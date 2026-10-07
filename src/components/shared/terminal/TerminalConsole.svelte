@@ -409,8 +409,8 @@
 
     /* the Screen's ring: while it shows, keys are the program's and the shortcuts are off */
     .focused {
-        outline: 0.15rem solid var(--accent);
-        outline-offset: -0.15rem;
+        outline: 1px solid var(--accent);
+        outline-offset: -1px;
     }
 
     .screen {

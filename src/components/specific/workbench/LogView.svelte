@@ -59,14 +59,14 @@
         min-height: 0;
         overflow: auto;
         scrollbar-gutter: stable;
-        padding: 0.3rem 0.6rem;
+        padding: var(--wb-output-padding);
         font-family: 'Fira Code', monospace;
         font-size: 0.82rem;
         line-height: 1.55;
     }
 
     .empty {
-        margin: 0.4rem 0;
+        margin: 0;
         font-family: Rubik, sans-serif;
         font-size: 0.8rem;
         color: var(--hint);

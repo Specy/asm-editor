@@ -776,6 +776,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const screen = this._peripherals.screen
         const port = machine.pendingInputPort ?? 0
         const question = device.inputQuestion(port)
+        this.refreshInputState()
         this.pendingEchoBefore ??= screen.history.sequence
         screen.beginCompoundOperation()
         try {

@@ -220,6 +220,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             //`clear()` replaces `state`, so each call looks it up instead of capturing it
             setInterrupt: (interrupt) => {
                 this.state.interrupt = interrupt
+                //MARS advances PC before invoking the syscall's asynchronous handler.
+                if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
             },
             fileSystem: () => this.fileSystemSession,
             instructionSerial: () => this.requireMips().getCurrentInstructionSerial()

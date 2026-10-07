@@ -202,6 +202,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             //`clear()` replaces `state`, so each call looks it up instead of capturing it
             setInterrupt: (interrupt) => {
                 this.state.interrupt = interrupt
+                //RARS advances PC before invoking the ecall's asynchronous handler.
+                if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
             },
             fileSystem: () => this.fileSystemSession,
             instructionSerial: () => this.requireRiscV().getCurrentInstructionSerial()

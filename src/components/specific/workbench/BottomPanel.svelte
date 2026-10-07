@@ -113,6 +113,7 @@
 
 <style lang="scss">
     .bottom-panel {
+        --wb-output-padding: 0.7rem 0.9rem;
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -238,14 +239,17 @@
     }
 
     .problems {
+        --diagnostics-padding: 0;
         flex: 1;
         min-height: 0;
         overflow: auto;
         scrollbar-gutter: stable;
+        padding: var(--wb-output-padding);
     }
 
     .empty {
-        margin: 0.7rem 0.9rem;
+        margin: 0;
+        padding: var(--wb-output-padding);
         font-size: 0.8rem;
         color: var(--hint);
     }

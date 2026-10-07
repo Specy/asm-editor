@@ -485,6 +485,40 @@ main:
         expect(emulator.stdOut).toBe('x\n')
     })
 
+    it('refreshes the waiting instruction and registers at each input request', async () => {
+        const emulator = await built(
+            `.text
+main:
+    li a7, 5
+    ecall
+    mv s0, a0
+    li a7, 5
+    ecall
+    mv s1, a0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        expect(emulator.line).toBe(3)
+        expect(emulator.currentFile).toBe(emulator.buildSources?.entry)
+        expect(valueOf(emulator, 'a7')).toBe(5n)
+
+        terminal.insertText('42')
+        terminal.pressEnter()
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        expect(emulator.line).toBe(6)
+        expect(valueOf(emulator, 's0')).toBe(42n)
+
+        terminal.insertText('7')
+        terminal.pressEnter()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, 's1')).toBe(7n)
+    })
+
     it('keeps the rest of a line a short read of standard input left, and reads End of input', async () => {
         const emulator = await built(
             `        .data

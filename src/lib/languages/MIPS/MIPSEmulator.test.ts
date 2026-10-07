@@ -608,6 +608,40 @@ main:
         expect(emulator.stdOut).toBe('x\n')
     })
 
+    it('refreshes the waiting instruction and registers at each input request', async () => {
+        const emulator = await built(
+            `.text
+main:
+    li $v0, 5
+    syscall
+    move $s0, $v0
+    li $v0, 5
+    syscall
+    move $s1, $v0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        expect(emulator.line).toBe(3)
+        expect(emulator.currentFile).toBe(emulator.buildSources?.entry)
+        expect(valueOf(emulator, '$v0')).toBe(5n)
+
+        terminal.insertText('42')
+        terminal.pressEnter()
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        expect(emulator.line).toBe(6)
+        expect(valueOf(emulator, '$s0')).toBe(42n)
+
+        terminal.insertText('7')
+        terminal.pressEnter()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s1')).toBe(7n)
+    })
+
     it('reads an integer from a line edited until Enter, ignoring Ctrl+D', async () => {
         const emulator = await built(
             `        .text

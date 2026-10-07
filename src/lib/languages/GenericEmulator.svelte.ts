@@ -1,7 +1,8 @@
 import {
     BaseEmulator,
     CompilationFailedError,
-    type EmulatorConfig
+    type EmulatorConfig,
+    type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
     type BaseEmulatorActions,
@@ -1321,6 +1322,15 @@ export abstract class GenericEmulator<T, R extends string>
             this.screenActiveUntil = now + SCREEN_ACTIVITY_MS
         }
         return now < this.screenActiveUntil
+    }
+
+    /** The instruction waiting for input, with every panel current before its read suspends. */
+    protected refreshInputState(
+        instruction: Instruction | null = this._getNextInstruction()
+    ): void {
+        if (this._peripherals.terminal.inputSource === 'scripted') return
+        this.selectInstruction(instruction)
+        this.refreshRunningPanels(true)
     }
 
     /**

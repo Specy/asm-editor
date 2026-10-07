@@ -418,6 +418,25 @@ describe('independent editor groups', () => {
         expect(origin.displayedPath).toBe('main.s')
         expect(origin.tabs.paths).toContain('main.c')
     })
+    it('restores the source on the left when the only pane shows assembly', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        const origin = session.groups[0]
+        result(fixture)
+        session.selectFile('main.s', origin)
+        session.closeTab('main.c', origin)
+        flushSync()
+        expect(origin.displayedCompilation).toBeDefined()
+        vi.mocked(compileProjectSource).mockResolvedValue(result(fixture))
+        await session.compileDisplayedSource(origin)
+        flushSync()
+        expect(session.groups).toHaveLength(2)
+        expect(session.groups[0]).toBe(origin)
+        expect(origin.displayedPath).toBe('main.c')
+        expect(origin.tabs.paths).toEqual(['main.c'])
+        expect(session.groups[1].displayedPath).toBe('main.s')
+        expect(session.groups[1].tabs.paths).toEqual(['main.s'])
+    })
     it('keeps both panes and their tabs on compilation failure', async () => {
         const { session } = setup()
         openSecond(session, 'main.s')

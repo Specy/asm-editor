@@ -53,7 +53,7 @@
     .diagnostics {
         display: flex;
         flex-direction: column;
-        padding: 0.35rem;
+        padding: var(--diagnostics-padding, 0.35rem);
         gap: 0.2rem;
 
         .diagnostic-group {

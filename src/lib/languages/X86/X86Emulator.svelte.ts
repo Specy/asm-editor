@@ -666,6 +666,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             })
             try {
                 if (acceptsInput) {
+                    this.refreshInputState()
                     this.state.interrupt = {
                         type: 'StandardInput',
                         message: STANDARD_INPUT_QUESTION

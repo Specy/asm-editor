@@ -16,7 +16,7 @@
     } = $props()
 </script>
 
-<div class="library-notice" role="status">
+<div class="library-notice" class:with-action={onShowSource} role="status">
     <span>
         {#if path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH}
             <!-- x86 has no Runtime library yet: this is the start code compiled programs link -->
@@ -46,13 +46,27 @@
         font-size: 0.8rem;
     }
 
+    .library-notice.with-action {
+        padding-block: 0.25rem;
+    }
+
     button {
         padding: 0.2rem 0.6rem;
         border: 0;
         border-radius: 0.3rem;
-        color: var(--accent-text);
-        background: var(--accent);
+        color: var(--secondary-text);
+        background: var(--secondary);
         cursor: pointer;
-        font-size: 0.75rem;
+        font-size: inherit;
+
+        &:hover {
+            color: var(--tertiary-text);
+            background: var(--tertiary);
+        }
+
+        &:focus-visible {
+            outline: 2px solid currentColor;
+            outline-offset: 2px;
+        }
     }
 </style>

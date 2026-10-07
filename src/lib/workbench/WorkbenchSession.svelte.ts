@@ -576,6 +576,14 @@ export class WorkbenchSession {
             this.pc.setSize(this.emulator.systemSize)
         })
 
+        //An input wait suspends Run or Step before its usual reveal. Show the waiting
+        //instruction now, including when it is in another File, without taking focus.
+        $effect(() => {
+            if (this.emulator.interrupt && !this.testing) {
+                untrack(() => this.revealCurrentInstruction())
+            }
+        })
+
         //each exit of the program goes in the Log with its running time and how it ended, whether
         //a Run, a Step or a runtime error ended it
         let wasTerminated = untrack(() => this.emulator.terminated)
@@ -1197,6 +1205,7 @@ export class WorkbenchSession {
         const optimization = origin.optimization
         const compiler = origin.sourceCompiler
         const recompileOutput = !!origin.displayedCompilation
+        const replaced = origin.displayedPath
         const existingDestination = this.groups.find((group) => group !== origin)
         const controller = new AbortController()
         this.compilationController = controller
@@ -1230,6 +1239,14 @@ export class WorkbenchSession {
                     liveSource(result.record.outputPath),
                     this.groupForFile(result.record.outputPath)
                 )
+            } else if (recompileOutput && !existingDestination) {
+                //the only pane shows assembly: the source takes that pane on the left, and the new
+                //assembly opens beside it on the right, as a split of a source File does
+                const assembly = this.createGroup()
+                this.show(liveSource(path), origin)
+                this.show(liveSource(result.record.outputPath), assembly)
+                this.closeTab(replaced, origin)
+                this.executionGroupId = assembly.id
             } else {
                 const other = existingDestination ?? this.createGroup()
                 const source = recompileOutput ? other : origin

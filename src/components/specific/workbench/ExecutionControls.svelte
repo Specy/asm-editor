@@ -107,6 +107,7 @@
     {fill}
     {attached}
     roundedStart={session.groups.length > 1 && session.groups[0] !== pane}
+    roundedEnd={session.groups.length > 1 && session.groups[0] === pane}
     {compilation}
     compileOnly={!execution ||
         (!!sourceLanguage(pane.displayedPath) && session.groups.length === 1)}

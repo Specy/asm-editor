@@ -75,6 +75,8 @@
         attached?: boolean
         /** Round the start tray's top-left corner when it sits beside another editor. */
         roundedStart?: boolean
+        /** Round the end tray's top-right corner when it sits beside another editor. */
+        roundedEnd?: boolean
         actions?: DockAction[]
         compilation?: DockCompilation
         /** The displayed File is source, so Compile takes the place of Build. */
@@ -109,6 +111,7 @@
         fill = false,
         attached = false,
         roundedStart = false,
+        roundedEnd = false,
         actions = [],
         compilation,
         compileOnly = false,
@@ -132,6 +135,7 @@
     class:fill
     class:attached
     class:rounded-start={roundedStart}
+    class:rounded-end={roundedEnd}
     class:debugging
     class:with-end={debugging && hasEnd}
     class:with-actions={debugging && actions.length > 0}
@@ -548,6 +552,16 @@
 
         &.fill {
             border-top-left-radius: 0.6rem;
+        }
+    }
+
+    .attached.rounded-end {
+        .end {
+            border-top-right-radius: 0.6rem;
+        }
+
+        &.fill {
+            border-top-right-radius: 0.6rem;
         }
     }
 

@@ -37,5 +37,5 @@
     {interactive}
     {escapes}
     placeholder="What the program writes appears here."
-    style="--terminal-padding: 0.8rem 1.1rem 0.8rem 1.4rem;"
+    style="--terminal-padding: var(--wb-output-padding);"
 />
