@@ -21,6 +21,15 @@
     let { entry, disableLinks = false }: Props = $props()
 
     const view = $derived(entry.view)
+    const codeLanguage = $derived(
+        entry.chapter !== 'runtime-library'
+            ? undefined
+            : entry.language === 'mips'
+              ? 'MIPS'
+              : entry.language === 'risc-v'
+                ? 'RISC-V'
+                : undefined
+    )
 </script>
 
 <div class="entry-body">
@@ -60,7 +69,7 @@
             </dl>
         {/if}
         {#if view.example}
-            <CodeSample code={view.example} label="Example" />
+            <CodeSample code={view.example} label="Example" language={codeLanguage} />
         {/if}
         {#if view.after && view.after.length > 0}
             <dl class="fields">

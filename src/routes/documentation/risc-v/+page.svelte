@@ -37,6 +37,9 @@
         <NavigationLinkButton href="/documentation/risc-v/using-c">
             <div>Using C and C++</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/risc-v/runtime-library">
+            <div>Runtime library</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/risc-v/all">
             <div>Complete Documentation</div>
         </NavigationLinkButton>

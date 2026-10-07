@@ -1,3 +1,3 @@
-## Instructions without a page
+## Other instructions
 
-Everything else the assembler accepts, under the heading NASM files it under. These have no page of their own: the only description of them we are free to publish is the one line below, and blink implements a part of them.
+Those instructions are also accepted by the assembler but don't have proper documentation. Please research the instruction you want to use to find out how it works.

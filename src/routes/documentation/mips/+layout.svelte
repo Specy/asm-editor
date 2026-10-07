@@ -74,37 +74,43 @@
         <Column gap="1rem" style="overflow-y: auto;">
             <Column gap="1rem" padding="0 1rem">
                 <SearchLauncher placeholder="Search the MIPS docs and courses" />
-                <MenuLink
-                    href="/documentation/mips"
-                    title="MIPS"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/mips/directive"
-                    title="Directives"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/mips/screen"
-                    title="Screen and I/O"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/mips/syscall"
-                    title="Syscalls"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/mips/using-c"
-                    title="Using C and C++"
-                    onClick={() => (menuOpen = false)}
-                />
-
-                <MenuLink
-                    href="/documentation/mips/registers"
-                    title="Registers"
-                    onClick={() => (menuOpen = false)}
-                />
+                <Column gap="0">
+                    <MenuLink
+                        href="/documentation/mips"
+                        title="MIPS"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/mips/directive"
+                        title="Directives"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/mips/screen"
+                        title="Screen and I/O"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/mips/syscall"
+                        title="Syscalls"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/mips/using-c"
+                        title="Using C and C++"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/mips/runtime-library"
+                        title="Runtime library"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/mips/registers"
+                        title="Registers"
+                        onClick={() => (menuOpen = false)}
+                    />
+                </Column>
             </Column>
             <TogglableSection
                 open={true}

@@ -10,11 +10,11 @@
     <title>MIPS Using C and C++</title>
     <meta
         name="description"
-        content="Compile C or C++ for MIPS, use the Environment library, and follow generated assembly."
+        content="Write, run and debug C or C++ for MIPS, with examples, supported libraries and simulator functions."
     />
     <meta
         property="og:description"
-        content="Compile C or C++ for MIPS, use the Environment library, and follow generated assembly."
+        content="Write, run and debug C or C++ for MIPS, with examples, supported libraries and simulator functions."
     />
 </svelte:head>
 

@@ -74,37 +74,43 @@
         <Column gap="1rem" style="overflow-y: auto;">
             <Column gap="1rem" padding="0 1rem">
                 <SearchLauncher placeholder="Search the RISC-V docs and courses" />
-                <MenuLink
-                    href="/documentation/risc-v"
-                    title="RISC-V"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/risc-v/directive"
-                    title="Directives"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/risc-v/screen"
-                    title="Screen and I/O"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/risc-v/syscall"
-                    title="Syscalls"
-                    onClick={() => (menuOpen = false)}
-                />
-                <MenuLink
-                    href="/documentation/risc-v/using-c"
-                    title="Using C and C++"
-                    onClick={() => (menuOpen = false)}
-                />
-
-                <MenuLink
-                    href="/documentation/risc-v/registers"
-                    title="Registers"
-                    onClick={() => (menuOpen = false)}
-                />
+                <Column gap="0">
+                    <MenuLink
+                        href="/documentation/risc-v"
+                        title="RISC-V"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/risc-v/directive"
+                        title="Directives"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/risc-v/screen"
+                        title="Screen and I/O"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/risc-v/syscall"
+                        title="Syscalls"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/risc-v/using-c"
+                        title="Using C and C++"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/risc-v/runtime-library"
+                        title="Runtime library"
+                        onClick={() => (menuOpen = false)}
+                    />
+                    <MenuLink
+                        href="/documentation/risc-v/registers"
+                        title="Registers"
+                        onClick={() => (menuOpen = false)}
+                    />
+                </Column>
             </Column>
             <TogglableSection
                 open={true}

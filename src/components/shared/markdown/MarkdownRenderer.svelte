@@ -458,7 +458,7 @@
             extensions: [
                 ext,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm'] }),
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -477,7 +477,7 @@
             extensions: [
                 extWithExternalLins,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm'] }),
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -496,7 +496,7 @@
             extensions: [
                 extWithoutLinks,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm', 'c'] }),
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -517,7 +517,7 @@
                 ext,
                 headingIdsPlugin,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm'] }),
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -537,7 +537,7 @@
             extensions: [
                 extWithExternalLins,
                 plainPlaygroundsPlugin,
-                code({ theme, langs: ['asm'] }),
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -878,15 +878,11 @@
     }
 
     :global(.simple-code pre.code-block) {
-        border-radius: 0;
-        background-color: transparent !important;
-        padding: 0 !important;
         margin: 0 !important;
         width: unset !important;
         max-width: unset !important;
         min-width: unset !important;
         box-shadow: unset !important;
-        border: none;
     }
 
     :global(.simple-code pre.code-block > .code-gutter) {

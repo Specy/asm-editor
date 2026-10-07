@@ -37,6 +37,9 @@
         <NavigationLinkButton href="/documentation/mips/using-c">
             <div>Using C and C++</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/mips/runtime-library">
+            <div>Runtime library</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/mips/all">
             <div>Complete Documentation</div>
         </NavigationLinkButton>

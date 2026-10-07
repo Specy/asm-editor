@@ -8,7 +8,7 @@ Compiling a C or C++ File links the Runtime library automatically. The program s
 
 Hand-written assembly can call the library too. Turn on _Link Runtime library_ in the Project Settings, then call a function with its arguments in `a0` to `a7` (floating point arguments in `fa0` to `fa7`) and find its result in `a0` or `fa0`. The setting is off by default, so a call to a function you have not written yet still reports an undefined symbol; that message says when the function is in the library.
 
-```
+```riscv
 .data
 format: .string "%d + %d = %d\n"
 .text

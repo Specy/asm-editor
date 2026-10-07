@@ -1,24 +1,56 @@
-Create a C or C++ File in an x86 Project and write `main`. Select that File, choose **Compile**, then **Build** the Generated assembly and use Run or Step. Compile asks Compiler Explorer for assembly; Build assembles that result and starts the program. A source edit needs another Compile before Build can run the new C code.
-
-## Compiling a source File {#compiling}
-
-x86 uses GCC 14.2 with its Intel assembly output, translated to the editor's NASM Build format. Choose an optimization level in the Compile controls. Start with `-O0` when learning how each C statement becomes instructions; `-O2` may inline calls, move instructions and combine statements. Compile creates an assembly File, makes it the Entry file and opens the source and Generated assembly together. If you later choose another assembly File as Entry, use **Set as entry file** in the Explorer to return to the generated one. A Project can keep other Files and local quoted headers, but compile one C or C++ translation unit at a time. The online compiler must be reachable.
-
-## Freestanding C and the Environment library {#libraries}
-
-The x86 compiler has freestanding headers, and Build links a small Start unit that calls `main` and exits with its result. There is no full C Runtime library yet: `printf`, `scanf`, `malloc` and normal standard-library File I/O are unavailable. Include the header-only Environment library `<sim.h>` for the implemented Linux [syscalls](/documentation/x86/syscall):
+Create `main.c` for C, or `main.cpp` for C++, in an x86 project. Replace its starting text with this complete program, which works in either language:
 
 ```c
 #include <sim.h>
 
 int main(void) {
-    sim_write(1, "Hello from x86\n", 15);
-    return 3;
+    const char text[] = "Hello from x86\n";
+    sim_write(1, text, sizeof(text) - 1);
+    return 0;
 }
 ```
 
-`sim_read` reads standard input from the Terminal and `sim_write` writes bytes to its transcript. At `-O0`, a `sim_` call can appear as a small local function in Generated assembly. At `-O2`, the compiler can place `syscall` at the call site. C evaluates arguments before passing them to the wrapper; inspect each syscall's **From C** field for its prototype. The Linux syscall convention puts the number in `rax`, arguments in `rdi`, `rsi`, `rdx`, `r10`, `r8`, `r9`, and the result in `rax`. The ordinary C function convention differs: the fourth argument reaches `rcx` before the wrapper moves it to `r10`. Errors return negative errno values, such as `-2` for ENOENT, through the `sim_` function.
+Select the source file and choose **Compile**. The generated assembly opens beside it. Choose **Build** in the assembly pane, then **Run**. Open the **Terminal** to see `Hello from x86`. The program starts in `main`; `return 0` finishes successfully.
+
+## Compiling a source file {#compiling}
+
+The Compile controls use GCC and let you choose an optimization level. Start with **-O0** to follow your statements easily. Higher levels can combine statements, move instructions or remove work whose result is unused.
+
+Compile creates an assembly file and makes it the project's entry file, which Build uses. Compile handles one C or C++ source file at a time; other `.c` or `.cpp` files are not compiled or linked automatically. Compilation needs an internet connection: your selected source and the project's local headers are sent to Compiler Explorer.
+
+To use a local header, create `helpers.h` beside your source file in the same project:
+
+```c
+#define GREETING "Hello from a header\n"
+```
+
+Include it with quotes, as in this complete replacement for `main.c`:
+
+```c
+#include <sim.h>
+#include "helpers.h"
+
+int main(void) {
+    const char text[] = GREETING;
+    sim_write(1, text, sizeof(text) - 1);
+    return 0;
+}
+```
+
+After changing the source or a local header, **Compile** again, then **Build** to run the updated program.
+
+## Libraries and simulator services {#libraries}
+
+x86 programs use `<sim.h>` for input and output. The C standard library is unavailable on this target: you cannot use `printf`, `scanf`, `malloc` or standard file functions such as `fopen`. Basic headers such as `<stddef.h>` and `<stdint.h>` are provided.
+
+C uses C17 and C++ uses C++17. C++ can use basic headers such as `<cstddef>` and `<cstdint>`, together with `<sim.h>`. The full C++ standard library is not provided: `<cstdio>`, `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI. Ordinary dynamic allocation with `new` and `delete` is not provided on this target. Use fixed arrays and objects stored locally or globally.
+
+Find the simulator functions' signatures and results under **From C** in [Syscalls](/documentation/x86/syscall), also available in the editor's Documentation panel. In the first program, `sim_write` uses descriptor `1` for Terminal output. Its final argument is the number of bytes to print; `sizeof(text) - 1` excludes the string's terminating zero.
+
+For Terminal input, `sim_read(0, buffer, size)` reads bytes into a character array and returns how many it read. Type your input and press **Enter**. On an empty input line, press **Ctrl+D** or **End of input** to finish standard input; `sim_read` then returns `0`. It does not add a string terminator. A failed simulator call returns a negative error number; check the result before using it.
 
 ## Following execution {#following-execution}
 
-The source map connects C or C++ lines to Generated assembly instructions. Select a line to see the corresponding instructions; Step, Run, Breakpoints and Undo follow that mapping. A Breakpoint on a source line stops at the first instruction of each mapped block for that line. Optimized code can map several instructions or blocks to one line. Open the read-only `@runtime/include/sim.h` from a mapped call to see the Environment library code; Step can enter its instructions and Undo returns to the caller. Editing a source File, a used header or the assembly makes the map stale; Compile again to regain current highlights and source Breakpoints. A saved Project needs Compile again after reopening to recreate its transient source map.
+Matching colors connect source lines with their generated assembly. Select a line to highlight its instructions. Use **Step** to follow those instructions, or place a breakpoint beside a source line and choose **Run** to stop at the start of its mapped assembly blocks. One source line can require several steps, especially with optimization. Use **Undo** to move back through recorded execution steps.
+
+Compile again after reopening a saved project to restore source highlights and breakpoints. Editing generated assembly removes that connection; recompilation asks before replacing your manual assembly edits.

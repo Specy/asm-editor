@@ -165,6 +165,11 @@ _Avoid_: crt0 (the Runtime library's start code, which takes its place once x86 
 
 The conversion of a selected higher-level **File** and its project-local headers into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
 
+## C/C++ language help
+
+The editor's lightweight assistance while writing C or C++: language keywords and snippets, function suggestions, parameter hints and hover documentation for the **Project**'s **Target**, including its **Environment library** and supported **Runtime library** functions. It does not establish whether a program is valid; Compile reports compiler errors.
+_Avoid_: LSP (when this assistance, rather than the Language Server Protocol, is meant), C++ IntelliSense (when full type-aware analysis is implied)
+
 ## Compiler driver
 
 The replaceable component that performs **Source compilation**, turning source Files and headers into **Generated assembly** and its **Source map** for a Target's compiler preset. Compiler Explorer is the current driver; nothing outside it depends on which compiler service is used.

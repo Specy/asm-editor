@@ -14,7 +14,7 @@ Hand-written assembly can call the library too. Turn on _Link Runtime library_ i
 
 The setting is off by default, so a call to a function you have not written yet still reports an undefined symbol; that message says when the function is in the library.
 
-```
+```mips
 .data
 format: .asciiz "%d + %d = %d\n"
 .text

@@ -10,11 +10,11 @@
     <title>x86 Using C and C++</title>
     <meta
         name="description"
-        content="Compile freestanding C or C++ for x86, use the Environment library, and follow generated NASM assembly."
+        content="Write, run and debug C or C++ for x86, with examples, simulator functions and supported language features."
     />
     <meta
         property="og:description"
-        content="Compile freestanding C or C++ for x86, use the Environment library, and follow generated NASM assembly."
+        content="Write, run and debug C or C++ for x86, with examples, simulator functions and supported language features."
     />
 </svelte:head>
 
