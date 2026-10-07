@@ -414,6 +414,129 @@ describe('C/C++ Monaco help providers', () => {
         const h = harness(' '.repeat(SOURCE_HELP_SCAN_LIMIT - 3) + 'printf')
         expect(await h.complete(SOURCE_HELP_SCAN_LIMIT - 1)).toBeUndefined()
     })
+    it('completes current-file variables and parameters with declaration details and exact ranges', async () => {
+        const h = harness('int global; int run(int count) { int counter = 0; cou')
+        const items = (await h.complete())!.suggestions
+        const variable = items.find((item) => item.label === 'counter')!
+        const parameter = items.find((item) => item.label === 'count')!
+        expect(variable.kind).toBe(4)
+        expect(variable.detail).toBe('int counter')
+        expect(variable.insertText).toBe('counter')
+        expect(variable.additionalTextEdits).toBeUndefined()
+        expect(parameter.detail).toBe('int count')
+        expect(variable.range).toMatchObject({
+            startColumn: h.model.getValue().length - 2,
+            endColumn: h.model.getValue().length + 1
+        })
+        expect(variable.sortText!.startsWith('0_')).toBe(true)
+    })
+    it('shows function declarations and hints from the current file even without a compilation Target', async () => {
+        const h = harness('int add(int left, int right); int main(void) { ad', 'main.c', 'M68K')
+        const item = (await h.complete())!.suggestions.find((item) => item.label === 'add')!
+        expect(item.kind).toBe(1)
+        expect(item.detail).toBe('int add(int left, int right)')
+        h.edit('int add(int left, int right); int main(void) { add(1, ')
+        const signature = (await h.signature())!.value
+        expect(signature.activeParameter).toBe(1)
+        expect(signature.signatures[0].label).toBe('int add(int left, int right)')
+        expect(signature.signatures[0].parameters[1].label).toEqual([18, 27])
+    })
+    it('keeps local function variadics on the final slot and declines excess fixed parameters', async () => {
+        const h = harness('int log(const char *format, ...); int run(void) { log("%d", 1, 2, ')
+        expect((await h.signature())!.value.activeParameter).toBe(1)
+        h.edit('int add(int left, int right); int run(void) { add(1, 2, ')
+        expect(await h.signature()).toBeUndefined()
+    })
+    it('uses the nearest declaration and suppresses library signatures shadowed by a variable', async () => {
+        const h = harness('int printf; void run(void) { double printf; pri')
+        const matches = (await h.complete())!.suggestions.filter((item) => item.label === 'printf')
+        expect(matches).toHaveLength(1)
+        expect(matches[0].detail).toBe('double printf')
+        h.edit('int printf; void run(void) { printf')
+        const hover = (await h.hover())!.contents[0] as monaco.IMarkdownString
+        expect(hover.value).toContain('int printf')
+        expect(hover.value).not.toContain('Include')
+        h.edit('int printf; void run(void) { printf(')
+        expect(await h.signature()).toBeUndefined()
+    })
+    it('does not show closed-block locals, other function parameters, later declarations or another model names', async () => {
+        const h = harness(
+            'int other(int count) { int counter; } void run(void) { { int closed; } co'
+        )
+        const names = (await h.complete())!.suggestions.map((item) => item.label)
+        expect(names).not.toContain('count')
+        expect(names).not.toContain('counter')
+        expect(names).not.toContain('closed')
+        const a = harness('int private_one; void run(void) { private_')
+        const b = harness('int private_two; void run(void) { private_')
+        expect((await a.complete())!.suggestions.map((item) => item.label)).toEqual(['private_one'])
+        expect((await b.complete())!.suggestions.map((item) => item.label)).toEqual(['private_two'])
+        a.edit('int renamed; void run(void) { private_')
+        expect((await a.complete())!.suggestions).toEqual([])
+    })
+    it('indexes the displayed Build model without borrowing declarations from changed live files', async () => {
+        const h = harness('int snapshot_name; void run(void) { snapshot_')
+        h.session.setBuild(4, h.session.sources)
+        Object.assign(h.model.uri, { path: '/build-4/main.c' })
+        h.session.update({
+            entry: 'main.c',
+            files: { 'main.c': { encoding: 'plain', content: 'int live_name;' } }
+        })
+        expect((await h.complete())!.suggestions.map((item) => item.label)).toEqual([
+            'snapshot_name'
+        ])
+    })
+    it('declines overload matching, unspecified C signatures and function-pointer calls', async () => {
+        const overload = harness(
+            'int add(int); double add(double); void run(void) { add(',
+            'main.cpp'
+        )
+        expect(await overload.signature()).toBeUndefined()
+        const pointer = harness('int (*printf)(int); void run(void) { printf(')
+        expect(await pointer.signature()).toBeUndefined()
+        expect(await harness('int read(); void run(void) { read(').signature()).toBeUndefined()
+        expect(
+            (await harness('int read(); void run() { read(', 'main.cpp').signature())!.value
+                .signatures[0].parameters
+        ).toEqual([])
+    })
+    it('uses local signature documentation without triggering compilation', async () => {
+        const fetch = vi.fn(() => {
+            throw new Error('unexpected request')
+        })
+        vi.stubGlobal('fetch', fetch)
+        const h = harness('int add(int left, int right); int main(void) { add(')
+        await h.complete(h.model.getValue().length - 1)
+        await h.hover(h.model.getValue().length - 1)
+        const hints = await h.signature()
+        const documentation = hints!.value.signatures[0].documentation as monaco.IMarkdownString
+        expect(documentation.value).toContain('Function declared in this file.')
+        expect(documentation.value).not.toContain('Include')
+        expect(documentation.isTrusted).toBe(false)
+        expect(fetch).not.toHaveBeenCalled()
+    })
+    it('keeps explicit std:: lookup separate from an unqualified local name', async () => {
+        const h = harness('int printf; void run() { std::pri', 'main.cpp')
+        const item = (await h.complete())!.suggestions.find((item) => item.label === 'std::printf')!
+        expect(item.detail).toContain('<cstdio>')
+        expect(item.insertText).toBe('printf')
+    })
+    it('discards pending local suggestions after the model changes', async () => {
+        let resolve: (
+            value: Awaited<ReturnType<typeof catalog.sourceHelpEntries>>
+        ) => void = () => {}
+        const deferred = new Promise<Awaited<ReturnType<typeof catalog.sourceHelpEntries>>>(
+            (done) => {
+                resolve = done
+            }
+        )
+        vi.spyOn(catalog, 'sourceHelpEntries').mockReturnValueOnce(deferred)
+        const h = harness('int private_one; void run(void) { private_')
+        const request = h.complete()
+        h.edit('int renamed; void run(void) { private_')
+        resolve([])
+        expect(await request).toBeUndefined()
+    })
     it('bounds scanning instead of blocking on very large Files', async () =>
         expect(
             await harness(' '.repeat(SOURCE_HELP_SCAN_LIMIT) + 'pri').complete()

@@ -155,10 +155,14 @@ describe('the x86 Documentation', () => {
             type: 'fields',
             markdown: expect.stringContaining('Descriptor 1 is standard output'),
             fields: [
-                { label: 'rax', value: '1' },
-                { label: 'rdi', value: 'file descriptor' },
-                { label: 'rsi', value: 'buffer (read by the kernel)' },
-                { label: 'rdx', value: 'byte count' },
+                {
+                    label: 'In',
+                    value: '`rax` = 1 (call number); `rdi` = file descriptor; `rsi` = buffer (read by the kernel); `rdx` = byte count'
+                },
+                {
+                    label: 'Out',
+                    value: '`rax` = result. Values from -1 through -4095 are error codes.'
+                },
                 { label: 'Waits', value: 'This call can wait for the outside world.' },
                 {
                     label: 'From C',
@@ -175,7 +179,11 @@ describe('the x86 Documentation', () => {
         expect(getppid.view).toEqual({
             type: 'fields',
             fields: [
-                { label: 'rax', value: '110' },
+                { label: 'In', value: '`rax` = 110 (call number)' },
+                {
+                    label: 'Out',
+                    value: '`rax` = result. Values from -1 through -4095 are error codes.'
+                },
                 { label: 'From C', value: '`long sim_getppid(void)`' }
             ]
         })
@@ -192,7 +200,7 @@ describe('the x86 Documentation', () => {
             const entry = syscalls.find((item) => item.title === syscall.name)!
             const fields = entry.view.type === 'fields' ? entry.view.fields : []
             const fromC = fields.find((field) => field.label === 'From C')
-            //last, after the registers, as MIPS and RISC-V show theirs
+            //last, after the input and output fields, as MIPS and RISC-V show theirs
             expect(fields[fields.length - 1], syscall.name).toBe(fromC)
             const binding = x86SimBinding(syscall)
             if (!binding) {

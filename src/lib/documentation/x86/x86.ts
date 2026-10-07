@@ -481,16 +481,6 @@ function registersAndFlags(): Chapter {
 const ARGUMENT_REGISTERS: readonly string[] = X86_SYSCALL_ARGUMENT_REGISTERS
 
 /**
- * The Environment library's function for a call, as `<sim.h>` declares it, or why it has none.
- */
-function fromC(syscall: X86Syscall): string | undefined {
-    const binding = x86SimBinding(syscall)
-    if (binding) return `\`${x86SimPrototype(binding)}\``
-    const reason = X86_SIM_EXCEPTIONS[syscall.name]
-    return reason ? `None in \`<sim.h>\`: ${reason}.` : undefined
-}
-
-/**
  * A row's line for a call nothing describes: what it reads, from which register. It is plain text
  * already, and kept from `summaryOf`, which would take `o_stat` for emphasis and drop the `_`.
  */
@@ -501,18 +491,44 @@ function argumentSummary(syscall: X86Syscall): string {
     return takes.length > 0 ? `Takes ${takes.join(', ')}.` : 'Takes no arguments.'
 }
 
-/**
- * A call as the registers it is made with: the number in `rax`, then each argument. Every call has
- * that much, so one that takes no arguments and that nothing describes still has a body.
- */
+/** A syscall's input registers, result register and any memory destinations it writes through. */
 function syscallEntry(syscall: X86Syscall, href: string): DocumentationEntry {
     const description = describeX86Syscall(syscall.name)
+    const arguments_ = x86SyscallArgs(syscall)
+    const input = [
+        `\`rax\` = ${syscall.number} (call number)`,
+        ...arguments_.map((argument, index) => {
+            const register = ARGUMENT_REGISTERS[index] ?? `arg${index + 1}`
+            return `\`${register}\` = ${argument}`
+        })
+    ].join('; ')
+    const binding = x86SimBinding(syscall)
+    const output =
+        syscall.name === 'rt_sigreturn'
+            ? 'Restores the saved program state and does not return normally.'
+            : binding?.noreturn
+              ? 'Does not return; ends the program.'
+              : '`rax` = result. Values from -1 through -4095 are error codes.'
+    const outputBuffers = arguments_.flatMap((argument, index) => {
+        const parameter = binding?.parameters[index]
+        if (
+            !argument.includes('(written by the kernel)') &&
+            !(argument.startsWith('o_') && parameter?.type !== 'const void *') &&
+            argument !== 'iovec array (written)' &&
+            !(argument.startsWith('io_') && parameter?.type !== 'const void *')
+        )
+            return []
+        const register = ARGUMENT_REGISTERS[index] ?? `arg${index + 1}`
+        if (argument === 'iovec array (written)')
+            return [`Buffers listed by the iovec array in \`${register}\` receive data.`]
+        const parameterName = parameter?.name
+        return [
+            `Memory at the address in \`${register}\` is written by the call${parameterName ? ` (${parameterName})` : ''}.`
+        ]
+    })
     const fields: EntryField[] = [
-        { label: 'rax', value: String(syscall.number) },
-        ...x86SyscallArgs(syscall).map((argument, index) => ({
-            label: ARGUMENT_REGISTERS[index] ?? `arg${index + 1}`,
-            value: argument
-        }))
+        { label: 'In', value: input },
+        { label: 'Out', value: [output, ...outputBuffers].join(' ') }
     ]
     if (syscall.blocking) {
         fields.push({ label: 'Waits', value: 'This call can wait for the outside world.' })
@@ -521,7 +537,11 @@ function syscallEntry(syscall: X86Syscall, href: string): DocumentationEntry {
     const searchText = [description, ...fields.map((field) => `${field.label}: ${field.value}`)]
         .filter(Boolean)
         .join('\n')
-    const prototype = fromC(syscall)
+    const prototype = binding
+        ? `\`${x86SimPrototype(binding)}\``
+        : X86_SIM_EXCEPTIONS[syscall.name]
+          ? `None in \`<sim.h>\`: ${X86_SIM_EXCEPTIONS[syscall.name]}.`
+          : undefined
     if (prototype) fields.push({ label: 'From C', value: prototype })
     const anchor = `syscall-${syscall.name}`
     return {

@@ -104,7 +104,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         binding: {
             name: 'sim_read_string',
             parameters: [
-                { name: 'buffer', type: 'char *', register: 'a0' },
+                { name: 'buffer', type: 'char *', register: 'a0', out: true },
                 { name: 'size', type: 'int', register: 'a1' }
             ],
             returns: { type: 'void' }
@@ -184,7 +184,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         binding: {
             name: 'sim_get_cwd',
             parameters: [
-                { name: 'buffer', type: 'char *', register: 'a0' },
+                { name: 'buffer', type: 'char *', register: 'a0', out: true },
                 { name: 'size', type: 'int', register: 'a1' }
             ],
             returns: { type: 'int', register: 'a0' }
@@ -202,7 +202,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 { name: 'a0', description: 'contains file descriptor (negative if error)' }
             ],
-            other: 'Service 1024 - MARS implements three flag values: 0 for read-only, 1 for write-only with create, and 9 for write-only with create and append. It ignores mode. The returned file descriptor will be negative if the operation failed. MARS maintains file descriptors internally and allocates them starting with 3. File descriptors 0, 1 and 2 are always open for: reading from standard input, writing to standard output, and writing to standard error, respectively (new in release 4.3).'
+            other: 'Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). The mode argument is ignored. A negative descriptor means the operation failed. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3.'
         },
         implemented: true,
         binding: {
@@ -237,7 +237,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             name: 'sim_read',
             parameters: [
                 { name: 'fd', type: 'int', register: 'a0' },
-                { name: 'buffer', type: 'void *', register: 'a1' },
+                { name: 'buffer', type: 'void *', register: 'a1', out: true },
                 { name: 'length', type: 'int', register: 'a2' }
             ],
             returns: { type: 'int', register: 'a0' }
@@ -320,7 +320,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         code: 93,
         arguments: [{ name: 'a0', description: 'termination result' }],
         result: {
-            other: 'Service 93 - Ends the program with the signed exit code in a0. The editor shows this code in the Log, while the RARS graphical interface ignores it.'
+            other: 'Ends the program with the signed exit code in a0. The editor shows this code in the Log.'
         },
         implemented: true,
         binding: {
@@ -339,7 +339,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                 { name: 'a0', description: 'low order 32 bits of the program time' },
                 { name: 'a1', description: 'high order 32 bits of the program time' }
             ],
-            other: 'Service 30 - Milliseconds since the run started, rather than since 1 January 1970 as in RARS: it is the time the program can observe passing, and in a testcase it comes from a virtual clock that starts at zero and only advances through the waits of service 32.'
+            other: 'Returns milliseconds since the run started. In a Testcase, a virtual clock starts at zero and advances only through waits of service 32.'
         },
         implemented: true,
         binding: {
@@ -651,7 +651,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             name: 'sim_input_dialog_string',
             parameters: [
                 { name: 'message', type: 'const char *', register: 'a0' },
-                { name: 'buffer', type: 'char *', register: 'a1' },
+                { name: 'buffer', type: 'char *', register: 'a1', out: true },
                 { name: 'size', type: 'int', register: 'a2' }
             ],
             returns: { type: 'int', register: 'a1' }

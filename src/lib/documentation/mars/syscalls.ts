@@ -15,12 +15,33 @@ export function documented(syscalls: Record<number, MarsSyscall>): MarsSyscall[]
 }
 
 export function syscallFields(syscall: MarsSyscall): EntryField[] {
-    const fields: EntryField[] = syscall.arguments.map((argument) => ({
-        label: argument.name,
-        value: capitalize(argument.description)
-    }))
-    for (const result of syscall.result.arguments ?? []) {
-        fields.push({ label: `${result.name} after`, value: capitalize(result.description) })
+    const fields: EntryField[] = []
+    if (syscall.arguments.length > 0) {
+        fields.push({
+            label: 'In',
+            value: syscall.arguments
+                .map((argument) => `\`${argument.name}\` = ${capitalize(argument.description)}`)
+                .join('; ')
+        })
+    }
+    const outputs = syscall.result.arguments ?? []
+    const outputMemory = syscall.binding.parameters.filter(
+        (parameter) =>
+            parameter.out && syscall.arguments.some((argument) => argument.name === parameter.register)
+    )
+    if (outputs.length > 0 || outputMemory.length > 0) {
+        fields.push({
+            label: 'Out',
+            value: [
+                ...outputs.map(
+                    (result) => `\`${result.name}\` = ${capitalize(result.description)}`
+                ),
+                ...outputMemory.map(
+                    (parameter) =>
+                        `Memory at the address passed in \`${parameter.register}\` is written through the \`${parameter.name}\` pointer.`
+                )
+            ].join('; ')
+        })
     }
     if (syscall.result.other && syscall.result.other !== 'N/A') {
         fields.push({ label: 'Note', value: syscall.result.other })

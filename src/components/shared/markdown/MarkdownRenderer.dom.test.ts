@@ -121,6 +121,18 @@ describe('code block rendering', () => {
         }
     })
 
+    it.each(['c', 'cpp'])('syntax highlights %s in documentation renderer mode', async (language) => {
+        const source = `\`\`\`${language}\n#include <stdio.h>\nint main(void) { return 0; }\n\`\`\`\n`
+        const { target, cleanup } = render(source, { linksInNewTab: true, simpleCode: true })
+        try {
+            const block = await waitForShikiCodeBlock(target)
+            expect(block.querySelectorAll('code span[style*="color"]').length).toBeGreaterThan(0)
+            expect(codeSource(target)).toContain('int main(void)')
+        } finally {
+            cleanup()
+        }
+    })
+
     it.each([
         ['normal', {}],
         ['external links', { linksInNewTab: true }],

@@ -1,9 +1,9 @@
-This lesson describes the exception model implemented by this Playground, which follows the MARS
-behavior used by its MIPS core. It exposes four coprocessor 0 registers: `BadVAddr` (register 8),
-`Status` (12), `Cause` (13), and `EPC` (14). A handler begins at `0x80000180`. The Playground
-delivers exceptions caused by the running program; its devices do not deliver interrupts. The fixed
-addresses, reset values, data layout, and instruction budget mentioned below are Playground
-properties, not rules for every MIPS processor.
+This lesson describes the exception behavior supported by this Playground's MIPS simulator. It
+exposes four coprocessor 0 registers: `BadVAddr` (register 8), `Status` (12), `Cause` (13), and
+`EPC` (14). A handler begins at `0x80000180`. The simulator delivers exceptions caused by the
+running program, but its devices do not deliver interrupts. It also has no branch delay slots. The
+fixed addresses, reset values, data layout, and instruction budget mentioned below describe this
+simulator's setup, not rules for every MIPS processor.
 
 ## Exceptions and interrupts
 

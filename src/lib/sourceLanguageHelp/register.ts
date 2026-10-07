@@ -7,6 +7,7 @@ import { languageEntries } from './languageEntries'
 import { entryDocumentation, entryHover, escapeMarkdown } from './documentation'
 import { includeSuggestions } from './includes'
 import type { HelpEntry } from './types'
+import { visibleSourceSymbols, type SourceSymbol } from './symbols'
 /** Measured lexical passes at 128 Ki characters stay small; decline later positions rather than
  * scan multi-megabyte files on the UI thread. Monaco's generic word suggestions remain available. */
 export const SOURCE_HELP_SCAN_LIMIT = 128 * 1024
@@ -49,6 +50,8 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
             endColumn: to.column
         }
     }
+    const symbolDocumentation = (symbol: SourceSymbol) =>
+        `\`\`\`cpp\n${symbol.declaration.replace(/`/g, '')}\n\`\`\`\n\n${symbol.kind === 'parameter' ? 'Parameter of this function.' : symbol.kind === 'variable' ? 'Variable declared in this file.' : 'Function declared in this file.'}${symbol.ambiguous ? ' Multiple declarations have different parameters; argument matching is unavailable.' : ''}`
     const kind = (entry: HelpEntry) =>
         entry.kind === 'function'
             ? currentMonaco.languages.CompletionItemKind.Function
@@ -80,6 +83,10 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
             }
             const identifier = identifierAt(source, offset, context.language === 'cpp', true)
             if (!identifier || identifier.end >= SOURCE_HELP_SCAN_LIMIT) return undefined
+            const locals = identifier.qualified
+                ? []
+                : visibleSourceSymbols(source, context.language, offset)
+            const localNames = new Set(locals.map((item) => item.name))
             const entries = await sourceHelpEntries(context.capabilities, context.language)
             if (disposed || token.isCancellationRequested || !context.current()) return undefined
             const replacement = range(model, identifier.start, identifier.end)
@@ -91,7 +98,11 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
                             ? entry.name.slice(5)
                             : undefined
                         : entry.name
-                    return name !== undefined && name.toLowerCase().startsWith(prefix)
+                    return (
+                        name !== undefined &&
+                        !localNames.has(entry.name) &&
+                        name.toLowerCase().startsWith(prefix)
+                    )
                 })
                 .map((entry) => ({
                     label: entry.name,
@@ -103,9 +114,29 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
                         isTrusted: false,
                         supportHtml: false
                     },
-                    range: replacement
+                    range: replacement,
+                    sortText: `1_${entry.name}`
                 }))
             if (!identifier.qualified) {
+                for (const item of locals) {
+                    if (!item.name.toLowerCase().startsWith(prefix)) continue
+                    suggestions.push({
+                        label: item.name,
+                        insertText: item.name,
+                        kind:
+                            item.kind === 'function'
+                                ? currentMonaco.languages.CompletionItemKind.Function
+                                : currentMonaco.languages.CompletionItemKind.Variable,
+                        detail: item.declaration,
+                        documentation: {
+                            value: symbolDocumentation(item),
+                            isTrusted: false,
+                            supportHtml: false
+                        },
+                        range: replacement,
+                        sortText: `0_${String(64 - item.scope.depth).padStart(2, '0')}_${item.name}`
+                    })
+                }
                 for (const entry of languageEntries(
                     context.language,
                     context.capabilities?.target
@@ -131,7 +162,8 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
                                           .InsertAsSnippet
                               }
                             : {}),
-                        range: replacement
+                        range: replacement,
+                        sortText: `2_${entry.name}`
                     })
                 }
             }
@@ -147,18 +179,27 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
             if (!source) return undefined
             const identifier = identifierAt(source, offset, context.language === 'cpp')
             if (!identifier || identifier.end >= SOURCE_HELP_SCAN_LIMIT) return undefined
+            const local = identifier.qualified
+                ? undefined
+                : visibleSourceSymbols(source, context.language, offset).find(
+                      (item) => item.name === identifier.name
+                  )
             const entries = await sourceHelpEntries(context.capabilities, context.language)
             if (disposed || token.isCancellationRequested || !context.current()) return undefined
             const entry = entries.find((entry) => entry.name === identifier.name)
             const keyword = languageEntries(context.language, context.capabilities?.target).find(
                 (entry) => entry.kind === 'keyword' && entry.name === identifier.name
             )
-            if (!entry && !keyword) return undefined
+            if (!local && !entry && !keyword) return undefined
             return {
                 range: range(model, identifier.start, identifier.end),
                 contents: [
                     {
-                        value: entry ? entryHover(entry) : escapeMarkdown(keyword!.summary),
+                        value: local
+                            ? symbolDocumentation(local)
+                            : entry
+                              ? entryHover(entry)
+                              : escapeMarkdown(keyword!.summary),
                         isTrusted: false,
                         supportHtml: false
                     }
@@ -177,9 +218,17 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
             if (!source) return undefined
             const call = callAt(source, offset, context.language === 'cpp')
             if (!call) return undefined
+            const local = visibleSourceSymbols(source, context.language, offset).find(
+                (item) => item.name === call.name
+            )
+            if (local && (local.kind !== 'function' || local.ambiguous || !local.parameters))
+                return undefined
             const entries = await sourceHelpEntries(context.capabilities, context.language)
             if (disposed || token.isCancellationRequested || !context.current()) return undefined
-            const entry = entries.find((entry) => entry.name === call.name && entry.parameters)
+            const libraryEntry = entries.find(
+                (entry) => entry.name === call.name && entry.parameters
+            )
+            const entry = local ?? libraryEntry
             if (!entry) return undefined
             const parameters = entry.parameters!
             const variadic = parameters[parameters.length - 1]?.label === '...'
@@ -195,7 +244,9 @@ export function registerSourceLanguageHelp(currentMonaco: MonacoType): monaco.ID
                         {
                             label: entry.declaration,
                             documentation: {
-                                value: entryDocumentation(entry),
+                                value: local
+                                    ? symbolDocumentation(local)
+                                    : entryDocumentation(libraryEntry!),
                                 isTrusted: false,
                                 supportHtml: false
                             },

@@ -190,7 +190,7 @@ function hexByte(code: number): string {
     return `$${code.toString(16).padStart(2, '0').toUpperCase()}`
 }
 
-/** The colors section of traps.md, with EASy68K's equates as swatches under its text. */
+/** The colors section of traps.md, with the assembly equates as swatches under its text. */
 function withSwatches(section: DocumentationEntry): DocumentationEntry {
     const markdown = section.view.type === 'markdown' ? section.view.markdown : ''
     const swatches = Object.entries(M68K_COLORS).map(([name, color]): EntrySwatch => ({
@@ -285,7 +285,7 @@ function rejectedTaskList(): string {
 /**
  * The Chapter in the page's order: the introduction, then each group of tasks after its own
  * introduction (the colors beside the graphics tasks, the key codes beside the keyboard ones), then
- * the tasks that are not supported and the differences from EASy68K.
+ * the tasks that are not supported.
  */
 function trapTasks(): Chapter {
     const href = `${BASE}/traps`
@@ -310,7 +310,7 @@ function trapTasks(): Chapter {
         graphics: take('colors').map(withSwatches),
         input: take('key-codes')
     }
-    const closing = [...take('unsupported'), ...take('differences')]
+    const closing = take('unsupported')
     const entries = [
         //what is left of traps.md introduces the whole Chapter
         ...sections.values(),

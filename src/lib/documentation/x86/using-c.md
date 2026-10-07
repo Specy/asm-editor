@@ -18,6 +18,8 @@ Type `sim_` to see the simulator functions for this project, or press **Ctrl+Spa
 
 Hover over a known function such as `sim_write` to see its declaration, required header and a documentation link. Parameter hints highlight the current argument while you write a call. Selecting a function inserts its name; add the indicated header yourself.
 
+Names you declare in the current file also appear in suggestions, with variable types or function declarations. Ordinary functions get parameter hints, and nearer block declarations take priority. Complex declarations may be missed.
+
 Editing help works locally, before Compile. It covers known language and library names; Compile checks your program and reports errors.
 
 ## Compiling a source file {#compiling}

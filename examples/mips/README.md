@@ -1,6 +1,6 @@
 # MIPS bitmap display and keyboard examples
 
-Programs for the manual verification matrix in [`docs/manual-verification.md`](../../docs/manual-verification.md). Open one in a MIPS project, then Build and Run: the `# @screen` comment in each header configures the screen panel's display, so there is nothing to set by hand. MARS reads that line as an ordinary comment, so the same file still assembles there, where you set the five values in its bitmap display window yourself.
+Programs for the manual verification matrix in [`docs/manual-verification.md`](../../docs/manual-verification.md). Open one in a MIPS project, then Build and Run: the `# @screen` comment in each header configures the screen panel's display, so there is nothing to set by hand.
 
 | File                    | What it exercises                                                                                       | Its `@screen` directive                            |
 | ----------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -12,6 +12,6 @@ Programs for the manual verification matrix in [`docs/manual-verification.md`](.
 
 ## Where they come from
 
-They were written for this repository. MARS's own bitmap and keyboard sample programs are not in [its source repository](https://github.com/dpetersanderson/MARS) — it ships tools, not example programs — so there was nothing to check in with a license note, and these cover the same two tools. The interface they use is MARS's: the [bitmap display](https://raw.githubusercontent.com/dpetersanderson/MARS/main/mars/tools/BitmapDisplay.java) and the [keyboard and display simulator](https://raw.githubusercontent.com/dpetersanderson/MARS/main/mars/tools/KeyboardAndDisplaySimulator.java), whose parameters, defaults and register layout the editor follows exactly. A program written against those tools runs here unchanged once the display parameters match, which is what the `@screen` line saves you from doing by hand.
+These examples were written for this repository. The `@screen` line in each source file sets the display unit size, width, height, and base address used by the Playground's screen panel. The keyboard example uses the memory-mapped input and output registers listed in its header.
 
 The RISC-V ports of all three are in [`../risc-v/`](../risc-v/).

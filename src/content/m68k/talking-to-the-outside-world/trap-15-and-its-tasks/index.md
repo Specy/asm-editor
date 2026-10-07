@@ -51,8 +51,8 @@ ends the program before execution can run into the bytes after `org $2000`.
 ## Print and read numbers
 
 Task 3 prints the **signed decimal** number in `d1.l`. Task 4 waits for a line of input, reads the
-decimal number at its start, and leaves the result in `d1.l`. As in EASy68K, the number stops at
-the first character that is not a digit, so `12abc` reads as 12, and a line with no number at all
+decimal number at its start, and leaves the result in `d1.l`. The number stops at the first
+character that is not a digit, so `12abc` reads as 12, and a line with no number at all
 reads as 0. The task number in `d0.b` changes between requests; the value in `d1` is the input or
 answer for the selected task.
 
@@ -152,10 +152,11 @@ cancelled. Read each task's registers and result codes in the [trap Documentatio
 `d0.w` reports success (0), end of file (1), failure (2), or read-only access (3). Undo restores
 file changes and positions with the instruction that made them.
 
-Some EASy68K tasks need devices this editor does not offer. Sound tasks 70 to 77 stop with an
-Audio Peripheral message, and cycle-counter tasks 30 and 31 need a 68000 timing model. Serial
-and network tasks also stop with a reason; the [unsupported task list](/documentation/m68k/traps#unsupported)
-names each one. An invalid argument can stop a supported task too, such as base 37 for task 15.
+The simulator does not provide every device or hardware feature that a program might request.
+Sound tasks 70 to 77 stop with an Audio Peripheral message, and cycle-counter tasks 30 and 31 need
+a 68000 timing model. Serial and network tasks also stop with a reason; the
+[unsupported task list](/documentation/m68k/traps#unsupported) names each one. An invalid argument
+can stop a supported task too, such as base 37 for task 15.
 
 ## Your turn
 

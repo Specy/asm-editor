@@ -167,7 +167,7 @@ The conversion of a selected higher-level **File** and its project-local headers
 
 ## C/C++ language help
 
-The editor's lightweight assistance while writing C or C++: language keywords and snippets, function suggestions, parameter hints and hover documentation for the **Project**'s **Target**, including its **Environment library** and supported **Runtime library** functions. It does not establish whether a program is valid; Compile reports compiler errors.
+The editor's lightweight assistance while writing C or C++: language keywords and snippets, function suggestions, parameter hints and hover documentation for the **Project**'s **Target**, including its **Environment library** and supported **Runtime library** functions. It also recognizes ordinary variable, parameter and function declarations in the current File using basic lexical scopes. It does not establish whether a program is valid; Compile reports compiler errors.
 _Avoid_: LSP (when this assistance, rather than the Language Server Protocol, is meant), C++ IntelliSense (when full type-aware analysis is implied)
 
 ## Compiler driver

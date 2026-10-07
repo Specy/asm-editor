@@ -28,19 +28,19 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'text',
         title: 'Text I/O',
         description:
-            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor, because EASy68K has one output window where text and graphics share the image; the transcript is what testcases assert on. Typed input is echoed to both, unless task 12 turned the echo off. Text is Windows-1252, EASy68K’s code page: one byte per character, `€` and the curly quotes included.'
+            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor. Testcases compare the transcript. Typed input is echoed to both, unless task 12 turned echo off. Text uses Windows-1252 bytes: one byte per character, including `€` and curly quotes.'
     },
     {
         group: 'graphics',
         title: 'Graphics',
         description:
-            'Drawing on the screen. The origin is the top left, coordinates are signed pixels, so a shape may start off the left or the top, and whatever falls outside the screen is clipped. Colors are `$00BBGGRR` longs, the same encoding EASy68K uses, so its color equates are unchanged. Rectangles and ellipses exclude their right and bottom edges, as they do in EASy68K, which draws them through the Windows GDI.'
+            'Drawing on the screen. The origin is the top left, coordinates are signed pixels, so a shape may start off the left or the top, and whatever falls outside the screen is clipped. Colors are `$00BBGGRR` longs. Rectangles and ellipses exclude their right and bottom edges.'
     },
     {
         group: 'input',
         title: 'Keyboard and mouse',
         description:
-            'Polled input from the focused screen. Key codes are EASy68K’s, which every environment in this editor uses. There are no input interrupts: a program asks for the state it wants when it wants it (tasks 60 and 62 are therefore not supported).'
+            'Polled input from the focused screen. There are no input interrupts: a program asks for the state it wants when it wants it (tasks 60 and 62 are therefore not supported).'
     },
     {
         group: 'time',
@@ -99,7 +99,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         description:
             'Reads a line of input, typed in the console, or on the screen once the program has used it, and ended with Enter; a testcase answers it from its scripted input. Its first 79 characters are stored, then a NULL. A character Windows-1252 has no byte for is stored as `?`.',
         deviation:
-            'EASy68K ends the line by itself at the 80th key and keeps that key for the next read; here the characters typed after the 79th are dropped.'
+            'Only the first 79 characters are stored. Additional typed characters are dropped.'
     },
     {
         task: 3,
@@ -114,9 +114,9 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Read number',
         output: 'D1.L = number',
         description:
-            'Reads a line and converts it the way C’s `atoi` does, as EASy68K does: spaces, then a sign, then the digits up to the first character that is not one. `12abc` is 12, and a line with no number, an empty one included, is 0, never an error.',
+            'Reads a line and converts it by skipping leading spaces, reading an optional sign, then taking digits up to the first other character. `12abc` is 12, and a line with no number, an empty one included, is 0, never an error.',
         deviation:
-            'A number too long for 32 bits keeps its low 32 bits, so every number from -2147483648 to 4294967295 lands in D1.L exactly. What EASy68K’s own `atoi` does past that was not available to check.'
+            'A number too long for 32 bits keeps its low 32 bits.'
     },
     {
         task: 5,
@@ -124,7 +124,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Read character',
         output: 'D1.B = the character, $0D for Enter',
         description:
-            'Reads one key as soon as it is typed, without waiting for Enter, in the console or on the screen once the program has used it. Enter is $0D, EASy68K’s carriage return. Check task 7 first to poll instead of waiting.'
+            'Reads one key as soon as it is typed, without waiting for Enter, in the console or on the screen once the program has used it. Enter is `$0D`. Check task 7 first to poll instead of waiting.'
     },
     {
         task: 6,
@@ -148,7 +148,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D1.L = hundredths of a second',
         description: 'The time the program has been running, in hundredths of a second.',
         deviation:
-            'EASy68K counts from midnight; here the clock starts at zero when the run starts, and a testcase’s virtual clock does too. Programs measure elapsed time by subtracting two reads, which is unchanged.'
+            'The clock starts at zero when a run starts. Programs can measure elapsed time by subtracting two reads.'
     },
     {
         task: 9,
@@ -171,7 +171,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Keyboard echo',
         input: 'D1.B = 0 to turn the echo off, anything else to turn it on',
         description:
-            'Whether what tasks 2, 4, 5 and 18 read is echoed in the console and on the screen. With the echo off, a line read still moves to a new line when Enter ends it, and a key read shows nothing, as in EASy68K. The echo is on when a program starts, and Undo puts back what this task changed.'
+            'Whether input read by tasks 2, 4, 5 and 18 is echoed in the console and on the screen. With echo off, a line read still moves to a new line when Enter ends it, and a key read shows nothing. Echo is on when a program starts, and Undo restores the previous setting.'
     },
     {
         task: 13,
@@ -193,9 +193,9 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display unsigned number in a base',
         input: 'D1.L = number, D2.B = base (2 to 36)',
         description:
-            'Displays D1.L as an unsigned number in the base in D2.B, with upper case digits past 9 as EASy68K writes them: 255 in base 16 is `FF`.',
+            'Displays D1.L as an unsigned number in the base in D2.B, using upper case digits past 9: 255 in base 16 is `FF`.',
         deviation:
-            'A base outside 2 to 36 stops the program with an error naming D2.B, where EASy68K displays nothing.'
+            'A base outside 2 to 36 stops the program with an error naming D2.B.'
     },
     {
         task: 16,
@@ -203,9 +203,9 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Input prompt and line feed',
         input: 'D1.B = 0 to hide the input prompt, 1 to show it, 2 to turn the line feed after Enter off, 3 to turn it on',
         description:
-            'The input prompt is EASy68K’s flashing cursor: here, the caret and the question the console shows while a read waits. The line feed is the new line a key read (task 5) of Enter echoes after its carriage return; without it, Enter only takes the screen’s text cursor back to the start of its line. Line and number reads always start a new line when Enter ends them, even with echo or line feed off. Both settings are on when a program starts, and Undo puts back what this task changed.',
+            'Controls the prompt shown while input is waiting and whether a key read of Enter adds a line feed. The waiting prompt appears as a caret and question in the console; the screen does not draw a flashing cursor. Without the line feed, Enter takes the screen text cursor back to the start of its line. Line and number reads always start a new line when Enter ends them, even with echo or line-feed settings off. Both settings are on when a program starts, and Undo restores the previous setting.',
         deviation:
-            'Another D1.B stops the program with an error naming it, where EASy68K does nothing.'
+            'Any other D1.B value stops the program with an error naming the value.'
     },
     {
         task: 17,
@@ -264,7 +264,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = width in the high word and height in the low word, or 0 to get, 1 for windowed, 2 for full screen',
         output: 'For D1.L = 0, D1.L = width in the high word, height in the low word',
         description:
-            'Resizes the screen and clears it. The minimum is EASy68K’s 640 by 480, which is also the size a program starts with. The windowed and full screen requests are accepted and ignored, since the screen is a panel in the editor.'
+            'Resizes the screen and clears it. The minimum is 640 by 480, which is also the size a program starts with. Windowed and full-screen requests are accepted and ignored because the screen is an editor panel.'
     },
     {
         task: 50,
@@ -300,7 +300,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         description:
             'Reads up to D2.L bytes from the file’s position into the buffer, and moves the position past them. Fewer bytes than asked for is a success, with their count in D2.L; none at all is the end of the file, which leaves D2.L as it was.',
         deviation:
-            'A read of no bytes, D2.L = 0, reports 2. EASy68K reports 1 instead once an earlier read has reached the end of the file.'
+            'A read of no bytes, D2.L = 0, reports 2, including when an earlier read reached the end of the file.'
     },
     {
         task: 54,
@@ -336,7 +336,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D0.W = 0, or 2 when there is no File there',
         description:
             'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.',
-        deviation: 'EASy68K, on Windows, cannot delete a file that is open and reports 2 instead.'
+        deviation: 'A file can be deleted while it is open and remains readable through its file number until closed.'
     },
     {
         task: 58,
@@ -347,7 +347,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         description:
             'Asks for the path of a File, for the program to open with task 51 or create with task 52. Cancel, or an empty answer, leaves (A3) alone and puts 0 in D1.L. A testcase answers it with its next scripted input.',
         deviation:
-            'EASy68K shows the Windows file dialog; here it is a text prompt naming the title, asking for a path from the Project root. A D1.L other than 0 or 1 stops the program with an error naming it, where EASy68K does nothing.'
+            'Shows a text prompt naming the title and asking for a path from the Project root. A D1.L other than 0 or 1 stops the program with an error naming the value.'
     },
     {
         task: 59,
@@ -466,7 +466,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         description:
             'Mode 4 draws normally and is the default; mode 2 moves the drawing point without changing any pixel; mode 16 turns double buffering off and mode 17 turns it on, so drawing goes to an off screen image until task 94 shows it.',
         deviation:
-            'EASy68K’s bitwise modes (0, 1, 3 and 5 to 15) stop the program with an error naming the mode. Double buffering covers the sprite erasing use of the XOR mode.'
+            'Bitwise modes (0, 1, 3 and 5 to 15) stop the program with an error naming the mode. Double buffering is available for drawing animated sprites.'
     },
     {
         task: 93,

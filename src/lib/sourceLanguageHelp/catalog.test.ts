@@ -72,6 +72,8 @@ describe('authoritative source help catalogs', () => {
         ['X86', 'x86']
     ] as const)(
         'links every %s help entry to an existing Documentation entry',
+        // Chapter adapters load a Core; match the documentation suite's startup timeout.
+        { timeout: 60_000 },
         async (target, route) => {
             const { documentationFor, entriesOf } = await import('$lib/documentation/documentation')
             const destinations = new Set(

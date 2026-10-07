@@ -325,22 +325,22 @@ export const mipsDirectivesMap = {
         //every other name here is written without the dot, which the page adds itself
         name: 'frame',
         description:
-            "Describes a function's **stack frame** for the debugger: base register, stack size and return register. MARS accepts it and does nothing with it, so that compiler output assembles unchanged."
+            "Describes a function's **stack frame** for debugging tools: base register, stack size and return register. The assembler accepts this metadata directive but does not use it to change program behavior."
     },
     ent: {
         name: 'ent',
         description:
-            'Marks the **start of a function** for the debugger. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
+            'Marks the **start of a function** for debugging tools. The assembler accepts this metadata directive but does not use it to change program behavior.'
     },
     end: {
         name: 'end',
         description:
-            'Marks the **end of a function** for the debugger. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
+            'Marks the **end of a function** for debugging tools. The assembler accepts this metadata directive but does not use it to change program behavior.'
     },
     local: {
         name: 'local',
         description:
-            'Marks a symbol as **local to this file** for the linker. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
+            'Marks a symbol as **local to this file** for the linker. This assembler accepts the directive but does not use it to change symbol visibility.'
     },
     section: {
         name: 'section',

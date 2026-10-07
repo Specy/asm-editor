@@ -11,9 +11,9 @@ The outcome is useful help before the learner presses Compile: C/C++ keywords an
 - Provide keyword descriptions and small snippets appropriate to the compiler's C17 or C++17 mode. Verify authored examples against those modes.
 - Offer explicit catalog entries for shipped public macros, typedefs, and constants as well as functions: for example `NULL`, `EOF`, `size_t`, fixed-width integer types, and the supported `SIM_SCREEN`/device helpers.
 - Keep existing Monaco word suggestions as generic text suggestions; do not describe them as semantic completion.
-- Do not add project/local symbol analysis, type inference, object/member completion, overload resolution, rename, references, or semantic diagnostics.
+- After the original implementation, the user approved current-file declaration suggestions for variables, parameters and ordinary functions, with basic lexical scope and function hints (2026-10-07). Included-header declarations remain deferred. Do not add project-wide symbol analysis, type inference, object/member completion, overload resolution, rename, references, or semantic diagnostics.
 - Do not claim a complete C or C++ standard library. In particular, the shipped C++ wrappers expose selected C names; they do not imply containers, algorithms, or other unsupported namespaces.
-- Do not resolve shadowing or establish that a suggested name is declared at this position. Help describes a known library entry; it does not certify a call or program.
+- Recognized current-file declarations take precedence over library names using lexical declaration order and block scope. This is best-effort: it does not resolve arbitrary C/C++ bindings or establish program validity. Library help describes a known entry; it does not certify a call.
 - Do not compile on keystrokes or send completion, hover, or parameter-hint requests to a compiler service. Ordinary editing must produce no compiler network requests.
 - Full type-aware C/C++ analysis is deferred. Keep the provider-facing interface replaceable, without implementing JSON-RPC or a language server now.
 
@@ -88,7 +88,7 @@ Monaco model + cursor + cancellation token
 
 Use one tolerant lexical scanner for completion, hover, and call context. It must track comments, escaped character/ordinary string literals, C++ raw strings with custom delimiters and prefixes, and incomplete literals across lines. Treat line continuations correctly. Suppress assistance inside comments/strings, except intentional editing of a literal `#include "..."` or `#include <...>` path.
 
-Recognize ordinary identifiers and simple calls, plus explicitly supported `std::name` spellings in C++ mode. Suppress library lookup after `.`, `->`, or unsupported namespace qualification. A local name can still shadow a library name: describe the known entry without claiming the scanner resolved the program's binding.
+Recognize ordinary identifiers and simple calls, plus explicitly supported `std::name` spellings in C++ mode. Suppress library lookup after `.`, `->`, or unsupported namespace qualification. Recognized current-file declarations take precedence over matching library names in their lexical scope. Unrecognized declarations can still shadow a library name: help must not claim complete binding resolution.
 
 For signature help, find the innermost eligible unfinished call with a balanced delimiter stack. Count commas only at that call's argument level, skipping literals/comments and nested parentheses, brackets, and braces. Do not split source or prototypes with `split(',')`. Preserve function-pointer parameter groups when generating signature labels, for example `qsort`'s comparator. Handle zero-parameter declarations and variadics explicitly; subsequent variadic arguments stay on the `...` parameter. Do not invent fixed parameters beyond the declaration.
 
@@ -255,3 +255,42 @@ Manual checks still required:
 2. Open/close Projects repeatedly and switch Files/two panes with identical paths on different Targets; check for duplicate menus or cross-Project help. Verify quoted include suggestions in a retained Build after changing/deleting live headers.
 3. In browser developer tools, confirm editing/help requests produce only local asset loads and no Compiler Explorer request. The chunk dependency audit is complete; runtime network observation remains pending.
 4. Compile a deliberate error, confirm Problems/squiggles and Build gating still belong to the compiler, then keep editing/requesting help and verify those diagnostics remain intact until the normal Compile flow updates them.
+
+## Current-file declarations extension — 2026-10-07
+
+The user committed the original feature as `3e0446c` (“Add simple completion and hover docs”), then approved current-file variable, parameter and function completion. This extension remains a separate, uncommitted set of changes. The unrelated `:memory:.ses` file is untouched.
+
+- Added `sourceLanguageHelp/symbols.ts`: a conservative declaration index over the existing scanner's tokens, cached by scanned model version and C/C++/header mode. No compiler, dependency or generated catalog changes are required. Only the displayed model's text is indexed, including retained Build text; other Projects, Files and included headers do not supply names.
+- Recognizes ordinary global/local declarations, pointers/references, arrays, comma declarations, typedefs/aliases used as types, named or anonymous struct declarations, function prototypes/definitions, zero/variadic parameters and named function-pointer parameters. C++ direct initialization is indexed as a variable when it cannot form an ordinary prototype. Identifier recognition respects the selected C17/C++17 mode, including C names that are C++ keywords. Struct/class fields, namespace/template contents and lambda-local declarations are deliberately skipped.
+- Variables become eligible after their declarator; parameters belong to the function body. Block scopes and control-statement scopes restrict declarations, including unbraced `for` bodies, range loops and C++ condition declarations. Matching names use the nearest scope and latest declaration. Generic Monaco word suggestions remain available and do not promise scope correctness.
+- Suggestions carry Variable/Function icons, source declaration details and priority over matching catalog/keyword suggestions. They insert only the name. Hovers show the recognized declaration. Explicit `std::` lookup keeps its existing catalog behavior.
+- Parameter hints use recognized source prototypes with balanced parameter groups and exact label offsets. Differing overload declarations, function-pointer calls and unspecified C `f()` parameter lists receive no guessed signature. Explicit C `f(void)` and C++ `f()` are zero-parameter declarations. A recognized local variable suppresses a same-name library signature.
+- This is not a full declarator parser or preprocessor evaluator. Types from unindexed headers, macro-generated declarations, trailing-return functions, complex templates/declarators, namespace members and type-aware member completion remain deferred. Source help does not certify that a declaration/call is valid.
+- Work reuses the existing 131,072-code-unit scan bound and disposal/cancellation checks. Deep recursive scopes/control statements stop after 64 levels to prevent pathological nesting from overflowing the JavaScript stack. On this host, indexing plus lookup over representative 131,000-character source took roughly 8–14 ms; subsequent requests share the index. These are local measurements, not mobile latency guarantees.
+
+Validation performed for this extension:
+
+- **155 tests pass across seven files**, covering the whole help suite, Monaco registration and Project source sessions. This run has no skipped cases or excluded files. New cases cover declaration order/scopes, unfinished code, C/C++ mode differences, prototype identity, local shadowing, hovers/signatures, model edits, separate Projects and retained Build models.
+- The documentation-link catalog test now uses the documentation suite's existing 60-second startup allowance because loading a Core exceeded its five-second default during a concurrent production build. No assertion or case was removed.
+- Scoped ESLint, Prettier, generation drift checks and `git diff --check` pass. `npm run check` reports zero errors and the 31 existing warnings. The production build passes. Its provider chunk is 25,309 bytes raw / 9,346 bytes gzip, approximately 2.9 KB gzip more than the baseline. The client manifest and source maps show only the existing pure shared dependencies plus the new declaration index; the remaining unmapped chunk is Vite's preload helper. No Core, Runtime member assembly, full Documentation Chapter, compiler client or x86 translator enters the provider dependency closure. Catalog assets are unchanged.
+- Real-browser verification remains pending: the sandbox still rejects Vite's listening socket with `listen EPERM`.
+
+Manual checks for the extension, in addition to the original feature's checks above:
+
+1. In a new C or C++ File, use the example below. Type `to` inside `main` and check `total` has a Variable icon and `int total` detail; inside the loop, type `ind` and check the `index` declaration. Check the dedicated declaration suggestion disappears outside its scope; generic Monaco word suggestions can still list the text.
+2. Type `add(` and advance past the comma to check the parameter highlight. Hover `add` and `total` for their declarations. Add an inner block with a differently typed `total` and verify its hover/detail takes precedence only inside that block. Repeat with an unfinished function or loop header.
+3. Open two Projects with different declarations at the same path; check they stay isolated. Compile, rename a live declaration, and check a retained Build still describes its own source. Confirm the normal compiler-error flow still works.
+
+```c
+int add(int left, int right) {
+    return left + right;
+}
+
+int main(void) {
+    int total = 0;
+    for (int index = 0; index < 4; ++index) {
+        total = add(total, index);
+    }
+    return total;
+}
+```
