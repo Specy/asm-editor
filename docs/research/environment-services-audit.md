@@ -15,14 +15,14 @@ Classes: **(a)** deliberate and documented, **(b)** a necessary browser adaptati
 
 ### 1. Service semantics decided in the adapter, not the Core (c)
 
-| Language | Finding | Where |
-| --- | --- | --- |
-| MIPS | print float/double use JS `String(v)`: `0.1f` prints `0.10000000149011612`, `1.0` prints `1`, `1e-5` prints `0.00001`. RISC-V formats in Java inside the Core and matches RARS, so the two Targets disagree, and MIPS service 57 (formatted in Java) disagrees with service 2. | `MIPSEmulator.svelte.ts:950-951` |
-| MIPS, RISC-V | read int/float/double parsed by the adapter with `Number()` and truncated with `\|0`: `""`→0, `"3.7"`→3, `"1e10"`→1410065408, `"0x1F"`→31; errors read "Handler readInt rejected: Invalid number" with no line or address. MARS/RARS use `parseInt`/`parseFloat` and error with the address. | `MIPS:896-900`, `RISC-V:983-987` |
-| MIPS, RISC-V | read char demands exactly one typed character plus Enter; Enter alone ends the run. MARS returns one keystroke, Enter gives 10. | `MIPS:903-907`, `RISC-V:990-994` |
-| M68K | task 15 prints lowercase hex (`ff`; EASy68K uppercases); task 20's width is read unsigned, so a negative width (left-justify) gives a 250-column field. | `M68KEmulator.svelte.ts:620,627`; `interpreter.rs:2339` |
-| M68K | tasks 4/18 parse with `Number()`: empty stops the run, `0x1F` and `1e3` are accepted, `1.5`/`3e9` reach the Core as a raw serde error. EASy68K uses `atoi` ("12abc"→12, "abc"→0, never an error). | `M68K:934-941` |
-| M68K | the adapter regex-parses the Core's text "Unknown interrupt: N" to explain a task. | `M68K:987-994` |
+| Language     | Finding                                                                                                                                                                                                                                                                                      | Where                                                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| MIPS         | print float/double use JS `String(v)`: `0.1f` prints `0.10000000149011612`, `1.0` prints `1`, `1e-5` prints `0.00001`. RISC-V formats in Java inside the Core and matches RARS, so the two Targets disagree, and MIPS service 57 (formatted in Java) disagrees with service 2.               | `MIPSEmulator.svelte.ts:950-951`                        |
+| MIPS, RISC-V | read int/float/double parsed by the adapter with `Number()` and truncated with `\|0`: `""`→0, `"3.7"`→3, `"1e10"`→1410065408, `"0x1F"`→31; errors read "Handler readInt rejected: Invalid number" with no line or address. MARS/RARS use `parseInt`/`parseFloat` and error with the address. | `MIPS:896-900`, `RISC-V:983-987`                        |
+| MIPS, RISC-V | read char demands exactly one typed character plus Enter; Enter alone ends the run. MARS returns one keystroke, Enter gives 10.                                                                                                                                                              | `MIPS:903-907`, `RISC-V:990-994`                        |
+| M68K         | task 15 prints lowercase hex (`ff`; EASy68K uppercases); task 20's width is read unsigned, so a negative width (left-justify) gives a 250-column field.                                                                                                                                      | `M68KEmulator.svelte.ts:620,627`; `interpreter.rs:2339` |
+| M68K         | tasks 4/18 parse with `Number()`: empty stops the run, `0x1F` and `1e3` are accepted, `1.5`/`3e9` reach the Core as a raw serde error. EASy68K uses `atoi` ("12abc"→12, "abc"→0, never an error).                                                                                            | `M68K:934-941`                                          |
+| M68K         | the adapter regex-parses the Core's text "Unknown interrupt: N" to explain a task.                                                                                                                                                                                                           | `M68K:987-994`                                          |
 
 ### 2. Standard input and the Terminal contract
 

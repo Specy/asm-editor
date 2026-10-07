@@ -14,7 +14,7 @@ export const versions: Version[] = [
             'Added compilation of C and C++ to X86, MIPS and RISC-V assembly with Clang or GCC, at every optimization level.',
             'Each C/C++ line is colored and connected to the assembly instructions it produced, and selecting a line highlights its instructions',
             'Breakpoints, stepping and undo follow the C/C++ source while debugging the generated assembly',
-            'C/C++ code can use a subset of the standard C/C++ library functions (printf, scanf, malloc, etc.) plus a custom library that allows you to use the simulator\'s low level syscalls'
+            "C/C++ code can use a subset of the standard C/C++ library functions (printf, scanf, malloc, etc.) plus a custom library that allows you to use the simulator's low level syscalls"
         ]
     },
     {
