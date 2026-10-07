@@ -11,3 +11,16 @@ Programs for the manual verification matrix in [`docs/manual-verification.md`](.
 `bouncing-ball.s` and `keyboard-display.s` run until you Stop them, or until you type `q` in the second one.
 
 These programs demonstrate the simulator's memory-mapped display and keyboard, along with timing through sleep and elapsed-time services. The `@screen` comment is an editor directive: it configures the display when you Build and is ignored as a normal assembly comment by other assemblers.
+
+## Flappy Bird in C
+
+`flappy-bird.c` reimplements the course's RISC-V Flappy Bird using the simulator API in `<sim.h>`.
+Add it as a C file in a RISC-V project, Compile it, then Build and Run its Generated assembly.
+`SIM_SCREEN(display, 256, 256, 4)` configures a 64 × 64 cell grid automatically.
+
+Open the Screen panel and click it to focus the keyboard. Tap Space, lowercase `w`, or Enter to
+start and flap. After a collision, tap once to reset, then again to start. Scores and the session's
+best score appear in the console. The program runs until you press Stop.
+
+The [Flappy bird in C example page](../../src/content/risc-v/examples/flappy-bird-in-c/index.md)
+contains the same source; keep both copies together when changing the game.

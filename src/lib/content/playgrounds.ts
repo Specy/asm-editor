@@ -1,4 +1,6 @@
 import type { AvailableLanguages, MemoryValue, Testcase } from '$lib/Project.svelte'
+import { isValidFilePath } from '$lib/projectFiles'
+import { cleanPlaygroundProgram, type PlaygroundProgram } from './playgroundProgram'
 
 /**
  * The playground fence of a course page, parsed once for the two places that read it: the renderer,
@@ -55,6 +57,10 @@ export type PlaygroundFence = {
     isExercise: boolean
     /** The worked answer of the exercise above it. It renders as an ordinary playground. */
     isSolution: boolean
+    /** Named-file fences can declare C/C++ independently of the CPU target. */
+    sourceLanguage?: 'c' | 'cpp'
+    file?: string
+    entry?: string
 }
 
 /**
@@ -63,6 +69,8 @@ export type PlaygroundFence = {
  */
 export type PlaygroundTestcase = {
     testcase: Testcase
+    /** Whether the author supplied testcase fields, rather than verification metadata alone. */
+    hasTestcase: boolean
     /**
      * How many instructions to run a program that never ends for. Set on the animated Examples,
      * which loop until the reader presses Stop.
@@ -104,8 +112,19 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
         .map((entry) => entry.trim())
         .filter((entry) => entry.length > 0)
     if (!entries.includes('playground')) return undefined
-    const language = parsePlaygroundLanguage(entries[0])
+    const sourceLanguage = entries[0] === 'c' || entries[0] === 'cpp' ? entries[0] : undefined
+    const target = entries.find((entry) => entry.startsWith('target='))?.slice(7)
+    if (sourceLanguage && !target)
+        throw new Error('A C/C++ playground needs a target= architecture')
+    const language = parsePlaygroundLanguage(target ?? entries[0])
     if (!language) return undefined
+    if (sourceLanguage && !['MIPS', 'RISC-V', 'RISC-V-64', 'X86'].includes(language))
+        throw new Error(`${language} has no C/C++ source compilation`)
+    const file = playgroundFileName(info)
+    if (sourceLanguage && !file) throw new Error('A C/C++ playground needs a file= name')
+    const entry = entries.find((entry) => entry.startsWith('entry='))?.slice(6)
+    if (entry !== undefined && (!file || !isValidFilePath(entry)))
+        throw new Error('A playground entry needs named files and a valid path')
     const showMemory = entries.includes('memory')
     //a fence that asks for the Screen open has one, so `open-screen` on its own is enough
     const openScreen = entries.includes('open-screen')
@@ -118,6 +137,9 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
         REGISTER_FILE_FLAGS.includes(entry as PlaygroundRegisterFile)
     )
     return {
+        ...(sourceLanguage ? { sourceLanguage } : {}),
+        ...(file ? { file } : {}),
+        ...(entry ? { entry } : {}),
         settings: {
             language,
             showMemory,
@@ -137,6 +159,35 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
         isExercise,
         isSolution: entries.includes('solution')
     }
+}
+
+/** A `file=` fence belongs to the preceding named playground when they are adjacent. */
+export function playgroundFileName(info: string): string | undefined {
+    const name = info
+        .split('|')
+        .map((part) => part.trim())
+        .find((part) => part.startsWith('file='))
+        ?.slice(5)
+    if (name !== undefined && !isValidFilePath(name))
+        throw new Error(`Invalid playground file: ${name}`)
+    return name
+}
+
+export function namedPlaygroundProgram(
+    fence: PlaygroundFence,
+    files: { info: string; code: string }[]
+): PlaygroundProgram {
+    const entries = files.map((file) => {
+        const name = playgroundFileName(file.info)
+        if (!name) throw new Error('Every playground file needs a file= name')
+        return [name, { encoding: 'plain' as const, content: file.code }] as const
+    })
+    if (new Set(entries.map(([name]) => name)).size !== entries.length)
+        throw new Error('Duplicate file name in playground')
+    return cleanPlaygroundProgram({
+        files: Object.fromEntries(entries),
+        entry: fence.entry ?? fence.file
+    })
 }
 
 /** The fence language of a testcase block, the one that attaches to the playground above it. */
@@ -169,6 +220,14 @@ export function parseTestcaseFence(raw: string): PlaygroundTestcase {
     }
     return {
         runFor,
+        hasTestcase: [
+            'input',
+            'expectedOutput',
+            'startingRegisters',
+            'expectedRegisters',
+            'startingMemory',
+            'expectedMemory'
+        ].some((field) => Object.hasOwn(value, field)),
         testcase: {
             ...(typeof value.name === 'string' ? { name: value.name } : {}),
             input: parseInput(value.input),
@@ -361,6 +420,7 @@ export type ContentPlayground = PlaygroundFence & {
     line: number
     info: string
     code: string
+    program?: PlaygroundProgram
     testcase?: Testcase
     runFor?: number
     /** For an exercise, the `solution` playground that follows it. */
@@ -385,6 +445,17 @@ export function extractPlaygrounds(markdown: string): ContentPlayground[] {
             line: fence.line,
             info: fence.info,
             code: fence.code
+        }
+        if (parsed.file) {
+            const files = [fence]
+            while (
+                fences[index + 1]?.followsPrevious &&
+                playgroundFileName(fences[index + 1].info) &&
+                !parsePlaygroundFence(fences[index + 1].info)
+            ) {
+                files.push(fences[++index])
+            }
+            playground.program = namedPlaygroundProgram(parsed, files)
         }
         const next = fences[index + 1]
         if (next && next.followsPrevious && isTestcaseFence(next.info)) {

@@ -135,6 +135,7 @@
     class:debugging
     class:with-end={debugging && hasEnd}
     class:with-actions={debugging && actions.length > 0}
+    class:with-compilation={!!compilation}
 >
     <div class="toolbar">
         {#if !debugging}
@@ -145,6 +146,7 @@
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
                     title="Assemble the program and start debugging it"
+                    aria-label={buildLabel}
                 >
                     <Icon size={1}>
                         {#if building}
@@ -178,7 +180,8 @@
                     disabled={compilation.disabled}
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
-                    title="Compile source and local headers with Compiler Explorer"
+                    title={compilation.warning ??
+                        'Compile source and local headers with Compiler Explorer'}
                     onclick={compilation.onCompile}
                 >
                     <Icon size={0.9}>
@@ -557,6 +560,20 @@
     @container (max-width: 30rem) {
         .tool {
             padding: 0 0.6rem;
+        }
+    }
+
+    @container (max-width: 38rem) {
+        .with-compilation .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 28rem) {
+        .with-compilation .label,
+        .with-compilation .compiler,
+        .with-compilation .compile-warning {
+            display: none;
         }
     }
 

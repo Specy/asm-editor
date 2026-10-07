@@ -4,6 +4,8 @@ import lzstring from 'lz-string'
 import { readFileSync } from 'node:fs'
 import MarkdownRenderer from './MarkdownRenderer.svelte'
 import { splitLecture } from '$lib/content/lectureSections'
+import { decodePlaygroundProgram } from '$lib/content/playgroundProgram'
+import { extractPlaygrounds } from '$lib/content/playgrounds'
 
 //the renderer reaches `$lib/Project.svelte`, which reaches the projects store, which opens its
 //IndexedDB because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's
@@ -121,17 +123,22 @@ describe('code block rendering', () => {
         }
     })
 
-    it.each(['c', 'cpp'])('syntax highlights %s in documentation renderer mode', async (language) => {
-        const source = `\`\`\`${language}\n#include <stdio.h>\nint main(void) { return 0; }\n\`\`\`\n`
-        const { target, cleanup } = render(source, { linksInNewTab: true, simpleCode: true })
-        try {
-            const block = await waitForShikiCodeBlock(target)
-            expect(block.querySelectorAll('code span[style*="color"]').length).toBeGreaterThan(0)
-            expect(codeSource(target)).toContain('int main(void)')
-        } finally {
-            cleanup()
+    it.each(['c', 'cpp'])(
+        'syntax highlights %s in documentation renderer mode',
+        async (language) => {
+            const source = `\`\`\`${language}\n#include <stdio.h>\nint main(void) { return 0; }\n\`\`\`\n`
+            const { target, cleanup } = render(source, { linksInNewTab: true, simpleCode: true })
+            try {
+                const block = await waitForShikiCodeBlock(target)
+                expect(block.querySelectorAll('code span[style*="color"]').length).toBeGreaterThan(
+                    0
+                )
+                expect(codeSource(target)).toContain('int main(void)')
+            } finally {
+                cleanup()
+            }
         }
-    })
+    )
 
     it.each([
         ['normal', {}],
@@ -168,6 +175,82 @@ describe('code block rendering', () => {
 })
 
 describe('playground rendering', () => {
+    it('keeps runFor-only metadata out of the embed testcases', async () => {
+        const source = PLAYGROUND.replace(
+            '{ "expectedRegisters": { "d0": 1 } }',
+            '{ "runFor": 200000 }'
+        )
+        const { target, cleanup } = render(source)
+        try {
+            const iframe = await waitForIframe(target)
+            const url = new URL(iframe.getAttribute('src')!, 'https://asm-editor.specy.app')
+            expect(url.searchParams.has('testcases')).toBe(false)
+            expect(extractPlaygrounds(source)[0].runFor).toBe(200000)
+        } finally {
+            cleanup()
+        }
+    })
+
+    it('preserves an explicit empty-output assertion as a testcase', async () => {
+        const source = PLAYGROUND.replace(
+            '{ "expectedRegisters": { "d0": 1 } }',
+            '{ "expectedOutput": "" }'
+        )
+        const { target, cleanup } = render(source)
+        try {
+            const iframe = await waitForIframe(target)
+            const url = new URL(iframe.getAttribute('src')!, 'https://asm-editor.specy.app')
+            const testcases = JSON.parse(
+                lzstring.decompressFromEncodedURIComponent(url.searchParams.get('testcases')!)
+            )
+            expect(testcases).toHaveLength(1)
+            expect(testcases[0].expectedOutput).toBe('')
+        } finally {
+            cleanup()
+        }
+    })
+
+    it('renders named C files as readable sources and mounts one RISC-V playground', async () => {
+        const source = [
+            '```c|playground|target=riscv|file=src/main.c|console|allow-open',
+            '#include "value.h"',
+            'int main(void) { return VALUE; }',
+            '',
+            '```',
+            '',
+            '```c|file=src/value.h',
+            '#define VALUE 42   ',
+            '```',
+            '',
+            '```testcase',
+            '{"expectedRegisters":{"a0":42}}',
+            '```'
+        ].join('\n')
+        const { target, cleanup } = render(source)
+        try {
+            expect(target.querySelector('div.code-playground')).not.toBeNull()
+            expect(
+                [...target.querySelectorAll('.playground-filename')].map((node) => node.textContent)
+            ).toEqual(['src/main.c', 'src/value.h'])
+            expect(
+                [...target.querySelectorAll('pre code')].map((node) => node.textContent?.trimEnd())
+            ).toEqual(['#include "value.h"\nint main(void) { return VALUE; }', '#define VALUE 42'])
+            const iframe = await waitForIframe(target)
+            expect(target.querySelectorAll('iframe')).toHaveLength(1)
+            expect(target.querySelectorAll('pre')).toHaveLength(0)
+            const url = new URL(iframe.getAttribute('src')!, 'https://asm-editor.specy.app')
+            expect(url.searchParams.get('language')).toBe('RISC-V')
+            expect(url.searchParams.get('openButton')).toBe('true')
+            const program = decodePlaygroundProgram(url.searchParams.get('program')!)
+            expect(program).toEqual(extractPlaygrounds(source)[0].program)
+            expect(program.entry).toBe('src/main.c')
+            expect(Object.keys(program.files)).toEqual(['src/main.c', 'src/value.h'])
+            expect(program.files['src/main.c'].content).toContain('return VALUE;')
+            expect(url.searchParams.has('testcases')).toBe(true)
+        } finally {
+            cleanup()
+        }
+    })
     it('renders a playground as its code before mount and as the embed after', async () => {
         const { target, cleanup } = render(PLAYGROUND)
         try {

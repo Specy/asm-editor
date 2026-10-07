@@ -17,6 +17,8 @@
         isTestcaseFence,
         parsePlaygroundFence,
         parseTestcaseFence,
+        playgroundFileName,
+        namedPlaygroundProgram,
         type PlaygroundFence,
         type PlaygroundSettings
     } from '$lib/content/playgrounds'
@@ -25,6 +27,7 @@
     import { assemblyPalette } from '$lib/content/assemblyPalette'
     import { HeadingSlugger } from '$lib/content/headings'
     import { toString as hastToString } from 'hast-util-to-string'
+    import { encodePlaygroundProgram, type PlaygroundProgram } from '$lib/content/playgroundProgram'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
@@ -40,7 +43,12 @@
 
     type Settings = PlaygroundSettings
 
-    function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
+    function createCodeUrl(
+        code: string,
+        settings: Settings,
+        testcases: Testcase[],
+        program?: PlaygroundProgram
+    ) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
@@ -71,7 +79,7 @@
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
                 : ''
-        return `/embed?${lang}${props}${tests}code=${compressed}`
+        return `/embed?${lang}${props}${tests}${program ? `program=${encodePlaygroundProgram(program)}` : `code=${compressed}`}`
     }
 
     /** The fence info string of a `<pre><code class="language-...">`, when it has one. */
@@ -118,7 +126,8 @@
     function attachedTestcases(node: RootContent, info: string): Testcase[] {
         const raw = textOf(node)
         try {
-            return [parseTestcaseFence(raw).testcase]
+            const parsed = parseTestcaseFence(raw)
+            return parsed.hasTestcase ? [parsed.testcase] : []
         } catch (e) {
             const where = typeof window === 'undefined' ? '' : ` on ${window.location.pathname}`
             console.error(
@@ -194,10 +203,10 @@
             }
             //the trailing newline a fence leaves behind would render as an empty last line, and the
             //embed URL is built from these same children, so both are trimmed once, here
-            codeNode.children = highlightedAssemblyCode(
-                textOf(codeNode).trimEnd(),
-                fence.settings.language
-            )
+            const text = textOf(codeNode).trimEnd()
+            codeNode.children = fence.sourceLanguage
+                ? [{ type: 'text', value: text }]
+                : highlightedAssemblyCode(text, fence.settings.language)
         }
         node.properties = {
             ...node.properties,
@@ -225,6 +234,29 @@
             const fence = info === undefined ? undefined : parsePlaygroundFence(info)
             if (fence && node.type === 'element') {
                 let testcases: Testcase[] = []
+                const fileNodes = [
+                    { node, info: info as string, code: textOf(node).replace(/\n$/, '') }
+                ]
+                if (fence.file) {
+                    for (;;) {
+                        const next = nextBlock(children, index)
+                        const nextInfo = next && fenceInfoOf(next.node)
+                        if (
+                            !next ||
+                            nextInfo === undefined ||
+                            !playgroundFileName(nextInfo) ||
+                            parsePlaygroundFence(nextInfo) ||
+                            next.node.type !== 'element'
+                        )
+                            break
+                        fileNodes.push({
+                            node: next.node,
+                            info: nextInfo,
+                            code: textOf(next.node).replace(/\n$/, '')
+                        })
+                        index = next.index
+                    }
+                }
                 const following = nextBlock(children, index)
                 const followingInfo = following && fenceInfoOf(following.node)
                 if (following && followingInfo !== undefined && isTestcaseFence(followingInfo)) {
@@ -232,7 +264,43 @@
                     //the testcase block and the whitespace before it go with the playground
                     index = following.index
                 }
-                result.push(markPlayground(node, fence, info as string, testcases, parent))
+                const marked = markPlayground(node, fence, info as string, testcases, parent)
+                if (fence.file) {
+                    const program = namedPlaygroundProgram(fence, fileNodes)
+                    const properties = marked.properties
+                    //Keep each source visible with its filename in the prerendered page. Only
+                    //the wrapper becomes an iframe, so all files share one emulator.
+                    marked.properties = { 'data-playground-file': true }
+                    result.push({
+                        type: 'element',
+                        tagName: 'div',
+                        properties: { ...properties, 'data-program': JSON.stringify(program) },
+                        children: fileNodes.flatMap(({ node: fileNode, info: fileInfo }) => {
+                            const codeNode = fileNode.children.find(
+                                (child): child is Element =>
+                                    child.type === 'element' && child.tagName === 'code'
+                            )
+                            if (codeNode)
+                                codeNode.properties.className = [
+                                    `language-${fileInfo.split('|')[0]}`
+                                ]
+                            return [
+                                {
+                                    type: 'element' as const,
+                                    tagName: 'div',
+                                    properties: { className: ['playground-filename'] },
+                                    children: [
+                                        {
+                                            type: 'text' as const,
+                                            value: playgroundFileName(fileInfo)!
+                                        }
+                                    ]
+                                },
+                                fileNode
+                            ]
+                        })
+                    })
+                } else result.push(marked)
                 continue
             }
             //a testcase fence that attached to nothing is still not something a reader should read
@@ -265,6 +333,11 @@
         const codeNode = node.children?.find(
             (child): child is Element => child.type === 'element' && child.tagName === 'code'
         )
+        const rawProgram = node.properties?.['data-program']
+        const program =
+            typeof rawProgram === 'string'
+                ? (JSON.parse(rawProgram) as PlaygroundProgram)
+                : undefined
         return {
             type: 'element',
             tagName: 'iframe',
@@ -278,7 +351,8 @@
                 src: createCodeUrl(
                     textOf(codeNode ?? node).trimEnd(),
                     fence.settings,
-                    markedTestcases(node)
+                    markedTestcases(node),
+                    program
                 )
             },
             children: []

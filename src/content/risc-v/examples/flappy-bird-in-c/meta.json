@@ -1,0 +1,6 @@
+{
+    "name": "Flappy bird in C",
+    "description": "Reimplement the RISC-V Flappy Bird game in C with the simulator API: screen cells, keyboard input, timing, and console scores.",
+    "order": 25,
+    "topic": "flappy-bird-in-c"
+}

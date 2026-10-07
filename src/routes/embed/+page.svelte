@@ -5,6 +5,7 @@
         type AvailableLanguages,
         cleanTestcases,
         makeProject,
+        type Project,
         type Testcase
     } from '$lib/Project.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -25,6 +26,12 @@
     import { serializer } from '$lib/json'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
     import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
+    import {
+        decodePlaygroundProgram,
+        encodePlaygroundProgram,
+        playgroundBuildSources
+    } from '$lib/content/playgroundProgram'
+    import { sourceLanguage } from '$lib/sourceCompilation/records'
 
     type Settings = {
         showMemory: boolean
@@ -65,6 +72,8 @@
     })
     let inIframe = $state(true)
     let code = $state(BASE_CODE[settings.language])
+    let project = $state<Project>()
+    let ready = $state(false)
     let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
     let generatedIframeCode = $derived(
@@ -76,15 +85,45 @@
         settings = getSettings()
         code = getCodeFromUrl() ?? BASE_CODE[settings.language]
         testcases = cleanTestcases(getTestsFromUrl())
+        const encoded = $page.url.searchParams.get('program')
+        if (encoded) {
+            try {
+                project = makeProject({
+                    ...decodePlaygroundProgram(encoded),
+                    language: settings.language
+                })
+            } catch (error) {
+                toast.error(`Cannot load playground files: ${String(error)}`)
+            }
+        }
+        ready = true
+        return () => clearTimeout(timeoutId)
     })
 
     function openInEditor() {
-        const project = makeProject({ code, language: settings.language })
+        const opened = project
+            ? makeProject({ ...project.toObject(), testcases })
+            : makeProject({ code, language: settings.language, testcases })
         try {
-            window.open(createShareLink(project), '_blank')
+            window.open(createShareLink(opened), '_blank')
         } catch (error) {
             console.error(error)
             toast.error('This program is too large to open in the editor through a link')
+        }
+    }
+
+    function changeLanguage(language: AvailableLanguages) {
+        code = BASE_CODE[language]
+        if (project) {
+            const previous = project
+            const source = previous.compilations.find(
+                (record) => record.outputPath === previous.entry
+            )?.sourcePath
+            project = makeProject({
+                files: previous.files,
+                entry: source ?? previous.entry,
+                language
+            })
         }
     }
 
@@ -185,7 +224,14 @@
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
                 : ''
-        return `${window.location.origin}/embed?${lang}${props}${tests}code=${compressed}`
+        const program = project
+            ? encodePlaygroundProgram({
+                  files: $state.snapshot(project.files),
+                  entry: project.entry,
+                  compilations: project.compilations
+              })
+            : undefined
+        return `${window.location.origin}/embed?${lang}${props}${tests}${program ? `program=${program}` : `code=${compressed}`}`
     }
 
     function generateCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
@@ -197,6 +243,13 @@
     }
 
     $effect(() => {
+        if (!ready) return
+        //Include file edits and generated assembly in standalone embed/share URLs too.
+        if (project) {
+            void project.files
+            void project.entry
+            void project.compilations
+        }
         generateCodeUrl(code, settings, testcases)
     })
 </script>
@@ -236,50 +289,55 @@
                 <Column
                     style={`padding: 0.5rem 0.5rem ${inIframe ? '0.5rem' : '0'}; flex:1; min-width: 0`}
                 >
-                    {#key settings.language}
-                        <EmulatorLoader
-                            bind:code
-                            language={settings.language}
-                            settings={{
-                                globalPageElementsPerRow: 4,
-                                globalPageSize: 4 * 8
-                            }}
-                        >
-                            {#snippet children(emulator)}
-                                <InteractiveInstructionEditor
-                                    {emulator}
-                                    bind:code
-                                    bind:testcases
-                                    embedded={inIframe}
-                                    showConsole={settings.showConsole}
-                                    showMemory={settings.showMemory}
-                                    showTestcases={settings.showTests}
-                                    showPc={settings.showPc}
-                                    showRegisters={settings.showRegisters}
-                                    showFlags={settings.showFlags}
-                                    showScreen={settings.showScreen &&
-                                        languageHasScreen(settings.language)}
-                                    openScreen={settings.openScreen}
-                                    initialRegisterFile={settings.registerFile}
-                                    language={settings.language}
-                                    forceMemoryRight={true}
-                                    dockActions={settings.openButton
-                                        ? [
-                                              {
-                                                  label: 'Open in editor',
-                                                  title: 'Open this program in the editor, in a new tab',
-                                                  icon: FaExternal,
-                                                  onClick: openInEditor
-                                              }
-                                          ]
-                                        : []}
-                                />
-                            {/snippet}
-                            {#snippet loading()}
-                                <Header>Loading emulator...</Header>
-                            {/snippet}
-                        </EmulatorLoader>
-                    {/key}
+                    {#if ready}
+                        {#key settings.language}
+                            <EmulatorLoader
+                                bind:code
+                                source={project ? playgroundBuildSources(project) : undefined}
+                                language={settings.language}
+                                settings={{
+                                    automaticChecking: !project || !sourceLanguage(project.entry),
+                                    globalPageElementsPerRow: 4,
+                                    globalPageSize: 4 * 8
+                                }}
+                            >
+                                {#snippet children(emulator)}
+                                    <InteractiveInstructionEditor
+                                        {emulator}
+                                        {project}
+                                        bind:code
+                                        bind:testcases
+                                        embedded={inIframe}
+                                        showConsole={settings.showConsole}
+                                        showMemory={settings.showMemory}
+                                        showTestcases={settings.showTests}
+                                        showPc={settings.showPc}
+                                        showRegisters={settings.showRegisters}
+                                        showFlags={settings.showFlags}
+                                        showScreen={settings.showScreen &&
+                                            languageHasScreen(settings.language)}
+                                        openScreen={settings.openScreen}
+                                        initialRegisterFile={settings.registerFile}
+                                        language={settings.language}
+                                        forceMemoryRight={true}
+                                        dockActions={settings.openButton
+                                            ? [
+                                                  {
+                                                      label: 'Open in editor',
+                                                      title: 'Open this program in the editor, in a new tab',
+                                                      icon: FaExternal,
+                                                      onClick: openInEditor
+                                                  }
+                                              ]
+                                            : []}
+                                    />
+                                {/snippet}
+                                {#snippet loading()}
+                                    <Header>Loading emulator...</Header>
+                                {/snippet}
+                            </EmulatorLoader>
+                        {/key}
+                    {/if}
                 </Column>
 
                 {#if !inIframe}
@@ -347,7 +405,7 @@
                                 <div class="share-settings">
                                     <span>Language</span>
                                     <Select
-                                        onChange={(language) => (code = BASE_CODE[language])}
+                                        onChange={changeLanguage}
                                         style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
                                         wrapperStyle="max-width: 5rem;"
                                         options={languageOptions}

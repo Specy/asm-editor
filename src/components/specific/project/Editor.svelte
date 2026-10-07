@@ -55,8 +55,6 @@
         /** A Workbench session owns models shared by its editor groups. */
         sharedModels?: EditorModels
         highlightedLine?: number
-        /** Related source/assembly lines selected through a Source map. */
-        mappedLines?: readonly number[]
         /** Matching source/assembly section backgrounds. */
         lineColoring?: EditorLineColoring
         /** Palette indices emphasized by the active source/assembly connections; others dim. */
@@ -93,7 +91,6 @@
         retainedModelKeys,
         sharedModels,
         highlightedLine = -1,
-        mappedLines = [],
         lineColoring,
         activeLineColors,
         hasError = false,
@@ -142,7 +139,6 @@
     let ownEditor: monaco.editor.IStandaloneCodeEditor | undefined
     let applyingExternalValue = false
     let overflowWidgets: HTMLDivElement | null = null
-    let viewZoneSelections = $state.raw<{ line: number; domNode: HTMLElement }[]>([])
     //Plain Maps, not reactive ones: nothing renders from them, and the effect that reconciles the
     //models both reads and writes them, which with reactive maps made it re-run on its own writes.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
@@ -451,8 +447,6 @@
                 domNode: HTMLElement
                 wrapper: HTMLElement
                 marginDomNode?: HTMLElement
-                line: number
-                selection: HTMLElement
                 observer: ResizeObserver
                 component: Record<string, unknown>
             }[]
@@ -485,8 +479,6 @@
                             marginDomNode.classList.add('compiled-section-border-bottom')
                         }
                     }
-                    const selection = document.createElement('div')
-                    selection.className = 'view-zone-selection'
                     const wrapper = document.createElement('div')
                     viewZoneEditor.applyFontInfo(wrapper)
                     const Component = zone.content
@@ -495,7 +487,7 @@
                         target: wrapper,
                         props
                     })
-                    domNode.append(selection, wrapper)
+                    domNode.appendChild(wrapper)
 
                     const id = changeAccessor.addZone({
                         afterLineNumber: zone.afterLineNumber,
@@ -518,8 +510,6 @@
                         domNode,
                         wrapper,
                         marginDomNode,
-                        line,
-                        selection,
                         observer,
                         component
                     })
@@ -530,13 +520,8 @@
                 if (fontOption !== undefined && !event.hasChanged(fontOption)) return
                 currentViewZones.forEach((zone) => viewZoneEditor.applyFontInfo(zone.wrapper))
             })
-            viewZoneSelections = currentViewZones.map((zone) => ({
-                line: zone.line,
-                domNode: zone.selection
-            }))
             return () => {
                 fontListener.dispose()
-                viewZoneSelections = []
                 currentViewZones.forEach((zone) => {
                     zone.observer.disconnect()
                     void unmount(zone.component)
@@ -550,14 +535,6 @@
                     })
                 })
             }
-        }
-    })
-
-    $effect(() => {
-        //Paint selection beneath transparent expansion content without remounting its rows.
-        const mapped = new Set(mappedLines)
-        for (const zone of viewZoneSelections) {
-            zone.domNode.classList.toggle('source-mapped-line', mapped.has(zone.line))
         }
     })
 
@@ -646,10 +623,6 @@
                           })
                       })
                     : []),
-                ...mappedLines.map((line) => ({
-                    range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
-                    options: { className: 'source-mapped-line', isWholeLine: true, zIndex: 1 }
-                })),
                 ...(highlightedLine >= 0
                     ? [
                           {
@@ -805,14 +778,6 @@
     :global(.compiled-section-border-bottom::after) {
         bottom: 0;
         transform: translateY(50%);
-    }
-    :global(.source-mapped-line) {
-        background-color: color-mix(in srgb, var(--accent) 15%, transparent);
-    }
-    :global(.view-zone-selection) {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
     }
     :global(.selected-line) {
         background-color: var(--accent);

@@ -152,7 +152,6 @@
                 diagnostics={group.displayedDiagnostics}
                 language={group.displayedLanguage}
                 highlightedLine={group.highlightedLine}
-                mappedLines={group.mappedLines}
                 lineColoring={group.lineColoring}
                 activeLineColors={group.activeLineColors}
                 on:linesSelect={(event) => session.selectMappedLines(group, event.detail)}

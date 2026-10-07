@@ -1,7 +1,10 @@
 <script lang="ts">
     import Editor from '$cmp/specific/project/Editor.svelte'
     import { toast } from '$stores/toastStore'
-    import ExecutionDock, { type DockAction } from '$cmp/specific/project/ExecutionDock.svelte'
+    import ExecutionDock, {
+        type DockAction,
+        type DockCompilation
+    } from '$cmp/specific/project/ExecutionDock.svelte'
     import { clampBigInt } from '$lib/utils'
     import { terminationSummary } from '$lib/languages/termination'
     import { registerColumnWidth } from '$lib/languages/registerFormats'
@@ -15,7 +18,17 @@
     import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
-    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
+    import type { AvailableLanguages, Project, Testcase, TestcaseResult } from '$lib/Project.svelte'
+    import { PlaygroundSession } from '$lib/content/PlaygroundSession.svelte'
+    import {
+        editorFileLanguage,
+        sourceLanguage,
+        OPTIMIZATIONS,
+        type Optimization,
+        type SourceCompiler
+    } from '$lib/sourceCompilation/records'
+    import { createProjectLanguageSessionId } from '$lib/languages/service/uri'
+    import { Prompt } from '$stores/promptStore.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
     import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
@@ -51,6 +64,8 @@
 
     interface Props {
         code: string
+        /** Optional transient Project: named files, a C/C++ or assembly entry, and compilation records. */
+        project?: Project
         testcases?: Testcase[]
         showMemory?: boolean
         showConsole?: boolean
@@ -87,6 +102,7 @@
 
     let {
         code = $bindable(),
+        project,
         language = 'M68K',
         showMemory: showMemoryProp,
         showFlags: showFlagsProp,
@@ -107,6 +123,96 @@
         fontOptions,
         dockActions = []
     }: Props = $props()
+    const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
+    const modelSessionId = createProjectLanguageSessionId()
+    const selectedFile = $derived(session?.selected)
+    const editorLanguage = $derived(
+        selectedFile ? editorFileLanguage(selectedFile, language) : language
+    )
+    const fileSource = $derived(
+        session && selectedFile
+            ? {
+                  key: selectedFile,
+                  value: session.project.files[selectedFile]?.content ?? '',
+                  identity: {
+                      sessionId: modelSessionId,
+                      sourceKind: 'live' as const,
+                      path: selectedFile
+                  }
+              }
+            : undefined
+    )
+    const compiling = $derived(session?.compiling ?? false)
+    const diagnostics = $derived([...(session?.diagnostics ?? []), ...emulator.compilerDiagnostics])
+    const shownDiagnostics = $derived(
+        selectedFile
+            ? diagnostics.filter(
+                  (diagnostic) => diagnostic.file === selectedFile || !diagnostic.file
+              )
+            : diagnostics
+    )
+    const buildDisabled = $derived(
+        (session && !!sourceLanguage(session.project.entry)) || emulator.compilerErrors.length > 0
+    )
+    const selectedIsSource = $derived(!!selectedFile && !!sourceLanguage(selectedFile))
+    const selectedLine = $derived.by(() => {
+        if (!session || !selectedFile) return emulator.line
+        if (emulator.currentFile === selectedFile) return emulator.line
+        const mapped = session.project.sourceMaps[emulator.currentFile]?.lines[emulator.line]
+        return mapped?.path === selectedFile ? mapped.line : -1
+    })
+    function confirmReplacement(question: string, signal: AbortSignal) {
+        const pending = Prompt.confirm(question)
+        const id = Prompt.id
+        const cancel = () => {
+            if (Prompt.id === id && Prompt.promise) Prompt.cancel()
+        }
+        signal.addEventListener('abort', cancel, { once: true })
+        return pending.finally(() => signal.removeEventListener('abort', cancel))
+    }
+    async function compileSourceFile() {
+        if (!session || running || building) return
+        try {
+            await session.compile(confirmReplacement)
+        } catch (error) {
+            toast.error(getM68kErrorMessage(error))
+        }
+    }
+    const compilation = $derived<DockCompilation | undefined>(
+        session?.sourcePath && (selectedIsSource || session.recompilationNeeded)
+            ? {
+                  label: compiling ? 'Compiling…' : selectedIsSource ? 'Compile' : 'Recompile',
+                  disabled: building || running || compiling,
+                  busy: compiling,
+                  optimization: selectedIsSource
+                      ? {
+                            value: session.optimization,
+                            levels: OPTIMIZATIONS,
+                            onChange: (value) => {
+                                session.optimization = value as Optimization
+                            }
+                        }
+                      : undefined,
+                  compiler: selectedIsSource
+                      ? {
+                            value: session.compiler,
+                            options:
+                                language === 'X86'
+                                    ? [{ value: 'gcc', label: 'GCC' }]
+                                    : [
+                                          { value: 'clang', label: 'Clang' },
+                                          { value: 'gcc', label: 'GCC' }
+                                      ],
+                            onChange: (value) => {
+                                session.compiler = value as SourceCompiler
+                            }
+                        }
+                      : undefined,
+                  onCompile: compileSourceFile,
+                  onCancel: () => session.cancel()
+              }
+            : undefined
+    )
     let showMemory = $derived(showMemoryProp ?? true)
     let showFlags = $derived(showFlagsProp ?? true)
     let showRegisters = $derived(showRegistersProp ?? true)
@@ -189,12 +295,12 @@
 
     /** Test, and the Testcases window's Run all. */
     function runTests() {
-        if (building || running) return
+        if (building || running || compiling || buildDisabled) return
         running = true
         setTimeout(async () => {
             try {
                 testcasesResult = await emulator.test(
-                    $state.snapshot(code),
+                    session ? $state.snapshot(session.sources) : $state.snapshot(code),
                     $state.snapshot(testcases),
                     TESTCASE_INSTRUCTION_LIMIT,
                     undoHistorySize(settings)
@@ -211,12 +317,20 @@
 
     $effect(() => {
         //Tracked read outside `untrack`, so editing the playground keeps arming the live check.
-        const source = code
-        untrack(() => emulator.setCode(source))
+        const source = session ? $state.snapshot(session.sources) : code
+        if (session && sourceLanguage(session.project.entry)) return
+        untrack(() =>
+            typeof source === 'string' ? emulator.setCode(source) : emulator.setSources(source)
+        )
+        if (session)
+            untrack(() => {
+                if (!building && !running && !emulator.canExecute) void emulator.check()
+            })
     })
 
     onMount(() => {
         return () => {
+            session?.cancel()
             emulator.dispose()
         }
     })
@@ -271,12 +385,15 @@
     )
 
     async function buildCode() {
-        if (building || running) return
+        if (building || running || compiling || buildDisabled) return
         try {
             running = false
             building = true
-            emulator.setCode(code)
-            await emulator.compile(undoHistorySize(settings), code)
+            const source = session ? $state.snapshot(session.sources) : code
+            if (typeof source === 'string') emulator.setCode(source)
+            else emulator.setSources(source)
+            await emulator.compile(undoHistorySize(settings), source)
+            if (session) session.selected = session.project.entry
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -292,7 +409,7 @@
      * turns the Run button into Pause here too, and what keeps Step and Undo out of a run.
      */
     async function startRun() {
-        if (building || running) return
+        if (building || running || compiling) return
         running = true
         if (layout === 'fullscreen') {
             testcasesResult = []
@@ -376,35 +493,64 @@
 
 {#snippet editorSurface()}
     <div class="editor-border" class:failed={emulator.errors.length > 0}>
-        <Editor
-            on:change={handleEditorChange}
-            on:breakpointPress={(d) => {
-                emulator.toggleBreakpoint(d.detail - 1)
-            }}
-            bind:editor
-            bind:code
-            codeOverride={emulator.compiledCode}
-            breakpoints={emulator.breakpoints
-                .filter(
-                    (breakpoint) =>
-                        breakpoint.file === (emulator.buildSources?.entry ?? emulator.entry)
-                )
-                .map((breakpoint) => breakpoint.line)}
-            diagnostics={emulator.compilerDiagnostics}
-            {language}
-            {fontOptions}
-            highlightedLine={emulator.line}
-            disabled={(emulator.canExecute && !emulator.terminated) || !!emulator.compiledCode}
-            hasError={emulator.errors.length > 0}
-        />
+        {#if session}
+            <div class="playground-files" role="tablist" aria-label="Program files">
+                {#each Object.keys(session.project.files) as path (path)}
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={selectedFile === path}
+                        onclick={() => {
+                            session.selected = path
+                        }}>{path}</button
+                    >
+                {/each}
+            </div>
+        {/if}
+        <div class="playground-code">
+            <Editor
+                on:change={handleEditorChange}
+                on:breakpointPress={(d) => {
+                    emulator.toggleBreakpoint(d.detail - 1, selectedFile)
+                }}
+                on:fileChange={(event) => session?.edit(event.detail.path, event.detail.value)}
+                bind:editor
+                bind:code
+                source={fileSource}
+                retainedModelKeys={session ? Object.keys(session.project.files) : undefined}
+                codeOverride={session ? undefined : emulator.compiledCode}
+                breakpointsEditable={!selectedIsSource}
+                breakpoints={emulator.breakpoints
+                    .filter(
+                        (breakpoint) =>
+                            breakpoint.file ===
+                            (selectedFile ?? emulator.buildSources?.entry ?? emulator.entry)
+                    )
+                    .map((breakpoint) => breakpoint.line)}
+                diagnostics={shownDiagnostics}
+                language={editorLanguage}
+                {fontOptions}
+                highlightedLine={selectedLine}
+                disabled={building ||
+                    compiling ||
+                    (emulator.canExecute && !emulator.terminated) ||
+                    !!emulator.compiledCode}
+                hasError={emulator.errors.length > 0}
+            />
+        </div>
         <div class="floating-dock">
             <ExecutionDock
                 attached
                 fill={viewport.deviceClass === 'phone'}
                 debugging={emulator.canExecute || !!emulator.compiledCode}
-                {building}
+                building={building || compiling}
                 {running}
-                buildDisabled={emulator.compilerErrors.length > 0}
+                {buildDisabled}
+                {compilation}
+                compileOnly={selectedIsSource}
+                buildLabel={selectedFile && selectedFile !== session?.project.entry
+                    ? 'Build entry'
+                    : 'Build'}
                 executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
                 canUndo={emulator.canUndo}
                 hasTests={offersTest}
@@ -608,9 +754,15 @@
                         //the program's own @screen comment, when it has one, is rewritten to say
                         //what was chosen, as on the project page; a program without one keeps the
                         //choice for as long as the page lives
-                        const rewritten = rewriteScreenDirective(code, display, next)
+                        const source = session
+                            ? (session.project.files[session.project.entry]?.content ?? '')
+                            : code
+                        const rewritten = rewriteScreenDirective(source, display, next)
                         const baseChanged = next.baseAddress !== display.baseAddress
-                        if (rewritten !== null) code = rewritten
+                        if (rewritten !== null) {
+                            if (session) session.edit(session.project.entry, rewritten)
+                            else code = rewritten
+                        }
                         display = next
                         displayOrigin = rewritten !== null ? 'directive' : 'user'
                         if (rewritten === null || baseChanged) displayBaseLabel = undefined
@@ -627,7 +779,7 @@
         {info}
         terminal={emulator.peripherals.terminal}
         errors={errorStrings}
-        diagnostics={emulator.compilerDiagnostics}
+        {diagnostics}
         interactive={emulator.canExecute && !emulator.terminated}
         escapes={language === 'X86'}
     />
@@ -650,7 +802,7 @@
             bind:testcases
             onRun={runTests}
             onClear={() => (testcasesResult = [])}
-            runDisabled={building || running || emulator.compilerErrors.length > 0}
+            runDisabled={building || compiling || running || buildDisabled}
         />
     {/if}
 {/snippet}
@@ -853,6 +1005,42 @@
         border-radius: var(--wb-radius, 0.4rem);
         border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
         overflow: hidden;
+    }
+
+    .playground-files {
+        display: flex;
+        flex: none;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .playground-code {
+        position: relative;
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .editor-border:has(.playground-files) {
+        flex-direction: column;
+    }
+    .playground-files button {
+        flex: none;
+        padding: 0.35rem 0.65rem;
+        color: var(--hint);
+        background: transparent;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+    }
+    .playground-files button[aria-selected='true'] {
+        color: var(--primary-text);
+        border-bottom-color: var(--accent);
+    }
+    .playground-files button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
     }
 
     /* the shadow Monaco draws under the top edge once the code is scrolled */

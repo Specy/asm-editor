@@ -119,7 +119,11 @@
     </header>
     {#each mounted as entry (entry.id)}
         {@const shown = entry.id === ui.activePanel}
-        <div class="panel-body" class:shown class:gutterless={entry.id === 'explorer'}>
+        <div
+            class="panel-body"
+            class:shown
+            class:gutterless={entry.id === 'explorer' || entry.id === 'testcases'}
+        >
             <div
                 class="panel-content"
                 style:min-width={phone ? '0' : (MIN_WIDTHS[entry.id] ?? '16rem')}
@@ -236,7 +240,7 @@
     }
 
     /* the scrollbar's room is kept whether the content scrolls or not, so a section opened in
-       Settings or a longer Testcase list does not push everything sideways when it starts to */
+       Settings does not push everything sideways when it starts to */
     .panel-body {
         display: none;
         flex-direction: column;
@@ -250,8 +254,7 @@
             display: flex;
         }
 
-        /* the Explorer seldom has files enough to scroll, so it keeps no room for a scrollbar it
-           would rarely show */
+        /* the Explorer seldom scrolls; Testcases reserves room on its own scrolling list */
         &.gutterless {
             scrollbar-gutter: auto;
         }

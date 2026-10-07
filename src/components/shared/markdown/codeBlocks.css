@@ -99,3 +99,15 @@ pre.code-block .asm-register {
 pre.code-block .asm-label {
     text-decoration: underline;
 }
+
+.playground-filename {
+    padding: 0.35rem 0.75rem;
+    background: var(--secondary);
+    color: var(--primary-text);
+    font-family: var(--example-font-family, 'Fira Code', monospace);
+    font-size: 0.85rem;
+}
+
+div.code-playground {
+    overflow: auto;
+}
