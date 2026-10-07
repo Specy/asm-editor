@@ -7,7 +7,7 @@
  *
  *   node scripts/sim-header/generate.mjs [--check]
  *
- * `--check` writes nothing and fails when a committed header differs from what the data generates,
+ * `--check` writes nothing and fails when a committed header or help catalog differs from its inputs,
  * which is what the editor's drift test runs.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -21,6 +21,7 @@ import {
     SIM_HEADER_TARGETS,
     X86_SIM_HEADER
 } from './simHeader.mjs'
+import { marsHelpCatalog, x86HelpCatalog } from './helpCatalog.mjs'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -77,21 +78,35 @@ const headers = [
     }),
     [X86_SIM_HEADER.file, generateX86SimHeader(x86SimHeaderData())]
 ]
+const catalogs = [
+    ...Object.entries(SIM_HEADER_TARGETS).map(([target, settings]) => [
+        target,
+        marsHelpCatalog(target, settings.syscalls === 'mips' ? mipsSyscalls : riscvSyscalls)
+    ]),
+    [X86_SIM_HEADER.file, x86HelpCatalog(x86SimHeaderData())]
+]
 
 const check = process.argv.includes('--check')
 let stale = false
-for (const [target, text] of headers) {
-    const path = join(repository, SIM_HEADER_DIRECTORY, `${target}.h`)
+const outputs = [
+    ...headers.map(([target, text]) => [`${SIM_HEADER_DIRECTORY}/${target}.h`, text]),
+    ...catalogs.map(([target, catalog]) => [
+        `src/lib/sourceLanguageHelp/generated/${target}.json`,
+        JSON.stringify(catalog) + '\n'
+    ])
+]
+for (const [relative, text] of outputs) {
+    const path = join(repository, relative)
     if (check) {
         if (!existsSync(path) || readFileSync(path, 'utf8') !== text) {
-            console.error(`${SIM_HEADER_DIRECTORY}/${target}.h is out of date`)
+            console.error(`${relative} is out of date`)
             stale = true
         }
         continue
     }
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, text)
-    console.log(`wrote ${SIM_HEADER_DIRECTORY}/${target}.h (${Buffer.byteLength(text)} bytes)`)
+    console.log(`wrote ${relative} (${Buffer.byteLength(text)} bytes)`)
 }
 if (stale) {
     console.error('Run node scripts/sim-header/generate.mjs to regenerate them.')

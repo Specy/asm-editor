@@ -11,6 +11,14 @@ int main(void) {
 
 Select the source file and choose **Compile**. The generated assembly opens beside it. Choose **Build** in the assembly pane, then **Run**. Open the **Terminal** to see `Hello from MIPS`. The program starts in `main`; `return 0` finishes successfully.
 
+## Help while editing {#editing-help}
+
+Type `sim_` to see the simulator functions for this project, or press **Ctrl+Space** to open suggestions. Small snippets help you write loops, functions and structures; press **Tab** to move through their editable fields. Suggestions inside an `#include` path offer available headers.
+
+Hover over a known function such as `printf` to see its declaration, required header and a documentation link. Parameter hints highlight the current argument while you write a call. Selecting a function inserts its name; add the indicated header yourself.
+
+Editing help works locally, before Compile. It covers known language and library names; Compile checks your program and reports errors.
+
 ## Compiling a source file {#compiling}
 
 The Compile controls offer Clang or GCC and an optimization level. Start with **-O0** to follow your statements easily. Higher levels can combine statements, move instructions or remove work whose result is unused.

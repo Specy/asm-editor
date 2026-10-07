@@ -10,6 +10,8 @@ import type {
     ProjectWorkerResponse
 } from './protocol'
 import { registerLanguageSession } from './sessionRegistry'
+import { compilerCapabilities } from '$lib/sourceCompilation/capabilities'
+import type { SourceHelpSessionContext } from '$lib/sourceLanguageHelp/context'
 
 type SnapshotListener = (snapshot: ProjectAnalysisSnapshot | undefined, pending: boolean) => void
 
@@ -35,6 +37,7 @@ export class ProjectLanguageSession {
     private revision = 1
     private currentSnapshot: ProjectAnalysisSnapshot | undefined
     private buildSnapshots = new Map<number, BuildSources>()
+    private buildHelp = new Map<number, SourceHelpSessionContext>()
     private listeners = new Set<SnapshotListener>()
     private unregister: () => void
     private connection: { post(request: ProjectWorkerRequest): void; dispose(): void } | undefined
@@ -86,7 +89,34 @@ export class ProjectLanguageSession {
 
     setBuild(buildGeneration: number, sources: BuildSources | undefined): void {
         this.buildSnapshots.clear()
-        if (sources) this.buildSnapshots.set(buildGeneration, normalizeBuildInput(sources))
+        this.buildHelp.clear()
+        if (sources) {
+            const frozen = normalizeBuildInput(sources)
+            this.buildSnapshots.set(buildGeneration, frozen)
+            this.buildHelp.set(
+                buildGeneration,
+                Object.freeze({
+                    sources: frozen,
+                    capabilities: compilerCapabilities(this.target, frozen.runtimeAbi),
+                    revision: buildGeneration
+                })
+            )
+        }
+    }
+
+    sourceHelpFor(
+        sourceKind: 'live' | 'build',
+        buildGeneration?: number
+    ): SourceHelpSessionContext | undefined {
+        return sourceKind === 'live'
+            ? {
+                  sources: this.currentSources,
+                  capabilities: compilerCapabilities(this.target),
+                  revision: this.revision
+              }
+            : buildGeneration === undefined
+              ? undefined
+              : this.buildHelp.get(buildGeneration)
     }
 
     update(sources: BuildSources): void {
@@ -132,6 +162,8 @@ export class ProjectLanguageSession {
         this.connection?.dispose()
         this.connection = undefined
         this.listeners.clear()
+        this.buildHelp.clear()
+        this.buildSnapshots.clear()
         this.unregister()
     }
 

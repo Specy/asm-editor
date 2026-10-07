@@ -12,6 +12,7 @@
  * are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
  * its Syscalls chapter shows.
  */
+import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO } from './helpers.mjs'
 
 /** Where the committed headers live, relative to the repository. */
 export const SIM_HEADER_DIRECTORY = 'src/lib/sourceRuntime/generated/sim'
@@ -225,25 +226,7 @@ function deviceFunctions(devices, simulator) {
  * makes a program wait to print.
  */
 
-/** Whether a typed character is waiting: the Ready bit of the receiver control register, ${hex(devices.receiverControl)}. */
-static inline int sim_keyboard_ready(void) {
-    return (*${address(devices.receiverControl)} & ${ready}u) != 0;
-}
-
-/** The waiting character, from the receiver data register, ${hex(devices.receiverData)}: reading it takes it. */
-static inline int sim_keyboard_read(void) {
-    return (int)*${address(devices.receiverData)};
-}
-
-/** Whether the console takes a character: the Ready bit of the transmitter control register, ${hex(devices.transmitterControl)}. */
-static inline int sim_display_ready(void) {
-    return (*${address(devices.transmitterControl)} & ${ready}u) != 0;
-}
-
-/** Prints a character through the transmitter data register, ${hex(devices.transmitterData)}; 12, a form feed, clears the console. */
-static inline void sim_display_write(int character) {
-    *${address(devices.transmitterData)} = (unsigned)character;
-}`
+${DEVICE_HELPERS.map((helper) => `/** ${helper.headerDoc(devices, hex)} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body(devices, address, ready)}\n}`).join('\n\n')}`
 }
 
 /** `sim_rgb` and `SIM_SCREEN`, whose grid may not take more than the static data the Core has room for. */
@@ -270,7 +253,7 @@ function screenSection(display, target) {
  */
 
 /** A color for the bitmap display: red, green and blue from 0 to 255, in the low 24 bits. */
-static inline unsigned sim_rgb(int red, int green, int blue) {
+static inline ${prototypeOf(RGB_HELPER)} {
     return ((unsigned)(red & 0xff) << 16) | ((unsigned)(green & 0xff) << 8) | (unsigned)(blue & 0xff);
 }
 
@@ -282,7 +265,7 @@ static inline unsigned sim_rgb(int red, int green, int blue) {
 #define __SIM_STRING(text) #text
 #define __SIM_EXPANDED_STRING(text) __SIM_STRING(text)
 
-#define SIM_SCREEN(name, width, height, unit) \\
+#define ${SCREEN_MACRO.name}(${SCREEN_MACRO.parameters.join(', ')}) \\
     __SIM_STATIC_ASSERT((${size('width')}) && (${size('height')}) && (${unit}), \\
         "SIM_SCREEN: width and height must be ${listed(display.sizes)}, and unit ${listed(display.units)}, the sizes ${target.simulator}'s bitmap display offers"); \\
     __SIM_STATIC_ASSERT((width) / (unit) * ((height) / (unit)) * 4 <= ${limit}, \\

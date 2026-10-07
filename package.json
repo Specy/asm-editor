@@ -21,6 +21,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "search:model": "node scripts/search-model.mjs",
+        "source:help:generate": "node scripts/sim-header/generate.mjs && node scripts/source-language-help/generate.mjs",
+        "source:help:check": "node scripts/sim-header/generate.mjs --check && node scripts/source-language-help/generate.mjs --check",
         "measure": "vitest run --config vitest.measure.config.ts",
         "emulators:init": "git submodule update --init --recursive",
         "emulators:status": "node scripts/local-emulators.mjs status",

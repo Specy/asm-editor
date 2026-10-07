@@ -27,6 +27,7 @@
     import { keepHoverReachable } from '$lib/monaco/hoverReachability'
     import type { EditorLineColoring } from '$lib/monaco/lineColoring'
     import { selectedLines } from '$lib/monaco/selectedLines'
+    import { setSourceHelpLanguage } from '$lib/sourceLanguageHelp/context'
     import type { EditorModels } from '$lib/workbench/editorModels'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '$lib/Config'
 
@@ -191,6 +192,10 @@
             initialModel.setEOL(0)
             models.set(mounted.key, initialModel)
         }
+        setSourceHelpLanguage(
+            initialModel,
+            editorLanguage === 'c' || editorLanguage === 'cpp' ? editorLanguage : undefined
+        )
         viewStateKey = mounted.key
         activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
@@ -354,6 +359,11 @@
               )
             : resolveEditorModel(modelStore(currentMonaco), next)
         if (!sharedModels) models.set(next.key, model)
+        setSourceHelpLanguage(model, language === 'c' || language === 'cpp' ? language : undefined)
+        if (language === 'c' || language === 'cpp')
+            void Monaco.registerLanguage(language).catch((error) =>
+                console.error('Source help registration failed', error)
+            )
         if (currentEditor.getModel() !== model) {
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true

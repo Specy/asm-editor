@@ -9,6 +9,10 @@ export type LanguageSessionView = {
     /** The Target the session analyses for, which picks the Runtime library a definition opens. */
     readonly target?: import('./protocol').ProjectAnalysisTarget
     sourcesFor(sourceKind: 'live' | 'build', buildGeneration?: number): BuildSources | undefined
+    sourceHelpFor?(
+        sourceKind: 'live' | 'build',
+        buildGeneration?: number
+    ): import('$lib/sourceLanguageHelp/context').SourceHelpSessionContext | undefined
 }
 
 const sessions = new Map<string, LanguageSessionView>()

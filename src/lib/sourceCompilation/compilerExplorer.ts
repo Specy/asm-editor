@@ -25,6 +25,7 @@ import type {
     TranslationProfile,
     translateCompilerOutput
 } from '@specy/x86/compiler-output'
+import { X86_HEADERS, X86_HEADER_NAMES } from './capabilities'
 
 const API_ROOT = 'https://godbolt.org/api'
 export const COMPILE_BYTE_LIMIT = 1024 * 1024
@@ -81,21 +82,6 @@ export class SourceCompilationError extends Error {
  * has a Runtime library. They are written on GCC's predefined macros, so they describe x86-64 as
  * they are. `<sim.h>`, the Environment library, comes with them.
  */
-const X86_HEADERS = {
-    c: [
-        'stddef.h',
-        'stdint.h',
-        'stdbool.h',
-        'stdarg.h',
-        'limits.h',
-        'float.h',
-        'iso646.h',
-        'stdnoreturn.h'
-    ],
-    cpp: ['cstddef', 'cstdint', 'climits', 'cfloat', 'cstdarg', 'new']
-}
-const X86_HEADER_NAMES = new Set([...X86_HEADERS.c, ...X86_HEADERS.cpp, ENVIRONMENT_HEADER])
-
 /**
  * What x86 compilation uses of `@specy/x86/compiler-output`, which only an x86 compilation loads,
  * so no other Target's users download the translator.

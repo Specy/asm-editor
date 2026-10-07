@@ -15,3 +15,6 @@ src/lib/languages/X86/generated/
 src/lib/sourceRuntime/generated/
 # The Runtime library's C sources and headers, which follow their own (musl's) style.
 /runtime/
+
+# Compact, deterministic source-help catalogs; their generators own formatting.
+src/lib/sourceLanguageHelp/generated/

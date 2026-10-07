@@ -18,16 +18,20 @@ class MonacoLoader {
     private registeredLanguages = new Set<AvailableLanguages>()
     private registeringLanguages = new Map<AvailableLanguages, Promise<void>>()
     private projectOpener: monaco.IDisposable | undefined
+    private sourceHelpRegistration: Promise<void> | undefined
+    private sourceHelpGeneration = 0
 
     constructor() {
         if (browser) this.load()
     }
 
     dispose = () => {
+        this.sourceHelpGeneration++
         for (const disposable of this.toDispose.splice(0).reverse()) disposable.dispose()
         this.registeredLanguages.clear()
         this.registeringLanguages.clear()
         this.projectOpener = undefined
+        this.sourceHelpRegistration = undefined
     }
 
     async load(): Promise<MonacoType> {
@@ -46,7 +50,15 @@ class MonacoLoader {
     }
 
     async registerLanguage(lang: AvailableLanguages | AvailableProgrammingLanguages) {
-        if (lang === 'c' || lang === 'cpp') return
+        if (lang === 'c' || lang === 'cpp') {
+            const generation = this.sourceHelpGeneration
+            this.sourceHelpRegistration ??= this.installSourceHelp(generation).catch((error) => {
+                if (generation === this.sourceHelpGeneration)
+                    this.sourceHelpRegistration = undefined
+                throw error
+            })
+            return this.sourceHelpRegistration
+        }
         if (this.registeredLanguages.has(lang)) return
         const pending = this.registeringLanguages.get(lang)
         if (pending) return pending
@@ -87,6 +99,13 @@ class MonacoLoader {
             }
         })
         this.toDispose.push(this.projectOpener)
+    }
+
+    private async installSourceHelp(generation: number): Promise<void> {
+        const monacoInstance = this.monaco ?? (await this.load())
+        const { registerSourceLanguageHelp } = await import('$lib/sourceLanguageHelp/register')
+        if (generation !== this.sourceHelpGeneration) return
+        this.toDispose.push(...registerSourceLanguageHelp(monacoInstance))
     }
 
     setCustomTheme = (theme: monaco.editor.IStandaloneThemeData) => {

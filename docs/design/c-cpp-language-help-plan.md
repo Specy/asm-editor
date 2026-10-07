@@ -1,6 +1,6 @@
 # C/C++ language help implementation plan
 
-Scope agreed on **2026-10-07**. **Implementation has not started.** This document plans browser-local Monaco providers; it does not implement them.
+Scope agreed on **2026-10-07**. **Implemented locally on 2026-10-07; browser acceptance checks remain pending.** Milestones 1–5 and the automated lifecycle/build checks in milestone 6 are implemented. See the Implementation notes below for decisions, evidence and the remaining manual checks.
 
 The outcome is useful help before the learner presses Compile: C/C++ keywords and snippets, suggestions for the Target's `sim_` functions and supported standard-library names, parameter hints, hover documentation, and include-path suggestions. Compile remains the authority for compiler errors. The glossary definition is [C/C++ language help](../../CONTEXT.md#cc-language-help).
 
@@ -199,12 +199,59 @@ For include editing, quoted suggestions cover plain Project headers accepted by 
 
 The feature is complete when all six milestone acceptance cases pass and the recorded validation shows the agreed help working before Compile across the supported matrix. Document any intentionally declined lexical contexts; do not label them compiler errors or quietly broaden the semantic scope.
 
-Implementation must still choose exact module filenames, catalog representation, and measured cache/scan limits. The `.h` neutral policy, identifier-only insertion, header dependency presentation, Target matrix, and manual Compile boundary are specified here; changing them requires revisiting the plan. Screen/device documentation destinations must be verified during catalog work. No performance/bundle budget has been approved by this document.
+The Implementation notes record the selected module filenames, catalog representation, and measured cache/scan limits. The `.h` neutral policy, identifier-only insertion, header dependency presentation, Target matrix, and manual Compile boundary are specified here; changing them requires revisiting the plan. Screen/device documentation destinations must be verified during catalog work. No performance/bundle budget has been approved by this document.
 
 ### Evidence and validation performed for this plan
 
 This plan was checked by reading the current repository sources listed above, small extracts of generated runtime metadata and headers, the installed [Monaco declarations](../../node_modules/monaco-editor/monaco.d.ts), and the documentation anchor construction in [mips.ts](../../src/lib/documentation/mips/mips.ts), [riscv.ts](../../src/lib/documentation/riscv/riscv.ts), and [x86.ts](../../src/lib/documentation/x86/x86.ts). The [assembly language-service plan](./assembly-language-service-plan.md) supplies the established identity/lifecycle approach; current code is the authority for what exists now. Document-local checks confirmed relative file links resolve, code fences balance, and all six milestones are present.
 
-Monaco's official [completion provider example](https://github.com/microsoft/monaco-editor/blob/main/website/src/website/data/playground-samples/extending-language-services/completion-provider-example/sample.js) and [hover provider example](https://github.com/microsoft/monaco-editor/blob/main/website/src/website/data/playground-samples/extending-language-services/hover-provider-example/sample.js) corroborate the native-provider approach; use the installed declarations for exact signatures. No implementation, generated artifact changes, tests, compilation experiments, or browser validation were performed for this plan.
+Monaco's official [completion provider example](https://github.com/microsoft/monaco-editor/blob/main/website/src/website/data/playground-samples/extending-language-services/completion-provider-example/sample.js) and [hover provider example](https://github.com/microsoft/monaco-editor/blob/main/website/src/website/data/playground-samples/extending-language-services/hover-provider-example/sample.js) corroborate the native-provider approach; use the installed declarations for exact signatures. At the planning stage, no implementation, generated artifact changes, tests, compilation experiments, or browser validation had been performed. The implementation evidence is recorded below.
 
 An independent maintainer review checked the plan against the approved scope and current sources and found it fit for implementation, with no remaining blockers or material nits. The review covered pre-Compile capabilities, x86 allocation limits, C/header modes, Project and Build isolation, catalog provenance, and conservative lexical behavior.
+
+## Implementation notes — 2026-10-07
+
+### Milestone 1: source context and capabilities
+
+- Added `sourceCompilation/capabilities.ts` as a pure shared capability descriptor. Compile and help share the existing x86 header allow list; compiler behavior is unchanged. Hosted help uses the current Runtime ABI before any Compilation record exists, independently of the assembly runtime Setting.
+- `sourceLanguageHelp/context.ts` resolves the canonical model URI through the owning session. File paths determine C/C++ mode, C++ headers use C++ mode, and `.h` uses the specified neutral policy. Standalone editors explicitly supply their File language and receive basic help without fabricated Target facts.
+- `ProjectLanguageSession.sourceHelpFor` exposes live context and a frozen descriptor with each retained Build source set and ABI. Model version, session identity, generation and context revision are rechecked after asynchronous catalog loads. Unavailable ABIs suppress the affected runtime entries rather than switching ABI.
+
+### Milestone 2: catalogs and authority
+
+- Chose generated compact JSON, lazy-loaded by Target plus a shared runtime/header catalog. `scripts/sim-header/helpCatalog.mjs` consumes the same structured syscall bindings as `sim.h`. Device/RGB/Screen declarations now live in `scripts/sim-header/helpers.mjs`, shared with the header renderer. Regeneration leaves all four committed `sim.h` files byte-for-byte unchanged.
+- `scripts/source-language-help/generate.mjs` reads committed Runtime function/header artifacts and checks them against `runtime/include`. Public macros, types and constants use an explicit validated manifest. C++ aliases come from actual wrapper `using ::name` declarations, preserving global spellings and required-header alternatives without duplicate names. This process neither rebuilds the Runtime nor contacts a compiler. Its pure catalog generator is also exercised directly by the normal test suite, including deterministic regeneration on repeated calls, so runtime drift checks do not depend on subprocess permissions.
+- Catalogs contain 44 MIPS, 45 RV32, 45 RV64 and 137 x86 environment entries, and 693 runtime/header entries including qualified aliases and data entries. Runtime entries are filtered by the Target's available headers; x86 gets basic types/macros and simulator calls, without hosted functions or allocating `new`.
+- Source documentation contains consumer descriptions rather than register placements or assembly. Provider tests verify every produced href against the actual Documentation entries, including `using-c#screen-and-devices` and `using-c#libraries`.
+- Added `npm run source:help:generate` and `npm run source:help:check`. The check covers both generated headers and help catalogs. A stale runtime catalog in an isolated `/tmp` fixture was rejected with exit status 1; the real generated artifacts pass.
+
+### Milestone 3: lexical context
+
+- One tolerant scanner serves identifiers, literal include paths and unfinished calls. Tests cover escaped ordinary/character literals, prefixed/custom-delimiter raw strings, incomplete multiline literals, comments, spliced comment delimiters, line continuations, nested delimiters and compound expressions.
+- Parameter labels carry declaration offsets generated with balanced delimiters, keeping `qsort`'s comparator intact. Zero-parameter calls and variadics are explicit; later variadic arguments stay on `...` and excess fixed arguments receive no invented parameter.
+- Assistance declines members, unknown namespace qualification, function-pointer calls and recognized declaration/cast contexts. In C++, template brackets and relational/shift tokens inside calls conservatively suppress signature help. This is deliberately lexical, with no claim to resolve typedefs, shadowing, overloads or arbitrary casts.
+- Continued include directives are supported; spliced identifiers and include paths are declined instead of replacing text across lines. Computed includes are not resolved.
+- Cache scans by model version. Read at most the first **131,072 UTF-16 code units** through Monaco's range API; requests at or beyond that boundary, or replacement ranges crossing it, receive no catalog help. Generic Monaco word suggestions remain available. The measured representative 128 Ki-character scans took approximately 4–14 ms on this host after initial warm-up; this is a local measurement, not a mobile latency guarantee. Model/provider disposal clears caches and removes model listeners.
+
+### Milestones 4–5: native Monaco providers
+
+- `sourceLanguageHelp/register.ts` installs completion, hover and signature help once for `c` and `cpp`. The loader shares pending registration across panes, protects disposal races and permits re-registration or recovery after failed installation. Partial installation rolls back each completed registration.
+- Completion inserts identifiers only, and after `std::` replaces only the final name. Function suggestions and hovers show the declaration, header dependency, consumer summary and an untrusted local documentation link. No automatic includes or diagnostic markers are produced.
+- Eight small snippets cover main/functions, loops, conditionals, arrays and structures with normal Monaco tab stops. C and C++ keyword sets remain separate; neutral headers get the common set. x86 does not advertise allocating `new`/`delete`.
+- Quoted includes use plain Project headers and the source-directory/root search order, including explicitly typed `./` and `../` paths without escaping the Project. Angle includes offer only the shipped Target/language headers. Build suggestions use the retained source set.
+- Added a consumer-facing “Help while editing” section to MIPS, RISC-V and x86 guides; these shared Markdown sources also feed the editor Documentation panel.
+
+### Milestone 6: validation and remaining browser checks
+
+- Focused context, scanner, catalog, provider and loader tests pass. They cover distinct Projects with identical paths, C/C++/header modes, retained Build Files and ABI, canceled/edited/disposed requests, failed-asset recovery, duplicate registration, partial rollback, model-listener cleanup, bounded range reads and absence of compiler network calls.
+- The broader targeted run passed **213 tests** across 12 files, with **15 skipped** by existing platform gates and explicit exclusion of subprocess checks that reported `spawnSync EPERM` in this sandbox. Existing subprocess tests were not changed. `npm run source:help:check`, scoped ESLint/Prettier and `git diff --check` pass. `npm run check` reports zero errors and the 31 existing warnings.
+- All eight expanded snippets passed native GCC `-std=c17 -fsyntax-only` and G++ `-std=c++17 -fno-exceptions -fno-rtti -fsyntax-only`, in suitable top-level/function fixtures. This checks syntax, not simulator execution.
+- The production build passes. Its client manifest/source maps show separate dynamic catalog chunks and a provider chunk with only pure shared capability/path/session dependencies. No Core, Runtime member assembly, full Documentation Chapter, compiler client or x86 translator is in that dependency closure. The shared catalog is about **20 KB gzip**, plus approximately **3 KB** per hosted Target or **6 KB** for x86. Provider code is approximately **6–7 KB gzip**, in addition to small shared modules already used by the editor. No dependency, WASM payload or language-server deployment was added.
+- **No real-browser acceptance case was completed in this implementation session.** The sandbox rejects Vite's listening socket with `listen EPERM`; installed Chrome also fails during startup. These are recorded limitations, not browser verification evidence.
+
+Manual checks still required:
+
+1. On MIPS, RV32, RV64 and x86, create C and C++ Files before Compile and exercise suggestions, snippet Tab stops, hovers/documentation links and nested/variadic parameter hints. Confirm x86 omits hosted functions, and check `.h` versus `.hpp` plus basic help on an unsupported Target.
+2. Open/close Projects repeatedly and switch Files/two panes with identical paths on different Targets; check for duplicate menus or cross-Project help. Verify quoted include suggestions in a retained Build after changing/deleting live headers.
+3. In browser developer tools, confirm editing/help requests produce only local asset loads and no Compiler Explorer request. The chunk dependency audit is complete; runtime network observation remains pending.
+4. Compile a deliberate error, confirm Problems/squiggles and Build gating still belong to the compiler, then keep editing/requesting help and verify those diagnostics remain intact until the normal Compile flow updates them.
