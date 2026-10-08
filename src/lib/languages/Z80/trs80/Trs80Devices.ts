@@ -62,6 +62,15 @@ export class Trs80Devices {
         this.host = host
     }
 
+    regions(): import('../../commonLanguageFeatures.svelte').DeviceRegion[] {
+        return this.enabled
+            ? [
+                  { name: 'TRS-80 video', start: 0x3c00n, end: 0x4000n },
+                  { name: 'TRS-80 keyboard', start: 0x3800n, end: 0x3c00n }
+              ]
+            : []
+    }
+
     /** Whether the memory-mapped display is the Screen's mode right now. */
     get isEnabled(): boolean {
         return this.enabled

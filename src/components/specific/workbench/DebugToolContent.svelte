@@ -48,6 +48,7 @@
     />
 {:else}
     <StackPointerView
+        emulator={session.emulator}
         tab={tool.tab}
         endianess={tool.tab.endianess}
         defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}

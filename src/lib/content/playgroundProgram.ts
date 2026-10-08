@@ -12,6 +12,7 @@ import {
     type CompilationRecord
 } from '$lib/sourceCompilation/records'
 import {
+    compiledLanguages,
     resolveAssemblyProfile,
     resolveRuntimeLink,
     resolveX86Start
@@ -51,7 +52,11 @@ export function decodePlaygroundProgram(encoded: string): PlaygroundProgram {
 
 /** Use the same assembler provenance and runtime startup as a Project Build. */
 export function playgroundBuildSources(project: Project): BuildSources {
-    const sources = { files: project.files, entry: project.entry }
+    const sources = {
+        files: project.files,
+        entry: project.entry,
+        compiledLanguages: compiledLanguages(project, project.compilations)
+    }
     if (sourceLanguage(project.entry)) {
         //There is no assembly to check yet. The Build action compiles the real source before
         //using this input; keep the emulator idle without marking valid C as an assembly error.

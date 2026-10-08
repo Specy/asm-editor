@@ -412,6 +412,39 @@ export function resolveRegisterFileLayout(
     }))
 }
 
+/** Core layout facts; all ranges are half-open and addresses stay lossless. */
+export type MemoryRunKind = 'code' | 'data' | 'reserved'
+export type MemoryLayoutItem = {
+    start: bigint
+    length: bigint
+    kind: MemoryRunKind
+    section: string
+    alignment?: bigint
+}
+export type DataLabel = {
+    /** The assembly unit that defines this symbol, when the Core reports it. */
+    file?: string
+    name: string
+    address: bigint
+    section?: string
+    fromLibrary: boolean
+    displayName?: string
+    preview?: string
+}
+export type MemoryLayout = {
+    sections: { name: string; runs: Omit<MemoryLayoutItem, 'section' | 'alignment'>[] }[]
+    dataLabels: DataLabel[]
+}
+export type HeapBounds = { start: bigint; end: bigint }
+export type DeviceRegion = { name: string; start: bigint; end: bigint }
+export type MemoryRegion = DeviceRegion & {
+    id: string
+    kind: MemoryRunKind | 'heap' | 'stack' | 'device'
+    section?: string
+    /** The live stack jumps to SP, including when its extent is empty. */
+    destination?: bigint
+}
+
 export type EmulatorDecoration = {
     type: 'below-line'
     note?: string
@@ -490,7 +523,10 @@ export type BaseEmulatorState = {
  * compile" stays correct without having to filter by severity itself.
  */
 export type BaseEmulatorDerivedState = {
+    resolveMemoryLabel(name: string): bigint | undefined
     readonly compilerErrors: Diagnostic[]
+    readonly memoryRegions: readonly MemoryRegion[]
+    readonly dataLabels: readonly DataLabel[]
     /** Immutable Files and Entry used by the current executable, retained until Stop. */
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */

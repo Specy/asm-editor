@@ -166,6 +166,10 @@ export type BuildSources = Readonly<{
     entrySymbol?: string
     /** x86 compiler support archive; startup is selected only for a compiled Entry. */
     x86Support?: boolean
+    /** Generated assembly path to the source language that produced it. */
+    compiledLanguages?: Readonly<
+        Record<string, import('./sourceCompilation/records').SourceLanguage>
+    >
 }>
 
 export type BuildInput = string | BuildSources
@@ -207,12 +211,26 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
         ) {
             throw new ProjectFormatError(`Invalid entry symbol: ${String(input.entrySymbol)}`)
         }
+        if (
+            hasOwn(input, 'compiledLanguages') &&
+            (!input.compiledLanguages ||
+                typeof input.compiledLanguages !== 'object' ||
+                Array.isArray(input.compiledLanguages) ||
+                Object.entries(input.compiledLanguages).some(
+                    ([path, language]) =>
+                        !isValidFilePath(path) || (language !== 'c' && language !== 'cpp')
+                ))
+        )
+            throw new ProjectFormatError('Invalid compiled source languages')
         return Object.freeze({
             files: cleanFiles(input.files),
             entry: input.entry,
             ...(input.assemblyError ? { assemblyError: input.assemblyError } : {}),
             ...(Object.prototype.hasOwnProperty.call(input, 'assemblerProfile')
                 ? { assemblerProfile: input.assemblerProfile }
+                : {}),
+            ...(hasOwn(input, 'compiledLanguages')
+                ? { compiledLanguages: Object.freeze({ ...input.compiledLanguages }) }
                 : {}),
             ...(hasOwn(input, 'runtimeAbi') ? { runtimeAbi: input.runtimeAbi } : {}),
             ...(hasOwn(input, 'entrySymbol') ? { entrySymbol: input.entrySymbol } : {}),

@@ -621,6 +621,7 @@
     <div class="column card memory-card code-data-memory-controls">
         <div class="memory-controls">
             <MemoryControls
+                {emulator}
                 buttonVar="secondary"
                 systemSize={emulator.systemSize}
                 bytesPerPage={emulator.memory.global.pageSize}
@@ -636,6 +637,8 @@
         </div>
         <div class="memory-page">
             <MemoryVisualiser
+                memoryRegions={emulator?.memoryRegions}
+                dataLabels={emulator?.dataLabels}
                 style="flex: 1; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                 systemSize={emulator.systemSize}
                 endianess={emulator.memory.global.endianess}
@@ -703,6 +706,7 @@
     <div class="column card memory-card">
         <div class="memory-controls">
             <MemoryControls
+                {emulator}
                 buttonVar="secondary"
                 systemSize={emulator.systemSize}
                 bytesPerPage={emulator.memory.global.pageSize}
@@ -716,6 +720,8 @@
         </div>
         <div class="memory-page">
             <MemoryVisualiser
+                memoryRegions={emulator?.memoryRegions}
+                dataLabels={emulator?.dataLabels}
                 style="border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                 systemSize={emulator.systemSize}
                 endianess={emulator.memory.global.endianess}

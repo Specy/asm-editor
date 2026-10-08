@@ -30,7 +30,7 @@ function reachableRecords(
         } catch {
             return
         }
-        for (const match of text.matchAll(/^\s*\.include\s+"([^"\n]+)"/gm)) {
+        for (const match of text.matchAll(/^\s*(?:\.include|%include)\s+"([^"\n]+)"/gm)) {
             const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
             try {
                 visit(
@@ -132,6 +132,20 @@ export function resolveX86Start(
         throw new ProjectFormatError(
             `${shadowed} is inside ${RUNTIME_NAMESPACE}, which the start code of compiled programs reserves. Move it to link the start code.`
         )
-    return { x86Support: true, ...(compiled.some(record => record.outputPath === sources.entry)
-        ? { entrySymbol: RUNTIME_ENTRY_SYMBOL } : {}) }
+    return {
+        x86Support: true,
+        ...(compiled.some((record) => record.outputPath === sources.entry)
+            ? { entrySymbol: RUNTIME_ENTRY_SYMBOL }
+            : {})
+    }
+}
+
+/** Keep compiler names scoped to Generated assembly, including mixed assembly/source Builds. */
+export function compiledLanguages(
+    sources: BuildSources,
+    records: readonly CompilationRecord[] | undefined
+) {
+    return Object.fromEntries(
+        reachableRecords(sources, records).map((record) => [record.outputPath, record.language])
+    )
 }

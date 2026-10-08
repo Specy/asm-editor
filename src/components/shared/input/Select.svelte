@@ -29,6 +29,8 @@
 
     type SelectOption = {
         key: string | number
+        /** Human-readable text for type ahead when the key is a stable identifier. */
+        searchText?: string
         value: T
         disabled?: boolean
     }
@@ -44,6 +46,9 @@
         disabled?: boolean
         onChange?: (value: T) => void
         /** Renders one row. Without it a row is its `key`, which is what a native select shows. */
+        popupHeader?: Snippet<[{ focusOptions: () => void; close: () => void }]>
+        trigger?: Snippet
+        popupWidth?: number
         item?: Snippet<[SelectOption, { selected: boolean; active: boolean }]>
     }
 
@@ -56,7 +61,10 @@
         wrapperStyle = '',
         disabled = false,
         onChange,
-        item
+        item,
+        popupHeader,
+        trigger,
+        popupWidth
     }: Props = $props()
 
     //SSR safe and unique per instance, so the ids survive hydration
@@ -106,9 +114,10 @@
         const wanted = list?.scrollHeight ?? 0
         const openUp = below < Math.min(wanted, 160) && above > below
 
+        const width = Math.min(popupWidth ?? rect.width, window.innerWidth - MARGIN * 2)
         placement = {
-            left: Math.max(MARGIN, Math.min(rect.left, window.innerWidth - rect.width - MARGIN)),
-            width: rect.width,
+            left: Math.max(MARGIN, Math.min(rect.left, window.innerWidth - width - MARGIN)),
+            width,
             top: openUp
                 ? Math.max(MARGIN, rect.top - Math.min(wanted, above) - 4)
                 : rect.bottom + 4,
@@ -191,7 +200,10 @@
         typedAt = now
         const match = options.findIndex(
             (option, index) =>
-                selectable(index) && String(option.key).toLowerCase().startsWith(typed)
+                selectable(index) &&
+                String(option.searchText ?? option.key)
+                    .toLowerCase()
+                    .startsWith(typed)
         )
         if (match === -1) return
         if (open) moveTo(match)
@@ -274,7 +286,9 @@
         onclick={() => (open ? closeList() : openList())}
         onkeydown={onKeyDown}
     >
-        <span class="label">{label}</span>
+        <span class="label"
+            >{#if trigger}{@render trigger()}{:else}{label}{/if}</span
+        >
         <span class="chevron" aria-hidden="true"></span>
     </button>
 
@@ -292,6 +306,18 @@
                 ? 'bottom'
                 : 'top'};"
         >
+            {#if popupHeader}<li role="presentation">
+                    {@render popupHeader({
+                        focusOptions: () => {
+                            button?.focus()
+                            moveTo(edge(1))
+                        },
+                        close: () => {
+                            closeList()
+                            button?.focus()
+                        }
+                    })}
+                </li>{/if}
             {#each options as option, index (option.key)}
                 <li
                     id={optionId(index)}
@@ -357,6 +383,7 @@
     }
 
     .label {
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

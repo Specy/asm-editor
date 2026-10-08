@@ -321,3 +321,21 @@ describe('the MARS bitmap display flush', () => {
         expect(reads).toEqual([{ from: 0, length: 39 * BLOCK }])
     })
 })
+
+it('reports the fixed MMIO block and the bitmap bounds after its geometry moves', () => {
+    const { devices } = makeDevices()
+    expect(devices.regions()).toEqual([
+        { name: 'MMIO', start: 0xffff0000n, end: 0xffff0010n },
+        {
+            name: 'Bitmap display',
+            start: BigInt(SMALL.baseAddress),
+            end: BigInt(SMALL.baseAddress) + 256n
+        }
+    ])
+    devices.setDisplay({ ...SMALL, baseAddress: 0x10020000, width: 128 })
+    expect(devices.regions()[1]).toEqual({
+        name: 'Bitmap display',
+        start: 0x10020000n,
+        end: 0x10020200n
+    })
+})

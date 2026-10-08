@@ -6,6 +6,7 @@ import globals from 'globals'
 import svelteConfig from './svelte.config.js'
 
 export default ts.config(
+    { ignores: ['src/lib/languages/demangle/module.js'] },
     js.configs.recommended,
     ...ts.configs.recommended,
     ...svelte.configs.recommended,

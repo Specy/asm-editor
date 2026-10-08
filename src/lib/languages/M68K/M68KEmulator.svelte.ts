@@ -1,3 +1,4 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     ccrToFlagsArray,
     type ExecutionStep as CoreExecutionStep,
@@ -377,6 +378,34 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     _getPc(): bigint {
         return BigInt(this.interpreter?.getPc() ?? 0)
+    }
+
+    _getMemoryLayout() {
+        const values = this.program!.getLayoutItems()
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (let i = 0; i < values.length; i += 5)
+            items.push({
+                start: BigInt(values[i]),
+                length: BigInt(values[i + 1]),
+                kind: (['code', 'data', 'reserved'] as const)[values[i + 2]],
+                section: `Section ${values[i + 3]}`,
+                alignment: BigInt(values[i + 4])
+            })
+        const labels = Object.values(this.program!.getSymbols())
+            .filter((symbol) => symbol.kind === 'label')
+            .map((symbol) => ({
+                name: symbol.name,
+                address: BigInt(symbol.value),
+                fromLibrary: false
+            }))
+        return memoryLayoutFromItems(items, labels)
+    }
+    _getStackTop() {
+        return BigInt(this.interpreter?.getStackTop() ?? 0)
+    }
+    _resolveMemoryLabel(name: string) {
+        const symbol = this.program?.getSymbols()[name]
+        return symbol?.kind === 'label' ? BigInt(symbol.value) : undefined
     }
 
     _getSp(): bigint {

@@ -1,5 +1,6 @@
 import { tick, untrack } from 'svelte'
 import {
+    compiledLanguages,
     resolveAssemblyProfile,
     resolveRuntimeLink,
     resolveX86Start
@@ -304,6 +305,10 @@ export class WorkbenchSession {
         this.sourceInput = $derived.by<BuildSources>(() => {
             const sources = {
                 files: $state.snapshot(this.project.files),
+                compiledLanguages: compiledLanguages(
+                    { files: this.project.files, entry: this.project.entry },
+                    this.project.compilations
+                ),
                 entry: this.project.entry
             }
             const x86 = this.project.language === 'X86'

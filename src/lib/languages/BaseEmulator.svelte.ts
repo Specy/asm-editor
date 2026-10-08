@@ -177,6 +177,13 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _getPc(): bigint
 
+    /** Static layout is read once after Build; moving bounds are read at panel refresh. */
+    _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
+    _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
+    _getStackTop?(): bigint
+    _getDeviceRegions?(): import('./commonLanguageFeatures.svelte').DeviceRegion[]
+    _resolveMemoryLabel?(name: string): bigint | undefined
+
     abstract _getSp(): bigint
 
     abstract _getFlags(): { name: string; value: number; prev?: number }[]

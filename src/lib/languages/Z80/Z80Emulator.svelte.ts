@@ -1,3 +1,4 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     type AssembledLine,
     assemble,
@@ -506,6 +507,45 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
 
     _getPc(): bigint {
         return BigInt(this.machine?.z80.regs.pc ?? 0)
+    }
+
+    _getMemoryLayout() {
+        const asm = this.assembly!.asm
+        let section = 0,
+            end: number | undefined
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (const line of asm.assembledLines) {
+            if (!line.kind || line.nextAddress <= line.address) continue
+            if (end !== undefined && line.address !== end) section++
+            items.push({
+                start: BigInt(line.address),
+                length: BigInt(line.nextAddress - line.address),
+                kind: line.alignment > 1 && items.length ? items[items.length - 1].kind : line.kind,
+                section: `Run ${section + 1}`,
+                alignment: BigInt(line.alignment)
+            })
+            end = line.nextAddress
+        }
+        const labels = asm.symbols
+            .filter((symbol) => symbol.type !== 1)
+            .map((symbol) => ({
+                name: symbol.originalSpelling,
+                address: BigInt(symbol.value),
+                fromLibrary: false
+            }))
+        return memoryLayoutFromItems(items, labels)
+    }
+    _getStackTop() {
+        return BigInt(this.machine?.getStackTop() ?? 0)
+    }
+    _getDeviceRegions() {
+        return this.trs80?.regions() ?? []
+    }
+    _resolveMemoryLabel(name: string) {
+        const symbol = this.assembly?.asm.symbols.find(
+            (symbol) => symbol.name === name.toLowerCase() && symbol.type !== 1
+        )
+        return symbol ? BigInt(symbol.value) : undefined
     }
 
     _getSp(): bigint {

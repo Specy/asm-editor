@@ -1,3 +1,4 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import { makeRiscVCore, type RiscVLink } from './RISC-V-core'
 import {
     coreLibrary,
@@ -616,6 +617,52 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const riscv = this.riscv
         if (!riscv) return 0n
         return this.is64Bit ? BigInt(riscv.programCounterLong) : BigInt(riscv.programCounter)
+    }
+
+    _getMemoryLayout() {
+        const core = this.riscv!
+        const names = core.getSectionNames()
+        const values = core.getLayoutItems()
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (let i = 0; i < values.length; i += 5)
+            items.push({
+                start: BigInt(values[i] >>> 0),
+                length: BigInt(values[i + 1] >>> 0),
+                kind: (['code', 'data', 'reserved'] as const)[values[i + 2]],
+                section: names[values[i + 3]],
+                alignment: BigInt(values[i + 4] >>> 0)
+            })
+        const symbols = core.getSymbolValues()
+        const files = core.getSymbolFiles()
+        const labels = core.getSymbolNames().flatMap((name, i) =>
+            symbols[i * 3 + 1]
+                ? [
+                      {
+                          name,
+                          address: BigInt(symbols[i * 3] >>> 0),
+                          fromLibrary: !!symbols[i * 3 + 2],
+                          file: files[i]
+                      }
+                  ]
+                : []
+        )
+        return memoryLayoutFromItems(items, labels)
+    }
+    _getHeapBounds() {
+        const core = this.riscv
+        return core
+            ? { start: BigInt(core.getHeapStart() >>> 0), end: BigInt(core.getHeapBreak() >>> 0) }
+            : undefined
+    }
+    _getStackTop() {
+        return BigInt((this.riscv?.getStackTop() ?? 0) >>> 0)
+    }
+    _getDeviceRegions() {
+        return this.devices.regions()
+    }
+    _resolveMemoryLabel(name: string) {
+        const address = this.riscv?.getAddressOfLabel(name)
+        return address === undefined || address === -1 ? undefined : BigInt(address >>> 0)
     }
 
     _getSp(): bigint {
@@ -1254,5 +1301,6 @@ const backStepActionMap = {
         'Control and status register poke restore',
     [BackStepAction.POKE]: 'Poke',
     [BackStepAction.EXIT_RESTORE]: 'Exit restore',
-    [BackStepAction.RANDOM_STREAM_RESTORE]: 'Random generator restore'
+    [BackStepAction.RANDOM_STREAM_RESTORE]: 'Random generator restore',
+    [BackStepAction.HEAP_RESTORE]: 'Heap break restore'
 } satisfies Record<BackStepAction, string>

@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { memoryRegionColor, memoryHover, regionsAt } from '$lib/languages/memoryRegions'
+    import type { MemoryRegion, DataLabel } from '$lib/languages/commonLanguageFeatures.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
@@ -32,6 +34,8 @@
     } as const
 
     interface Props {
+        memoryRegions?: readonly MemoryRegion[]
+        dataLabels?: readonly DataLabel[]
         memory: DiffedMemory
         currentAddress: bigint
         callStackAddresses?: ColorizedLabel[]
@@ -61,6 +65,8 @@
     }
 
     let {
+        memoryRegions = [],
+        dataLabels = [],
         memory,
         currentAddress,
         sp,
@@ -76,7 +82,35 @@
         pokeable = false,
         onPoke
     }: Props = $props()
+    const annotations = $derived.by(() => {
+        const cells = Array.from({ length: pageSize }, (_, index) => {
+            const address = currentAddress + BigInt(index)
+            const region = regionsAt(memoryRegions, address)[0]
+            return {
+                region,
+                hover: memoryHover(memoryRegions, dataLabels, address)
+            }
+        })
+        return cells.map((cell, index) => {
+            const region = cell.region
+            if (!region) return { ...cell, outline: '' }
+            const sameRegion = (neighbor: number) => cells[neighbor]?.region?.id === region.id
+            const column = index % bytesPerRow
+            // Only the exposed edges of a region's cells form its continuous outline.
+            const edges = [
+                !sameRegion(index - bytesPerRow),
+                column === bytesPerRow - 1 || !sameRegion(index + 1),
+                !sameRegion(index + bytesPerRow),
+                column === 0 || !sameRegion(index - 1)
+            ]
+            return {
+                ...cell,
+                outline: `--region-color: ${memoryRegionColor(region.kind)}; --region-edges: ${edges.map(edge => edge ? '1px' : '0').join(' ')};`
+            }
+        })
+    })
     const maxAddresses = systemSize
+    let memoryGrid = $state<HTMLDivElement>()
     const addressDigits = $derived(memorySize ? memorySize.toString(16).length : 4)
     let selectedAddressesIndexes = $state({
         start: -1,
@@ -319,7 +353,7 @@
     }
 </script>
 
-<div class="memory-grid" class:dense style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
+<div class="memory-grid" bind:this={memoryGrid} class:dense style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
     <div class="memory-offsets">
         {#each new Array(bytesPerRow).keys() as offset (offset)}
             <div>
@@ -376,6 +410,7 @@
         onpointermove={selectingAddresses ? handlePointerMove : undefined}
     >
         {#each memory.current as word, i (currentAddress + BigInt(i))}
+            {@const unreadableByte = !!unreadable?.mask[i]}
             {@const signed = unsignedBigIntToSigned(BigInt(word), 1)}
             {@const selectionValue = getNumberInRange(
                 memory,
@@ -388,7 +423,7 @@
                 selectedAddressesIndexes.len,
                 bytesPerRow
             )}
-            <div class="memory-number">
+            <div class="memory-number" class:outlined={!!annotations[i].region} style={annotations[i].outline}>
                 {#if i === selectedAddressesIndexes.start}
                     {@const signedSelection = unsignedBigIntToSigned(
                         selectionValue.current,
@@ -448,32 +483,18 @@
                         {/if}
                     </div>
                 {/if}
-                {#if unreadable?.mask[i]}
-                    <div
-                        class="unreadable-byte"
-                        title={unreadable.reason}
-                        style={inRange(
-                            i,
-                            selectedAddressesIndexes.start,
-                            selectedAddressesIndexes.len
-                        )
-                            ? 'background-color: var(--green); color: var(--green-text);'
-                            : ''}
-                    >
-                        ??
-                    </div>
-                {:else}
                     <ValueDiff
-                        value={getTextFromValue(BigInt(word), 0, type)}
+                        value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 0, type)}
                         id={`${id}-${i}`}
-                        diff={getTextFromValue(
+                        diff={unreadableByte ? '??' : getTextFromValue(
                             BigInt(memory.prevState[i] ?? defaultMemoryValue),
                             0,
                             type
                         )}
-                        hasSoftDiff={word !== defaultMemoryValue}
-                        hoverElementStyle="width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);"
+                        hasSoftDiff={!unreadableByte && !annotations[i].region && word !== defaultMemoryValue}
+                        hoverBoundary={memoryGrid}
                         style={`padding: 0.3rem var(--cell-pad-x); min-width: calc(var(--cell-pad-x) * 2 + 2ch); height: calc(2ch + 0.65rem);
+                    ${unreadableByte ? 'color: var(--hint);' : ''}
                     ${
                         currentAddress + BigInt(i) === sp
                             ? ' background-color: var(--accent2); color: var(--accent2-text);'
@@ -494,23 +515,31 @@
                             : ''
                     }
 								`}
-                        hoverElementOffset={BigInt(word) !== signed ? '-2.2rem' : '-1rem'}
                         monospaced
                     >
                         {#snippet hoverValue()}
                             <div>
-                                {#if BigInt(word) !== signed}
-                                    <div style="user-select: all;">
-                                        {signed}
+                                {#if annotations[i].hover}
+                                    <div class="region-hover">
+                                        {annotations[i].hover}
                                     </div>
                                 {/if}
-                                <div style="user-select: all">
-                                    {word}
-                                </div>
+                                {#if unreadableByte}
+                                    <div class="byte-value">??</div>
+                                    <div class="byte-error">{unreadable?.reason}</div>
+                                {:else}
+                                    {#if BigInt(word) !== signed}
+                                        <div class="byte-value" style="user-select: all;">
+                                            {signed}
+                                        </div>
+                                    {/if}
+                                    <div class="byte-value" style="user-select: all">
+                                        {word}
+                                    </div>
+                                {/if}
                             </div>
                         {/snippet}
                     </ValueDiff>
-                {/if}
             </div>
         {/each}
     </div>
@@ -547,6 +576,17 @@
         display: flex;
         flex-direction: column;
 
+        &.outlined::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-style: solid;
+            border-color: var(--region-color);
+            border-width: var(--region-edges);
+            pointer-events: none;
+            z-index: 1;
+        }
+
         > :global(div:has(> .tooltip-base)) {
             display: flex;
             flex-direction: column;
@@ -556,6 +596,27 @@
         :global(.tooltip-base) {
             flex: 1;
         }
+        :global(.hover-element) {
+            --memory-hover-border: color-mix(in srgb, var(--tertiary-text) 28%, var(--tertiary));
+            border: 1px solid var(--memory-hover-border);
+            pointer-events: none;
+        }
+    }
+
+    .region-hover {
+        border-bottom: 1px solid var(--memory-hover-border);
+        padding: 0.2rem 0.4rem;
+        margin-bottom: 0.2rem;
+        overflow-wrap: anywhere;
+    }
+
+    .byte-value {
+        padding: 0 0.3rem 0.2rem;
+    }
+
+    .byte-error {
+        padding: 0.2rem 0.4rem;
+        overflow-wrap: anywhere;
     }
 
     .selection-value {
@@ -666,19 +727,6 @@
 
     .memory-grid:has(.memory-numbers:hover) .partial {
         opacity: 0.12;
-    }
-
-    //a byte the Core could not read, the size of a hex byte so the grid does not move
-    .unreadable-byte {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.3rem var(--cell-pad-x);
-        min-width: calc(var(--cell-pad-x) * 2 + 2ch);
-        height: calc(2ch + 0.65rem);
-        color: var(--hint);
-        cursor: default;
     }
 
     .memory-numbers {

@@ -140,6 +140,17 @@ export class MarsDevices {
         }
     }
 
+    regions(): import('../commonLanguageFeatures.svelte').DeviceRegion[] {
+        const regions = [{ name: 'MMIO', start: 0xffff0000n, end: 0xffff0010n }]
+        if (this.geometry)
+            regions.push({
+                name: 'Bitmap display',
+                start: BigInt(this.geometry.baseAddress),
+                end: BigInt(this.geometry.endAddress + 4)
+            })
+        return regions
+    }
+
     /** The grid the Screen currently mirrors, for the GUI and the tests. */
     get displayGeometry(): MarsDisplayGeometry | null {
         return this.geometry

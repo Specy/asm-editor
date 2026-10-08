@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { boundedValueHover } from './boundedValueHover'
+
     interface Props {
         diff: string | number
         style?: string
@@ -11,6 +13,7 @@
         oldValueStyle?: string
         id?: string | undefined
         hoverValue?: import('svelte').Snippet
+        hoverBoundary?: HTMLElement
     }
 
     let {
@@ -24,22 +27,25 @@
         oldValueStyle,
         hoverElementOffset = '-1.1rem',
         id = undefined,
-        hoverValue
+        hoverValue,
+        hoverBoundary
     }: Props = $props()
 </script>
 
-<div style="position: relative;">
-    <div class="hover-element" style={`--top: ${hoverElementOffset}; ${hoverElementStyle}`}>
-        {#if hoverValue}
-            <div class:monospaced style={hoverValueElementStyle}>
-                {@render hoverValue?.()}
-            </div>
-        {/if}
-        {#if diff !== value}
-            <div class="old-value" class:monospaced style={oldValueStyle} role="tooltip">
-                {diff}
-            </div>
-        {/if}
+<div style="position: relative;" use:boundedValueHover={hoverBoundary}>
+    <div class="hover-element" class:bounded={!!hoverBoundary} style={`--top: ${hoverElementOffset}; ${hoverElementStyle}`}>
+        <div class="hover-content">
+            {#if hoverValue}
+                <div class:monospaced style={hoverValueElementStyle}>
+                    {@render hoverValue?.()}
+                </div>
+            {/if}
+            {#if diff !== value}
+                <div class="old-value" class:monospaced style={oldValueStyle} role="tooltip">
+                    {diff}
+                </div>
+            {/if}
+        </div>
     </div>
     <div
         class:modified={diff !== value}
@@ -97,9 +103,51 @@
         filter: brightness(1.1);
     }
 
-    .hover-element:has(~ .tooltip-base:hover),
-    .hover-element:hover {
+    .hover-element:not(.bounded):has(~ .tooltip-base:hover),
+    .hover-element:not(.bounded):hover,
+    .hover-element:global(.shown) {
         display: flex;
+    }
+
+    .bounded {
+        width: max-content;
+        padding: 0;
+
+        .hover-content {
+            max-height: var(--hover-max-height);
+            overflow: auto;
+            border-radius: inherit;
+        }
+
+        .old-value {
+            padding: 0 0.3rem 0.2rem;
+        }
+
+        &::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            left: var(--hover-notch-x);
+            background: var(--tertiary);
+            transform: translateX(-50%) rotate(45deg);
+        }
+
+        &:global([data-side='above'])::after {
+            bottom: -5px;
+            border-right: 1px solid var(--memory-hover-border);
+            border-bottom: 1px solid var(--memory-hover-border);
+        }
+
+        &:global([data-side='below'])::after {
+            top: -5px;
+            border-left: 1px solid var(--memory-hover-border);
+            border-top: 1px solid var(--memory-hover-border);
+        }
+
+        &:global(.overlapping)::after {
+            display: none;
+        }
     }
 
     .modified {

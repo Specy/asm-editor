@@ -18,3 +18,6 @@ src/lib/sourceRuntime/generated/
 
 # Compact, deterministic source-help catalogs; their generators own formatting.
 src/lib/sourceLanguageHelp/generated/
+
+# Generated libc++abi demangler; scripts/demangle/build.sh owns this module.
+src/lib/languages/demangle/module.js

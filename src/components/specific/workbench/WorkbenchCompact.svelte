@@ -144,6 +144,7 @@
                             <div class="card memory">
                                 <div class="memory-controls">
                                     <MemoryControls
+                                        {emulator}
                                         buttonVar="secondary"
                                         systemSize={emulator.systemSize}
                                         bytesPerPage={emulator.memory.global.pageSize}
@@ -155,6 +156,8 @@
                                     />
                                 </div>
                                 <MemoryVisualiser
+                                    memoryRegions={emulator?.memoryRegions}
+                                    dataLabels={emulator?.dataLabels}
                                     systemSize={emulator.systemSize}
                                     endianess={emulator.memory.global.endianess}
                                     memorySize={MEMORY_SIZE[language]}

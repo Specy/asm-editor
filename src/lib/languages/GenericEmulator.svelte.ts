@@ -1,3 +1,5 @@
+import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
+import { mergeMemoryRegions } from './memoryRegions'
 import {
     BaseEmulator,
     CompilationFailedError,
@@ -16,6 +18,9 @@ import {
     makeGenericDiagnostic,
     makeRegister,
     type MemoryTab,
+    type MemoryLayout,
+    type HeapBounds,
+    type DeviceRegion,
     numbersOfSizeToSlice,
     type RegisterFile,
     type RegisterPoke,
@@ -130,7 +135,8 @@ function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
         left.assemblerProfile !== right.assemblerProfile ||
         left.assemblyError !== right.assemblyError ||
         left.runtimeAbi !== right.runtimeAbi ||
-        left.entrySymbol !== right.entrySymbol
+        left.entrySymbol !== right.entrySymbol ||
+        JSON.stringify(left.compiledLanguages) !== JSON.stringify(right.compiledLanguages)
     )
         return false
     const leftPaths = Object.keys(left.files)
@@ -152,6 +158,35 @@ export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
+    private memoryLayout = $state<MemoryLayout | undefined>()
+    private heapBounds = $state<HeapBounds | undefined>()
+    private stackTop = $state<bigint | undefined>()
+    private deviceRegions = $state<DeviceRegion[]>([])
+
+    get dataLabels() {
+        return this.memoryLayout?.dataLabels ?? []
+    }
+    get memoryRegions() {
+        return this.memoryLayout
+            ? mergeMemoryRegions(
+                  this.memoryLayout,
+                  this.heapBounds,
+                  this.stackTop === undefined
+                      ? undefined
+                      : { start: this.state.sp, end: this.stackTop },
+                  this.deviceRegions
+              )
+            : []
+    }
+    resolveMemoryLabel(name: string): bigint | undefined {
+        if (!this._buildSources) return undefined
+        const matches = this.dataLabels.filter(
+            (label) => label.name === name || label.displayName === name
+        )
+        if (matches.length === 1) return matches[0].address
+        return this._resolveMemoryLabel?.(name)
+    }
+
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
     protected _sources: BuildSources
     protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals' | 'display'>>
@@ -335,6 +370,15 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
         this.state.buildArtifacts = this._getBuildArtifacts()
+        const layout = this._getMemoryLayout?.() ?? { sections: [], dataLabels: [] }
+        this.memoryLayout = {
+            ...layout,
+            dataLabels: compiledMemoryNames(
+                layout.dataLabels,
+                this._buildSources!,
+                (address, length) => this._readMemoryBytes(address, length)
+            )
+        }
     }
 
     protected addError(error: string) {
@@ -760,6 +804,9 @@ export abstract class GenericEmulator<T, R extends string>
         this.readTermination()
         this.state.pc = this._getPc()
         this.state.callStack = this._getCallStack()
+        this.heapBounds = this._getHeapBounds?.()
+        this.stackTop = this._getStackTop?.()
+        this.deviceRegions = this._getDeviceRegions?.() ?? []
         this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
     }
 
@@ -979,6 +1026,10 @@ export abstract class GenericEmulator<T, R extends string>
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
         this._buildSources = undefined
+        this.memoryLayout = undefined
+        this.heapBounds = undefined
+        this.stackTop = undefined
+        this.deviceRegions = []
         this._buildLibraryFiles = undefined
         this.undoLedger = []
         this.pauseRequested = false
@@ -1063,6 +1114,7 @@ export abstract class GenericEmulator<T, R extends string>
                     ? $state.snapshot(this._sources)
                     : normalizeBuildInput(sourceOverride)
             entry = sources.entry
+            await prepareMemoryNames(sources)
             await this._prepareBuild?.(sources)
             this.executionController.ensureCurrent(execution)
             const result = await this._compile(sources, historySize)
@@ -1802,6 +1854,10 @@ export abstract class GenericEmulator<T, R extends string>
             //but its isolated FileSystem session has been released. It is therefore a Test result,
             //not an interactive Debug session that can be undone and resumed.
             this._buildSources = undefined
+            this.memoryLayout = undefined
+            this.heapBounds = undefined
+            this.stackTop = undefined
+            this.deviceRegions = []
             this.state.canExecute = false
             this.state.canUndo = false
         }

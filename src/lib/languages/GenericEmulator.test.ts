@@ -1881,3 +1881,61 @@ describe('Testcase runtime failures', () => {
         ])
     })
 })
+
+describe('Memory region lifetime', () => {
+    it('reads the static layout once per Build and refreshes moving ends and overlapping devices', async () => {
+        class RegionEmulator extends FakeEmulator {
+            layoutReads = 0
+            heapEnd = 0x2000n
+            top = 0x3000n
+            deviceStart = 0x1000n
+            _getMemoryLayout() {
+                this.layoutReads++
+                return {
+                    sections: [
+                        {
+                            name: '.data',
+                            runs: [{ start: 0x1000n, length: 16n, kind: 'data' as const }]
+                        }
+                    ],
+                    dataLabels: [
+                        { name: 'buffer', address: 0x1000n, section: '.data', fromLibrary: false }
+                    ]
+                }
+            }
+            _getHeapBounds() {
+                return { start: 0x2000n, end: this.heapEnd }
+            }
+            _getStackTop() {
+                return this.top
+            }
+            _getDeviceRegions() {
+                return [{ name: 'Bitmap', start: this.deviceStart, end: this.deviceStart + 8n }]
+            }
+            _getSp() {
+                return 0x2ff0n
+            }
+        }
+        const emulator = new RegionEmulator({ automaticChecking: false })
+        expect(emulator.memoryRegions).toEqual([])
+        await emulator.compile(20, undefined)
+        expect(emulator.layoutReads).toBe(1)
+        expect(emulator.dataLabels[0].name).toBe('buffer')
+        expect(emulator.memoryRegions.find((region) => region.kind === 'heap')?.end).toBe(0x2000n)
+        emulator.heapEnd += 32n
+        emulator.top += 16n
+        emulator.deviceStart = 0x4000n
+        emulator.refreshPanels(true)
+        expect(emulator.layoutReads).toBe(1)
+        expect(emulator.memoryRegions.find((region) => region.kind === 'heap')?.end).toBe(0x2020n)
+        expect(emulator.memoryRegions.find((region) => region.kind === 'stack')?.end).toBe(0x3010n)
+        expect(emulator.memoryRegions.find((region) => region.kind === 'device')?.start).toBe(
+            0x4000n
+        )
+        emulator.clear()
+        expect(emulator.memoryRegions).toEqual([])
+        expect(emulator.dataLabels).toEqual([])
+        await emulator.compile(20, undefined)
+        expect(emulator.layoutReads).toBe(2)
+    })
+})

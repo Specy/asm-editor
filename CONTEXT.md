@@ -244,6 +244,11 @@ _Avoid_: embed editor, small editor, playground editor, inline editor (for the c
 The three views of a **Debug session** that follow execution step by step: the Stack pointer (the memory around the stack pointer), the History (the steps instruction Undo can take back, **Pokes** included) and the Call stack. In the **Workbench** they are floating windows or sections of the debug column, as a **Preference** chooses. Registers, memory and the **Screen** are not debug tools.
 _Avoid_: inspectors, trackers, user tools, floating panels
 
+## Memory region
+
+A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. Distinct from a page, which is the fixed-size window the memory view shows at a time.
+_Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zone, memory map entry
+
 ## Log
 
 The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it). Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.

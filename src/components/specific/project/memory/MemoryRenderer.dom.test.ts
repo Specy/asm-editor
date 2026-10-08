@@ -19,7 +19,14 @@ const BYTES = [0x11, 0x01, 0x02, 0x33, 0x44, 0x55, 0x66, 0x77]
 const ADDRESS = 0x1000n
 
 function render(
-    options: { pokeable?: boolean; endianess?: 'big' | 'little'; unreadable?: number[] } = {}
+    options: {
+        memoryRegions?: import('$lib/languages/commonLanguageFeatures.svelte').MemoryRegion[]
+        dataLabels?: import('$lib/languages/commonLanguageFeatures.svelte').DataLabel[]
+        sp?: bigint
+        pokeable?: boolean
+        endianess?: 'big' | 'little'
+        unreadable?: number[]
+    } = {}
 ) {
     const pokes: { address: bigint; bytes: number[] }[] = []
     const target = document.createElement('div')
@@ -40,7 +47,9 @@ function render(
         props: {
             memory,
             currentAddress: ADDRESS,
-            sp: 0n,
+            sp: options.sp ?? 0n,
+            memoryRegions: options.memoryRegions,
+            dataLabels: options.dataLabels,
             pageSize: 8,
             bytesPerRow: 8,
             defaultMemoryValue: 0xff,
@@ -257,4 +266,51 @@ describe('bytes the Core could not read', () => {
         expect(panel.input()).toBeNull()
         panel.close()
     })
+})
+
+it('tints device overlaps, preserves SP and selection highlights, and hovers both owners', () => {
+    const region = {
+        id: 'data',
+        name: '.data',
+        section: '.data',
+        kind: 'data' as const,
+        start: ADDRESS,
+        end: ADDRESS + 8n
+    }
+    const ui = render({
+        memoryRegions: [
+            region,
+            {
+                id: 'bitmap',
+                name: 'Bitmap display',
+                kind: 'device',
+                start: ADDRESS,
+                end: ADDRESS + 8n
+            }
+        ],
+        sp: ADDRESS + 1n,
+        dataLabels: [
+            {
+                name: '_ZN4Game5scoreE',
+                displayName: 'Game::score',
+                section: '.data',
+                address: ADDRESS,
+                fromLibrary: true
+            }
+        ]
+    })
+    try {
+        expect(ui.cells()[0].getAttribute('style')).toContain('var(--red)')
+        expect(ui.cells()[1].getAttribute('style')).toContain('background-color: var(--accent2)')
+        expect(ui.target.querySelector('.region-hover')?.textContent).toBe(
+            'Bitmap display · .data · Game::score (_ZN4Game5scoreE) (library)'
+        )
+        ui.select(0)
+        expect(ui.cells()[0].getAttribute('style')).toContain('background-color: var(--green)')
+        expect(ui.cells()[0].getAttribute('style')!.lastIndexOf('var(--green)')).toBeGreaterThan(
+            ui.cells()[0].getAttribute('style')!.lastIndexOf('var(--red)')
+        )
+    } finally {
+        ui.close()
+    }
 })

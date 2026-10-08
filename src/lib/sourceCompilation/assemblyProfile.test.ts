@@ -177,7 +177,8 @@ describe('x86 start code', () => {
     it('adds startup only for a compiled Entry and keeps support for secondary compiled Files', () => {
         expect(resolveX86Start(x86Sources, [x86Record])).toEqual({ x86Support: true })
         expect(resolveX86Start({ ...x86Sources, entry: 'main.c.asm' }, [x86Record])).toEqual({
-            entrySymbol: '_start', x86Support: true
+            entrySymbol: '_start',
+            x86Support: true
         })
     })
     it('leaves hand-written programs and removed Generated assembly alone', () => {
@@ -222,4 +223,20 @@ describe('x86 start code', () => {
             ).toEqual({ x86Support: true })
         }
     })
+})
+
+it('carries the source language of reachable Generated assembly, including NASM includes', async () => {
+    const { compiledLanguages } = await import('./assemblyProfile')
+    const sources = {
+        entry: 'main.asm',
+        files: {
+            'main.asm': text('%include "generated.asm"'),
+            'generated.asm': text('section .data')
+        }
+    }
+    const records = [
+        { outputPath: 'generated.asm', language: 'cpp' },
+        { outputPath: 'unused.asm', language: 'c' }
+    ] as import('./records').CompilationRecord[]
+    expect(compiledLanguages(sources, records)).toEqual({ 'generated.asm': 'cpp' })
 })

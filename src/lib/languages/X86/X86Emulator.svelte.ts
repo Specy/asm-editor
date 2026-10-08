@@ -1,3 +1,4 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     EmulatorStatus,
     type CompileResult,
@@ -478,6 +479,36 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core.getRegisterValuesRecord()
     }
 
+    _getMemoryLayout() {
+        const layout = this.core!.getMemoryLayout()
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (let i = 0; i < layout.items.length; i += 5)
+            items.push({
+                start: layout.items[i],
+                length: layout.items[i + 1],
+                kind: (['code', 'data', 'reserved'] as const)[Number(layout.items[i + 2])],
+                section: layout.sections[Number(layout.items[i + 3])],
+                alignment: layout.items[i + 4]
+            })
+        return memoryLayoutFromItems(
+            items,
+            layout.symbols.map((symbol) => ({
+                ...symbol,
+                section: layout.sections[symbol.section]
+            }))
+        )
+    }
+    _getHeapBounds() {
+        const core = this.core
+        return core ? { start: core.getHeapStart(), end: core.getHeapBreak() } : undefined
+    }
+    _getStackTop() {
+        return this.core?.getStackTop() ?? 0n
+    }
+    _resolveMemoryLabel(name: string) {
+        return this.core?.resolveMemoryLabel(name)
+    }
+
     _getSp(): bigint {
         return this.core?.getSp() ?? 0n
     }
@@ -905,7 +936,7 @@ function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoErro
     const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
-        severity: error.severity === 'hint' ? 'suggestion' : error.severity ?? 'error',
+        severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
         file: source.path,
         lineIndex: source.line,
         column: Math.max(1, error.column),
@@ -931,7 +962,7 @@ function coreDiagnosticToDiagnostic(
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
     return {
-        severity: diagnostic.severity === 'hint' ? 'suggestion' : diagnostic.severity ?? 'error',
+        severity: diagnostic.severity === 'hint' ? 'suggestion' : (diagnostic.severity ?? 'error'),
         file: source.path,
         lineIndex: source.line,
         column: span.column,

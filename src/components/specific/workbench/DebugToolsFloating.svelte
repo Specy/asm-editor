@@ -118,6 +118,7 @@
     >
         <div class="window-body">
             <StackPointerView
+                emulator={session.emulator}
                 {tab}
                 endianess={tab.endianess}
                 defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
