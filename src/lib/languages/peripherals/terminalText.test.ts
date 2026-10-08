@@ -8,6 +8,21 @@ import {
 
 const everyByte = Uint8Array.from({ length: 256 }, (_, byte) => byte)
 
+/**
+ * Windows-1252's bytes `0x80`–`0x9F` as the WHATWG Encoding Standard maps them, written out here
+ * rather than read from `TextDecoder`, whose table depends on the platform's ICU data.
+ */
+const WINDOWS_1252_HIGH = [...'€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ']
+
+/** Every byte decoded as Windows-1252: Latin-1 except for the typographic `0x80`–`0x9F`. */
+function everyByteAsWindows1252(): string {
+    return [...everyByte]
+        .map((byte) =>
+            byte >= 0x80 && byte < 0xa0 ? WINDOWS_1252_HIGH[byte - 0x80] : String.fromCharCode(byte)
+        )
+        .join('')
+}
+
 describe('terminal text conventions', () => {
     it("follows each Target's Reference environment", () => {
         expect(terminalTextConventions('M68K')).toEqual({ encoding: 'windows-1252', enter: '\r' })
@@ -19,14 +34,13 @@ describe('terminal text conventions', () => {
 })
 
 describe('Windows-1252', () => {
-    it("decodes every byte as the platform's own decoder does", () => {
+    it('decodes every byte as the Encoding Standard maps it', () => {
         const decoded = createTextStreamDecoder('windows-1252').decode(everyByte)
-        expect(decoded).toBe(new TextDecoder('windows-1252').decode(everyByte))
+        expect(decoded).toBe(everyByteAsWindows1252())
     })
 
     it('encodes back to the same bytes', () => {
-        const decoded = new TextDecoder('windows-1252').decode(everyByte)
-        expect(encodeText(decoded, 'windows-1252')).toEqual(everyByte)
+        expect(encodeText(everyByteAsWindows1252(), 'windows-1252')).toEqual(everyByte)
     })
 
     it('has no byte for a C1 control its typographic characters replace', () => {
