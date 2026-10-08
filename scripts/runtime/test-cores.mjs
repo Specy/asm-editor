@@ -256,16 +256,17 @@ function firstDifference(expected, actual) {
 }
 
 async function main() {
+    const { MIPS, StopReason } = await import(
+        join(repository, 'emulators', 'mips', 'marsjs', 'ts', 'dist', 'index.mjs')
+    )
     const cores = {
-        StopReason: (await import('@specy/mips')).StopReason,
+        StopReason,
         RISCV: (
             await import(
                 join(repository, 'emulators', 'risc-v', 'rarsjs', 'ts', 'dist', 'index.mjs')
             )
         ).RISCV,
-        MIPS: (
-            await import(join(repository, 'emulators', 'mips', 'marsjs', 'ts', 'dist', 'index.mjs'))
-        ).MIPS
+        MIPS
     }
     // The headers as they are now, the same ones the build uploads as the sysroot.
     const include = join(runtime, 'include')
