@@ -44,18 +44,19 @@ export class PlaygroundSession {
 
     /** Give named models source help without starting an assembly-analysis Worker. */
     registerSourceHelp(sessionId: string): () => void {
-        const playground = this
+        const getSources = () => this.sourceHelpSources
+        const getTarget = () => this.project.language
         return registerLanguageSession({
             sessionId,
             get sources() {
-                return playground.sourceHelpSources
+                return getSources()
             },
             get target() {
-                return playground.project.language
+                return getTarget()
             },
             snapshot: undefined,
             sourcesFor(sourceKind) {
-                return sourceKind === 'live' ? playground.sourceHelpSources : undefined
+                return sourceKind === 'live' ? getSources() : undefined
             }
         })
     }
