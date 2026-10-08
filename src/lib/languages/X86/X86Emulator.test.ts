@@ -1077,8 +1077,12 @@ describe('x86 start unit', () => {
             expect(await emulator.check()).toEqual([])
             //the linker takes `_start` from the start code, and nothing from main.asm
             await emulator.compile(20, project)
-            expect(emulator.compilerErrors.filter(d => d.severity === 'error')).toEqual([])
-            expect(emulator.compilerDiagnostics.some(d => d.file === 'main.asm' && d.severity === 'suggestion')).toBe(true)
+            expect(emulator.compilerErrors.filter((d) => d.severity === 'error')).toEqual([])
+            expect(
+                emulator.compilerDiagnostics.some(
+                    (d) => d.file === 'main.asm' && d.severity === 'suggestion'
+                )
+            ).toBe(true)
             await emulator.run(100_000)
             expect(emulator.terminated).toBe(true)
             expect(cpuRegister(emulator, 'rdi')).toBe(20n)

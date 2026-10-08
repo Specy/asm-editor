@@ -11,7 +11,10 @@ test('ABI rejects removed compiler support, changed public signatures and layout
     current.exported.riscv32.pop()
     current.signatures.riscv32.printf = 'changed'
     current.layouts.riscv32['sizeof(max_align_t)'] = 16
-    assert.deepEqual(checkAbi(baseline, current).map(x => x.split(':')[0]), ['riscv32', 'riscv32', 'riscv32'])
+    assert.deepEqual(
+        checkAbi(baseline, current).map((x) => x.split(':')[0]),
+        ['riscv32', 'riscv32', 'riscv32']
+    )
 })
 test('ABI accepts additions and preserves target-specific required symbols', () => {
     const current = structuredClone(baseline)

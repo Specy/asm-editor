@@ -22,7 +22,7 @@ beforeAll(() => {
 })
 let dispose = () => {}
 afterEach(() => dispose())
-function render(built = true) {
+function render(built = true, showRegions = true) {
     const target = document.createElement('div')
     document.body.append(target)
     const change = vi.fn()
@@ -53,7 +53,8 @@ function render(built = true) {
             bytesPerPage: 8,
             memorySize: 0xffffffffn,
             systemSize: RegisterSize.Long,
-            onAddressChange: change
+            onAddressChange: change,
+            showRegions
         }
     })
     flushSync()
@@ -142,4 +143,11 @@ it('uses displayed label names for keyboard type ahead and returns focus on filt
     flushSync()
     expect(button.getAttribute('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(button)
+})
+
+it('leaves the region picker out when the regions are hidden, the page buttons still there', () => {
+    const ui = render(true, false)
+    expect(ui.target.querySelector('.region-picker')).toBeNull()
+    expect(ui.target.querySelector('[title="Previous page"]')).not.toBeNull()
+    expect(ui.target.querySelector('[title="Next page"]')).not.toBeNull()
 })

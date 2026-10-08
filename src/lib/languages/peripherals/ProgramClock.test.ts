@@ -155,9 +155,10 @@ describe('abortable waits', () => {
     })
 })
 
- describe('calendar and CPU clocks', () => {
+describe('calendar and CPU clocks', () => {
     it('uses host calendar independently of elapsed time', () => {
-        let elapsed = 10, calendar = 1700000000000
+        let elapsed = 10,
+            calendar = 1700000000000
         const clock = new ProgramClock({ now: () => elapsed, calendarNow: () => calendar })
         elapsed += 500
         expect(clock.now()).toBe(500)
@@ -178,4 +179,4 @@ describe('abortable waits', () => {
         clock.start()
         expect(clock.calendarNow()).toBe(946684800000)
     })
- })
+})

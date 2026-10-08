@@ -68,6 +68,8 @@
         project?: Project
         testcases?: Testcase[]
         showMemory?: boolean
+        /** Whether the memory view has the region picker and tints its bytes by region. */
+        showMemoryRegions?: boolean
         showConsole?: boolean
         showTestcases?: boolean
         showPc?: boolean
@@ -105,6 +107,7 @@
         project,
         language = 'M68K',
         showMemory: showMemoryProp,
+        showMemoryRegions = false,
         showFlags: showFlagsProp,
         showRegisters: showRegistersProp,
         showConsole: showConsoleProp,
@@ -623,6 +626,7 @@
             <MemoryControls
                 {emulator}
                 buttonVar="secondary"
+                showRegions={showMemoryRegions}
                 systemSize={emulator.systemSize}
                 bytesPerPage={emulator.memory.global.pageSize}
                 memorySize={MEMORY_SIZE[language]}
@@ -637,8 +641,8 @@
         </div>
         <div class="memory-page">
             <MemoryVisualiser
-                memoryRegions={emulator?.memoryRegions}
-                dataLabels={emulator?.dataLabels}
+                memoryRegions={showMemoryRegions ? emulator?.memoryRegions : undefined}
+                dataLabels={showMemoryRegions ? emulator?.dataLabels : undefined}
                 readOnlyMemory={emulator?.readOnlyMemory}
                 style="flex: 1; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                 systemSize={emulator.systemSize}
@@ -709,6 +713,7 @@
             <MemoryControls
                 {emulator}
                 buttonVar="secondary"
+                showRegions={showMemoryRegions}
                 systemSize={emulator.systemSize}
                 bytesPerPage={emulator.memory.global.pageSize}
                 memorySize={MEMORY_SIZE[language]}
@@ -721,8 +726,8 @@
         </div>
         <div class="memory-page">
             <MemoryVisualiser
-                memoryRegions={emulator?.memoryRegions}
-                dataLabels={emulator?.dataLabels}
+                memoryRegions={showMemoryRegions ? emulator?.memoryRegions : undefined}
+                dataLabels={showMemoryRegions ? emulator?.dataLabels : undefined}
                 readOnlyMemory={emulator?.readOnlyMemory}
                 style="border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                 systemSize={emulator.systemSize}
@@ -955,6 +960,8 @@
     /* the address controls are ruled off from the page under them, from edge to edge of the card,
        as in the Workbench's memory card */
     .memory-card {
+        min-width: 13rem;
+
         .memory-controls {
             display: flex;
             flex: none;

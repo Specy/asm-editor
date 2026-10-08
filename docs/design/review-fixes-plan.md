@@ -36,6 +36,7 @@ Each one has a recommendation. Implement the recommendation unless the owner ans
 ## W1. Allocation alignment and `max_align_t` (P1)
 
 **Evidence.**
+
 - [malloc_impl.h:13](../../runtime/src/malloc/malloc_impl.h) sets `ALIGN` to `2 * sizeof(size_t)`, which is 8 on
   RV32/MIPS and 16 on RV64.
 - [stddef.h:11](../../runtime/include/stddef.h) defines `max_align_t` without `long double`, so its alignment is 8
@@ -46,6 +47,7 @@ Each one has a recommendation. Implement the recommendation unless the owner ans
 - MIPS o32 is correct at 8, because `long double` is `double` there.
 
 **Changes.**
+
 1. Define `max_align_t` the way GCC's own `stddef.h` does: `long long` plus `long double`, each `__aligned__` to
    its own `__alignof__`, plus `__float128` under `__i386__`. Expected alignment: RV32 16, RV64 16, MIPS 8,
    x86-64 16, i386 16.
@@ -62,6 +64,7 @@ target-independent text so it matches glibc's output.
 ## W2. x86 link order (P1)
 
 **Evidence.**
+
 - ADR 0033 makes every non-Entry File an archive member, and the editor's library units (`start.asm`,
   `support.asm`, via `X86Project.library` in
   [x86StartUnit.ts:60](../../src/lib/languages/X86/x86StartUnit.ts)) come **first** in that archive.
@@ -73,6 +76,7 @@ target-independent text so it matches glibc's output.
 
 **Decision (recommended, open decision 1).** Keep the archive, which keeps ADR 0033's goal that the Entry picks
 which program runs, and fix the three hazards:
+
 1. **Link order.** Link the Entry's unit as an object, and `start.asm` as an object whenever the Entry is generated
    assembly. `_start` is then already defined, so `main.asm` is never pulled in for it. After those come the user
    archive (all other Files), then the support archive (`support.asm`, and later the x86 Runtime library) **last**,
@@ -94,6 +98,7 @@ planned an x86 major); don't release twice.
 Update `src/lib/documentation/x86/using-c.md`.
 
 **Tests.** Core tests for each case:
+
 - a user `memcpy` beats the support one;
 - duplicate strong definitions are an error, while weak plus strong is not;
 - a File that nothing references produces the Hint;
@@ -103,6 +108,7 @@ Update `src/lib/documentation/x86/using-c.md`.
 ## W3. Calendar, elapsed and CPU time (P1)
 
 **Evidence.**
+
 - [ProgramClock.now()](../../src/lib/languages/peripherals/ProgramClock.ts) returns milliseconds since the run
   started.
 - [marsHandlers.ts:223](../../src/lib/languages/mars/marsHandlers.ts) feeds it to service 30 and to the RISC-V
@@ -118,13 +124,14 @@ Update `src/lib/documentation/x86/using-c.md`.
 
 **Design.** Write a new ADR, "Programs see three clocks", and update ADR 0010 and ADR 0037 cross-references.
 
-| Clock | Interactive | Testcase (virtual) | Used by |
-| --- | --- | --- | --- |
-| Calendar (realtime) | host `Date.now()` | fixed epoch (open decision 3) + virtual elapsed | MARS/RARS service 30, `time()`, x86 `CLOCK_REALTIME*`/`CLOCK_TAI`, EASy68K task 8 (since local midnight), Z80 if its Reference says so |
-| Elapsed (monotonic) | host time since start, as now | virtual elapsed, as now | animation, waits (service 32, `nanosleep`), x86 `CLOCK_MONOTONIC*`/`BOOTTIME` |
-| CPU | executed instructions × nominal period (open decision 2) | same | C `clock()`, x86 `CLOCK_PROCESS_CPUTIME_ID`/`CLOCK_THREAD_CPUTIME_ID` |
+| Clock               | Interactive                                              | Testcase (virtual)                              | Used by                                                                                                                                |
+| ------------------- | -------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Calendar (realtime) | host `Date.now()`                                        | fixed epoch (open decision 3) + virtual elapsed | MARS/RARS service 30, `time()`, x86 `CLOCK_REALTIME*`/`CLOCK_TAI`, EASy68K task 8 (since local midnight), Z80 if its Reference says so |
+| Elapsed (monotonic) | host time since start, as now                            | virtual elapsed, as now                         | animation, waits (service 32, `nanosleep`), x86 `CLOCK_MONOTONIC*`/`BOOTTIME`                                                          |
+| CPU                 | executed instructions × nominal period (open decision 2) | same                                            | C `clock()`, x86 `CLOCK_PROCESS_CPUTIME_ID`/`CLOCK_THREAD_CPUTIME_ID`                                                                  |
 
 **Changes.**
+
 1. `ProgramClock`: add `calendarNow()` (ms since epoch) beside `now()`. Keep `now()` as the elapsed clock.
 2. `marsHandlers.ts`: service 30 uses `calendarNow()`. Check in the RARS source (`emulators/risc-v/rars`) what the
    `time`/`timeh` CSRs report in the Reference. If it differs from service 30, split the shared `time` handler into
@@ -135,15 +142,16 @@ Update `src/lib/documentation/x86/using-c.md`.
 4. M68K task 8 → hundredths since local midnight of `calendarNow()`. In a Testcase use UTC, so results are
    reproducible. Audit Z80 `timeHundredths` against its Port map and document the result.
 5. Runtime `clock()`: read CPU time from a new platform call `__aed_cpu_ticks()`.
-   - RISC-V: `rdinstret`/`rdinstreth` (RARS implements `instret`).
-   - MIPS: add a service, because MARS has no counter. It's a Core change; reserve a number in the runtime's
-     private range or follow whatever precedent `aed_sys_arch.h` sets.
-   - x86 (future runtime): `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)`.
-   - Convert to `CLOCKS_PER_SEC` with the nominal period. Keep the `(clock_t)-1` overflow return.
+    - RISC-V: `rdinstret`/`rdinstreth` (RARS implements `instret`).
+    - MIPS: add a service, because MARS has no counter. It's a Core change; reserve a number in the runtime's
+      private range or follow whatever precedent `aed_sys_arch.h` sets.
+    - x86 (future runtime): `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)`.
+    - Convert to `CLOCKS_PER_SEC` with the nominal period. Keep the `(clock_t)-1` overflow return.
 6. Fix the comments in `time.c`/`clock.c` and the docs: `{mips,riscv,x86}/syscalls.md`, `runtime-library.md`,
    `m68k/traps.md`, `z80/io.md`, `runtime/PLATFORM.md`, `runtime/FUNCTIONS.md`.
 
 **Tests.**
+
 - ProgramClock unit tests for the three clocks in both modes.
 - In a Testcase, `time()` returns the fixed epoch at start and moves with service 32.
 - `clock()` doesn't advance across a sleep and does advance across a loop; Undo rewinds it.
@@ -152,6 +160,7 @@ Update `src/lib/documentation/x86/using-c.md`.
 ## W4. A Runtime ABI check that protects compiled programs (P1)
 
 **Evidence.**
+
 - `checkAbi` in [build.mjs](../../scripts/runtime/build.mjs) checks only that baseline names weren't removed and
   that `layout.c` values are unchanged.
 - `exported` is the documented function names plus `stdin/stdout/stderr/errno/bcmp`: 175 names, of which only
@@ -160,15 +169,17 @@ Update `src/lib/documentation/x86/using-c.md`.
   such as `__divdi3` are all provided but unprotected. Signatures aren't checked at all.
 
 **Changes** (do these last among the runtime work, then regenerate `v1.json` once).
-1. **Per-target required symbols.** `exported` becomes `{ target: [names] }`. Each target's list is the union of:
-   - the documented functions and objects;
-   - every undefined global referenced by the corpus's compiled assembly for that target, across GCC and Clang,
-     C and C++, `-O0` and `-O2` (`runtime/.cache` holds it). This picks up mangled C++ operators, `__cxa_*`,
-     `__dso_handle`, libgcc helpers and implicit `memcpy`/`memset`;
-   - an explicit list of compiler-support symbols the compilers may emit even if no corpus program does yet (the
-     `__{,u}{div,mod}di3` family, the shift helpers, `__mulsc3`/`__muldc3`, …).
 
-   Internal names (`__aed_*`, musl-internal `__stdio_*`, `__fmodeflags`, …) stay out.
+1. **Per-target required symbols.** `exported` becomes `{ target: [names] }`. Each target's list is the union of:
+    - the documented functions and objects;
+    - every undefined global referenced by the corpus's compiled assembly for that target, across GCC and Clang,
+      C and C++, `-O0` and `-O2` (`runtime/.cache` holds it). This picks up mangled C++ operators, `__cxa_*`,
+      `__dso_handle`, libgcc helpers and implicit `memcpy`/`memset`;
+    - an explicit list of compiler-support symbols the compilers may emit even if no corpus program does yet (the
+      `__{,u}{div,mod}di3` family, the shift helpers, `__mulsc3`/`__muldc3`, …).
+
+    Internal names (`__aed_*`, musl-internal `__stdio_*`, `__fmodeflags`, …) stay out.
+
 2. **Signatures.** For each documented function, record its type in a target-specific, compiler-checked form.
    Compile one C++ unit per target through Compiler Explorer that includes every public header and instantiates
    `template<class T> void __aed_sig(T *) {}` with `&function`. The mangled instantiation name encodes the full
@@ -194,15 +205,17 @@ write-only and `a+` into append-only, because the Cores' open service knows only
 truncate) and 9 (append).
 
 **Changes.**
+
 1. Extend MARS/RARS open with read-write flags, documented as an extension beyond MARS 4.5 (whose hand-written
    programs keep the 0/1/9 behaviour):
-   - 2 = read-write on an existing file (`r+`);
-   - 3 = read-write, create and truncate (`w+`);
-   - 10 = read-write, create, writes at the end (`a+`).
+    - 2 = read-write on an existing file (`r+`);
+    - 3 = read-write, create and truncate (`w+`);
+    - 10 = read-write, create, writes at the end (`a+`).
 
-   Check how the open flags travel from the Core to the editor `FileSystem` (environment-library M4b) and support
-   reading and writing on one descriptor with a shared position. Seek already exists. x86 goes through Blink's
-   real `open()` and needs nothing new.
+    Check how the open flags travel from the Core to the editor `FileSystem` (environment-library M4b) and support
+    reading and writing on one descriptor with a shared position. Seek already exists. x86 goes through Blink's
+    real `open()` and needs nothing new.
+
 2. The runtime maps `r+`/`w+`/`a+` to those flags and restores musl's update-mode rules (an `fseek`/`fflush`
    between switching from reading to writing).
 3. Until the Core support lands, `fopen` with `+` must **fail** with `EINVAL`. It must never succeed with half
@@ -222,6 +235,7 @@ can't be honoured. Either way, record the policy in `FUNCTIONS.md`.
 ### W5c. Heap exhaustion
 
 **Evidence.**
+
 - `malloc` handles a failed `__aed_sbrk` correctly (`ENOMEM`, returns NULL; see
   [malloc.c](../../runtime/src/malloc/malloc.c)).
 - But RARS's `SyscallSbrk` (and MARS's) throws `ExitingException` when the heap is exhausted, so the program dies
@@ -244,6 +258,7 @@ exiting with 134: no exceptions means `std::terminate` semantics.
 riscv64, mips, host-i386, host-x86_64, and [X86/start.asm:29](../../src/lib/languages/X86/start.asm).
 
 **Changes.**
+
 - MIPS and RISC-V: `argc = 0` and `argv` pointing at a read-only `{ NULL }`. Also pass `envp` as the same array
   if `environ`/`getenv` exist.
 - x86: Blink's loader builds a real Linux initial stack, so take `argc`, `argv` and `envp` from `[rsp]` before
@@ -284,11 +299,12 @@ in one place (`runtime/FUNCTIONS.md` § Deviations).
    implementation half of W5b.
 2. **Editor only:** W3 steps 1, 3 and 4, W6 (x86 `start.asm`), W7.
 3. **Cores:**
-   - MARS/RARS: open flags (W5a), non-terminating sbrk (W5c), CPU counter on MIPS (W3), and the `time` CSR split
-     if needed (W3).
-   - x86: link order, duplicates and the Hint (W2).
+    - MARS/RARS: open flags (W5a), non-terminating sbrk (W5c), CPU counter on MIPS (W3), and the `time` CSR split
+      if needed (W3).
+    - x86: link order, duplicates and the Hint (W2).
 
-   Fold these into whatever Core majors are already pending. Release them, then bump the editor.
+    Fold these into whatever Core majors are already pending. Release them, then bump the editor.
+
 4. **Runtime work that needs the Cores:** W5a steps 1-2, W5c, W3 step 5.
 5. **W4**, then regenerate `abi/v1.json` and the fixtures once.
 6. Docs and ADRs (W2 ADR, W3 ADR, compatibility-policy ADR, amendments to 0033, 0035 and 0036).
@@ -299,10 +315,10 @@ in one place (`runtime/FUNCTIONS.md` § Deviations).
   ABI fixtures.
 - Each changed Core's own test suite; the editor's `vitest` and `svelte-check`.
 - Browser checks:
-  - a C program printing `ctime(&t)` shows today's date interactively and the fixed epoch in a Testcase;
-  - `clock()` around a loop and around a `sleep`;
-  - an x86 project whose secondary File defines `memcpy`, and one with duplicate definitions;
-  - Ctrl+D after partial input in a `fgets`/`read` loop.
+    - a C program printing `ctime(&t)` shows today's date interactively and the fixed epoch in a Testcase;
+    - `clock()` around a loop and around a `sleep`;
+    - an x86 project whose secondary File defines `memcpy`, and one with duplicate definitions;
+    - Ctrl+D after partial input in a `fgets`/`read` loop.
 
 ## Implementation notes
 

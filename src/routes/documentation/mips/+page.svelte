@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -22,7 +23,7 @@
         This reference covers the MIPS simulator’s instructions, assembler directives, registers,
         and services. For a service call, put its number in <code>$v0</code> and use the listed
         registers for its arguments and result; see
-        <a href="/documentation/mips/syscall">Syscalls</a>.
+        <a href={resolve('/documentation/mips/syscall', {})}>Syscalls</a>.
     </p>
     <div class="links">
         <NavigationLinkButton href="/documentation/mips/directive">

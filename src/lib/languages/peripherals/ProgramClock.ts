@@ -128,7 +128,7 @@ export class ProgramClock {
 
     /** CPU milliseconds from a Core counter which rewinds with Undo. */
     cpuNow(instructions: bigint | number): number {
-        return Number(instructions) * 1000 / CPU_INSTRUCTIONS_PER_SECOND
+        return (Number(instructions) * 1000) / CPU_INSTRUCTIONS_PER_SECOND
     }
 
     /** EASy68K task 8: hundredths since midnight; Testcases use UTC. */
@@ -137,7 +137,9 @@ export class ProgramClock {
         const hours = this.isVirtual ? date.getUTCHours() : date.getHours()
         const minutes = this.isVirtual ? date.getUTCMinutes() : date.getMinutes()
         const seconds = this.isVirtual ? date.getUTCSeconds() : date.getSeconds()
-        return (hours * 3600 + minutes * 60 + seconds) * 100 + Math.floor(date.getMilliseconds() / 10)
+        return (
+            (hours * 3600 + minutes * 60 + seconds) * 100 + Math.floor(date.getMilliseconds() / 10)
+        )
     }
 
     /** Program time in hundredths of a second, the unit of EASy68K's task 8. */

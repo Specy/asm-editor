@@ -19,7 +19,7 @@ export function x86DiagnosticToLanguageDiagnostic(
     return {
         //The Core reports its own severity: a NASM warning is not an error, and painting it red
         //here contradicted the amber squiggle the same finding gets after a Build.
-        severity: error.severity === 'hint' ? 'suggestion' : error.severity ?? 'error',
+        severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
         source: 'nasm',
         location: {
             path: source.path,

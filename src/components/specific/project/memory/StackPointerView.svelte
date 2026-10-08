@@ -66,6 +66,7 @@
             }}
             hideLabel
             buttonVar={controlsVar}
+            showRegions={false}
         />
     </div>
     <div class="page">
@@ -91,6 +92,10 @@
 </div>
 
 <style lang="scss">
+    .tab {
+        min-width: 13rem;
+    }
+
     .controls {
         display: flex;
         padding: 0.3rem;

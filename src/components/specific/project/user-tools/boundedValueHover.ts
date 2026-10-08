@@ -30,8 +30,14 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
         }
         const target = anchor.getBoundingClientRect()
         const center = (target.left + target.right) / 2
-        if (right - left < 12 || bottom - top < 12 || center < left || center > right ||
-            target.bottom <= top || target.top >= bottom) {
+        if (
+            right - left < 12 ||
+            bottom - top < 12 ||
+            center < left ||
+            center > right ||
+            target.bottom <= top ||
+            target.top >= bottom
+        ) {
             popup.style.visibility = 'hidden'
             return
         }
@@ -44,12 +50,21 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
         const naturalHeight = popup.getBoundingClientRect().height
         const above = Math.max(0, target.top - top - gap)
         const below = Math.max(0, bottom - target.bottom - gap)
-        const side = naturalHeight <= above ? 'above' : naturalHeight <= below ? 'below' :
-            above >= below ? 'above' : 'below'
+        const side =
+            naturalHeight <= above
+                ? 'above'
+                : naturalHeight <= below
+                  ? 'below'
+                  : above >= below
+                    ? 'above'
+                    : 'below'
         const room = side === 'above' ? above : below
         // In an unusually short viewport, keep the box inside even if it must cover the byte.
         const overlaps = room < 20
-        popup.style.setProperty('--hover-max-height', `${Math.max(0, (overlaps ? bottom - top : room) - 2)}px`)
+        popup.style.setProperty(
+            '--hover-max-height',
+            `${Math.max(0, (overlaps ? bottom - top : room) - 2)}px`
+        )
         const box = popup.getBoundingClientRect()
         const x = Math.max(left, Math.min(center - box.width / 2, right - box.width))
         const preferredY = side === 'above' ? target.top - gap - box.height : target.bottom + gap
@@ -57,17 +72,21 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
         const origin = node.getBoundingClientRect()
         popup.style.left = `${x - origin.left}px`
         popup.style.top = `${y - origin.top}px`
-        popup.style.setProperty('--hover-notch-x', `${Math.max(6, Math.min(center - x, box.width - 6))}px`)
+        popup.style.setProperty(
+            '--hover-notch-x',
+            `${Math.max(6, Math.min(center - x, box.width - 6))}px`
+        )
         popup.dataset.side = side
         popup.classList.toggle('overlapping', overlaps)
         popup.style.visibility = 'visible'
     }
 
     function schedule() {
-        if (!frame) frame = requestAnimationFrame(() => {
-            frame = 0
-            place()
-        })
+        if (!frame)
+            frame = requestAnimationFrame(() => {
+                frame = 0
+                place()
+            })
     }
 
     function hide() {

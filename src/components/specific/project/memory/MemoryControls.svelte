@@ -34,6 +34,8 @@
          * caller that puts them on a card passes the card's, so they read as part of it.
          */
         buttonVar?: ThemeKeys
+        /** Whether the memory region picker sits after the page buttons. */
+        showRegions?: boolean
     }
 
     let {
@@ -46,7 +48,8 @@
         style = '',
         systemSize,
         onAddressChange,
-        buttonVar = 'primary'
+        buttonVar = 'primary',
+        showRegions = true
     }: Props = $props()
 
     let hexAddress = $derived(currentAddress.toString(16))
@@ -69,7 +72,7 @@
             const address = resolveMemoryAddress(
                 hexAddress || '0',
                 !!emulator?.buildSources,
-                name => emulator?.resolveMemoryLabel(name)
+                (name) => emulator?.resolveMemoryLabel(name)
             )
             return address >= 0n && address <= memorySize && !addressInView(address)
         } catch {
@@ -82,30 +85,41 @@
             ...(showLibrary ? Object.values(emulator?.buildLibraryFiles ?? {}) : [])
         ]
         // Include code labels from the built sources. Resolution below rejects other tokens.
-        return files.filter(file => file.encoding === 'plain').flatMap(file =>
-            Array.from(file.content.matchAll(/^[\t ]*([A-Za-z_.$?@][\w.$?@]*)(?=[:\t ]|$)/gm), match => match[1])
-        )
+        return files
+            .filter((file) => file.encoding === 'plain')
+            .flatMap((file) =>
+                Array.from(
+                    file.content.matchAll(/^[\t ]*([A-Za-z_.$?@][\w.$?@]*)(?=[:\t ]|$)/gm),
+                    (match) => match[1]
+                )
+            )
     })
     const completionNames = $derived(
-        [...new Set([
-            ...labels.filter(label => showLibrary || !label.fromLibrary)
-                .flatMap(label => label.displayName ? [label.displayName, label.name] : [label.name]),
-            ...sourceLabelNames
-        ])]
-            .sort((a, b) => a.localeCompare(b))
+        [
+            ...new Set([
+                ...labels
+                    .filter((label) => showLibrary || !label.fromLibrary)
+                    .flatMap((label) =>
+                        label.displayName ? [label.displayName, label.name] : [label.name]
+                    ),
+                ...sourceLabelNames
+            ])
+        ].sort((a, b) => a.localeCompare(b))
     )
     const completion = $derived.by(() => {
         const builtEmulator = emulator
         if (!builtEmulator?.buildSources || !addressFocused || !caretAtEnd || !hexAddress) return ''
-        const match = completionNames.find(name =>
-            name.startsWith(hexAddress) && builtEmulator.resolveMemoryLabel(name) !== undefined
+        const match = completionNames.find(
+            (name) =>
+                name.startsWith(hexAddress) && builtEmulator.resolveMemoryLabel(name) !== undefined
         )
         return match && match !== hexAddress ? match : ''
     })
 
     function updateAddressInputState() {
         if (!inputRef) return
-        caretAtEnd = inputRef.selectionStart === inputRef.selectionEnd &&
+        caretAtEnd =
+            inputRef.selectionStart === inputRef.selectionEnd &&
             inputRef.selectionEnd === inputRef.value.length
         inputScroll = inputRef.scrollLeft
     }
@@ -191,8 +205,12 @@
             rows.push({ key: 'No matching regions', value: undefined, disabled: true })
         return rows
     })
-    const currentRegion = $derived(memoryHover(regions, labels, currentAddress) ||
-        regions.find(region => region.start === currentAddress && region.end === region.start)?.name || '')
+    const currentRegion = $derived(
+        memoryHover(regions, labels, currentAddress) ||
+            regions.find((region) => region.start === currentAddress && region.end === region.start)
+                ?.name ||
+            ''
+    )
     function searchAddress() {
         try {
             const newAddress = resolveMemoryAddress(
@@ -228,157 +246,178 @@
 </script>
 
 <div class="memory-controls-layout">
-<Form style="width:100%; {style}" on:submit={searchAddress}>
-    <div class="address-search">
-        <div
-            class="hex-address"
-            style={inputStyle}
-            onclick={() => {
-                inputRef?.focus()
-            }}
-        >
-            {#if !hideLabel}
-                <span class="address-caption"> Address </span>
-            {/if}
-            <span class="hex-address-label" class:hex-address-label-no-prefix={hideLabel}>
-                0x
-            </span>
-            <div class="hex-address-entry">
-                {#if completion}
-                    <div class="address-completion" aria-hidden="true">
-                        <span style:transform={`translateX(-${inputScroll}px)`}><span class="completion-prefix">{hexAddress}</span><span class="completion-suffix">{completion.slice(hexAddress.length)}</span></span>
-                    </div>
-                {/if}
-                <input
-                    bind:this={inputRef}
-                    spellcheck="false"
-                    autocomplete="off"
-                    bind:value={hexAddress}
-                    class="hex-address-input"
-                    aria-label="Address or label"
-                    aria-autocomplete="inline"
-                    aria-invalid={!!error}
-                    title={error || 'Hex address or label+offset (Tab completes labels)'}
-                    oninput={() => {
-                        error = ''
-                        updateAddressInputState()
-                    }}
-                    onfocus={() => {
-                        addressFocused = true
-                        updateAddressInputState()
-                    }}
-                    onblur={() => (addressFocused = false)}
-                    onselect={updateAddressInputState}
-                    onscroll={updateAddressInputState}
-                    onkeyup={updateAddressInputState}
-                    onkeydown={onAddressKeyDown}
-                />
-            </div>
-        <Button
-            onClick={searchAddress}
-            hasIcon
-            style="padding: 0; width:1.8rem; min-height: 1.8rem; flex-shrink: 0;"
-            cssVar="unset"
-            bg="transparent"
-            color="var(--secondary-text)"
-            title="Search address"
-            active={searchChangesView}
-        >
-            <Icon size={1}>
-                <FaSearch />
-            </Icon>
-        </Button>
-        </div>
-
-        <Button
-            onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
-            hasIcon
-            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
-            cssVar={buttonVar}
-            title="Previous page"
-        >
-            <Icon size={1.2}>
-                <FaAngleLeft />
-            </Icon>
-        </Button>
-
-        <Button
-            onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
-            hasIcon
-            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
-            cssVar={buttonVar}
-            title="Next page"
-        >
-            <Icon size={1.2}>
-                <FaAngleRight />
-            </Icon>
-        </Button>
-
-        <div class="region-picker" title={emulator?.buildSources ? currentRegion || 'Memory regions' : 'Build to see memory regions'}>
-            <Select
-                options={destinations}
-                bind:value={chosen}
-                disabled={!emulator?.buildSources}
-                ariaLabel="Memory regions"
-                popupWidth={360}
-                wrapperStyle="height: 100%;"
-                style="padding: 0.4rem 0.6rem; height: 100%; gap: 0.4rem; font-size: 0.8rem; border: 1px solid var(--memory-control-border);"
-                onChange={(address) => {
-                    if (address !== undefined) {
-                        error = ''
-                        updateAddress(address)
-                    }
+    <Form style="width:100%; {style}" on:submit={searchAddress}>
+        <div class="address-search" class:without-regions={!showRegions}>
+            <div
+                class="hex-address"
+                style={inputStyle}
+                onclick={() => {
+                    inputRef?.focus()
                 }}
             >
-                {#snippet trigger()}<span class="picker-current-region">{currentRegion || 'Memory regions'}</span>{/snippet}
-                {#snippet popupHeader({ focusOptions, close })}
-                    <div class="picker-header">
-                        <input
-                            aria-label="Filter memory regions"
-                            placeholder="Filter regions and labels"
-                            bind:value={filter}
-                            onkeydown={(event) => {
-                                if (event.key === 'ArrowDown') {
-                                    event.preventDefault()
-                                    focusOptions()
-                                } else if (event.key === 'Escape') {
-                                    close()
-                                }
-                            }}
-                        />
-                        <div class="library-toggle">
-                            <span>Show library labels</span>
-                            <Switch bind:checked={showLibrary} title="Show library labels" />
+                {#if !hideLabel}
+                    <span class="address-caption"> Address </span>
+                {/if}
+                <span class="hex-address-label" class:hex-address-label-no-prefix={hideLabel}>
+                    0x
+                </span>
+                <div class="hex-address-entry">
+                    {#if completion}
+                        <div class="address-completion" aria-hidden="true">
+                            <span style:transform={`translateX(-${inputScroll}px)`}
+                                ><span class="completion-prefix">{hexAddress}</span><span
+                                    class="completion-suffix"
+                                    >{completion.slice(hexAddress.length)}</span
+                                ></span
+                            >
                         </div>
-                    </div>
-                {/snippet}
-                {#snippet item(row)}
-                    {@const destination = row as Destination}
-                    <div class="destination" class:data-label={!!destination.label}>
-                        {#if destination.region && !destination.label}<span
-                                class="swatch"
-                                style:background={memoryRegionColor(destination.region.kind)}
-                            ></span>{/if}
-                        <span>{destinationTitle(destination)}</span>
-                        {#if destination.value !== undefined}<small
-                                >0x{destination.value.toString(
-                                    16
-                                )}{#if !destination.label && destination.region}
-                                    · {destination.region.end - destination.region.start} B{/if}</small
-                            >{/if}
-                    </div>
-                {/snippet}
-            </Select>
-        </div>
+                    {/if}
+                    <input
+                        bind:this={inputRef}
+                        spellcheck="false"
+                        autocomplete="off"
+                        bind:value={hexAddress}
+                        class="hex-address-input"
+                        aria-label="Address or label"
+                        aria-autocomplete="inline"
+                        aria-invalid={!!error}
+                        title={error || 'Hex address or label+offset (Tab completes labels)'}
+                        oninput={() => {
+                            error = ''
+                            updateAddressInputState()
+                        }}
+                        onfocus={() => {
+                            addressFocused = true
+                            updateAddressInputState()
+                        }}
+                        onblur={() => (addressFocused = false)}
+                        onselect={updateAddressInputState}
+                        onscroll={updateAddressInputState}
+                        onkeyup={updateAddressInputState}
+                        onkeydown={onAddressKeyDown}
+                    />
+                </div>
+                <Button
+                    onClick={searchAddress}
+                    hasIcon
+                    style="padding: 0; width:1.8rem; min-height: 1.8rem; flex-shrink: 0;"
+                    cssVar="unset"
+                    bg="transparent"
+                    color="var(--secondary-text)"
+                    title="Search address"
+                    active={searchChangesView}
+                >
+                    <Icon size={1}>
+                        <FaSearch />
+                    </Icon>
+                </Button>
+            </div>
 
-    </div>
-    {#if error}<div class="address-error" role="alert">{error}</div>{/if}
-</Form>
+            <Button
+                onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
+                hasIcon
+                style="padding: 0; width:1.8rem; min-height: 1.8rem;"
+                cssVar={buttonVar}
+                title="Previous page"
+            >
+                <Icon size={1.2}>
+                    <FaAngleLeft />
+                </Icon>
+            </Button>
+
+            <Button
+                onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
+                hasIcon
+                style="padding: 0; width:1.8rem; min-height: 1.8rem;"
+                cssVar={buttonVar}
+                title="Next page"
+            >
+                <Icon size={1.2}>
+                    <FaAngleRight />
+                </Icon>
+            </Button>
+
+            {#if showRegions}
+                <div
+                    class="region-picker"
+                    title={emulator?.buildSources
+                        ? currentRegion || 'Memory regions'
+                        : 'Build to see memory regions'}
+                >
+                    <Select
+                        options={destinations}
+                        bind:value={chosen}
+                        disabled={!emulator?.buildSources}
+                        ariaLabel="Memory regions"
+                        popupWidth={360}
+                        wrapperStyle="height: 100%;"
+                        style="padding: 0.4rem 0.6rem; height: 100%; gap: 0.4rem; font-size: 0.8rem; border: 1px solid var(--memory-control-border);"
+                        onChange={(address) => {
+                            if (address !== undefined) {
+                                error = ''
+                                updateAddress(address)
+                            }
+                        }}
+                    >
+                        {#snippet trigger()}<span class="picker-current-region"
+                                >{currentRegion || 'Memory regions'}</span
+                            >{/snippet}
+                        {#snippet popupHeader({ focusOptions, close })}
+                            <div class="picker-header">
+                                <input
+                                    aria-label="Filter memory regions"
+                                    placeholder="Filter regions and labels"
+                                    bind:value={filter}
+                                    onkeydown={(event) => {
+                                        if (event.key === 'ArrowDown') {
+                                            event.preventDefault()
+                                            focusOptions()
+                                        } else if (event.key === 'Escape') {
+                                            close()
+                                        }
+                                    }}
+                                />
+                                <div class="library-toggle">
+                                    <span>Show library labels</span>
+                                    <Switch
+                                        bind:checked={showLibrary}
+                                        title="Show library labels"
+                                    />
+                                </div>
+                            </div>
+                        {/snippet}
+                        {#snippet item(row)}
+                            {@const destination = row as Destination}
+                            <div class="destination" class:data-label={!!destination.label}>
+                                {#if destination.region && !destination.label}<span
+                                        class="swatch"
+                                        style:background={memoryRegionColor(
+                                            destination.region.kind
+                                        )}
+                                    ></span>{/if}
+                                <span>{destinationTitle(destination)}</span>
+                                {#if destination.value !== undefined}<small
+                                        >0x{destination.value.toString(
+                                            16
+                                        )}{#if !destination.label && destination.region}
+                                            · {destination.region.end - destination.region.start} B{/if}</small
+                                    >{/if}
+                            </div>
+                        {/snippet}
+                    </Select>
+                </div>
+            {/if}
+        </div>
+        {#if error}<div class="address-error" role="alert">{error}</div>{/if}
+    </Form>
 </div>
 
 <style lang="scss">
     .memory-controls-layout {
-        --memory-control-border: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
+        --memory-control-border: var(
+            --wb-line,
+            color-mix(in srgb, var(--tertiary) 60%, transparent)
+        );
         container: memory-controls / inline-size;
         flex: 1;
         width: 100%;
@@ -511,12 +550,12 @@
         background-color: transparent;
     }
     @container memory-controls (max-width: 22rem) {
-        .address-search {
+        .address-search:not(.without-regions) {
             display: grid;
             grid-template-columns: minmax(0, 1fr) repeat(2, 1.8rem);
             gap: 0.3rem;
         }
-        .hex-address {
+        .address-search:not(.without-regions) .hex-address {
             grid-column: 1;
             grid-row: 1;
             min-width: 100%;
@@ -529,10 +568,10 @@
         }
     }
     @container memory-controls (max-width: 14rem) {
-        .address-search {
+        .address-search:not(.without-regions) {
             grid-template-columns: repeat(2, 1.8rem) minmax(0, 1fr);
         }
-        .hex-address {
+        .address-search:not(.without-regions) .hex-address {
             grid-column: 1 / -1;
         }
         .address-caption {

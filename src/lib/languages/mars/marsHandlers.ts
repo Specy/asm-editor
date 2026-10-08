@@ -184,10 +184,17 @@ export class MarsHandlers {
                 try {
                     return this.requireFileSystem().open(
                         path,
-                        flags === 2 ? { access: 'read-write' } :
-                        flags === 3 ? { access: 'read-write', create: true, truncate: true } :
-                        flags === 10 ? { access: 'read-write', create: true, append: true } :
-                        flags === 0 ? 'read' : append ? 'append' : 'write' 
+                        flags === 2
+                            ? { access: 'read-write' }
+                            : flags === 3
+                              ? { access: 'read-write', create: true, truncate: true }
+                              : flags === 10
+                                ? { access: 'read-write', create: true, append: true }
+                                : flags === 0
+                                  ? 'read'
+                                  : append
+                                    ? 'append'
+                                    : 'write'
                     )
                 } catch (error) {
                     return guestFileFailure(error)

@@ -33,7 +33,11 @@
 </script>
 
 <div style="position: relative;" use:boundedValueHover={hoverBoundary}>
-    <div class="hover-element" class:bounded={!!hoverBoundary} style={`--top: ${hoverElementOffset}; ${hoverElementStyle}`}>
+    <div
+        class="hover-element"
+        class:bounded={!!hoverBoundary}
+        style={`--top: ${hoverElementOffset}; ${hoverElementStyle}`}
+    >
         <div class="hover-content">
             {#if hoverValue}
                 <div class:monospaced style={hoverValueElementStyle}>

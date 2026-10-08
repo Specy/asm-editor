@@ -51,6 +51,11 @@ export function linksX86StartUnit(sources: BuildSources): boolean {
 export function x86CoreProject(sources: BuildSources): X86Project {
     const project = toX86Project(sources)
     if (!linksX86StartUnit(sources) && !sources.x86Support) return project
-    return { ...project, ...(linksX86StartUnit(sources) ? { startUnits: { [X86_START_UNIT_PATH]: X86_START_UNIT } } : {}),
-        library: { [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT } }
+    return {
+        ...project,
+        ...(linksX86StartUnit(sources)
+            ? { startUnits: { [X86_START_UNIT_PATH]: X86_START_UNIT } }
+            : {}),
+        library: { [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT }
+    }
 }

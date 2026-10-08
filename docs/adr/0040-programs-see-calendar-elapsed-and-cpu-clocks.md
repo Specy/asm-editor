@@ -7,11 +7,11 @@ date: 2026-10-08
 
 Amends the time semantics of [ADR 0010](./0010-program-time-without-clock-pacing.md) and [ADR 0037](./0037-testcases-run-on-a-seeded-random-source.md). Clock values follow their reference environment rather than sharing one elapsed counter.
 
-| Clock | Interactive | Testcase |
-| --- | --- | --- |
-| Calendar | `Date.now()`, Unix epoch milliseconds | 2000-01-01 UTC plus virtual elapsed milliseconds |
-| Elapsed | Host monotonic time since start | Virtual elapsed milliseconds, initially zero |
-| CPU | Executed instructions at nominal 100 MHz | The same instruction counter and rate |
+| Clock    | Interactive                              | Testcase                                         |
+| -------- | ---------------------------------------- | ------------------------------------------------ |
+| Calendar | `Date.now()`, Unix epoch milliseconds    | 2000-01-01 UTC plus virtual elapsed milliseconds |
+| Elapsed  | Host monotonic time since start          | Virtual elapsed milliseconds, initially zero     |
+| CPU      | Executed instructions at nominal 100 MHz | The same instruction counter and rate            |
 
 Waits advance elapsed time, and virtual calendar time, without charging the waiting duration to CPU time. CPU time rewinds with Core Undo and starts over when a program loads. CPU clocks are a nominal cost model, not an estimate of host CPU performance. Instruction identities stay monotonic and independent of the count.
 

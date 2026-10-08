@@ -17,10 +17,6 @@ describe('the start code beside an x86 Project', () => {
         'src/main.c.asm': text('    global main\nmain:\n    ret\n')
     }
     const compiled: BuildSources = { entry: 'src/main.c.asm', files, entrySymbol: '_start' }
-    const units = {
-        [X86_START_UNIT_PATH]: X86_START_UNIT,
-        [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT
-    }
 
     it('offers the start code as library units to a Core that links a Project as an archive', () => {
         expect(x86CoreProject(compiled)).toEqual({

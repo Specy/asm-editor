@@ -1210,7 +1210,9 @@ describe('M68K sound tasks', () => {
             expect(emulator.terminated).toBe(true)
             expect(emulator.termination?.kind).toBe('error')
             expect(emulator.errors.join('\n')).toContain(`Trap task ${task}`)
-            expect(emulator.errors.join('\n')).toContain('the editor provides no audio output for these tasks')
+            expect(emulator.errors.join('\n')).toContain(
+                'the editor provides no audio output for these tasks'
+            )
             //the program stopped at the task rather than finishing as though it had played
             expect(registerOf(emulator, 'D5')).toBe(0n)
             //and Undo takes the end back with the task

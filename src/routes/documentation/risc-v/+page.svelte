@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -21,7 +22,7 @@
     <p>
         This reference covers RV32 and RV64 assembly for the RARS simulator. For a service call, put
         its number in <code>a7</code> and use the listed registers for its arguments and result; see
-        <a href="/documentation/risc-v/syscall">Syscalls</a>.
+        <a href={resolve('/documentation/risc-v/syscall', {})}>Syscalls</a>.
     </p>
     <div class="links">
         <NavigationLinkButton href="/documentation/risc-v/directive">

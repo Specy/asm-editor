@@ -305,7 +305,9 @@ describe('M68K v2 language tooling', () => {
                 type: 'InstructionAccess',
                 value: { address: 4096, write: true }
             })
-        ).toBe(' Cannot write to an instruction: address $1000 is not available as it holds assembled instructions')
+        ).toBe(
+            ' Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
+        )
         expect(
             getM68kErrorMessage({
                 type: 'InstructionAccess',
