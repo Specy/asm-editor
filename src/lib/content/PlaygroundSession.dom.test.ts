@@ -5,6 +5,10 @@ import { compilerExplorerDriver, compileSource } from '$lib/sourceCompilation/co
 import fixture from '$lib/sourceCompilation/fixtures/risc-v-c-O0.json'
 import { PlaygroundSession } from './PlaygroundSession.svelte'
 import { decodePlaygroundProgram, encodePlaygroundProgram } from './playgroundProgram'
+import type monaco from 'monaco-editor'
+import { resolveSourceHelpContext } from '$lib/sourceLanguageHelp/context'
+import { includeSuggestions } from '$lib/sourceLanguageHelp/includes'
+import { sourceHelpEntries } from '$lib/sourceLanguageHelp/catalog'
 
 vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 const text = (content: string) => ({ encoding: 'plain' as const, content })
@@ -34,6 +38,47 @@ afterEach(() => {
 })
 
 describe('playground compilation lifecycle', () => {
+    it.each([
+        ['main.c', 'c', 'stdio.h'],
+        ['main.cpp', 'cpp', 'cstdio']
+    ] as const)(
+        'provides named %s models with headers and function help',
+        async (path, language, header) => {
+            const session = setup()
+            session.edit(path, 'int main(void) { return 0; }')
+            const unregister = session.registerSourceHelp('named-playground')
+            disposers.push(unregister)
+            const model = {
+                uri: { scheme: 'asm-editor', authority: 'named-playground', path: `/live/${path}` },
+                isDisposed: () => false,
+                getVersionId: () => 1
+            } as unknown as monaco.editor.ITextModel
+            const context = resolveSourceHelpContext(model)!
+            expect(context.language).toBe(language)
+            expect(context.capabilities?.target).toBe('RISC-V')
+            expect(
+                includeSuggestions(context, { kind: 'system', prefix: '', start: 0, end: 0 }).map(
+                    (suggestion) => suggestion.name
+                )
+            ).toContain(header)
+            expect(await sourceHelpEntries(context.capabilities, context.language)).toContainEqual(
+                expect.objectContaining({ name: 'sim_print_int', parameters: expect.any(Array) })
+            )
+            session.edit('new.h', '#define ANSWER 42')
+            flushSync()
+            expect(context.current()).toBe(false)
+            const updated = resolveSourceHelpContext(model)!
+            expect(
+                includeSuggestions(updated, { kind: 'quoted', prefix: '', start: 0, end: 0 }).map(
+                    (suggestion) => suggestion.name
+                )
+            ).toContain('new.h')
+            unregister()
+            expect(updated.current()).toBe(false)
+            expect(resolveSourceHelpContext(model)).toBeUndefined()
+        }
+    )
+
     it('compiles source plus headers, selects generated assembly and carries startup provenance through a URL', async () => {
         const session = setup()
         const compile = vi

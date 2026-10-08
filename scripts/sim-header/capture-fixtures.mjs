@@ -75,6 +75,8 @@ function architecture(target, compiler) {
  * from its translation profile, the others' for C.
  */
 function userArguments(target, compiler, optimization, language) {
+    const sourcePath = language === 'cpp' ? 'src/main.cpp' : 'src/main.c'
+    const projectFlags = `-iquote 'project/src' -iquote project -include 'project/${sourcePath}'`
     if (target === 'X86') {
         const profile = GCC_INTEL_V1.flags
         const common = [
@@ -86,10 +88,10 @@ function userArguments(target, compiler, optimization, language) {
             ...profile.locations
         ].join(' ')
         const cpp = language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''
-        return `${common} -nostdinc -isystem sysroot/include ${profile.target.join(' ')} -iquote 'src' -iquote . ${profile.language[language].join(' ')}${cpp}`
+        return `${common} -nostdinc -isystem sysroot/include ${profile.target.join(' ')} ${projectFlags} ${profile.language[language].join(' ')}${cpp}`
     }
     const options = compiler === 'clang' ? '-fno-addrsig' : '-fno-section-anchors'
-    return `-O${optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie ${options} -nostdinc -isystem sysroot/include ${architecture(target, compiler)} -iquote 'src' -iquote . -std=c17`
+    return `-O${optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie ${options} -nostdinc -isystem sysroot/include ${architecture(target, compiler)} ${projectFlags} -std=c17`
 }
 
 /**
@@ -419,7 +421,7 @@ for (const [program, settings] of Object.entries(PROGRAMS)) {
 /** One compile, stored in `directory` as `<name>.json`. */
 async function capture(name, fixture, sysroot, header, directory) {
     const body = {
-        source: `#line 1 ${JSON.stringify(fixture.sourcePath)}\n${fixture.source}`,
+        source: '/* The program is uploaded at its Project path and read through -include. */\n',
         lang: fixture.sourcePath.endsWith('.cpp') ? 'c++' : 'c',
         options: {
             userArguments: fixture.userArguments,
@@ -435,6 +437,10 @@ async function capture(name, fixture, sysroot, header, directory) {
             }
         },
         files: [
+            {
+                filename: `project/${fixture.sourcePath}`,
+                contents: `#line 1 ${JSON.stringify(fixture.sourcePath)}\n${fixture.source}`
+            },
             ...sysroot.map(([path, contents]) => ({
                 filename: `sysroot/include/${path}`,
                 contents

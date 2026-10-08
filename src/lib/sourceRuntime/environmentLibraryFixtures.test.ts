@@ -182,13 +182,19 @@ describe('the captured <sim.h> compiles', () => {
             }
             const prepared = createCompilerRequest(requestFor(fixture), sysroot)
             expect(prepared.compilerId).toBe(fixture.compilerId)
-            expect(prepared.body.options.userArguments).toBe(fixture.userArguments)
+            // These responses were captured before the source moved from example.c/cpp into
+            // an uploaded Project directory. Keep checking every compiler option from that capture.
+            const expectedArguments = fixture.userArguments.replace(
+                "-iquote 'src' -iquote .",
+                `-iquote 'project/src' -iquote project -include 'project/${fixture.sourcePath}'`
+            )
+            expect(prepared.body.options.userArguments).toBe(expectedArguments)
             //and what compileSource sends is that request, `<sim.h>` included
             const { fetcher, result } = compile(fixture)
             await result.catch(() => undefined)
             const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
             const body = JSON.parse(String(init.body))
-            expect(body.options.userArguments).toBe(fixture.userArguments)
+            expect(body.options.userArguments).toBe(expectedArguments)
             expect(
                 body.files.find(
                     (file: { filename: string }) => file.filename === 'sysroot/include/sim.h'

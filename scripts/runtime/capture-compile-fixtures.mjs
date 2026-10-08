@@ -107,9 +107,10 @@ for (const name of readdirSync(fixtures)
             )
         }
     ]
-    const userArguments = `${common} -nostdinc -isystem sysroot/include ${preset.flags} -iquote '${directory}' -iquote . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
+    const quoteDirectory = directory === '.' ? 'project' : `project/${directory}`
+    const userArguments = `${common} -nostdinc -isystem sysroot/include ${preset.flags} -iquote '${quoteDirectory}' -iquote project -include 'project/${fixture.sourcePath}' ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
-        source: `#line 1 ${JSON.stringify(fixture.sourcePath)}\n${fixture.source}`,
+        source: '/* The program is uploaded at its Project path and read through -include. */\n',
         lang: language === 'cpp' ? 'c++' : 'c',
         options: {
             userArguments,
@@ -125,9 +126,13 @@ for (const name of readdirSync(fixtures)
             }
         },
         files: [
+            {
+                filename: `project/${fixture.sourcePath}`,
+                contents: `#line 1 ${JSON.stringify(fixture.sourcePath)}\n${fixture.source}`
+            },
             ...Object.entries(fixture.headers).map(([filename, contents]) => ({
-                filename,
-                contents
+                filename: `project/${filename}`,
+                contents: `#line 1 ${JSON.stringify(filename)}\n${contents}`
             })),
             ...headers
         ]

@@ -332,7 +332,9 @@
     })
 
     onMount(() => {
+        const unregisterSourceHelp = session?.registerSourceHelp(modelSessionId)
         return () => {
+            unregisterSourceHelp?.()
             session?.cancel()
             emulator.dispose()
         }

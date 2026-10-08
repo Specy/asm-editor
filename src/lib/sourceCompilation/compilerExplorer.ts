@@ -386,9 +386,19 @@ export function createCompilerRequest(
         : language === 'cpp'
           ? '-std=c++17 -fno-exceptions -fno-rtti'
           : '-std=c17'
-    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(directory)} -iquote . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
+    // Compiler Explorer writes the primary input as example.c/cpp at its working directory's
+    // root. A #line directive only changes locations, so compiling the source there would search
+    // root headers before the source's own directory. Include an uploaded source instead, keeping
+    // all Project Files together and away from the service's primary input and our sysroot.
+    const projectDirectory = 'project'
+    const upload = (path: string, content: string) => ({
+        filename: `${projectDirectory}/${path}`,
+        contents: `#line 1 ${JSON.stringify(path)}\n${content}`
+    })
+    const quoteDirectory = directory === '.' ? projectDirectory : `${projectDirectory}/${directory}`
+    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(quoteDirectory)} -iquote ${projectDirectory} -include ${quote(`${projectDirectory}/${request.sourcePath}`)} ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
-        source: `#line 1 ${JSON.stringify(request.sourcePath)}\n${source.content}`,
+        source: '/* The program is uploaded at its Project path and read through -include. */\n',
         lang: language === 'cpp' ? 'c++' : 'c',
         options: {
             userArguments,
@@ -404,7 +414,8 @@ export function createCompilerRequest(
             }
         },
         files: [
-            ...headers.map(([filename, file]) => ({ filename, contents: file.content })),
+            upload(request.sourcePath, source.content),
+            ...headers.map(([path, file]) => upload(path, file.content)),
             ...Object.entries(sysroot)
                 .filter(([path]) => !x86 || X86_HEADER_NAMES.has(path))
                 .map(([path, contents]) => ({

@@ -13,6 +13,7 @@ import {
     type SourceCompiler
 } from '$lib/sourceCompilation/records'
 import { playgroundBuildSources } from './playgroundProgram'
+import { registerLanguageSession } from '$lib/languages/service/sessionRegistry'
 
 /** A transient Project gives embeds the same files and compilation lifecycle as the Workbench. */
 export class PlaygroundSession {
@@ -24,6 +25,7 @@ export class PlaygroundSession {
     compiler = $state<SourceCompiler>('clang')
     private controller?: AbortController
     readonly sources: BuildSources
+    private readonly sourceHelpSources: BuildSources
 
     constructor(project: Project) {
         this.project = project
@@ -34,6 +36,26 @@ export class PlaygroundSession {
                 return playgroundBuildSources(project)
             } catch (error) {
                 return { files: project.files, entry: project.entry, assemblyError: String(error) }
+            }
+        })
+        // A C/C++ entry leaves the emulator idle, but its source files still need editor help.
+        this.sourceHelpSources = $derived({ ...this.sources, files: project.files })
+    }
+
+    /** Give named models source help without starting an assembly-analysis Worker. */
+    registerSourceHelp(sessionId: string): () => void {
+        const playground = this
+        return registerLanguageSession({
+            sessionId,
+            get sources() {
+                return playground.sourceHelpSources
+            },
+            get target() {
+                return playground.project.language
+            },
+            snapshot: undefined,
+            sourcesFor(sourceKind) {
+                return sourceKind === 'live' ? playground.sourceHelpSources : undefined
             }
         })
     }

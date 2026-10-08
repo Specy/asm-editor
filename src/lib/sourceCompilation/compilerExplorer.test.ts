@@ -59,10 +59,28 @@ function includeFlags(userArguments: string): string[] {
     return words.flatMap((word, index) =>
         word === '-nostdinc'
             ? [word]
-            : ['-isystem', '-iquote', '-I'].includes(word)
+            : ['-isystem', '-iquote', '-I', '-include'].includes(word)
               ? [word, words[index + 1]]
               : []
     )
+}
+
+function preprocess(request: ReturnType<typeof createCompilerRequest>): string {
+    const directory = mkdtempSync(join(tmpdir(), 'asm-editor-include-'))
+    try {
+        writeFileSync(join(directory, 'example.c'), request.body.source)
+        for (const file of request.body.files) {
+            mkdirSync(dirname(join(directory, file.filename)), { recursive: true })
+            writeFileSync(join(directory, file.filename), file.contents)
+        }
+        return execFileSync(
+            'gcc',
+            ['-E', '-P', ...includeFlags(request.body.options.userArguments), 'example.c'],
+            { cwd: directory, encoding: 'utf8' }
+        )
+    } finally {
+        rmSync(directory, { recursive: true, force: true })
+    }
 }
 
 function requestFor(fixture: Fixture): CompilationRequest {
@@ -232,7 +250,10 @@ describe('Compiler Explorer failures', () => {
     it('limits submitted text and enforces the main signature without shifting source line numbers', () => {
         const current = request()
         const body = createCompilerRequest(current).body
-        expect(body.source.startsWith(`#line 1 "${current.sourcePath}"\n`)).toBe(true)
+        expect(body.files).toContainEqual({
+            filename: `project/${current.sourcePath}`,
+            contents: `#line 1 "${current.sourcePath}"\n${current.files[current.sourcePath].content}`
+        })
         expect(body.options.userArguments).toContain('-iquote')
         expect(() =>
             createCompilerRequest({
@@ -286,7 +307,10 @@ describe('hosted compilation', () => {
 
     it('compiles against the Runtime library headers, without renaming main', () => {
         const request = createCompilerRequest(hosted(), { 'stdio.h': 'int puts(const char *);' })
-        expect(request.body.source.startsWith('#line 1 "src/main.c"\n')).toBe(true)
+        expect(request.body.files).toContainEqual({
+            filename: 'project/src/main.c',
+            contents: '#line 1 "src/main.c"\nint main(void) { return 0; }\n'
+        })
         expect(request.body.source).not.toContain('__asm_editor_main')
         expect(request.body.options.userArguments).toContain('-nostdinc -isystem sysroot/include')
         expect(request.body.options.userArguments).not.toContain('-Dmain')
@@ -320,9 +344,9 @@ describe('hosted compilation', () => {
                 { 'stdio.h': 'int puts(const char *);' }
             )
             const flags = request.body.options.userArguments
-            const directory = sourcePath.includes('/') ? "'src'" : "'.'"
+            const directory = sourcePath.includes('/') ? "'project/src'" : "'project'"
             expect(flags).toContain('-nostdinc -isystem sysroot/include')
-            expect(flags).toContain(`-iquote ${directory} -iquote . `)
+            expect(flags).toContain(`-iquote ${directory} -iquote project `)
             expect(flags.split(' ').filter((flag) => flag.startsWith('-I'))).toEqual([])
         }
     })
@@ -345,24 +369,53 @@ describe('hosted compilation', () => {
             },
             { 'stdio.h': '#define WHICH "sysroot"\n' }
         )
-        const directory = mkdtempSync(join(tmpdir(), 'asm-editor-include-'))
-        try {
-            writeFileSync(join(directory, 'example.c'), request.body.source)
-            for (const file of request.body.files) {
-                mkdirSync(dirname(join(directory, file.filename)), { recursive: true })
-                writeFileSync(join(directory, file.filename), file.contents)
-            }
-            const output = execFileSync(
-                'gcc',
-                ['-E', '-P', ...includeFlags(request.body.options.userArguments), 'example.c'],
-                { cwd: directory, encoding: 'utf8' }
-            )
-            expect(output).toContain('which = "sysroot"')
-            expect(output).toContain('value = 42')
-        } finally {
-            rmSync(directory, { recursive: true, force: true })
-        }
+        const output = preprocess(request)
+        expect(output).toContain('which = "sysroot"')
+        expect(output).toContain('value = 42')
     })
+
+    it.skipIf(!HOST_GCC).each(['src/main.c', 'src/main.cpp'])(
+        'resolves %s includes beside each including file, then at the Project root',
+        (sourcePath) => {
+            const text = (content: string) => ({ encoding: 'plain' as const, content })
+            const files = {
+                [sourcePath]: text(
+                    '#include "value.h"\nint source_value = VALUE;\n' +
+                        '#include "lib/outer.h"\n#include "fallback.h"\n' +
+                        'const char *source_file = __FILE__;\nint source_line = __LINE__;\n' +
+                        'int values[] = {VALUE, NESTED, FALLBACK};\n'
+                ),
+                'value.h': text('#define VALUE 1\n'),
+                'src/value.h': text('#define VALUE 2\n'),
+                'lib/outer.h': text(
+                    '#undef VALUE\n#include "value.h"\n#define NESTED VALUE\n' +
+                        'const char *header_file = __FILE__;\n'
+                ),
+                'lib/value.h': text('#define VALUE 3\n'),
+                'fallback.h': text('#define FALLBACK 4\n')
+            }
+            const request = createCompilerRequest({ ...hosted(), sourcePath, files })
+            const output = preprocess(request)
+            expect(output).toContain('source_value = 2')
+            expect(output).toContain('source_file = "' + sourcePath + '"')
+            expect(output).toContain('source_line = 6')
+            expect(output).toContain('header_file = "lib/outer.h"')
+            expect(output).toContain('values[] = {3, 3, 4}')
+            expect(compilationInputs(sourcePath, files)).not.toHaveProperty('value.h')
+        }
+    )
+
+    it.skipIf(!HOST_GCC)(
+        'keeps a Project source named example.c separate from the service input',
+        () => {
+            const request = createCompilerRequest({
+                ...hosted(),
+                sourcePath: 'example.c',
+                files: { 'example.c': { encoding: 'plain', content: 'int answer = 42;\n' } }
+            })
+            expect(preprocess(request)).toContain('int answer = 42;')
+        }
+    )
 
     it('records the Project headers quoted includes reach, and no system header', () => {
         const text = (content: string) => ({ encoding: 'plain' as const, content })
@@ -509,14 +562,21 @@ describe('x86 compilation', () => {
         const headers = await loadRuntimeHeaders('v1')
         const c = createCompilerRequest(x86(), headers, GCC_INTEL_V1)
         expect(c.compilerId).toBe('cg142')
-        expect(c.body.source).toBe('#line 1 "src/main.c"\nint main(void) { return 0; }\n')
+        expect(c.body.files).toContainEqual({
+            filename: 'project/src/main.c',
+            contents: '#line 1 "src/main.c"\nint main(void) { return 0; }\n'
+        })
         expect(c.body.options.userArguments).toBe(
-            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -iquote . -std=c17"
+            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.c' -std=c17"
         )
         //the translation reads GCC's raw output, its .file and .loc directives included
         expect(Object.values(c.body.options.filters).every((filter) => filter === false)).toBe(true)
         expect(c.body.files.map((file) => file.filename).sort()).toEqual(
-            ['src/values.h', ...FREESTANDING.map((name) => `sysroot/include/${name}`)].sort()
+            [
+                'project/src/main.c',
+                'project/src/values.h',
+                ...FREESTANDING.map((name) => `sysroot/include/${name}`)
+            ].sort()
         )
         expect(c.body.files).toContainEqual({
             filename: 'sysroot/include/stdint.h',
@@ -529,7 +589,7 @@ describe('x86 compilation', () => {
         )
         expect(cpp.compilerId).toBe('g142')
         expect(cpp.body.options.userArguments).toBe(
-            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -iquote . -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++"
+            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.cpp' -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++"
         )
     })
 
@@ -539,7 +599,8 @@ describe('x86 compilation', () => {
         const c = createCompilerRequest(x86(), { ...headers, 'sim.h': environment }, GCC_INTEL_V1)
         expect(c.body.files.map((file) => file.filename).sort()).toEqual(
             [
-                'src/values.h',
+                'project/src/main.c',
+                'project/src/values.h',
                 'sysroot/include/sim.h',
                 ...FREESTANDING.map((name) => `sysroot/include/${name}`)
             ].sort()
