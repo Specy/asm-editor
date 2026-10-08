@@ -1,0 +1,2 @@
+array allocations counted=1
+sum=10 allocations=6 deallocations=6

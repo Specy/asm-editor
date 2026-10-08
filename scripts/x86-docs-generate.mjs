@@ -8,7 +8,8 @@
  *
  * `--fetch` downloads the two prose sources into `.cache/x86-docs` the first time. Everything else
  * is read out of `emulators/`, which means the instruction table always describes the assembler
- * this editor actually ships rather than a snapshot of some other NASM.
+ * this editor actually ships rather than a snapshot of some other NASM. The syscall list also reads
+ * getImplementedSyscalls() from the built Core, so it lists exactly that WASM dispatch table.
  *
  * What comes out is deliberately dumb: lists and records, no curation. Which instructions are worth
  * a page, which syscalls a beginner needs and what the registers mean are decisions, and decisions
@@ -77,6 +78,17 @@ function serialise(value) {
     return JSON.stringify(value)
 }
 
+/** A sentence broken into header comment lines. */
+function wrap(text, width = 96) {
+    const lines = ['']
+    for (const word of text.split(/\s+/)) {
+        const last = lines.length - 1
+        if (lines[last] && lines[last].length + word.length + 1 > width) lines.push(word)
+        else lines[last] = lines[last] ? `${lines[last]} ${word}` : word
+    }
+    return lines
+}
+
 // --- read ----------------------------------------------------------------------------------------
 
 const accepted = readNasmNames()
@@ -88,7 +100,7 @@ const directives = readNasmDirectives()
 const standardMacros = readNasmStandardMacros()
 const registers = readNasmRegisters()
 const preprocessor = readNasmPreprocessorDirectives()
-const syscalls = readBlinkSyscalls()
+const syscalls = await readBlinkSyscalls()
 const insref = parseInsref(
     await cached('insref.src', { fetch: fetchAllowed }),
     accepted,
@@ -408,8 +420,13 @@ writeFileSync(
             'blink (`emulators/x86/libblink`), SPDX-License-Identifier: ISC,',
             'Copyright 2022 Justine Alexandra Roberts Tunney.',
             '',
-            "Numbers, names and argument shapes come from blink's dispatch table and its strace",
-            'signatures, so a call listed here is a call that works in the editor.'
+            ...wrap(
+                [
+                    'Numbers, canonical Linux names and arities come from getImplementedSyscalls(),',
+                    "the built Core's WASM dispatch table. Argument labels and blocking labels come",
+                    "from blink's strace signatures only; source guards do not decide membership."
+                ].join(' ')
+            )
         ]
     )}
 export type X86Syscall = {
@@ -523,7 +540,7 @@ const forms = instructions.reduce((count, instruction) => count + instruction.fo
 console.log(`x86Instructions.ts  ${instructions.length} instructions, ${forms} operand shapes`)
 console.log(`x86Mnemonics.ts     ${instructions.length} names`)
 console.log(`x86Descriptions.ts  ${Object.keys(descriptions).length} descriptions`)
-console.log(`x86Syscalls.ts      ${syscalls.length} syscalls`)
+console.log(`x86Syscalls.ts      ${syscalls.length} syscalls exported by the built Core`)
 console.log(
     `x86Tokens.ts        ${directives.length} directives, ${standardMacros.length} standard macros, ${preprocessor.length} preprocessor directives, ${registers.length} registers`
 )

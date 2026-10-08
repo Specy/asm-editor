@@ -17,6 +17,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
+    import { isCompilationTarget } from '$lib/sourceCompilation/records'
 
     let { data }: { data: PageData } = $props()
 
@@ -93,7 +94,16 @@
         <Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
-            <Select title="Language" options={languageOptions} bind:value={language} />
+            <Select title="Language" options={languageOptions} bind:value={language}>
+                {#snippet item(option)}
+                    <span class="language-option">
+                        <span>{option.key}</span>
+                        {#if isCompilationTarget(option.value)}
+                            <span class="language-badge">C/C++ available</span>
+                        {/if}
+                    </span>
+                {/snippet}
+            </Select>
             <div class="template-field">
                 <Select title="Template" options={templateOptions} bind:value={templateId}>
                     {#snippet item(option)}
@@ -117,13 +127,6 @@
             </ButtonLink>
             <Button onClick={create}>Create</Button>
         </div>
-        {#if language === 'X86'}
-            <p
-                style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.1); padding: 1rem; border-radius: 0.5rem;"
-            >
-                X86 is experimental and might have bugs. Please report any issues you find.
-            </p>
-        {/if}
     </div>
 </Page>
 
@@ -144,6 +147,24 @@
         display: flex;
         flex-direction: column;
         gap: 0.4rem;
+    }
+
+    .language-option {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .language-badge {
+        flex-shrink: 0;
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.3rem;
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        color: var(--accent);
+        font-size: 0.7rem;
+        font-weight: normal;
+        white-space: nowrap;
     }
 
     .template-option-name {

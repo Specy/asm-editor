@@ -1,4 +1,4 @@
-import type { ProjectFile, ProjectFiles } from '$lib/projectFiles'
+import type { BuildConfiguration, ProjectFile, ProjectFiles } from '$lib/projectFiles'
 import type { LanguageDiagnostic, SourceLocation, SymbolKind } from './sourceModel'
 
 export type ProjectAnalysisTarget = 'M68K' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86' | 'Z80'
@@ -34,21 +34,21 @@ export type ProjectAnalysisSnapshot = {
 }
 
 export type ProjectWorkerRequest =
-    | {
+    | (BuildConfiguration & {
           type: 'open'
           sessionId: string
           revision: number
           target: ProjectAnalysisTarget
           entry: string
           files: ProjectFiles
-      }
-    | {
+      })
+    | (BuildConfiguration & {
           type: 'update'
           sessionId: string
           revision: number
           entry: string
           changes: ProjectFileChange[]
-      }
+      })
     | { type: 'dispose'; sessionId: string }
 
 export type ProjectWorkerResponse =

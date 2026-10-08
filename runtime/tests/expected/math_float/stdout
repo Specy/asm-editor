@@ -1,0 +1,23 @@
+x=0 sinf=0 cosf=1 tanf=0 expf=1 logf=-inf
+x=0.1 sinf=0.0998334 cosf=0.995004 tanf=0.100335 expf=1.10517 logf=-2.30259
+x=0.5 sinf=0.479426 cosf=0.877583 tanf=0.546302 expf=1.64872 logf=-0.693147
+x=1 sinf=0.841471 cosf=0.540302 tanf=1.55741 expf=2.71828 logf=0
+x=-1 sinf=-0.841471 cosf=0.540302 tanf=-1.55741 expf=0.367879 logf=nan
+x=2 sinf=0.909297 cosf=-0.416147 tanf=-2.18504 expf=7.38906 logf=0.693147
+x=3.14159 sinf=-8.74228e-08 cosf=-1 tanf=8.74228e-08 expf=23.1407 logf=1.14473
+x=10 sinf=-0.544021 cosf=-0.839072 tanf=0.648361 expf=22026.5 logf=2.30259
+x=-7.25 sinf=-0.823081 cosf=0.567924 tanf=-1.44928 expf=0.000710174 logf=nan
+x=50 sinf=-0.262375 cosf=0.964966 tanf=-0.271901 expf=5.18471e+21 logf=3.91202
+x=88 sinf=0.0353983 cosf=0.999373 tanf=0.0354205 expf=1.65164e+38 logf=4.47734
+x=1e-05 sinf=1e-05 cosf=1 tanf=1e-05 expf=1.00001 logf=-11.5129
+x=1e+06 sinf=-0.349993 cosf=0.936752 tanf=-0.373624 expf=inf logf=13.8155
+x=1e+30 sinf=-0.791163 cosf=-0.611605 tanf=1.29359 expf=inf logf=69.0776
+powf(2, 10)=1024
+powf(2, 0.5)=1.41421
+powf(10, -2)=0.01
+powf(-2, 3)=-8
+powf(0, 0)=1
+powf(1.5, 2.5)=2.75568
+powf(2, 130)=inf
+powf(2, -150)=0
+sincosf(2)=0.909297 -0.416147

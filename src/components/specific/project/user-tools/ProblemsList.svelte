@@ -23,7 +23,7 @@
                 title="Open source location"
             >
                 {diagnostic.file
-                    ? `${diagnostic.file}:${diagnostic.lineIndex + 1}: `
+                    ? `${diagnostic.file}:${diagnostic.lineIndex + 1}${diagnostic.column > 0 ? `:${diagnostic.column}` : ''}: `
                     : ''}{formatDiagnostic(diagnostic)}
             </button>
             {#each diagnostic.related ?? [] as related, relatedIndex (`${index}:${relatedIndex}`)}
@@ -42,7 +42,7 @@
                         })}
                     title="Open related source location"
                 >
-                    ↳ {related.file}:{related.lineIndex + 1}: {related.message}
+                    ↳ {related.file}:{related.lineIndex + 1}:{related.column}: {related.message}
                 </button>
             {/each}
         </div>
@@ -53,7 +53,7 @@
     .diagnostics {
         display: flex;
         flex-direction: column;
-        padding: 0.35rem;
+        padding: var(--diagnostics-padding, 0.35rem);
         gap: 0.2rem;
 
         .diagnostic-group {
@@ -66,17 +66,17 @@
             padding: 0.2rem 0.35rem;
             border: 0;
             border-radius: 0.2rem;
-            color: #181818;
-            background: #d19a3f;
+            color: var(--primary-text);
+            background: color-mix(in srgb, #d19a3f 15%, transparent);
             font: inherit;
             font-size: 0.78rem;
             text-align: left;
+            white-space: pre-wrap;
             cursor: pointer;
         }
 
         button.error {
-            color: var(--red-text);
-            background: var(--red);
+            background: color-mix(in srgb, var(--red) 15%, transparent);
         }
 
         button.related-location {

@@ -1,10 +1,14 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     ccrToFlagsArray,
     type ExecutionStep as CoreExecutionStep,
+    type FileDialogMode,
+    type InputSettings,
     type InstructionLine,
     Interpreter,
     InterpreterStatus as CoreInterpreterStatus,
     type Interrupt,
+    type OpenedFile,
     type PokeWrite as CorePokeWrite,
     type RegisterOperand,
     type Program,
@@ -35,6 +39,7 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import type { Termination } from '$lib/languages/termination'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
 import {
@@ -47,7 +52,13 @@ import {
     M68K_MOUSE_MODES,
     screenColorOf
 } from '$lib/languages/M68K/M68K-traps'
+import {
+    type FileDescriptorOptions,
+    FileSystemGuestError,
+    type FileSystemSession
+} from '$lib/languages/peripherals/FileSystem'
 import type { MouseSnapshot } from '$lib/languages/peripherals/Mouse'
+import type { TerminalReadOptions } from '$lib/languages/peripherals/Terminal.svelte'
 import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
@@ -89,13 +100,44 @@ const M68K_INSTRUCTIONS_PER_MS = 15_000
 const READ_CHAR_QUESTION = 'Enter a character'
 const READ_NUMBER_QUESTION = 'Enter a number'
 const READ_STRING_QUESTION = 'Enter a string'
+const FILE_DIALOG_QUESTION = 'Choose a File'
 
 const INTERRUPT_INPUT_QUESTIONS: Partial<Record<Interrupt['type'], string>> = {
     ReadChar: READ_CHAR_QUESTION,
     ReadNumber: READ_NUMBER_QUESTION,
     ReadKeyboardString: READ_STRING_QUESTION,
-    DisplayStringAndReadNumber: READ_NUMBER_QUESTION
+    DisplayStringAndReadNumber: READ_NUMBER_QUESTION,
+    FileDialog: FILE_DIALOG_QUESTION
 }
+
+/**
+ * EASy68K's file numbers, which the FileSystem session hands out: the lowest free one from 0, and
+ * at most eight open at once (`MAXFILES`, `SIMOPS2.CPP`), so a ninth open is answered with null.
+ */
+const EASY68K_FILE_DESCRIPTORS: FileDescriptorOptions = { firstDescriptor: 0, maxOpen: 8 }
+
+/**
+ * The sound tasks, by the interrupt the Core raises for each. Nothing can play them until the
+ * Audio Peripheral exists ([the plan](../../../../docs/design/environment-library-plan.md), Later),
+ * so each one ends the program with the reason from the trap table.
+ */
+const SOUND_TASKS = {
+    PlaySound: 70,
+    LoadSound: 71,
+    PlayLoadedSound: 72,
+    PlaySoundDirectX: 73,
+    LoadSoundDirectX: 74,
+    PlayLoadedSoundDirectX: 75,
+    ControlSound: 76,
+    ControlSoundDirectX: 77
+} as const satisfies Partial<Record<Interrupt['type'], number>>
+
+/**
+ * How the program ended when the editor answered a task with `Terminate`, which it does only for a
+ * task it cannot carry out (sound). The run ends on the error that names the task, which is what the
+ * Log and the console show; this is the Core's own account of the same end.
+ */
+const ENDED_BY_THE_EDITOR = 'The editor ended the program at a trap #15 task it cannot carry out'
 
 const sizeMap = {
     [Size.Byte]: RegisterSize.Byte,
@@ -194,11 +236,22 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _canUndo(): boolean {
         const interpreter = this.interpreter
         if (!interpreter?.canUndo()) return false
-        //a Poke on top is the Core's alone to roll back: it drew nothing, and it holds a step id of
-        //its own that the Screen journal never hung an effect on
+        //a Poke on top is the Core's alone to roll back: it drew nothing, touched no File, and it
+        //holds a step id of its own that neither journal ever hung an effect on
         //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
         if (interpreter.getUndoHistory(1)[0]?.kind === 'poke') return true
-        return this.screenInstructions?.canUndoAfter(interpreter.getLastStepId() - 1) ?? true
+        const step = interpreter.getLastStepId()
+        //both journals are asked before anything rolls back: one whose inverse is gone under its
+        //budget stops Undo before this instruction ([ADR 0015](../../../../docs/adr/0015-restore-file-operations-on-undo.md))
+        return (
+            (this.screenInstructions?.canUndoAfter(step - 1) ?? true) &&
+            (this.fileSystemSession?.canUndoAfter(step) ?? true)
+        )
+    }
+
+    /** EASy68K's eight file numbers, from 0, rather than the 3 upward of MARS, RARS and Linux. */
+    protected fileDescriptorOptions(): FileDescriptorOptions {
+        return EASY68K_FILE_DESCRIPTORS
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
@@ -235,9 +288,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _initialize(undoSize: number): void {
         const program = this.program
         if (!program) throw new Error('Interpreter not initialized')
-        //a run starts with the input prompt every M68K program has always had; the first graphics,
-        //keyboard or mouse task moves input to the focused Screen instead (see `useScreenInput`)
-        this._peripherals.terminal.usePromptInput()
+        //a run starts reading what is typed in the Terminal; the first graphics, keyboard or mouse
+        //task moves input to the focused Screen instead (see `useScreenInput`)
+        this._peripherals.terminal.useTerminalInput((text) =>
+            echoToScreen(this._peripherals.screen, text)
+        )
         this.interpreter = new Interpreter(program, {
             history_size: undoSize,
             keep_history: undoSize > 0
@@ -276,8 +331,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const program = this.program
         if (!interpreter || !program) return []
         const result: BuildArtifact[] = []
-        const info = program.getInfo()
-        for (const address of m68kInstructionAddresses(program, interpreter, info)) {
+        for (const address of program.getInstructionAddresses()) {
             const instruction = interpreter.getInstructionAt(address)
             if (!instruction || instruction.size <= 0) continue
             result.push({
@@ -324,6 +378,34 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     _getPc(): bigint {
         return BigInt(this.interpreter?.getPc() ?? 0)
+    }
+
+    _getMemoryLayout() {
+        const values = this.program!.getLayoutItems()
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (let i = 0; i < values.length; i += 5)
+            items.push({
+                start: BigInt(values[i]),
+                length: BigInt(values[i + 1]),
+                kind: (['code', 'data', 'reserved'] as const)[values[i + 2]],
+                section: `Section ${values[i + 3]}`,
+                alignment: BigInt(values[i + 4])
+            })
+        const labels = Object.values(this.program!.getSymbols())
+            .filter((symbol) => symbol.kind === 'label')
+            .map((symbol) => ({
+                name: symbol.name,
+                address: BigInt(symbol.value),
+                fromLibrary: false
+            }))
+        return memoryLayoutFromItems(items, labels)
+    }
+    _getStackTop() {
+        return BigInt(this.interpreter?.getStackTop() ?? 0)
+    }
+    _resolveMemoryLabel(name: string) {
+        const symbol = this.program?.getSymbols()[name]
+        return symbol?.kind === 'label' ? BigInt(symbol.value) : undefined
     }
 
     _getSp(): bigint {
@@ -396,6 +478,38 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return this.interpreter?.hasTerminated() ?? false
     }
 
+    /**
+     * Why the Core says the program ended, which Undo takes back with the step that ended it: task
+     * 9 is an exit, which EASy68K gives no status; running past the last instruction is the end;
+     * a runtime error is an error. `Terminate` from the editor, its answer to a sound task, is an
+     * error too, since the program asked for something that did not happen. The Core also throws
+     * every error it ends on, and `GenericEmulator` reports what was thrown, with the line, so this
+     * says the same thing for a reader that only asks the Core. `simhalt` only pauses the program.
+     */
+    _getTermination(): Termination | undefined {
+        const interpreter = this.interpreter
+        const termination = interpreter?.getTermination()
+        if (!interpreter || !termination) return undefined
+        switch (termination.type) {
+            case 'TerminateTask':
+                return { kind: 'exit' }
+            case 'EndOfProgram':
+                return { kind: 'end' }
+            case 'TerminatedByHost':
+                return { kind: 'error', message: ENDED_BY_THE_EDITOR }
+            case 'Exception': {
+                const line = interpreter.getLastInstruction()?.location.line
+                return {
+                    kind: 'error',
+                    message: this._stringifyError(
+                        termination.value,
+                        line === undefined ? undefined : line + 1
+                    )
+                }
+            }
+        }
+    }
+
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
         return this.requireInterpreter().readMemoryBytes(Number(address), Number(length))
     }
@@ -435,15 +549,28 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _stringifyError(error: unknown, line?: number): string {
-        return getM68kErrorMessage(withTrapTaskExplained(error), line)
+        return getM68kErrorMessage(error, line)
     }
 
     _undo(): void {
-        const step = this.requireInterpreter().undo()
-        //a Poke has no instruction identity, so the Screen journal hung nothing on it and must be
-        //left where it is ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        const interpreter = this.requireInterpreter()
+        //the FileSystem cannot refuse half way through, so the step about to be rolled back is
+        //checked first, as `_canUndo` checked it; a Poke never touched a File
+        if (interpreter.getUndoHistory(1)[0]?.kind === 'instruction') {
+            const id = interpreter.getLastStepId()
+            if (!(this.screenInstructions?.canUndoAfter(id - 1) ?? true)) {
+                throw new Error('Screen Undo history exhausted')
+            }
+            if (!(this.fileSystemSession?.canUndoAfter(id) ?? true)) {
+                throw new Error('FileSystem Undo history exhausted')
+            }
+        }
+        const step = interpreter.undo()
+        //a Poke has no instruction identity, so neither journal hung anything on it and both must
+        //be left where they are ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
         if (step.kind === 'poke') return
         this.screenInstructions?.undoAfter(step.id - 1)
+        this.fileSystemSession?.undoAfter(step.id)
     }
 
     /**
@@ -541,19 +668,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     ): Promise<Promise<void> | undefined> {
         switch (interpreter.getStatus()) {
             case CoreInterpreterStatus.Terminated: {
+                //not marked terminated here: the run that ends says so once it is over, with how
+                //the program ended and its running time, which the Log reads together
                 const ins = interpreter.getLastInstruction()
-                this.state.terminated = true
                 this.state.line = ins?.location.line ?? -1
                 if (ins) this.state.currentFile = ins.location.file
-                break
-            }
-            case CoreInterpreterStatus.TerminatedWithException: {
-                const ins = interpreter.getLastInstruction()
-                this.state.terminated = true
-                this.state.line = ins?.location.line ?? -1
-                if (ins) this.state.currentFile = ins.location.file
-                this.state.canUndo = false
-                this.addError('Program terminated with errors')
                 break
             }
             case CoreInterpreterStatus.Interrupt: {
@@ -577,14 +696,18 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     /**
      * The whole `trap #15` interface, task by task: EASy68K's tasks as the Core decodes them, each
      * routed to the peripheral that owns it
-     * ([ADR 0003](../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md)). Answering
-     * is what resumes the Core, so every branch ends in `answerInterrupt`; the Delay branch answers
-     * first and returns its wait, because the program is not blocked on the trap any more, only on
-     * time passing.
+     * ([ADR 0003](../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md)). The Core
+     * owns what a task means: a display task hands over finished text, a read task takes what was
+     * typed as it was typed, a file task what the FileSystem did, and the Core formats, parses and
+     * writes EASy68K's results itself ([ADR 0035](../../../../docs/adr/0035-environments-match-their-reference.md)).
+     * Answering is what resumes the Core, so every branch ends in `answerInterrupt`, with the answer
+     * of the interrupt's own type; the Delay branch answers first and returns its wait, because the
+     * program is not blocked on the trap any more, only on time passing.
      *
      * The whole task is associated with this trap's execution ID, including tasks like 18 that
      * print a prompt and then echo every character the user types. The compound journal makes
-     * eviction of those effects atomic (ADR 0005).
+     * eviction of those effects atomic (ADR 0005), and a file task's changes are one FileSystem
+     * frame under the same ID (ADR 0015).
      */
     private async handleInterrupt(
         interrupt: Interrupt | null,
@@ -609,61 +732,163 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     interpreter.answerInterrupt({ type })
                     break
                 }
+                //finished text: decoded from Windows-1252 and, for a number, formatted the way
+                //EASy68K formats it (task 15 in upper case, task 20 in its signed field)
                 case 'DisplayStringWithoutCRLF':
                 case 'DisplayChar':
-                case 'DisplayNumber': {
-                    this.print(String(interrupt.value))
-                    interpreter.answerInterrupt({ type })
-                    break
-                }
-                case 'DisplayNumberInBase': {
-                    const { value, base } = interrupt.value
-                    this.print(value.toString(base))
-                    interpreter.answerInterrupt({ type })
-                    break
-                }
-                case 'DisplaySignedNumberInField': {
-                    const { value, width } = interrupt.value
-                    //EASy68K right justifies in the field and lets a longer number overflow it
-                    this.print(String(value).padStart(width))
-                    interpreter.answerInterrupt({ type })
-                    break
-                }
+                case 'DisplayNumber':
+                case 'DisplayNumberInBase':
+                case 'DisplaySignedNumberInField':
                 case 'DisplayStringAndNumber': {
-                    const { string, number } = interrupt.value
-                    this.print(`${string}${number}`)
+                    this.print(interrupt.value)
                     interpreter.answerInterrupt({ type })
                     break
                 }
-                case 'DisplayStringAndReadNumber': {
-                    this.print(interrupt.value)
-                    const number = await this.readNumber(execution)
-                    interpreter.answerInterrupt({ type, value: number })
+                //the line as it was typed: the Core reads it with EASy68K's `atoi` (task 18 shows
+                //its prompt first) and stores task 2's first 79 characters
+                case 'DisplayStringAndReadNumber':
+                case 'ReadNumber':
+                case 'ReadKeyboardString': {
+                    if (type === 'DisplayStringAndReadNumber') this.print(interrupt.value)
+                    const line = await this.requestInput(
+                        type === 'ReadKeyboardString' ? READ_STRING_QUESTION : READ_NUMBER_QUESTION,
+                        execution,
+                        this.readOptions(interpreter)
+                    )
+                    this.executionController.ensureCurrent(execution)
+                    interpreter.answerInterrupt({ type, value: line })
                     break
                 }
                 case 'ReadChar': {
-                    //one keystroke at a time once the Screen's Keyboard is the source; with a prompt
-                    //it is still the first character of the answered line (ADR 0009)
-                    const char = await this.requestCharacter(READ_CHAR_QUESTION, execution)
+                    //one keystroke, from the Terminal or, once the Screen's Keyboard is the source,
+                    //from the Screen (ADR 0009); Enter is EASy68K's $0D, the Terminal's Enter code
+                    //for this Target (ADR 0036), which the Core also takes as a line feed
+                    const char = await this.requestCharacter(
+                        READ_CHAR_QUESTION,
+                        execution,
+                        this.readOptions(interpreter)
+                    )
                     if (!char) throw new Error(`Expected a character, got "${char}"`)
                     this.executionController.ensureCurrent(execution)
                     interpreter.answerInterrupt({ type, value: char })
                     break
                 }
-                case 'ReadNumber': {
-                    const number = await this.readNumber(execution)
-                    interpreter.answerInterrupt({ type, value: number })
-                    break
-                }
-                case 'ReadKeyboardString': {
-                    const string = await this.requestInput(READ_STRING_QUESTION, execution)
-                    this.executionController.ensureCurrent(execution)
-                    interpreter.answerInterrupt({ type, value: string })
-                    break
-                }
                 case 'Terminate': {
+                    //task 9 ends the program in the Core without waiting for an answer; any other
+                    //interrupt of this type is answered in kind, which also ends the program
                     interpreter.answerInterrupt({ type })
                     break
+                }
+
+                // ------------------------------------------------------------ files
+                case 'CloseAllFiles': {
+                    const closed = this.fileTask(interpreter, false, (files) => {
+                        files.closeAll()
+                        return true
+                    })
+                    interpreter.answerInterrupt({ type, value: closed })
+                    break
+                }
+                case 'OpenFile': {
+                    const path = interrupt.value
+                    const opened = this.fileTask(interpreter, null, (files) =>
+                        openExistingFile(files, path)
+                    )
+                    interpreter.answerInterrupt({ type, value: opened })
+                    break
+                }
+                case 'NewFile': {
+                    const path = interrupt.value
+                    //`fopen(name, "w+b")`: created, or emptied, and open for reading and writing
+                    const handle = this.fileTask(interpreter, null, (files) =>
+                        files.open(path, { access: 'read-write', create: true, truncate: true })
+                    )
+                    interpreter.answerInterrupt({ type, value: handle })
+                    break
+                }
+                case 'ReadFile': {
+                    const { handle, count } = interrupt.value
+                    //no bytes is the end of the file, which the Core reports as 1 in D0.W
+                    const bytes = this.fileTask(interpreter, null, (files) =>
+                        files.read(handle, count)
+                    )
+                    interpreter.answerInterrupt({ type, value: bytes })
+                    break
+                }
+                case 'WriteFile': {
+                    const { handle, bytes } = interrupt.value
+                    //a full FileSystem is an error the program sees as 2, like any other
+                    const written = this.fileTask(interpreter, false, (files) => {
+                        files.write(handle, bytes)
+                        return true
+                    })
+                    interpreter.answerInterrupt({ type, value: written })
+                    break
+                }
+                case 'PositionFile': {
+                    const { handle, offset } = interrupt.value
+                    const moved = this.fileTask(interpreter, false, (files) => {
+                        files.seek(handle, offset, 0)
+                        return true
+                    })
+                    interpreter.answerInterrupt({ type, value: moved })
+                    break
+                }
+                case 'CloseFile': {
+                    const handle = interrupt.value
+                    const closed = this.fileTask(interpreter, false, (files) => {
+                        files.close(handle)
+                        return true
+                    })
+                    interpreter.answerInterrupt({ type, value: closed })
+                    break
+                }
+                case 'DeleteFile': {
+                    const path = interrupt.value
+                    const deleted = this.fileTask(interpreter, false, (files) => {
+                        files.remove(path)
+                        return true
+                    })
+                    interpreter.answerInterrupt({ type, value: deleted })
+                    break
+                }
+                case 'FileExists': {
+                    const path = interrupt.value
+                    //every File of a Project can be written, and a Directory is not a File
+                    const found = this.fileTask(interpreter, 'Missing' as const, (files) =>
+                        files.stat(path)?.kind === 'file' ? 'Writable' : 'Missing'
+                    )
+                    interpreter.answerInterrupt({ type, value: found })
+                    break
+                }
+                case 'FileDialog': {
+                    //modal in its reference, so it is the app's Prompt rather than the console
+                    const { mode, title, filter, path } = interrupt.value
+                    const answer = await this._peripherals.terminal.inputDialog(
+                        fileDialogQuestion(mode, title, filter),
+                        execution,
+                        path
+                    )
+                    this.executionController.ensureCurrent(execution)
+                    //an empty answer cancels, as the dialog's Cancel does
+                    interpreter.answerInterrupt({ type, value: answer || null })
+                    break
+                }
+
+                // ------------------------------------------------------------ sound
+                case 'PlaySound':
+                case 'LoadSound':
+                case 'PlayLoadedSound':
+                case 'PlaySoundDirectX':
+                case 'LoadSoundDirectX':
+                case 'PlayLoadedSoundDirectX':
+                case 'ControlSound':
+                case 'ControlSoundDirectX': {
+                    //nothing can play them until the Audio Peripheral exists. `Terminate` is the
+                    //Core's answer for a host without sound, and the run ends on an error saying so
+                    //rather than as though the program had finished
+                    interpreter.answerInterrupt({ type: 'Terminate' })
+                    throw new Error(describeUnsupportedTrapTask(SOUND_TASKS[type]))
                 }
 
                 // --------------------------------------------------- keyboard and mouse
@@ -886,11 +1111,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
                 // ------------------------------------------------------- program time
                 case 'GetTime': {
-                    //hundredths of a second since the run started, from the clock a testcase swaps
-                    //for a virtual one (ADR 0010); EASy68K counts from midnight instead
+                    //EASy68K counts hundredths since local midnight; Testcases use UTC.
                     interpreter.answerInterrupt({
                         type,
-                        value: this._peripherals.clock.nowHundredths()
+                        value: this._peripherals.clock.calendarHundredths()
                     })
                     break
                 }
@@ -901,7 +1125,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     return this._peripherals.clock.waitHundredths(interrupt.value)
                 }
                 default:
-                    throw new Error(`Unknown interrupt type "${type}"`)
+                    return unknownInterrupt(type)
             }
         } finally {
             screen.endCompoundOperation()
@@ -931,15 +1155,38 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this._peripherals.screen.writeText(text)
     }
 
-    /** Tasks 4 and 18, which read the same line and reject the same answers. */
-    private async readNumber(execution: ExecutionGeneration): Promise<number> {
-        const answer = await this.requestInput(READ_NUMBER_QUESTION, execution)
-        const number = Number(answer)
-        if (Number.isNaN(number) || answer === '') {
-            throw new Error(`Expected a number, got "${answer === '' ? '' : number}"`)
-        }
-        this.executionController.ensureCurrent(execution)
-        return number
+    /**
+     * How the program set its reads to show what is typed: task 12's echo and task 16's prompt and
+     * line feed. The Core keeps them and Undo puts them back, so they are asked for at each read.
+     */
+    private readOptions(interpreter: Interpreter): TerminalReadOptions {
+        const { echo, prompt, line_feed } = interpreter.getInputSettings()
+        return { echo, prompt, lineFeed: line_feed }
+    }
+
+    /**
+     * One file task on the Build's FileSystem session, inside the Undo frame of the trap that asked
+     * for it. The frame is keyed by the Core's step id, as the Screen journal's records are, so Undo
+     * of that step puts back the Files, the open files and their positions with the registers
+     * ([ADR 0015](../../../../docs/adr/0015-restore-file-operations-on-undo.md)). A failure the
+     * program can be told about answers `failed`, which the Core turns into EASy68K's 2 in D0.W;
+     * anything else, such as a session that has ended, ends the run.
+     */
+    private fileTask<T>(
+        interpreter: Interpreter,
+        failed: T,
+        operation: (files: FileSystemSession) => T
+    ): T {
+        const files = this.fileSystemSession
+        if (!files) throw new Error('The FileSystem is not running')
+        return files.performInstruction(interpreter.getLastStepId(), () => {
+            try {
+                return operation(files)
+            } catch (error) {
+                if (error instanceof FileSystemGuestError) return failed
+                throw error
+            }
+        })
     }
 
     /** Task 92, of whose modes the Core only ever forwards these four. */
@@ -962,7 +1209,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     /**
      * The Terminal's interactive source is chosen by what the program does, once per run: a program
-     * that only prints keeps the input prompt it has always had, and the first graphics, keyboard or
+     * that only prints reads what is typed in the Terminal, and the first graphics, keyboard or
      * mouse task moves reads to the focused Screen's Keyboard, echoing what is typed at the text
      * cursor as well as into the transcript (ADR 0003, ADR 0009). The switch happens at most once
      * and never goes back, so the source is still fixed for the run.
@@ -980,40 +1227,34 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 }
 
-function m68kInstructionAddresses(
-    program: Program,
-    interpreter: Interpreter,
-    info: ReturnType<Program['getInfo']>
-): number[] {
-    const native = program as Program & { getInstructionAddresses?: () => number[] }
-    if (native.getInstructionAddresses) return native.getInstructionAddresses()
-
-    // Compatibility with the currently published package. Local/newer Cores expose the compact
-    // address index above; the fallback walks the executable range and stops as soon as it has
-    // found the number of instructions reported by ProgramInfo.
-    const addresses: number[] = []
-    for (
-        let address = info.entryPoint;
-        address < info.endAddress && addresses.length < info.instructionCount;
-        address += 2
-    ) {
-        if (interpreter.getInstructionAt(address)) addresses.push(address)
+/**
+ * Task 51 as EASy68K does it (`openFile`, `SIMOPS2.CPP`): for reading and writing, and failing that
+ * for reading only, which the program learns as 3 in D0.W. Every File of a Project can be written
+ * today, so the second open fails for the reason the first did; it is there for a File that cannot.
+ */
+function openExistingFile(files: FileSystemSession, path: string): OpenedFile {
+    try {
+        return { handle: files.open(path, { access: 'read-write' }), read_only: false }
+    } catch (error) {
+        if (!(error instanceof FileSystemGuestError)) throw error
+        return { handle: files.open(path, { access: 'read' }), read_only: true }
     }
-    return addresses
 }
 
 /**
- * The Core knows a task it cannot decode only as a number, and says so; this says which task it was
- * and, for the ones this editor deliberately does not support, why. Anything else is passed through
- * untouched.
+ * Task 58's dialog as the Prompt asks it: whether it opens or saves, with the program's title and
+ * filter, for a path from the Project root.
  */
-function withTrapTaskExplained(error: unknown): unknown {
-    if (typeof error !== 'object' || error === null) return error
-    const raw = error as { type?: unknown; value?: unknown }
-    if (raw.type !== 'Raw' || typeof raw.value !== 'string') return error
-    const match = /^Unknown interrupt: (\d+)$/.exec(raw.value)
-    if (!match) return error
-    return { type: 'Raw', value: describeUnsupportedTrapTask(Number(match[1])) }
+function fileDialogQuestion(mode: FileDialogMode, title: string, filter: string): string {
+    const action = mode === 'Open' ? 'The File to open' : 'The File to save to'
+    const kinds = filter ? ` (${filter})` : ''
+    const question = `${action}${kinds}, as a path from the Project root`
+    return title ? `${title}: ${question.charAt(0).toLowerCase()}${question.slice(1)}` : question
+}
+
+/** A Core interrupt this adapter does not know, which the type checker says cannot happen. */
+function unknownInterrupt(type: never): never {
+    throw new Error(`Unknown interrupt type "${type}"`)
 }
 
 /** Task 61's flags byte: `Ctrl, Alt, Shift, Double, Middle, Right, Left` from bit 6 down. */
@@ -1111,9 +1352,29 @@ function convertMutation(mutation: CoreExecutionStep['mutations'][number]): Muta
                     from: BigInt(mutation.value.from)
                 }
             }
+        case 'SetInputSettings':
+            return {
+                type: 'Other',
+                value: inputSettingsChange(mutation.value.old, mutation.value.new)
+            }
         default:
             return unsupportedMutation(mutation)
     }
+}
+
+/**
+ * What task 12 or 16 changed, as the History names it: "Turned the echo off". The Core journals a
+ * change only, so at least one of the three differs.
+ */
+function inputSettingsChange(old: InputSettings, next: InputSettings): string {
+    const turned = (name: string, on: boolean) => `turned ${name} ${on ? 'on' : 'off'}`
+    const changes = [
+        old.echo !== next.echo ? turned('the echo', next.echo) : '',
+        old.prompt !== next.prompt ? turned('the input prompt', next.prompt) : '',
+        old.line_feed !== next.line_feed ? turned('the line feed after Enter', next.line_feed) : ''
+    ].filter(Boolean)
+    const text = changes.join(', ') || 'set the input settings'
+    return text[0].toUpperCase() + text.slice(1)
 }
 
 /**

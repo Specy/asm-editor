@@ -17,6 +17,7 @@ import {
     type X86Instruction,
     type X86InstructionForm
 } from './generated/x86Instructions'
+import { X86_SIM_ARGUMENT_OVERRIDES } from '../../documentation/x86/syscallBinding'
 import { X86_DESCRIPTIONS } from './generated/x86Descriptions'
 import { X86_SYSCALLS, type X86Syscall } from './generated/x86Syscalls'
 import {
@@ -79,8 +80,6 @@ export const x86InstructionMap = new Map<string, X86Instruction>(
     X86_INSTRUCTIONS.map((instruction) => [instruction.name, instruction])
 )
 
-export const x86InstructionNames = X86_INSTRUCTIONS.map((instruction) => instruction.name)
-
 /** Every instruction, grouped under the heading NASM files it under, in the table's own order. */
 export const x86InstructionsBySection = X86_INSTRUCTIONS.reduce((sections, instruction) => {
     const section = instruction.section || 'Uncategorised'
@@ -129,6 +128,19 @@ Programs here run as Linux programs, so this is the only way a program reaches t
     cqo: `Sign extends \`rax\` into \`rdx:rax\`, filling \`rdx\` with copies of the sign bit. \`idiv\` divides that 128 bit pair, so signed division is written as \`cqo\` then \`idiv\`; forgetting the \`cqo\` leaves whatever \`rdx\` happened to hold in the high half and the result is nonsense rather than an error.`,
 
     movsxd: `Copies a 32 bit source into a 64 bit register, sign extending it. This is the instruction to reach for when a signed 32 bit value has to become a 64 bit one, because the ordinary \`mov eax, ...\` zero extends instead: writing any 32 bit register clears the top half of its 64 bit name.`
+}
+
+/** Corrected visible one-line summaries where the imported assembler text has obvious typos. */
+export const X86_SUMMARY_OVERRIDES: Record<string, string> = {
+    vcvtph2qq:
+        'Convert packed half-precision floating-point values to packed signed quadword integers',
+    vcvtps2qq:
+        'Convert packed single-precision floating-point values to packed signed quadword integers',
+    vcvttph2qq:
+        'Convert packed half-precision floating-point values to packed signed quadword integers with truncation',
+    vcvttps2qq:
+        'Convert packed single-precision floating-point values to packed signed quadword integers with truncation',
+    vbcstnebf162ps: 'Load and convert one BF16 value, broadcasting it across packed FP32 elements'
 }
 
 /** The markdown shown for an instruction: written here, then the appendix, then the one liner. */
@@ -604,10 +616,6 @@ export const x86SyscallMap = new Map<string, X86Syscall>(
     X86_SYSCALLS.map((syscall) => [syscall.name, syscall])
 )
 
-export const x86SyscallsByNumber = new Map<number, X86Syscall>(
-    X86_SYSCALLS.map((syscall) => [syscall.number, syscall])
-)
-
 /**
  * What a call does, for the ones a program here is likely to make. The generated table has the
  * number, the name and the shape of every call blink implements, and nothing about their meaning:
@@ -620,17 +628,52 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     open: 'Opens the path at `rdi` with the flags in `rsi` and, when creating, the mode in `rdx`. Returns a file descriptor.',
     close: 'Closes the file descriptor in `rdi`.',
     lseek: 'Moves the read and write position of the descriptor in `rdi` to the offset in `rsi`, interpreted according to `rdx`, and returns the new position.',
+    stat: 'Reads file metadata for the path at `rdi` and writes it to the Linux `struct stat` buffer at `rsi`.',
+    lstat: 'Like `stat`, but reports a symbolic link itself instead of the file it points to. Writes a Linux `struct stat` to the buffer at `rsi`.',
+    fstat: 'Reads file metadata for the descriptor in `rdi` and writes it to the Linux `struct stat` buffer at `rsi`.',
+    poll: 'Waits for the `pollfd` array at `rdi` to report requested events, checking `rsi` entries for up to `rdx` milliseconds. A negative timeout waits without a time limit.',
+    select: 'Takes the descriptor limit in `rdi`, pointers to the read, write, and exception sets in `rsi`, `rdx`, and `r10`, and an optional timeout in `r8`. Waits until a descriptor is ready or the timeout expires, then updates the sets and timeout.',
     exit: 'Ends the program with the status in `rdi`. It never returns, and a program that reaches the end of its code without calling it runs into whatever bytes follow.',
     exit_group:
         'Ends every thread of the program with the status in `rdi`. For a program with one thread it is `exit`.',
-    brk: 'Moves the end of the data segment to the address in `rdi`, which is the oldest way to ask for more memory. Called with 0 it returns where the segment currently ends.',
     mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to.',
+    mprotect:
+        'Changes the read, write, or execute permissions of the `rsi` bytes starting at the page-aligned address in `rdi`.',
     munmap: 'Unmaps the mapping of `rsi` bytes at the address in `rdi`.',
+    brk: 'Sets the end address of the heap area. Returns the current break; a request the emulator cannot satisfy leaves it unchanged.',
+    pipe: 'Creates a pair of connected file descriptors and writes both integers to the two-element array at `rdi`; reads from one end receive bytes written to the other.',
+    dup: 'Returns a new file descriptor that refers to the same open file description as the descriptor in `rdi`.',
+    dup2: 'Makes descriptor `rsi` refer to the same open file description as `rdi`, closing the old `rsi` first if needed.',
+    readv: 'Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read.',
+    writev: 'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written.',
     nanosleep: 'Sleeps for the interval at `rdi`, a pair of seconds and nanoseconds.',
     getpid: 'Returns the process id.',
-    fstat: 'Fills the structure at `rsi` with what is known about the descriptor in `rdi`, including its size.',
-    clock_gettime: 'Writes the time of the clock named in `rdi` into the structure at `rsi`.',
-    ioctl: 'Asks a device the descriptor in `rdi` refers to for something outside the ordinary read and write interface, chosen by the request in `rsi`.'
+    clock_gettime:
+        'Writes the current run’s elapsed program time to the `timespec` structure at `rsi` (seconds and nanoseconds). This is simulator time, not calendar time.',
+    time: 'Returns the current run’s elapsed program time in whole seconds, and also stores it at the address in `rdi` unless `rdi` is 0.',
+    ioctl: 'Asks a device the descriptor in `rdi` refers to for something outside the ordinary read and write interface, chosen by the request in `rsi`.',
+    sendfile:
+        'Copies up to `r10` bytes from the input descriptor in `rsi` to the output descriptor in `rdi`, optionally updating the input position through the pointer in `rdx`.',
+    getcwd: 'Writes the current working directory as a NUL-terminated path to the buffer at `rdi`, up to `rsi` bytes.',
+    chdir: 'Changes the program’s current working directory to the path at `rdi`.',
+    fchdir: 'Changes the program’s current working directory to the directory referred to by descriptor `rdi`.',
+    rename: 'Renames or moves the path at `rdi` to the path at `rsi`.',
+    mkdir: 'Creates a directory at the path in `rdi`; `rsi` supplies its permission mode.',
+    rmdir: 'Removes the empty directory named by the path at `rdi`.',
+    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor.',
+    uname: 'Writes system name and version fields to the Linux `struct utsname` buffer at `rdi`.',
+    gettimeofday:
+        'Writes the current run’s elapsed program time, in seconds and microseconds, to the `timeval` structure at `rdi`; this is not calendar time.',
+    getrusage:
+        'Writes resource-usage counters for the selected process or children to the `rusage` structure at `rsi`.',
+    sysinfo:
+        'Writes the emulator’s uptime, memory, and process-count values to a Linux `struct sysinfo` buffer at `rdi`.',
+    getgroups:
+        'Writes up to `rdi` supplementary group IDs to the array at `rsi`; with a zero size, returns how many IDs are needed.',
+    setgroups:
+        'Replaces the process’s supplementary group list with the `rdi` group IDs in the array at `rsi`.',
+    rt_sigreturn:
+        'Returns from a signal handler: restores the registers and the signal mask saved when the signal arrived, and carries on where the program was interrupted. A handler does not make this call itself: it returns into the restorer registered with `rt_sigaction`, and the restorer makes it.'
 }
 
 /** The calls the syscall page leads with, in the order a program meets them. */
@@ -643,7 +686,6 @@ export const X86_COMMON_SYSCALLS = [
     'close',
     'lseek',
     'fstat',
-    'brk',
     'mmap',
     'munmap',
     'nanosleep',
@@ -663,14 +705,23 @@ export function describeX86Syscall(name: string): string {
 const X86_SYSCALL_ARGS: Record<string, string[]> = {
     exit: ['status'],
     exit_group: ['status'],
-    clock_gettime: ['clock', 'timespec']
+    clock_gettime: ['clock', 'timespec'],
+    time: ['buffer (written by the kernel)']
 }
 
 /** What each argument of a call is, in register order: rdi, rsi, rdx, r10, r8, r9. */
 export function x86SyscallArgs(syscall: X86Syscall): string[] {
     const written = X86_SYSCALL_ARGS[syscall.name]
     if (written) return written
-    if (syscall.args.length > 0) return syscall.args
+    if (syscall.args.length > 0)
+        return syscall.args.map((label, index) => {
+            const override = X86_SIM_ARGUMENT_OVERRIDES[syscall.name]?.[index]
+            return override
+                ? override.type === 'long'
+                    ? override.name
+                    : `${override.name} (${override.type === 'const void *' ? 'read by' : 'written by'} the kernel)`
+                : label
+        })
     // Untraced and unwritten: say how many it takes rather than inventing names for them.
     return Array.from({ length: syscall.arity }, (_, index) => `arg${index + 1}`)
 }

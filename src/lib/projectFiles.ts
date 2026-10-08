@@ -1,3 +1,6 @@
+import { isAssemblerProfile } from './assemblerProfiles'
+import { isRuntimeAbiName } from './runtimeAbi'
+
 /** Shared byte and path rules for persistence, assembly, and the FileSystem. */
 export type FileEncoding = 'plain' | 'base64'
 export type ProjectFile = Readonly<{ encoding: FileEncoding; content: string }>
@@ -144,16 +147,134 @@ export function cleanFiles(raw: unknown): ProjectFiles {
     return Object.freeze(files)
 }
 
-export type BuildSources = Readonly<{ files: ProjectFiles; entry: string }>
+export type BuildConfiguration = Readonly<{
+    assemblerProfile?: import('./assemblerProfiles').AssemblerProfile
+    /** A source-unit resolution failure, carried to live checking and Build as a Diagnostic. */
+    assemblyError?: string
+    /**
+     * The Runtime ABI whose library the Build links, absent when it links none
+     * ([ADR 0031](../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
+     */
+    runtimeAbi?: `v${number}`
+    /**
+     * The global execution starts at instead of `main`: the Runtime library's `_start` for compiled
+     * programs. On x86, where every program starts at `_start`, it asks for the start code that
+     * defines it: the Runtime library's `crt0` once x86 has one, the editor's start unit until then.
+     */
+    entrySymbol?: string
+    /** x86 compiler support archive; startup is selected only for a compiled Entry. */
+    x86Support?: boolean
+    /** Generated assembly path to the source language that produced it. */
+    compiledLanguages?: Readonly<
+        Record<string, import('./sourceCompilation/records').SourceLanguage>
+    >
+}>
+
+export type BuildSources = Readonly<{ files: ProjectFiles; entry: string }> & BuildConfiguration
+
+// Exhaustive at compile time: a new configuration field must participate in every consumer.
+const BUILD_CONFIGURATION_KEYS: Record<keyof Required<BuildConfiguration>, true> = {
+    assemblerProfile: true,
+    assemblyError: true,
+    runtimeAbi: true,
+    entrySymbol: true,
+    x86Support: true,
+    compiledLanguages: true
+}
+
+export function buildConfiguration(sources: BuildConfiguration): BuildConfiguration {
+    const configuration: Record<string, unknown> = {}
+    for (const key of Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]) {
+        if (sources[key] !== undefined) configuration[key] = sources[key]
+    }
+    if (sources.compiledLanguages)
+        configuration.compiledLanguages = Object.freeze({ ...sources.compiledLanguages })
+    return Object.freeze(configuration) as BuildConfiguration
+}
+
+export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildConfiguration) {
+    return (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).every((key) => {
+        if (key !== 'compiledLanguages') return left[key] === right[key]
+        const a = left.compiledLanguages ?? {}
+        const b = right.compiledLanguages ?? {}
+        return (
+            Object.keys(a).length === Object.keys(b).length &&
+            Object.keys(a).every((path) => hasOwn(b, path) && a[path] === b[path])
+        )
+    })
+}
+
+export function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
+    return (
+        left.entry === right.entry &&
+        buildConfigurationsEqual(left, right) &&
+        Object.keys(left.files).length === Object.keys(right.files).length &&
+        Object.keys(left.files).every(
+            (path) =>
+                hasOwn(right.files, path) &&
+                left.files[path].encoding === right.files[path].encoding &&
+                left.files[path].content === right.files[path].content
+        )
+    )
+}
 
 export type BuildInput = string | BuildSources
 
+export function buildAssemblerProfile(sources: BuildSources) {
+    if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
+    if (!hasOwn(sources, 'assemblerProfile')) return 'rars' as const
+    if (!isAssemblerProfile(sources.assemblerProfile)) {
+        throw new ProjectFormatError(
+            `Unsupported assembler profile: ${String(sources.assemblerProfile)}`
+        )
+    }
+    return sources.assemblerProfile
+}
+
 export function normalizeBuildInput(input: BuildInput): BuildSources {
     if (typeof input !== 'string') {
+        if (hasOwn(input, 'assemblyError') && typeof input.assemblyError !== 'string') {
+            throw new ProjectFormatError('Invalid assembly resolution error')
+        }
         if (!isValidFilePath(input.entry)) {
             throw new ProjectFormatError(`Invalid entry path: ${input.entry}`)
         }
-        return Object.freeze({ files: cleanFiles(input.files), entry: input.entry })
+        if (
+            Object.prototype.hasOwnProperty.call(input, 'assemblerProfile') &&
+            !isAssemblerProfile(input.assemblerProfile)
+        ) {
+            throw new ProjectFormatError(
+                `Unsupported assembler profile: ${String(input.assemblerProfile)}`
+            )
+        }
+        if (hasOwn(input, 'runtimeAbi') && !isRuntimeAbiName(input.runtimeAbi)) {
+            throw new ProjectFormatError(`Invalid Runtime ABI: ${String(input.runtimeAbi)}`)
+        }
+        if (
+            hasOwn(input, 'entrySymbol') &&
+            (typeof input.entrySymbol !== 'string' ||
+                !/^[.$A-Za-z_][.$A-Za-z_0-9]*$/.test(input.entrySymbol))
+        ) {
+            throw new ProjectFormatError(`Invalid entry symbol: ${String(input.entrySymbol)}`)
+        }
+        if (hasOwn(input, 'x86Support') && typeof input.x86Support !== 'boolean')
+            throw new ProjectFormatError('Invalid x86 compiler support setting')
+        if (
+            hasOwn(input, 'compiledLanguages') &&
+            (!input.compiledLanguages ||
+                typeof input.compiledLanguages !== 'object' ||
+                Array.isArray(input.compiledLanguages) ||
+                Object.entries(input.compiledLanguages).some(
+                    ([path, language]) =>
+                        !isValidFilePath(path) || (language !== 'c' && language !== 'cpp')
+                ))
+        )
+            throw new ProjectFormatError('Invalid compiled source languages')
+        return Object.freeze({
+            files: cleanFiles(input.files),
+            entry: input.entry,
+            ...buildConfiguration(input)
+        })
     }
     return Object.freeze({
         files: cleanFiles({ main: { encoding: 'plain', content: input } }),
@@ -163,6 +284,7 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
 
 export function updateEntryText(sources: BuildSources, text: string): BuildSources {
     return Object.freeze({
+        ...sources,
         entry: sources.entry,
         files: cleanFiles({
             ...sources.files,

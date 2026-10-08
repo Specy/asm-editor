@@ -16,7 +16,7 @@
 import { KEY_CODES } from '../peripherals/keyCodes'
 import { rgb, type ScreenColor } from '../peripherals/screen/color'
 
-export type M68KTrapGroup = 'text' | 'graphics' | 'input' | 'time'
+export type M68KTrapGroup = 'text' | 'graphics' | 'input' | 'time' | 'files'
 
 /** The groups the documentation page and the coding agent's prompt show, in that order. */
 export const M68K_TRAP_GROUP_DOCS: {
@@ -28,25 +28,31 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'text',
         title: 'Text I/O',
         description:
-            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor, because EASy68K has one output window where text and graphics share the image; the transcript is what testcases assert on. Typed input is echoed to both.'
+            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor. Testcases compare the transcript. Typed input is echoed to both, unless task 12 turned echo off. Text uses Windows-1252, a single-byte character encoding: each character takes one byte, including `€` and curly quotes.'
     },
     {
         group: 'graphics',
         title: 'Graphics',
         description:
-            'Drawing on the screen. The origin is the top left, coordinates are signed pixels, so a shape may start off the left or the top, and whatever falls outside the screen is clipped. Colors are `$00BBGGRR` longs, the same encoding EASy68K uses, so its color equates are unchanged. Rectangles and ellipses exclude their right and bottom edges, as they do in EASy68K, which draws them through the Windows GDI.'
+            'Drawing on the screen. The origin is the top left, coordinates are signed pixels, so a shape may start off the left or the top, and whatever falls outside the screen is clipped. Colors are `$00BBGGRR` longs. Rectangles and ellipses exclude their right and bottom edges.'
     },
     {
         group: 'input',
         title: 'Keyboard and mouse',
         description:
-            'Polled input from the focused screen. Key codes are EASy68K’s, which every environment in this editor uses. There are no input interrupts: a program asks for the state it wants when it wants it (tasks 60 and 62 are therefore not supported).'
+            'Polled input from the focused screen. There are no input interrupts: a program asks for the state it wants when it wants it (tasks 60 and 62 are therefore not supported).'
     },
     {
         group: 'time',
         title: 'Program time',
         description:
             'Waiting and reading the clock. A delay suspends the program without blocking the editor, so Stop still answers and the screen still repaints while it runs. Testcases run on a virtual clock, where a delay completes at once and the clock starts at zero.'
+    },
+    {
+        group: 'files',
+        title: 'Files',
+        description:
+            'Reading and writing the Project’s Files. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. Undo restores changes made by a file task, and each testcase works on its own copy of the Files.'
     }
 ]
 
@@ -74,7 +80,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string with CR, LF',
         input: 'A1 = string address, D1.W = length',
         description:
-            'Displays up to D1.W characters of the string at (A1), stopping at a NULL, then a new line. See task 13 for the NULL terminated form.'
+            'Displays D1.W characters of the string at (A1), at most 255, stopping early at a NUL, then a new line. See task 13 for the NUL terminated form.'
     },
     {
         task: 1,
@@ -82,16 +88,18 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string',
         input: 'A1 = string address, D1.W = length',
         description:
-            'Displays up to D1.W characters of the string at (A1) without a new line. See task 14 for the NULL terminated form.'
+            'Displays D1.W characters of the string at (A1), at most 255, stopping early at a NUL, without a new line. See task 14 for the NUL terminated form.'
     },
     {
         task: 2,
         group: 'text',
         title: 'Read string',
         input: 'A1 = buffer address',
-        output: 'The NULL terminated string at (A1), D1.W = its length',
+        output: 'The NUL terminated string at (A1), D1.L = its length',
         description:
-            'Reads a line of input. With a screen keyboard the line is typed on the screen and ends with Enter; otherwise the editor asks for it, and a testcase answers it from its scripted input.'
+            'Reads a line of input, typed in the console, or on the screen once the program has used it, and ended with Enter; a testcase answers it from its scripted input. Its first 79 characters are stored, then a NUL (zero byte). Text is converted to Windows-1252, a single-byte encoding; a character it cannot represent is stored as `?`.',
+        deviation:
+            'Only the first 79 characters are stored. Additional typed characters are dropped.'
     },
     {
         task: 3,
@@ -105,15 +113,17 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         group: 'text',
         title: 'Read number',
         output: 'D1.L = number',
-        description: 'Reads a line and parses it as a decimal number.'
+        description:
+            'Reads a line and converts it by skipping leading spaces, reading an optional sign, then taking digits up to the first other character. `12abc` is 12, and a line with no number, an empty one included, is 0, never an error.',
+        deviation: 'A number too long for 32 bits keeps its low 32 bits.'
     },
     {
         task: 5,
         group: 'text',
         title: 'Read character',
-        output: 'D1.B = ASCII code',
+        output: 'D1.B = the character, $0D for Enter',
         description:
-            'Reads one character. With a screen keyboard it is taken as soon as it is typed, without waiting for Enter; check task 7 first to poll instead of waiting.'
+            'Reads one key as soon as it is typed, without waiting for Enter, in the console or on the screen once the program has used it. Enter is `$0D`. Check task 7 first to poll instead of waiting.'
     },
     {
         task: 6,
@@ -137,7 +147,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D1.L = hundredths of a second',
         description: 'The time the program has been running, in hundredths of a second.',
         deviation:
-            'EASy68K counts from midnight; here the clock starts at zero when the run starts, and a testcase’s virtual clock does too. Programs measure elapsed time by subtracting two reads, which is unchanged.'
+            'Returns hundredths since local midnight; Testcases use UTC midnight at 2000-01-01. The value wraps at midnight.'
     },
     {
         task: 9,
@@ -155,32 +165,51 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
             'The text cursor is where printed text lands, in character cells counted from the top left. Clearing with $FF00 clears text and graphics together, since they share one image, and homes the cursor. Positions outside the screen are clamped to it.'
     },
     {
+        task: 12,
+        group: 'text',
+        title: 'Keyboard echo',
+        input: 'D1.B = 0 to turn the echo off, anything else to turn it on',
+        description:
+            'Whether input read by tasks 2, 4, 5 and 18 is echoed in the console and on the screen. With echo off, a line read still moves to a new line when Enter ends it, and a key read shows nothing. Echo is on when a program starts, and Undo restores the previous setting.'
+    },
+    {
         task: 13,
         group: 'text',
-        title: 'Display NULL terminated string with CR, LF',
+        title: 'Display NUL terminated string with CR, LF',
         input: 'A1 = string address',
-        description: 'Displays the NULL terminated string at (A1), then a new line.'
+        description: 'Displays the NUL terminated string at (A1), then a new line.'
     },
     {
         task: 14,
         group: 'text',
-        title: 'Display NULL terminated string',
+        title: 'Display NUL terminated string',
         input: 'A1 = string address',
-        description: 'Displays the NULL terminated string at (A1) without a new line.'
+        description: 'Displays the NUL terminated string at (A1) without a new line.'
     },
     {
         task: 15,
         group: 'text',
         title: 'Display unsigned number in a base',
         input: 'D1.L = number, D2.B = base (2 to 36)',
-        description: 'Displays D1.L as an unsigned number in the base in D2.B.'
+        description:
+            'Displays D1.L as an unsigned number in the base in D2.B, using upper case digits past 9: 255 in base 16 is `FF`.',
+        deviation: 'A base outside 2 to 36 stops the program with an error naming D2.B.'
+    },
+    {
+        task: 16,
+        group: 'text',
+        title: 'Input prompt and line feed',
+        input: 'D1.B = 0 to hide the input prompt, 1 to show it, 2 to turn the line feed after Enter off, 3 to turn it on',
+        description:
+            'Controls the prompt shown while input is waiting and whether a key read of Enter adds a line feed. The waiting prompt appears as a caret and question in the console; the screen does not draw a flashing cursor. Without the line feed, Enter takes the screen text cursor back to the start of its line. Line and number reads always start a new line when Enter ends them, even with echo or line-feed settings off. Both settings are on when a program starts, and Undo restores the previous setting.',
+        deviation: 'Any other D1.B value stops the program with an error naming the value.'
     },
     {
         task: 17,
         group: 'text',
         title: 'Display string and number',
         input: 'A1 = string address, D1.L = number',
-        description: 'Task 14 then task 3: the NULL terminated string, then the signed number.'
+        description: 'Task 14 then task 3: the NUL terminated string, then the signed number.'
     },
     {
         task: 18,
@@ -188,7 +217,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string and read number',
         input: 'A1 = string address',
         output: 'D1.L = number',
-        description: 'Task 14 then task 4: the NULL terminated string as a prompt, then a number.'
+        description: 'Task 14 then task 4: the NUL terminated string as a prompt, then a number.'
     },
     {
         task: 19,
@@ -205,7 +234,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display signed number in a field',
         input: 'D1.L = number, D2.B = field width',
         description:
-            'Task 3 right justified in a field D2.B columns wide. A number too long for the field is displayed in full.'
+            'Task 3 right justified in a field D2.B columns wide. D2.B is signed, and a negative width left justifies the number in a field that wide instead. A number too long for the field is displayed in full.'
     },
     {
         task: 23,
@@ -232,7 +261,99 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = width in the high word and height in the low word, or 0 to get, 1 for windowed, 2 for full screen',
         output: 'For D1.L = 0, D1.L = width in the high word, height in the low word',
         description:
-            'Resizes the screen and clears it. The minimum is EASy68K’s 640 by 480, which is also the size a program starts with. The windowed and full screen requests are accepted and ignored, since the screen is a panel in the editor.'
+            'Resizes the screen and clears it. The minimum is 640 by 480, which is also the size a program starts with. Windowed and full-screen requests are accepted and ignored because the screen is an editor panel.'
+    },
+    {
+        task: 50,
+        group: 'files',
+        title: 'Close all files',
+        output: 'D0.W = 0',
+        description: 'Closes every file the program has open.'
+    },
+    {
+        task: 51,
+        group: 'files',
+        title: 'Open an existing file',
+        input: 'A1 = NUL terminated path',
+        output: 'D1.L = file number, or -1; D0.W = 0, 3 when it opened for reading only, 2 when it did not open',
+        description:
+            'Opens the existing File at the path at its start. D0.W is 0 when it opens for reading and writing, or 3 when it opens for reading only. A path with no File, a Directory, or a ninth open file is an error.'
+    },
+    {
+        task: 52,
+        group: 'files',
+        title: 'Open a new file',
+        input: 'A1 = NUL terminated path',
+        output: 'D1.L = file number, or -1; D0.W = 0, or 2 when it did not open',
+        description:
+            'Creates the File at the path, or empties the one that is there, and opens it for reading and writing. The Directories on its path are created with it.'
+    },
+    {
+        task: 53,
+        group: 'files',
+        title: 'Read a file',
+        input: 'D1.L = file number, A1 = buffer address, D2.L = byte count',
+        output: 'D2.L = bytes read; D0.W = 0, 1 at the end of the file, 2 on an error',
+        description:
+            'Reads up to D2.L bytes from the file’s position into the buffer, and moves the position past them. Fewer bytes than asked for is a success, with their count in D2.L; none at all is the end of the file, which leaves D2.L as it was.',
+        deviation:
+            'A read of no bytes, D2.L = 0, reports 2, including when an earlier read reached the end of the file.'
+    },
+    {
+        task: 54,
+        group: 'files',
+        title: 'Write a file',
+        input: 'D1.L = file number, A1 = buffer address, D2.L = byte count',
+        output: 'D0.W = 0, or 2 on an error',
+        description:
+            'Writes the D2.L bytes at (A1) at the file’s position, growing the File as needed, and moves the position past them. A write of no bytes, and one to a file opened for reading only, report 2.'
+    },
+    {
+        task: 55,
+        group: 'files',
+        title: 'Position a file',
+        input: 'D1.L = file number, D2.L = position',
+        output: 'D0.W = 0, or 2 on an error',
+        description:
+            'Moves the file’s position to D2.L bytes from its start. A position past the end reads as the end of the file until a write there fills the gap with zeros; a negative one is an error.'
+    },
+    {
+        task: 56,
+        group: 'files',
+        title: 'Close a file',
+        input: 'D1.L = file number',
+        output: 'D0.W = 0, or 2 when it was not open',
+        description: 'Closes the file, so that its number can be given to the next one opened.'
+    },
+    {
+        task: 57,
+        group: 'files',
+        title: 'Delete a file',
+        input: 'A1 = NUL terminated path',
+        output: 'D0.W = 0, or 2 when there is no File there',
+        description:
+            'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.',
+        deviation:
+            'A file can be deleted while it is open and remains readable through its file number until closed.'
+    },
+    {
+        task: 58,
+        group: 'files',
+        title: 'File dialog',
+        input: 'D1.L = 0 to open, 1 to save; A1 = title, A2 = filter, either 0 for none; A3 = a 256 byte buffer',
+        output: 'The path chosen at (A3), NULs to 256 bytes; D1.L = 1, or 0 when the dialog was cancelled; D0.W = 0, or 2 when the buffer runs past the end of memory',
+        description:
+            'Asks for the path of a File, for the program to open with task 51 or create with task 52. Cancel, or an empty answer, leaves (A3) alone and puts 0 in D1.L. A testcase answers it with its next scripted input.',
+        deviation:
+            'Shows a text prompt naming the title and asking for a path from the Project root. A D1.L other than 0 or 1 stops the program with an error naming the value.'
+    },
+    {
+        task: 59,
+        group: 'files',
+        title: 'Check that a file exists',
+        input: 'A1 = NUL terminated path',
+        output: 'D0.W = 0 when the File can be written, 3 when it can only be read, 2 when there is none',
+        description: 'Whether there is a File at the path. A Directory is not one, so it answers 2.'
     },
     {
         task: 61,
@@ -343,7 +464,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         description:
             'Mode 4 draws normally and is the default; mode 2 moves the drawing point without changing any pixel; mode 16 turns double buffering off and mode 17 turns it on, so drawing goes to an off screen image until task 94 shows it.',
         deviation:
-            'EASy68K’s bitwise modes (0, 1, 3 and 5 to 15) stop the program with an error naming the mode. Double buffering covers the sprite erasing use of the XOR mode.'
+            'Bitwise modes (0, 1, 3 and 5 to 15) stop the program with an error naming the mode. Double buffering is available for drawing animated sprites.'
     },
     {
         task: 93,
@@ -364,7 +485,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         task: 95,
         group: 'graphics',
         title: 'Draw text at a pixel position',
-        input: 'A1 = NULL terminated string, D1.W = X, D2.W = Y',
+        input: 'A1 = NUL terminated string, D1.W = X, D2.W = Y',
         description:
             'Draws the string in the pen color with its top left corner at X, Y, over whatever is already there, so a label can sit on a drawing. Control characters are ignored. Text printed with the text tasks lands at the text cursor instead (task 11).'
     },
@@ -377,46 +498,42 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
     }
 ]
 
+/** Why the cycle counter is rejected, which [the plan's decision 9](../../../../docs/design/environment-library-plan.md) settles. */
+const NO_CYCLE_TIMING =
+    'instruction timing is not modeled, so these tasks cannot report a 68000 cycle count'
+const NO_TEXT_GRID = 'the screen holds pixels, not a grid of characters'
+const NO_SERIAL_PORT = 'no serial device is available to a program'
+const NO_AUDIO = 'the editor provides no audio output for these tasks'
+const NO_NETWORK = 'programs in this editor cannot open network connections'
+
 /**
- * The tasks that stop the program with an error naming them. Every one of them either drives
- * hardware this editor does not have (a printer, the cycle counter, the hardware window) or
- * configures something the editor decides for itself (fonts, echo, the input prompt, interrupts).
- * The reasons are what the error message says, so a user reads why rather than only what.
+ * The tasks that stop the program with an error naming them, each with the reason the error gives,
+ * so a user reads why rather than only what. Each either drives something a page in a browser
+ * cannot have (a printer, a serial port, the network), or something the editor does not have yet
+ * (the cycle counter, sound), or configures what the editor decides for itself (fonts,
+ * interrupts). Tasks 70 to 77 reach the editor and are refused there; the Core refuses the others
+ * itself, as `UnsupportedTrapTask`.
  */
 export const M68K_REJECTED_TRAP_TASKS: { task: number; title: string; reason: string }[] = [
     { task: 10, title: 'print to the printer', reason: 'the editor has no printer' },
-    {
-        task: 12,
-        title: 'keyboard echo',
-        reason: 'typed input is always echoed, the way a terminal does it'
-    },
-    {
-        task: 16,
-        title: 'display properties',
-        reason: 'the editor’s input prompt is not a program setting'
-    },
     {
         task: 21,
         title: 'font properties',
         reason: 'the screen draws text in one fixed cell font'
     },
-    {
-        task: 22,
-        title: 'read a character from the text screen',
-        reason: 'the screen holds pixels, not a grid of characters'
-    },
-    {
-        task: 25,
-        title: 'scroll a text rectangle',
-        reason: 'the screen holds pixels, not a grid of characters'
-    },
-    { task: 30, title: 'clear the cycle counter', reason: 'no cycle counting is emulated' },
-    { task: 31, title: 'read the cycle counter', reason: 'no cycle counting is emulated' },
+    { task: 22, title: 'read a character from the text screen', reason: NO_TEXT_GRID },
+    { task: 25, title: 'scroll a text rectangle', reason: NO_TEXT_GRID },
+    { task: 30, title: 'clear the cycle counter', reason: NO_CYCLE_TIMING },
+    { task: 31, title: 'read the cycle counter', reason: NO_CYCLE_TIMING },
     {
         task: 32,
         title: 'hardware and simulator control',
         reason: 'there is no hardware window and no automatic IRQ'
     },
+    { task: 40, title: 'initialize a serial port', reason: NO_SERIAL_PORT },
+    { task: 41, title: 'set the serial port parameters', reason: NO_SERIAL_PORT },
+    { task: 42, title: 'read a string from a serial port', reason: NO_SERIAL_PORT },
+    { task: 43, title: 'send a string to a serial port', reason: NO_SERIAL_PORT },
     {
         task: 60,
         title: 'enable the mouse IRQ',
@@ -426,15 +543,33 @@ export const M68K_REJECTED_TRAP_TASKS: { task: number; title: string; reason: st
         task: 62,
         title: 'enable the keyboard IRQ',
         reason: 'keyboard input is polled with tasks 7 and 19, not delivered as an interrupt'
-    }
+    },
+    { task: 70, title: 'play a sound file', reason: NO_AUDIO },
+    { task: 71, title: 'load a sound file', reason: NO_AUDIO },
+    { task: 72, title: 'play a loaded sound', reason: NO_AUDIO },
+    { task: 73, title: 'play a sound file with DirectX', reason: NO_AUDIO },
+    { task: 74, title: 'load a sound file with DirectX', reason: NO_AUDIO },
+    { task: 75, title: 'play a loaded DirectX sound', reason: NO_AUDIO },
+    { task: 76, title: 'control the sound player', reason: NO_AUDIO },
+    { task: 77, title: 'control the DirectX sound player', reason: NO_AUDIO },
+    { task: 100, title: 'create a network client', reason: NO_NETWORK },
+    { task: 101, title: 'create a network server', reason: NO_NETWORK },
+    { task: 102, title: 'send over the network', reason: NO_NETWORK },
+    { task: 103, title: 'receive from the network', reason: NO_NETWORK },
+    { task: 104, title: 'close a network connection', reason: NO_NETWORK },
+    { task: 105, title: 'get the local IP address', reason: NO_NETWORK },
+    { task: 106, title: 'send on a network port', reason: NO_NETWORK },
+    { task: 107, title: 'receive data and its port', reason: NO_NETWORK }
 ]
 
 const REJECTED_BY_TASK = new Map(M68K_REJECTED_TRAP_TASKS.map((doc) => [doc.task, doc]))
+const SUPPORTED_BY_TASK = new Map(M68K_TRAP_DOCS.map((doc) => [doc.task, doc]))
 
 /**
- * What the Core says when it meets a task it does not decode, said better. The Core knows only the
- * number; this knows whether the number is a task the editor deliberately does not support, and
- * says why, which is the difference between a dead end and a documented one.
+ * Why the Core stopped at a task it does not carry out (`UnsupportedTrapTask`), or the editor at a
+ * sound task. The Core knows only the number; this knows whether the number is a task the editor
+ * deliberately does not support, and says why, which is the difference between a dead end and a
+ * documented one.
  */
 export function describeUnsupportedTrapTask(task: number): string {
     const rejected = REJECTED_BY_TASK.get(task)
@@ -442,6 +577,17 @@ export function describeUnsupportedTrapTask(task: number): string {
         return `Trap task ${task} (${rejected.title}) is not supported: ${rejected.reason}`
     }
     return `Trap task ${task} is not a supported trap #15 task`
+}
+
+/**
+ * Why the Core stopped at a task that was given a value it cannot take (`InvalidTrapArgument`).
+ * The Core's reason names the register and what the task takes, such as "D2.B is 37, and a base is
+ * 2 to 36"; this names the task in front of it.
+ */
+export function describeInvalidTrapArgument(task: number, reason: string): string {
+    const doc = SUPPORTED_BY_TASK.get(task)
+    const title = doc ? ` (${doc.title[0].toLowerCase()}${doc.title.slice(1)})` : ''
+    return `Trap task ${task}${title} was given a value it cannot take: ${reason}`
 }
 
 /**

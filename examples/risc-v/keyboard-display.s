@@ -1,4 +1,4 @@
-# The memory-mapped keyboard and display, RARS's keyboard and display simulator.
+# The simulator's memory-mapped keyboard and display.
 #
 #   0xffff0000  receiver control      bit 0 Ready: a character is waiting
 #   0xffff0004  receiver data         the character, in the low byte
@@ -10,14 +10,14 @@
 # color made from its character code. Typing "c" clears the console with a form feed (ASCII 12)
 # and "q" ends the program. The poll loop sleeps for ten milliseconds when nothing is waiting:
 # a wait costs no instructions, so the editor's execution limit never ends a program that is only
-# waiting for a key. RARS itself has no such limit and spins instead.
+# waiting for a key.
 #
 # @screen unit=8 width=512 height=256 base=display
 #
 # That comment configures the screen, and every Build reads it: one word drawn eight pixels square,
 # a 512 by 256 display area and the grid starting wherever the `display` label ends up, which makes
-# a 64 by 32 grid of words. RARS reads the line as the ordinary comment it is, and you set the same
-# five values in its keyboard and display windows by hand.
+# a 64 by 32 grid of words. The @screen line is an editor directive; other assemblers read it as
+# an ordinary comment.
 
         .eqv    MMIO, 0xffff0000
         .eqv    READY, 1

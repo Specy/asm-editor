@@ -1,0 +1,14 @@
+// Runtime library, ABI v1: <cinttypes>, the C header <inttypes.h> with its names also in namespace std.
+#ifndef _AED_CINTTYPES
+#define _AED_CINTTYPES
+
+#include <inttypes.h>
+#include <cstdint>
+
+extern "C++" {
+namespace std {
+using ::imaxdiv_t; using ::imaxabs; using ::imaxdiv; using ::strtoimax; using ::strtoumax;
+}
+}
+
+#endif

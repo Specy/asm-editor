@@ -1,0 +1,10 @@
+deposit 100
+withdraw 30.5
+balance
+withdraw 500
+deposit abc
+fly
+deposit 0.25
+balance
+quit
+deposit 1000

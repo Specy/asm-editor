@@ -1,0 +1,9 @@
+{
+  "source": "// Calling a pure virtual function from a base-class constructor reaches __cxa_pure_virtual, which prints a message\n// and aborts with status 134. libstdc++ adds a \"terminate called\" line, so stderr is fixed in\n// cpp_pure_virtual.expect.stderr. The status is fixed too: at -O2 the glibc oracle's only, weak, reference into\n// libstdc++ makes the host linker drop libstdc++, and the oracle crashes at address 0. GCC references\n// __cxa_pure_virtual weakly; the Cores pull its member through the library's resolveWeak list (README.md, Linking).\n#include <cstdio>\n\nstruct Shape {\n\tShape() { std::puts(\"Shape constructor calls describe()\"); std::fflush(stdout); init(); }\n\tvoid init() { describe(); }\n\tvirtual void describe() = 0;\n\tvirtual ~Shape() {}\n};\n\nstruct Circle : Shape {\n\tvoid describe() override { std::puts(\"circle\"); }\n};\n\nint main()\n{\n\tCircle c;\n\tstd::puts(\"not reached\");\n\treturn 0;\n}\n",
+  "stdin": null,
+  "inputFiles": {},
+  "stdout": "U2hhcGUgY29uc3RydWN0b3IgY2FsbHMgZGVzY3JpYmUoKQo=",
+  "stderr": "cHVyZSB2aXJ0dWFsIG1ldGhvZCBjYWxsZWQK",
+  "status": 134,
+  "files": {}
+}

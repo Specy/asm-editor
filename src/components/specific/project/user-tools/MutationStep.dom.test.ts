@@ -13,10 +13,6 @@ import {
 //this project resolves `browser` as true; jsdom has no IndexedDB, so the database is stubbed away
 vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 
-//the row reads a 68000 CCR through `@specy/s68k`, whose wasm jsdom cannot fetch; a Poke row draws
-//no flags at all, so the one function it calls is enough of the Core here
-vi.mock('@specy/s68k', () => ({ ccrToFlagsArray: () => [0, 0, 0, 0, 0] }))
-
 /**
  * A Poke's History row ([the design record](../../../../../docs/design/pokes.md)): what was poked
  * and the value it held before, with no PC line and nothing to jump to, since no instruction ran.
@@ -223,5 +219,64 @@ describe('an instruction in the History panel', () => {
         expect(row.rows()).toEqual(['Wrote Long to D2'])
         expect(row.expanded()).toEqual([false])
         row.close()
+    })
+})
+
+describe('the flags of an instruction row', () => {
+    it("light the Target's own flags, reading x86's EFLAGS rather than a 68000 CCR", () => {
+        const step: ExecutionStep = {
+            kind: 'instruction',
+            mutations: [],
+            pc: 0x401000,
+            line: 3,
+            old_ccr: { bits: 0 },
+            //CF, PF and ZF
+            new_ccr: { bits: 0x45 },
+            writes: []
+        }
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const app = mount(MutationStep, {
+            target,
+            props: {
+                step,
+                flags: ['CF', 'PF', 'AF', 'ZF', 'SF', 'TF', 'DF', 'OF'],
+                language: 'X86' as const
+            }
+        })
+        flushSync()
+        const lit = [...target.querySelectorAll<HTMLElement>('.flag.flag-active')].map((flag) =>
+            flag.textContent?.trim()
+        )
+        expect(lit).toEqual(['CF', 'PF', 'ZF'])
+        unmount(app)
+        target.remove()
+    })
+})
+
+describe('irreversible History rows', () => {
+    it('retains the row and explains why its grouped call cannot be undone', async () => {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const step: ExecutionStep = {
+            kind: 'instruction',
+            undoable: false,
+            mutations: [],
+            pc: 4096,
+            line: 3,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            stretch: { library: 'read', instructions: 8 }
+        }
+        const app = mount(MutationStep, { target, props: { step, flags: [], language: 'X86' } })
+        flushSync()
+        try {
+            expect(target.textContent).toContain('Called read: 8 instructions')
+            expect(target.textContent).toContain('Undo stops here: effects are not recorded.')
+            expect(target.querySelector<HTMLButtonElement>('.undo-to-here')?.disabled).toBe(true)
+        } finally {
+            await unmount(app)
+            target.remove()
+        }
     })
 })

@@ -5,7 +5,7 @@
      * panel). A failed Build shows the Problems, a successful one the Terminal, Test the Log.
      * All three stay built, and only the one picked is shown, so switching keeps each where it was.
      */
-    import type { Snippet } from 'svelte'
+    import { untrack, type Snippet } from 'svelte'
     import FaSpinner from '~icons/fa-solid/spinner'
     import FaTerminal from '~icons/fa-solid/terminal'
     import FaListUl from '~icons/fa-solid/list-ul'
@@ -29,6 +29,18 @@
 
     const { session } = useWorkbench()
     const problems = $derived(session.activeDiagnostics.length)
+    const terminal = session.emulator.peripherals.terminal
+    const interactive = $derived(session.emulator.canExecute && !session.emulator.terminated)
+    const readWaiting = $derived(terminal.pendingRead?.source === 'terminal')
+
+    //a read that starts while no console is on screen picks the Terminal's tab, and the compact
+    //layout unfolds the panel (the plan's decision 10); the caret then takes the keyboard
+    $effect(() => {
+        if (!readWaiting) return
+        untrack(() => {
+            if (!terminal.consoleAttached) session.bottomTab = 'terminal'
+        })
+    })
     const tabs: { id: BottomTab; label: string; icon: Component }[] = [
         { id: 'terminal', label: 'Terminal', icon: FaTerminal },
         { id: 'log', label: 'Log', icon: FaListUl },
@@ -71,8 +83,11 @@
     </div>
     <div class="tab-body" class:hidden={!open || session.bottomTab !== 'terminal'} role="tabpanel">
         <TerminalView
-            text={session.terminalText}
+            {terminal}
+            errors={session.errorStrings}
             visible={open && session.bottomTab === 'terminal'}
+            {interactive}
+            escapes={session.project.language === 'X86'}
         />
     </div>
     <div class="tab-body" class:hidden={!open || session.bottomTab !== 'log'} role="tabpanel">
@@ -98,6 +113,7 @@
 
 <style lang="scss">
     .bottom-panel {
+        --wb-output-padding: 0.7rem 0.9rem;
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -223,14 +239,17 @@
     }
 
     .problems {
+        --diagnostics-padding: 0;
         flex: 1;
         min-height: 0;
         overflow: auto;
         scrollbar-gutter: stable;
+        padding: var(--wb-output-padding);
     }
 
     .empty {
-        margin: 0.7rem 0.9rem;
+        margin: 0;
+        padding: var(--wb-output-padding);
         font-size: 0.8rem;
         color: var(--hint);
     }

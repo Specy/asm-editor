@@ -7,12 +7,11 @@
      * editor's bottom edge instead), the bottom panel, then
      * the Debug session's sections. A tablet keeps the rail, with Back and Save in it as on a
      * desktop, and opens panels in a drawer beside it; a phone puts the rail and the panel in a
-     * drawer from the left. There are no file tabs and no splitters, and the Debug
-     * tools are always sections.
+     * drawer from the left. Each editor keeps its file tabs; the Debug tools are sections.
      */
     import { untrack } from 'svelte'
+    import { sourceLanguage } from '$lib/sourceCompilation/records'
     import { prefersReducedMotion } from 'svelte/motion'
-    import { fade } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
@@ -48,6 +47,7 @@
     const hasScreen = $derived(languageHasScreen(language))
     const tools = $derived(debugTools(emulator.memory.tabs))
     const bottomOpen = $derived(!workbenchLayout.isCollapsed('compact:bottom', false))
+    const readWaiting = $derived(emulator.peripherals.terminal.pendingRead?.source === 'terminal')
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
     const panelShown = $derived(phone ? ui.drawerOpen : !!ui.activePanel)
     let restoring = $state(false)
@@ -63,11 +63,25 @@
     //the Screen's size and controls, which its section shows in its own header while it is open
     let screenHeader: ScreenHeader | undefined = $state()
     const screenOpen = $derived(!workbenchLayout.isCollapsed('compact:screen', true))
+    const executionBar = $derived(
+        session.debugSession ||
+            session.groups.length > 1 ||
+            !sourceLanguage(session.controlsGroup.displayedPath)
+    )
     //the Debug session's sections are built at the first Build and only hidden after a Stop
     let debugged = false
     const debugSectionsBuilt = $derived.by(() => {
         if (session.debugSession) debugged = true
         return debugged
+    })
+
+    //a read unfolds the bottom panel, whose Terminal tab the panel itself picks (the plan's
+    //decision 10), so that there is a console to type the answer in
+    $effect(() => {
+        if (!readWaiting) return
+        untrack(() => {
+            if (!bottomOpen) workbenchLayout.setCollapsed('compact:bottom', false)
+        })
     })
 
     //a phone's drawer always shows a panel beside its rail: the last one, or the first there is
@@ -81,7 +95,7 @@
     }
 </script>
 
-<div class="compact" class:phone>
+<div class="compact" class:phone class:no-controls-bar={!executionBar}>
     {#if phone && !externalMenu}
         <TopBar />
     {/if}
@@ -94,14 +108,13 @@
         <div class="scroll">
             <!-- a phone's controls are inside the editor, along its bottom edge -->
             <EditorArea
-                tabs={false}
                 controls={phone}
                 fill={phone}
                 style="height: var(--compact-editor-height); flex: none;"
             />
-            {#if !phone}
+            {#if !phone && executionBar}
                 <div class="controls-bar">
-                    <ExecutionControls fill />
+                    <ExecutionControls fill group={session.controlsGroup} showCompilation={false} />
                 </div>
             {/if}
             <BottomPanel
@@ -131,6 +144,7 @@
                             <div class="card memory">
                                 <div class="memory-controls">
                                     <MemoryControls
+                                        {emulator}
                                         buttonVar="secondary"
                                         systemSize={emulator.systemSize}
                                         bytesPerPage={emulator.memory.global.pageSize}
@@ -142,8 +156,13 @@
                                     />
                                 </div>
                                 <MemoryVisualiser
+                                    memoryRegions={emulator?.memoryRegions}
+                                    dataLabels={emulator?.dataLabels}
+                                    readOnlyMemory={emulator?.readOnlyMemory}
                                     systemSize={emulator.systemSize}
                                     endianess={emulator.memory.global.endianess}
+                                    memorySize={MEMORY_SIZE[language]}
+                                    dense
                                     defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
                                     bytesPerRow={emulator.memory.global.rowSize}
                                     pageSize={emulator.memory.global.pageSize}
@@ -188,12 +207,7 @@
             {/if}
         </div>
         {#if panelShown && !panelMaximized}
-            <button
-                class="backdrop"
-                aria-label="Close the panel"
-                transition:fade={{ duration: panelMaximized ? 0 : 150 }}
-                onclick={closeOverlay}
-            ></button>
+            <button class="backdrop" aria-label="Close the panel" onclick={closeOverlay}></button>
         {/if}
         <div
             class="drawer"
@@ -239,8 +253,12 @@
     }
 
     .rail-slot {
+        /* keep the tablet's rail beside its drawer, above the backdrop */
+        position: relative;
+        z-index: 12;
         display: flex;
         flex: none;
+        margin: var(--wb-gap) 0 var(--wb-gap) var(--wb-gap);
 
         /* the open panel carries on from the rail's right edge, whose rule divides the two */
         &.joined :global(.icon-rail) {
@@ -278,7 +296,8 @@
     }
 
     /* a phone's controls are inside the editor, so the column has no bar to leave room for */
-    .phone .scroll {
+    .phone .scroll,
+    .no-controls-bar .scroll {
         --compact-controls-height: 0px;
     }
 
@@ -372,6 +391,7 @@
         inset: 0;
         z-index: 11;
         background-color: rgb(0 0 0 / 0.4);
+        backdrop-filter: blur(1px);
         cursor: default;
     }
 
@@ -380,16 +400,15 @@
     .drawer {
         position: absolute;
         z-index: 12;
-        top: 0;
-        bottom: 0;
-        left: var(--wb-rail-width);
+        top: var(--wb-gap);
+        bottom: var(--wb-gap);
+        left: calc(var(--wb-gap) + var(--wb-rail-width));
         display: none;
         overflow: hidden;
         background-color: var(--wb-surface);
         border: var(--wb-card-edge);
         border-left: none;
         border-radius: 0 var(--wb-radius) var(--wb-radius) 0;
-        box-shadow: 0.5rem 0 2rem rgb(0 0 0 / 0.4);
 
         &.shown {
             display: flex;
@@ -400,7 +419,6 @@
             inset: 0;
             border: none;
             border-radius: 0;
-            box-shadow: none;
             display: flex;
             visibility: hidden;
             pointer-events: none;
@@ -424,9 +442,8 @@
         }
 
         &.maximized {
-            width: calc(100% - var(--wb-rail-width));
+            width: calc(100% - var(--wb-rail-width) - 2 * var(--wb-gap));
             animation: expand-panel-width 0.2s ease;
-            box-shadow: none;
         }
 
         &.restoring {
@@ -442,7 +459,7 @@
 
     @keyframes restore-panel-width {
         from {
-            width: calc(100% - var(--wb-rail-width));
+            width: calc(100% - var(--wb-rail-width) - 2 * var(--wb-gap));
         }
         to {
             width: var(--side-panel-width);

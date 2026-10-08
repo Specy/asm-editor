@@ -1,12 +1,4 @@
-export function parseCcr(value: number) {
-    return [
-        (value & 0x1) === 0x1,
-        (value & 0x2) === 0x2,
-        (value & 0x4) === 0x4,
-        (value & 0x8) === 0x8,
-        (value & 0x10) === 0x10
-    ]
-}
+import { describeInvalidTrapArgument, describeUnsupportedTrapTask } from './M68K-traps'
 
 export function getM68kErrorMessage(error: unknown, lineNumber?: number): string {
     const prepend = lineNumber ? `Error at line ${lineNumber}:` : ''
@@ -41,6 +33,14 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
                 return `${prepend} Address error: Tried to read/write to an odd memory address "${error.value.address}" using non-byte operation with size "${error.value.size}" `
             }
             break
+        case 'InstructionAccess':
+            if (isRecord(error.value) && typeof error.value.address === 'number') {
+                const address = `$${error.value.address.toString(16).toUpperCase()}`
+                return error.value.write
+                    ? `${prepend} Cannot write to an instruction: address ${address} is not available as it holds assembled instructions`
+                    : `${prepend} Cannot read from an instruction: address ${address} is not available as it holds assembled instructions`
+            }
+            break
         case 'ChkOutOfBounds':
             if (isRecord(error.value)) {
                 return `${prepend} CHK exception: ${error.value.value} is outside 0..${error.value.bound}`
@@ -50,6 +50,35 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
             return `${prepend} Overflow exception: TRAPV ran while the overflow flag was set`
         case 'IllegalInstruction':
             return `${prepend} Illegal instruction exception`
+        //a `trap #15` task the Core does not carry out, or one given a value it cannot take: the
+        //Core names the task and the register, the trap table says which task it is and why
+        case 'UnsupportedTrapTask':
+            if (isRecord(error.value) && typeof error.value.task === 'number') {
+                return `${prepend} ${describeUnsupportedTrapTask(error.value.task)}`
+            }
+            break
+        case 'InvalidTrapArgument':
+            if (
+                isRecord(error.value) &&
+                typeof error.value.task === 'number' &&
+                typeof error.value.reason === 'string'
+            ) {
+                return `${prepend} ${describeInvalidTrapArgument(error.value.task, error.value.reason)}`
+            }
+            break
+        //the editor's own mistakes in answering the Core, never the program's
+        case 'NoPendingInterrupt':
+            return `${prepend} The editor answered a trap #15 task that was not waiting for an answer`
+        case 'InvalidAnswer':
+            if (isRecord(error.value)) {
+                return `${prepend} The editor's answer to ${error.value.interrupt} was refused: ${error.value.reason}`
+            }
+            break
+        case 'InvalidArgument':
+            if (typeof error.value === 'string') {
+                return `${prepend} Invalid argument: ${error.value}`
+            }
+            break
     }
     if (typeof error.message === 'string') {
         if (error.message === 'unreachable') {

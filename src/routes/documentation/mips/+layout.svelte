@@ -13,6 +13,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
     import { mipsInstructionEntries } from '$lib/languages/MIPS/MIPS-documentation'
     import MenuLink from '$cmp/documentation/site/MenuLink.svelte'
     import InstructionsMenu from '$cmp/documentation/site/InstructionsMenu.svelte'
@@ -70,10 +71,13 @@
         </Row>
     </Navbar>
 
-    <Sidebar bind:menuOpen>
-        <Column gap="1rem" style="overflow-y: auto;">
+    <Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
+        <Column padding="0 1rem">
+            <SearchLauncher placeholder="Search the MIPS docs and courses" />
+        </Column>
+
+        <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
-                <SearchLauncher placeholder="Search the MIPS docs and courses" />
                 <MenuLink
                     href="/documentation/mips"
                     title="MIPS"
@@ -94,7 +98,16 @@
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
-
+                <MenuLink
+                    href="/documentation/mips/using-c"
+                    title="Using C and C++"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href="/documentation/mips/runtime-library"
+                    title="Runtime library"
+                    onClick={() => (menuOpen = false)}
+                />
                 <MenuLink
                     href="/documentation/mips/registers"
                     title="Registers"
@@ -118,7 +131,7 @@
                     {currentInstructionName}
                 />
             </TogglableSection>
-        </Column>
+        </MaskedScroll>
 
         <Column style="margin-top: auto;" padding="0.5rem">
             <ButtonLink

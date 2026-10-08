@@ -1402,7 +1402,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
         get_emulator_state: tool({
             name: 'get_emulator_state',
             description: `Returns the full emulator execution state.
-Use this to inspect registers, flags, call stack, breakpoints, errors, execution status, stdout, and latest mutations. This is the only tool that returns every Register file in full: registerFiles lists each floating-point, coprocessor and control/status register of the language, zero or not, with an empty x87 stack slot reading empty, so use it whenever you need floating-point, SSE, x87, CP0 or CSR state that step or run_to_completion did not list. Call it after stepping or running only when you need fields not already returned by them.`,
+Use this to inspect registers, flags, call stack, breakpoints, errors, execution status (terminated, and ended: how the program ended), stdout, and latest mutations. This is the only tool that returns every Register file in full: registerFiles lists each floating-point, coprocessor and control/status register of the language, zero or not, with an empty x87 stack slot reading empty, so use it whenever you need floating-point, SSE, x87, CP0 or CSR state that step or run_to_completion did not list. Call it after stepping or running only when you need fields not already returned by them.`,
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
@@ -1481,7 +1481,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         run_to_completion: tool({
             name: 'run_to_completion',
             description:
-                'Runs the program until it terminates, hits a breakpoint, reaches the instruction limit, or raises a runtime error. You MUST compile first before calling this tool. Returns final registers, pc, sp, status registers, stdout, current line, and latest mutations. Of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.',
+                'Runs the program until it terminates, hits a breakpoint, reaches the instruction limit, or raises a runtime error. You MUST compile first before calling this tool. Returns final registers, pc, sp, status registers, stdout, current line, latest mutations and, once the program has terminated, how it ended (ended, as the Log says it, and termination: an exit with its code, an end past the last instruction, a signal or a runtime error). Of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {

@@ -1,0 +1,6 @@
+Measurements (cm)
+12.5 7.25 -3
+100
+0.125 2e2
+  42.0
+END of data

@@ -1,4 +1,4 @@
-# The memory-mapped keyboard and display, MARS's keyboard and display simulator.
+# The memory-mapped keyboard and display registers provided by the simulator.
 #
 #   0xffff0000  receiver control      bit 0 Ready: a character is waiting
 #   0xffff0004  receiver data         the character, in the low byte
@@ -9,15 +9,13 @@
 # the transmitter, so it appears in the console, and paints one word of the bitmap display in a
 # color made from its character code. Typing "c" clears the console with a form feed (ASCII 12)
 # and "q" ends the program. The poll loop sleeps for ten milliseconds when nothing is waiting:
-# a wait costs no instructions, so the editor's execution limit never ends a program that is only
-# waiting for a key. MARS itself has no such limit and spins instead.
+# the pause does not spend the program's instruction budget while it waits for input.
 #
 # @screen unit=8 width=512 height=256 base=display
 #
 # That comment configures the screen, and every Build reads it: one word drawn eight pixels square,
 # a 512 by 256 display area and the grid starting wherever the `display` label ends up, which makes
-# a 64 by 32 grid of words. MARS reads the line as the ordinary comment it is, and you set the same
-# five values in its keyboard and display windows by hand.
+# a 64 by 32 grid of words.
 
         .eqv    MMIO, 0xffff0000
         .eqv    READY, 1

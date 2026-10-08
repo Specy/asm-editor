@@ -1,0 +1,6 @@
+chars=65 lines=4 feof=1 ferror=0
+again=-1
+after clearerr feof=0
+read after clearerr=-1 feof=1
+fgets at end=NULL
+scanf at end=-1 x=5

@@ -11,11 +11,11 @@
 
 <div class="status-codes" {style}>
     {#each statusCodes as el, i (i)}
-        <div class="column">
+        <div class="column flag">
             <div style="opacity: 0.8;">
                 {el.name}
             </div>
-            <div style="text-align: center;" class:edited={el.prev !== el.value}>
+            <div class="flag-value" class:edited={el.prev !== el.value}>
                 {el.value}
             </div>
         </div>
@@ -34,5 +34,15 @@
     }
     .edited {
         color: var(--accent);
+    }
+    .flag {
+        flex: 1 1 0;
+        min-width: 0;
+        align-items: center;
+    }
+    .flag-value {
+        min-width: 1ch;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
     }
 </style>

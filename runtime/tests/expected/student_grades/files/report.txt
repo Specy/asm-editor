@@ -1,0 +1,8 @@
+students=6
+average=76.08
+1. Farouk pass
+2. Carla pass
+3. Alice pass
+4. Dmitri pass
+5. Bob fail
+6. Eve fail

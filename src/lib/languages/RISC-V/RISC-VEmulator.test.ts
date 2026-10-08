@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
+import { Prompt, PromptType } from '$stores/promptStore.svelte'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
     MARS_READY_BIT,
@@ -442,6 +443,209 @@ describe('RISC-V memory-mapped keyboard and display', () => {
     })
 })
 
+/**
+ * Reads typed in the Terminal through its Line discipline, and RARS's dialogs, which stay modal
+ * ([ADR 0036](../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). The tests
+ * attach a console, so a read waits for typing instead of asking the interim modal prompt.
+ */
+describe('RISC-V input typed in the Terminal', () => {
+    beforeEach(() => Prompt.cancel())
+
+    async function built(code: string) {
+        const emulator = await build(code)
+        emulator.peripherals.terminal.attachConsole()
+        return emulator
+    }
+
+    function valueOf(emulator: Emulator, name: string): bigint | undefined {
+        return emulator.registers.find((register) => register.name === name)?.value
+    }
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
+
+    it('reads a character on one keystroke, Enter giving 10', async () => {
+        const emulator = await built(
+            `        .text
+main:
+        li      a7, 12
+        ecall
+        mv      s0, a0
+        li      a7, 12
+        ecall
+        mv      s1, a0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        terminal.insertText('x')
+        terminal.pressEnter()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, 's0')).toBe(BigInt('x'.charCodeAt(0)))
+        expect(valueOf(emulator, 's1')).toBe(10n)
+        expect(emulator.stdOut).toBe('x\n')
+    })
+
+    it('refreshes the waiting instruction and registers at each input request', async () => {
+        const emulator = await built(
+            `.text
+main:
+    li a7, 5
+    ecall
+    mv s0, a0
+    li a7, 5
+    ecall
+    mv s1, a0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        expect(emulator.line).toBe(3)
+        expect(emulator.currentFile).toBe(emulator.buildSources?.entry)
+        expect(valueOf(emulator, 'a7')).toBe(5n)
+
+        terminal.insertText('42')
+        terminal.pressEnter()
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        expect(emulator.line).toBe(6)
+        expect(valueOf(emulator, 's0')).toBe(42n)
+
+        terminal.insertText('7')
+        terminal.pressEnter()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, 's1')).toBe(7n)
+    })
+
+    it('keeps the rest of a line a short read of standard input left, and reads End of input', async () => {
+        const emulator = await built(
+            `        .data
+buffer: .space  16
+        .text
+main:
+        li      a7, 63
+        li      a0, 0
+        la      a1, buffer
+        li      a2, 2
+        ecall
+        mv      s0, a0
+        li      a7, 63
+        li      a0, 0
+        la      a1, buffer
+        li      a2, 16
+        ecall
+        mv      s1, a0
+        li      a7, 63
+        li      a0, 0
+        la      a1, buffer
+        li      a2, 16
+        ecall
+        mv      s2, a0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        terminal.insertText('hello\n')
+        terminal.sendEndOfInput()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect([valueOf(emulator, 's0'), valueOf(emulator, 's1'), valueOf(emulator, 's2')]).toEqual(
+            [2n, 4n, 0n]
+        )
+    })
+
+    it('decodes standard output as UTF-8, a character split across two writes included', async () => {
+        const emulator = await run(
+            `        .data
+bytes:  .byte   0xc3, 0xa9
+        .text
+main:
+        li      a7, 64
+        li      a0, 1
+        la      a1, bytes
+        li      a2, 1
+        ecall
+        li      a7, 64
+        li      a0, 1
+        la      a1, bytes
+        addi    a1, a1, 1
+        li      a2, 1
+        ecall
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('é')
+    })
+
+    it('answers the confirm dialog with Cancel, which RARS gives as 2', async () => {
+        const emulator = await built(
+            `        .data
+question: .asciz "Sure?"
+        .text
+main:
+        li      a7, 50
+        la      a0, question
+        ecall
+        mv      s0, a0
+` + EXIT
+        )
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(Prompt.type).toBe(PromptType.Confirm)
+        Prompt.cancel()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, 's0')).toBe(2n)
+    })
+
+    it('waits on a message dialog until it is dismissed', async () => {
+        const emulator = await built(
+            `        .data
+message: .asciz "Done"
+        .text
+main:
+        li      a7, 55
+        la      a0, message
+        li      a1, 1
+        ecall
+        li      a7, 1
+        li      a0, 7
+        ecall
+` + EXIT
+        )
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(Prompt.type).toBe(PromptType.Alert)
+        expect(emulator.stdOut).toBe('')
+        Prompt.answerAlert()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('7')
+    })
+
+    it('answers the receiver register from a Testcase’s scripted input', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        li      s0, ${MARS_RECEIVER_CONTROL | 0}
+        li      s2, 3
+loop:   lw      t0, 0(s0)
+        andi    t0, t0, 1
+        beqz    t0, loop
+        lw      a0, 4(s0)
+        li      a7, 11
+        ecall
+        addi    s2, s2, -1
+        bnez    s2, loop
+` + EXIT
+        )
+        await emulator.runTestcase({ ...SCREEN_TESTCASE, input: ['ab'] }, INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('ab\n')
+    })
+})
+
 describe('RISC-V program time', () => {
     it('answers ecall 30 from the clock and sleeps through ecall 32', async () => {
         const emulator = await run(
@@ -482,7 +686,7 @@ describe('RISC-V program time', () => {
             [
                 {
                     input: [],
-                    expectedOutput: '5000',
+                    expectedOutput: String((946684800000 + 5000) | 0),
                     startingRegisters: {},
                     expectedRegisters: {},
                     startingMemory: [],
@@ -776,6 +980,108 @@ main:
         expect(result?.passed).toBe(true)
         expect(emulator.line).toBe(CALLS_BELOW_EXIT)
     })
+
+    /** The last instruction is an ecall, but not an exit: the program runs past it. */
+    const RUNS_PAST_THE_END = `        .text
+main:
+        li      a7, 1
+        li      a0, 42
+        ecall
+`
+
+    it('says the program exited, as the Core’s stop reason does', async () => {
+        expect((await run(CALLS_BELOW)).termination).toEqual({ kind: 'exit', code: 0 })
+        expect((await run(`        .text\nmain:\n` + EXIT)).termination).toEqual({
+            kind: 'exit',
+            code: 0
+        })
+        const exit2 = await run(`        .text
+main:
+        li      a0, 3
+        li      a7, 93
+        ecall
+`)
+        expect(exit2.termination).toEqual({ kind: 'exit', code: 3 })
+    })
+
+    it('says a program that runs past its last instruction ended there, by a Run or a Step', async () => {
+        const ran = await run(RUNS_PAST_THE_END)
+        expect(ran.terminated).toBe(true)
+        expect(ran.termination).toEqual({ kind: 'end' })
+        const stepped = await build(RUNS_PAST_THE_END)
+        for (let steps = 0; !stepped.terminated && steps < 10; steps++) await stepped.step()
+        expect(stepped.termination).toEqual({ kind: 'end' })
+    })
+
+    it('forgets how the program ended when Undo takes the exit back', async () => {
+        const emulator = await run(CALLS_BELOW)
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.termination).toBeUndefined()
+        await emulator.step()
+        expect(emulator.termination).toEqual({ kind: 'exit', code: 0 })
+    })
+})
+
+describe('RISC-V instruction Undo', () => {
+    const CALLS = `.text
+.globl main
+main:
+    call __asm_editor_main
+    li a7, 93
+    ecall
+fibonacci:
+    addi a0, a0, 1
+    jr ra
+__asm_editor_main:
+    addi sp, sp, -16
+    sw ra, 12(sp)
+    li a0, 5
+    call fibonacci
+    lw ra, 12(sp)
+    addi sp, sp, 16
+    jr ra
+`
+
+    it.each(['RISC-V', 'RISC-V-64'] as const)(
+        'restores each call and return in one Undo on %s',
+        async (language) => {
+            // Force a new clock sample on every step, including jumps. Otherwise this bug depends
+            // on whether two steps happen within the same millisecond.
+            vi.useFakeTimers({ toFake: ['Date'] })
+            let now = 1_700_000_000_000
+            vi.setSystemTime(now)
+            const emulator = RISCVEmulator(CALLS, { language, display: SMALL })
+            const registers = () => emulator.registers.map(({ name, value }) => ({ name, value }))
+            const snapshots: {
+                pc: bigint
+                line: number
+                registers: ReturnType<typeof registers>
+            }[] = []
+            try {
+                await emulator.check()
+                await emulator.compile(200, CALLS)
+                while (!emulator.terminated && snapshots.length < 30) {
+                    snapshots.push({ pc: emulator.pc, line: emulator.line, registers: registers() })
+                    vi.setSystemTime((now += 2))
+                    await emulator.step()
+                    expect(emulator._getUndoHistory(200)).toHaveLength(snapshots.length)
+                }
+                expect(emulator.errors).toEqual([])
+                expect(emulator.terminated).toBe(true)
+                for (const snapshot of snapshots.reverse()) {
+                    expect(emulator.undo(1)).toBe(1)
+                    expect(emulator.pc).toBe(snapshot.pc)
+                    expect(emulator.line).toBe(snapshot.line)
+                    expect(registers()).toEqual(snapshot.registers)
+                }
+                expect(emulator.canUndo).toBe(false)
+                expect(emulator.undo(1)).toBe(0)
+            } finally {
+                emulator.dispose()
+                vi.useRealTimers()
+            }
+        }
+    )
 })
 
 /**

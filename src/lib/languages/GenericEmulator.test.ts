@@ -33,6 +33,8 @@ import { RECORD_OVERHEAD_BYTES } from '$lib/languages/peripherals/screen/ScreenH
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
+import type { Termination } from '$lib/languages/termination'
+import { RandomSource } from '$lib/languages/peripherals/RandomSource'
 
 /**
  * The scheduler, the injection, the reset path and the Undo rule of phase 3, exercised through a
@@ -138,6 +140,13 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return this.hasEnded
     }
 
+    /** How the fake program ends, once `hasEnded` says it has. */
+    endedAs: Termination = { kind: 'end' }
+
+    _getTermination(): Termination | undefined {
+        return this.hasEnded ? this.endedAs : undefined
+    }
+
     /** A byte of fake memory per address, so what a Poke wrote can be read back. */
     readonly memoryBytes = new Map<bigint, number>()
 
@@ -161,6 +170,11 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** `refreshRunningPanels` is what an adapter calls from inside a slice; it is protected. */
     refreshPanels(force: boolean): void {
         this.refreshRunningPanels(force)
+    }
+
+    /** A character read as an adapter makes one, which `requestCharacter` is protected for. */
+    readCharacter(): Promise<string> {
+        return this.requestCharacter('Enter a character', this.executionController.capture())
     }
 
     _getNextInstruction(): Instruction | null {
@@ -532,13 +546,16 @@ describe('peripheral injection', () => {
         expect(emulator.peripherals.keyboard).toBeDefined()
         expect(emulator.peripherals.mouse).toBeDefined()
         expect(emulator.peripherals.clock.mode).toBe('host')
+        expect(emulator.peripherals.random.mode).toBe('host')
         expect(emulator.peripherals.terminal).toBeDefined()
     })
 
     it('keeps the instances the caller injected', () => {
         const screen = new Screen({ width: 32, height: 16 })
-        const emulator = new FakeEmulator({ peripherals: { screen } })
+        const random = new RandomSource()
+        const emulator = new FakeEmulator({ peripherals: { screen, random } })
         expect(emulator.peripherals.screen).toBe(screen)
+        expect(emulator.peripherals.random).toBe(random)
         //the Mouse clamps against the injected Screen, not against a default one
         emulator.peripherals.mouse.moveTo(100, 100)
         expect(emulator.peripherals.mouse.x).toBe(31)
@@ -1133,6 +1150,18 @@ describe('reset', () => {
         expect(clock.now()).toBeLessThan(2)
     })
 
+    it('starts the Random source over, from new host randomness', () => {
+        let draws = 0
+        const random = new RandomSource({ hostSeed: () => BigInt(++draws) })
+        const emulator = new FakeEmulator({ peripherals: { random } })
+        const before = random.seedFor(0)
+        random.bytes(16)
+        emulator.clear()
+        expect(emulator.peripherals.random).toBe(random)
+        expect(random.position).toBe(0)
+        expect(random.seedFor(0)).not.toBe(before)
+    })
+
     it('keeps the memory views and the addresses the user chose', async () => {
         //left on, the Stack tab follows SP whatever the user chose, which is what it is for
         const autoScroll = preferencesStore.values.autoScrollStackTab
@@ -1159,24 +1188,103 @@ describe('reset', () => {
     })
 })
 
+describe('memory views', () => {
+    /** Fake memory that cannot be read from `limit` up, failing a whole read as the MARS Cores do. */
+    function limitMemory(emulator: FakeEmulator, limit: bigint) {
+        emulator._readMemoryBytes = (address, length) => {
+            if (address + length > limit) throw new Error('address out of range')
+            return new Uint8Array(Number(length)).fill(7)
+        }
+    }
+
+    it('shows what it cannot read in the view, not as an error of the program', async () => {
+        const emulator = new FakeEmulator()
+        await emulator.compile(0, undefined)
+        limitMemory(emulator, 0x1010n)
+        const [stack] = emulator.memory.tabs
+        emulator.setTabMemoryAddress(0x1000n, stack.id)
+
+        const view = emulator.memory.tabs[0]
+        expect(view.address).toBe(0x1000n)
+        expect(view.data.current[15]).toBe(7)
+        expect(view.data.unreadable?.mask.indexOf(1)).toBe(16)
+        expect(view.data.unreadable?.reason).toContain('address out of range')
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('keeps refreshing the other views while one of them cannot be read', async () => {
+        const emulator = new FakeEmulator()
+        await emulator.compile(0, undefined)
+        limitMemory(emulator, 0x2000n)
+        //the global view is read first, so a failure in it used to leave the Stack tab stale
+        emulator.setGlobalMemoryAddress(0x3000n)
+        emulator._readMemoryBytes = (address, length) => {
+            if (address + length > 0x2000n) throw new Error('address out of range')
+            return new Uint8Array(Number(length)).fill(9)
+        }
+
+        emulator.refreshPanels(true)
+        expect(emulator.memory.global.data.unreadable?.mask.every((byte) => byte === 1)).toBe(true)
+        expect(emulator.memory.tabs[0].data.current[0]).toBe(9)
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('reads it whole again once it points somewhere readable', async () => {
+        const emulator = new FakeEmulator()
+        await emulator.compile(0, undefined)
+        limitMemory(emulator, 0x2000n)
+        emulator.setGlobalMemoryAddress(0x3000n)
+        expect(emulator.memory.global.data.unreadable).not.toBeNull()
+        emulator.setGlobalMemoryAddress(0x1000n)
+        expect(emulator.memory.global.data.unreadable).toBeNull()
+    })
+})
+
 describe('testcase run configuration', () => {
-    it('selects scripted input and virtual time together, and restores them', async () => {
+    it('selects scripted input, virtual time and a seeded Random source together, and restores them', async () => {
         const emulator = new FakeEmulator()
         const interactive = emulator.peripherals.clock
-        let insideTest: { input: string; virtual: boolean } | null = null
+        const interactiveRandom = emulator.peripherals.random
+        let insideTest: { input: string; virtual: boolean; seeded: boolean } | null = null
         emulator._runTestcase = async () => {
             insideTest = {
                 input: emulator.peripherals.terminal.inputSource,
-                virtual: emulator.peripherals.clock.isVirtual
+                virtual: emulator.peripherals.clock.isVirtual,
+                seeded: emulator.peripherals.random.isSeeded
             }
             //a virtual wait completes at once and advances the clock, so a test never sleeps
             await emulator.peripherals.clock.wait(5000)
         }
         await emulator.runTestcase(emptyTestcase, 100)
-        expect(insideTest).toEqual({ input: 'scripted', virtual: true })
+        expect(insideTest).toEqual({ input: 'scripted', virtual: true, seeded: true })
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock).toBe(interactive)
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
+        expect(emulator.peripherals.random).toBe(interactiveRandom)
+        expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+
+    it('gives every scripted run the fixed seed’s numbers, and an interactive run the host’s', async () => {
+        //an adapter reads the source where it uses it, never the instance the Core was built with
+        const random = new RandomSource({ hostSeed: () => 0x0123456789abcdefn })
+        const emulator = new FakeEmulator({ peripherals: { random } })
+        const drawn: { seed: number; bytes: Uint8Array }[] = []
+        emulator._runTestcase = async () => {
+            const source = emulator.peripherals.random
+            drawn.push({ seed: source.seedFor(0), bytes: source.bytes(8) })
+        }
+        await emulator.runTestcase(emptyTestcase, 100)
+        await emulator.runTestcase(emptyTestcase, 100)
+        const fixed = new RandomSource({ mode: 'seeded' })
+        const expected = { seed: fixed.seedFor(0), bytes: fixed.bytes(8) }
+        //the same numbers in each Testcase, each starting the stream over
+        expect(drawn).toEqual([expected, expected])
+        const host = emulator.peripherals.random
+        expect(host).toBe(random)
+        expect(host.seedFor(0)).toBe(
+            new RandomSource({ hostSeed: () => 0x0123456789abcdefn }).seedFor(0)
+        )
+        expect(host.seedFor(0)).not.toBe(expected.seed)
     })
 
     it('restores them after a testcase that threw', async () => {
@@ -1187,6 +1295,194 @@ describe('testcase run configuration', () => {
         await emulator.runTestcase(emptyTestcase, 100)
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
+        expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+})
+
+describe('termination', () => {
+    async function builtEmulator(): Promise<FakeEmulator> {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        await emulator.compile(10, undefined)
+        return emulator
+    }
+
+    /** A slice that ends the program the way `endedAs` says. */
+    function endsAs(emulator: FakeEmulator, termination: Termination): void {
+        emulator.endedAs = termination
+        emulator.behavior = () => {
+            emulator.hasEnded = true
+            return { reason: 'terminated', instructions: 1 }
+        }
+    }
+
+    it('reports how a Run ended beside terminated', async () => {
+        const emulator = await builtEmulator()
+        expect(emulator.termination).toBeUndefined()
+        endsAs(emulator, { kind: 'exit', code: 3 })
+        expect(await emulator.run(100)).toBe(InterpreterStatus.Terminated)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'exit', code: 3 })
+        expect(emulator.executionTime).toBeGreaterThanOrEqual(0)
+    })
+
+    it('reports a program a Step ended, with no running time of its own', async () => {
+        const emulator = await builtEmulator()
+        //a Run that stopped on a breakpoint measured a time the Step must not inherit
+        emulator.behavior = () => ({ reason: 'breakpoint', instructions: 1 })
+        await emulator.run(100)
+        expect(emulator.executionTime).toBeGreaterThanOrEqual(0)
+        emulator.endedAs = { kind: 'end' }
+        emulator._step = async () => {
+            emulator.hasEnded = true
+            return { terminated: true }
+        }
+        expect(await emulator.step()).toBe(true)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'end' })
+        expect(emulator.executionTime).toBe(-1)
+    })
+
+    it('forgets the end on a clear, and when Undo takes it back', async () => {
+        const emulator = await builtEmulator()
+        endsAs(emulator, { kind: 'exit', code: 0 })
+        await emulator.run(100)
+        emulator._undo = () => {
+            emulator.coreSteps -= 1
+            emulator.hasEnded = false
+        }
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+
+        emulator.hasEnded = true
+        await emulator.run(100)
+        expect(emulator.termination).toEqual({ kind: 'exit', code: 0 })
+        emulator.clear()
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+    })
+
+    it('ends a Run on a runtime error, which stands until Undo takes it back', async () => {
+        const emulator = await builtEmulator()
+        emulator.behavior = () => {
+            emulator.coreSteps += 1
+            throw new Error('Bad load')
+        }
+        expect(await emulator.run(100)).toBe(InterpreterStatus.TerminatedWithException)
+        //the Core itself still says the program can run, as MARS's and s68k's do after most errors
+        expect(emulator.hasEnded).toBe(false)
+        expect(emulator.errors).toEqual(['Error: Bad load'])
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'error', message: 'Error: Bad load' })
+        //a refresh reads the Core again, and the error is still what ended the program
+        emulator.refreshPanels(true)
+        expect(emulator.termination?.kind).toBe('error')
+        //an Undo with nothing to take back leaves it standing too
+        emulator.coreSteps = 0
+        expect(emulator.undo(1)).toBe(0)
+        expect(emulator.terminated).toBe(true)
+
+        emulator.coreSteps = 1
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+    })
+
+    it('reports a Step’s failure as a Run’s, naming the instruction the Step attempted', async () => {
+        const emulator = await builtEmulator()
+        const failing = { address: 4n, lineNumber: 6, file: 'main.s', code: 'lw $t1, 0($t0)' }
+        //the Core's program counter is past the failing instruction once it threw
+        let next: Instruction | null = failing
+        emulator._getNextInstruction = () => next
+        emulator._step = async () => {
+            emulator.coreSteps += 1
+            next = { ...failing, address: 8n, lineNumber: 7 }
+            throw new Error('Bad load')
+        }
+        emulator.registerValue = 0x2an
+        await expect(emulator.step()).rejects.toThrow('Bad load')
+        expect(emulator.errors).toEqual(['Error: Bad load'])
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'error', message: 'Error: Bad load' })
+        expect(emulator.line).toBe(6)
+        //the panels show what the failing Step left, and its Undo is offered
+        expect(emulator.registers[0].value).toBe(0x2an)
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.executionTime).toBe(-1)
+    })
+})
+
+describe('the Terminal of a Target', () => {
+    it("decodes output in the Target's encoding", () => {
+        const decoded = (['M68K', 'Z80', 'MIPS', 'X86'] as const).map((language) => {
+            const terminal = new FakeEmulator({ language }).peripherals.terminal
+            terminal.writeBytes([0x80, 0x93])
+            terminal.flushOutput()
+            return terminal.output
+        })
+        //Windows-1252 for EASy68K, Latin-1 for the Z80, UTF-8 (where both are invalid) elsewhere
+        expect(decoded).toEqual(['€“', '\u0080\u0093', '\ufffd\ufffd', '\ufffd\ufffd'])
+    })
+
+    it("gives Enter to a character read as the Target's code", async () => {
+        const answers: string[] = []
+        for (const language of ['M68K', 'Z80', 'RISC-V'] as const) {
+            const emulator = new FakeEmulator({ language })
+            const terminal = emulator.peripherals.terminal
+            terminal.attachConsole()
+            terminal.pressEnter()
+            answers.push(await emulator.readCharacter())
+        }
+        expect(answers).toEqual(['\r', '\n', '\n'])
+    })
+
+    it('ends a character the program left incomplete when it terminates', async () => {
+        const emulator = new FakeEmulator({ language: 'MIPS' })
+        emulator.behavior = () => {
+            emulator.peripherals.terminal.writeBytes([0x61, 0xc3])
+            emulator.hasEnded = true
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(100)
+        expect(emulator.stdOut).toBe('a\ufffd')
+    })
+
+    it('holds it back while the program is only stopped, for the rest of it to arrive', async () => {
+        const emulator = new FakeEmulator({ language: 'MIPS' })
+        emulator.behavior = () => {
+            emulator.peripherals.terminal.writeBytes([0xc3])
+            return { reason: 'breakpoint', instructions: 1 }
+        }
+        await emulator.run(100)
+        expect(emulator.stdOut).toBe('')
+        emulator._step = async () => {
+            emulator.peripherals.terminal.writeBytes([0xa9, 0xe2])
+            return { terminated: true }
+        }
+        await emulator.step()
+        //the split character completed, and the one the last step left incomplete is ended
+        expect(emulator.stdOut).toBe('é\ufffd')
+    })
+
+    it('ends the output of a Testcase before it is compared', async () => {
+        const emulator = new FakeEmulator({ language: 'MIPS' })
+        emulator._runTestcase = async () => {
+            emulator.peripherals.terminal.writeBytes([0xe2, 0x82])
+        }
+        await emulator.runTestcase(emptyTestcase, 100)
+        expect(emulator.stdOut).toBe('\ufffd')
+    })
+
+    it('answers scripted input without echoing it, and stops reading it after the Testcase', async () => {
+        const emulator = new FakeEmulator()
+        let read: string | undefined
+        emulator._runTestcase = async () => {
+            read = await emulator.readCharacter()
+        }
+        await emulator.runTestcase(emptyTestcase, 100)
+        expect(read).toBe('1')
+        expect(emulator.stdOut).toBe('')
+        expect(emulator.peripherals.terminal.hasPendingInput()).toBe(false)
     })
 })
 
@@ -1537,3 +1833,145 @@ function controlledPerformanceTime(): { advance(milliseconds: number): void } {
         }
     }
 }
+
+describe('atomic grouped Undo preflight', () => {
+    it('reads only the call-site rows when displaying a long library stretch', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let pc = 0
+        emulator._getNextInstruction = () => ({
+            file: pc > 0 && pc < 1001 ? '@runtime/helper.s' : 'main.s',
+            lineNumber: pc,
+            address: BigInt(pc),
+            code: 'nop'
+        })
+        emulator._step = async () => {
+            pc++
+            emulator.coreSteps++
+            return { terminated: false }
+        }
+        emulator._undoDepth = () => emulator.coreSteps
+        const preflight = vi.fn(() => true)
+        emulator._canUndoSteps = preflight
+        const range = vi.fn((skip: number, max: number): ExecutionStep[] =>
+            Array.from({ length: max }, (_, i) => ({
+                kind: 'instruction',
+                pc: 1000 - skip - i,
+                line: 1000 - skip - i,
+                file: skip + i === 1000 ? 'main.s' : '@runtime/helper.s',
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 },
+                mutations: []
+            }))
+        )
+        emulator._getUndoHistoryRange = range
+        await emulator.step()
+        expect(emulator.latestSteps).toHaveLength(1)
+        expect(emulator.latestSteps[0].stretch?.instructions).toBe(1001)
+        expect(range).toHaveBeenCalledWith(999, 2)
+        expect(range.mock.calls.every(([, count]) => count === 2)).toBe(true)
+        expect(preflight).toHaveBeenCalledWith(1001)
+    })
+    it('refuses the whole Step before CPU or Peripheral rollback when a middle entry is blocked', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let pc = 0
+        emulator._getNextInstruction = () => ({
+            file: pc > 0 && pc < 4 ? '@runtime/helper.s' : 'main.s',
+            lineNumber: pc,
+            address: BigInt(pc),
+            code: 'nop'
+        })
+        emulator._step = async () => {
+            pc++
+            emulator.coreSteps++
+            return { terminated: false }
+        }
+        emulator._undoDepth = () => emulator.coreSteps
+        let rollbacks = 0
+        emulator._undo = () => {
+            rollbacks++
+            pc--
+            emulator.coreSteps--
+        }
+        const preflight = vi.fn((count: number) => count === 1)
+        emulator._canUndoSteps = preflight
+        await emulator.step()
+        expect(emulator.coreSteps).toBe(4)
+        expect(preflight).toHaveBeenCalledWith(4)
+        expect(emulator.canUndo).toBe(false)
+        expect(emulator.undo()).toBe(0)
+        expect(rollbacks).toBe(0)
+        expect(pc).toBe(4)
+    })
+})
+
+describe('Testcase runtime failures', () => {
+    it('fails an empty-expectation case when execution throws', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator._runTestcase = async () => {
+            throw new Error('environment unavailable')
+        }
+        const [result] = await emulator.test('', [emptyTestcase], 100)
+        expect(result.passed).toBe(false)
+        expect(result.errors).toEqual([
+            { type: 'runtime-error', message: 'Error: environment unavailable' }
+        ])
+    })
+})
+
+describe('Memory region lifetime', () => {
+    it('reads the static layout once per Build and refreshes moving ends and overlapping devices', async () => {
+        class RegionEmulator extends FakeEmulator {
+            layoutReads = 0
+            heapEnd = 0x2000n
+            top = 0x3000n
+            deviceStart = 0x1000n
+            _getMemoryLayout() {
+                this.layoutReads++
+                return {
+                    sections: [
+                        {
+                            name: '.data',
+                            runs: [{ start: 0x1000n, length: 16n, kind: 'data' as const }]
+                        }
+                    ],
+                    dataLabels: [
+                        { name: 'buffer', address: 0x1000n, section: '.data', fromLibrary: false }
+                    ]
+                }
+            }
+            _getHeapBounds() {
+                return { start: 0x2000n, end: this.heapEnd }
+            }
+            _getStackTop() {
+                return this.top
+            }
+            _getDeviceRegions() {
+                return [{ name: 'Bitmap', start: this.deviceStart, end: this.deviceStart + 8n }]
+            }
+            _getSp() {
+                return 0x2ff0n
+            }
+        }
+        const emulator = new RegionEmulator({ automaticChecking: false })
+        expect(emulator.memoryRegions).toEqual([])
+        await emulator.compile(20, undefined)
+        expect(emulator.layoutReads).toBe(1)
+        expect(emulator.dataLabels[0].name).toBe('buffer')
+        expect(emulator.memoryRegions.find((region) => region.kind === 'heap')?.end).toBe(0x2000n)
+        emulator.heapEnd += 32n
+        emulator.top += 16n
+        emulator.deviceStart = 0x4000n
+        emulator.refreshPanels(true)
+        expect(emulator.layoutReads).toBe(1)
+        expect(emulator.memoryRegions.find((region) => region.kind === 'heap')?.end).toBe(0x2020n)
+        expect(emulator.memoryRegions.find((region) => region.kind === 'stack')?.end).toBe(0x3010n)
+        expect(emulator.memoryRegions.find((region) => region.kind === 'device')?.start).toBe(
+            0x4000n
+        )
+        emulator.clear()
+        expect(emulator.memoryRegions).toEqual([])
+        expect(emulator.dataLabels).toEqual([])
+        await emulator.compile(20, undefined)
+        expect(emulator.layoutReads).toBe(2)
+    })
+})

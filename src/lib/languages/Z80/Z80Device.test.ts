@@ -33,6 +33,8 @@ function makeDevice() {
     let elapsedHundredths = 0
     let input = false
     let graphicalUses = 0
+    //the bytes of the line the Terminal holds for the character port, which it hands out on request
+    let line: number[] = []
     const screen = new Screen({ width: 256, height: 192, cell: SCREEN_CELL_8X8 })
     const keyboard = new Keyboard({ holdIntervalMs: 0 })
     const mouse = new Mouse({ screen, keyboard })
@@ -56,6 +58,7 @@ function makeDevice() {
             output += text
         },
         hasInput: () => input,
+        readBufferedByte: () => line.shift(),
         timeHundredths: () => elapsedHundredths,
         screen,
         keyboard,
@@ -79,6 +82,10 @@ function makeDevice() {
         },
         setInput(available: boolean) {
             input = available
+        },
+        /** What is left of the line the Terminal read for the character port. */
+        setLine(bytes: number[]) {
+            line = [...bytes]
         },
         setElapsed(hundredths: number) {
             elapsedHundredths = hundredths
@@ -200,58 +207,54 @@ describe('Z80Device console output', () => {
 })
 
 describe('Z80Device console input', () => {
-    it('hands out one character of the line at a time, ending with a newline', () => {
-        const { device } = makeDevice()
-        expect(device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
-        device.provideInput(Z80_PORTS.CHAR, 'ab')
-        expect(device.readPort(Z80_PORTS.CHAR)).toBe(0x61)
-        expect(device.readPort(Z80_PORTS.CHAR)).toBe(0x62)
-        expect(device.readPort(Z80_PORTS.CHAR)).toBe(0x0a)
-        expect(device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
+    it('hands out the line the Terminal holds one byte at a time, without waiting', () => {
+        const view = makeDevice()
+        //nothing to read: the `in` waits, and the adapter asks the Terminal
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
+        view.setLine([0x61, 0x62, 0x0a])
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBe(0x61)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBe(0x62)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBe(0x0a)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
     })
 
-    it('hands out a single keystroke without a newline of its own', () => {
-        const { device } = makeDevice()
-        //the Screen keyboard answers a character read as soon as one is typed (ADR 0009); the Enter
-        //key types its own newline, so a program reading until 0x0A still works
-        device.provideCharacter('x')
-        expect(device.readPort(Z80_PORTS.CHAR)).toBe(0x78)
-        expect(device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
-    })
-
-    it('substitutes a question mark for a character that does not fit a byte', () => {
-        const { device } = makeDevice()
-        device.provideInput(Z80_PORTS.CHAR, 'é☃')
-        expect(device.readPort(Z80_PORTS.CHAR)).toBe(0xe9)
-        expect(device.readPort(Z80_PORTS.CHAR)).toBe(0x3f)
+    it('answers the `in` that waited with the byte the Terminal read for it, then the rest', () => {
+        const view = makeDevice()
+        //the Terminal read the line "ab" and handed over its first byte; the rest stays with it
+        view.setLine([0x62, 0x0a])
+        view.device.provideCharacter(0x61)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBe(0x61)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBe(0x62)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBe(0x0a)
+        expect(view.device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
     })
 
     it('parses a line per numeric read', () => {
         const { device } = makeDevice()
         expect(device.readPort(Z80_PORTS.NUMBER)).toBeUndefined()
-        device.provideInput(Z80_PORTS.NUMBER, ' 21 ')
+        device.provideNumber(Z80_PORTS.NUMBER, ' 21 ')
         expect(device.readPort(Z80_PORTS.NUMBER)).toBe(21)
         expect(device.readPort(Z80_PORTS.NUMBER)).toBeUndefined()
     })
 
     it('returns a negative number as its two complement byte', () => {
         const { device } = makeDevice()
-        device.provideInput(Z80_PORTS.SIGNED, '-5')
+        device.provideNumber(Z80_PORTS.SIGNED, '-5')
         expect(device.readPort(Z80_PORTS.SIGNED)).toBe(0xfb)
     })
 
     it('accepts every hexadecimal spelling the assembler does', () => {
         const { device } = makeDevice()
         for (const line of ['ff', '0xFF', '$ff', 'FFh']) {
-            device.provideInput(Z80_PORTS.HEX, line)
+            device.provideNumber(Z80_PORTS.HEX, line)
             expect(device.readPort(Z80_PORTS.HEX)).toBe(0xff)
         }
     })
 
     it('refuses a line that is not the number the port asked for', () => {
         const { device } = makeDevice()
-        expect(() => device.provideInput(Z80_PORTS.NUMBER, 'twelve')).toThrow(INVALID_NUMBER_ERROR)
-        expect(() => device.provideInput(Z80_PORTS.HEX, 'zz')).toThrow(INVALID_HEX_NUMBER_ERROR)
+        expect(() => device.provideNumber(Z80_PORTS.NUMBER, 'twelve')).toThrow(INVALID_NUMBER_ERROR)
+        expect(() => device.provideNumber(Z80_PORTS.HEX, 'zz')).toThrow(INVALID_HEX_NUMBER_ERROR)
     })
 
     it('names the input a port is waiting for', () => {
@@ -261,10 +264,10 @@ describe('Z80Device console input', () => {
         expect(device.inputQuestion(Z80_PORTS.NUMBER)).toMatch(/number/i)
     })
 
-    it('drops buffered input on a reset', () => {
+    it('drops the answers it was handed on a reset', () => {
         const { device } = makeDevice()
-        device.provideInput(Z80_PORTS.CHAR, 'ab')
-        device.provideInput(Z80_PORTS.NUMBER, '7')
+        device.provideCharacter(0x61)
+        device.provideNumber(Z80_PORTS.NUMBER, '7')
         device.reset()
         expect(device.readPort(Z80_PORTS.CHAR)).toBeUndefined()
         expect(device.readPort(Z80_PORTS.NUMBER)).toBeUndefined()

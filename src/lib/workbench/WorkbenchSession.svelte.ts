@@ -1,11 +1,31 @@
 import { tick, untrack } from 'svelte'
-import type monaco from 'monaco-editor'
+import { projectBuildSources } from '$lib/buildSources'
+import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import {
+    linksX86StartUnit,
+    X86_START_UNIT_FILES,
+    X86_START_UNIT_PATH
+} from '$lib/languages/X86/x86StartUnit'
+import {
+    loadedRuntimeLibrary,
+    loadedRuntimeSources,
+    loadRuntimeSources,
+    parseRuntimeSourcePath,
+    runtimeSourcePath
+} from '$lib/sourceRuntime/runtimeLibrary'
+import {
+    isEnvironmentHeaderPath,
+    loadedEnvironmentHeader
+} from '$lib/sourceRuntime/environmentLibrary'
+import type { ProjectFile } from '$lib/projectFiles'
 import type { Project, TestcaseResult } from '$lib/Project.svelte'
 import type { Emulator } from '$lib/languages/Emulator'
+import { CompilationFailedError } from '$lib/languages/BaseEmulator.svelte'
 import {
     makeRegister,
     type Diagnostic,
-    type RegisterPoke
+    type RegisterPoke,
+    type SourceBreakpoint
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
@@ -22,20 +42,15 @@ import {
     normalizeMarsDisplay,
     type ProjectDisplay
 } from '$lib/languages/mars/marsDisplay'
-import type { BuildSources, ProjectFile } from '$lib/projectFiles'
+import type { BuildSources } from '$lib/projectFiles'
 import {
     buildSource,
-    canEditProjectBreakpoints,
-    isCurrentBuildLocation,
+    isSameProjectSourceSelection,
     liveSource,
     selectProjectFile,
     type ProjectSourceSelection
 } from '$lib/monaco/projectSourceSelection'
-import {
-    createProjectLanguageSessionId,
-    projectSourceModelKey,
-    type ProjectModelIdentity
-} from '$lib/languages/service/uri'
+import { createProjectLanguageSessionId, projectSourceModelKey } from '$lib/languages/service/uri'
 import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
 import type { ProjectAnalysisSnapshot } from '$lib/languages/service/protocol'
 import { languageDiagnosticToDiagnostic } from '$lib/languages/service/diagnosticBridge'
@@ -49,17 +64,35 @@ import {
     shortcutsStore
 } from '$stores/shortcutsStore'
 import { toast } from '$stores/toastStore'
-import { serializer } from '$lib/json'
-import { createDebouncer, formatTime } from '$lib/utils'
+import { Prompt } from '$stores/promptStore.svelte'
+import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
+import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
 import {
-    closeTab,
-    initialTabs,
-    openTab,
-    renameTab,
-    retainTabs,
-    removeTab,
-    type FileTabs
-} from './fileTabs'
+    coreBreakpoints,
+    currentSourceMaps,
+    isSourceBreakpoint,
+    mappedBreakpoints
+} from '$lib/sourceCompilation/sourceBreakpoints'
+import {
+    colorSourceMap,
+    sourceMapColorIndices,
+    type SourceMapColoring
+} from '$lib/sourceCompilation/sourceColoring'
+import {
+    assemblyLinesOf,
+    sameLocations,
+    sourceLocationsOf,
+    type MappingSelection
+} from '$lib/sourceCompilation/mappingSelection'
+import {
+    editorFileLanguage,
+    type CompilationSourceMap,
+    type SourceLocation
+} from '$lib/sourceCompilation/records'
+import { serializer } from '$lib/json'
+import { createDebouncer } from '$lib/utils'
+import { terminationSummary } from '$lib/languages/termination'
+import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
 import {
     appendLog,
     buildEntry,
@@ -68,6 +101,16 @@ import {
     type LogDraft,
     type LogEntry
 } from './workbenchLog'
+import { EditorGroup } from './EditorGroup.svelte'
+import { EditorModels } from './editorModels'
+import { resolveMappingPair } from './mappingPair'
+import { editorGroupForFile, editorFileKind } from './editorFileRouting'
+import {
+    EDITOR_FILE_DRAG_TYPE,
+    readEditorFileDrag,
+    writeEditorFileDrag,
+    type EditorFileDrag
+} from './editorFileDrag'
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
@@ -109,8 +152,93 @@ export class WorkbenchSession {
     panels: WorkbenchSessionPanels = {}
 
     //The source being shown, and the version of it: the live Files or the Build snapshot
-    sourceSelection = $state<ProjectSourceSelection>(liveSource(''))
-    tabs = $state.raw<FileTabs>(initialTabs(''))
+    groups = $state.raw<readonly EditorGroup[]>([])
+    draggedFile = $state.raw<EditorFileDrag | undefined>()
+    executionGroupId = $state('editor-1')
+    editorRatio = $state(0.5)
+    private nextGroupId = 1
+    readonly models: EditorModels
+
+    /**
+     * A Runtime library member as the editor shows it, read-only: the one the running Build linked,
+     * or else the one the live sources would link, once that library has loaded.
+     */
+    runtimeMemberFile(path: string): ProjectFile | undefined {
+        const built = this.emulator.buildLibraryFiles?.[path]
+        if (built) return built
+        //x86 has no Runtime library yet, only the start unit its compiled programs link
+        if (path === X86_START_UNIT_PATH && this.project.language === 'X86')
+            return linksX86StartUnit(this.sourceInput) ? X86_START_UNIT_FILES[path] : undefined
+        const source = parseRuntimeSourcePath(path)
+        if (source) {
+            //`<sim.h>`, which compiling for this Target loaded, or one of the library's C sources
+            const text =
+                source.kind === 'environment'
+                    ? loadedEnvironmentHeader(this.project.language)
+                    : loadedRuntimeSources(source.abi)?.[source.source]
+            return text === undefined ? undefined : { encoding: 'plain', content: text }
+        }
+        const abi = this.sourceInput.runtimeAbi
+        const content = abi
+            ? loadedRuntimeLibrary(abi, this.project.language)?.members[path]
+            : undefined
+        return content === undefined ? undefined : { encoding: 'plain', content }
+    }
+
+    /** The ABI whose library a Runtime library path belongs to: the Build's, else the live one. */
+    private runtimeAbiFor(path: string): string | undefined {
+        const abi = /^@runtime\/(v\d+)\//.exec(path)?.[1]
+        return abi ?? this.emulator.buildSources?.runtimeAbi ?? this.sourceInput.runtimeAbi
+    }
+
+    /**
+     * Where a library member came from in the library's C source, as a Source map the mapped split
+     * view reads like a Compilation's, or undefined when the member has none (startup code).
+     */
+    runtimeSourceMap(path: string): CompilationSourceMap | undefined {
+        if (!path.startsWith(RUNTIME_NAMESPACE)) return undefined
+        const abi = this.runtimeAbiFor(path)
+        const library = abi ? loadedRuntimeLibrary(abi, this.project.language) : undefined
+        const origin = library?.memberSources[path]
+        if (!abi || !origin) return undefined
+        const source = runtimeSourcePath(abi, origin.source)
+        return {
+            sourcePath: source,
+            outputFingerprint: '',
+            lines: origin.lines.map((line) => (line === null ? null : { path: source, line }))
+        }
+    }
+
+    /** Opens a library member's C source beside it, so the two read as a mapped pair. */
+    async showRuntimeSource(group: EditorGroup) {
+        const map = this.runtimeSourceMap(group.displayedPath)
+        const abi = this.runtimeAbiFor(group.displayedPath)
+        if (!map || !abi) return
+        await loadRuntimeSources(abi)
+        const other = this.groups.find((candidate) => candidate !== group) ?? this.createGroup()
+        this.show(liveSource(map.sourcePath), other)
+    }
+
+    groupForFile(path: string) {
+        return editorGroupForFile(path, this.groups)
+    }
+    get executionGroup() {
+        return (
+            this.groups.find((group) => group.id === this.executionGroupId) ??
+            this.groups[this.groups.length - 1]
+        )
+    }
+    get controlsGroup() {
+        const assembly = this.groups.filter(
+            (group) => editorFileKind(group.displayedPath) === 'assembly'
+        )
+        return (
+            assembly.find((group) => group.id === this.executionGroupId) ??
+            assembly[assembly.length - 1] ??
+            [...this.groups].reverse().find((group) => group.displayedPath) ??
+            this.groups[this.groups.length - 1]
+        )
+    }
     buildGeneration = $state(0)
     private previousBuildSources = $state.raw<BuildSources | undefined>(undefined)
     fileSystemLocked = $state(false)
@@ -125,6 +253,17 @@ export class WorkbenchSession {
 
     running = $state(false)
     building = $state(false)
+    compiling = $state(false)
+    compilingGroupId = $state<string | undefined>()
+    sourceDiagnostics = $state.raw<Diagnostic[]>([])
+    /**
+     * What the last Build reported when it failed, and the sources it built. Live checking cannot
+     * see everything a Build can, such as a symbol two x86 Files define, and a failed Build leaves
+     * no snapshot to show them in, so the live view adds them for as long as the sources are those.
+     */
+    private failedBuild = $state.raw<{ sources: BuildSources; diagnostics: Diagnostic[] }>()
+    mappingSelection = $state.raw<MappingSelection | undefined>()
+    private compilationController: AbortController | undefined
     /**
      * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
      * program exit or a Build of the person's own. Not reactive: the effects that ask read it at the
@@ -132,7 +271,6 @@ export class WorkbenchSession {
      */
     testing = false
     testcasesResult = $state<TestcaseResult[]>([])
-    editor = $state.raw<monaco.editor.IStandaloneCodeEditor | undefined>(undefined)
 
     /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
     displayOrigin = $state<MarsDisplayOrigin>('user')
@@ -153,49 +291,47 @@ export class WorkbenchSession {
         this.project = project
         this.emulator = emulator
         this.host = host
+        const start = project.entry ?? Object.keys(project.files)[0] ?? ''
+        this.groups = [new EditorGroup(this, 'editor-1', start)]
+        this.models = new EditorModels((path, value) => this.fileEdited(path, value))
         this.effectiveSettings = $derived(
             resolveProjectSettings(this.project.language, this.project.settings)
         )
-        this.sourceInput = $derived<BuildSources>({
-            files: $state.snapshot(this.project.files),
-            entry: this.project.entry
+        this.sourceInput = $derived.by<BuildSources>(() => {
+            const files = $state.snapshot(this.project.files)
+            try {
+                return projectBuildSources({
+                    files,
+                    entry: this.project.entry,
+                    language: this.project.language,
+                    compilations: this.project.compilations,
+                    settings: this.project.settings
+                })
+            } catch (error) {
+                return {
+                    files,
+                    entry: this.project.entry,
+                    assemblyError: error instanceof Error ? error.message : String(error)
+                }
+            }
         })
-        this.displayedPath = $derived(this.sourceSelection.path)
-        this.sourceView = $derived<'snapshot' | 'live'>(
-            this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
-        )
+        this.displayedPath = $derived(this.groups[0].displayedPath)
+        this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
-        this.displayedFile = $derived.by<ProjectFile | undefined>(() =>
-            this.sourceView === 'snapshot'
-                ? this.emulator.buildSources?.files[this.displayedPath]
-                : this.project.files[this.displayedPath]
+        this.mappingPair = $derived(
+            resolveMappingPair(
+                this.groups,
+                this.project.sourceMaps,
+                this.project.compilations,
+                this.project.files,
+                this.project.language,
+                (path) => this.runtimeSourceMap(path)
+            )
         )
-        this.displayedCode = $derived(
-            this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
-        )
-        this.displayedLanguage = $derived(
-            /\.(?:c|h)$/i.test(this.displayedPath) ? ('c' as const) : this.project.language
-        )
-        this.displayedModelIdentity = $derived.by<ProjectModelIdentity | undefined>(() => {
-            if (!this.displayedPath) return undefined
-            return this.sourceSelection.sourceKind === 'build'
-                ? {
-                      sessionId: this.languageSessionId,
-                      sourceKind: 'build',
-                      buildGeneration: this.sourceSelection.buildGeneration,
-                      path: this.displayedPath
-                  }
-                : {
-                      sessionId: this.languageSessionId,
-                      sourceKind: 'live',
-                      path: this.displayedPath
-                  }
+        this.mappingColors = $derived.by<SourceMapColoring | undefined>(() => {
+            const map = this.mappingPair?.map
+            return map ? colorSourceMap(map) : undefined
         })
-        this.displayedModelKey = $derived(
-            this.displayedModelIdentity
-                ? projectSourceModelKey(this.displayedModelIdentity)
-                : 'empty'
-        )
         this.retainedModelKeys = $derived.by(() => {
             const liveKeys = Object.keys(this.project.files).map((path) =>
                 projectSourceModelKey({
@@ -214,28 +350,32 @@ export class WorkbenchSession {
             )
             return [...liveKeys, ...buildKeys]
         })
+        this.liveViewDiagnostics = $derived.by(() => {
+            const live = [...this.liveLanguageDiagnostics, ...this.sourceDiagnostics]
+            //any change to what a Build builds makes what it said about the old sources stale
+            const failed = this.failedBuild
+            if (failed?.sources !== this.sourceInput) return live
+            return [...live, ...buildOnlyDiagnostics(live, failed.diagnostics)]
+        })
         this.activeDiagnostics = $derived(
             this.sourceView === 'live'
-                ? this.liveLanguageDiagnostics
+                ? this.liveViewDiagnostics
                 : this.emulator.compilerDiagnostics
         )
         this.liveBuildHasErrors = $derived(
             this.languageAnalysis?.diagnostics.some(
-                (diagnostic) => diagnostic.severity === 'error'
+                (diagnostic) =>
+                    diagnostic.severity === 'error' &&
+                    editorFileLanguage(diagnostic.location.path, this.project.language) ===
+                        this.project.language
             ) ?? false
         )
-        this.displayedDiagnostics = $derived(
-            this.activeDiagnostics.filter(
-                (diagnostic) => !diagnostic.file || diagnostic.file === this.displayedPath
-            )
-        )
-        this.analysisStatus = $derived(
-            this.sourceView === 'live' ? this.languageAnalysis?.fileStatus : undefined
-        )
-        this.displayedAnalysisStatus = $derived(this.analysisStatus?.[this.displayedPath])
         this.languageErrorCount = $derived(
             this.languageAnalysis?.diagnostics.filter(
-                (diagnostic) => diagnostic.severity === 'error'
+                (diagnostic) =>
+                    diagnostic.severity === 'error' &&
+                    editorFileLanguage(diagnostic.location.path, this.project.language) ===
+                        this.project.language
             ).length ?? 0
         )
         this.diagnosticCounts = $derived.by(() => {
@@ -266,59 +406,105 @@ export class WorkbenchSession {
             !this.host.readonly && !this.running && !this.building && this.emulator.canPoke
         )
         this.errorStrings = $derived(this.emulator.errors.join('\n'))
-        this.terminalText = $derived(
-            this.errorStrings
-                ? `${this.errorStrings}\n${this.emulator.stdOut}`
-                : this.emulator.stdOut
-        )
+        //the Log's wording, without an error's message, which the Terminal tab shows itself
         this.runInfo = $derived(
-            this.emulator.terminated && this.emulator.executionTime >= 0
-                ? `Ran in ${formatTime(this.emulator.executionTime)}`
+            this.emulator.terminated
+                ? terminationSummary(this.emulator.termination, this.emulator.executionTime, {
+                      errorMessage: false
+                  })
                 : ''
         )
         this.executionDisabled = $derived(
             this.host.readonly || this.emulator.terminated || this.emulator.interrupt !== undefined
         )
         this.undoDisabled = $derived(this.host.readonly || this.emulator.interrupt !== undefined)
-        this.buildDisabled = $derived(this.host.readonly || this.liveBuildHasErrors)
-        this.breakpointsEditable = $derived(
-            canEditProjectBreakpoints(this.sourceSelection, {
-                readonly: this.host.readonly,
-                building: this.building,
-                fileSystemLocked: this.fileSystemLocked
-            })
+        this.buildDisabled = $derived(
+            this.host.readonly || this.liveBuildHasErrors || this.compiling
         )
-        this.displayedBreakpoints = $derived(
-            (this.sourceView === 'snapshot' || !this.fileSystemLocked
-                ? this.emulator.breakpoints
+        //a Debug session runs the Build's Files, so its Breakpoints expand through the maps that
+        //describe those rather than the live Files
+        const breakpointSourceMaps = $derived(
+            currentSourceMaps(
+                this.project.sourceMaps,
+                this.project.compilations,
+                this.debugSession && this.emulator.buildSources
+                    ? this.emulator.buildSources.files
+                    : this.project.files,
+                this.project.language
+            )
+        )
+        this.mappedBreakpoints = $derived(
+            //fingerprinting the Files is skipped while no Breakpoint is on a source File
+            this.emulator.breakpoints.some((item) =>
+                isSourceBreakpoint(item, this.project.language)
+            )
+                ? mappedBreakpoints(
+                      this.emulator.breakpoints,
+                      breakpointSourceMaps,
+                      this.project.language
+                  )
                 : []
+        )
+        emulator.setBreakpointResolver((breakpoints) =>
+            breakpoints.some((item) => isSourceBreakpoint(item, this.project.language))
+                ? coreBreakpoints(breakpoints, breakpointSourceMaps, this.project.language)
+                : [...breakpoints]
+        )
+        this.executionSourceLocation = $derived(
+            this.mappingPair?.map.lines[this.mappingPair.assembly.instructionLine] ?? undefined
+        )
+        this.activeMappingColors = $derived.by(() => {
+            const coloring = this.mappingColors
+            const execution = this.executionSourceLocation
+            if (!coloring) return undefined
+            const colors = sourceMapColorIndices(
+                coloring,
+                this.mappingSelection ?? (execution ? [execution] : [])
             )
-                .filter((breakpoint) => breakpoint.file === this.displayedPath)
-                .map((breakpoint) => breakpoint.line)
-        )
-        this.highlightedLine = $derived(
-            isCurrentBuildLocation(
-                this.sourceSelection,
-                this.buildGeneration,
-                this.emulator.currentFile
-            )
-                ? this.emulator.line
-                : -1
-        )
-        this.editorDisabled = $derived(
-            this.host.readonly ||
-                this.running ||
-                this.building ||
-                this.sourceView === 'snapshot' ||
-                this.displayedFile?.encoding !== 'plain' ||
-                this.fileSystemLocked ||
-                (this.emulator.canExecute && !this.emulator.terminated)
-        )
-        const start = project.entry ?? Object.keys(project.files)[0] ?? ''
-        this.sourceSelection = liveSource(start)
-        this.tabs = initialTabs(start)
+            //Nothing to emphasize leaves every section at its default strength.
+            return colors.size ? colors : undefined
+        })
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
+
+        $effect(() => {
+            const pageSize = preferencesStore.values.memoryPanelSize.value
+            untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
+        })
+
+        let previousPairKey = ''
+        let previousPairMap: CompilationSourceMap | undefined
+        $effect(() => {
+            const pair = this.mappingPair
+            const key = pair
+                ? `${pair.source.id}:${pair.source.displayedPath}:${pair.assembly.id}:${pair.assembly.displayedPath}`
+                : ''
+            if (key !== previousPairKey || pair?.map !== previousPairMap) {
+                untrack(() => {
+                    this.mappingSelection = undefined
+                })
+            }
+            previousPairKey = key
+            previousPairMap = pair?.map
+        })
+        $effect(() => {
+            const map = this.mappingPair?.map
+            const executionLocation = this.executionSourceLocation
+            untrack(() => {
+                //Keep the selected correspondence through Build's unmapped startup wrapper.
+                //Execution takes over once an instruction has a source location.
+                if (!map || executionLocation) this.mappingSelection = undefined
+            })
+        })
+
+        $effect(() => {
+            const keys = [...this.retainedModelKeys, ...this.groups.map((group) => group.modelKey)]
+            const files = this.project.files
+            untrack(() => {
+                this.models.retain(keys)
+                this.models.synchronize(files)
+            })
+        })
 
         //Testcases are edited in place, so a change is noticed by watching their content; the first
         //run only remembers what was loaded
@@ -376,7 +562,16 @@ export class WorkbenchSession {
             this.pc.setSize(this.emulator.systemSize)
         })
 
-        //each exit of the program goes in the Log with its running time
+        //An input wait suspends Run or Step before its usual reveal. Show the waiting
+        //instruction now, including when it is in another File, without taking focus.
+        $effect(() => {
+            if (this.emulator.interrupt && !this.testing) {
+                untrack(() => this.revealCurrentInstruction())
+            }
+        })
+
+        //each exit of the program goes in the Log with its running time and how it ended, whether
+        //a Run, a Step or a runtime error ended it
         let wasTerminated = untrack(() => this.emulator.terminated)
         $effect(() => {
             const terminated = this.emulator.terminated && this.emulator.canExecute
@@ -385,7 +580,7 @@ export class WorkbenchSession {
                     this.appendLog(
                         exitEntry({
                             executionTimeMs: this.emulator.executionTime,
-                            errors: this.emulator.errors
+                            termination: this.emulator.termination
                         })
                     )
                 )
@@ -404,19 +599,21 @@ export class WorkbenchSession {
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
     declare readonly debugSession: boolean
-    declare readonly displayedFile: ProjectFile | undefined
-    declare readonly displayedCode: string
-    declare readonly displayedLanguage: Project['language'] | 'c'
-    declare readonly displayedModelIdentity: ProjectModelIdentity | undefined
-    declare readonly displayedModelKey: string
+    declare readonly mappingColors: SourceMapColoring | undefined
+    declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
+    declare readonly executionSourceLocation: SourceLocation | undefined
+    /**
+     * The assembly lines that Breakpoints on C and C++ Files stand for: the first instruction of
+     * each block of Generated assembly mapped to the line. The Core stops on these.
+     */
+    declare readonly mappedBreakpoints: SourceBreakpoint[]
+    /** Palette indices of the selected or executing source lines, which the others dim around. */
+    declare readonly activeMappingColors: ReadonlySet<number> | undefined
     declare readonly retainedModelKeys: string[]
+    /** The live view's Diagnostics: live checking's, then Compile's, then a failed Build's own. */
+    declare readonly liveViewDiagnostics: Diagnostic[]
     declare readonly activeDiagnostics: Diagnostic[]
     declare readonly liveBuildHasErrors: boolean
-    declare readonly displayedDiagnostics: Diagnostic[]
-    /** Whether each File is assembled from the Entry file, on the live Files only. */
-    declare readonly analysisStatus: ProjectAnalysisSnapshot['fileStatus'] | undefined
-    declare readonly displayedAnalysisStatus:
-        ProjectAnalysisSnapshot['fileStatus'][string] | undefined
     declare readonly languageErrorCount: number
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
@@ -430,18 +627,12 @@ export class WorkbenchSession {
     //a read-only Project takes no Pokes, and neither does one whose Core is building or running.
     //The Emulator owns the other half
     declare readonly pokeable: boolean
+    /** The Emulator's runtime errors, which the Terminal tab shows before what the program wrote. */
     declare readonly errorStrings: string
-    /** The Terminal's text: the Emulator's runtime errors, then what the program wrote. */
-    declare readonly terminalText: string
     declare readonly runInfo: string
     declare readonly executionDisabled: boolean
     declare readonly undoDisabled: boolean
     declare readonly buildDisabled: boolean
-    declare readonly breakpointsEditable: boolean
-    /** The breakpoint lines of the displayed File, hidden on live contents during a Debug session. */
-    declare readonly displayedBreakpoints: number[]
-    declare readonly highlightedLine: number
-    declare readonly editorDisabled: boolean
 
     // ---- lifecycle -----------------------------------------------------------------------------
 
@@ -449,25 +640,32 @@ export class WorkbenchSession {
     mount(): () => void {
         const unregisterNavigation = registerProjectNavigation(
             this.languageSessionId,
-            async (identity, selection) => {
+            async (identity, selection, originatingEditor) => {
+                const group =
+                    this.groups.find((group) => group.editor === originatingEditor) ??
+                    this.groupForFile(identity.path)
                 if (identity.sourceKind === 'build') {
                     if (
                         identity.buildGeneration !== this.buildGeneration ||
-                        !this.emulator.buildSources?.files[identity.path]
+                        !this.existsInBuild(identity.path)
                     ) {
                         return false
                     }
-                    this.show(buildSource(identity.path, identity.buildGeneration))
+                    this.show(buildSource(identity.path, identity.buildGeneration), group)
+                } else if (identity.path.startsWith(RUNTIME_NAMESPACE)) {
+                    //a Runtime library member, opened read-only from go to definition
+                    if (!this.runtimeMemberFile(identity.path)) return false
+                    this.show(liveSource(identity.path), group)
                 } else {
                     if (!this.project.files[identity.path]) return false
-                    this.show(liveSource(identity.path))
+                    this.show(liveSource(identity.path), group)
                 }
                 await tick()
                 if (selection) {
                     const lineNumber =
                         'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
                     const column = 'column' in selection ? selection.column : selection.startColumn
-                    this.revealEditorLine(lineNumber, column)
+                    this.revealEditorLine(lineNumber, column, group)
                 }
                 return true
             }
@@ -485,9 +683,13 @@ export class WorkbenchSession {
             if (snapshot && !pending) {
                 const current = untrack(() => this.sourceInput)
                 this.languageAnalysis = snapshot
-                this.liveLanguageDiagnostics = snapshot.diagnostics.map((diagnostic) =>
-                    languageDiagnosticToDiagnostic(diagnostic, current)
-                )
+                this.liveLanguageDiagnostics = snapshot.diagnostics
+                    .filter(
+                        (diagnostic) =>
+                            editorFileLanguage(diagnostic.location.path, this.project.language) ===
+                            this.project.language
+                    )
+                    .map((diagnostic) => languageDiagnosticToDiagnostic(diagnostic, current))
             }
             this.languageAnalysisPending = pending
         })
@@ -513,6 +715,8 @@ export class WorkbenchSession {
             session.dispose()
             this.languageSession = undefined
             this.emulator.dispose()
+            this.compilationController?.abort()
+            this.models.dispose()
         }
     }
 
@@ -622,44 +826,170 @@ export class WorkbenchSession {
     // ---- which File is shown -------------------------------------------------------------------
 
     /** Shows a version of a File, opening its tab. */
-    private show(selection: ProjectSourceSelection) {
-        this.sourceSelection = selection
-        this.tabs = openTab(this.tabs, selection.path)
+    private show(selection: ProjectSourceSelection, group = this.groupForFile(selection.path)) {
+        const changedPath = group.displayedPath !== selection.path
+        if (!isSameProjectSourceSelection(group.sourceSelection, selection)) {
+            group.sourceSelection = selection
+        }
+        group.tabs = openTab(group.tabs, selection.path)
+        if (changedPath) group.resetCompilationOptions()
     }
 
+    /**
+     * Opens the second pane. With a single tab it starts empty, since showing the same File twice
+     * is rarely wanted; with several tabs the shown File moves over, leaving the rest behind.
+     */
+    splitEditor() {
+        if (this.groups.length > 1) return this.groups[1]
+        const origin = this.groups[0]
+        const path = origin.displayedPath
+        if (!path) return origin
+        const other = this.createGroup()
+        if (origin.tabs.paths.length > 1) void this.transferTab(path, origin, other)
+        return other
+    }
+
+    startFileDrag(event: DragEvent, path: string, origin?: EditorGroup) {
+        if (!event.dataTransfer || (!this.project.files[path] && !this.existsInBuild(path))) return
+        const file = {
+            sessionId: this.languageSessionId,
+            path,
+            ...(origin ? { groupId: origin.id } : {})
+        }
+        writeEditorFileDrag(event.dataTransfer, file)
+        this.draggedFile = file
+    }
+
+    endFileDrag() {
+        this.draggedFile = undefined
+    }
+
+    canDropFile(event: DragEvent) {
+        return (
+            !!this.draggedFile &&
+            Array.from(event.dataTransfer?.types ?? []).includes(EDITOR_FILE_DRAG_TYPE)
+        )
+    }
+
+    async dropFile(event: DragEvent, destination: EditorGroup) {
+        if (!event.dataTransfer) return
+        const file = readEditorFileDrag(event.dataTransfer, this.languageSessionId)
+        this.endFileDrag()
+        if (!file || !this.groups.includes(destination)) return
+        if (file.groupId) {
+            const origin = this.groups.find((group) => group.id === file.groupId)
+            if (origin) await this.transferTab(file.path, origin, destination)
+        } else if (this.project.files[file.path]) this.selectFile(file.path, destination)
+    }
+
+    /**
+     * Whether the File being dragged can open a second pane: there is only one, and the File is
+     * not that pane's last tab, which would leave it empty and closed rather than split.
+     */
+    canSplitWithDrop() {
+        const file = this.draggedFile
+        if (!file || this.groups.length > 1) return false
+        if (!file.groupId) return !!this.project.files[file.path]
+        return this.groups[0].tabs.paths.length > 1
+    }
+
+    /** Drops the dragged File into a new pane on the right of the only one. */
+    async dropFileIntoSplit(event: DragEvent) {
+        if (!event.dataTransfer || !this.canSplitWithDrop()) return this.endFileDrag()
+        const file = readEditorFileDrag(event.dataTransfer, this.languageSessionId)
+        this.endFileDrag()
+        if (!file) return
+        const origin = this.groups[0]
+        const other = this.createGroup()
+        if (file.groupId) await this.transferTab(file.path, origin, other)
+        else this.selectFile(file.path, other)
+    }
+
+    async transferTab(path: string, origin: EditorGroup, destination: EditorGroup) {
+        if (
+            !this.groups.includes(origin) ||
+            !this.groups.includes(destination) ||
+            !origin.tabs.paths.includes(path)
+        )
+            return
+        if (origin === destination) {
+            this.activateTab(path, origin)
+            return
+        }
+        const viewState = origin.displayedPath === path ? origin.editor?.saveViewState() : undefined
+        const selection = selectProjectFile(
+            origin.sourceSelection,
+            path,
+            this.buildGeneration,
+            this.existsInBuild(path)
+        )
+        this.show(selection, destination)
+        this.closeTab(path, origin)
+        await tick()
+        if (viewState && this.groups.includes(destination) && destination.displayedPath === path)
+            destination.editor?.restoreViewState(viewState)
+    }
+
+    private createGroup() {
+        const group = new EditorGroup(this, `editor-${++this.nextGroupId}`)
+        this.groups = [...this.groups, group]
+        return group
+    }
+
+    closeGroup(group: EditorGroup) {
+        if (!this.groups.includes(group)) return
+        if (this.groups.length === 1) {
+            group.tabs = initialTabs('')
+            group.sourceSelection = liveSource('')
+            return
+        }
+        this.groups = this.groups.filter((candidate) => candidate !== group)
+        if (this.executionGroupId === group.id) this.executionGroupId = this.groups[0].id
+    }
+
+    /** Whether the Build has this File: its own, or a Runtime library member it linked. */
     private existsInBuild(path: string) {
-        return this.emulator.buildSources?.files[path] !== undefined
+        return (
+            this.emulator.buildSources?.files[path] !== undefined ||
+            this.emulator.buildLibraryFiles?.[path] !== undefined
+        )
     }
 
-    revealEditorLine(lineNumber: number, column: number) {
-        const editor = this.editor
+    revealEditorLine(lineNumber: number, column: number, group = this.groups[0]) {
+        if (!this.groups.includes(group)) return
+        const editor = group.editor
         if (!editor) return
         editor.revealLineInCenter(lineNumber)
         editor.setPosition({ lineNumber, column })
     }
 
     /** Explorer navigation: changes the File, not which version of the Project is being looked at. */
-    selectFile(path: string) {
+    selectFile(path: string, group = this.groupForFile(path)) {
         this.show(
             selectProjectFile(
-                this.sourceSelection,
+                group.sourceSelection,
                 path,
                 this.buildGeneration,
                 this.existsInBuild(path)
-            )
+            ),
+            group
         )
     }
 
     /** Clicking a tab: the same rule as the Explorer. */
-    activateTab(path: string) {
-        this.selectFile(path)
+    activateTab(path: string, group = this.groupForFile(path)) {
+        this.selectFile(path, group)
     }
 
-    closeTab(path: string) {
-        const next = closeTab(this.tabs, path)
-        if (next === this.tabs) return
-        this.tabs = next
-        if (next.active !== this.displayedPath) this.selectFile(next.active)
+    closeTab(path: string, group = this.groups[0]) {
+        const next = closeTab(group.tabs, path)
+        if (next === group.tabs) return
+        group.tabs = next
+        if (!next.paths.length) {
+            this.closeGroup(group)
+            return
+        }
+        if (next.active !== group.displayedPath) this.selectFile(next.active, group)
     }
 
     private synchronizeBuildGeneration(buildSources: BuildSources | undefined): void {
@@ -669,13 +999,43 @@ export class WorkbenchSession {
 
     async revealSourceLocation(file: string, line: number, column = 1) {
         const buildSources = this.emulator.buildSources
-        if (!buildSources?.files[file]) return
+        if (!buildSources || !this.existsInBuild(file)) return
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
-        this.show(buildSource(file, this.buildGeneration))
+        const group =
+            this.groups.find((group) => group.displayedPath === file) ?? this.executionGroup
+        this.executionGroupId = group.id
+        this.show(buildSource(file, this.buildGeneration), group)
+        //Both file editors retain the exact versions used by this Build.
+        for (const other of this.groups) {
+            if (other !== group && this.existsInBuild(other.displayedPath)) {
+                const next = buildSource(other.displayedPath, this.buildGeneration)
+                if (!isSameProjectSourceSelection(other.sourceSelection, next)) {
+                    other.sourceSelection = next
+                }
+            }
+        }
         await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(line), column)
+        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        this.followExecutionSource()
+    }
+
+    /**
+     * The mapped pair's source pane follows the current instruction to the File it was compiled
+     * from, as a debugger shows an inlined function's source: into `<sim.h>` for the instructions an
+     * inlined `sim_` function contributed, and back to the caller's File after them.
+     */
+    private followExecutionSource() {
+        const pair = this.mappingPair
+        const location = this.executionSourceLocation
+        if (!pair || !location || location.path === pair.source.displayedPath) return
+        if (isEnvironmentHeaderPath(location.path)) {
+            if (this.runtimeMemberFile(location.path))
+                this.show(liveSource(location.path), pair.source)
+        } else if (this.existsInBuild(location.path)) {
+            this.show(buildSource(location.path, this.buildGeneration), pair.source)
+        }
     }
 
     async revealDiagnostic(diagnostic: Diagnostic) {
@@ -684,13 +1044,14 @@ export class WorkbenchSession {
             this.emulator.buildSources?.entry ??
             this.project.entry ??
             this.displayedPath
-        if (this.existsInBuild(path)) {
-            await this.revealSourceLocation(path, diagnostic.lineIndex, diagnostic.column)
-            return
-        }
-        this.show(liveSource(path))
+        const group = this.groupForFile(path)
+        const selection =
+            diagnostic.source !== 'Compiler Explorer' && this.existsInBuild(path)
+                ? buildSource(path, this.buildGeneration)
+                : liveSource(path)
+        this.show(selection, group)
         await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(diagnostic.lineIndex), diagnostic.column)
+        this.revealEditorLine(zeroBasedLineToMonaco(diagnostic.lineIndex), diagnostic.column, group)
     }
 
     revealCurrentInstruction() {
@@ -701,9 +1062,13 @@ export class WorkbenchSession {
     /** After Stop: every tab shows the live File again, and tabs of Files that are gone close. */
     returnToLiveFiles() {
         const files = this.project.files
-        const fallback = this.project.entry ?? Object.keys(files)[0] ?? ''
-        this.tabs = retainTabs(this.tabs, (path) => files[path] !== undefined, fallback)
-        this.sourceSelection = liveSource(this.tabs.active)
+        for (const group of this.groups) {
+            group.tabs = retainTabs(group.tabs, (path) => files[path] !== undefined, '')
+            const next = liveSource(group.tabs.active)
+            if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
+                group.sourceSelection = next
+            }
+        }
     }
 
     // ---- the Files -----------------------------------------------------------------------------
@@ -724,17 +1089,26 @@ export class WorkbenchSession {
     }
 
     fileRenamed(from: string, to: string) {
+        this.project.renameCompilationFile(from, to)
         this.moveFileBreakpoints(from, to)
-        this.tabs = renameTab(this.tabs, from, to)
-        if (this.displayedPath === from) this.selectFile(to)
+        for (const group of this.groups) {
+            group.tabs = renameTab(group.tabs, from, to)
+            if (group.displayedPath === from) this.show(liveSource(to), group)
+        }
     }
 
     fileDeleted(path: string) {
         this.moveFileBreakpoints(path)
-        const fallback = this.project.entry ?? Object.keys(this.project.files)[0] ?? ''
-        const shown = this.displayedPath === path
-        this.tabs = removeTab(this.tabs, path, fallback)
-        if (shown) this.selectFile(this.tabs.active)
+        for (const group of this.groups) {
+            group.tabs = removeTab(group.tabs, path, '')
+            if (group.displayedPath === path) {
+                const next = liveSource(group.tabs.active)
+                if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
+                    group.sourceSelection = next
+                }
+            }
+            if (!group.tabs.paths.length && this.groups.length > 1) this.closeGroup(group)
+        }
     }
 
     setEntry(path: string) {
@@ -748,9 +1122,16 @@ export class WorkbenchSession {
      * rather than from the editor's active text.
      */
     fileEdited(path: string, nextCode: string) {
-        if (this.sourceView !== 'live') return
+        if (
+            this.host.readonly ||
+            this.fileSystemLocked ||
+            this.running ||
+            this.building ||
+            (this.emulator.canExecute && !this.emulator.terminated)
+        )
+            return
         //A File the Project no longer has is not recreated by typing into a stale model.
-        if (!(path in this.project.files)) return
+        if (this.project.files[path]?.encoding !== 'plain') return
         try {
             this.project.fileSystem.writeText(path, nextCode)
         } catch (error) {
@@ -762,18 +1143,136 @@ export class WorkbenchSession {
         }
     }
 
-    toggleBreakpoint(line: number) {
-        this.emulator.toggleBreakpoint(line, this.displayedPath)
+    toggleBreakpoint(line: number, group = this.groups[0]) {
+        this.emulator.toggleBreakpoint(line, group.displayedPath)
     }
 
     // ---- execution -----------------------------------------------------------------------------
+
+    /** Select the source lines behind any set of lines in either pane of the mapped pair. */
+    selectMappedLines(group: EditorGroup, lines: readonly number[]) {
+        const pair = this.mappingPair
+        if (!pair || (group !== pair.source && group !== pair.assembly)) return
+        const locations =
+            group === pair.assembly
+                ? sourceLocationsOf(pair.map, lines)
+                : lines.map((line) => ({ path: group.displayedPath, line }))
+        const selection = locations.length ? locations : undefined
+        //Dragging a selection repeats the same lines; keep the value so nothing recomputes.
+        if (!sameLocations(selection, this.mappingSelection)) this.mappingSelection = selection
+        if (!selection) return
+        const other = group === pair.source ? pair.assembly : pair.source
+        const otherLines =
+            other === pair.source
+                ? selection.flatMap((location) =>
+                      location.path === other.displayedPath ? [location.line] : []
+                  )
+                : assemblyLinesOf(pair.map, selection)
+        const editor = other.editor
+        if (!editor || !otherLines.length) return
+        //Leave the other pane alone while any related line is in view, so growing a selection
+        //does not scroll it on every step.
+        const visible = editor.getVisibleRanges()
+        const inView = otherLines.some((line) =>
+            visible.some(
+                (range) => range.startLineNumber <= line + 1 && line + 1 <= range.endLineNumber
+            )
+        )
+        if (!inView) editor.revealLineInCenter(otherLines[0] + 1)
+    }
+
+    cancelSourceCompilation() {
+        this.compilationController?.abort()
+    }
+
+    async compileDisplayedSource(origin = this.groups[0]) {
+        const path = origin.compilablePath
+        if (origin.sourceCompileDisabled || !path) return
+        const optimization = origin.optimization
+        const compiler = origin.sourceCompiler
+        const recompileOutput = !!origin.displayedCompilation
+        const replaced = origin.displayedPath
+        const existingDestination = this.groups.find((group) => group !== origin)
+        const controller = new AbortController()
+        this.compilationController = controller
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)])
+        this.compiling = true
+        this.compilingGroupId = origin.id
+        this.sourceDiagnostics = []
+        this.failedBuild = undefined
+        try {
+            const result = await compileProjectSource(this.project, path, optimization, {
+                signal,
+                sourceAnnotations: preferencesStore.values.sourceAnnotations.value,
+                compiler,
+                confirm: (question) => {
+                    const pending = Prompt.confirm(question)
+                    const id = Prompt.id
+                    const cancel = () => {
+                        if (Prompt.id === id && Prompt.promise) Prompt.cancel()
+                    }
+                    signal.addEventListener('abort', cancel, { once: true })
+                    return pending.finally(() => signal.removeEventListener('abort', cancel))
+                }
+            })
+            if (!result) return
+            this.sourceDiagnostics = result.diagnostics
+            const originStillOpen = this.groups.includes(origin)
+            const destinationClosed =
+                existingDestination && !this.groups.includes(existingDestination)
+            if (!originStillOpen || destinationClosed) {
+                this.show(
+                    liveSource(result.record.outputPath),
+                    this.groupForFile(result.record.outputPath)
+                )
+            } else if (recompileOutput && !existingDestination) {
+                //the only pane shows assembly: the source takes that pane on the left, and the new
+                //assembly opens beside it on the right, as a split of a source File does
+                const assembly = this.createGroup()
+                this.show(liveSource(path), origin)
+                this.show(liveSource(result.record.outputPath), assembly)
+                this.closeTab(replaced, origin)
+                this.executionGroupId = assembly.id
+            } else {
+                const other = existingDestination ?? this.createGroup()
+                const source = recompileOutput ? other : origin
+                const assembly = recompileOutput ? origin : other
+                this.show(liveSource(path), source)
+                this.show(liveSource(result.record.outputPath), assembly)
+                this.executionGroupId = assembly.id
+            }
+            for (const group of this.groups) {
+                if (
+                    group.displayedPath === path ||
+                    group.displayedPath === result.record.outputPath
+                )
+                    group.resetCompilationOptions()
+            }
+            this.changed()
+        } catch (error) {
+            if (controller.signal.aborted) return
+            if (error instanceof SourceCompilationError) this.sourceDiagnostics = error.diagnostics
+            if (this.sourceDiagnostics.length) this.bottomTab = 'problems'
+            toast.error(
+                signal.aborted
+                    ? 'Source compilation timed out. Try again.'
+                    : error instanceof SourceCompilationError
+                      ? error.message
+                      : 'Could not reach Compiler Explorer. Check your connection and try again.'
+            )
+        } finally {
+            this.compiling = false
+            this.compilingGroupId = undefined
+            this.compilationController = undefined
+        }
+    }
 
     private appendLog(draft: LogDraft) {
         this.log = appendLog(this.log, draft, ++this.logId, Date.now())
     }
 
     async build() {
-        if (this.host.readonly || this.building || this.running) return
+        if (this.host.readonly || this.building || this.running || this.compiling) return
         if (this.fileSystemLocked) {
             //The Build button is hidden in this state, but the shortcut is not, and returning here
             //without a word left the key looking broken.
@@ -781,19 +1280,27 @@ export class WorkbenchSession {
             return
         }
         const started = performance.now()
+        const sources = this.sourceInput
+        this.failedBuild = undefined
+        let failure: Diagnostic[] | undefined
         try {
             this.running = false
             this.building = true
-            await this.emulator.compile(undoHistorySize(this.effectiveSettings), this.sourceInput)
+            await this.emulator.compile(undoHistorySize(this.effectiveSettings), sources)
         } catch (e) {
             console.error(e)
+            //only a compilation failure carries this Build's own findings: any other error leaves the
+            //emulator's list as an earlier Build or check left it
+            if (e instanceof CompilationFailedError) failure = e.diagnostics
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             this.building = false
             //also after a failed build: the directive is read before the program is assembled
             this.syncDisplay()
-            const diagnostics = this.emulator.compilerDiagnostics
             const ok = this.emulator.canExecute
+            const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
+            if (!ok && diagnostics.length)
+                this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
             this.appendLog(
                 buildEntry({
                     ok,
@@ -824,7 +1331,7 @@ export class WorkbenchSession {
      * keeps Step and Undo out of a run they would re-enter the Core inside of.
      */
     async run() {
-        if (this.building || this.running) return
+        if (this.building || this.running || this.compiling) return
         this.running = true
         this.testcasesResult = []
         try {
@@ -887,7 +1394,7 @@ export class WorkbenchSession {
     }
 
     async test() {
-        if (this.building || this.running) return
+        if (this.building || this.running || this.compiling) return
         this.running = true
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))
@@ -1003,4 +1510,18 @@ export class WorkbenchSession {
             }
         }
     }
+}
+
+/**
+ * Those of a failed Build's diagnostics the live view does not show already: one on the same File
+ * and line with the same message is the same finding, which live checking made first.
+ */
+function buildOnlyDiagnostics(
+    live: readonly Diagnostic[],
+    build: readonly Diagnostic[]
+): Diagnostic[] {
+    const key = (diagnostic: Diagnostic) =>
+        `${diagnostic.file ?? ''}\0${diagnostic.lineIndex}\0${diagnostic.message}`
+    const shown = new Set(live.map(key))
+    return build.filter((diagnostic) => !shown.has(key(diagnostic)))
 }

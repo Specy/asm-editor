@@ -156,7 +156,7 @@ main:
 { "input": ["21"] }
 ```
 
-When the run reaches service 5, type a decimal number in the console input box and press Enter. The
+When the run reaches service 5, type a decimal number in the console and press Enter. The
 service parses that line and places the integer in `a0`. The `add` doubles it into `t0`, keeping the
 calculated value there before the following print request replaces `a0` with an address.
 

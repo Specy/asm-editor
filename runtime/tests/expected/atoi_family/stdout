@@ -1,0 +1,13 @@
+atoi("42")=42 atol=42 atoll=42
+atoi("   -17")=-17 atol=-17 atoll=-17
+atoi("+8")=8 atol=8 atoll=8
+atoi("12abc")=12 atol=12 atoll=12
+atoi("abc")=0 atol=0 atoll=0
+atoi("")=0 atol=0 atoll=0
+atoi(" 	
+ 99")=99 atol=99 atoll=99
+atoi("-0")=0 atol=0 atoll=0
+atoi("2147483647")=2147483647 atol=2147483647 atoll=2147483647
+atoi("-2147483648")=-2147483648 atol=-2147483648 atoll=-2147483648
+atoi("007")=7 atol=7 atoll=7
+atoll big=9223372036854775807 -9223372036854775807

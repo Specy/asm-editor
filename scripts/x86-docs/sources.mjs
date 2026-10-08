@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createX86Emulator } from '@specy/x86'
 
 export const projectRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 export const nasmRoot = join(projectRoot, 'emulators/x86/wasm_nasm/nasm')
@@ -251,77 +252,49 @@ const SYSCALL_ARG_TYPES = {
     SSIZE_: 'byte count'
 }
 
-/**
- * The syscalls blink implements, which is a different list from the ones Linux defines: the number,
- * the name, how many arguments the dispatcher reads, and what each one is. The argument types come
- * from the strace signature the table names, which is the only place blink writes them down.
- */
-export function readBlinkSyscalls() {
-    const strace = new Map()
-    for (const line of read(join(blinkRoot, 'blink/strace.h')).split('\n')) {
-        const match = /^#define\s+(STRACE_\w+)\s+(\w+)\s+(\w+)\s+(.*)$/.exec(line)
+/** Labels from strace enrich the exported list; source guards never decide membership. */
+export function parseBlinkSyscalls(sources, implemented) {
+    const signatures = new Map()
+    for (const line of sources.strace.split('\n')) {
+        const match = /^#define\s+(STRACE_\w+)\s+(\w+)\s+\w+\s+(.*)$/.exec(line)
         if (!match) continue
-        const [, name, kind, returns, rest] = match
-        strace.set(name, { kind, returns, args: rest.trim().split(/\s+/) })
+        signatures.set(match[1], { kind: match[2], args: match[3].trim().split(/\s+/) })
     }
-    const syscalls = []
-    // Matched over the whole file rather than line by line: two entries wrap onto a second line.
-    const table = read(join(blinkRoot, 'blink/syscall.c'))
-    for (const match of table.matchAll(
-        /\bSYSCALL\((\d+),\s*(0x[0-9A-Fa-f]+),\s*"([^"]+)",\s*(\w+),\s*(\w+)\)\s*;/g
+    const labels = new Map()
+    for (const match of sources.syscall.matchAll(
+        /\bSYSCALL\((\d+),\s*(0x[0-9A-Fa-f]+),\s*"[^"]+",\s*\w+,\s*(\w+)\)\s*;/g
     )) {
-        const [, arity, ordinal, name, , signature] = match
-        const shape = strace.get(signature)
-        const args = (shape?.args ?? [])
-            .slice(0, Number(arity))
-            .map((type) => SYSCALL_ARG_TYPES[type] ?? type.toLowerCase())
-        syscalls.push({
-            number: Number.parseInt(ordinal, 16),
-            name,
-            arity: Number(arity),
-            args,
-            /** `BLOCKY` and `CANCPT` mean the call can wait; the others return at once. */
+        const shape = signatures.get(match[3])
+        labels.set(Number.parseInt(match[2], 16), {
+            args: (shape?.args ?? [])
+                .slice(0, Number(match[1]))
+                .map((type) => SYSCALL_ARG_TYPES[type] ?? type.toLowerCase()),
             blocking: shape?.kind === 'BLOCKY' || shape?.kind === 'CANCPT'
         })
     }
-    // `exit`, `exit_group` and `rt_sigreturn` never return, so blink handles them as plain `case`
-    // arms outside the table. The log line is where their name and arguments are written down, and
-    // `exit` matters more here than most of the table: it is how every program ends.
-    for (const match of table.matchAll(/case\s+(0x[0-9A-Fa-f]+):\s*\n\s*SYS_LOGF\(([^;]*)\);/g)) {
-        const [, ordinal, call] = match
-        // The format string is spliced together from `PRIx64` macros, so the name is the first
-        // quoted word that is a bare identifier and the arguments are what follows it.
-        const named = /"(\w+)"((?:\s*,\s*\w+)*)\s*$/.exec(call)
-        if (!named) continue
-        const [, name, rest] = named
-        // Only the traced calls declare their argument types; these declare how many they read.
-        const arity = rest.split(',').filter((argument) => argument.trim()).length
-        syscalls.push({
-            number: Number.parseInt(ordinal, 16),
-            name,
-            arity,
-            args: [],
-            blocking: false
-        })
+    return implemented
+        .map((call) => ({
+            ...call,
+            args: (labels.get(call.number)?.args ?? []).slice(0, call.arity),
+            blocking: labels.get(call.number)?.blocking ?? false
+        }))
+        .sort((a, b) => a.number - b.number)
+}
+
+/** The built WASM dispatch table is the authority, including calls outside traced source arms. */
+export async function readBlinkSyscalls() {
+    const core = await createX86Emulator()
+    try {
+        return parseBlinkSyscalls(
+            {
+                syscall: read(join(blinkRoot, 'blink/syscall.c')),
+                strace: read(join(blinkRoot, 'blink/strace.h'))
+            },
+            core.getImplementedSyscalls()
+        )
+    } finally {
+        core.dispose()
     }
-    // `clock_gettime` is answered before the dispatcher runs, because blink exempts it from
-    // tracing, so it appears in neither the table nor the logged cases. Reading the early-exit
-    // branch keeps it in the list rather than hardcoding a number that may move.
-    for (const match of table.matchAll(
-        /Get64\(m->ax\)\s*==\s*(0x[0-9A-Fa-f]+)\)\s*\{[\s\S]{0,600}?=\s*Sys(\w+)\(m,([^;]*)\);/g
-    )) {
-        const [, ordinal, fn, argumentList] = match
-        const number = Number.parseInt(ordinal, 16)
-        if (syscalls.some((syscall) => syscall.number === number)) continue
-        syscalls.push({
-            number,
-            name: fn.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(),
-            arity: [...argumentList.matchAll(/Get64\(m->(\w+)\)/g)].length,
-            args: [],
-            blocking: false
-        })
-    }
-    return syscalls.sort((a, b) => a.number - b.number)
 }
 
 // --- insref: the prose ---------------------------------------------------------------------------

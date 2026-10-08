@@ -21,9 +21,27 @@
     let { entry, disableLinks = false }: Props = $props()
 
     const view = $derived(entry.view)
+    const codeLanguage = $derived(
+        entry.chapter !== 'runtime-library'
+            ? undefined
+            : entry.language === 'mips'
+              ? 'MIPS'
+              : entry.language === 'risc-v'
+                ? 'RISC-V'
+                : undefined
+    )
 </script>
 
 <div class="entry-body">
+    {#if entry.instructionContent?.description}
+        <MarkdownRenderer
+            source={entry.instructionContent.description}
+            linksInNewTab
+            {disableLinks}
+            centered={false}
+            simpleCode
+        />
+    {/if}
     {#if view.type === 'markdown'}
         <MarkdownRenderer
             source={view.markdown}
@@ -51,7 +69,7 @@
             </dl>
         {/if}
         {#if view.example}
-            <CodeSample code={view.example} label="Example" />
+            <CodeSample code={view.example} label="Example" language={codeLanguage} />
         {/if}
         {#if view.after && view.after.length > 0}
             <dl class="fields">
@@ -88,6 +106,12 @@
         <X86InstructionView instruction={view.instruction} {disableLinks} />
     {:else if view.type === 'z80-instruction'}
         <Z80InstructionView variants={view.variants} {disableLinks} />
+    {/if}
+    {#if entry.instructionContent?.example}
+        <CodeSample
+            code={entry.instructionContent.example.code}
+            language={entry.instructionContent.example.target}
+        />
     {/if}
 </div>
 

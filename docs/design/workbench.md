@@ -64,12 +64,12 @@ Two new **Preferences** in Settings › Layout, from the two variants the brief 
 Below the editor, present whether or not a Debug session exists, with a resizable height. Today's single console box (`StdOutRenderer`) holds the Diagnostics list, then runtime errors and program output, and pins "Ran in …" to the viewport's corner. It is split into three tabs:
 
 - **Terminal**: exactly the **Terminal** Peripheral's text, the program's output with its echoed input, plus the Emulator's runtime errors, as the console shows them today.
-- **Log**: the **Log**. It records each Build with its result, each test run with every Testcase's outcome and a summary, and each program exit with "Ran in …". Test results also stay in the Testcases panel.
+- **Log**: the **Log**. It records each Build with its result, each test run with every Testcase's outcome and a summary, and each program exit with "Ran in …" and how it ended: "exited with code N", a signal such as "Segmentation fault (signal 11)", or the runtime error. Test results also stay in the Testcases panel.
 - **Problems**: the **Diagnostics**, clickable to reveal their source location, with a count badge coloured by the worst severity. They move here out of the console.
 
 A Build with errors switches to Problems, a successful Build to Terminal, and Test to Log.
 
-Input does not change in this pass. It still comes through the prompt dialog or the focused Screen's Keyboard; typing into the Terminal tab is later work.
+Input does not change in this pass. It still comes through the prompt dialog or the focused Screen's Keyboard; typing into the Terminal tab is later work. Done on 2026-10-06 ([ADR 0036](../adr/0036-programs-read-input-typed-in-the-terminal.md)): a read is typed at a caret in the Terminal tab (`TerminalConsole`), and a read that starts while the tab is hidden or the compact panel folded picks the tab and unfolds the panel.
 
 Two alternatives were rejected. The brief's single tab mixed build and test lines into the program's output, so that tab would no longer be the Terminal. The Log is not called "Output" because program output is the Terminal's.
 
@@ -143,7 +143,7 @@ These follow the brief, today's behaviour, or the decisions above. The owner con
 
 ## Deferred
 
-- Typing the program's input into the Terminal tab, in place of the prompt dialog.
+- Typing the program's input into the Terminal tab, in place of the prompt dialog. Done on 2026-10-06, see Bottom panel.
 - Moving `/chat` to the Workbench.
 - Per-project layout: open tabs, panel sizes, collapsed sections.
 - The visual pass over the first implementation.

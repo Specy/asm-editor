@@ -1,8 +1,13 @@
 <script lang="ts">
-    import type { AnyProjectSettingDeclaration } from '$lib/projectSettings'
+    import type {
+        AnyProjectSettingDeclaration,
+        ProjectSettingId,
+        ProjectSettingValues
+    } from '$lib/projectSettings'
     import FaUndo from '~icons/fa-solid/undo'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Switch from '$cmp/shared/input/Switch.svelte'
+    import Select from '$cmp/shared/input/Select.svelte'
 
     /**
      * One Setting of the open Project: a switch or a number, the value the Project runs with, and
@@ -12,14 +17,26 @@
     interface Props {
         declaration: AnyProjectSettingDeclaration
         /** The value the Project runs with: the decision, or the default. */
-        value: number | boolean
+        value: ProjectSettingValues[ProjectSettingId]
         decided: boolean
-        onDecide: (value: number | boolean) => void
+        onDecide: (value: ProjectSettingValues[ProjectSettingId]) => void
         onReset: () => void
     }
 
     let { declaration, value, decided, onDecide, onReset }: Props = $props()
     let draft = $derived(typeof value === 'number' ? value : 0)
+    const options = $derived.by(() => {
+        const available = (declaration.options ?? []).map((option) => ({
+            key: option.label,
+            value: String(option.value)
+        }))
+        return available.some((option) => option.value === String(value))
+            ? available
+            : [
+                  ...available,
+                  { key: `${value} (unavailable)`, value: String(value), disabled: true }
+              ]
+    })
 </script>
 
 <div class="row settings-value">
@@ -37,6 +54,17 @@
                 checked={value === true}
                 title={declaration.name}
                 onChange={(checked) => onDecide(checked)}
+            />
+        {:else if declaration.type === 'enum'}
+            <Select
+                {options}
+                value={String(value)}
+                ariaLabel={declaration.name}
+                style="padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)"
+                wrapperStyle="min-width: 9rem; max-width: 12rem"
+                onChange={(value) => {
+                    if (declaration.accepts(value)) onDecide(value)
+                }}
             />
         {:else}
             <input

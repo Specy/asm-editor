@@ -155,17 +155,6 @@ export function createDefaultExamSection(type: ExamSectionType): ExamSection {
     }
 }
 
-export function createDefaultExamPayload(): ExamPayload {
-    return {
-        version: 2,
-        title: 'Untitled exam',
-        instructions: '',
-        unlockPasswordHash: '',
-        timeLimit: -1,
-        sections: [createDefaultExamSection(ExamSectionType.AssemblyCoding)]
-    }
-}
-
 export function encodeExamPayload(payload: ExamPayload): string {
     return lzstring.compressToEncodedURIComponent(serializer.stringify(payload))
 }

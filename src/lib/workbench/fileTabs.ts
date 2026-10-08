@@ -24,13 +24,14 @@ export function openTab(tabs: FileTabs, path: string): FileTabs {
 
 /**
  * Closes a tab and, when it was the one shown, shows its right neighbour, or its left one at the
- * end of the row. The last tab never closes: an empty editor would have nothing to say.
+ * end of the row. Closing the last tab leaves an empty group; the session owns pane closure.
  */
 export function closeTab(tabs: FileTabs, path: string): FileTabs {
     const index = tabs.paths.indexOf(path)
-    if (index < 0 || tabs.paths.length <= 1) return tabs
+    if (index < 0) return tabs
     const paths = tabs.paths.filter((candidate) => candidate !== path)
-    const active = tabs.active === path ? paths[Math.min(index, paths.length - 1)] : tabs.active
+    const active =
+        tabs.active === path ? (paths[Math.min(index, paths.length - 1)] ?? '') : tabs.active
     return { paths, active }
 }
 

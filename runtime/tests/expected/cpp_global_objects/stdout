@@ -1,0 +1,12 @@
+construct global first
+construct global second
+dynamic initializer of an int
+construct global third, defined after main
+main starts, initializer returned 30
+construct function-local static
+main returns
+destroy function-local static
+atexit handler
+destroy global third, defined after main
+destroy global second
+destroy global first

@@ -44,7 +44,10 @@
     const effective = $derived(resolveProjectSettings(language, project.settings))
     const sections: Partial<Record<SettingsSectionId, HTMLElement>> = $state({})
 
-    function decide(id: ProjectSettingId, value: number | boolean) {
+    function decide(
+        id: ProjectSettingId,
+        value: import('$lib/projectSettings').ProjectSettingValues[ProjectSettingId]
+    ) {
         if (readonly) return
         session.applySettings({ ...project.settings, [id]: value })
     }

@@ -13,15 +13,3 @@ export const WHITE: ScreenColor = 0xffffff
 export function rgb(red: number, green: number, blue: number): ScreenColor {
     return ((red & 0xff) << 16) | ((green & 0xff) << 8) | (blue & 0xff)
 }
-
-export function redOf(color: ScreenColor): number {
-    return (color >> 16) & 0xff
-}
-
-export function greenOf(color: ScreenColor): number {
-    return (color >> 8) & 0xff
-}
-
-export function blueOf(color: ScreenColor): number {
-    return color & 0xff
-}

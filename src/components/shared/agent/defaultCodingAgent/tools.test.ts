@@ -1411,6 +1411,41 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
         })
     })
 
+    describe('termination', () => {
+        it('says how the program ended, in the words of the Log', async () => {
+            const emulator = createMockEmulator()
+            emulator.run = vi.fn(async () => {
+                Object.assign(emulator, {
+                    terminated: true,
+                    executionTime: 12,
+                    termination: { kind: 'exit', code: 3 }
+                })
+                return InterpreterStatus.Terminated
+            })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.run_to_completion.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            expect(result).toMatchObject({
+                status: 'Terminated',
+                terminated: true,
+                ended: 'Ran in 12ms, exited with code 3',
+                termination: { kind: 'exit', code: 3 }
+            })
+        })
+
+        it('says nothing of an end while the program has not ended', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.get_emulator_state.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            expect(result.terminated).toBe(false)
+            expect(result.ended).toBeUndefined()
+        })
+    })
+
     describe('latest steps', () => {
         it('renders a Poke with its writes in hex and no source line', () => {
             const poke: ExecutionStep = {

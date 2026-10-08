@@ -105,7 +105,7 @@
         gap: 1rem;
         text-align: center;
         font-size: 1.2rem;
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         justify-content: space-between;
         background-color: var(--secondary);
         color: var(--secondary-text);

@@ -1,3 +1,5 @@
+import { runtimeDefinition } from '$lib/sourceRuntime/runtimeLanguage'
+import type { AvailableLanguages } from '$lib/Project.svelte'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '$lib/monaco/Monaco'
 import { resolveFilePath, type BuildSources } from '$lib/projectFiles'
@@ -56,7 +58,7 @@ function contextForModel(model: monaco.editor.ITextModel) {
         identity.sourceKind,
         identity.sourceKind === 'build' ? identity.buildGeneration : undefined
     )
-    return session && sources ? { identity, sources } : null
+    return session && sources ? { identity, sources, target: session.target } : null
 }
 
 function sourceSymbols(
@@ -485,6 +487,28 @@ export function createProjectDefinitionProvider(
             const definitions = sourceSymbols(context.sources, options).filter(
                 (symbol) => symbol.name === token.name
             )
+            if (definitions.length === 0 && options.dialect === 'mars') {
+                //a function of the Runtime library the Build links: its member, read-only
+                const library = runtimeDefinition(
+                    context.sources.runtimeAbi,
+                    context.target as AvailableLanguages,
+                    token.name
+                )
+                if (!library) return null
+                return {
+                    uri: projectSourceUri(monaco, {
+                        ...context.identity,
+                        sourceKind: 'live',
+                        path: library.path
+                    } as ProjectModelIdentity),
+                    range: new monaco.Range(
+                        library.line + 1,
+                        1,
+                        library.line + 1,
+                        token.name.length + 1
+                    )
+                }
+            }
             if (definitions.length !== 1) return null
             const definition = definitions[0]
             const identity: ProjectModelIdentity = { ...context.identity, path: definition.path }

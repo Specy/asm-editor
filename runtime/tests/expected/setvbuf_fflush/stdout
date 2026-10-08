@@ -1,0 +1,9 @@
+setvbuf full=0
+written after setvbuf
+fflush(stdout)=0
+fflush(NULL)=0
+fflush(stderr)=0
+setvbuf line=0
+fflush(file)=0
+setvbuf none=0
+setvbuf bad mode=1

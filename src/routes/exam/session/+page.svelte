@@ -902,7 +902,7 @@
                                                 ? 'Select all that apply'
                                                 : 'Select one option'}
                                         </Header>
-                                        {#each mcSection.options as option}
+                                        {#each mcSection.options as option (option.id)}
                                             <label class="option-row">
                                                 <input
                                                     disabled={examDisabled}
@@ -1042,7 +1042,7 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
         padding: 0.8rem;
-        font-family: 'Fira Mono', monospace;
+        font-family: 'Fira Code', monospace;
         resize: vertical;
     }
 

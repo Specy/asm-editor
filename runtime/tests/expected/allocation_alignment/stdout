@@ -1,0 +1,3 @@
+malloc aligned=1 calloc aligned=1
+realloc aligned=1
+new aligned=1 array aligned=1 alignas16=1

@@ -25,6 +25,11 @@
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
     import { keepHoverReachable } from '$lib/monaco/hoverReachability'
+    import type { EditorLineColoring } from '$lib/monaco/lineColoring'
+    import { selectedLines } from '$lib/monaco/selectedLines'
+    import { setSourceHelpLanguage } from '$lib/sourceLanguageHelp/context'
+    import type { EditorModels } from '$lib/workbench/editorModels'
+    import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '$lib/Config'
 
     interface Props {
         disabled?: boolean
@@ -47,14 +52,27 @@
         modelIdentity?: ProjectModelIdentity
         /** Model identities still owned by the Project; omitted outside the Project File editor. */
         retainedModelKeys?: readonly string[]
+        /** A Workbench session owns models shared by its editor groups. */
+        sharedModels?: EditorModels
         highlightedLine?: number
+        /** Matching source/assembly section backgrounds. */
+        lineColoring?: EditorLineColoring
+        /** Palette indices emphasized by the active source/assembly connections; others dim. */
+        activeLineColors?: ReadonlySet<number>
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
         diagnostics?: Diagnostic[]
         breakpoints?: number[]
+        /** Lines where a Breakpoint set on another File, through a Source map, stops. */
+        mappedBreakpoints?: number[]
         /** Text can be read-only while the Debug session still accepts breakpoint changes. */
         breakpointsEditable?: boolean
         editor?: monaco.editor.IStandaloneCodeEditor
+        /** A preview host can keep its static source and Monaco's typography identical. */
+        fontOptions?: Pick<
+            monaco.editor.IStandaloneEditorConstructionOptions,
+            'fontFamily' | 'fontSize' | 'lineHeight'
+        >
         viewZones?: {
             afterLineNumber: number
             content: Component<ViewZoneProps>
@@ -71,13 +89,18 @@
         modelKey = 'default',
         modelIdentity,
         retainedModelKeys,
+        sharedModels,
         highlightedLine = -1,
+        lineColoring,
+        activeLineColors,
         hasError = false,
         language,
         diagnostics = [],
         breakpoints = [],
+        mappedBreakpoints = [],
         breakpointsEditable = true,
         editor = $bindable(),
+        fontOptions,
         viewZones = [],
         buildArtifacts = []
     }: Props = $props()
@@ -128,6 +151,8 @@
         /** A change to any Project File's model, including one the editor is not showing. */
         fileChange: { path: string; value: string }
         breakpointPress: number
+        /** Zero-based lines covered by the user's selections, a click's single line included. */
+        linesSelect: number[]
     }>()
     let el: HTMLDivElement | null = $state(null)
 
@@ -147,14 +172,26 @@
         await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
         const mounted = activeSource
-        const initialModel = createModel(
-            loadedMonaco,
-            mounted.value,
-            editorLanguage.toLowerCase(),
-            mounted.identity
+        const initialModel = sharedModels
+            ? sharedModels.resolve(
+                  loadedMonaco,
+                  mounted,
+                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase()
+              )
+            : createModel(
+                  loadedMonaco,
+                  mounted.value,
+                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase(),
+                  mounted.identity
+              )
+        if (!sharedModels) {
+            initialModel.setEOL(0)
+            models.set(mounted.key, initialModel)
+        }
+        setSourceHelpLanguage(
+            initialModel,
+            editorLanguage === 'c' || editorLanguage === 'cpp' ? editorLanguage : undefined
         )
-        initialModel.setEOL(0)
-        models.set(mounted.key, initialModel)
         viewStateKey = mounted.key
         activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
@@ -173,6 +210,8 @@
             //diagnostics still matter: a Debug session, a Build snapshot, an exam. The error pill
             //and the console list keep reporting them there, so the squiggles must agree.
             renderValidationDecorations: 'on',
+            //Context menus need the theme variables and decoration styles from the document.
+            useShadowDOM: false,
             fixedOverflowWidgets: true,
             overflowWidgetsDomNode: overflowWidgets,
             minimap: { enabled: false },
@@ -185,6 +224,7 @@
             lineNumbersMinChars: 3,
             cursorBlinking: 'phase',
             fontSize: 16,
+            ...fontOptions,
             smoothScrolling: true,
             cursorSmoothCaretAnimation: 'on'
         })
@@ -204,6 +244,11 @@
         }
 
         toDispose.push(
+            mountedEditor.onDidChangeCursorSelection((event) => {
+                //Model switches and debugger navigation are not a new user source selection.
+                if (applyingExternalValue || event.source === 'api') return
+                dispatcher('linesSelect', selectedLines(mountedEditor.getSelections() ?? []))
+            }),
             mountedEditor.onMouseDown((e) => {
                 if (
                     breakpointsEditable &&
@@ -285,7 +330,7 @@
                 const model = createModel(
                     currentMonaco,
                     source.value,
-                    language.toLowerCase(),
+                    language === 'c' ? 'cpp' : language.toLowerCase(),
                     source.identity
                 )
                 model.setEOL(0)
@@ -302,7 +347,19 @@
         //a host that swaps its content while Monaco is still loading can destroy this component
         //between the editor's creation and this effect; a disposed editor throws on setModel
         if (destroyed || !currentEditor || !currentMonaco) return
-        const model = resolveEditorModel(modelStore(currentMonaco), next)
+        const model = sharedModels
+            ? sharedModels.resolve(
+                  currentMonaco,
+                  next,
+                  language === 'c' ? 'cpp' : language.toLowerCase()
+              )
+            : resolveEditorModel(modelStore(currentMonaco), next)
+        if (!sharedModels) models.set(next.key, model)
+        setSourceHelpLanguage(model, language === 'c' || language === 'cpp' ? language : undefined)
+        if (language === 'c' || language === 'cpp')
+            void Monaco.registerLanguage(language).catch((error) =>
+                console.error('Source help registration failed', error)
+            )
         if (currentEditor.getModel() !== model) {
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true
@@ -323,8 +380,13 @@
     })
 
     $effect(() => {
-        const model = models.get(activeSource.key)
+        if (!activeModelKey) return
+        const model = sharedModels ? editor?.getModel() : models.get(activeSource.key)
         if (!model || model.isDisposed()) return
+        if (sharedModels) {
+            sharedModels.artifacts(activeSource.key, buildArtifacts)
+            return
+        }
         return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
     })
 
@@ -332,6 +394,10 @@
         if (!retainedModelKeys) return
         const retained = new Set(retainedModelKeys)
         const current = activeSource.key
+        for (const key of modelViewStates.keys()) {
+            if (key !== current && !retained.has(key)) modelViewStates.delete(key)
+        }
+        if (sharedModels) return
         for (const [key, model] of models) {
             if (key === current || retained.has(key)) continue
             model.dispose()
@@ -351,12 +417,19 @@
         if (editor === ownEditor) editor = undefined
         overflowWidgets?.remove()
         overflowWidgets = null
-        for (const model of models.values()) if (!model.isDisposed()) model.dispose()
+        if (!sharedModels)
+            for (const model of models.values()) if (!model.isDisposed()) model.dispose()
         models.clear()
         modelViewStates.clear()
     })
 
     let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
+    let sectionLayoutRevision = $state(0)
+
+    $effect(() => {
+        const listener = editor?.onDidChangeHiddenAreas(() => sectionLayoutRevision++)
+        return () => listener?.dispose()
+    })
 
     $effect(() => {
         if (!activeModelKey) return
@@ -368,17 +441,46 @@
     $effect(() => {
         if (activeModelKey && editor && viewZones.length > 0) {
             const viewZoneEditor = editor
+            const coloring = lineColoring
             let currentViewZones = [] as {
                 id: string
                 domNode: HTMLElement
+                wrapper: HTMLElement
+                marginDomNode?: HTMLElement
                 observer: ResizeObserver
                 component: Record<string, unknown>
             }[]
             currentViewZones = []
             viewZoneEditor.changeViewZones(function (changeAccessor) {
-                viewZones.forEach((zone) => {
+                viewZones.forEach((zone, index) => {
                     const domNode = document.createElement('div')
+                    const line = zone.afterLineNumber - 1
+                    const section = coloring?.ranges.find(
+                        (range) => range.startLine <= line && range.endLine >= line
+                    )
+                    let marginDomNode: HTMLElement | undefined
+                    if (section) {
+                        //Expansion rows and their gutter belong to the original assembly section.
+                        domNode.className = `compiled-section compiled-section-zone compiled-section-color-${section.colorIndex}`
+                        marginDomNode = document.createElement('div')
+                        marginDomNode.className = `compiled-section-margin compiled-section-color-${section.colorIndex}`
+                        if (
+                            SOURCE_MAP_SECTION_BORDER.width > 0 &&
+                            line === section.endLine &&
+                            !viewZones
+                                .slice(index + 1)
+                                .some(
+                                    (candidate) =>
+                                        candidate.afterLineNumber === zone.afterLineNumber
+                                )
+                        ) {
+                            //The section ends after its final expansion row, not above it.
+                            domNode.classList.add('compiled-section-border-bottom')
+                            marginDomNode.classList.add('compiled-section-border-bottom')
+                        }
+                    }
                     const wrapper = document.createElement('div')
+                    viewZoneEditor.applyFontInfo(wrapper)
                     const Component = zone.content
                     const props = zone.props
                     const component = mount(Component, {
@@ -392,7 +494,8 @@
                         get heightInPx() {
                             return wrapper.getBoundingClientRect().height
                         },
-                        domNode
+                        domNode,
+                        marginDomNode
                     })
                     const observer = new ResizeObserver(() => {
                         const height = wrapper.getBoundingClientRect().height
@@ -402,14 +505,28 @@
                         })
                     })
                     observer.observe(wrapper)
-                    currentViewZones.push({ id, domNode, observer, component })
+                    currentViewZones.push({
+                        id,
+                        domNode,
+                        wrapper,
+                        marginDomNode,
+                        observer,
+                        component
+                    })
                 })
             })
+            const fontOption = monacoInstance?.editor.EditorOption.fontInfo
+            const fontListener = viewZoneEditor.onDidChangeConfiguration((event) => {
+                if (fontOption !== undefined && !event.hasChanged(fontOption)) return
+                currentViewZones.forEach((zone) => viewZoneEditor.applyFontInfo(zone.wrapper))
+            })
             return () => {
+                fontListener.dispose()
                 currentViewZones.forEach((zone) => {
                     zone.observer.disconnect()
                     void unmount(zone.component)
                     zone.domNode.remove()
+                    zone.marginDomNode?.remove()
                 })
                 if (destroyed) return
                 viewZoneEditor.changeViewZones((changeAccessor) => {
@@ -422,9 +539,90 @@
     })
 
     $effect(() => {
+        const currentEditor = editor
+        const coloring = lineColoring
+        if (!currentEditor || !coloring?.ranges.length) return
+        //The container survives model changes. Monaco replaces its inner view when Build switches
+        //from live assembly to its snapshot, and also resets that view's classes on focus/theme.
+        const root = currentEditor.getContainerDomNode()
+        const scope = `compiled-colors-${currentEditor.getId().replace(/[^a-zA-Z0-9_-]/g, '-')}`
+        root.dataset.sourceMapColorScope = scope
+        const style = document.createElement('style')
+        style.dataset.sourceMapColors = scope
+        const used = new Set(coloring.ranges.map((range) => range.colorIndex))
+        const activeColors = activeLineColors
+        style.textContent = [...used]
+            .map((index) => {
+                const opacity =
+                    activeColors === undefined
+                        ? SOURCE_MAP_COLOR_OPACITY.default
+                        : activeColors.has(index)
+                          ? SOURCE_MAP_COLOR_OPACITY.active
+                          : SOURCE_MAP_COLOR_OPACITY.dimmed
+                return `[data-source-map-color-scope="${scope}"] .compiled-section-color-${index} { --compiled-section-color: ${coloring.colors[index]}; --compiled-section-opacity: ${opacity * 100}%; --compiled-section-border-color: color-mix(in srgb, ${coloring.colors[index]} ${opacity * SOURCE_MAP_SECTION_BORDER.opacity * 100}%, transparent); }`
+            })
+            .join('\n')
+        document.head.appendChild(style)
+        return () => {
+            style.remove()
+            delete root.dataset.sourceMapColorScope
+        }
+    })
+
+    $effect(() => {
         const currentMonaco = monacoInstance
-        if (activeModelKey && editor && decorations && currentMonaco) {
+        const currentEditor = editor
+        void sectionLayoutRevision
+        if (activeModelKey && currentEditor && decorations && currentMonaco) {
             decorations.set([
+                ...(lineColoring?.ranges ?? []).map((range) => ({
+                    range: new currentMonaco.Range(range.startLine + 1, 1, range.endLine + 1, 1),
+                    options: {
+                        className: `compiled-section compiled-section-color-${range.colorIndex}`,
+                        marginClassName: `compiled-section-margin compiled-section-color-${range.colorIndex}`,
+                        isWholeLine: true,
+                        zIndex: 0
+                    }
+                })),
+                ...(SOURCE_MAP_SECTION_BORDER.width > 0
+                    ? (lineColoring?.ranges ?? []).flatMap((range) => {
+                          let first = range.startLine + 1
+                          let last = range.endLine + 1
+                          //Match the connector's endpoints when section lines are folded.
+                          while (
+                              first <= last &&
+                              currentEditor.getLineHeightForPosition({
+                                  lineNumber: first,
+                                  column: 1
+                              }) === 0
+                          )
+                              first++
+                          while (
+                              last >= first &&
+                              currentEditor.getLineHeightForPosition({
+                                  lineNumber: last,
+                                  column: 1
+                              }) === 0
+                          )
+                              last--
+                          if (first > last) return []
+                          const endpoints = [{ line: first, edge: 'top' }]
+                          if (!viewZones.some((zone) => zone.afterLineNumber === last))
+                              endpoints.push({ line: last, edge: 'bottom' })
+                          return endpoints.map(({ line, edge }) => {
+                              const className = `compiled-section-border-${edge} compiled-section-color-${range.colorIndex}`
+                              return {
+                                  range: new currentMonaco.Range(line, 1, line, 1),
+                                  options: {
+                                      className,
+                                      marginClassName: className,
+                                      isWholeLine: true,
+                                      zIndex: 3
+                                  }
+                              }
+                          })
+                      })
+                    : []),
                 ...(highlightedLine >= 0
                     ? [
                           {
@@ -437,7 +635,8 @@
                               options: {
                                   className: hasError ? 'error-line' : 'selected-line',
                                   inlineClassName: 'selected-line-text',
-                                  isWholeLine: true
+                                  isWholeLine: true,
+                                  zIndex: 2
                               }
                           }
                       ]
@@ -448,9 +647,19 @@
                         glyphMarginClassName: 'breakpoint-glyph'
                     }
                 })),
+                ...mappedBreakpoints.map((e) => ({
+                    range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
+                    options: {
+                        glyphMarginClassName: 'mapped-breakpoint-glyph',
+                        glyphMarginHoverMessage: {
+                            value: 'Breakpoint set on the source line this instruction compiles from'
+                        }
+                    }
+                })),
                 ...(breakpointsEditable &&
                 hoveredGliphen &&
-                !breakpoints.includes(hoveredGliphen - 1)
+                !breakpoints.includes(hoveredGliphen - 1) &&
+                !mappedBreakpoints.includes(hoveredGliphen - 1)
                     ? [
                           {
                               range: new currentMonaco.Range(hoveredGliphen, 1, hoveredGliphen, 1),
@@ -539,9 +748,37 @@
     {/if}
 </div>
 
-<div bind:this={el} class="editor"></div>
+<div
+    bind:this={el}
+    class="editor"
+    style:--compiled-section-border-width="{Math.max(0, SOURCE_MAP_SECTION_BORDER.width)}px"
+></div>
 
 <style lang="scss">
+    :global(.compiled-section, .compiled-section-margin) {
+        background-color: color-mix(
+            in srgb,
+            var(--compiled-section-color) var(--compiled-section-opacity),
+            transparent
+        );
+    }
+    :global(.compiled-section-border-top::before, .compiled-section-border-bottom::after) {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: var(--compiled-section-border-width);
+        background-color: var(--compiled-section-border-color);
+        pointer-events: none;
+    }
+    :global(.compiled-section-border-top::before) {
+        top: 0;
+        transform: translateY(-50%);
+    }
+    :global(.compiled-section-border-bottom::after) {
+        bottom: 0;
+        transform: translateY(50%);
+    }
     :global(.selected-line) {
         background-color: var(--accent);
         color: var(--accent-text);
@@ -608,6 +845,10 @@
 
     :global(.monaco-editor .monaco-hover .hover-row:not(:first-child):not(:empty)) {
         border-top: 1px solid var(--accent2) !important;
+    }
+
+    :global(.monaco-editor .monaco-hover hr) {
+        margin: 0.4rem 0 !important;
     }
 
     :global(.monaco-hover table) {
@@ -694,9 +935,21 @@
         background-color: var(--accent2) !important;
     }
 
+    :global(.mapped-breakpoint-glyph) {
+        width: calc(22px - 0.6rem) !important;
+        height: calc(22px - 0.6rem) !important;
+        margin-top: 0.3rem;
+        margin-left: 0.6rem;
+        cursor: pointer;
+        box-sizing: border-box;
+        border: 0.15rem solid var(--accent);
+        border-radius: 1rem;
+    }
+
     .editor {
         display: flex;
         position: absolute;
+        inset: 0;
         flex: 1;
         z-index: 2;
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);

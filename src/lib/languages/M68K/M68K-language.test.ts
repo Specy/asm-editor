@@ -300,5 +300,19 @@ describe('M68K v2 language tooling', () => {
         ).toBe(' CHK exception: -1 is outside 0..9')
         expect(getM68kErrorMessage({ type: 'OverflowException' })).toContain('TRAPV')
         expect(getM68kErrorMessage({ type: 'IllegalInstruction' })).toContain('Illegal instruction')
+        expect(
+            getM68kErrorMessage({
+                type: 'InstructionAccess',
+                value: { address: 4096, write: true }
+            })
+        ).toBe(
+            ' Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
+        )
+        expect(
+            getM68kErrorMessage({
+                type: 'InstructionAccess',
+                value: { address: 4098, write: false }
+            })
+        ).toContain('Cannot read from an instruction: address $1002')
     })
 })

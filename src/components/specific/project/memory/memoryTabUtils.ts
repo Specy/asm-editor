@@ -1,4 +1,4 @@
-import { type DiffedMemory, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
 
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
@@ -15,11 +15,6 @@ export function findElInTree(e: HTMLElement, baseId: string) {
         el = el.parentElement
     }
     return null
-}
-
-export function getGroupSignedValue(groupValue: bigint, groupLength: bigint, size: RegisterSize) {
-    const bits = BigInt(size * 8)
-    return (groupValue << (bits - groupLength * 4n)) >> (bits - groupLength * 4n)
 }
 
 export function inRange(value: number, start: number, len: number) {

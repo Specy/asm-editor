@@ -1,0 +1,5 @@
+.text
+li t0, 13
+li t1, 5
+# t0=13, t1=5; add writes 18 to t2.
+add t2, t0, t1

@@ -628,9 +628,9 @@ export const ThemeStore = makeThemeStore(BUILTIN_THEMES[0])
  * The built-in theme one subtree of the app is dressed in, when a layout asks for one.
  *
  * The colours themselves are custom properties that layout writes into its own markup — that is
- * what keeps them from flashing — so this exists only for the one thing markup cannot reach: the
+ * what keeps them from flashing — so this exists for what that markup cannot reach: the
  * `theme-color` meta tag, which colours the browser's own chrome on mobile and lives in a head
- * the root layout owns.
+ * the root layout owns, and the prompt and toasts, which the root layout draws above the subtree.
  */
 let scopedThemeId: string | null = $state(null)
 
@@ -640,6 +640,11 @@ export const ScopedTheme = {
     },
     get theme() {
         return BUILTIN_THEMES.find((t) => t.id === scopedThemeId) ?? null
+    },
+    /** The subtree's custom properties, for an element drawn outside it; empty when there is none. */
+    get variables() {
+        const scoped = this.theme
+        return scoped ? themeCssVariables(scoped.theme, ThemeStore.meta) : ''
     },
     set(id: string | null) {
         scopedThemeId = id

@@ -1,3 +1,4 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     type AssembledLine,
     assemble,
@@ -28,6 +29,7 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import type { Termination } from '$lib/languages/termination'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -131,6 +133,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * machine, which is a perfectly valid address, and `undo()` does not rewind it.
      */
     private lastInstructionAddress: number | null = null
+    private pokeInstructionAddresses = new Map<number, number | null>()
+    private historyCapacity = 0
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -241,6 +245,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _initialize(undoSize: number): void {
+        this.historyCapacity = normalizeUndoSize(undoSize)
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
         const peripherals = this._peripherals
@@ -251,6 +256,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const device = new Z80Device({
             write: (text) => peripherals.terminal.write(text),
             hasInput: () => peripherals.terminal.hasPendingInput(),
+            readBufferedByte: () => peripherals.terminal.readBufferedByte(),
             //the clock is swapped for a virtual one during a testcase, so it is read per call
             timeHundredths: () => this._peripherals.clock.nowHundredths(),
             screen: peripherals.screen,
@@ -262,11 +268,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                     device.echo(text)
                 )
         })
-        //a run starts with the prompt every Z80 program has always had; the device switches the
-        //Terminal over the first time the program touches the Screen, the Keyboard or the Mouse,
-        //which is what "in graphical use" means for a language whose console is just more ports
+        //a run starts reading what is typed in the Terminal; the device switches it over the first
+        //time the program touches the Screen, the Keyboard or the Mouse, which is what "in graphical
+        //use" means for a language whose console is just more ports
         //([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md))
-        peripherals.terminal.usePromptInput()
+        peripherals.terminal.useTerminalInput()
         const screenInstructions = new ScreenInstructionHistory(
             peripherals.screen,
             normalizeUndoSize(undoSize)
@@ -330,6 +336,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.machine = machine
         this.screenInstructions = screenInstructions
         this.lastInstructionAddress = null
+        this.pokeInstructionAddresses.clear()
     }
 
     _dispose(): void {
@@ -341,6 +348,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.device = null
         this.cliffBreakpoints = []
         this.lastInstructionAddress = null
+        this.pokeInstructionAddresses.clear()
     }
 
     _beginPoke(): void {
@@ -348,7 +356,20 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _endPoke(): boolean {
-        return this.requireMachine().endPoke()
+        const machine = this.requireMachine()
+        const committed = machine.endPoke()
+        if (committed) {
+            const record = machine.getHistory(1)[0]
+            if (record && isPokeRecord(record)) {
+                this.pokeInstructionAddresses.set(record.stepId, this.lastInstructionAddress)
+                // Each newer checkpoint occupies a retained entry; serials are never reused.
+                if (this.pokeInstructionAddresses.size > this.historyCapacity)
+                    this.pokeInstructionAddresses.delete(
+                        this.pokeInstructionAddresses.keys().next().value!
+                    )
+            }
+        }
+        return committed
     }
 
     _canUndo(): boolean {
@@ -368,10 +389,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         if (record && !isPokeRecord(record)) {
             this.screenInstructions?.undoAfter(record.tStateCountBefore)
         }
-        //the core restores the registers but not `instructionAddress`, so without this the panel
-        //would keep naming the instruction that was just undone. The newest surviving instruction
-        //is the one that ran last, and there always is one while the machine could undo at all.
-        this.lastInstructionAddress = this.newestInstructionAddress()
+        // The core restores registers but not instructionAddress. A Poke keeps the remembered
+        // address; an instruction restores it from the newest entry's address or Poke checkpoint.
+        if (record && !isPokeRecord(record))
+            this.lastInstructionAddress = this.newestInstructionAddress()
+        if (record && isPokeRecord(record)) this.pokeInstructionAddresses.delete(record.stepId)
     }
 
     /**
@@ -397,6 +419,20 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         if (machine.stopReason === StopReason.WAITING_FOR_INTERRUPT) return true
         //the cliff: the PC left the assembled code, which is where the other languages stop too
         return this.sourceMap?.addressToLocation(machine.z80.regs.pc) === undefined
+    }
+
+    /**
+     * `halt` and a top-level `ret` are the program stopping itself, an `ei` + `halt` that waits for
+     * an interrupt nothing raises included; the cliff is running past the assembled code. A Z80
+     * program has no exit status.
+     */
+    _getTermination(): Termination | undefined {
+        const machine = this.machine
+        if (!machine || !this._hasTerminated()) return undefined
+        if (machine.isTerminated() || machine.stopReason === StopReason.WAITING_FOR_INTERRUPT) {
+            return { kind: 'exit' }
+        }
+        return { kind: 'end' }
     }
 
     /**
@@ -490,6 +526,45 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
 
     _getPc(): bigint {
         return BigInt(this.machine?.z80.regs.pc ?? 0)
+    }
+
+    _getMemoryLayout() {
+        const asm = this.assembly!.asm
+        let section = 0,
+            end: number | undefined
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (const line of asm.assembledLines) {
+            if (!line.kind || line.nextAddress <= line.address) continue
+            if (end !== undefined && line.address !== end) section++
+            items.push({
+                start: BigInt(line.address),
+                length: BigInt(line.nextAddress - line.address),
+                kind: line.alignment > 1 && items.length ? items[items.length - 1].kind : line.kind,
+                section: `Run ${section + 1}`,
+                alignment: BigInt(line.alignment)
+            })
+            end = line.nextAddress
+        }
+        const labels = asm.symbols
+            .filter((symbol) => symbol.type !== 1)
+            .map((symbol) => ({
+                name: symbol.originalSpelling,
+                address: BigInt(symbol.value),
+                fromLibrary: false
+            }))
+        return memoryLayoutFromItems(items, labels)
+    }
+    _getStackTop() {
+        return BigInt(this.machine?.getStackTop() ?? 0)
+    }
+    _getDeviceRegions() {
+        return this.trs80?.regions() ?? []
+    }
+    _resolveMemoryLabel(name: string) {
+        const symbol = this.assembly?.asm.symbols.find(
+            (symbol) => symbol.name === name.toLowerCase() && symbol.type !== 1
+        )
+        return symbol ? BigInt(symbol.value) : undefined
     }
 
     _getSp(): bigint {
@@ -688,7 +763,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     /**
      * Runs until the machine stops for a reason other than input, refilling the console device
      * whenever an `in` could not be served. Every await goes through `execution` so that a Stop or a
-     * recompile while the prompt is open cannot resume a run that no longer exists.
+     * recompile while a read is waiting cannot resume a run that no longer exists.
      */
     private async runWithInput(
         execution: ExecutionGeneration,
@@ -745,9 +820,10 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     /**
      * Asks the Terminal for input and hands it to the device. The `in` that could not be served was
      * rolled back by the machine, so resuming re-executes it and the device answers it then. The
-     * character port takes one keystroke at a time once the Screen's Keyboard is the source
-     * (ADR 0009); every other case is the line the port has always read (ADR 0002), which is also
-     * what a testcase's scripted input is made of.
+     * character port reads a byte: the Terminal's line, a byte at a time and ending with a line
+     * feed, which is the line the port has always read (ADR 0002) and what a testcase's scripted
+     * input is made of, or a single keystroke once the Screen's Keyboard is the source (ADR 0009).
+     * The numeric ports read a whole line each.
      *
      * The whole read is one journal record: the echo draws a glyph per typed character, and all of
      * them belong to the single `in` the machine is about to re-execute, which is the one step Undo
@@ -756,27 +832,23 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private async provideInput(execution: ExecutionGeneration): Promise<void> {
         const machine = this.requireMachine()
         const device = this.requireDevice()
-        const terminal = this._peripherals.terminal
         const screen = this._peripherals.screen
         const port = machine.pendingInputPort ?? 0
         const question = device.inputQuestion(port)
+        this.refreshInputState()
         this.pendingEchoBefore ??= screen.history.sequence
         screen.beginCompoundOperation()
         try {
-            if (
-                Z80Device.isCharacterPort(port) &&
-                terminal.inputSource === 'interactive' &&
-                terminal.interactiveSource === 'keyboard'
-            ) {
-                const character = await this.requestCharacter(question, execution)
+            if (Z80Device.isCharacterPort(port)) {
+                const byte = await this.requestByte(question, execution)
                 this.executionController.ensureCurrent(execution)
-                device.provideCharacter(character)
+                device.provideCharacter(byte)
                 return
             }
             const value = await this.requestInput(question, execution)
             this.executionController.ensureCurrent(execution)
             //throws for a line that does not parse as the number the port asked for, stopping the run
-            device.provideInput(port, value)
+            device.provideNumber(port, value)
         } finally {
             screen.endCompoundOperation()
         }
@@ -792,22 +864,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.lastInstructionAddress = this.requireMachine().z80.instructionAddress
     }
 
-    /**
-     * Where the machine last executed: the newest record that is an instruction. A Poke ran none and
-     * carries no instruction address, so it is looked past
-     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)). The window grows because
-     * a run of Pokes can be any length; the usual one Poke costs a window of two.
-     */
+    /** A Poke remembers the last instruction, so even a long edit sequence needs just one row. */
     private newestInstructionAddress(): number | null {
-        const machine = this.machine
-        if (!machine) return null
-        for (let window = 2; ; window *= 2) {
-            const records = machine.getHistory(window)
-            for (let i = records.length - 1; i >= 0; i--) {
-                if (!isPokeRecord(records[i])) return records[i].address
-            }
-            if (records.length < window) return null
-        }
+        const newest = this.machine?.getHistory(1)[0]
+        if (!newest) return null
+        if (!isPokeRecord(newest)) return newest.address
+        return this.pokeInstructionAddresses.get(newest.stepId) ?? null
     }
 
     private recordToMutations(record: ExecutionRecord, after: RegisterSet): MutationOperation[] {

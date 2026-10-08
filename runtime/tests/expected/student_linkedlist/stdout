@@ -1,0 +1,4 @@
+sorted: item-3 item0 item7 item7 item19 item19 item42 item64 item100
+removed 19 and -3: item0 item7 item7 item42 item64 item100
+reversed: item100 item64 item42 item7 item7 item0
+dynamic array len=1000 cap=1024 sum=508251

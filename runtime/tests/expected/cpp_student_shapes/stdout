@@ -1,0 +1,7 @@
+circle     area=   7.069 perimeter=   9.425
+rectangle  area=  13.500 perimeter=  15.000
+triangle   area=   6.000 perimeter=  12.000
+circle     area=   0.196 perimeter=   1.571
+largest area=13.500
+largest int=17
+vec=(7, 10)

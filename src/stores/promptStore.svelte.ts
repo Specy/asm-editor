@@ -1,6 +1,8 @@
 export enum PromptType {
     Text,
-    Confirm
+    Confirm,
+    /** A message with a single Ok, MARS's and RARS's message dialogs. */
+    Alert
 }
 type Prompt = {
     promise: Promise<PromptResult> | null
@@ -10,6 +12,11 @@ type Prompt = {
     type: PromptType
     resolve: ((value: PromptResult) => void) | null
     cancellable: boolean
+    /**
+     * Whether a confirm offers Cancel beside No and Yes, as MARS's confirm dialog does. The app's
+     * own confirms are yes-or-no questions and leave it off.
+     */
+    offersCancel: boolean
 }
 type PromptResult = string | boolean | null
 
@@ -21,7 +28,8 @@ function createPromptStore() {
         placeholder: '',
         type: PromptType.Text,
         resolve: null,
-        cancellable: true
+        cancellable: true,
+        offersCancel: false
     })
     function ask(
         question: string,
@@ -34,6 +42,7 @@ function createPromptStore() {
         prompt.placeholder = placeholder
         prompt.type = type
         prompt.cancellable = cancellable
+        prompt.offersCancel = false
         prompt.id = prompt.id + 1
         const promise = new Promise<PromptResult>((resolve) => {
             prompt.resolve = resolve
@@ -45,6 +54,22 @@ function createPromptStore() {
     async function confirm(question: string, cancellable = true): Promise<boolean | null> {
         const result = await ask(question, PromptType.Confirm, cancellable)
         return typeof result === 'boolean' ? result : null
+    }
+
+    /**
+     * A question answered Yes, No or Cancel, MARS's and RARS's confirm dialog: true, false, or null
+     * for Cancel, which is also what a prompt that something else dismissed answers.
+     */
+    async function confirmOrCancel(question: string): Promise<boolean | null> {
+        const pending = ask(question, PromptType.Confirm, true)
+        prompt.offersCancel = true
+        const result = await pending
+        return typeof result === 'boolean' ? result : null
+    }
+
+    /** A message dismissed with Ok, awaited until it is, or until another prompt replaces it. */
+    async function alert(message: string): Promise<void> {
+        await ask(message, PromptType.Alert, true)
     }
 
     async function askText(
@@ -66,6 +91,11 @@ function createPromptStore() {
         settle(value)
     }
 
+    function answerAlert() {
+        if (prompt.type !== PromptType.Alert) return
+        settle(true)
+    }
+
     function cancel() {
         settle(null)
     }
@@ -82,6 +112,7 @@ function createPromptStore() {
         prompt.question = ''
         prompt.placeholder = ''
         prompt.cancellable = true
+        prompt.offersCancel = false
     }
     return {
         get question() {
@@ -96,6 +127,9 @@ function createPromptStore() {
         get cancellable() {
             return prompt.cancellable
         },
+        get offersCancel() {
+            return prompt.offersCancel
+        },
         get id() {
             return prompt.id
         },
@@ -103,9 +137,12 @@ function createPromptStore() {
             return prompt.promise
         },
         confirm,
+        confirmOrCancel,
+        alert,
         askText,
         answerText,
         answerConfirm,
+        answerAlert,
         cancel
     }
 }

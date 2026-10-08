@@ -26,12 +26,7 @@
     let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
         $state.raw()
     onMount(async () => {
-        //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
-        const imp = await import('$cmp/documentation/site/ClientOnly.svelte')
-        // @ts-ignore -- the dynamic import type omits the generated top-level-await promise
-        await imp?.__tla
-        // @ts-ignore -- the prerender import shim obscures the component's default export
-        component = imp?.default
+        component = (await import('$cmp/documentation/site/ClientOnly.svelte')).default
     })
 
     function formatCycles(cycles: { taken: number; notTaken: number }): string {
@@ -183,7 +178,7 @@
         margin-bottom: 1rem;
     }
     .summary {
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         line-height: 1.6;
         word-break: break-word;
     }
@@ -200,7 +195,7 @@
         line-height: 1.5;
     }
     code {
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         color: var(--accent);
     }
     .table-scroll {
@@ -236,7 +231,7 @@
         background-color: color-mix(in srgb, var(--secondary), var(--tertiary) 20%);
     }
     .mono {
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         white-space: nowrap;
     }
     .numeric {

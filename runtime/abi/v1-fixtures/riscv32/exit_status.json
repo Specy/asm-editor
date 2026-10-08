@@ -1,0 +1,9 @@
+{
+  "source": "/* exit from a nested function ends the program with its status after running atexit handlers; main's\n * return value is not reached. */\n#include <stdio.h>\n#include <stdlib.h>\n\nstatic void handler(void) { puts(\"handler ran\"); }\n\nstatic void deep(int level)\n{\n\tif (level == 3) {\n\t\tprintf(\"exiting at level %d\\n\", level);\n\t\texit(7);\n\t}\n\tif (level < 10) deep(level + 1);\n}\n\nint main(void)\n{\n\tatexit(handler);\n\tdeep(0);\n\tputs(\"not reached\");\n\treturn 1;\n}\n",
+  "stdin": null,
+  "inputFiles": {},
+  "stdout": "ZXhpdGluZyBhdCBsZXZlbCAzCmhhbmRsZXIgcmFuCg==",
+  "stderr": "",
+  "status": 7,
+  "files": {}
+}

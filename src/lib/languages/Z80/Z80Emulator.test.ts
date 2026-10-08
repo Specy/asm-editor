@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
 import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 
@@ -156,6 +156,66 @@ describe('Z80 Screen journal', () => {
     })
 })
 
+/**
+ * The character port reads through the Terminal's Line discipline
+ * ([ADR 0036](../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)): a line typed
+ * in the Terminal and echoed, handed out a byte at a time in Latin-1 and ending with 0x0A, or a
+ * single keystroke from the Screen keyboard once the program is graphical (ADR 0009).
+ */
+describe('Z80 console input typed in the Terminal', () => {
+    function registerValue(emulator: ReturnType<typeof Z80Emulator>, name: string): bigint {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register ${name}`)
+        return register.value
+    }
+
+    it('reads a typed line a byte at a time, which the key port sees waiting', async () => {
+        const code = [
+            '        org $8000',
+            '        in a, (0x10)        ; the first byte of the line',
+            '        ld h, a',
+            '        in a, (0x30)        ; is more of it waiting?',
+            '        ld l, a',
+            '        in a, (0x10)',
+            '        ld d, a',
+            '        in a, (0x10)',
+            '        ld e, a',
+            '        halt'
+        ].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(0, code)
+        const terminal = emulator.peripherals.terminal
+        terminal.attachConsole()
+        terminal.insertText('é☃\n')
+        await emulator.run(100_000)
+        expect(emulator.errors).toEqual([])
+        //Latin-1, one byte a character, and a question mark for one outside it
+        expect(registerValue(emulator, 'hl')).toBe(0xe901n)
+        expect(registerValue(emulator, 'de')).toBe(0x3f0an)
+        expect(emulator.stdOut).toBe('é☃\n')
+    })
+
+    it('reads one keystroke at a time once the program is graphical, Enter being 0x0A', async () => {
+        const code = [
+            '        org $8000',
+            '        ld a, 0xFF',
+            '        out (0x20), a       ; a pen color: the program is graphical',
+            '        in a, (0x10)',
+            '        ld d, a',
+            '        in a, (0x10)',
+            '        ld e, a',
+            '        halt'
+        ].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.keyboard.typeText('x\n')
+        await emulator.run(100_000)
+        expect(emulator.errors).toEqual([])
+        expect(registerValue(emulator, 'de')).toBe(0x780an)
+        expect(emulator.stdOut).toBe('x\n')
+    })
+})
+
 describe('Z80 reset and testcases', () => {
     it('leaves a blank Screen and no input state after a rebuild', async () => {
         const code = DRAWING_TESTCASE_PROGRAM
@@ -200,6 +260,40 @@ describe('Z80 reset and testcases', () => {
         expect(Date.now() - started).toBeLessThan(1_000)
         //the drawing happened too, on a Screen the testcase reset before it started
         expect(colorAt(emulator.peripherals.screen, 100, 100)).toBe(0xffffff)
+    })
+})
+
+describe('Z80 termination', () => {
+    async function ended(lines: string[]) {
+        const code = ['    org $8000', ...lines].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        return emulator
+    }
+
+    it('says `halt` and a top-level `ret` are the program stopping itself', async () => {
+        for (const stop of [['    halt'], ['    ret'], ['    ei', '    halt']]) {
+            const emulator = await ended(['    ld a, 1', ...stop])
+            expect(emulator.terminated).toBe(true)
+            //a Z80 program has no exit status
+            expect(emulator.termination).toEqual({ kind: 'exit' })
+        }
+    })
+
+    it('says a program that runs past its code ended there', async () => {
+        const emulator = await ended(['    ld a, 1', '    ld b, 2'])
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'end' })
+    })
+
+    it('forgets how the program ended when Undo takes the `halt` back', async () => {
+        const emulator = await ended(['    ld a, 1', '    halt'])
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+        await emulator.step()
+        expect(emulator.termination).toEqual({ kind: 'exit' })
     })
 })
 
@@ -281,6 +375,26 @@ describe('Z80 Pokes', () => {
         expect(registerOf(emulator, 'a')).toBe(2n)
     })
 
+    it('keeps Poke Undo inspection bounded and preserves the last executed instruction', async () => {
+        const emulator = await stepped(LOADS, 2)
+        const machine = (
+            emulator as unknown as { machine: { getHistory(max?: number): unknown[] } }
+        ).machine
+        const history = vi.spyOn(machine, 'getHistory')
+        const instruction = emulator._getLastInstruction()
+        try {
+            for (let i = 1; i <= 60; i++)
+                emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: BigInt(i) }])
+            emulator.undo(1)
+            expect(emulator._getLastInstruction()).toEqual(instruction)
+            await emulator.step()
+            emulator.undo(1)
+            expect(emulator._getLastInstruction()).toEqual(instruction)
+            expect(history.mock.calls.every(([max]) => max !== undefined && max <= 20)).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
     it('records poked memory as one step, however many bytes it spans', async () => {
         const emulator = await stepped(LOADS, 2)
         const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])

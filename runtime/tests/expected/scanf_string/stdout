@@ -1,0 +1,15 @@
+1: r=2 [hello] [world]
+2: r=2 [abcde] [fgh]
+3: r=1 [32]
+4: r=1 [tai]
+5: r=1 [l]
+6: r=2 [abc] [123]
+7: r=2 [first part] [second part with spaces]
+8: r=2 []ca]] [-]
+9: r=1 [after] n1=7 n2=12
+10: r=0 (no digits), next char 'w'
+11: r=1 [the whole line here]
+12: r=1 [10]
+13: r=1 [abc]
+14: r=1 [defg]
+15: r=-1 at end

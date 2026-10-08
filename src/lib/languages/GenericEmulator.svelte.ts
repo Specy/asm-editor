@@ -1,7 +1,11 @@
+import { buildSourcesEqual } from '$lib/projectFiles'
+import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
+import { mergeMemoryRegions, readOnlyMemoryAt } from './memoryRegions'
 import {
     BaseEmulator,
     CompilationFailedError,
-    type EmulatorConfig
+    type EmulatorConfig,
+    type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
     type BaseEmulatorActions,
@@ -10,21 +14,33 @@ import {
     createMemoryTab,
     resetMemoryTab,
     type EmulatorSettings,
+    type ExecutionStep,
     InterpreterStatus,
     makeGenericDiagnostic,
     makeRegister,
+    type MemoryTab,
+    type MemoryLayout,
+    type HeapBounds,
+    type DeviceRegion,
+    type ReadOnlyMemory,
     numbersOfSizeToSlice,
     type RegisterFile,
     type RegisterPoke,
     type RegisterSize,
-    resolveRegisterFileLayout
+    resolveRegisterFileLayout,
+    type SourceBreakpoint,
+    type UnreadableBytes
 } from '$lib/languages/commonLanguageFeatures.svelte'
-import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+import { type MemoryPage, readMemoryPage } from '$lib/languages/memoryPage'
+import { Terminal, type TerminalReadOptions } from '$lib/languages/peripherals/Terminal.svelte'
+import { terminalTextConventions } from '$lib/languages/peripherals/terminalText'
 import {
     createInjectedPeripherals,
     type EmulatorPeripherals
 } from '$lib/languages/peripherals/peripheralSet'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
+import { RandomSource } from '$lib/languages/peripherals/RandomSource'
+import type { Termination } from '$lib/languages/termination'
 import {
     COMPUTE_SLICE_MS,
     nextSpeedCorrection,
@@ -38,6 +54,7 @@ import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
 import { projectSettingDefault } from '$lib/projectSettings'
+import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
 import {
     byteSliceToNum,
     isMemoryChunkEqual,
@@ -52,9 +69,14 @@ import {
     sourceText,
     updateEntryText,
     type BuildInput,
-    type BuildSources
+    type BuildSources,
+    type ProjectFiles
 } from '$lib/projectFiles'
-import { FileSystem, type FileSystemSession } from '$lib/languages/peripherals/FileSystem'
+import {
+    FileSystem,
+    type FileDescriptorOptions,
+    type FileSystemSession
+} from '$lib/languages/peripherals/FileSystem'
 
 /**
  * How often the panels a user watches — registers, memory, the call stack, the undo history — are
@@ -96,27 +118,55 @@ function isProgramCounterName(register: string): boolean {
     return PROGRAM_COUNTER_NAMES.includes(register.toLowerCase())
 }
 
-function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
-    if (left.entry !== right.entry) return false
-    const leftPaths = Object.keys(left.files)
-    const rightPaths = Object.keys(right.files)
-    if (leftPaths.length !== rightPaths.length) return false
-    return leftPaths.every((path) => {
-        const leftFile = left.files[path]
-        const rightFile = right.files[path]
-        return (
-            leftFile !== undefined &&
-            rightFile !== undefined &&
-            leftFile.encoding === rightFile.encoding &&
-            leftFile.content === rightFile.content
-        )
-    })
-}
+/**
+ * One stretch of the newest Core history, newest last. Plain entries undo one at a time; a grouped
+ * stretch is a Step that ran through Runtime library code, which Undo takes back as a whole, so it
+ * returns to the previous stop as Step left it. A floor is start code that a Core which cannot pause
+ * its history recorded before the program's own first instruction: Undo never takes it back.
+ */
+type UndoSegment = { entries: number; grouped: boolean; floor?: true }
+
+/** How many instructions a Step may run through library code before it stops there anyway. */
+const STEP_THROUGH_LIMIT = 50_000_000
+/** How often a Step running through library code hands the host a turn. */
+const STEP_THROUGH_YIELD = 2_000
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
+    private memoryLayout = $state<MemoryLayout | undefined>()
+    private heapBounds = $state<HeapBounds | undefined>()
+    private stackTop = $state<bigint | undefined>()
+    private deviceRegions = $state<DeviceRegion[]>([])
+
+    get dataLabels() {
+        return this.memoryLayout?.dataLabels ?? []
+    }
+    get readOnlyMemory(): readonly ReadOnlyMemory[] {
+        return this.memoryLayout?.readOnly ?? []
+    }
+    get memoryRegions() {
+        return this.memoryLayout
+            ? mergeMemoryRegions(
+                  this.memoryLayout,
+                  this.heapBounds,
+                  this.stackTop === undefined
+                      ? undefined
+                      : { start: this.state.sp, end: this.stackTop },
+                  this.deviceRegions
+              )
+            : []
+    }
+    resolveMemoryLabel(name: string): bigint | undefined {
+        if (!this._buildSources) return undefined
+        const matches = this.dataLabels.filter(
+            (label) => label.name === name || label.displayName === name
+        )
+        if (matches.length === 1) return matches[0].address
+        return this._resolveMemoryLabel?.(name)
+    }
+
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
     protected _sources: BuildSources
     protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals' | 'display'>>
@@ -127,6 +177,11 @@ export abstract class GenericEmulator<T, R extends string>
      * they need it instead of caching it.
      */
     private readonly interactiveClock: ProgramClock
+    /**
+     * The host-seeded Random source of interactive runs, kept for the same reason: a Testcase swaps
+     * in a seeded one, and adapters read `_peripherals.random` at the point of use.
+     */
+    private readonly interactiveRandom: RandomSource
     private semanticCheckId = 0
     /**
      * What the slices of the current run have taught about how fast this program runs, multiplied
@@ -150,8 +205,25 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private pauseRequested = false
     private runInFlight = false
+    /** Turns the Breakpoints the user set into the ones the Core runs with, see `setBreakpointResolver`. */
+    private breakpointResolver?: (breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]
     protected fileSystemSession: FileSystemSession | null = null
     private _buildSources: BuildSources | undefined = $state()
+    /**
+     * The Runtime library members the Build linked against, as read-only Files under `@runtime/`
+     * for the debugger to open. They are never part of the Project or its FileSystem.
+     */
+    protected _buildLibraryFiles: ProjectFiles | undefined = $state.raw()
+    /** What Undo takes back next, newest last; see `UndoSegment`. */
+    private undoLedger: UndoSegment[] = []
+    /**
+     * Whether Step stops in Runtime library code like any other, the Preference of that name. Off by
+     * default: a Step that lands in a Library member runs on until the program is back in user code
+     * ("Just My Code").
+     */
+    get stepIntoRuntimeLibrary(): boolean {
+        return preferencesStore.values.stepIntoRuntimeLibrary?.value === true
+    }
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
     /**
@@ -195,9 +267,14 @@ export abstract class GenericEmulator<T, R extends string>
                 this._emulatorOptions.language,
                 emulatorOptions.peripherals
             ),
-            terminal: new Terminal({ executionController: this.executionController })
+            //the Target's encoding and Enter code, which its Reference environment decides
+            terminal: new Terminal({
+                executionController: this.executionController,
+                ...terminalTextConventions(this._emulatorOptions.language)
+            })
         }
         this.interactiveClock = this._peripherals.clock
+        this.interactiveRandom = this._peripherals.random
 
         this.state = $state({
             systemSize: options.systemSize,
@@ -207,6 +284,7 @@ export abstract class GenericEmulator<T, R extends string>
             hiddenRegisters: options.hiddenRegisters ?? [], //TODO should this be state?
             pc: 0n,
             terminated: false,
+            termination: undefined,
             line: -1,
             currentFile: this._sources.entry,
             decorations: [],
@@ -257,12 +335,30 @@ export abstract class GenericEmulator<T, R extends string>
         return []
     }
 
+    /**
+     * How the Build's FileSystem session numbers the files a program opens, the Target's
+     * convention: the default, from 3 with no limit, leaves 0 to 2 to the standard streams as MARS,
+     * RARS and Linux do. An adapter whose environment numbers its files otherwise says so here.
+     */
+    protected fileDescriptorOptions(): FileDescriptorOptions {
+        return {}
+    }
+
     protected addDecorations() {
         if (!this.getInstance()) return
         const decorations = this._getCompiledCode()
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
         this.state.buildArtifacts = this._getBuildArtifacts()
+        const layout = this._getMemoryLayout?.() ?? { sections: [], dataLabels: [] }
+        this.memoryLayout = {
+            ...layout,
+            dataLabels: compiledMemoryNames(
+                layout.dataLabels,
+                this._buildSources!,
+                (address, length) => this._readMemoryBytes(address, length)
+            )
+        }
     }
 
     protected addError(error: string) {
@@ -344,6 +440,8 @@ export abstract class GenericEmulator<T, R extends string>
     protected async semanticCheck() {
         const checkId = ++this.semanticCheckId
         try {
+            //before the idle wait, so nothing is awaited between it and the throwaway assembly
+            await this._prepareBuild?.($state.snapshot(this._sources))
             //`_checkCode` assembles a throwaway core, which for the MARS/RARS derived cores would
             //hijack a run that is still in flight (see `duringCoreOperation`), so wait it out. A
             //check that a newer one superseded in the meantime is dropped instead of assembling.
@@ -534,46 +632,116 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.sp = this._getSp()
     }
 
+    /**
+     * Every memory view read again. A byte a view cannot read is that view's to show, marked in its
+     * page with the reason, and never an error of the program: the address is the user's choice, and
+     * a run must not stop, or the terminal fill up, because a view points somewhere unmapped.
+     */
     protected updateMemory() {
         if (!this.getInstance()) return
-        try {
-            const temp = this.state.memory.global.data.current
-            const memory = this._readMemoryBytes(
-                this.state.memory.global.address,
-                BigInt(this.state.memory.global.pageSize)
-            )
-            this.state.memory.global.data.current = new Uint8Array(memory)
-            this.state.memory.global.data.prevState = temp
-            this.state.memory.tabs.forEach((tab) => {
-                const temp = tab.data.current
-                const memory = this._readMemoryBytes(tab.address, BigInt(tab.pageSize))
-                tab.data.current = new Uint8Array(memory)
-                tab.data.prevState = temp
-            })
-        } catch (e) {
-            console.error(e)
-            this.addError(this._stringifyError(e))
+        for (const view of [this.state.memory.global, ...this.state.memory.tabs]) {
+            const page = this.readMemoryPage(view.address, view.pageSize, view.data.unreadable)
+            const temp = view.data.current
+            view.data.current = page.bytes
+            view.data.prevState = temp
+            view.data.unreadable = page.unreadable
         }
     }
 
-    protected async requestInput(question: string, execution: ExecutionGeneration) {
+    /** A view's page as `readMemoryPage` reads it, around the bytes the Core refuses. */
+    private readMemoryPage(
+        address: bigint,
+        pageSize: number,
+        previous: UnreadableBytes | null = null
+    ): MemoryPage {
+        return readMemoryPage(
+            (at, length) => this._readMemoryBytes(at, BigInt(length)),
+            address,
+            pageSize,
+            this._emulatorOptions.initialMemoryValue,
+            //the view already says it could not read, so the reason is the Core's message alone
+            (e) => this._stringifyError(e).replace(/^Error: /, ''),
+            previous
+        )
+    }
+
+    /** A view moved to an address the user chose: what it held before is not a previous state. */
+    private placeMemoryView(view: MemoryTab, address: bigint): void {
+        const page: MemoryPage = this.getInstance()
+            ? this.readMemoryPage(address, view.pageSize)
+            : {
+                  bytes: new Uint8Array(view.pageSize).fill(
+                      this._emulatorOptions.initialMemoryValue
+                  ),
+                  unreadable: null
+              }
+        view.address = address
+        view.userPlaced = true
+        view.data.current = page.bytes
+        view.data.prevState = page.bytes
+        view.data.unreadable = page.unreadable
+    }
+
+    /**
+     * A line, through the Terminal's Line discipline. `options` are how the program set up its
+     * reads to show what is typed, where its environment lets it (EASy68K's tasks 12 and 16).
+     */
+    protected async requestInput(
+        question: string,
+        execution: ExecutionGeneration,
+        options?: TerminalReadOptions
+    ) {
         this.state.interrupt = { type: 'ReadInput', message: question }
         try {
-            return await this._peripherals.terminal.readAsync(question, execution)
+            return await this._peripherals.terminal.readAsync(question, execution, options)
         } finally {
             this.state.interrupt = undefined
         }
     }
 
     /**
-     * One character rather than a line: with Screen keyboard input it is consumed as soon as it is
-     * typed ([ADR 0009](../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)), and
-     * with a prompt it is the first character of the answered line, as the adapters read it before.
+     * One character rather than a line, consumed as soon as one keystroke is typed, with Enter as
+     * the Target's code: the Terminal's Line discipline
+     * ([ADR 0036](../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)).
      */
-    protected async requestCharacter(question: string, execution: ExecutionGeneration) {
+    protected async requestCharacter(
+        question: string,
+        execution: ExecutionGeneration,
+        options?: TerminalReadOptions
+    ) {
         this.state.interrupt = { type: 'ReadInput', message: question }
         try {
-            return await this._peripherals.terminal.readCharAsync(question, execution)
+            return await this._peripherals.terminal.readCharAsync(question, execution, options)
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    /**
+     * A read of standard input, at most `length` bytes: what is left of the current line, or else a
+     * new one, or no bytes at End of input.
+     */
+    protected async requestStandardInput(
+        length: number,
+        question: string,
+        execution: ExecutionGeneration
+    ) {
+        this.state.interrupt = { type: 'StandardInput', message: question }
+        try {
+            return await this._peripherals.terminal.readStandardInput(length, question, execution)
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    /**
+     * One byte of input for a port that reads a byte at a time, the Z80's character port: the rest of
+     * the current line, or else a new line or, in graphical use, a single keystroke.
+     */
+    protected async requestByte(question: string, execution: ExecutionGeneration) {
+        this.state.interrupt = { type: 'ReadInput', message: question }
+        try {
+            return await this._peripherals.terminal.readByte(question, execution)
         } finally {
             this.state.interrupt = undefined
         }
@@ -613,10 +781,85 @@ export abstract class GenericEmulator<T, R extends string>
 
     protected updateData() {
         if (!this.getInstance()) return
-        this.state.terminated = this._hasTerminated()
+        this.readTermination()
         this.state.pc = this._getPc()
         this.state.callStack = this._getCallStack()
-        this.state.latestSteps = this._getUndoHistory(VISIBLE_HISTORY_STEPS)
+        this.heapBounds = this._getHeapBounds?.()
+        this.stackTop = this._getStackTop?.()
+        this.deviceRegions = this._getDeviceRegions?.() ?? []
+        this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
+    }
+
+    /**
+     * `terminated` and how the program ended, read from the Core together so that the two never
+     * disagree. A runtime error is the exception: the Core reported it by throwing, and several
+     * Cores leave a failed program runnable, so it stands until an Undo takes it back
+     * (`forgetRuntimeFailure`) or a clear drops the program.
+     */
+    private readTermination(): void {
+        if (this.state.termination?.kind === 'error') return
+        const terminated = this._hasTerminated()
+        this.state.terminated = terminated
+        this.state.termination = terminated
+            ? (this._getTermination() ?? { kind: 'end' })
+            : undefined
+    }
+
+    /** Ends the program on a runtime error, which `readTermination` then leaves standing. */
+    private endWithError(message: string): void {
+        this.state.terminated = true
+        this.state.termination = { kind: 'error', message }
+    }
+
+    /**
+     * Drops a runtime error that ended the program, so the Core is read again: after an Undo, which
+     * took the failure back, and after a Step or Run that ran, which proves it gone.
+     */
+    private forgetRuntimeFailure(): void {
+        if (this.state.termination?.kind === 'error') this.state.termination = undefined
+    }
+
+    /**
+     * The newest steps of the history as Undo takes them back: a Step that ran through library code
+     * is one row, the instruction that called into the library, with the library function and how
+     * many instructions the Step ran, so "Undo to here" on row N is N Undos.
+     */
+    private visibleHistory(max: number): ExecutionStep[] {
+        if (!this._getUndoHistoryRange || !this.undoLedger.some((segment) => segment.grouped))
+            return this._getUndoHistory(max)
+        const rows: ExecutionStep[] = []
+        let skip = 0
+        for (let i = this.undoLedger.length - 1; i >= 0 && rows.length < max; i--) {
+            const segment = this.undoLedger[i]
+            //the start code, which no Undo reaches, and nothing older
+            if (segment.floor) break
+            if (!segment.grouped) {
+                rows.push(
+                    ...this._getUndoHistoryRange(skip, Math.min(segment.entries, max - rows.length))
+                )
+            } else {
+                //newest first: the first library instruction, then the call that reached it
+                const [entered, call] = this._getUndoHistoryRange(skip + segment.entries - 2, 2)
+                if (!call) break
+                rows.push({
+                    ...call,
+                    undoable:
+                        (this._undoDepth?.() ?? 0) >= skip + segment.entries &&
+                        (this._canUndoHistoryRange?.(skip, segment.entries) ??
+                            (skip === 0 ? this._canUndoSteps?.(segment.entries) : undefined) ??
+                            true),
+                    stretch: {
+                        library:
+                            entered?.file
+                                ?.slice(entered.file.lastIndexOf('/') + 1)
+                                .replace(/\.s$/, '') ?? 'library',
+                        instructions: segment.entries
+                    }
+                })
+            }
+            skip += segment.entries
+        }
+        return rows
     }
 
     /**
@@ -625,7 +868,7 @@ export abstract class GenericEmulator<T, R extends string>
      * termination and only loses it here, which is what the design record asks for.
      */
     private resetPeripherals(): void {
-        const { terminal, screen, keyboard, mouse, clock } = this._peripherals
+        const { terminal, screen, keyboard, mouse, clock, random } = this._peripherals
         terminal.clear()
         terminal.useInteractiveInput()
         this.applyScreenHistoryBudget()
@@ -633,6 +876,7 @@ export abstract class GenericEmulator<T, R extends string>
         keyboard.reset()
         mouse.reset()
         clock.reset()
+        random.reset()
     }
 
     /**
@@ -661,43 +905,114 @@ export abstract class GenericEmulator<T, R extends string>
      * older drawing has been evicted. Memory-backed framebuffers rely on the CPU history alone.
      */
     private canUndoStep(): boolean {
-        return this._canUndo()
+        const top = this.undoLedger[this.undoLedger.length - 1]
+        if (top?.floor) return false
+        if (!top?.grouped) return this._canUndo()
+        //a library call the history no longer holds whole is not undone part way: Undo stops here,
+        //as it does at the oldest entry the history kept
+        return (
+            this._canUndo() &&
+            (this._undoDepth?.() ?? 0) >= top.entries &&
+            (this._canUndoSteps?.(top.entries) ?? true)
+        )
+    }
+
+    /** Records instructions or Pokes the Core just added to its history. */
+    private recordHistory(entries: number, grouped = false): void {
+        if (entries <= 0) return
+        const top = this.undoLedger[this.undoLedger.length - 1]
+        if (!grouped && top && !top.grouped) top.entries += entries
+        else this.undoLedger.push({ entries, grouped })
+        //only the newest stretches can ever be undone; a run that alternates library Steps and
+        //plain ones for hours must not grow this without bound
+        if (this.undoLedger.length > 100_000) this.undoLedger.splice(0, 50_000)
+    }
+
+    /** Whether an instruction belongs to a Runtime library member. */
+    private inRuntimeLibrary(instruction: { file?: string } | null | undefined): boolean {
+        return !!instruction?.file?.startsWith(RUNTIME_NAMESPACE)
     }
 
     /**
-     * The run configuration of a Testcase: scripted answers and a virtual Time Source, chosen
-     * together ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)). Waits
-     * complete immediately and advance a clock that starts at zero, so elapsed-time output is
-     * reproducible and a sleeping program cannot stall a test.
+     * Runs a program that starts in the Runtime library, a compiled one at `_start`, up to its own
+     * first instruction: `main`, or a C++ global constructor that runs before it. That is where a
+     * Step from `_start` stops, so a Build shows the program's code rather than the library's. The
+     * start code runs outside the Undo history, which begins at that first instruction, and nothing
+     * it does before user code is visible: it reads no input and writes no output. A Core that cannot
+     * pause its history records the start code like any instruction, and the ledger puts it behind a
+     * floor that Undo never crosses. With _Step into Runtime library code_ on, library code is
+     * ordinary and the Build stays at `_start`.
+     */
+    private async runStartCode(execution: ExecutionGeneration): Promise<void> {
+        if (this.stepIntoRuntimeLibrary || !this.inRuntimeLibrary(this._getNextInstruction()))
+            return
+        const pausable = this._setUndoRecording !== undefined
+        this._setUndoRecording?.(false)
+        let executed = 0
+        try {
+            while (executed < STEP_THROUGH_LIMIT) {
+                const { terminated } = await this._step()
+                executed += 1
+                this.executionController.ensureCurrent(execution)
+                if (terminated || !this.inRuntimeLibrary(this._getNextInstruction())) return
+                if (executed % STEP_THROUGH_YIELD === 0)
+                    await this.executionController.waitFor(execution, () => yieldToHost())
+            }
+        } finally {
+            if (pausable) this._setUndoRecording?.(true)
+            else if (executed > 0)
+                this.undoLedger.push({ entries: executed, grouped: true, floor: true })
+        }
+    }
+
+    /**
+     * The run configuration of a Testcase: scripted answers, a virtual Time Source and a seeded
+     * Random source, chosen together
+     * ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md),
+     * [ADR 0037](../../../docs/adr/0037-testcases-run-on-a-seeded-random-source.md)). Waits
+     * complete immediately and advance a clock that starts at zero, and the random services start
+     * from the fixed seed, so elapsed-time output and random numbers are reproducible and a
+     * sleeping program cannot stall a test.
      *
-     * The clock instance is swapped, not switched: a clock's mode is fixed for its life, and an
-     * adapter that captured the interactive one before the test would otherwise keep host time.
+     * The clock and the Random source are swapped, not switched: their modes are fixed for their
+     * lives, and an adapter that captured the interactive ones before the test would otherwise keep
+     * host time and host randomness.
      */
     private useScriptedRun(input: string[]): void {
         this._peripherals.terminal.useScriptedInput(input)
         this._peripherals.clock.cancel()
         this._peripherals.clock = new ProgramClock({ mode: 'virtual' })
         this._peripherals.clock.start()
+        this._peripherals.random = new RandomSource({ mode: 'seeded' })
     }
 
     /**
      * Back to the interactive sources after a Testcase, including after one that threw. The
-     * interactive clock is the instance the caller injected, so a GUI holding it keeps the one it
-     * bound to.
+     * interactive clock and Random source are the instances the caller injected, so a GUI holding
+     * them keeps the ones it bound to.
      */
     private useInteractiveRun(): void {
         this._peripherals.terminal.useInteractiveInput()
         this._peripherals.clock.cancel()
         this._peripherals.clock = this.interactiveClock
         this._peripherals.clock.reset()
+        this._peripherals.random = this.interactiveRandom
+        this._peripherals.random.reset()
     }
 
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        this._clearExecution?.()
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
         this._buildSources = undefined
+        this.memoryLayout = undefined
+        this.heapBounds = undefined
+        this.stackTop = undefined
+        this.deviceRegions = []
+        this._buildLibraryFiles = undefined
+        this.undoLedger = []
         this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
@@ -710,6 +1025,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.state = {
             ...this.state,
             terminated: false,
+            termination: undefined,
             compiledCode: undefined,
             pc: 0n,
             sp: 0n,
@@ -747,16 +1063,24 @@ export abstract class GenericEmulator<T, R extends string>
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(() =>
-            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem)
+            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem, true)
         )
     }
 
+    /**
+     * `stopInUserCode` is the Build a Debug session starts from, which stops where a Step from the
+     * program's start would (`runStartCode`). A Testcase starts at the first instruction instead:
+     * its starting registers and instruction limit apply from there, as they always have.
+     */
     private async compileInternal(
         historySize: number,
         sourceOverride: BuildInput | undefined,
-        fileSystem: FileSystem
+        fileSystem: FileSystem,
+        stopInUserCode = false,
+        scriptedInput?: string[]
     ): Promise<void> {
         this.clear()
+        if (scriptedInput !== undefined) this.useScriptedRun(scriptedInput)
         //A Build supersedes live checking the same way a newer check supersedes an older one: the
         //debounced check is disarmed and any check already in flight fails its id comparison when
         //it settles, so it cannot overwrite the Build's diagnostics with a separately assembled
@@ -771,6 +1095,9 @@ export abstract class GenericEmulator<T, R extends string>
                     ? $state.snapshot(this._sources)
                     : normalizeBuildInput(sourceOverride)
             entry = sources.entry
+            await prepareMemoryNames(sources)
+            await this._prepareBuild?.(sources)
+            this.executionController.ensureCurrent(execution)
             const result = await this._compile(sources, historySize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
@@ -785,12 +1112,24 @@ export abstract class GenericEmulator<T, R extends string>
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
                 Number.isFinite(megabytes) && megabytes >= 0 ? megabytes * 1024 * 1024 : 0,
-                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0
+                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
+                this.fileDescriptorOptions()
             )
             this._buildSources = sources
+            this._beginExecutionSession?.()
             this.addDecorations()
             this.state.canExecute = true
             this.state.canUndo = false
+            if (stopInUserCode) {
+                try {
+                    await this.runStartCode(execution)
+                } catch (e) {
+                    if (!this.executionController.isCurrent(execution)) throw e
+                    //the program was built, and failed before its own code as a Step would show
+                    this.reportRuntimeFailure(e)
+                    return
+                }
+            }
             const instruction = this._getNextInstruction()
             this.state.line = instruction?.lineNumber ?? -1
             this.state.currentFile = instruction?.file ?? sources.entry
@@ -911,16 +1250,27 @@ export abstract class GenericEmulator<T, R extends string>
             const clock = this._peripherals.clock
             const startedAt = performance.now()
             const waitedAt = clock.waitedMs
-            const slice: ExecutionSlice = await this._runSlice({
-                //the whole rest of the limit, so an adapter can cap it with its own throughput
-                //estimate of `timeBudgetMs` and never has to know how long the run has been going
-                instructionBudget: remaining,
-                timeBudgetMs: targetMs,
-                breakpoints: this.state.breakpoints,
-                skipBreakpointAtPc: firstSlice,
-                runInstructionLimit: haltLimit,
-                speedCorrection: this.speedCorrection
-            })
+            const countedBefore = this._getInstructionsExecuted?.()
+            let slice: ExecutionSlice
+            try {
+                slice = await this._runSlice({
+                    //the whole rest of the limit, so an adapter can cap it with its own throughput
+                    //estimate of `timeBudgetMs` and never has to know how long the run has been going
+                    instructionBudget: remaining,
+                    timeBudgetMs: targetMs,
+                    //resolved per slice, like the list it replaces, so a Breakpoint toggled mid-Run
+                    //takes effect at the next slice
+                    breakpoints:
+                        this.breakpointResolver?.(this.state.breakpoints) ?? this.state.breakpoints,
+                    skipBreakpointAtPc: firstSlice,
+                    runInstructionLimit: haltLimit,
+                    speedCorrection: this.speedCorrection
+                })
+            } catch (error) {
+                if (countedBefore !== undefined && this.executionController.isCurrent(execution))
+                    this.recordHistory(Number(this._getInstructionsExecuted!() - countedBefore))
+                throw error
+            }
             firstSlice = false
             this.learnSliceSpeed(
                 slice,
@@ -930,6 +1280,7 @@ export abstract class GenericEmulator<T, R extends string>
             )
             this.executionController.ensureCurrent(execution)
             const progress = Math.max(0, slice.instructions)
+            this.recordHistory(progress)
             remaining -= progress
             if (slice.reason === 'wait') {
                 //a wait is not execution: it costs no instructions and the run continues after it.
@@ -1006,6 +1357,15 @@ export abstract class GenericEmulator<T, R extends string>
         return now < this.screenActiveUntil
     }
 
+    /** The instruction waiting for input, with every panel current before its read suspends. */
+    protected refreshInputState(
+        instruction: Instruction | null = this._getNextInstruction()
+    ): void {
+        if (this._peripherals.terminal.inputSource === 'scripted') return
+        this.selectInstruction(instruction)
+        this.refreshRunningPanels(true)
+    }
+
     /**
      * The panels, refreshed from inside a running program — the path an adapter takes when its Core
      * stops on an interrupt. Reading the registers of every Register file, a page of memory per
@@ -1040,24 +1400,36 @@ export abstract class GenericEmulator<T, R extends string>
      * which would otherwise leave every panel showing what it held when Run was pressed.
      */
     /**
-     * The end of a run that threw: the failing instruction is reported, and the panels are brought
-     * up to date. A program that ends on a runtime error is exactly when the registers and memory
-     * that caused it are worth looking at, and the Core's history still holds the instructions that
-     * ran, so Undo is offered rather than left reading as unavailable. Both are guarded: a Core that
-     * just failed may no longer be readable, and that must not replace the error the user needs.
+     * The end of a Run, Step or Testcase that threw: the failing instruction is reported, the
+     * program ends on the error (`termination` says so until an Undo takes it back), and the panels
+     * are brought up to date. A program that ends on a runtime error is exactly when the registers
+     * and memory that caused it are worth looking at, and the Core's history still holds the
+     * instructions that ran, so Undo is offered rather than left reading as unavailable. Both are
+     * guarded: a Core that just failed may no longer be readable, and that must not replace the
+     * error the user needs.
+     *
+     * `attempted` is the instruction a Step was about to run, for a Core that cannot name the last
+     * instruction it attempted: its program counter may already be past the one that failed.
      */
-    private reportRuntimeFailure(error: unknown): void {
+    private reportRuntimeFailure(
+        error: unknown,
+        attempted?: { file: string; lineNumber: number } | null
+    ): void {
         console.error(error)
-        let instruction: { file: string; lineNumber: number } | null = null
+        let instruction = attempted ?? null
         try {
             //the failing instruction is the last one that was attempted, not the one after it
-            instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
+            instruction =
+                this._getLastInstruction?.() ??
+                (attempted !== undefined ? attempted : this._getNextInstruction())
         } catch (lookupError) {
             console.error(lookupError)
         }
         const line = instruction?.lineNumber ?? -1
-        this.addError(this._stringifyError(error, line >= 0 ? line + 1 : undefined))
-        this.state.terminated = true
+        const message = this._stringifyError(error, line >= 0 ? line + 1 : undefined)
+        this.addError(message)
+        this.endWithError(message)
+        this._peripherals.terminal.flushOutput()
         this.selectInstruction(instruction)
         try {
             this.state.canUndo = this.canUndoStep()
@@ -1100,10 +1472,12 @@ export abstract class GenericEmulator<T, R extends string>
             await this.runSlices(haltLimit, execution)
             this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
+            if (terminated) this._peripherals.terminal.flushOutput()
+            //if it managed to run, it means it does not have valid errors, nor ended on one
+            this.forgetRuntimeFailure()
             this.refreshVisibleState(terminated)
             this.state.executionTime = performance.now() - start
-            this.state.terminated = terminated
-            //if it managed to run, it means it does not have valid errors
+            this.readTermination()
             this.state.errors = []
             return terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
@@ -1111,6 +1485,8 @@ export abstract class GenericEmulator<T, R extends string>
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
+            //how long it ran before it failed, which the Log's exit entry reports
+            this.state.executionTime = performance.now() - start
             this.reportRuntimeFailure(e)
         }
         return InterpreterStatus.TerminatedWithException
@@ -1138,42 +1514,31 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     setGlobalMemoryAddress(address: bigint): void {
-        try {
-            const bytes = this.getInstance()
-                ? this._readMemoryBytes(address, BigInt(this.state.memory.global.pageSize))
-                : new Uint8Array(this.state.memory.global.pageSize).fill(
-                      this._emulatorOptions.initialMemoryValue
-                  )
-            this.state.memory.global.address = address
-            this.state.memory.global.userPlaced = true
-            this.state.memory.global.data.current = bytes
-            // Reset prevState as we don't know what the previous state was.
-            this.state.memory.global.data.prevState = this.state.memory.global.data.current
-        } catch (e) {
-            console.error(e)
-            this.addError(this._stringifyError(e))
-        }
+        this.placeMemoryView(this.state.memory.global, address)
+    }
+
+    /** Resize the main memory view and read its new page without changing execution state. */
+    setGlobalMemorySize(pageSize: number, rowSize: number): void {
+        const view = this.state.memory.global
+        if (view.pageSize === pageSize && view.rowSize === rowSize) return
+        const userPlaced = view.userPlaced
+        view.pageSize = pageSize
+        view.rowSize = rowSize
+        this.placeMemoryView(view, view.address - (view.address % BigInt(pageSize)))
+        view.userPlaced = userPlaced
     }
 
     setTabMemoryAddress(address: bigint, tabId: number): void {
-        try {
-            const tab = this.state.memory.tabs.find((e) => e.id == tabId)
-            if (!tab) return
-            const bytes = this.getInstance()
-                ? this._readMemoryBytes(address, BigInt(tab.pageSize))
-                : new Uint8Array(tab.pageSize).fill(this._emulatorOptions.initialMemoryValue)
-            tab.address = address
-            tab.userPlaced = true
-            tab.data.current = bytes
-            tab.data.prevState = tab.data.current
-        } catch (e) {
-            console.error(e)
-            this.addError(this._stringifyError(e))
-        }
+        const tab = this.state.memory.tabs.find((e) => e.id == tabId)
+        if (!tab) return
+        this.placeMemoryView(tab, address)
     }
 
     async validateTestcase(testcase: Testcase) {
-        const errors: TestcaseValidationError[] = []
+        const errors: TestcaseValidationError[] =
+            this.state.termination?.kind === 'error'
+                ? [{ type: 'runtime-error', message: this.state.termination.message }]
+                : []
         if (!this.getInstance()) throw new Error('Interpreter not initialized')
         const registers = this._getRegisterValues()
         for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
@@ -1270,15 +1635,48 @@ export abstract class GenericEmulator<T, R extends string>
 
     private async stepInternal(): Promise<boolean> {
         this.state.paused = false
+        //a Step measures no running time, so a program it ends is logged without one rather than
+        //with the time of a Run that stopped earlier on a breakpoint
+        this.state.executionTime = -1
         let attemptedInstruction: { file: string; lineNumber: number } | null = null
+        const countedBefore = this._getInstructionsExecuted?.()
+        let historyRecorded = false
         const execution = this.executionController.capture()
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
             attemptedInstruction = this._getNextInstruction()
-            const result = await this._step()
+            let result = await this._step()
             this.executionController.ensureCurrent(execution)
+            let executed = 1
+            //Just My Code: a Step that lands in a Library member runs on until the program is back
+            //in user code, stopping early for the end of the program, an error or input (input
+            //waits inside `_step` and resumes here). The library's callbacks into user code, such
+            //as a qsort comparator, are user code, so the Step stops in them
+            try {
+                while (
+                    !result.terminated &&
+                    !this.stepIntoRuntimeLibrary &&
+                    executed < STEP_THROUGH_LIMIT &&
+                    this.inRuntimeLibrary(this._getNextInstruction())
+                ) {
+                    attemptedInstruction = this._getNextInstruction()
+                    result = await this._step()
+                    this.executionController.ensureCurrent(execution)
+                    executed += 1
+                    if (executed % STEP_THROUGH_YIELD === 0)
+                        await this.executionController.waitFor(execution, () => yieldToHost())
+                }
+            } finally {
+                const completed =
+                    countedBefore === undefined
+                        ? executed
+                        : Number(this._getInstructionsExecuted!() - countedBefore)
+                this.recordHistory(completed, completed > 1)
+                historyRecorded = true
+            }
             this.state.terminated = result.terminated
             if (result.terminated) {
+                this._peripherals.terminal.flushOutput()
                 this.selectLastExecuted(attemptedInstruction?.lineNumber ?? -1)
             } else {
                 try {
@@ -1288,18 +1686,16 @@ export abstract class GenericEmulator<T, R extends string>
             }
 
             this.state.canUndo = this.canUndoStep()
-            //if it managed to step, it means it does not have valid errors
+            //if it managed to step, it means it does not have valid errors, nor ended on one
             this.state.errors = []
+            this.forgetRuntimeFailure()
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return false
-            console.error(e)
-            try {
-                attemptedInstruction = this._getLastInstruction?.() ?? attemptedInstruction
-            } catch {}
-            const line = attemptedInstruction?.lineNumber ?? -1
-            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
-            this.state.terminated = true
-            this.selectInstruction(attemptedInstruction)
+            if (!historyRecorded && countedBefore !== undefined) {
+                const completed = Number(this._getInstructionsExecuted!() - countedBefore)
+                this.recordHistory(completed, completed > 1)
+            }
+            this.reportRuntimeFailure(e, attemptedInstruction)
             throw e
         }
         this.refreshCoreViews()
@@ -1307,7 +1703,27 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async runTestcase(testcase: Testcase, haltLimit: number) {
-        return this.duringCoreOperation(() => this.runTestcaseInternal(testcase, haltLimit))
+        return this.duringCoreOperation(async () => {
+            // Standalone Testcases need the same fresh loader/source/session boundary as test().
+            const sources = this._buildSources ?? normalizeBuildInput(this._sources)
+            try {
+                await this.compileInternal(
+                    0,
+                    sources,
+                    new FileSystem(sources.files),
+                    false,
+                    testcase.input
+                )
+                return await this.runTestcaseInternal(testcase, haltLimit)
+            } finally {
+                this._clearExecution?.()
+                this.fileSystemSession?.stop()
+                this.fileSystemSession = null
+                this.useInteractiveRun()
+                this.state.canExecute = false
+                this.state.canUndo = false
+            }
+        })
     }
 
     private async runTestcaseInternal(testcase: Testcase, haltLimit: number) {
@@ -1340,12 +1756,9 @@ export abstract class GenericEmulator<T, R extends string>
                     this._writeMemoryBytes(value.address, encoded)
                 }
             }
-            this.useScriptedRun(testcase.input)
-            try {
-                await this._runTestcase(testcase, haltLimit)
-            } finally {
-                this.useInteractiveRun()
-            }
+            await this._runTestcase(testcase, haltLimit)
+            //the run is over whether or not the program ended, and its output is what is compared
+            this._peripherals.terminal.flushOutput()
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             this.state.line = ins?.lineNumber ?? this.getLastExecutedLine()
@@ -1391,7 +1804,13 @@ export abstract class GenericEmulator<T, R extends string>
             try {
                 //The whole testcase loop already owns the Core operation lock.
                 const isolatedFileSystem = new FileSystem(snapshot.files)
-                await this.compileInternal(historySize, snapshot, isolatedFileSystem)
+                await this.compileInternal(
+                    historySize,
+                    snapshot,
+                    isolatedFileSystem,
+                    false,
+                    testcase.input
+                )
                 await this.runTestcaseInternal(testcase, haltLimit)
                 const errors = await this.validateTestcase(testcase)
                 results.push({
@@ -1403,8 +1822,10 @@ export abstract class GenericEmulator<T, R extends string>
                 console.error(e)
                 this.addError(this._stringifyError(e))
             } finally {
+                this._clearExecution?.()
                 this.fileSystemSession?.stop()
                 this.fileSystemSession = null
+                this.useInteractiveRun()
             }
         }
         const passedTests = results.filter((r) => r.passed)
@@ -1425,10 +1846,24 @@ export abstract class GenericEmulator<T, R extends string>
             //but its isolated FileSystem session has been released. It is therefore a Test result,
             //not an interactive Debug session that can be undone and resumed.
             this._buildSources = undefined
+            this.memoryLayout = undefined
+            this.heapBounds = undefined
+            this.stackTop = undefined
+            this.deviceRegions = []
             this.state.canExecute = false
             this.state.canUndo = false
         }
         return results
+    }
+
+    /**
+     * Breakpoints can be set on Files the Core never sees, such as the C source of Generated
+     * assembly; the host that knows their Source maps translates them to assembly lines here.
+     */
+    setBreakpointResolver(
+        resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
+    ): void {
+        this.breakpointResolver = resolver
     }
 
     toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
@@ -1455,9 +1890,18 @@ export abstract class GenericEmulator<T, R extends string>
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
             let undone = 0
             for (; undone < undoCount && this.canUndoStep(); undone++) {
-                //the Core owns the instruction boundary, so it rolls back first and the Screen
-                //follows it (ADR 0005)
-                this._undo()
+                //one Undo takes back what one Step did: a stretch of library code goes as a whole
+                const top = this.undoLedger[this.undoLedger.length - 1]
+                const entries = top?.grouped ? top.entries : 1
+                for (let i = 0; i < entries; i++) {
+                    //an inverse a peripheral evicted under its budget ends the rollback where it is
+                    if (i > 0 && !this._canUndo()) break
+                    //the Core owns the instruction boundary, so it rolls back first and the Screen
+                    //follows it (ADR 0005)
+                    this._undo()
+                }
+                if (top?.grouped) this.undoLedger.pop()
+                else if (top && --top.entries <= 0) this.undoLedger.pop()
             }
             //an image that lives in Core memory was restored by the rollback itself, so the Screen
             //re-reads it instead of having journaled it. Once for the whole rollback: the re-read is
@@ -1466,7 +1910,10 @@ export abstract class GenericEmulator<T, R extends string>
             const instruction = this._getNextInstruction()
             this.selectInstruction(instruction)
             this.state.canUndo = this.canUndoStep()
-            this.state.terminated = this._hasTerminated()
+            //whatever ended the program was the newest thing it did, so a rollback takes the end
+            //back, a runtime error's included, and the Core says again whether it has ended
+            if (undone > 0) this.forgetRuntimeFailure()
+            this.readTermination()
             this.updateRegisters()
             this.scrollStackTab()
             this.updateMemory()
@@ -1474,8 +1921,9 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateStatusRegisters()
             return undone
         } catch (e) {
-            this.addError(this._stringifyError(e))
-            this.state.terminated = true
+            const message = this._stringifyError(e)
+            this.addError(message)
+            this.endWithError(message)
             console.error(e)
             throw e
         }
@@ -1598,6 +2046,7 @@ export abstract class GenericEmulator<T, R extends string>
                 //setter that threw leaves whatever the writes before it changed, which the Core
                 //recorded and the next Undo would revert
                 recorded = this._endPoke()
+                if (recorded) this.recordHistory(1)
                 this.refreshAfterPoke()
             }
             return recorded
@@ -1615,6 +2064,8 @@ export abstract class GenericEmulator<T, R extends string>
      */
     pokeMemory(address: bigint, bytes: Uint8Array): boolean {
         if (!this.canPoke || bytes.length === 0 || !this.getInstance()) return false
+        //the memory view offers no Poke there, and the Core would refuse the write anyway
+        if (readOnlyMemoryAt(this.readOnlyMemory, address, BigInt(bytes.length))) return false
         try {
             if (isMemoryChunkEqual(this._readMemoryBytes(address, BigInt(bytes.length)), bytes)) {
                 return false
@@ -1625,6 +2076,7 @@ export abstract class GenericEmulator<T, R extends string>
                 this._writeMemoryBytes(address, bytes)
             } finally {
                 recorded = this._endPoke()
+                if (recorded) this.recordHistory(1)
                 //an image that lives in Core memory is re-read rather than journaled, exactly as
                 //after an Undo ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md),
                 //[ADR 0020](../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)),
@@ -1691,6 +2143,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildSources() {
         return this._buildSources
+    }
+
+    get buildLibraryFiles() {
+        return this._buildLibraryFiles
     }
 
     /** The Entry path of the sources currently set, which a single-source host never names itself. */
@@ -1773,6 +2229,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get terminated() {
         return this.state.terminated
+    }
+
+    get termination(): Termination | undefined {
+        return this.state.termination
     }
 
     get code() {

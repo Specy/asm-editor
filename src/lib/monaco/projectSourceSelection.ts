@@ -10,6 +10,19 @@ export function buildSource(path: string, buildGeneration: number): ProjectSourc
     return { sourceKind: 'build', path, buildGeneration }
 }
 
+export function isSameProjectSourceSelection(
+    a: ProjectSourceSelection | undefined,
+    b: ProjectSourceSelection | undefined
+): boolean {
+    if (a === b) return true
+    if (!a || !b) return false
+    if (a.sourceKind !== b.sourceKind || a.path !== b.path) return false
+    if (a.sourceKind === 'build' && b.sourceKind === 'build') {
+        return a.buildGeneration === b.buildGeneration
+    }
+    return true
+}
+
 /**
  * Explorer navigation changes the File, not which version of the Project the user is looking at.
  * A File created by the running program may not exist in the retained Build; only that case falls
@@ -26,12 +39,6 @@ export function selectProjectFile(
         return buildSource(path, currentBuildGeneration)
     }
     return liveSource(path)
-}
-
-export function sourceModelKey(selection: ProjectSourceSelection, liveIdentity: string): string {
-    return selection.sourceKind === 'build'
-        ? `snapshot:${selection.buildGeneration}:${selection.path}`
-        : liveIdentity
 }
 
 export function isCurrentBuildLocation(

@@ -27,6 +27,8 @@
         language: AvailableLanguages
         /** The file the panel opens on, which is a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag. */
         initialFileId?: string
+        /** A host may choose a supported Format for its initial file; user selections take over. */
+        initialFormat?: RegisterFormat
         position?: 'top' | 'bottom'
         withoutHeader?: boolean
         style?: string
@@ -51,6 +53,7 @@
         systemSize,
         language,
         initialFileId = undefined,
+        initialFormat = undefined,
         position = 'top',
         withoutHeader = false,
         style = '',
@@ -87,7 +90,13 @@
 
     /** The Format a file is showing, or the one it would open on the moment its tab was picked. */
     function formatOf(candidate: RegisterFile): RegisterFormat {
-        return selectedFormats[candidate.id] ?? candidate.formats[0] ?? 'hex'
+        const suggested =
+            candidate.id === initialFileId &&
+            initialFormat &&
+            candidate.formats.includes(initialFormat)
+                ? initialFormat
+                : undefined
+        return selectedFormats[candidate.id] ?? suggested ?? candidate.formats[0] ?? 'hex'
     }
 
     //a file wider than the system word (x86's 128 bit SSE registers) can be grouped by its own

@@ -1,0 +1,6 @@
+ftell after appending=64
+log: existing line A
+log: existing line B
+log: appended line 1
+log: appended line 2
+log: !

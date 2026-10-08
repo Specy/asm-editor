@@ -2,7 +2,6 @@ import { SHARE_ID } from '$stores/projectsStore.svelte'
 import lzstring from 'lz-string'
 import type { Project } from '$lib/Project.svelte'
 import { serializer } from '$lib/json'
-import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))
@@ -28,11 +27,6 @@ export function unsignedBigIntToSigned(unsignedBigInt: bigint, numBytes: number)
     }
 
     return unsignedBigInt
-}
-
-export function bigIntOfSize(number: bigint, bytes: RegisterSize) {
-    const mask = 1n << BigInt(bytes * 8)
-    return number & mask
 }
 
 export type Timer = ReturnType<typeof setTimeout>
@@ -108,17 +102,9 @@ export function createSharePayload(project: Project): string {
     return payload
 }
 
-export function createShareLink(project: Project, mode: 'exam' | 'project' = 'project'): string {
+export function createShareLink(project: Project): string {
     const code = createSharePayload(project)
-    if (mode === 'exam') {
-        return `${window.location.origin}/projects/exam?project=${code}`
-    } else {
-        return `${window.location.origin}/projects/share?project=${code}`
-    }
-}
-
-export function getEnumKeys<T extends Record<string, string | number>>(enumObj: T): (keyof T)[] {
-    return Object.keys(enumObj).filter((key) => isNaN(Number(key))) as (keyof T)[]
+    return `${window.location.origin}/projects/share?project=${code}`
 }
 
 function hexDigest(buffer: ArrayBuffer) {

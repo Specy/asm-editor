@@ -1,0 +1,5 @@
+existing line A
+existing line B
+appended line 1
+appended line 2
+!

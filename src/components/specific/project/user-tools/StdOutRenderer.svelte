@@ -1,28 +1,48 @@
 <script lang="ts">
+    /**
+     * The Interactive editor's console: the compiler's diagnostics and the runtime errors, then the
+     * Terminal with a caret where a read waits for what is typed.
+     */
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { fly } from 'svelte/transition'
-    import Console from '$cmp/shared/Console.svelte'
+    import TerminalConsole from '$cmp/shared/terminal/TerminalConsole.svelte'
     import ProblemsList from './ProblemsList.svelte'
+    import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
     import { type Diagnostic, formatDiagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
-        stdOut: string
+        terminal: Terminal
+        /** The Emulator's runtime errors, shown before what the program wrote. */
+        errors?: string
         diagnostics?: Diagnostic[]
         info?: string
+        /** Whether a program is built and has not ended, so that typing reaches it. */
+        interactive?: boolean
+        /** Whether the output's escape sequences are drawn: the x86 Target's. */
+        escapes?: boolean
         onDiagnosticSelect?: (diagnostic: Diagnostic) => void
     }
 
-    let { stdOut, diagnostics = [], info = '', onDiagnosticSelect }: Props = $props()
+    let {
+        terminal,
+        errors = '',
+        diagnostics = [],
+        info = '',
+        interactive = false,
+        escapes = false,
+        onDiagnosticSelect
+    }: Props = $props()
     let areDiagnosticsShown = $state(false)
-    let el: HTMLDivElement | undefined = $state()
 
-    let separator = $derived(diagnostics.length ? '\n\n' : '')
     let hasErrors = $derived(diagnostics.some((d) => d.severity === 'error'))
-    $effect(() => {
-        if (el && stdOut) el.scrollTop = el.scrollHeight
+    let listsDiagnostics = $derived(!!onDiagnosticSelect && diagnostics.length > 0)
+    //the diagnostics as text when they are not listed, then a blank line, then the errors
+    let prefix = $derived.by(() => {
+        const listed = listsDiagnostics ? '' : diagnostics.map(formatDiagnostic).join('\n')
+        return `${listed}${listed ? '\n\n' : ''}${errors ? `${errors}\n` : ''}`
     })
 </script>
 
-<div class="std-out" bind:this={el}>
+<div class="std-out">
     {#if diagnostics.length}
         <button
             class="floating-std-icon"
@@ -37,14 +57,12 @@
         </button>
     {/if}
     <div class="output-content">
-        {#if onDiagnosticSelect && diagnostics.length}
-            <ProblemsList {diagnostics} {onDiagnosticSelect} />
-            {#if stdOut}<Console value={stdOut} />{/if}
-        {:else}
-            <Console
-                value={`${diagnostics.map(formatDiagnostic).join('\n')}${separator}${stdOut}`}
-            />
+        {#if listsDiagnostics && onDiagnosticSelect}
+            <div class="problems">
+                <ProblemsList {diagnostics} {onDiagnosticSelect} />
+            </div>
         {/if}
+        <TerminalConsole {terminal} {prefix} {interactive} {escapes} />
     </div>
     <div class="info">
         {info}
@@ -54,6 +72,7 @@
 <style lang="scss">
     .floating-std-icon {
         position: absolute;
+        z-index: 1;
         background-color: var(--red);
         color: var(--red-text);
         padding: 0.2rem;
@@ -77,12 +96,13 @@
         background-color: var(--accent2);
         color: var(--accent2-text);
     }
+    /* the console scrolls inside, so the box keeps its height and the icon its corner */
     .std-out {
         min-height: 4rem;
         max-height: 8rem;
         position: relative;
         border-radius: 0.5rem;
-        overflow-y: auto;
+        overflow: hidden;
         display: flex;
         flex: 1;
         background-color: var(--secondary);
@@ -93,8 +113,16 @@
         }
     }
     .output-content {
+        display: flex;
+        flex-direction: column;
         min-width: 0;
+        min-height: 0;
         width: 100%;
+    }
+    .problems {
+        flex: none;
+        max-height: 50%;
+        overflow: auto;
     }
     .info {
         position: fixed;

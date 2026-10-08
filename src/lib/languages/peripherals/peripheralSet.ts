@@ -2,6 +2,7 @@ import type { AvailableLanguages } from '$lib/Project.svelte'
 import { Keyboard } from './Keyboard'
 import { Mouse } from './Mouse'
 import { ProgramClock } from './ProgramClock'
+import { RandomSource } from './RandomSource'
 import { SCREEN_CELL_8X16, SCREEN_CELL_8X8, type ScreenCellSize } from './screen/bitmapFont'
 import { Screen, type ScreenOptions } from './screen/Screen'
 import type { Terminal } from './Terminal.svelte'
@@ -23,6 +24,8 @@ export type InjectedPeripherals = {
     keyboard: Keyboard
     mouse: Mouse
     clock: ProgramClock
+    /** Where the random services start from: host randomness, or the fixed seed of a Testcase. */
+    random: RandomSource
     fileSystem: FileSystem
 }
 
@@ -76,6 +79,7 @@ export function createInjectedPeripherals(
     const keyboard = overrides.keyboard ?? new Keyboard()
     const mouse = overrides.mouse ?? new Mouse({ screen, keyboard })
     const clock = overrides.clock ?? new ProgramClock()
+    const random = overrides.random ?? new RandomSource()
     const fileSystem = overrides.fileSystem ?? new FileSystem()
-    return { screen, keyboard, mouse, clock, fileSystem }
+    return { screen, keyboard, mouse, clock, random, fileSystem }
 }

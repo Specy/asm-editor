@@ -46,7 +46,7 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 
 ## Breakpoint
 
-A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
 
 ## Poke
@@ -72,7 +72,12 @@ The Peripheral representing pointing input for a program interacting with the **
 
 ## Terminal
 
-The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+
+## Line discipline
+
+The **Terminal**'s rules for turning typed keys into what a program's read receives: a line read edits a line until Enter, a character read returns on a single keystroke with Enter giving the **Reference environment**'s code, and Ctrl+D gives **End of input** to standard input. It also decides the echo. It belongs to the editor, not to a Core or to the component that draws the Terminal.
+_Avoid_: tty driver, input mode, canonical mode (except when contrasting line reads with character reads in a Linux context)
 
 ## FileSystem
 
@@ -81,7 +86,12 @@ _Avoid_: drive peripheral
 
 ## Input Source
 
-The source of answers to a **Terminal**'s input requests: interactive user input or a **Testcase**'s scripted answers. Interactive character, string and numeric input can come from prompts or the **Keyboard** associated with a **Screen**.
+The source of answers to a **Terminal**'s input requests: interactive user input or a **Testcase**'s scripted answers. Interactive character, string and numeric input can come from the **Terminal** or the **Keyboard** associated with a **Screen**.
+
+## End of input
+
+The answer an **Input Source** gives a read of standard input (descriptor 0) when it has no more lines: a **Testcase** whose scripted answers are exhausted, or an interactive user pressing Ctrl+D or the End of input button. The read returns 0 bytes; the educational read syscalls never receive it.
+_Avoid_: EOF (for the Terminal-level event)
 
 ## Program time
 
@@ -89,7 +99,12 @@ The passage of time as a program observes it through its environment's wait and 
 
 ## Time Source
 
-Where a program's **Program time** comes from: host time in an interactive run, or a virtual clock in a **Testcase**'s scripted run, which starts at zero and advances only through the program's waits. Selected for the whole run together with the **Input Source**.
+Where a program's **Program time** comes from: host time in an interactive run, or a virtual clock in a **Testcase**'s scripted run, which starts at zero and advances only through the program's waits. Selected for the whole run together with the **Input Source** and the **Random source**.
+
+## Random source
+
+Where a program's random services get their starting state: host randomness in an interactive run, or a fixed seed in a **Testcase**'s scripted run, so its numbers are the same on every run. A program that seeds a generator itself gets that seed's sequence either way. Selected for the whole run together with the **Input Source** and the **Time Source**. See [ADR 0037](./docs/adr/0037-testcases-run-on-a-seeded-random-source.md).
+_Avoid_: RNG, entropy source, random seed (when the source, not one seed, is meant)
 
 ## Port map
 
@@ -112,9 +127,69 @@ The architecture and supported assembler/runtime environment selected for a **Pr
 
 The language of a text **File**, such as target-specific assembly, C, or plain text, used to interpret and present its source. It is independent of the Project's **Target** and the File's storage encoding; selecting a language does not make a compiler for it available.
 
-## Self-contained program
+## Hosted program
 
-A program compiled from a higher-level **File language** for a **Target** without standard-library dependencies, using the startup and exit support supplied for that Target. Full language runtimes are outside the first source-compilation release.
+A program compiled from a higher-level **File language** for a **Target** that may use the standard library its **Runtime library** provides. See [ADR 0029](./docs/adr/0029-hosted-programs-link-an-editor-owned-runtime-library.md).
+_Avoid_: Self-contained program (the earlier, library-free boundary of ADR 0027, which x86 keeps until it has a **Runtime library**)
+
+## Runtime library
+
+The editor-owned, versioned C standard library and startup code for a **Target**, with its own headers, whose supported functions are a written list. It reaches the **Terminal** and **FileSystem** through the Target's syscalls.
+_Avoid_: libc (when this specific library is meant), runtime
+
+## Runtime ABI
+
+The named, versioned binary interface of a **Runtime library** (`v1`, …) that a Project's Setting or a **Compilation record** pins: its exported symbols, their signatures and its public struct layouts. Each Runtime ABI has one current implementation, which the editor may update under saved Projects. See [ADR 0031](./docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md).
+_Avoid_: runtime version (when the interface, not a release, is meant)
+
+## Reference environment
+
+The real simulator or operating system whose behaviour a **Target**'s services match: EASy68K for M68K, MARS for MIPS, RARS for RISC-V, a Linux process on a tty for x86, and the **Port map** itself for the Z80, which has no real counterpart. A service departs from it only through a documented deviation that helps a learner. See [ADR 0035](./docs/adr/0035-environments-match-their-reference.md).
+_Avoid_: real world, upstream (when the behaviour, not the source code, is meant)
+
+## Environment library
+
+The editor's C interface, `<sim.h>` with `sim_`-prefixed functions shared by every **Target**, to the services a Target's simulator environment offers, one function for each service its **Documentation** lists (every syscall, including those the **Runtime library** also covers, such as printing an integer or sbrk) and functions for its memory-mapped devices, such as the bitmap display and the keyboard registers. Its names cannot clash with the C or C++ standard library, and any C or C++ source can include it. Distinct from the **Runtime library**, which is the C standard library and reaches the same services only privately.
+_Avoid_: hardware library, syscall library, platform library (none of these services is hardware, and "platform contract" names the Runtime library's internal layer)
+
+## Library member
+
+One assembly unit of a **Runtime library**, usually a single function, which a **Core** adds to a Build only to resolve a global symbol the program uses but does not define. See [ADR 0030](./docs/adr/0030-cores-resolve-runtime-library-members.md).
+
+## Start unit
+
+The editor's own start code for x86 programs compiled from C or C++, until x86 has a **Runtime library**: two read-only NASM Files outside the **Project**, offered to every x86 Build of a Project that holds **Generated assembly** whose **Compilation record** requires no **Runtime ABI**. The linker takes `@runtime/start.asm` for a program without a `_start` of its own: it runs the constructors, calls `main`, runs the static destructors and exits with `main`'s result. It takes `@runtime/support.asm` for what the program uses of it: as weak symbols, what GCC's output calls without the program asking, `memcpy`, `memmove`, `memset`, `memcmp` and the C++ ABI's hooks. The debugger steps through it as it does through **Library member** code. See [the x86 translation plan](./docs/design/x86-compiler-assembly-translation-plan.md), milestone 3a.
+_Avoid_: crt0 (the Runtime library's start code, which takes its place once x86 has one)
+
+## Source compilation
+
+The conversion of a selected higher-level **File** and its project-local headers into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
+
+## C/C++ language help
+
+The editor's lightweight assistance while writing C or C++: language keywords and snippets, function suggestions, parameter hints and hover documentation for the **Project**'s **Target**, including its **Environment library** and supported **Runtime library** functions. It also recognizes ordinary variable, parameter and function declarations in the current File using basic lexical scopes. It does not establish whether a program is valid; Compile reports compiler errors.
+_Avoid_: LSP (when this assistance, rather than the Language Server Protocol, is meant), C++ IntelliSense (when full type-aware analysis is implied)
+
+## Compiler driver
+
+The replaceable component that performs **Source compilation**, turning source Files and headers into **Generated assembly** and its **Source map** for a Target's compiler preset. Compiler Explorer is the current driver; nothing outside it depends on which compiler service is used.
+_Avoid_: Compiler Explorer (when the role is meant)
+
+## Generated assembly
+
+An assembly **File** produced by **Source compilation** for the **Project**'s **Target**. Distinct from the machine code produced when a Build assembles it.
+
+## Compilation record
+
+Saved **Project** metadata identifying a **Source compilation**'s input Files and **Generated assembly** by their paths and content fingerprints. It retains the compilation's origin independently of its transient **Source map**.
+
+## Source map
+
+The correspondence between lines of **Generated assembly** and the higher-level **Files** used by its **Source compilation**, held as transient editor data belonging to the **Project**. Distinct from a Core's mapping between assembled instructions and assembly lines.
+
+## Stale assembly
+
+**Generated assembly** whose source File or a project-local header used to compile it has subsequently changed. Its contents remain available, but its Source map has been removed and the editor identifies it as stale.
 
 ## Project archive
 
@@ -139,7 +214,7 @@ The **Project**'s configured path from which a Build begins, `main.<ext>` by def
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, which a Build assembles first. Other Files are reached from it through includes or are not built at all.
+The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
 _Avoid_: main file, active file, selected file, open file
 
 ## Displayed file
@@ -169,9 +244,14 @@ _Avoid_: embed editor, small editor, playground editor, inline editor (for the c
 The three views of a **Debug session** that follow execution step by step: the Stack pointer (the memory around the stack pointer), the History (the steps instruction Undo can take back, **Pokes** included) and the Call stack. In the **Workbench** they are floating windows or sections of the debug column, as a **Preference** chooses. Registers, memory and the **Screen** are not debug tools.
 _Avoid_: inspectors, trackers, user tools, floating panels
 
+## Memory region
+
+A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. Distinct from a page, which is the fixed-size window the memory view shows at a time.
+_Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zone, memory map entry
+
 ## Log
 
-The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it). Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
 _Avoid_: output, build output, console
 
 ## Settings
@@ -195,7 +275,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 
@@ -211,6 +291,10 @@ _Avoid_: doc item, article, card, topic (a **Topic** is what a Lecture teaches)
 
 A named group of one language's **Documentation entries** that share a kind or a subject: Instructions, Directives, Trap tasks, Registers, the Screen. It is a heading in the Documentation panel and one page of the language's documentation site.
 _Avoid_: section, category, group (a **Module** groups Lectures)
+
+## Instruction example
+
+A small runnable program attached to an instruction's **Documentation entry**, focused on that instruction with only the supporting code needed to demonstrate it and all register and memory setup visible in its source. It can show variations and quirks within the same program, with faulting variations commented out for the reader to enable; distinct from a **Language course**'s **Example**.
 
 ## Lecture section
 
@@ -250,7 +334,7 @@ _Avoid_: specific course, single course, deep dive
 
 ## Example
 
-A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing. A rung is missing only where the environment cannot run it: x86 has nineteen of the twenty five, having neither a Screen nor a way to read the console.
+A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing. A rung is missing only where the environment cannot run it: x86 has nineteen of the twenty five and no Screen, though it can read standard input from the Terminal.
 _Avoid_: demo, sample, snippet
 
 ## Exercise

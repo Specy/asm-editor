@@ -1,6 +1,5 @@
 <script lang="ts">
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { ccrToFlagsArray } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
     import FaUndo from '~icons/fa-solid/undo'
     import {
@@ -11,16 +10,19 @@
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import { sizeName } from '$lib/languages/sizeNames'
+    import { statusFlagsFromBits } from '$lib/languages/statusFlagBits'
 
     interface Props {
         step: ExecutionStep
+        canUndoToHere?: boolean
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
     }
 
-    let { step, flags, language }: Props = $props()
-    let ccr = $derived(ccrToFlagsArray(step.new_ccr.bits).reverse())
+    let { step, flags, language, canUndoToHere = true }: Props = $props()
+    //each Core records its own status register, so the bits are read with the Target's own layout
+    let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
     /**
      * A Poke is a row of its own ([the design record](../../../../../docs/design/pokes.md)): what
@@ -179,7 +181,10 @@
 <div class="column step">
     <div class="step-header column">
         <button
-            title="Undo to here"
+            title={canUndoToHere && step.undoable !== false
+                ? 'Undo to here'
+                : 'Undo stops before effects that are not recorded'}
+            disabled={!canUndoToHere || step.undoable === false}
             class="undo-to-here"
             onclick={() => {
                 dispatcher('undo')
@@ -225,6 +230,20 @@
                     </button>
                 </span>
             </div>
+            {#if step.undoable === false}
+                <div class="stretch">Undo stops here: effects are not recorded.</div>
+            {/if}
+            {#if step.stretch}
+                <!-- a Step that ran through the Runtime library: one Undo takes all of it back -->
+                <div
+                    class="stretch"
+                    title={step.undoable === false
+                        ? 'This call includes effects Undo cannot restore'
+                        : 'One Undo takes back the call and the library code it ran'}
+                >
+                    Called {step.stretch.library}: {step.stretch.instructions.toLocaleString()} instructions
+                </div>
+            {/if}
             {#if flags.length !== 0}
                 <div class="row space-between">
                     <span> CCR </span>
@@ -242,7 +261,7 @@
         {/if}
     </div>
 
-    {#if step.kind !== 'poke' && step.mutations.length !== 0}
+    {#if step.kind !== 'poke' && !step.stretch && step.mutations.length !== 0}
         <div class="column mutations">
             {#each step.mutations as mutation, i (i)}
                 {#if isWrite(mutation) && hasValues(mutation)}
@@ -276,6 +295,11 @@
 </div>
 
 <style lang="scss">
+    .stretch {
+        font-size: 0.8rem;
+        opacity: 0.85;
+        overflow-wrap: anywhere;
+    }
     .undo-to-here {
         position: absolute;
         top: 0;
@@ -325,7 +349,7 @@
         position: relative;
 
         &:hover:not(:has(.go-to-line:hover)) {
-            .undo-to-here {
+            .undo-to-here:not(:disabled) {
                 opacity: 1;
                 cursor: pointer;
                 pointer-events: all;

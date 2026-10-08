@@ -2,6 +2,27 @@ import type { AvailableLanguages } from './Project.svelte'
 
 export const PAGE_SIZE = 16 * 16
 export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
+
+/**
+ * Keep source-map connections this far beyond each editor's top and bottom edges,
+ * measured as a fraction of its viewport height. 0 clips immediately; 0.5 keeps
+ * connections for half a viewport offscreen; 1 keeps them for a full viewport.
+ */
+export const SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO = 0.8
+
+/** Choose 'curved' for smooth ribbons or 'straight' for direct connections with gentle end bends. */
+export const SOURCE_MAP_CONNECTION_STYLE: 'curved' | 'straight' = 'straight'
+
+/** Matching opacity for source/assembly section backgrounds and their connections. */
+//export const SOURCE_MAP_COLOR_OPACITY = { default: 0.18, active: 0.18, dimmed: 0.04 } as const
+export const SOURCE_MAP_COLOR_OPACITY = { default: 0.18, active: 0.18, dimmed: 0.04 } as const
+
+/** Hue step in degrees; saturation and lightness in percent (0-100). */
+export const SOURCE_MAP_COLOR_PALETTE = { hueStep: 43, saturation: 45, lightness: 62 } as const
+
+/** Border width in pixels (0 disables it); opacity is relative to the section background. */
+export const SOURCE_MAP_SECTION_BORDER = { width: 1, opacity: 0.5 } as const
+
 export const MEMORY_SIZE = {
     M68K: 0xffffffn,
     MIPS: 0xffffffffn,

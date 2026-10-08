@@ -82,9 +82,12 @@
             const checks = checkCount(testcase)
             return `${checks} check${checks === 1 ? '' : 's'} passed`
         }
+        if (result.errors.some((error) => error.type === 'runtime-error')) return 'runtime error'
         const mismatches = result.errors.length
         return `${mismatches} mismatch${mismatches === 1 ? '' : 'es'}`
     })
+
+    const runtimeError = $derived(result?.errors.find((error) => error.type === 'runtime-error'))
 
     const hasRegisters = $derived(
         Object.keys(testcase.startingRegisters).length +
@@ -128,6 +131,9 @@
         <div class="body-fold" class:shown bind:this={fold}>
             <div class="body-clip">
                 <div class="body" id="{id}-body">
+                    {#if runtimeError?.type === 'runtime-error'}
+                        <div class="section" role="status">{runtimeError.message}</div>
+                    {/if}
                     {#if editable}
                         <div class="section">
                             <Header type="h3" noMargin id="{id}-name">Name</Header>

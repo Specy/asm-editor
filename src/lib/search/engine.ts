@@ -34,7 +34,14 @@ export const RANKING = {
      * that has no page of its own, names and summaries: it too matches almost any word. Its exact
      * names still put it first (`vaddpd`).
      */
-    extensionGroupWeight: 0.6
+    extensionGroupWeight: 0.6,
+    /**
+     * The same for a Runtime library function. Its name is often the start of an everyday word,
+     * and Orama matches a word to every name it begins, so on words alone `printf` answered "print
+     * an integer" and `getc` "divide and get the remainder" ahead of the Core's own syscalls and
+     * instructions. Its exact name still puts it first.
+     */
+    runtimeFunctionWeight: 0.3
 }
 
 /**
@@ -349,7 +356,11 @@ export class SearchEngine {
                 seen.add(key)
                 const entry = payload.entries[unit.ref]
                 const weight =
-                    entry.entryKind === 'extension-group' ? RANKING.extensionGroupWeight : 1
+                    entry.entryKind === 'extension-group'
+                        ? RANKING.extensionGroupWeight
+                        : entry.entryKind === 'function'
+                          ? RANKING.runtimeFunctionWeight
+                          : 1
                 results.push({ kind: 'entry', key, score: hit.score * weight, exact: false, entry })
                 continue
             }

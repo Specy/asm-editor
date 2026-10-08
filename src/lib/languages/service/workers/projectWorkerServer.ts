@@ -1,6 +1,8 @@
 /// <reference lib="webworker" />
 
-import type { ProjectFile, ProjectFiles } from '$lib/projectFiles'
+import type { BuildConfiguration, ProjectFile, BuildSources } from '$lib/projectFiles'
+import { buildConfiguration } from '$lib/projectFiles'
+import { validateAssemblerProfile } from '$lib/assemblerProfiles'
 import type {
     ProjectAnalysisSnapshot,
     ProjectAnalysisTarget,
@@ -8,7 +10,7 @@ import type {
     ProjectWorkerResponse
 } from '../protocol'
 
-type WorkerSession = {
+type WorkerSession = BuildConfiguration & {
     revision: number
     target: ProjectAnalysisTarget
     entry: string
@@ -17,7 +19,7 @@ type WorkerSession = {
 }
 
 type AnalyzeProject = (
-    sources: { entry: string; files: ProjectFiles },
+    sources: BuildSources,
     sessionId: string,
     revision: number,
     target: ProjectAnalysisTarget
@@ -55,6 +57,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                     const target = current.target
                     const sources = {
                         entry: current.entry,
+                        ...buildConfiguration(current),
                         files: Object.fromEntries(current.files)
                     }
                     try {
@@ -81,6 +84,22 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
 
     workerScope.addEventListener('message', (event: MessageEvent<ProjectWorkerRequest>) => {
         const request = event.data
+        if (
+            request.type !== 'dispose' &&
+            Object.prototype.hasOwnProperty.call(request, 'assemblerProfile')
+        ) {
+            try {
+                validateAssemblerProfile(request.assemblerProfile)
+            } catch (error) {
+                workerScope.postMessage({
+                    type: 'failure',
+                    sessionId: request.sessionId,
+                    revision: request.revision,
+                    message: error instanceof Error ? error.message : String(error)
+                } satisfies ProjectWorkerResponse)
+                return
+            }
+        }
         if (request.type === 'dispose') {
             sessions.delete(request.sessionId)
             pendingSessions.delete(request.sessionId)
@@ -91,6 +110,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                 revision: request.revision,
                 target: request.target,
                 entry: request.entry,
+                ...buildConfiguration(request),
                 files: new Map(Object.entries(request.files))
             })
             scheduleAnalysis(request.sessionId)
@@ -98,8 +118,15 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         }
         const session = sessions.get(request.sessionId)
         if (!session || request.revision <= session.revision) return
-        session.revision = request.revision
-        session.entry = request.entry
+        // Replace configuration, rather than merge, so omitted fields are cleared on updates.
+        const next = {
+            revision: request.revision,
+            target: session.target,
+            entry: request.entry,
+            files: session.files,
+            ...buildConfiguration(request)
+        }
+        sessions.set(request.sessionId, next)
         for (const change of request.changes) {
             //A plain object would route a File named `__proto__` into the prototype instead of the
             //map, so it would never be analysed and could never be deleted.

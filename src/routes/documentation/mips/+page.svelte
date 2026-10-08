@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -8,16 +9,22 @@
     <title>MIPS Documentation</title>
     <meta
         name="description"
-        content="Read the MIPS Documentation, including all the instructions with addressing modes and the assembler features"
+        content="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
     />
     <meta
         property="og:description"
-        content="Read the MIPS Documentation, including all the instructions with addressing modes and the assembler features"
+        content="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
     />
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">MIPS Documentation</h1>
     <SearchLauncher size="full" placeholder="Search the MIPS docs and courses" />
+    <p>
+        This reference covers the MIPS simulator’s instructions, assembler directives, registers,
+        and services. For a service call, put its number in <code>$v0</code> and use the listed
+        registers for its arguments and result; see
+        <a href={resolve('/documentation/mips/syscall', {})}>Syscalls</a>.
+    </p>
     <div class="links">
         <NavigationLinkButton href="/documentation/mips/directive">
             <div>Directives</div>
@@ -33,6 +40,12 @@
         </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/mips/screen">
             <div>Screen and I/O</div>
+        </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/mips/using-c">
+            <div>Using C and C++</div>
+        </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/mips/runtime-library">
+            <div>Runtime library</div>
         </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/mips/all">
             <div>Complete Documentation</div>

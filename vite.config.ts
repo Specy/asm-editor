@@ -1,10 +1,8 @@
 import { sveltekit } from '@sveltejs/kit/vite'
-//import { visualizer } from 'rollup-plugin-visualizer'
 import wasm from 'vite-plugin-wasm'
 import Icons from 'unplugin-icons/vite'
 import { defineConfig } from 'vitest/config'
 import { searchModelPlugin } from './scripts/search-model-plugin.ts'
-//import devtoolsJson from 'vite-plugin-devtools-json';
 export default defineConfig({
     server: {
         port: 4173,
@@ -22,13 +20,12 @@ export default defineConfig({
         }
     },
     optimizeDeps: {
-        exclude: ['@specy/s68k', '@specy/x86', '@battlefieldduck/xterm-svelte']
+        exclude: ['@specy/s68k', '@specy/x86']
     },
     build: {
         sourcemap: true
     },
     plugins: [
-        //devtoolsJson(),
         sveltekit(),
         Icons({
             compiler: 'svelte',
@@ -40,12 +37,6 @@ export default defineConfig({
         }),
         wasm(),
         searchModelPlugin()
-        /*
-         visualizer({
-            emitFile: true,
-            filename: 'stats.html'
-        })
-        */
     ],
     worker: {
         format: 'es',

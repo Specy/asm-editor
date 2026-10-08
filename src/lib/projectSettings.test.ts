@@ -16,6 +16,8 @@ import {
 describe('resolveProjectSettings', () => {
     it('follows the defaults where nothing was decided', () => {
         expect(resolveProjectSettings('M68K', {})).toEqual({
+            riscvAssemblerProfile: 'rars',
+            linkRuntimeLibrary: 'off',
             undoEnabled: true,
             screenHistoryBudgetMb: 64,
             fileSystemHistoryBudgetMb: 64
@@ -47,9 +49,9 @@ describe('resolveProjectSettings', () => {
 })
 
 describe('undoHistorySize', () => {
-    it('gives a Build 200 undo steps with undo on and none with it off', () => {
-        expect(UNDO_HISTORY_SIZE).toBe(200)
-        expect(undoHistorySize(resolveProjectSettings('M68K', {}))).toBe(200)
+    it('gives a Build 200,000 undo steps with undo on and none with it off', () => {
+        expect(UNDO_HISTORY_SIZE).toBe(200_000)
+        expect(undoHistorySize(resolveProjectSettings('M68K', {}))).toBe(200_000)
         expect(undoHistorySize(resolveProjectSettings('M68K', { undoEnabled: false }))).toBe(0)
     })
 })

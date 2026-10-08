@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
     X86_COMMON_SYSCALLS,
@@ -21,6 +22,7 @@ import {
     type Chapter,
     type DocumentationEntry
 } from '../entries'
+import { x86SimBinding, x86SimPrototype } from './syscallBinding'
 import { chapters } from './x86'
 
 function chapter(id: string): Chapter {
@@ -44,13 +46,14 @@ function markdownOf(entry: DocumentationEntry): string {
 }
 
 describe('the x86 Documentation', () => {
-    it('has its five Chapters at the pages they have always had', () => {
+    it('has its six Chapters at their pages', () => {
         expect(chapters().map((chapter) => [chapter.id, chapter.href])).toEqual([
             ['instructions', '/documentation/x86/instruction'],
             ['extensions', '/documentation/x86/extensions'],
             ['directives', '/documentation/x86/directive'],
             ['registers-and-flags', '/documentation/x86/registers'],
-            ['syscalls', '/documentation/x86/syscall']
+            ['syscalls', '/documentation/x86/syscall'],
+            ['using-c', '/documentation/x86/using-c']
         ])
         expect(documentationProblems(chapters())).toEqual([])
     })
@@ -137,7 +140,6 @@ describe('the x86 Documentation', () => {
     it('has an entry for every syscall, the common ones first', () => {
         const syscalls = chapter('syscalls').entries.filter((entry) => entry.kind === 'syscall')
         expect(syscalls).toHaveLength(X86_SYSCALLS.length)
-        expect(syscalls).toHaveLength(181)
         expect(syscalls.slice(0, X86_COMMON_SYSCALLS.length).map((entry) => entry.title)).toEqual(
             X86_COMMON_SYSCALLS
         )
@@ -153,24 +155,73 @@ describe('the x86 Documentation', () => {
             type: 'fields',
             markdown: expect.stringContaining('Descriptor 1 is standard output'),
             fields: [
-                { label: 'rax', value: '1' },
-                { label: 'rdi', value: 'file descriptor' },
-                { label: 'rsi', value: 'buffer (read by the kernel)' },
-                { label: 'rdx', value: 'byte count' },
-                { label: 'Waits', value: 'This call can wait for the outside world.' }
+                {
+                    label: 'In',
+                    value: '`rax` = 1 (call number); `rdi` = file descriptor; `rsi` = buffer (read by the kernel); `rdx` = byte count'
+                },
+                {
+                    label: 'Out',
+                    value: '`rax` = result. Values from -1 through -4095 are error codes.'
+                },
+                { label: 'Waits', value: 'This call can wait for the outside world.' },
+                {
+                    label: 'From C',
+                    value: '`long sim_write(long fd, const void *buffer, long count)`'
+                }
             ]
         })
         // Linux names its calls in code, `exit_group`, where MARS names its services in words.
         expect(hasCodeName(find('syscalls', 'exit_group'))).toBe(true)
 
         // A call from the table: its number and its arguments, and a line built from them.
-        const fork = find('syscalls', 'fork')
-        expect(fork.summary).toBe('Takes no arguments.')
-        expect(fork.view).toEqual({ type: 'fields', fields: [{ label: 'rax', value: '57' }] })
+        const getppid = find('syscalls', 'getppid')
+        expect(getppid.summary).toBe('Takes no arguments.')
+        expect(getppid.view).toEqual({
+            type: 'fields',
+            fields: [
+                { label: 'In', value: '`rax` = 110 (call number)' },
+                {
+                    label: 'Out',
+                    value: '`rax` = result. Values from -1 through -4095 are error codes.'
+                },
+                { label: 'From C', value: '`long sim_getppid(void)`' }
+            ]
+        })
         expect(find('syscalls', 'lseek').summary).toBe(
             'Moves the read and write position of the descriptor in rdi to the offset in rsi, interpreted according to rdx, and returns the new position.'
         )
-        expect(find('syscalls', 'stat').summary).toBe('Takes path in rdi, o_stat in rsi.')
+        expect(find('syscalls', 'stat').summary).toBe(
+            'Reads file metadata for the path at rdi and writes it to the Linux struct stat buffer at rsi.'
+        )
+    })
+
+    it("names each call's <sim.h> function, as the header declares it", () => {
+        const syscalls = chapter('syscalls').entries.filter((entry) => entry.kind === 'syscall')
+        const header = readFileSync('src/lib/sourceRuntime/generated/sim/x86_64.h', 'utf8')
+        for (const syscall of X86_SYSCALLS) {
+            const entry = syscalls.find((item) => item.title === syscall.name)!
+            const fields = entry.view.type === 'fields' ? entry.view.fields : []
+            const fromC = fields.find((field) => field.label === 'From C')
+            //last, after the input and output fields, as MIPS and RISC-V show theirs
+            expect(fields[fields.length - 1], syscall.name).toBe(fromC)
+            const binding = x86SimBinding(syscall)
+            if (!binding) {
+                expect(fromC?.value).toBe(
+                    'None in `<sim.h>`: only the restorer a program registers with rt_sigaction makes it, as a signal handler returns, and called from C it corrupts the program.'
+                )
+                continue
+            }
+            const prototype = x86SimPrototype(binding)
+            expect(fromC?.value).toBe(`\`${prototype}\``)
+            expect(header).toContain(`${prototype} {`)
+            //searched as MIPS's and RISC-V's are, without it
+            expect(entry.searchText).not.toContain('sim_')
+        }
+        expect(find('syscalls', 'exit').view).toMatchObject({
+            fields: expect.arrayContaining([
+                { label: 'From C', value: '`void sim_exit(long status)`' }
+            ])
+        })
     })
 
     it('keeps every anchor the pages had', () => {

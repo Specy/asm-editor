@@ -4,6 +4,8 @@ the run, and another accepted key starts a new one.
 
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
 
+For the same game written with the simulator's C API, see [Flappy bird in C](/learn/courses/risc-v/examples/flappy-bird-in-c).
+
 This capstone combines the frame loop, keyboard input, screen addresses, and the supplied xorshift
 helper from The snake game. Its new ideas are a three-state game, fractional movement, pipe records,
 half-open collision ranges, and repainting selected screen columns.

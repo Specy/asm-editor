@@ -1,9 +1,9 @@
 <script lang="ts">
     import { Prompt, PromptType } from '$stores/promptStore.svelte'
+    import { ScopedTheme } from '$stores/themeStore.svelte'
     import { fade } from 'svelte/transition'
     import { tick } from 'svelte'
 
-    import Button from '$cmp/shared/button/Button.svelte'
     import Input from '$cmp/shared/input/Input.svelte'
     interface Props {
         children?: import('svelte').Snippet
@@ -14,17 +14,20 @@
     let value = $state('')
     let currentId = $state(0)
     let inputEl = $state<HTMLInputElement | undefined>()
+    let alertOkEl = $state<HTMLButtonElement | undefined>()
     $effect(() => {
         if (Prompt.id !== currentId) {
             currentId = Prompt.id
             value = ''
             //every prompt takes the keyboard, not just the ones that arrive with the form off the
-            //screen. A program that asks twice in a row — EASy68K's task 18 for each of two numbers —
-            //asks again before this form has finished leaving, and Svelte keeps the element it was
-            //about to remove rather than building a new one: the input's own mount-time focus never
-            //runs again, and the answer the user clicked Ok for leaves the focus on that button.
-            //After a tick, so the element of the prompt now being asked is the one focused.
-            tick().then(() => inputEl?.focus())
+            //screen. A program that opens two input dialogs in a row — MARS's service 51 for each of
+            //two numbers — asks again before this form has finished leaving, and Svelte keeps the
+            //element it was about to remove rather than building a new one: the input's own
+            //mount-time focus never runs again, and the answer the user clicked Ok for leaves the
+            //focus on that button.
+            //After a tick, so the element of the prompt now being asked is the one focused. A
+            //message has no input, so its Ok takes the keyboard and Enter dismisses it
+            tick().then(() => (Prompt.type === PromptType.Alert ? alertOkEl : inputEl)?.focus())
         }
     })
 </script>
@@ -33,10 +36,12 @@
 {#if Prompt.promise}
     <form
         class="prompt-wrapper"
+        style={ScopedTheme.variables}
         out:fade|global={{ duration: 150 }}
         onsubmit={(e) => {
             e.preventDefault()
             if (Prompt.type === PromptType.Text) Prompt.answerText(value)
+            else if (Prompt.type === PromptType.Alert) Prompt.answerAlert()
         }}
     >
         <div class="prompt-text">
@@ -47,34 +52,44 @@
                 focus
                 bind:value
                 bind:el={inputEl}
+                placeholder={Prompt.placeholder}
                 hideStatus
-                style="color: var(--primary-text); background-color: var(--primary);"
+                style="border: 1px solid var(--tray-line);"
             />
         {/if}
 
+        <!-- the Workbench's tray: only the answer that goes on is filled, the rest are their label -->
         <div class="prompt-row">
             {#if Prompt.type === PromptType.Text}
                 {#if Prompt.cancellable}
-                    <Button
-                        onClick={() => Prompt.cancel()}
-                        cssVar="secondary"
-                        style="padding: 0.5rem 1.5rem">Cancel</Button
+                    <button type="button" class="tool" onclick={() => Prompt.cancel()}
+                        >Cancel</button
                     >
                 {/if}
-                <Button
-                    onClick={() => Prompt.answerText(value)}
-                    style="padding: 0.5rem 1.5rem; margin-left:auto">Ok</Button
+                <button type="button" class="tool primary" onclick={() => Prompt.answerText(value)}
+                    >Ok</button
+                >
+            {:else if Prompt.type === PromptType.Alert}
+                <button
+                    type="button"
+                    class="tool primary"
+                    bind:this={alertOkEl}
+                    onclick={() => Prompt.answerAlert()}>Ok</button
                 >
             {:else}
-                <Button
-                    onClick={() => Prompt.answerConfirm(false)}
-                    cssVar="secondary"
-                    style="padding: 0.5rem 1.5rem">No</Button
+                <!-- MARS's confirm dialog answers Cancel too; the app's own confirms do not offer it -->
+                {#if Prompt.offersCancel}
+                    <button type="button" class="tool" onclick={() => Prompt.cancel()}
+                        >Cancel</button
+                    >
+                {/if}
+                <button type="button" class="tool" onclick={() => Prompt.answerConfirm(false)}
+                    >No</button
                 >
-                <Button
-                    onClick={() => Prompt.answerConfirm(true)}
-                    cssVar="accent2"
-                    style="padding: 0.5rem 1.5rem">Yes</Button
+                <button
+                    type="button"
+                    class="tool primary"
+                    onclick={() => Prompt.answerConfirm(true)}>Yes</button
                 >
             {/if}
         </div>
@@ -82,22 +97,27 @@
 {/if}
 
 <style lang="scss">
+    /* drawn as the Workbench's execution trays where they float over the code: a translucent tint
+       that blurs what is beneath, a hairline edge, lifted by a shadow */
     .prompt-wrapper {
+        --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
         display: flex;
         position: fixed;
         top: 1rem;
         overflow: hidden;
         max-height: 20rem;
-        max-width: 25rem;
-        min-width: 20rem;
-        color: var(--secondary-text);
-        backdrop-filter: blur(3px);
-        border-radius: 0.5rem;
-        border: solid 0.1rem var(--tertiary);
-        background-color: rgba(var(--RGB-secondary), 0.8);
-        box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
+        max-width: min(25rem, calc(100vw - 2rem));
+        min-width: min(20rem, calc(100vw - 2rem));
+        gap: 0.5rem;
+        color: var(--primary-text);
+        border: 1px solid var(--tray-line);
+        border-radius: 0.6rem;
+        background-color: color-mix(in srgb, var(--primary) 80%, transparent);
+        backdrop-filter: blur(4px);
+        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         z-index: 20;
-        padding: 0.5rem;
+        padding: 0.6rem;
+        font-family: Rubik;
         transition: transform 0.3s ease-out;
         flex-direction: column;
         animation: slideIn 0.25s ease-out;
@@ -116,19 +136,63 @@
         }
     }
 
-    .prompt-row {
-        display: flex;
-        margin-top: 0.5rem;
-        justify-content: space-between;
-    }
-
     .prompt-text {
-        padding: 0.3rem;
+        padding: 0.1rem 0.2rem;
         font-size: 0.9rem;
         display: flex;
         margin-top: auto;
         line-height: 1.5;
         white-space: pre-wrap;
+    }
+
+    .prompt-row {
+        display: flex;
+        gap: 0.2rem;
+        height: 2.1rem;
+        justify-content: flex-end;
+    }
+
+    .tool {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 0 0.9rem;
+        border: none;
+        border-radius: 0.4rem;
+        background-color: transparent;
+        color: var(--primary-text);
+        font-family: Rubik;
+        font-size: 0.9rem;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        transition:
+            background-color 0.15s,
+            color 0.15s;
+    }
+
+    .tool:hover {
+        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
+    }
+
+    .tool:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    .primary {
+        min-width: 4.5rem;
+        background-color: var(--accent);
+        color: var(--accent-text);
+    }
+
+    .primary:hover {
+        background-color: color-mix(in srgb, var(--accent) 85%, white);
+    }
+
+    .primary:focus-visible {
+        outline-color: var(--accent-text);
     }
 
     @media print {

@@ -9,6 +9,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     import type { PageData } from './$types'
     import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
@@ -125,9 +126,8 @@
         </Row>
     </Navbar>
 
-    <Sidebar bind:menuOpen menuStyle="gap: 0;">
-        <Column padding="1rem" gap="1rem" style="padding-top: 0;">
-            <SearchLauncher {placeholder} />
+    <Sidebar bind:menuOpen menuStyle="gap: 0; overflow-y: hidden;">
+        <Column padding="0 1rem 0" gap="1rem">
             <a
                 onclick={() => (menuOpen = false)}
                 href={resolve('/learn/courses/[courseId]', { courseId: data.course.slug })}
@@ -138,8 +138,9 @@
                     {data.course.name}
                 </Header>
             </a>
+            <SearchLauncher {placeholder} />
         </Column>
-        <Column style="overflow-y: auto">
+        <MaskedScroll gap="0">
             {#each data.course.modules as module (module.slug)}
                 <TogglableSection
                     open={true}
@@ -164,7 +165,7 @@
                     </Column>
                 </TogglableSection>
             {/each}
-        </Column>
+        </MaskedScroll>
         <Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
             <ButtonLink
                 style="width: 100%; gap: 0.5rem"

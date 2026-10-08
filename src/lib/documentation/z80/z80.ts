@@ -328,8 +328,8 @@ function groupEntry(group: (typeof Z80_PORT_GROUP_DOCS)[number], href: string): 
 function portEntry(port: Z80PortDoc, href: string): DocumentationEntry {
     const number = toHex(port.port)
     const fields: EntryField[] = [
-        { label: 'out', value: port.write },
-        { label: 'in', value: port.read }
+        { label: 'In', value: port.read },
+        { label: 'Out', value: port.write }
     ]
     //what running the example takes and gives, shown under it
     const after: EntryField[] = []
@@ -351,7 +351,7 @@ function portEntry(port: Z80PortDoc, href: string): DocumentationEntry {
         signature: `port ${number}`,
         summary: summary(purpose),
         view: { type: 'fields', fields, example: port.example, after },
-        searchText: [`Port ${number}.`, `Out: ${port.write}`, `In: ${port.read}`, port.exampleShows]
+        searchText: [`Port ${number}.`, `In: ${port.read}`, `Out: ${port.write}`, port.exampleShows]
             .filter(Boolean)
             .join('\n'),
         code: port.example

@@ -1,13 +1,16 @@
 <script lang="ts">
     import InteractiveEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import { type AvailableLanguages } from '$lib/Project.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
+    import InstructionPreview from './InstructionPreview.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import FaExternalLink from '~icons/fa-solid/external-link-alt'
     import { createSharePayload } from '$lib/utils'
     import { makeProject } from '$lib/Project.svelte'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
+    import type { RegisterFormat } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { EXAMPLE_EDITOR_FONT } from '$lib/monaco/exampleFont'
+    import './instructionExample.css'
 
     interface Props {
         code?: string
@@ -16,6 +19,9 @@
         showPc?: boolean
         showFlags?: boolean
         showConsole?: boolean
+        showMemory?: boolean
+        initialRegisterFile?: string
+        initialRegisterFormat?: RegisterFormat
     }
 
     let {
@@ -24,7 +30,10 @@
         language,
         showFlags,
         showPc,
-        showConsole
+        showConsole,
+        showMemory,
+        initialRegisterFile,
+        initialRegisterFormat
     }: Props = $props()
     /**
      * Hands whatever is currently in the embedded editor to the real one.
@@ -50,37 +59,43 @@
     }
 </script>
 
-{#key instructionKey}
-    <EmulatorLoader
-        bind:code
-        {language}
-        settings={{
-            globalPageElementsPerRow: 4,
-            globalPageSize: 4 * 8
-        }}
-    >
-        {#snippet children(emulator)}
-            <InteractiveEditor
-                bind:code
-                {language}
-                {emulator}
-                {showFlags}
-                {showPc}
-                {showConsole}
-                showScreen={false}
-                forceMemoryRight
-                dockActions={[
-                    {
-                        label: 'Try in the editor',
-                        title: 'Open this example in the editor',
-                        icon: FaExternalLink,
-                        onClick: openInEditor
-                    }
-                ]}
-            />
-        {/snippet}
-        {#snippet loading()}
-            <Header>Loading emulator...</Header>
-        {/snippet}
-    </EmulatorLoader>
-{/key}
+<div class="instruction-example playground">
+    {#key `${language}/${instructionKey}`}
+        <EmulatorLoader
+            bind:code
+            {language}
+            settings={{
+                globalPageElementsPerRow: 4,
+                globalPageSize: 4 * 8
+            }}
+        >
+            {#snippet children(emulator)}
+                <InteractiveEditor
+                    bind:code
+                    {language}
+                    {emulator}
+                    {showFlags}
+                    {showPc}
+                    {showConsole}
+                    {showMemory}
+                    {initialRegisterFile}
+                    {initialRegisterFormat}
+                    fontOptions={EXAMPLE_EDITOR_FONT}
+                    showScreen={false}
+                    forceMemoryRight
+                    dockActions={[
+                        {
+                            label: 'Try in the editor',
+                            title: 'Open this example in the editor',
+                            icon: FaExternalLink,
+                            onClick: openInEditor
+                        }
+                    ]}
+                />
+            {/snippet}
+            {#snippet loading()}
+                <InstructionPreview {code} {language} />
+            {/snippet}
+        </EmulatorLoader>
+    {/key}
+</div>

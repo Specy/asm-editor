@@ -93,7 +93,7 @@
     }
 
     .from-source {
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         font-weight: bold;
         line-height: 1;
         color: var(--accent);

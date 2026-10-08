@@ -1,4 +1,9 @@
 import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
+import {
+    normalizeBuildInput,
+    buildConfiguration,
+    buildConfigurationsEqual
+} from '$lib/projectFiles'
 import { languageWorkerManager } from './LanguageWorkerManager'
 import type {
     ProjectAnalysisSnapshot,
@@ -9,6 +14,8 @@ import type {
     ProjectWorkerResponse
 } from './protocol'
 import { registerLanguageSession } from './sessionRegistry'
+import { compilerCapabilities } from '$lib/sourceCompilation/capabilities'
+import type { SourceHelpSessionContext } from '$lib/sourceLanguageHelp/context'
 
 type SnapshotListener = (snapshot: ProjectAnalysisSnapshot | undefined, pending: boolean) => void
 
@@ -34,11 +41,13 @@ export class ProjectLanguageSession {
     private revision = 1
     private currentSnapshot: ProjectAnalysisSnapshot | undefined
     private buildSnapshots = new Map<number, BuildSources>()
+    private buildHelp = new Map<number, SourceHelpSessionContext>()
     private listeners = new Set<SnapshotListener>()
     private unregister: () => void
     private connection: { post(request: ProjectWorkerRequest): void; dispose(): void } | undefined
 
     constructor(sessionId: string, sources: BuildSources, target: ProjectAnalysisTarget = 'M68K') {
+        sources = normalizeBuildInput(sources)
         this.sessionId = sessionId
         this.target = target
         this.currentSources = sources
@@ -52,7 +61,8 @@ export class ProjectLanguageSession {
             revision: this.revision,
             target,
             entry: sources.entry,
-            files: sources.files
+            files: sources.files,
+            ...buildConfiguration(sources)
         })
     }
 
@@ -78,12 +88,45 @@ export class ProjectLanguageSession {
 
     setBuild(buildGeneration: number, sources: BuildSources | undefined): void {
         this.buildSnapshots.clear()
-        if (sources) this.buildSnapshots.set(buildGeneration, sources)
+        this.buildHelp.clear()
+        if (sources) {
+            const frozen = normalizeBuildInput(sources)
+            this.buildSnapshots.set(buildGeneration, frozen)
+            this.buildHelp.set(
+                buildGeneration,
+                Object.freeze({
+                    sources: frozen,
+                    capabilities: compilerCapabilities(this.target, frozen.runtimeAbi),
+                    revision: buildGeneration
+                })
+            )
+        }
+    }
+
+    sourceHelpFor(
+        sourceKind: 'live' | 'build',
+        buildGeneration?: number
+    ): SourceHelpSessionContext | undefined {
+        return sourceKind === 'live'
+            ? {
+                  sources: this.currentSources,
+                  capabilities: compilerCapabilities(this.target),
+                  revision: this.revision
+              }
+            : buildGeneration === undefined
+              ? undefined
+              : this.buildHelp.get(buildGeneration)
     }
 
     update(sources: BuildSources): void {
+        sources = normalizeBuildInput(sources)
         const changes = fileChanges(this.currentSources.files, sources.files)
-        if (changes.length === 0 && sources.entry === this.currentSources.entry) return
+        if (
+            changes.length === 0 &&
+            sources.entry === this.currentSources.entry &&
+            buildConfigurationsEqual(sources, this.currentSources)
+        )
+            return
         this.currentSources = sources
         this.revision += 1
         // Keep the last complete answer visible while the Worker analyzes this revision. Monaco's
@@ -95,7 +138,8 @@ export class ProjectLanguageSession {
             sessionId: this.sessionId,
             revision: this.revision,
             entry: sources.entry,
-            changes
+            changes,
+            ...buildConfiguration(sources)
         })
     }
 
@@ -109,6 +153,8 @@ export class ProjectLanguageSession {
         this.connection?.dispose()
         this.connection = undefined
         this.listeners.clear()
+        this.buildHelp.clear()
+        this.buildSnapshots.clear()
         this.unregister()
     }
 
@@ -116,9 +162,8 @@ export class ProjectLanguageSession {
         //The Worker's readiness handshake is the manager's business, not a session's.
         if (response.type === 'ready') return
         if (response.type === 'failure') {
-            //`<=`, not `==`: a failure carrying an older revision is still a failure, and the Worker
-            //that reported it will not be answering the newer request either.
-            if (response.revision <= this.revision) {
+            // A failed old profile/source unit cannot replace Diagnostics for the new revision.
+            if (response.revision === this.revision) {
                 console.error(`${this.target} analysis failed: ${response.message}`)
                 const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
                 for (const [path, file] of Object.entries(this.currentSources.files)) {

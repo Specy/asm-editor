@@ -76,8 +76,8 @@ agreement.
 
 There is no operating system here. Each language imitates a simulator that already existed, and the
 simulator answers the trap itself: what a program prints appears in the console panel, and what it
-reads comes from the box under that panel. While a program waits for input the run is stopped in the
-middle of that one instruction, which is exactly what happens on a real machine. A program that
+reads is typed in the same panel, after that output. While a program waits for input the run is
+stopped in the middle of that one instruction, which is exactly what happens on a real machine. A program that
 reads a lot of input spends most of its life inside a system call.
 
 The services on offer are much the same wherever you look, because programs want the same things:

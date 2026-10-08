@@ -2,7 +2,7 @@ import type { MonacoType } from '$lib/monaco/Monaco'
 import type monaco from 'monaco-editor'
 import {
     RISCVAddressingModes,
-    riscvDirectivesMap,
+    riscvDirectivesForProfile,
     type RISCVInstruction,
     riscvInstructionMap,
     riscvInstructionsVariants,
@@ -11,6 +11,12 @@ import {
     riscvVariantOperands
 } from './RISC-V-documentation'
 import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
+import { languageSession } from '$lib/languages/service/sessionRegistry'
+import {
+    runtimeFunctionDocumentation,
+    runtimeFunctionsForModel
+} from '$lib/sourceRuntime/runtimeLanguage'
+import { parseProjectSourceUri } from '$lib/languages/service/uri'
 import {
     assemblyOperandContext,
     instructionSnippet,
@@ -26,6 +32,17 @@ export const RISCV_TEXT_OPTIONS = {
         { start: /^\s*\.(?:if|ifdef|ifndef|ifb|ifnb)\b/i, end: /^\s*\.endif\b/i }
     ]
 } satisfies AssemblyTextOptions
+
+function directivesForModel(model: monaco.editor.ITextModel) {
+    const identity = model.uri ? parseProjectSourceUri(model.uri) : null
+    const profile = identity
+        ? languageSession(identity.sessionId)?.sourcesFor(
+              identity.sourceKind,
+              identity.sourceKind === 'build' ? identity.buildGeneration : undefined
+          )?.assemblerProfile
+        : undefined
+    return riscvDirectivesForProfile(profile ?? 'rars')
+}
 
 type CompletionMetadata = {
     detail?: string
@@ -144,7 +161,7 @@ export function createRISCVCompletion(
             if (lastArg?.startsWith('.')) {
                 const directivePrefix = lastArg.slice(1).toLowerCase()
                 suggestions.push(
-                    ...Object.entries(riscvDirectivesMap)
+                    ...Object.entries(directivesForModel(model))
                         .filter(([key]) => key.startsWith(directivePrefix))
                         .map(([key, value]) => {
                             return {
@@ -254,6 +271,20 @@ export function createRISCVCompletion(
                     )
                     if (dedupedArgs.find((a) => a.internal_type === 'IDENTIFIER')) {
                         suggestions.push(...labelsSuggestions)
+                        //the Runtime library's functions, when the Build links it
+                        suggestions.push(
+                            ...runtimeFunctionsForModel(model).map((entry) => ({
+                                label: entry.name,
+                                kind: monaco.languages.CompletionItemKind.Function,
+                                insertText: entry.name,
+                                detail: entry.prototype,
+                                documentation: {
+                                    value: runtimeFunctionDocumentation(entry)
+                                },
+                                sortText: `${1000 - 4}${entry.name}`,
+                                range
+                            }))
+                        )
                     }
                     const onlyRegs = dedupedArgs.filter(
                         (a) =>
@@ -390,9 +421,14 @@ export function createRISCVHoverProvider(
                     value: register.documentation
                 })
             }
+            const library = runtimeFunctionsForModel(model).find((entry) => entry.name === word)
+            if (library && !labels.includes(word)) {
+                contents.push({ value: runtimeFunctionDocumentation(library) })
+            }
             const lowerWord = word.toLowerCase()
-            if (hasOwnKey(riscvDirectivesMap, lowerWord)) {
-                contents.push({ value: riscvDirectivesMap[lowerWord].description })
+            const directives = directivesForModel(model)
+            if (hasOwnKey(directives, lowerWord)) {
+                contents.push({ value: directives[lowerWord].description })
             }
 
             return contents.length > 0 ? { range, contents } : null

@@ -81,7 +81,7 @@ starts reading.
 Complete the two ordinary loops below. For each string, check its capacity before reading a
 byte, count the nonzero bytes, and put **-1** in the result register if no zero occurs within
 that capacity. `first` contains `"Hi!"` and a zero, so `r10` should be **3**. `second` has five
-nonzero bytes and no terminator, so `r11` should have the **-1** bit pattern
+nonzero bytes and no terminator, so `r12` should have the **-1** bit pattern
 `0xFFFFFFFFFFFFFFFF`. Use **Test** to check both values,
 then inspect the registers. The second string is safe to scan because its five-byte capacity
 stops the loop before it reads beyond `second_end`.
@@ -111,7 +111,7 @@ _start:
     xor rcx, rcx
 .second_next:
     ; Check SECOND_CAPACITY before reading a byte.
-    ; On zero, put rcx in r11. On exhaustion, put -1 in r11.
+    ; On zero, put rcx in r12. On exhaustion, put -1 in r12.
 
 .done:
     mov rax, 60
@@ -123,7 +123,7 @@ _start:
 {
     "expectedRegisters": {
         "r10": 3,
-        "r11": "0xFFFFFFFFFFFFFFFF"
+        "r12": "0xFFFFFFFFFFFFFFFF"
     }
 }
 ```
@@ -171,10 +171,10 @@ _start:
     inc rcx
     jmp .second_next
 .second_found:
-    mov r11, rcx
+    mov r12, rcx
     jmp .done
 .second_missing:
-    mov r11, -1
+    mov r12, -1
 
 .done:
     mov rax, 60

@@ -17,10 +17,8 @@ import { fillPlaceholders, proseEntries, type DocumentationEntry } from '../entr
 import template from './screen.md?raw'
 
 /**
- * The Screen Chapter of MIPS and of RISC-V: MARS's bitmap display and keyboard-and-display
- * simulator and RARS's ports of them are the same two tools with the same parameters and the same
- * registers, so one text serves both and only the register names, the service call and the sample
- * syntax change. The tables are built from the same constants the editor runs on.
+ * Shared screen and keyboard documentation for MIPS and RISC-V. Only register names, service-call
+ * syntax and assembly examples vary; the tables use the same constants as the editor.
  */
 
 type Variant = 'MIPS' | 'RISC-V'
@@ -34,7 +32,8 @@ function fence(variant: Variant, code: string): string {
 }
 
 const BITMAP_EXAMPLE: Record<Variant, string> = {
-    MIPS: `        .data
+    MIPS: `# @screen unit=1 width=256 height=256 base=display
+        .data
 display:.space  262144          # 256 * 256 words
         .text
 main:
@@ -42,7 +41,8 @@ main:
         li      $t1, 0x00ff8000 # low 24 bits: red 0xff, green 0x80, blue 0x00
         sw      $t1, 0($t0)     # the pixel at the top left
         sw      $t1, 1024($t0)  # 256 words further on: the one below it`,
-    'RISC-V': `        .data
+    'RISC-V': `# @screen unit=1 width=256 height=256 base=display
+        .data
 display:.space  262144          # 256 * 256 words
         .text
 main:
@@ -151,12 +151,10 @@ export function screenEntries(
     const mips = variant === 'MIPS'
     const markdown = fillPlaceholders(template, {
         variant,
-        simulator: mips ? 'MARS' : 'RARS',
         call: mips ? 'syscall' : 'ecall',
         service: mips ? '$v0' : 'a7',
         argument: mips ? '$a0' : 'a0',
         highArgument: mips ? '$a1' : 'a1',
-        examples: mips ? 'examples/mips/' : 'examples/risc-v/',
         receiverControl: hex(MARS_RECEIVER_CONTROL),
         readyBit: String(MARS_READY_BIT),
         interruptBit: String(MARS_INTERRUPT_ENABLE_BIT),

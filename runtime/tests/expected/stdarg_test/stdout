@@ -1,0 +1,12 @@
+first argument again via va_copy: 1
+sum=4e+09
+first argument again via va_copy: 1
+sum=55
+first argument again via va_copy: 1
+sum=78
+say hi 42 2.50 !
+say returned 17
+log returned 6
+parse 2: 12 34
+vscanf 2: name 99
+vfscanf 2: 3.5 seven

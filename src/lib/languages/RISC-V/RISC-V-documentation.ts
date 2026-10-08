@@ -21,9 +21,6 @@ export type RISCVInstruction = {
     args: RISCVAddressingMode[][]
     description: string
     example: string
-    interactiveExample?: {
-        code: string
-    }
     isRv64Only: boolean
 }
 
@@ -38,9 +35,6 @@ export const riscvInstructionsWithDuplicates = riscvIse.map((ins) => {
         name: ins.name,
         description: ins.description,
         example: ins.example.trim(),
-        interactiveExample: {
-            code: ins.example.trim()
-        },
         args: ins.tokens.slice(1).map((t) => {
             return [
                 {
@@ -325,7 +319,7 @@ export const riscvDirectivesMap = {
     align: {
         name: 'align',
         description:
-            'Align next data item on specified byte boundary (0=byte, 1=half, 2=word, 3=double)'
+            'Aligns the next data address to a 2^n-byte boundary: `.align 0` is byte alignment, `.align 1` is 2 bytes, `.align 2` is 4 bytes, and `.align 3` is 8 bytes. Here the operand is the exponent; `.balign` takes the byte count directly.'
     },
     half: {
         name: 'half',
@@ -345,15 +339,17 @@ export const riscvDirectivesMap = {
     },
     extern: {
         name: 'extern',
-        description: 'Declare the listed label and byte length to be a global data field'
+        description:
+            'Declares an external data symbol and its size in bytes, so the assembler can reserve its address for references to that symbol.'
     },
     globl: {
         name: 'globl',
-        description: 'Declare the listed label(s) as global to enable referencing from other files'
+        description:
+            'Marks the listed symbol as global so it can be used as an external name, such as a program entry point: `.globl main`.'
     },
     global: {
         name: 'global',
-        description: 'Declare the listed label(s) as global to enable referencing from other files'
+        description: 'Alias for `.globl`: marks a symbol as global, for example `.global main`.'
     },
     eqv: {
         name: 'eqv',
@@ -375,7 +371,7 @@ export const riscvDirectivesMap = {
     section: {
         name: 'section',
         description:
-            'Allows specifying sections without .text or .data directives. Included for gcc comparability'
+            'Switches to the named section, such as `.text`, `.data`, `.rodata`, or `.bss`. In this simulator, `.rodata` and `.bss` share the data segment with `.data`; use `.text` for instructions.'
     },
     bss: {
         name: 'bss',
@@ -423,470 +419,68 @@ export const riscvDirectivesMap = {
     }
 }
 
-export const riscvSyscall = {
-    [1]: {
-        name: 'print integer',
-        code: 1,
-        arguments: [{ name: 'a0', description: 'integer to print' }],
-        result: {}
-    },
-    [2]: {
-        name: 'print float',
-        code: 2,
-        arguments: [{ name: 'f12', description: 'float to print' }],
-        result: {}
-    },
-    [3]: {
-        name: 'print double',
-        code: 3,
-        arguments: [{ name: 'f12', description: 'double to print' }],
-        result: {}
-    },
-    [4]: {
-        name: 'print string',
-        code: 4,
-        arguments: [{ name: 'a0', description: 'address of null-terminated string to print' }],
-        result: {}
-    },
-    [5]: {
-        name: 'read integer',
-        code: 5,
-        arguments: [],
-        result: { arguments: [{ name: 'v0', description: 'contains integer read' }] }
-    },
-    [6]: {
-        name: 'read float',
-        code: 6,
-        arguments: [],
-        result: { arguments: [{ name: 'f0', description: 'contains float read' }] }
-    },
-    [7]: {
-        name: 'read double',
-        code: 7,
-        arguments: [],
-        result: { arguments: [{ name: 'f0', description: 'contains double read' }] }
-    },
-    [8]: {
-        name: 'read string',
-        code: 8,
-        arguments: [
-            { name: 'a0', description: 'address of input buffer' },
-            { name: 'a1', description: 'maximum number of characters to read' }
-        ],
-        result: {
-            other: "Service 8 - Follows semantics of UNIX 'fgets'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer."
-        }
-    },
-    [9]: {
-        name: 'sbrk (allocate heap memory)',
-        code: 9,
-        arguments: [{ name: 'a0', description: 'number of bytes to allocate' }],
-        result: { arguments: [{ name: 'v0', description: 'contains address of allocated memory' }] }
-    },
-    [10]: {
-        name: 'exit (terminate execution)',
-        code: 10,
-        arguments: [],
-        result: {}
-    },
-    [11]: {
-        name: 'print character',
-        code: 11,
-        arguments: [{ name: 'a0', description: 'character to print' }],
-        result: {
-            other: 'Service 11 - Prints ASCII character corresponding to contents of low-order byte.'
-        }
-    },
-    [12]: {
-        name: 'read character',
-        code: 12,
-        arguments: [],
-        result: { arguments: [{ name: 'v0', description: 'contains character read' }] }
-    },
-    [17]: {
-        name: 'Get cwd',
-        code: 17,
-        arguments: [], //TODO
-        result: {}
-    },
-    [1024]: {
-        name: 'open file',
-        code: 1024,
-        arguments: [
-            { name: 'a0', description: 'address of null-terminated string containing filename' },
-            { name: 'a1', description: 'flags' },
-            { name: 'a2', description: 'mode' }
-        ],
-        result: {
-            arguments: [
-                { name: 'v0', description: 'contains file descriptor (negative if error)' }
-            ],
-            other: 'Service 1024 - MARS implements three flag values: 0 for read-only, 1 for write-only with create, and 9 for write-only with create and append. It ignores mode. The returned file descriptor will be negative if the operation failed. MARS maintains file descriptors internally and allocates them starting with 3. File descriptors 0, 1 and 2 are always open for: reading from standard input, writing to standard output, and writing to standard error, respectively (new in release 4.3).'
-        }
-    },
-    [63]: {
-        name: 'read from file',
-        code: 63,
-        arguments: [
-            { name: 'a0', description: 'file descriptor' },
-            { name: 'a1', description: 'address of input buffer' },
-            { name: 'a2', description: 'maximum number of characters to read' }
-        ],
-        result: {
-            arguments: [
-                {
-                    name: 'v0',
-                    description:
-                        'contains number of characters read (0 if end-of-file, negative if error)'
-                }
-            ]
-        }
-    },
-    [64]: {
-        name: 'write to file',
-        code: 64,
-        arguments: [
-            { name: 'a0', description: 'file descriptor' },
-            { name: 'a1', description: 'address of output buffer' },
-            { name: 'a2', description: 'number of characters to write' }
-        ],
-        result: {
-            arguments: [
-                {
-                    name: 'v0',
-                    description: 'contains number of characters written (negative if error)'
-                }
-            ]
-        }
-    },
-    [57]: {
-        name: 'close file',
-        code: 57,
-        arguments: [{ name: 'a0', description: 'file descriptor' }],
-        result: {}
-    },
-    [93]: {
-        name: 'exit2 (terminate with value)',
-        code: 93,
-        arguments: [{ name: 'a0', description: 'termination result' }],
-        result: {
-            other: 'Service 93 - If the RISCV program is run under control of the MARS graphical interface (GUI), the exit code in a0 is ignored.'
-        }
-    },
-    [30]: {
-        name: 'time (program time)',
-        code: 30,
-        arguments: [],
-        result: {
-            arguments: [
-                { name: 'a0', description: 'low order 32 bits of the program time' },
-                { name: 'a1', description: 'high order 32 bits of the program time' }
-            ],
-            other: 'Service 30 - Milliseconds since the run started, rather than since 1 January 1970 as in RARS: it is the time the program can observe passing, and in a testcase it comes from a virtual clock that starts at zero and only advances through the waits of service 32.'
-        }
-    },
-    [32]: {
-        name: 'sleep',
-        code: 32,
-        arguments: [{ name: 'a0', description: 'the length of time to sleep in milliseconds' }],
-        result: {
-            other: 'Service 32 - Lets that much program time pass before the next instruction. The editor stays responsive while it waits and the wait costs no instructions, so a program idling on the keyboard never reaches the execution limit; in a testcase it completes at once and advances the virtual clock instead.'
-        }
-    },
+const gnuDirectiveDescriptions = {
+    word: 'Emit 32-bit little-endian values at the current location, without implicit alignment.',
+    half: 'Emit 16-bit little-endian values without implicit alignment.',
+    dword: 'Emit eight little-endian bytes in RV32 and RV64; symbols use checked, zero-extended addresses.',
+    quad: 'Emit eight little-endian bytes in RV32 and RV64, including resolved expressions.',
+    long: 'Alias for .word.',
+    short: 'Alias for .half.',
+    '2byte': 'Alias for .half; no implicit alignment.',
+    '4byte': 'Alias for .word; no implicit alignment.',
+    '8byte': 'Alias for .quad; no implicit alignment.',
+    align: 'Align to 2^n bytes. Optional byte fill and maximum skip; omitted code fill emits NOPs.',
+    p2align:
+        'Align to 2^n bytes. Optional byte fill and maximum skip; omitted code fill emits NOPs.',
+    balign: 'Align to a power-of-two byte boundary, with optional byte fill and maximum skip.',
+    section:
+        'Select a supported named section, preserving its independent location counter. Validate flags and type.',
+    pushsection: 'Push the current section and select a supported named section.',
+    popsection: 'Restore the section saved by .pushsection.',
+    previous: 'Switch to the previously selected section.',
+    set: 'Define a constant or alias once; reassignment and cycles are errors.',
+    equ: 'Alias for the single-definition .set subset.',
+    option: 'Supports push/pop, nopic, norvc, norelax and relax. No relaxation is performed.',
+    attribute:
+        'Validate the selected ISA width, supported architecture and 16-byte ABI stack alignment.',
+    weak: 'Declare a symbol that must have one definition in this include unit.',
+    local: 'Declare a local symbol.',
+    hidden: 'Mark visibility metadata for this static include unit.',
+    protected: 'Mark visibility metadata for this static include unit.',
+    internal: 'Mark visibility metadata for this static include unit.',
+    type: 'Declare @function, @object or @notype metadata.',
+    size: 'Validate a resolved, nonnegative symbol-size expression.',
+    rodata: 'Select the read-only data section; this classification determines layout, not memory protection.',
+    skip: 'Reserve data bytes, with optional byte fill.',
+    comm: 'Allocate zeroed common storage with checked size and power-of-two byte alignment.',
+    lcomm: 'Allocate zeroed local common storage with checked size and byte alignment.'
+} as const
 
-    [34]: {
-        name: 'print integer in hexadecimal',
-        code: 34,
-        arguments: [{ name: 'a0', description: 'integer to print' }],
-        result: {
-            other: 'Displayed value is 8 hexadecimal digits, left-padding with zeroes if necessary.'
-        }
-    },
-    [35]: {
-        name: 'print integer in binary',
-        code: 35,
-        arguments: [{ name: 'a0', description: 'integer to print' }],
-        result: { other: 'Displayed value is 32 bits, left-padding with zeroes if necessary.' }
-    },
-    [36]: {
-        name: 'print integer as unsigned',
-        code: 36,
-        arguments: [{ name: 'a0', description: 'integer to print' }],
-        result: { other: 'Displayed as unsigned decimal value.' }
-    },
-    /*
-        [40]: {
-                name: "set seed",
-                code: 40,
-                arguments: [
-                    { name: "a0", description: "i.d. of pseudorandom number generator (any int)" },
-                    { name: "a1", description: "seed for corresponding pseudorandom number generator" }
-                ],
-                result: { other: "No values are returned. Sets the seed of the corresponding underlying Java pseudorandom number generator (java.util.Random). Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired." }
-            },
-    */
-    [41]: {
-        name: 'random int',
-        code: 41,
-        arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
-        result: {
-            arguments: [
-                {
-                    name: 'a0',
-                    description:
-                        "contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence"
-                }
-            ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
-        }
-    },
-    [42]: {
-        name: 'random int range',
-        code: 42,
-        arguments: [
-            { name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' },
-            { name: 'a1', description: 'upper bound of range of returned values' }
-        ],
-        result: {
-            arguments: [
-                {
-                    name: 'a0',
-                    description:
-                        "contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence"
-                }
-            ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
-        }
-    },
-    [43]: {
-        name: 'random float',
-        code: 43,
-        arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
-        result: {
-            arguments: [
-                {
-                    name: 'f0',
-                    description:
-                        "contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
-                }
-            ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
-        }
-    },
-    [44]: {
-        name: 'random double',
-        code: 44,
-        arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
-        result: {
-            arguments: [
-                {
-                    name: 'f0',
-                    description:
-                        "contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
-                }
-            ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
-        }
-    },
-    [50]: {
-        name: 'ConfirmDialog',
-        code: 50,
-        arguments: [
-            {
-                name: 'a0',
-                description: 'address of null-terminated string that is the message to user'
-            }
-        ],
-        result: {
-            arguments: [
-                {
-                    name: 'a0',
-                    description: 'contains value of user-chosen option\n0: Yes\n1: No\n2: Cancel'
-                }
-            ]
-        }
-    },
-    [51]: {
-        name: 'InputDialogInt',
-        code: 51,
-        arguments: [
-            {
-                name: 'a0',
-                description: 'address of null-terminated string that is the message to user'
-            }
-        ],
-        result: {
-            arguments: [
-                { name: 'a0', description: 'contains int read' },
-                {
-                    name: 'a1',
-                    description:
-                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
-                }
-            ]
-        }
-    },
-    [52]: {
-        name: 'InputDialogFloat',
-        code: 52,
-        arguments: [
-            {
-                name: 'a0',
-                description: 'address of null-terminated string that is the message to user'
-            }
-        ],
-        result: {
-            arguments: [
-                { name: 'f0', description: 'contains float read' },
-                {
-                    name: 'a1',
-                    description:
-                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
-                }
-            ]
-        }
-    },
-    [53]: {
-        name: 'InputDialogDouble',
-        code: 53,
-        arguments: [
-            {
-                name: 'a0',
-                description: 'address of null-terminated string that is the message to user'
-            }
-        ],
-        result: {
-            arguments: [
-                { name: 'f0', description: 'contains double read' },
-                {
-                    name: 'a1',
-                    description:
-                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
-                }
-            ]
-        }
-    },
-    [54]: {
-        name: 'InputDialogString',
-        code: 54,
-        arguments: [
-            {
-                name: 'a0',
-                description: 'address of null-terminated string that is the message to user'
-            },
-            { name: 'a1', description: 'address of input buffer' },
-            { name: 'a2', description: 'maximum number of characters to read' }
-        ],
-        result: {
-            arguments: [
-                {
-                    name: 'a1',
-                    description:
-                        'contains status value\n0: OK status. Buffer contains the input string.\n-2: Cancel was chosen. No change to buffer.\n-3: OK was chosen but no data had been input into field. No change to buffer.\n-4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null.'
-                }
-            ],
-            other: 'See Service 8 note below table'
-        }
-    },
-    [55]: {
-        name: 'MessageDialog',
-        code: 55,
-        arguments: [
-            {
-                name: 'a0',
-                description: 'address of null-terminated string that is the message to user'
-            },
-            {
-                name: 'a1',
-                description:
-                    'the type of message to be displayed:\n0: error message, indicated by Error icon\n1: information message, indicated by Information icon\n2: warning message, indicated by Warning icon\n3: question message, indicated by Question icon\nother: plain message (no icon displayed)'
-            }
-        ],
-        result: {}
-    },
-
-    [56]: {
-        name: 'MessageDialogInt',
-        code: 56,
-        arguments: [
-            {
-                name: 'a0',
-                description:
-                    'address of null-terminated string that is an information-type message to user'
-            },
-            {
-                name: 'a1',
-                description: 'int value to display in string form after the first string'
-            }
-        ],
-        result: {}
-    },
-    [60]: {
-        name: 'MessageDialogFloat',
-        code: 60,
-        arguments: [
-            {
-                name: 'a0',
-                description:
-                    'address of null-terminated string that is an information-type message to user'
-            },
-            {
-                name: 'f12',
-                description: 'float value to display in string form after the first string'
-            }
-        ],
-        result: {}
-    },
-    [58]: {
-        name: 'MessageDialogDouble',
-        code: 58,
-        arguments: [
-            {
-                name: 'a0',
-                description:
-                    'address of null-terminated string that is an information-type message to user'
-            },
-            {
-                name: 'f12',
-                description: 'double value to display in string form after the first string'
-            }
-        ],
-        result: {}
-    },
-    [59]: {
-        name: 'MessageDialogString',
-        code: 59,
-        arguments: [
-            {
-                name: 'a0',
-                description:
-                    'address of null-terminated string that is an information-type message to user'
-            },
-            {
-                name: 'a1',
-                description: 'address of null-terminated string to display after the first string'
-            }
-        ],
-        result: {}
+export function riscvDirectivesForProfile(
+    profile: 'rars' | 'gnu-compiler-v1'
+): Readonly<Record<string, { name: string; description: string }>> {
+    if (profile === 'rars') return riscvDirectivesMap
+    const unsupported = new Set(['eqv', 'macro', 'end_macro', 'extern', 'sbss'])
+    return {
+        ...Object.fromEntries(
+            Object.entries(riscvDirectivesMap).filter(([name]) => !unsupported.has(name))
+        ),
+        ...Object.fromEntries(
+            Object.entries(gnuDirectiveDescriptions).map(([name, description]) => [
+                name,
+                { name, description }
+            ])
+        )
     }
-} as Record<number, Syscall>
-
-export interface SyscallArgument {
-    name: string
-    description: string
 }
 
-export interface SyscallResult {
-    arguments?: SyscallArgument[] // Optional, as some syscalls have no result arguments
-    other?: string // Optional, for additional notes
-}
+export const riscvGnuDirectiveNames = Object.keys(gnuDirectiveDescriptions)
 
-export interface Syscall {
-    name: string
-    code: number
-    arguments: SyscallArgument[]
-    result: SyscallResult
-}
+/**
+ * The syscalls live in `documentation/mars/riscvSyscalls.ts`, free of the Core, so that build
+ * scripts can read them.
+ */
+export { riscvSyscalls as riscvSyscall } from '$lib/documentation/mars/riscvSyscalls'
 
 export type RISCVRegisterDoc = {
     /** The name, or the range of names, the panel and the assembler spell the registers with. */

@@ -120,6 +120,8 @@
         min-width: 0;
         max-width: 100%;
         overflow-y: auto;
+        // Keep the content width steady when unfolding a testcase makes the list scroll.
+        scrollbar-gutter: stable;
         background-color: var(--secondary);
         color: var(--secondary-text);
     }

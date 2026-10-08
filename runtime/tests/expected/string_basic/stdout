@@ -1,0 +1,25 @@
+memcpy returns dest=1
+memcpy: [hello-------]
+memmove right: [0101234589.]
+memmove left: [3456789789.]
+memset returns dest=1
+memset: [zzzz...789]
+memcmp: -1 0 1 1
+memcmp n=0: 0
+memchr: 9 1 1
+memchr NUL: 15
+strlen: 0 1 11
+strnlen: 3 2 0
+strcpy returns dest=1 [copied]
+strncpy pads: [ab....##]
+strncpy no NUL: [abcd##]
+strcat returns dest=1 [concatenated]
+strncat: [abcdef]
+strncat short: [abcdefXY]
+strcmp: -1 0 1 -1 1
+strncmp: 0 -1 -1 0
+strcoll: -1 0
+strxfrm: 4 [xfrm] needed=13
+strdup: [duplicate me] distinct=1
+strndup: [trunc]
+strndup short: [hi]

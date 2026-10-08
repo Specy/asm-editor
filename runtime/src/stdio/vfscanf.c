@@ -1,0 +1,280 @@
+/* Derived from musl 1.2.6 src/stdio/vfscanf.c (MIT, see runtime/third_party/musl/COPYRIGHT).
+ * Changes: floating point is scanned in double (see floatscan.c); %Lf and friends fail as a matching
+ * failure unless long double is double; no wide conversions (%lc, %ls, %l[, %C, %S fail) and no %m
+ * allocation, so scanf never calls malloc; locking is a no-op; the __isoc99 alias is removed. */
+#include <stdlib.h>
+#include <stdarg.h>
+#include <ctype.h>
+#include <limits.h>
+#include <string.h>
+#include <stdint.h>
+
+#include "stdio_impl.h"
+#include "shgetc.h"
+#include "intscan.h"
+#include "floatscan.h"
+
+/* aed: long double conversions are accepted only where long double is double (MIPS). */
+#define AED_LDBL_IS_DBL (__LDBL_MANT_DIG__ == __DBL_MANT_DIG__ && __LDBL_MAX_EXP__ == __DBL_MAX_EXP__)
+
+#define SIZE_hh -2
+#define SIZE_h  -1
+#define SIZE_def 0
+#define SIZE_l   1
+#define SIZE_L   2
+#define SIZE_ll  3
+
+static void store_int(void *dest, int size, unsigned long long i)
+{
+	if (!dest) return;
+	switch (size) {
+	case SIZE_hh:
+		*(char *)dest = i;
+		break;
+	case SIZE_h:
+		*(short *)dest = i;
+		break;
+	case SIZE_def:
+		*(int *)dest = i;
+		break;
+	case SIZE_l:
+		*(long *)dest = i;
+		break;
+	case SIZE_ll:
+		*(long long *)dest = i;
+		break;
+	}
+}
+
+static void *arg_n(va_list ap, unsigned int n)
+{
+	void *p;
+	unsigned int i;
+	va_list ap2;
+	va_copy(ap2, ap);
+	for (i=n; i>1; i--) va_arg(ap2, void *);
+	p = va_arg(ap2, void *);
+	va_end(ap2);
+	return p;
+}
+
+int vfscanf(FILE *restrict f, const char *restrict fmt, va_list ap)
+{
+	int width;
+	int size;
+	int base;
+	const unsigned char *p;
+	int c, t;
+	char *s;
+	void *dest=NULL;
+	int invert;
+	int matches=0;
+	unsigned long long x;
+	double y;
+	off_t pos = 0;
+	unsigned char scanset[257];
+	size_t i;
+
+	FLOCK(f);
+
+	if (!f->rpos) __toread(f);
+	if (!f->rpos) goto input_fail;
+
+	for (p=(const unsigned char *)fmt; *p; p++) {
+
+		if (isspace(*p)) {
+			while (isspace(p[1])) p++;
+			shlim(f, 0);
+			while (isspace(shgetc(f)));
+			shunget(f);
+			pos += shcnt(f);
+			continue;
+		}
+		if (*p != '%' || p[1] == '%') {
+			shlim(f, 0);
+			if (*p == '%') {
+				p++;
+				while (isspace((c=shgetc(f))));
+			} else {
+				c = shgetc(f);
+			}
+			if (c!=*p) {
+				shunget(f);
+				if (c<0) goto input_fail;
+				goto match_fail;
+			}
+			pos += shcnt(f);
+			continue;
+		}
+
+		p++;
+		if (*p=='*') {
+			dest = 0; p++;
+		} else if (isdigit(*p) && p[1]=='$') {
+			dest = arg_n(ap, *p-'0'); p+=2;
+		} else {
+			dest = va_arg(ap, void *);
+		}
+
+		for (width=0; isdigit(*p); p++) {
+			width = 10*width + *p - '0';
+		}
+
+		size = SIZE_def;
+		switch (*p++) {
+		case 'h':
+			if (*p == 'h') p++, size = SIZE_hh;
+			else size = SIZE_h;
+			break;
+		case 'l':
+			if (*p == 'l') p++, size = SIZE_ll;
+			else size = SIZE_l;
+			break;
+		case 'j':
+			size = SIZE_ll;
+			break;
+		case 'z':
+		case 't':
+			size = SIZE_l;
+			break;
+		case 'L':
+			size = SIZE_L;
+			break;
+		case 'd': case 'i': case 'o': case 'u': case 'x':
+		case 'a': case 'e': case 'f': case 'g':
+		case 'A': case 'E': case 'F': case 'G': case 'X':
+		case 's': case 'c': case '[':
+		case 'p': case 'n':
+			p--;
+			break;
+		default:
+			goto fmt_fail;
+		}
+
+		t = *p;
+
+		/* aed: no wide characters (%lc, %ls, %l[) and no long double unless it is double */
+		if (size == SIZE_l && (t == 'c' || t == 's' || t == '[')) goto fmt_fail;
+#if !AED_LDBL_IS_DBL
+		if (size == SIZE_L && ((t|32) == 'a' || (t|32) == 'e' || (t|32) == 'f' || (t|32) == 'g')) goto fmt_fail;
+#endif
+
+		switch (t) {
+		case 'c':
+			if (width < 1) width = 1;
+		case '[':
+			break;
+		case 'n':
+			store_int(dest, size, pos);
+			/* do not increment match count, etc! */
+			continue;
+		default:
+			shlim(f, 0);
+			while (isspace(shgetc(f)));
+			shunget(f);
+			pos += shcnt(f);
+		}
+
+		shlim(f, width);
+		if (shgetc(f) < 0) goto input_fail;
+		shunget(f);
+
+		switch (t) {
+		case 's':
+		case 'c':
+		case '[':
+			if (t == 'c' || t == 's') {
+				memset(scanset, -1, sizeof scanset);
+				scanset[0] = 0;
+				if (t == 's') {
+					scanset[1+'\t'] = 0;
+					scanset[1+'\n'] = 0;
+					scanset[1+'\v'] = 0;
+					scanset[1+'\f'] = 0;
+					scanset[1+'\r'] = 0;
+					scanset[1+' '] = 0;
+				}
+			} else {
+				if (*++p == '^') p++, invert = 1;
+				else invert = 0;
+				memset(scanset, invert, sizeof scanset);
+				scanset[0] = 0;
+				if (*p == '-') p++, scanset[1+'-'] = 1-invert;
+				else if (*p == ']') p++, scanset[1+']'] = 1-invert;
+				for (; *p != ']'; p++) {
+					if (!*p) goto fmt_fail;
+					if (*p=='-' && p[1] && p[1] != ']')
+						for (c=p++[-1]; c<*p; c++)
+							scanset[1+c] = 1-invert;
+					scanset[1+*p] = 1-invert;
+				}
+			}
+			s = 0;
+			i = 0;
+			if ((s = dest)) {
+				while (scanset[(c=shgetc(f))+1])
+					s[i++] = c;
+			} else {
+				while (scanset[(c=shgetc(f))+1]);
+			}
+			shunget(f);
+			if (!shcnt(f)) goto match_fail;
+			if (t == 'c' && shcnt(f) != width) goto match_fail;
+			if (t != 'c') {
+				if (s) s[i] = 0;
+			}
+			break;
+		case 'p':
+		case 'X':
+		case 'x':
+			base = 16;
+			goto int_common;
+		case 'o':
+			base = 8;
+			goto int_common;
+		case 'd':
+		case 'u':
+			base = 10;
+			goto int_common;
+		case 'i':
+			base = 0;
+		int_common:
+			x = __intscan(f, base, 0, ULLONG_MAX);
+			if (!shcnt(f)) goto match_fail;
+			if (t=='p' && dest) *(void **)dest = (void *)(uintptr_t)x;
+			else store_int(dest, size, x);
+			break;
+		case 'a': case 'A':
+		case 'e': case 'E':
+		case 'f': case 'F':
+		case 'g': case 'G':
+			y = __floatscan(f, size, 0);
+			if (!shcnt(f)) goto match_fail;
+			if (dest) switch (size) {
+			case SIZE_def:
+				*(float *)dest = y;
+				break;
+			case SIZE_l:
+				*(double *)dest = y;
+				break;
+			case SIZE_L: /* aed: only where long double is double */
+				*(double *)dest = y;
+				break;
+			}
+			break;
+		}
+
+		pos += shcnt(f);
+		if (dest) matches++;
+	}
+	if (0) {
+fmt_fail:
+input_fail:
+		if (!matches) matches--;
+match_fail:
+		;
+	}
+	FUNLOCK(f);
+	return matches;
+}
+

@@ -5,7 +5,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import { onMount } from 'svelte'
+    import InstructionExample from '$cmp/documentation/site/InstructionExample.svelte'
     import { formatAggregatedArgs } from '$lib/languages/RISC-V/RISC-V-documentation'
     interface Props {
         data: PageData
@@ -14,32 +14,19 @@
     let { data }: Props = $props()
     let ins = $derived(data.props.instruction[0])
 
-    let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
-
-    let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
-        $state.raw()
-    onMount(async () => {
-        //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
-        const imp = await import('$cmp/documentation/site/ClientOnly.svelte')
-        // @ts-ignore -- the dynamic import type omits the generated top-level-await promise
-        await imp?.__tla
-        // @ts-ignore -- the prerender import shim obscures the component's default export
-        component = imp?.default
-    })
-
     // "Docs - move" matched no query anyone types; "MOVE - M68K instruction reference"
     // matches how these are actually searched for.
     let pageTitle = $derived(`${String(ins.name).toUpperCase()} - RISC-V instruction reference`)
     // The raw description is markdown, and was reaching search results with its link
     // syntax and newlines intact.
     let metaDescription = $derived(
-        toMetaDescription(`The ${ins.name} RISC-V instruction. ${ins.description}`)
+        toMetaDescription(`The ${ins.name} RISC-V instruction. ${data.props.description}`)
     )
     let structuredData = $derived(
         instructionLd({
             name: String(ins.name),
             architecture: 'RISC-V',
-            description: ins.description,
+            description: data.props.description,
             pathname: page.url.pathname
         })
     )
@@ -77,7 +64,7 @@
             </Column>
 
             <article class="description">
-                <MarkdownRenderer source={ins.description} centered={false} />
+                <MarkdownRenderer source={data.props.description} centered={false} />
             </article>
 
             <Column style="gap: 1rem">
@@ -91,26 +78,10 @@
             </Column>
         </Column>
     </div>
-    {#if component}
-        {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 bind:code instructionKey={ins.name} language="RISC-V" showPc={true} />
-    {:else}
-        <div class="loading">Loading...</div>
-    {/if}
+    <InstructionExample instructionKey={ins.name} example={data.props.content?.example} />
 </Page>
 
 <style lang="scss">
-    .loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex: 1;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        font-size: 2rem;
-        border-radius: 0.5rem;
-        min-height: 19.75rem;
-    }
     .instruction-info {
         display: flex;
         gap: 1rem;

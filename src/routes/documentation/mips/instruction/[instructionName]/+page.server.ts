@@ -2,6 +2,8 @@ import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
 import { chapters } from '$lib/documentation/mips/mips'
 import { mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
+import { mipsInstructionContent } from '$lib/documentation/mips/instructionContent'
+import { instructionDescription } from '$lib/documentation/instructions/content'
 
 export const load = (async ({ params }) => {
     const instruction = mipsInstructionMap.get(params.instructionName)
@@ -11,6 +13,11 @@ export const load = (async ({ params }) => {
     return {
         props: {
             instruction,
+            content: mipsInstructionContent[params.instructionName],
+            description: instructionDescription(
+                mipsInstructionContent[params.instructionName],
+                instruction[0].description
+            ),
             name: params.instructionName
         }
     }

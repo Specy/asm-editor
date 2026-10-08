@@ -13,6 +13,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
     import MenuLink from '$cmp/documentation/site/MenuLink.svelte'
     import InstructionsMenu from '$cmp/documentation/site/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
@@ -75,10 +76,13 @@
         </Row>
     </Navbar>
 
-    <Sidebar bind:menuOpen>
-        <Column gap="1rem" style="overflow-y: auto;">
+    <Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
+        <Column padding="0 1rem">
+            <SearchLauncher placeholder="Search the x86 docs and courses" />
+        </Column>
+
+        <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
-                <SearchLauncher placeholder="Search the x86 docs and courses" />
                 <MenuLink
                     href="/documentation/x86"
                     title="x86"
@@ -97,6 +101,11 @@
                 <MenuLink
                     href="/documentation/x86/syscall"
                     title="Syscalls"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href="/documentation/x86/using-c"
+                    title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
@@ -122,7 +131,7 @@
                     {currentInstructionName}
                 />
             </TogglableSection>
-        </Column>
+        </MaskedScroll>
 
         <Column style="margin-top: auto;" padding="0.5rem">
             <ButtonLink

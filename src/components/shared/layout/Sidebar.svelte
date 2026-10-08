@@ -49,7 +49,7 @@
         color: var(--secondary-text);
         width: var(--side-menu-width);
         min-width: var(--side-menu-width);
-        gap: 1rem;
+        gap: 0;
         top: 3.2rem;
         padding-top: 1rem;
         height: calc(var(--screen-height) - 3.2rem);

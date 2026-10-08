@@ -7,7 +7,7 @@
     import rehypeExternalLinks from 'rehype-external-links'
     import '@cartamd/plugin-code/default.css'
     import { code } from '@cartamd/plugin-code'
-    import type { Element, ElementContent, Parent, Root, RootContent } from 'hast'
+    import type { Element, Parent, Root, RootContent } from 'hast'
     import { visit } from 'unist-util-visit'
     import type { Testcase } from '$lib/Project.svelte'
     import lzstring from 'lz-string'
@@ -16,15 +16,18 @@
     import {
         isTestcaseFence,
         parsePlaygroundFence,
-        parsePlaygroundLanguage,
         parseTestcaseFence,
+        playgroundFileName,
+        namedPlaygroundProgram,
         type PlaygroundFence,
         type PlaygroundSettings
     } from '$lib/content/playgrounds'
-    import { tokenizeAssembly } from '$lib/content/assemblyHighlight'
+    import { codeBlocks, highlightedAssemblyCode } from '$lib/content/codeBlocks'
+    import './codeBlocks.css'
+    import { assemblyPalette } from '$lib/content/assemblyPalette'
     import { HeadingSlugger } from '$lib/content/headings'
     import { toString as hastToString } from 'hast-util-to-string'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import { encodePlaygroundProgram, type PlaygroundProgram } from '$lib/content/playgroundProgram'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
@@ -32,32 +35,20 @@
     /**
      * The colours of the code block a prerendered playground carries, taken from the editor's own
      * theme (`$lib/monaco/editorTheme.ts`) so the block reads as the thing it is about to become.
-     * It follows `isDark` rather than a media query because the theme here is the reader's choice,
-     * not the system's, and it is the same signal that picks the shiki theme above.
+     * It follows the reader's chosen secondary surface, the same one the editor draws on.
      */
     let asmPalette = $derived(
-        isDark
-            ? {
-                  comment: '#1f619a',
-                  mnemonic: '#ff9d00',
-                  directive: '#eb939a',
-                  number: '#80ffbb',
-                  string: '#3ad900',
-                  register: '#8673ff'
-              }
-            : {
-                  comment: '#506696',
-                  mnemonic: '#473fd8',
-                  directive: '#9f3b3b',
-                  number: '#006d4c',
-                  string: '#0a7b3e',
-                  register: '#037280'
-              }
+        assemblyPalette(ThemeStore.isColorDark(ThemeStore.theme.secondary.color))
     )
 
     type Settings = PlaygroundSettings
 
-    function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
+    function createCodeUrl(
+        code: string,
+        settings: Settings,
+        testcases: Testcase[],
+        program?: PlaygroundProgram
+    ) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
@@ -88,7 +79,7 @@
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
                 : ''
-        return `/embed?${lang}${props}${tests}code=${compressed}`
+        return `/embed?${lang}${props}${tests}${program ? `program=${encodePlaygroundProgram(program)}` : `code=${compressed}`}`
     }
 
     /** The fence info string of a `<pre><code class="language-...">`, when it has one. */
@@ -135,7 +126,8 @@
     function attachedTestcases(node: RootContent, info: string): Testcase[] {
         const raw = textOf(node)
         try {
-            return [parseTestcaseFence(raw).testcase]
+            const parsed = parseTestcaseFence(raw)
+            return parsed.hasTestcase ? [parsed.testcase] : []
         } catch (e) {
             const where = typeof window === 'undefined' ? '' : ` on ${window.location.pathname}`
             console.error(
@@ -182,33 +174,6 @@
     }
 
     /**
-     * The `<code>` children of a highlighted block: a span per token, the plain runs left as text,
-     * and the newlines the tokenizer dropped put back between the lines. Shiki cannot do this one -
-     * its highlighter is asynchronous and this is Carta's synchronous pass - so
-     * [a structural tokenizer](../../../lib/content/assemblyHighlight.ts) does, and the colours the
-     * stylesheet gives these classes are the editor's own.
-     */
-    function highlightedCode(code: string, language: AvailableLanguages): ElementContent[] {
-        const children: ElementContent[] = []
-        tokenizeAssembly(code, language).forEach((tokens, index) => {
-            if (index > 0) children.push({ type: 'text', value: '\n' })
-            for (const token of tokens) {
-                if (token.kind === 'plain') {
-                    children.push({ type: 'text', value: token.text })
-                    continue
-                }
-                children.push({
-                    type: 'element',
-                    tagName: 'span',
-                    properties: { className: [`asm-${token.kind}`] },
-                    children: [{ type: 'text', value: token.text }]
-                })
-            }
-        })
-        return children
-    }
-
-    /**
      * Marks a playground fence as one, in place, leaving it an ordinary code block. This is the
      * whole of what a prerendered page carries: the iframe is built from these marks on the client,
      * by the async pass below. A lecture's playgrounds are its worked examples, so a page that
@@ -238,7 +203,10 @@
             }
             //the trailing newline a fence leaves behind would render as an empty last line, and the
             //embed URL is built from these same children, so both are trimmed once, here
-            codeNode.children = highlightedCode(textOf(codeNode).trimEnd(), fence.settings.language)
+            const text = textOf(codeNode).trimEnd()
+            codeNode.children = fence.sourceLanguage
+                ? [{ type: 'text', value: text }]
+                : highlightedAssemblyCode(text, fence.settings.language)
         }
         node.properties = {
             ...node.properties,
@@ -249,24 +217,6 @@
                 : undefined)
         }
         return node
-    }
-
-    /**
-     * Colours an ordinary block in one of the editor's languages the way a playground's is, with the
-     * same tokenizer and the editor's palette, so that every assembly listing on a page reads alike
-     * and is coloured in the prerendered file too. Its `language-` class goes, so that shiki, which
-     * is left only the blocks in other languages, does not touch it. Answers whether it was one.
-     */
-    function highlightAssemblyBlock(node: Element, info: string): boolean {
-        const language = parsePlaygroundLanguage(info.split('|')[0])
-        const codeNode = node.children?.find(
-            (child): child is Element => child.type === 'element' && child.tagName === 'code'
-        )
-        if (!language || !codeNode) return false
-        codeNode.properties = { className: ['asm-code'] }
-        codeNode.children = highlightedCode(textOf(codeNode).trimEnd(), language)
-        node.properties = { ...node.properties, className: ['asm-block'] }
-        return true
     }
 
     /**
@@ -284,6 +234,29 @@
             const fence = info === undefined ? undefined : parsePlaygroundFence(info)
             if (fence && node.type === 'element') {
                 let testcases: Testcase[] = []
+                const fileNodes = [
+                    { node, info: info as string, code: textOf(node).replace(/\n$/, '') }
+                ]
+                if (fence.file) {
+                    for (;;) {
+                        const next = nextBlock(children, index)
+                        const nextInfo = next && fenceInfoOf(next.node)
+                        if (
+                            !next ||
+                            nextInfo === undefined ||
+                            !playgroundFileName(nextInfo) ||
+                            parsePlaygroundFence(nextInfo) ||
+                            next.node.type !== 'element'
+                        )
+                            break
+                        fileNodes.push({
+                            node: next.node,
+                            info: nextInfo,
+                            code: textOf(next.node).replace(/\n$/, '')
+                        })
+                        index = next.index
+                    }
+                }
                 const following = nextBlock(children, index)
                 const followingInfo = following && fenceInfoOf(following.node)
                 if (following && followingInfo !== undefined && isTestcaseFence(followingInfo)) {
@@ -291,19 +264,47 @@
                     //the testcase block and the whitespace before it go with the playground
                     index = following.index
                 }
-                result.push(markPlayground(node, fence, info as string, testcases, parent))
+                const marked = markPlayground(node, fence, info as string, testcases, parent)
+                if (fence.file) {
+                    const program = namedPlaygroundProgram(fence, fileNodes)
+                    const properties = marked.properties
+                    //Keep each source visible with its filename in the prerendered page. Only
+                    //the wrapper becomes an iframe, so all files share one emulator.
+                    marked.properties = { 'data-playground-file': true }
+                    result.push({
+                        type: 'element',
+                        tagName: 'div',
+                        properties: { ...properties, 'data-program': JSON.stringify(program) },
+                        children: fileNodes.flatMap(({ node: fileNode, info: fileInfo }) => {
+                            const codeNode = fileNode.children.find(
+                                (child): child is Element =>
+                                    child.type === 'element' && child.tagName === 'code'
+                            )
+                            if (codeNode)
+                                codeNode.properties.className = [
+                                    `language-${fileInfo.split('|')[0]}`
+                                ]
+                            return [
+                                {
+                                    type: 'element' as const,
+                                    tagName: 'div',
+                                    properties: { className: ['playground-filename'] },
+                                    children: [
+                                        {
+                                            type: 'text' as const,
+                                            value: playgroundFileName(fileInfo)!
+                                        }
+                                    ]
+                                },
+                                fileNode
+                            ]
+                        })
+                    })
+                } else result.push(marked)
                 continue
             }
             //a testcase fence that attached to nothing is still not something a reader should read
             if (info !== undefined && isTestcaseFence(info)) continue
-            if (
-                info !== undefined &&
-                node.type === 'element' &&
-                highlightAssemblyBlock(node, info)
-            ) {
-                result.push(node)
-                continue
-            }
             if (node.type === 'element') transformPlaygrounds(node)
             result.push(node)
         }
@@ -332,6 +333,11 @@
         const codeNode = node.children?.find(
             (child): child is Element => child.type === 'element' && child.tagName === 'code'
         )
+        const rawProgram = node.properties?.['data-program']
+        const program =
+            typeof rawProgram === 'string'
+                ? (JSON.parse(rawProgram) as PlaygroundProgram)
+                : undefined
         return {
             type: 'element',
             tagName: 'iframe',
@@ -345,7 +351,8 @@
                 src: createCodeUrl(
                     textOf(codeNode ?? node).trimEnd(),
                     fence.settings,
-                    markedTestcases(node)
+                    markedTestcases(node),
+                    program
                 )
             },
             children: []
@@ -515,12 +522,19 @@
             }
         ]
     }
+    const codeBlocksPlugin = codeBlocks()
+
     const cartaNormal = $derived(
         new Carta({
             sanitizer: (html) => {
                 return sanitizeMarkdownHtml(html)
             },
-            extensions: [ext, customPlaygroundPlugin, code({ theme, langs: ['asm'] })],
+            extensions: [
+                ext,
+                customPlaygroundPlugin,
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                codeBlocksPlugin
+            ],
             rehypeOptions: {
                 allowDangerousHtml: true
             },
@@ -537,7 +551,8 @@
             extensions: [
                 extWithExternalLins,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm'] })
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                codeBlocksPlugin
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -555,7 +570,8 @@
             extensions: [
                 extWithoutLinks,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm', 'c'] })
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                codeBlocksPlugin
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -575,7 +591,8 @@
                 ext,
                 headingIdsPlugin,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm'] })
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                codeBlocksPlugin
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -594,7 +611,8 @@
             extensions: [
                 extWithExternalLins,
                 plainPlaygroundsPlugin,
-                code({ theme, langs: ['asm'] })
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                codeBlocksPlugin
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -608,6 +626,7 @@
 
 <script lang="ts">
     import { Markdown } from 'carta-md'
+    import { EXAMPLE_EDITOR_FONT } from '$lib/monaco/exampleFont'
 
     interface Props {
         source: string
@@ -615,6 +634,10 @@
         style?: string
         spacing?: string
         simpleCode?: boolean
+        /** Show line numbers beside fenced code; configurable by callers, with no UI control. */
+        lineNumbers?: boolean
+        /** Reserve editor gutter spacing; ordinary listings use a compact gutter by default. */
+        gutterSpacing?: boolean
         disableLinks?: boolean
         /**
          * Whether the content sits in a column centred in its container, the way a lecture or an
@@ -641,6 +664,8 @@
         style,
         spacing,
         simpleCode,
+        lineNumbers = !simpleCode,
+        gutterSpacing = false,
         disableLinks,
         centered = true,
         headingIds = false,
@@ -686,15 +711,20 @@
     class="_markdown"
     class:heading-ids={headingIds}
     class:simple-code={simpleCode}
+    class:code-gutter-spacing={gutterSpacing}
     {style}
     style:--gap={spacing}
     style:--md-inline-margin={centered ? null : '0'}
+    style:--code-block-gutter-display={lineNumbers ? 'block' : 'none'}
     style:--asm-comment={asmPalette.comment}
     style:--asm-mnemonic={asmPalette.mnemonic}
     style:--asm-directive={asmPalette.directive}
     style:--asm-number={asmPalette.number}
     style:--asm-string={asmPalette.string}
     style:--asm-register={asmPalette.register}
+    style:--example-font-family={EXAMPLE_EDITOR_FONT.fontFamily}
+    style:--example-font-size={`${EXAMPLE_EDITOR_FONT.fontSize}px`}
+    style:--example-line-height={`${EXAMPLE_EDITOR_FONT.lineHeight}px`}
 >
     {#key source + theme + disableLinks + playgrounds + headingIds}
         <Markdown value={source} {carta} />
@@ -715,30 +745,8 @@
         scroll-margin-top: 4.5rem;
     }
 
-    :global(pre:has(code)) {
-        width: 100%;
-        background: var(--secondary) !important;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        /* a long listing, a whole game, scrolls inside its block rather than running down the page */
-        max-height: 60vh;
-        overflow: auto;
-        max-width: fit-content;
-        padding: 0.5rem 1rem;
-        min-width: min(100%, 72ch);
-        margin: 1rem var(--md-inline-margin, auto);
-        box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
-    }
-
-    :global(.shiki) {
-        padding: 0.5rem;
-        border-radius: 0.3rem;
-        width: 100%;
-        max-width: fit-content;
-        padding: 0.5rem 1rem;
-        min-width: min(100%, 72ch);
-        margin: 1rem var(--md-inline-margin, auto);
-        box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
+    :global(._markdown pre.code-block:not(.code-playground)) {
+        margin: 1rem 0;
     }
 
     :global(._markdown .markdown-body) {
@@ -764,6 +772,7 @@
     }
 
     :global(._markdown code:not(pre code)) {
+        font-family: 'Fira Code', monospace;
         background: var(--secondary);
         padding: 0.2rem 0.4rem;
         border-radius: 0.3rem;
@@ -860,24 +869,24 @@
         margin-bottom: 0;
     }
 
-    :global(.code-playground) {
-        border: none;
-        border-radius: 0.8rem;
+    :global(._markdown .code-playground) {
+        box-sizing: border-box;
+        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border-radius: var(--wb-radius, 0.4rem);
         width: 100%;
         min-height: 21.4rem;
         margin: 1.5rem var(--md-inline-margin, auto);
         background-color: var(--secondary);
-        box-shadow: 0 0 2rem 10px rgba(0, 0, 0, 0.2);
+        box-shadow: none;
     }
-    :global(.code-playground:first-child) {
+    :global(._markdown .code-playground:first-child) {
         margin: 0 var(--md-inline-margin, auto);
     }
 
     /* what a prerendered page carries in place of a playground, until the client swaps the iframe
        in: the lecture's worked example as readable, crawlable code. Same box as the iframe, so the
        swap moves nothing - the height matches the min-height above, and a fence that asks for a
-       taller one overrides both inline. The resets undo the `pre:has(code)` rules, which size a
-       code block to its content.
+       taller one overrides both inline. The listing itself scrolls inside that box.
 
        `font-family: inherit` is what keeps the two the same width, and is not cosmetic: both carry
        the same inline `max-width: 70ch`, and a `ch` is the width of a `0` in the element's OWN
@@ -892,57 +901,9 @@
         max-height: none;
         min-width: 0;
         max-width: none;
-        padding: 1rem;
+        padding: 0.4rem 1rem;
         overflow: auto;
         font-family: inherit;
-    }
-
-    :global(pre.code-playground > code),
-    :global(pre.plain-playground > code) {
-        font-family: 'Fira Code', monospace;
-        /* the editor that replaces this block sets the same size */
-        font-size: 1rem;
-        line-height: 1.35;
-    }
-
-    /* the editor's own palette, bound above so it follows the reader's theme rather than the
-       system's. A token the tokenizer was unsure of has no span and inherits the block's colour. */
-    :global(pre.code-playground .asm-comment),
-    :global(pre.plain-playground .asm-comment),
-    :global(pre.asm-block .asm-comment) {
-        color: var(--asm-comment);
-        font-style: italic;
-    }
-    :global(pre.code-playground .asm-mnemonic),
-    :global(pre.plain-playground .asm-mnemonic),
-    :global(pre.asm-block .asm-mnemonic) {
-        color: var(--asm-mnemonic);
-    }
-    :global(pre.code-playground .asm-directive),
-    :global(pre.plain-playground .asm-directive),
-    :global(pre.asm-block .asm-directive) {
-        color: var(--asm-directive);
-    }
-    :global(pre.code-playground .asm-number),
-    :global(pre.plain-playground .asm-number),
-    :global(pre.asm-block .asm-number) {
-        color: var(--asm-number);
-    }
-    :global(pre.code-playground .asm-string),
-    :global(pre.plain-playground .asm-string),
-    :global(pre.asm-block .asm-string) {
-        color: var(--asm-string);
-    }
-    :global(pre.code-playground .asm-register),
-    :global(pre.plain-playground .asm-register),
-    :global(pre.asm-block .asm-register) {
-        color: var(--asm-register);
-    }
-    /* the editor underlines a label rather than colouring it */
-    :global(pre.code-playground .asm-label),
-    :global(pre.plain-playground .asm-label),
-    :global(pre.asm-block .asm-label) {
-        text-decoration: underline;
     }
 
     /* a collapsed block of a lecture (an Exercise's solution): an expanding item in the same centered
@@ -986,14 +947,19 @@
         box-shadow: none;
     }
 
-    :global(.simple-code .shiki) {
-        border-radius: 0;
-        background-color: transparent !important;
-        padding: 0 !important;
+    :global(._markdown pre.code-playground.in-details) {
+        display: flex;
+    }
+
+    :global(.simple-code pre.code-block) {
         margin: 0 !important;
         width: unset !important;
         max-width: unset !important;
         min-width: unset !important;
         box-shadow: unset !important;
+    }
+
+    :global(.simple-code pre.code-block > .code-gutter) {
+        margin-left: 0;
     }
 </style>

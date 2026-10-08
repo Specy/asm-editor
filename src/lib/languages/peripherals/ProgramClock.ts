@@ -1,8 +1,8 @@
 /**
  * The Time Source: where a program's program time comes from
  * ([ADR 0010](../../../../docs/adr/0010-program-time-without-clock-pacing.md)). No environment
- * emulates a clock rate, so this is the whole of it: a wait for a duration, a wait for the next
- * frame, and a read of the time elapsed since the run started.
+ * paces instruction execution. Calendar and elapsed time follow host or virtual time; CPU time
+ * converts a Core's retired instruction counter at a nominal 100 MHz (ADR 0040).
  *
  * Two modes, chosen with the Input Source for the whole run:
  *
@@ -31,9 +31,18 @@ export type ProgramClockOptions = {
     mode?: ProgramClockMode
     /** The host time source. Injected so tests do not have to wait for real milliseconds. */
     now?: ClockReader
+    /** Interactive calendar source; defaults to Date.now. */
+    calendarNow?: ClockReader
+    /** Reproducible Testcase calendar origin; defaults to 2000-01-01 UTC. */
+    virtualEpochMs?: number
     /** How far one `nextFrame()` moves the virtual clock. */
     frameIntervalMs?: number
 }
+
+/** 2000-01-01 UTC, expressed in Unix milliseconds. */
+export const VIRTUAL_CALENDAR_EPOCH_MS = 946684800000
+/** 100 MHz nominal instruction rate; independent of wall time and scheduler speed. */
+export const CPU_INSTRUCTIONS_PER_SECOND = 100_000_000
 
 /** About 60 frames a second, an integer so virtual times stay exact. */
 export const VIRTUAL_FRAME_INTERVAL_MS = 16
@@ -57,6 +66,8 @@ export function hostNow(): number {
 
 export class ProgramClock {
     private readonly _mode: ProgramClockMode
+    private readonly hostCalendar: ClockReader
+    private readonly virtualEpochMs: number
     private readonly hostTime: ClockReader
     private readonly frameIntervalMs: number
     private readonly pending = new Set<PendingWait>()
@@ -68,6 +79,8 @@ export class ProgramClock {
 
     constructor(options: ProgramClockOptions = {}) {
         this._mode = options.mode ?? 'host'
+        this.hostCalendar = options.calendarNow ?? Date.now
+        this.virtualEpochMs = options.virtualEpochMs ?? VIRTUAL_CALENDAR_EPOCH_MS
         this.hostTime = options.now ?? hostNow
         this.frameIntervalMs = options.frameIntervalMs ?? VIRTUAL_FRAME_INTERVAL_MS
         this.origin = this.hostTime()
@@ -108,6 +121,27 @@ export class ProgramClock {
         return this.isVirtual ? this.elapsed : this.hostTime() - this.origin
     }
 
+    /** Calendar milliseconds since the Unix epoch. */
+    calendarNow(): number {
+        return this.isVirtual ? this.virtualEpochMs + this.elapsed : this.hostCalendar()
+    }
+
+    /** CPU milliseconds from a Core counter which rewinds with Undo. */
+    cpuNow(instructions: bigint | number): number {
+        return (Number(instructions) * 1000) / CPU_INSTRUCTIONS_PER_SECOND
+    }
+
+    /** EASy68K task 8: hundredths since midnight; Testcases use UTC. */
+    calendarHundredths(): number {
+        const date = new Date(this.calendarNow())
+        const hours = this.isVirtual ? date.getUTCHours() : date.getHours()
+        const minutes = this.isVirtual ? date.getUTCMinutes() : date.getMinutes()
+        const seconds = this.isVirtual ? date.getUTCSeconds() : date.getSeconds()
+        return (
+            (hours * 3600 + minutes * 60 + seconds) * 100 + Math.floor(date.getMilliseconds() / 10)
+        )
+    }
+
     /** Program time in hundredths of a second, the unit of EASy68K's task 8. */
     nowHundredths(): number {
         return Math.floor(this.now() / MS_PER_HUNDREDTH)
@@ -117,7 +151,8 @@ export class ProgramClock {
      * The program-requested wait of ADR 0010: the run loop awaits it and resumes the program after
      * it, without blocking the GUI.
      */
-    wait(ms: number): Promise<void> {
+    wait(ms: number, signal?: AbortSignal): Promise<void> {
+        if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('Wait aborted'))
         const duration = Number.isFinite(ms) ? Math.max(0, ms) : 0
         if (this.isVirtual) {
             this.elapsed += duration
@@ -126,7 +161,7 @@ export class ProgramClock {
         return this.schedule((resume) => {
             const timer = setTimeout(resume, duration)
             return () => clearTimeout(timer)
-        })
+        }, signal)
     }
 
     /** A wait in hundredths of a second, the unit of EASy68K's task 23. */
@@ -174,17 +209,26 @@ export class ProgramClock {
         this.start()
     }
 
-    private schedule(arm: (resume: () => void) => () => void): Promise<void> {
-        return new Promise<void>((resolve) => {
+    private schedule(arm: (resume: () => void) => () => void, signal?: AbortSignal): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
             const armedAt = this.hostTime()
             const wait: PendingWait = { disarm: () => {}, settle: () => {} }
+            const abort = () => {
+                wait.disarm()
+                signal?.removeEventListener('abort', abort)
+                if (this.pending.has(wait)) this._waitedMs += this.hostTime() - armedAt
+                this.pending.delete(wait)
+                reject(signal?.reason ?? new Error('Wait aborted'))
+            }
             wait.settle = () => {
+                signal?.removeEventListener('abort', abort)
                 if (this.pending.has(wait)) this._waitedMs += this.hostTime() - armedAt
                 this.pending.delete(wait)
                 resolve()
             }
             this.pending.add(wait)
             wait.disarm = arm(() => wait.settle())
+            signal?.addEventListener('abort', abort, { once: true })
         })
     }
 }

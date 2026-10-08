@@ -57,6 +57,11 @@
             "top": 1,
             "expect": "z80/instructions/djnz",
             "meaning": true
+        },
+        {
+            "query": "Terminal character port newline Enter",
+            "top": 5,
+            "expect": "z80/input-output/ports"
         }
     ]
 }

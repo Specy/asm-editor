@@ -6,7 +6,13 @@ export type LanguageSessionView = {
     readonly sessionId: string
     readonly sources: BuildSources
     readonly snapshot: ProjectAnalysisSnapshot | undefined
+    /** The Target the session analyses for, which picks the Runtime library a definition opens. */
+    readonly target?: import('./protocol').ProjectAnalysisTarget
     sourcesFor(sourceKind: 'live' | 'build', buildGeneration?: number): BuildSources | undefined
+    sourceHelpFor?(
+        sourceKind: 'live' | 'build',
+        buildGeneration?: number
+    ): import('$lib/sourceLanguageHelp/context').SourceHelpSessionContext | undefined
 }
 
 const sessions = new Map<string, LanguageSessionView>()
@@ -41,6 +47,11 @@ export function analysisForModel(
     if (identity.sourceKind === 'live') return snapshot
     const live = session.sourcesFor('live')
     if (!live) return undefined
+    if (
+        live.assemblerProfile !== sources.assemblerProfile ||
+        live.assemblyError !== sources.assemblyError
+    )
+        return undefined
     //Keep only the symbols and occurrences whose File still reads the way the analysis read it.
     const unchanged = (path: string) => live.files[path]?.content === sources.files[path]?.content
     return {

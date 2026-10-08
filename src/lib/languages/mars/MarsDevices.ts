@@ -1,5 +1,6 @@
 import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import type { Screen } from '$lib/languages/peripherals/screen/Screen'
+import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 import {
     marsDisplayGeometry,
     marsWordAddress,
@@ -86,19 +87,19 @@ export type MarsDeviceHost = {
     screen: Screen
     keyboard: Keyboard
     /**
-     * The Terminal, narrowed to what the transmitter register does to it plus the Input Source,
-     * which says whether the run is the user's or a Testcase's.
+     * The Terminal, narrowed to what the two registers need of it: the transmitter writes to and
+     * clears its output, and the receiver reads its keystrokes through it, which is how a Testcase's
+     * scripted input reaches the receiver as it reaches EASy68K's task 7 and the Z80's key port.
      */
-    terminal: {
-        write(text: string): void
-        clear(): void
-        readonly inputSource: 'interactive' | 'scripted'
-    }
+    terminal: Pick<
+        Terminal,
+        'write' | 'clearOutput' | 'peekKeystroke' | 'takeKeystroke' | 'onInputChange'
+    >
 }
 
 export class MarsDevices {
     private readonly host: MarsDeviceHost
-    private readonly unsubscribeKeyboard: () => void
+    private readonly unsubscribeInput: () => void
     private core: MarsCore | null = null
     private handles: number[] = []
     private geometry: MarsDisplayGeometry | null = null
@@ -117,16 +118,37 @@ export class MarsDevices {
     private dirtyBlocks = new Uint8Array(0)
     private dirtyFrom = -1
     private dirtyTo = -1
-    /** Whether the receiver data register is holding a character the program has not read yet. */
+    /**
+     * Whether the receiver data register is presenting a keystroke the program has not read yet. The
+     * keystroke stays in its queue until the program reads the register: a register that took it
+     * out would take it from a read syscall waiting on the same queue.
+     */
     private receiverArmed = false
     /** The framebuffer registration, kept apart so a display change can replace only it. */
     private framebufferHandle: number | null = null
 
     constructor(host: MarsDeviceHost) {
         this.host = host
-        //a keystroke arrives between two instructions, so the register is loaded from the queue as
-        //soon as one is typed rather than polled: the program sees Ready on its very next `lw`
-        this.unsubscribeKeyboard = host.keyboard.onTypedInput(() => this.refillReceiver())
+        //a keystroke arrives between two instructions, so the register is loaded as soon as one is
+        //typed rather than polled: the program sees Ready on its very next `lw`. The Terminal says
+        //when its own input changes, a Testcase's scripted lines included
+        const unsubscribeKeyboard = host.keyboard.onTypedInput(() => this.refreshReceiver())
+        const unsubscribeTerminal = host.terminal.onInputChange(() => this.refreshReceiver())
+        this.unsubscribeInput = () => {
+            unsubscribeKeyboard()
+            unsubscribeTerminal()
+        }
+    }
+
+    regions(): import('../commonLanguageFeatures.svelte').DeviceRegion[] {
+        const regions = [{ name: 'MMIO', start: 0xffff0000n, end: 0xffff0010n }]
+        if (this.geometry)
+            regions.push({
+                name: 'Bitmap display',
+                start: BigInt(this.geometry.baseAddress),
+                end: BigInt(this.geometry.endAddress + 4)
+            })
+        return regions
     }
 
     /** The grid the Screen currently mirrors, for the GUI and the tests. */
@@ -146,7 +168,7 @@ export class MarsDevices {
         this.configureDisplay(display)
     }
 
-    /** Drops every registration. The Keyboard subscription outlives it, see `dispose`. */
+    /** Drops every registration. The input subscriptions outlive it, see `dispose`. */
     detach(): void {
         this.detachCore()
     }
@@ -154,7 +176,7 @@ export class MarsDevices {
     /** The Emulator is going away: no keystroke may reach a Core that no longer exists. */
     dispose(): void {
         this.detachCore()
-        this.unsubscribeKeyboard()
+        this.unsubscribeInput()
     }
 
     /**
@@ -309,24 +331,27 @@ export class MarsDevices {
         core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, 0)
         core.setPeripheralWord(MARS_RECEIVER_DATA | 0, 0)
         this.receiverArmed = false
-        this.refillReceiver()
+        this.refreshReceiver()
     }
 
     /**
-     * Moves one typed character into the receiver data register and sets Ready. Ready means "the
-     * queue is not empty", so it survives a read that leaves more input behind; the register holds
-     * one character and the Keyboard's queue holds the rest, which is why no keystroke is lost.
+     * Shows the next keystroke in the receiver data register and sets Ready, or clears Ready when
+     * there is none. Ready means "a keystroke is waiting", so it survives a read that leaves more
+     * input behind, and no keystroke is lost: the register only shows the next one, which stays
+     * queued until the program reads it.
+     *
+     * The keystroke comes through the Terminal: a Testcase's scripted lines, a byte at a time, and
+     * otherwise what is typed on the Screen panel or in the Terminal. An automated run does not
+     * consume live Screen input
+     * ([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)), so a
+     * keystroke typed into the panel while a Testcase runs stays in the queue for the run after it.
      */
-    private refillReceiver(): void {
+    private refreshReceiver(): void {
         const core = this.core
-        if (!core || this.receiverArmed) return
-        //an automated run does not consume live Screen input
-        //([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)): a
-        //keystroke typed into the panel while a Testcase runs stays in the queue, and the register
-        //keeps the Ready bit `observeRegisters` cleared when the scripted run built its Core
-        if (this.host.terminal.inputSource === 'scripted') return
-        const code = this.host.keyboard.readCharacterCode()
+        if (!core) return
+        const code = this.host.terminal.peekKeystroke(this.host.keyboard)
         if (code === undefined) {
+            this.receiverArmed = false
             core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, 0)
             return
         }
@@ -339,9 +364,10 @@ export class MarsDevices {
     }
 
     private onReceiverDataRead(): void {
-        //the program was handed the value memory held before this ran, so the register is free again
-        this.receiverArmed = false
-        this.refillReceiver()
+        //the program was handed the value memory held before this ran: the keystroke the register
+        //was showing is read, and the next one takes its place
+        if (this.receiverArmed) this.host.terminal.takeKeystroke(this.host.keyboard)
+        this.refreshReceiver()
     }
 
     private onControlWrite(
@@ -365,7 +391,9 @@ export class MarsDevices {
     private onTransmitterDataWrite(value: number): void {
         const character = value & 0xff
         if (character === FORM_FEED) {
-            this.host.terminal.clear()
+            //MARS clears its display window: the output, not a read in progress or what is left of
+            //the standard-input line, which are the program's input
+            this.host.terminal.clearOutput()
             return
         }
         this.host.terminal.write(String.fromCharCode(character))

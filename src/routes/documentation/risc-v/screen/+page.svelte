@@ -10,11 +10,11 @@
     <title>RISC-V Screen and Memory-Mapped I/O</title>
     <meta
         name="description"
-        content="RISC-V programs draw through memory: the bitmap display maps one word to one pixel, and four words at 0xffff0000 carry the keyboard and the console. Learn RARS's parameters, the registers and program time."
+        content="RISC-V programs draw through memory: the bitmap display maps one word to one pixel, and four words at 0xffff0000 carry the keyboard and console. Learn how the simulator's display, input devices, and program clock work."
     />
     <meta
         property="og:description"
-        content="RISC-V programs draw through memory: the bitmap display maps one word to one pixel, and four words at 0xffff0000 carry the keyboard and the console. Learn RARS's parameters, the registers and program time."
+        content="RISC-V programs draw through memory: the bitmap display maps one word to one pixel, and four words at 0xffff0000 carry the keyboard and console. Learn how the simulator's display, input devices, and program clock work."
     />
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">

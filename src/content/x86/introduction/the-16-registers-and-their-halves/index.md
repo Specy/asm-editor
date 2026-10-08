@@ -88,6 +88,9 @@ _start:
 | `r11`    | `0x0000000055667788`      |
 | `r12`    | `0x1122334455667788`      |
 
+The table describes the moment before the template because its `syscall` overwrites `rcx` and
+`r11`, as every `syscall` does, so after a full run those two hold other values.
+
 The first four families also have the old high-byte names `ah`, `bh`, `ch`, and `dh`. Each selects
 the second-lowest byte, as `ah` does above. Prefer the ordinary low-byte names when possible:
 high-byte names cannot appear in the same instruction as an `r8`–`r15` name.
@@ -126,7 +129,7 @@ of `rdx`: it makes the complete 64-bit `rdx` equal to `0x0000000000000005`.
 ## Your turn
 
 `r8` holds `0xCAFEBABEDEADBEEF`. Copy its least-significant byte to `bl`, its least-significant two
-bytes to `cx`, and its least-significant four bytes to `edx`. The initial destination values are
+bytes to `si`, and its least-significant four bytes to `edx`. The initial destination values are
 chosen so that the preserved and cleared upper bits are visible.
 
 ```x86|playground|exercise
@@ -147,12 +150,12 @@ _start:
     "startingRegisters": {
         "r8": "0xCAFEBABEDEADBEEF",
         "rbx": "0x1122334455667700",
-        "rcx": "0x2233445566770000",
+        "rsi": "0x2233445566770000",
         "rdx": "0xFFFFFFFF00000000"
     },
     "expectedRegisters": {
         "rbx": "0x11223344556677EF",
-        "rcx": "0x223344556677BEEF",
+        "rsi": "0x223344556677BEEF",
         "rdx": "0x00000000DEADBEEF"
     }
 }
@@ -168,7 +171,7 @@ global _start
 section .text
 _start:
     mov bl, r8b
-    mov cx, r8w
+    mov si, r8w
     mov edx, r8d
 
     mov rax, 60

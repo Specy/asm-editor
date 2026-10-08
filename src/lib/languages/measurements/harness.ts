@@ -13,7 +13,7 @@ import { UNDO_HISTORY_SIZE } from '$lib/projectSettings'
 
 /**
  * What the phase 8 measurements need from an Emulator, and the pieces every measurement file shares:
- * building one per language under node, running a single unsliced slice, and printing a markdown row
+ * building one per language under node, running without scheduler yields, and printing a markdown row
  * ([the plan](../../../../docs/design/screen-peripherals-plan.md), phase 8).
  *
  * Kept out of `*.test.ts` on purpose: these files time things, they take minutes, and they are run
@@ -71,8 +71,8 @@ export async function buildProgram(
 }
 
 /**
- * One slice big enough for the whole measurement, which is what "without yields" means: the Core is
- * entered once and comes back when it has run every instruction. An exhausted limit is how s68k
+ * Runs without scheduler yields. An adapter may cap a slice even with an unlimited time hint,
+ * so keep entering it until the full instruction count has run. An exhausted limit is how s68k
  * reports the end of such a slice, and the instructions still ran, so it is not a failure here.
  */
 export async function runUnsliced(
@@ -80,21 +80,24 @@ export async function runUnsliced(
     instructions: number
 ): Promise<number> {
     const runner = emulator as unknown as SliceRunner
-    try {
-        const slice = await runner._runSlice({
-            instructionBudget: instructions,
-            //no adapter's throughput estimate can cap a budget this large, so the slice is the
-            //whole run: `sliceInstructionBudget` returns the instruction budget itself
-            timeBudgetMs: Number.MAX_SAFE_INTEGER,
-            breakpoints: [],
-            skipBreakpointAtPc: true,
-            runInstructionLimit: instructions,
-            speedCorrection: 1
-        })
-        return slice.instructions
-    } catch {
-        return instructions
+    let executed = 0
+    while (executed < instructions) {
+        try {
+            const slice = await runner._runSlice({
+                instructionBudget: instructions - executed,
+                timeBudgetMs: Number.MAX_SAFE_INTEGER,
+                breakpoints: [],
+                skipBreakpointAtPc: executed === 0,
+                runInstructionLimit: instructions,
+                speedCorrection: 1
+            })
+            executed += slice.instructions
+            if (slice.instructions <= 0 || slice.reason !== 'budget') return executed
+        } catch {
+            return instructions
+        }
     }
+    return executed
 }
 
 /** A loop that does nothing but arithmetic: no I/O, no Screen, no memory traffic. */

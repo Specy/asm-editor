@@ -1,3 +1,4 @@
+import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     EmulatorStatus,
     type CompileResult,
@@ -24,7 +25,7 @@ import {
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import {
-    BlinkState,
+    END_OF_INPUT,
     createX86Emulator,
     decodeFpuState,
     locateDiagnosticSpan,
@@ -38,33 +39,36 @@ import {
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
     type PokeWrite as CorePokeWrite,
-    type X86CompileResult,
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
     type X86FpuState,
+    type X86WaitRequest,
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
 import { x86DiagnosticHint } from './X86-diagnostics'
-import { type BuildInput, type BuildSources } from '$lib/projectFiles'
-import {
-    expandLegacyX86Project,
-    stageLegacyX86ProjectFiles,
-    toX86Project,
-    x86GeneratedLinesFor,
-    x86SourceLineAt,
-    type X86ProjectDiagnostic,
-    type X86ProjectInput,
-    type X86SourceLine
-} from './x86Project'
+import { ProjectFormatError, type BuildInput, type BuildSources } from '$lib/projectFiles'
+import { linksX86StartUnit, x86CoreProject, X86_START_UNIT_FILES } from './x86StartUnit'
+import type { Termination } from '$lib/languages/termination'
 
 /**
- * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
- * limit. Measured in phase 8 on a compute-only loop under node: about 11, two hundred times slower
- * than the estimate this replaces, which held the host for nine tenths of a second per slice and
- * answered Stop seventeen seconds after it was pressed.
+ * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with
+ * @specy/x86 4.0.0 and the default Undo history found roughly 1,800–2,400 instructions/ms
+ * ([the results](../../../../docs/research/code-cleanup-2026-10-05/followup-results.md)).
  */
-const X86_INSTRUCTIONS_PER_MS = 10
+const X86_INSTRUCTIONS_PER_MS = 2_000
+
+/**
+ * A slice returns to GenericEmulator before the Core starts another native batch, so Pause is
+ * honored there and the app owns the host yield. Undo recording is slower: its smaller cap keeps
+ * Stop and Pause under 100 ms in the measured 4× CPU slowdown. Without history, one full native
+ * batch still fits that target. The time estimate can reduce either cap on slower programs.
+ */
+const X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO = 20_000
+const X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO = 50_000
+
+/** What a read of standard input asks for, in words. */
+const STANDARD_INPUT_QUESTION = 'Program input'
 
 /**
  * The Register files x86 holds beside the general registers
@@ -115,8 +119,8 @@ export async function X86Emulator(source: BuildInput, options: EmulatorSettings 
     const core = await createX86Emulator({
         mode: 'NASM_trunk',
         callbacks: {
-            stdout: (charCode) => wrapper?.appendOutput(charCode),
-            stderr: (charCode) => wrapper?.appendOutput(charCode)
+            stdout: (bytes) => wrapper?.appendOutput(bytes),
+            stderr: (bytes) => wrapper?.appendOutput(bytes)
         }
     })
     wrapper = new AsmEditorX86Emulator(source, options, core)
@@ -128,19 +132,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private diagnosticCore: CoreX86Emulator | null = null
     private compileQueue: Promise<void> = Promise.resolve()
     private checkCodeQueue: Promise<void> = Promise.resolve()
-    private buildLineMap: X86SourceLine[] = []
-    /**
-     * True from the start of a Build until the program is first asked to run, which is the window
-     * `isProgramOutput` discards output in. It closes at the run rather than at the end of the
-     * Build because blink writes its launch line after `initialize` has returned.
-     */
-    private beforeFirstRun = false
     /**
      * Which x87 stack slots were empty in the block the values read decoded. A refresh reads a
      * file's values immediately before its blanks, so the tags cost no second bridge call. Before
      * the first read every slot is empty, which is what a machine that does not exist yet reports.
      */
     private x87Blanks: boolean[] = new Array(X87_STACK_DEPTH).fill(true)
+    /** How many entries the Build's Undo history holds when full, as `initialize` was told. */
+    private undoSize = 0
+    private recordingRandom = true
+    private compiling = false
+    private clearAfterCompile = false
+    private disposeAfterCompile = false
+    private randomPositions = new Map<string, number>()
+    private inputRead: { execution: ExecutionGeneration; promise: Promise<Uint8Array> } | null =
+        null
+    private waitError: unknown
 
     constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
@@ -160,12 +167,56 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         )
         this.core = core
+        core.setEnvironment({
+            now: (id) => {
+                const clock = this._peripherals.clock
+                if (id === 0 || id === 5 || id === 11) return clock.calendarNow()
+                if (id === 2 || id === 3) return clock.cpuNow(core.getInstructionsExecuted())
+                return clock.now()
+            },
+            random: (length) => {
+                const serial = core.getCurrentInstructionSerial()
+                // Loader AT_RANDOM has no instruction. Keep its draw outside the Undo journal.
+                if (
+                    this.undoSize > 0 &&
+                    this.recordingRandom &&
+                    serial !== null &&
+                    !this.randomPositions.has(serial)
+                ) {
+                    this.randomPositions.set(serial, this._peripherals.random.position)
+                    // Keep at most one checkpoint per possible retained history entry. Obsolete
+                    // serials are harmless (never reused), so no history scan is needed to prune
+                    // them. Every newer checkpoint consumes an entry; evicting the oldest beyond
+                    // capacity therefore cannot discard a checkpoint that Undo could still reach.
+                    if (this.randomPositions.size > this.undoSize)
+                        this.randomPositions.delete(this.randomPositions.keys().next().value!)
+                }
+                return this._peripherals.random.bytes(length)
+            },
+            wait: async (request, signal) => {
+                try {
+                    await this.waitForClock(request, signal)
+                } catch (error) {
+                    if (!signal.aborted) this.waitError = error
+                    throw error
+                }
+            }
+        })
+        // Pause history while GenericEmulator runs compiled startup code. A Build that asked
+        // for no history still records none when recording resumes.
+        this._setUndoRecording = (recording) => {
+            if (this.core === core) {
+                core.setUndoEnabled(recording)
+                this.recordingRandom = recording
+            }
+        }
+        this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
         if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
 
-    appendOutput(charCode: number): void {
-        if (!this.isProgramOutput()) return
-        this._peripherals.terminal.write(String.fromCharCode(charCode))
+    /** Streaming decoding belongs to the Terminal; native callbacks already exclude tool output. */
+    appendOutput(bytes: Uint8Array): void {
+        this._peripherals.terminal.writeBytes(bytes)
     }
 
     protected getInstance(): CoreX86Emulator | null {
@@ -180,8 +231,39 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         await currentCompile
     }
 
+    _getInstructionsExecuted(): bigint {
+        return this.core?.getInstructionsExecuted() ?? 0n
+    }
+
     _canUndo(): boolean {
         return this.core?.canUndo() ?? false
+    }
+
+    _canUndoSteps(count: number): boolean {
+        return this.core?.canUndoSteps(count) ?? false
+    }
+
+    _canUndoHistoryRange(skip: number, count: number): boolean {
+        return this.core?.canUndoHistoryRange(skip, count) ?? false
+    }
+
+    _clearExecution(): void {
+        this.inputRead = null
+        this.waitError = undefined
+        this.randomPositions?.clear()
+        if (this.compiling) {
+            // compileProject detached the old capability before its first awaited tool call.
+            // Native cleanup is guarded during Build; finish it before the next queued Build.
+            this.clearAfterCompile = true
+            return
+        }
+        this.core?.clearExecution()
+    }
+
+    _beginExecutionSession(): void {
+        if (!this.fileSystemSession) throw new Error('Missing x86 FileSystem session')
+        this.requireCore().mountProjectFileSystem(this.fileSystemSession)
+        this.updateMemoryAddresses()
     }
 
     /**
@@ -205,55 +287,67 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
         if (!this.core && !this.diagnosticCore) return []
+        //what stops the Build stops the check too, and `semanticCheck` reports it the same way
+        if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const currentCheck = this.checkCodeQueue.then(async () => {
             const checker = await this.getDiagnosticCore()
-            if (hasNativeProjectApi(checker)) {
-                const errors = await checkNativeProject(checker, toX86Project(sources))
-                return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
-            }
-            const expanded = expandLegacyX86Project(sources)
-            if (expanded.diagnostics.length > 0) {
-                return expanded.diagnostics.map((diagnostic) =>
-                    projectDiagnosticToDiagnostic(sources, diagnostic)
-                )
-            }
-            stageLegacyX86ProjectFiles(checker.module, expanded)
-            const errors = await checker.checkCode(expanded.code)
-            return errors.map((error) =>
-                mapCoreDiagnosticToProject(sources, error, expanded.lineMap)
-            )
+            const errors = await checker.checkProject(x86CoreProject(sources))
+            return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
     }
 
-    /** Opens the window `isProgramOutput` discards output in; a run hook closes it. */
     async _compile(sources: BuildSources): Promise<CompileResult> {
-        this.beforeFirstRun = true
-        return this.compileSources(sources)
+        this.compiling = true
+        try {
+            return await this.compileSources(sources)
+        } finally {
+            this.compiling = false
+            if (this.clearAfterCompile) {
+                this.clearAfterCompile = false
+                this.requireCore().clearExecution()
+            }
+            if (this.disposeAfterCompile) this.disposeCores()
+        }
     }
 
     private async compileSources(sources: BuildSources): Promise<CompileResult> {
+        //sources that could not be resolved, such as Generated assembly that needs a Runtime
+        //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
+        if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const core = this.requireCore()
-        if (!hasNativeProjectApi(core)) return this.compileLegacyProject(core, sources)
-        this.buildLineMap = []
-        const result = await compileNativeProject(core, toX86Project(sources))
+        const linked = linksX86StartUnit(sources)
+        const result = await core.compileProject(x86CoreProject(sources))
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
         const diagnostics = result.diagnostics.map((diagnostic) =>
             coreDiagnosticToDiagnostic(sources, diagnostic)
         )
-        if (!('errors' in result)) return { ok: true, diagnostics }
+        if (!('errors' in result)) {
+            //the start unit is no File of the Project, so the debugger reads it from here
+            this._buildLibraryFiles = linked ? X86_START_UNIT_FILES : undefined
+            return { ok: true, diagnostics }
+        }
         return { ok: false, diagnostics, report: result.report }
     }
 
     _initialize(undoSize: number): void {
         const core = this.requireCore()
-        core.initialize(undoSize)
-        this.updateMemoryAddresses()
+        this.undoSize = Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+        core.initialize(this.undoSize)
+        this.recordingRandom = true
     }
 
     _dispose(): void {
+        if (this.compiling) {
+            this.disposeAfterCompile = true
+            return
+        }
+        this.disposeCores()
+    }
+
+    private disposeCores(): void {
         this.core?.dispose()
         this.diagnosticCore?.dispose()
         this.core = null
@@ -263,12 +357,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
-            this.core?.getCallStack().map((frame) => {
-                const file = coreSourceFile(frame)
-                if (file) return { ...frame, file }
-                const source = x86SourceLineAt(this.buildLineMap, frame.line, entry)
-                return { ...frame, line: source.line, file: source.path }
-            }) ?? []
+            this.core?.getCallStack().map((frame) => ({ ...frame, file: frame.file || entry })) ??
+            []
         )
     }
 
@@ -284,11 +374,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     protected _getBuildArtifacts(): BuildArtifact[] {
         const core = this.core
-        if (!core || !hasCompiledInstructionApi(core)) return []
+        if (!core) return []
         const fallback = this.buildSources?.entry ?? this._sources.entry
         return core.getCompiledInstructions().flatMap((instruction) => {
-            const file = coreSourceFile(instruction) ?? fallback
-            const bytes = coreInstructionBytes(instruction)
+            const file = instruction.file || fallback
+            const bytes = instruction.bytes ?? new Uint8Array()
             if (instruction.lineNumber < 0 || bytes.length === 0) return []
             return [
                 {
@@ -310,34 +400,18 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _getInstructionAt(address: bigint): Instruction | null {
         const instruction = this.core?.getInstructionAt(address)
         if (!instruction) return null
-        const file = coreSourceFile(instruction)
-        if (file) return { ...instruction, file }
-        const source = x86SourceLineAt(
-            this.buildLineMap,
-            instruction.lineNumber,
-            this.buildSources?.entry ?? this._sources.entry
-        )
         return {
             ...instruction,
-            lineNumber: source.line,
-            file: source.path
+            file: instruction.file || this.buildSources?.entry || this._sources.entry
         }
     }
 
     _getNextInstruction(): Instruction | null {
         const instruction = this.core?.getNextInstruction()
         if (!instruction) return null
-        const file = coreSourceFile(instruction)
-        if (file) return { ...instruction, file }
-        const source = x86SourceLineAt(
-            this.buildLineMap,
-            instruction.lineNumber,
-            this.buildSources?.entry ?? this._sources.entry
-        )
         return {
             ...instruction,
-            lineNumber: source.line,
-            file: source.path
+            file: instruction.file || this.buildSources?.entry || this._sources.entry
         }
     }
 
@@ -349,8 +423,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * is left to the caller's own fallback — the instruction about to run — as it was before Pokes.
      */
     _getLastInstruction(): Instruction | null {
-        const history = this.core?.getUndoHistory(LAST_INSTRUCTION_LOOKBACK) ?? []
-        if (history[0]?.kind !== 'poke') return null
+        if (this.core?.getUndoHistory(1)[0]?.kind !== 'poke') return null
+        const history = this.core.getUndoHistoryRange(1, LAST_INSTRUCTION_LOOKBACK - 1)
         const executed = history.find((step) => step.kind === 'instruction')
         if (!executed) return null
         return this._getInstructionAt(BigInt(executed.pc))
@@ -411,6 +485,36 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core.getRegisterValuesRecord()
     }
 
+    _getMemoryLayout() {
+        const layout = this.core!.getMemoryLayout()
+        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        for (let i = 0; i < layout.items.length; i += 5)
+            items.push({
+                start: layout.items[i],
+                length: layout.items[i + 1],
+                kind: (['code', 'data', 'reserved'] as const)[Number(layout.items[i + 2])],
+                section: layout.sections[Number(layout.items[i + 3])],
+                alignment: layout.items[i + 4]
+            })
+        return memoryLayoutFromItems(
+            items,
+            layout.symbols.map((symbol) => ({
+                ...symbol,
+                section: layout.sections[symbol.section]
+            }))
+        )
+    }
+    _getHeapBounds() {
+        const core = this.core
+        return core ? { start: core.getHeapStart(), end: core.getHeapBreak() } : undefined
+    }
+    _getStackTop() {
+        return this.core?.getStackTop() ?? 0n
+    }
+    _resolveMemoryLabel(name: string) {
+        return this.core?.resolveMemoryLabel(name)
+    }
+
     _getSp(): bigint {
         return this.core?.getSp() ?? 0n
     }
@@ -420,24 +524,41 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
+        return this._getUndoHistoryRange(0, max)
+    }
+
+    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
-            this.core?.getUndoHistory(max).map((step) => {
+            this.core?.getUndoHistoryRange(skip, max).map((step) => {
                 const mapped = mapExecutionStep(step)
                 //a Poke ran no instruction, so it has no line of its own even though the Core reads
                 //one off the pc the machine is parked on, and the History row draws no PC line for
                 //it ([the design record](../../../../docs/design/pokes.md))
                 if (mapped.kind === 'poke') return { ...mapped, line: -1, file: undefined }
-                const file = coreSourceFile(step)
-                if (file) return { ...mapped, file }
-                const source = x86SourceLineAt(this.buildLineMap, mapped.line, entry)
-                return { ...mapped, line: source.line, file: source.path }
+                return { ...mapped, file: step.file || entry }
             }) ?? []
         )
     }
 
     _hasTerminated(): boolean {
         return this.core?.hasTerminated() ?? true
+    }
+
+    /** The Core's stop reason: an exit with its status, or the signal that ended the program. */
+    _getTermination(): Termination | undefined {
+        const core = this.core
+        if (!core?.hasTerminated()) return undefined
+        const reason = core.stopReason
+        if (reason?.kind === 'exit') return { kind: 'exit', code: reason.exitCode }
+        if (reason?.kind === 'signal' && reason.signal)
+            return {
+                kind: 'signal',
+                number: reason.signal.number,
+                name: reason.signal.name,
+                description: reason.signal.description
+            }
+        return { kind: 'end' }
     }
 
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
@@ -451,39 +572,29 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
-    /**
-     * Blink has no instruction counter and its `run` stops for input rather than for a clock, so a
-     * slice is one `run` with the budget as its limit: exact when it comes back still running, which
-     * is the compute-only case the budget exists for. x86 has no Screen, so it never sees the short
-     * slice ([screen-peripherals.md](../../../../docs/design/screen-peripherals.md)).
-     */
+    /** Completed guest-instruction deltas exclude tool execution and work with history disabled. */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
-        this.beforeFirstRun = false
-        const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
-        const breakpoints = hasNativeProjectApi(this.requireCore())
-            ? request.breakpoints.map(({ file, line }) => ({ path: file, line }))
-            : request.breakpoints.flatMap((breakpoint) =>
-                  x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
-              )
+        const budget = Math.min(
+            this.undoSize > 0
+                ? X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO
+                : X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO,
+            sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
+        )
+        const core = this.requireCore()
+        const before = core.getInstructionsExecuted()
+        const breakpoints = request.breakpoints.map(({ file, line }) => ({ path: file, line }))
         const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
-        if (status === CoreEmulatorStatus.Running) {
-            //still runnable: either the budget ran out or a breakpoint stopped it, and the Core
-            //says which — the two are separate stops with a reason of their own. Deciding it from
-            //the line the program is parked on instead called every slice whose budget happened to
-            //run out on a line that has a breakpoint a breakpoint stop, and ended the Run there
-            const stopped = this.requireCore().stopReason
+        const instructions = Number(core.getInstructionsExecuted() - before)
+        if (status === CoreEmulatorStatus.Running)
             return {
-                reason: stopped?.kind === 'breakpoint' ? 'breakpoint' : 'budget',
-                instructions: budget
+                reason: core.stopReason?.kind === 'breakpoint' ? 'breakpoint' : 'budget',
+                instructions
             }
-        }
-        return { reason: 'terminated', instructions: budget }
+        return { reason: 'terminated', instructions }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
-        this.beforeFirstRun = false
-        const limit = haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit
-        await this.runWithInput(limit, [])
+        await this.runWithInput(haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit, [])
     }
 
     /**
@@ -508,15 +619,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _step(): Promise<{ terminated: boolean }> {
-        this.beforeFirstRun = false
         const core = this.requireCore()
         const execution = this.executionController.capture()
-        const result = await this.executionController.waitFor(execution, () => core.step())
-        if (core.getStatus() === CoreEmulatorStatus.WaitingForInput) {
-            await this.provideProgramInput(execution)
-        }
-        this.executionController.ensureCurrent(execution)
-        return { terminated: result.terminated || core.hasTerminated() }
+        await this.executionController.waitFor(execution, () => core.step())
+        await this.finishBlockedInstruction(execution)
+        return { terminated: core.hasTerminated() }
     }
 
     _stringifyError(error: unknown, _line?: number): string {
@@ -525,42 +632,129 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _undo(): void {
-        this.requireCore().undo()
+        const core = this.requireCore()
+        const step = core.getUndoHistory(1)[0]
+        core.undo() // Native preflight runs before either CPU or Random source changes.
+        const position = step && this.randomPositions.get(step.serial)
+        if (position !== undefined) this._peripherals.random.seek(position)
+        if (step) this.randomPositions.delete(step.serial)
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
         this.requireCore().writeMemoryBytes(address, data)
     }
 
-    /**
-     * `skipBreakpointAtPc` belongs to the first call only: the Core finishes the read instruction
-     * while the input is being handed over, so every call after one leaves the program counter on
-     * an instruction that has not run, and a breakpoint on that one has to stop the run.
-     */
     private async runWithInput(
-        limit: number | undefined,
-        breakpoints: Array<number | { path: string; line: number }>,
+        limit: number,
+        breakpoints: Array<{ path: string; line: number }>,
         skipBreakpointAtPc = false
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         const execution = this.executionController.capture()
-        let status = await this.executionController.waitFor(execution, () =>
-            runX86Core(core, limit, breakpoints, skipBreakpointAtPc)
-        )
-        while (status === CoreEmulatorStatus.WaitingForInput) {
-            await this.provideProgramInput(execution)
-            status = await this.executionController.waitFor(execution, () =>
-                runX86Core(core, limit, breakpoints, false)
+        const before = core.getInstructionsExecuted()
+        for (;;) {
+            const remaining = limit - Number(core.getInstructionsExecuted() - before)
+            if (remaining <= 0) return core.getStatus()
+            const status = await this.executionController.waitFor(execution, () =>
+                core.run(remaining, breakpoints, { skipBreakpointAtPc })
             )
+            skipBreakpointAtPc = false
+            if (
+                status !== CoreEmulatorStatus.WaitingForInput &&
+                status !== CoreEmulatorStatus.Waiting
+            ) {
+                if (core.hasTerminated()) this.cancelInputRead()
+                return status
+            }
+            await this.finishBlockedInstruction(execution)
+            if (core.hasTerminated()) return core.getStatus()
         }
-        return status
     }
 
-    private async provideProgramInput(execution: ExecutionGeneration): Promise<void> {
+    /** Keep one canonical read across EINTR and signal handlers, including its unsubmitted draft.
+     * Give Core the whole released line; Core owns byte splitting, EOF tokens and dup/readv queues.
+     */
+    private async finishBlockedInstruction(execution: ExecutionGeneration): Promise<void> {
         const core = this.requireCore()
-        const value = await this.requestInput('Program input', execution)
-        this.executionController.ensureCurrent(execution)
-        core.provideInput(ensureLineInput(value))
+        while (
+            core.getStatus() === CoreEmulatorStatus.WaitingForInput ||
+            core.getStatus() === CoreEmulatorStatus.Waiting
+        ) {
+            const status = core.getStatus()
+            const acceptsInput =
+                status === CoreEmulatorStatus.WaitingForInput || core.getWaitRequest()?.acceptsInput
+            let off = () => {}
+            const changed = new Promise<'changed'>((resolve) => {
+                off = core.on('stateChange', () => resolve('changed'))
+            })
+            try {
+                if (acceptsInput) {
+                    this.refreshInputState()
+                    this.state.interrupt = {
+                        type: 'StandardInput',
+                        message: STANDARD_INPUT_QUESTION
+                    }
+                    this.inputRead ??= {
+                        execution,
+                        promise: this._peripherals.terminal.readStandardInput(
+                            Number.MAX_SAFE_INTEGER,
+                            STANDARD_INPUT_QUESTION,
+                            execution
+                        )
+                    }
+                    const read = this.inputRead
+                    const result = await this.executionController.waitFor(execution, () =>
+                        Promise.race([changed, read.promise.then((bytes) => ({ bytes }))])
+                    )
+                    if (result !== 'changed' && this.inputRead === read) {
+                        this.inputRead = null
+                        core.provideInput(result.bytes.length === 0 ? END_OF_INPUT : result.bytes)
+                    }
+                } else await this.executionController.waitFor(execution, () => changed)
+                this.executionController.ensureCurrent(execution)
+                if (this.waitError !== undefined) {
+                    const error = this.waitError
+                    this.waitError = undefined
+                    throw error
+                }
+            } finally {
+                off()
+                this.state.interrupt = undefined
+            }
+        }
+        if (core.hasTerminated()) this.cancelInputRead()
+    }
+
+    private cancelInputRead(): void {
+        this.inputRead = null
+        this._peripherals.terminal.cancelPendingInput()
+        this.state.interrupt = undefined
+    }
+
+    private async waitForClock(request: X86WaitRequest, signal: AbortSignal): Promise<void> {
+        if (request.deadlineNanoseconds === null) {
+            if (this._peripherals.clock.isVirtual && !request.acceptsInput)
+                throw new Error('An indefinite x86 wait has no external wake source in a Testcase')
+            await new Promise<void>((_resolve, reject) => {
+                const abort = () => reject(signal.reason ?? new Error('Wait aborted'))
+                if (signal.aborted) abort()
+                else signal.addEventListener('abort', abort, { once: true })
+            })
+            return
+        }
+        const now = this._peripherals.clock.now()
+        const nanoseconds = request.deadlineNanoseconds - BigInt(Math.floor(now * 1e6))
+        const milliseconds = nanoseconds <= 0n ? 0 : Number(nanoseconds) / 1e6
+        if (!Number.isFinite(milliseconds) || milliseconds > Number.MAX_SAFE_INTEGER)
+            throw new Error('x86 wait deadline exceeds the Time Source range')
+        if (this._peripherals.clock.isVirtual && milliseconds > 0 && now + milliseconds === now)
+            throw new Error('x86 wait is smaller than virtual clock precision at the current time')
+        await this._peripherals.clock.wait(
+            this._peripherals.clock.isVirtual
+                ? milliseconds
+                : Math.min(2147483647, Math.ceil(milliseconds)),
+            signal
+        )
     }
 
     private async getDiagnosticCore(): Promise<CoreX86Emulator> {
@@ -573,33 +767,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core
     }
 
-    private async compileLegacyProject(
-        core: CoreX86Emulator,
-        sources: BuildSources
-    ): Promise<CompileResult> {
-        const expanded = expandLegacyX86Project(sources)
-        this.buildLineMap = expanded.lineMap
-        if (expanded.diagnostics.length > 0) {
-            return {
-                ok: false,
-                diagnostics: expanded.diagnostics.map((diagnostic) =>
-                    projectDiagnosticToDiagnostic(sources, diagnostic)
-                ),
-                report: 'NASM Project expansion failed'
-            }
-        }
-        stageLegacyX86ProjectFiles(core.module, expanded)
-        const result = await core.compile(expanded.code)
-        if (!('errors' in result)) return { ok: true }
-        return {
-            ok: false,
-            diagnostics: result.errors.map((error) =>
-                coreDiagnosticToDiagnostic(sources, error, expanded.code, expanded.lineMap)
-            ),
-            report: result.report
-        }
-    }
-
     private updateMemoryAddresses(): void {
         const global = this.state.memory.global
         if (!global.userPlaced) {
@@ -610,25 +777,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             const stackPageSize = BigInt(stackTab.pageSize)
             stackTab.address = alignDown(this._getSp(), stackPageSize)
         }
-    }
-
-    /**
-     * Whether what the Core is writing came from the program rather than from the toolchain around
-     * it. The assembler and the linker write their diagnostics under their own states, and blink
-     * then announces the program it is about to launch with a shell-like `$ /program` line, written
-     * with the state already moved to running and before a single instruction of the program has
-     * executed. Nothing between the start of a Build and the first run is the program talking, so
-     * that whole window is discarded: without it a Testcase would have to declare the launch line as
-     * `expectedOutput` on every x86 page, and the console would open on a prompt nobody typed.
-     */
-    private isProgramOutput(): boolean {
-        const state = this.core?.state
-        return (
-            !this.beforeFirstRun &&
-            state !== undefined &&
-            state !== BlinkState.Assembling &&
-            state !== BlinkState.Linking
-        )
     }
 }
 
@@ -765,84 +913,17 @@ function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
     return EmulatorStatus.Running
 }
 
-type NativeProjectCore = CoreX86Emulator & {
-    compileProject(project: X86ProjectInput): Promise<X86CompileResult>
-    checkProject(project: X86ProjectInput): Promise<Array<CoreMonacoError & { file?: string }>>
-}
-
-type CompiledInstructionCore = CoreX86Emulator & {
-    getCompiledInstructions(): Array<Instruction & { bytes?: Uint8Array; file?: string }>
-}
-
-function hasNativeProjectApi(core: CoreX86Emulator): boolean {
-    const candidate = core as Partial<NativeProjectCore>
-    return (
-        typeof candidate.compileProject === 'function' &&
-        typeof candidate.checkProject === 'function'
-    )
-}
-
-function compileNativeProject(
-    core: CoreX86Emulator,
-    project: X86ProjectInput
-): Promise<X86CompileResult> {
-    return (core as NativeProjectCore).compileProject(project)
-}
-
-function checkNativeProject(
-    core: CoreX86Emulator,
-    project: X86ProjectInput
-): Promise<Array<CoreMonacoError & { file?: string }>> {
-    return (core as NativeProjectCore).checkProject(project)
-}
-
-function coreSourceFile(value: unknown): string | undefined {
-    if (!value || typeof value !== 'object' || !('file' in value)) return undefined
-    return typeof value.file === 'string' ? value.file : undefined
-}
-
-function hasCompiledInstructionApi(core: CoreX86Emulator): core is CompiledInstructionCore {
-    return typeof (core as Partial<CompiledInstructionCore>).getCompiledInstructions === 'function'
-}
-
-function coreInstructionBytes(value: unknown): Uint8Array {
-    if (!value || typeof value !== 'object' || !('bytes' in value)) return new Uint8Array()
-    return value.bytes instanceof Uint8Array ? value.bytes : new Uint8Array()
-}
-
-function runX86Core(
-    core: CoreX86Emulator,
-    limit: number | undefined,
-    breakpoints: Array<number | { path: string; line: number }>,
-    skipBreakpointAtPc: boolean
-): Promise<CoreEmulatorStatus> {
-    return (
-        core.run as (
-            limit?: number,
-            breakpoints?: Array<number | { path: string; line: number }>,
-            options?: { skipBreakpointAtPc?: boolean }
-        ) => Promise<CoreEmulatorStatus>
-    )(limit, breakpoints, { skipBreakpointAtPc })
-}
-
 function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
     const file = sources.files[source.path]
     return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
 }
 
-function mapCoreDiagnosticToProject(
-    sources: BuildSources,
-    error: CoreMonacoError,
-    lineMap: readonly X86SourceLine[] = []
-): Diagnostic {
-    const file = coreSourceFile(error)
-    const source = file
-        ? { path: file, line: error.lineIndex }
-        : x86SourceLineAt(lineMap, error.lineIndex, sources.entry)
+function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
+    const source = { path: error.file || sources.entry, line: error.lineIndex }
     const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
-        severity: error.severity ?? 'error',
+        severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
         file: source.path,
         lineIndex: source.line,
         column: Math.max(1, error.column),
@@ -857,20 +938,18 @@ function mapCoreDiagnosticToProject(
 
 function coreDiagnosticToDiagnostic(
     sources: BuildSources,
-    diagnostic: X86CompilationDiagnostic,
-    code = '',
-    lineMap: readonly X86SourceLine[] = []
+    diagnostic: X86CompilationDiagnostic
 ): Diagnostic {
-    const generatedLine = Math.max(0, diagnostic.line - 1)
-    const file = coreSourceFile(diagnostic)
-    const source = file
-        ? { path: file, line: generatedLine }
-        : x86SourceLineAt(lineMap, generatedLine, sources.entry)
-    const line = sourceLine(sources, source) || code.split('\n')[generatedLine] || ''
-    const hint = x86DiagnosticHint(diagnostic.warningClass)
+    const source = {
+        path: diagnostic.file || sources.entry,
+        line: Math.max(0, diagnostic.line - 1)
+    }
+    const line = sourceLine(sources, source)
+    const hint =
+        x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
     return {
-        severity: diagnostic.severity ?? 'error',
+        severity: diagnostic.severity === 'hint' ? 'suggestion' : (diagnostic.severity ?? 'error'),
         file: source.path,
         lineIndex: source.line,
         column: span.column,
@@ -886,32 +965,34 @@ function coreDiagnosticToDiagnostic(
     }
 }
 
-function projectDiagnosticToDiagnostic(
-    sources: BuildSources,
-    diagnostic: X86ProjectDiagnostic
-): Diagnostic {
-    const source = { path: diagnostic.path, line: diagnostic.line }
-    const line = sourceLine(sources, source)
-    return {
-        severity: 'error',
-        file: diagnostic.path,
-        lineIndex: diagnostic.line,
-        column: diagnostic.column + 1,
-        line: { line, line_index: diagnostic.line },
-        message: diagnostic.message,
-        formatted: diagnostic.message
-    }
+const DUPLICATE_START_HINT =
+    'Compiled C and C++ start in the start code, `@runtime/start.asm`, which defines `_start` and calls `main`, so a File linked with them may not define `_start` too. Remove this one, or move what the program uses from this File into another.'
+const DUPLICATE_MAIN_HINT =
+    'Only one File linked into a program may define `main`. If the program needs something else from this File, move it into a File without `main`.'
+
+/**
+ * What a second `_start` or `main` means ([the plan](../../../../docs/design/x86-compiler-assembly-translation-plan.md),
+ * milestone 3a): a File that defines one too was linked, because the program uses something else it
+ * defines. `ld` only says there are two. Matched on the words `ld` and the Core both use, whatever
+ * line it lands on.
+ */
+function x86LinkHint(message: string, sources: BuildSources): string | undefined {
+    if (/multiple definition of [`']main'/.test(message)) return DUPLICATE_MAIN_HINT
+    if (/multiple definition of [`']_start'/.test(message) && linksX86StartUnit(sources))
+        return DUPLICATE_START_HINT
+    return undefined
 }
 
 function mapExecutionStep(step: CoreExecutionStep): ExecutionStep {
     return {
         kind: step.kind,
+        undoable: step.undoable,
         mutations: step.mutations.map(mapMutationOperation),
         pc: step.pc,
         old_ccr: { ...step.old_ccr },
         new_ccr: { ...step.new_ccr },
         line: step.line,
-        file: coreSourceFile(step),
+        file: step.file,
         ...(step.writes ? { writes: step.writes.map(mapPokeWrite) } : {})
     }
 }
@@ -966,10 +1047,6 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
         }
     }
     return { ...operation }
-}
-
-function ensureLineInput(input: string): string {
-    return input.endsWith('\n') ? input : `${input}\n`
 }
 
 function alignDown(value: bigint, size: bigint): bigint {

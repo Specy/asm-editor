@@ -30,6 +30,7 @@ export type PreferenceValue<T> = {
 export type PanelStyle = 'cards' | 'lines'
 /** The Debug tools as draggable windows, or as sections of the debug column. */
 export type DebugToolsPlacement = 'floating' | 'sections'
+export type MemoryPanelSize = 256 | 128 | 64
 
 export type PreferenceValues = {
     useDecimalAsDefault: PreferenceValue<boolean>
@@ -37,8 +38,11 @@ export type PreferenceValues = {
     autoSave: PreferenceValue<boolean>
     showDrawingBuffer: PreferenceValue<boolean>
     showPseudoInstructions: PreferenceValue<boolean>
+    sourceAnnotations: PreferenceValue<boolean>
+    stepIntoRuntimeLibrary: PreferenceValue<boolean>
     panelStyle: PreferenceValue<PanelStyle>
     debugTools: PreferenceValue<DebugToolsPlacement>
+    memoryPanelSize: PreferenceValue<MemoryPanelSize>
 }
 export type PreferenceKey = keyof PreferenceValues
 
@@ -55,7 +59,7 @@ function createValue<T>(name: string, value: T, onlyFor?: AvailableLanguages) {
     } as PreferenceValue<T>
 }
 
-function createChoice<T extends string>(
+function createChoice<T extends string | number>(
     name: string,
     value: T,
     options: PreferenceOption<T>[],
@@ -71,6 +75,9 @@ export function defaultPreferences(): PreferenceValues {
         autoScrollStackTab: createValue('Auto scroll the stack memory tab', true),
         autoSave: createValue('Auto save', true),
         showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
+        sourceAnnotations: createValue('Include source annotations when compiling', true),
+        //off: a Step runs through Runtime library code back to the program's own ("Just My Code")
+        stepIntoRuntimeLibrary: createValue('Step into Runtime library code', false),
         showDrawingBuffer: createValue(
             'Show the drawing buffer of a double buffered screen',
             false
@@ -92,6 +99,16 @@ export function defaultPreferences(): PreferenceValues {
             [
                 { value: 'floating', label: 'Floating' },
                 { value: 'sections', label: 'Sections' }
+            ],
+            'layout'
+        ),
+        memoryPanelSize: createChoice<MemoryPanelSize>(
+            'Memory panel size',
+            128,
+            [
+                { value: 256, label: '256 bytes' },
+                { value: 128, label: '128 bytes (default)' },
+                { value: 64, label: '64 bytes' }
             ],
             'layout'
         )

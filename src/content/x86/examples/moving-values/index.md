@@ -16,9 +16,9 @@ _start:
     mov rbx, rax            ; one register into another
     add rbx, 5              ; rbx is now 15
 
-    mov rcx, [value]        ; memory into a register
-    imul rcx, rbx           ; 7 * 15 = 105
-    mov [value], rcx        ; the answer back into memory
+    mov rdx, [value]        ; memory into a register
+    imul rdx, rbx           ; 7 * 15 = 105
+    mov [value], rdx        ; the answer back into memory
 
     mov rax, 60             ; syscall 60: exit
     xor rdi, rdi            ; with status 0
@@ -26,13 +26,13 @@ _start:
 ```
 
 Here `dq 7` reserves eight bytes for `value` and starts them at 7. Square brackets mean “use the
-contents at this address”: `mov rcx, [value]` reads 7, and `mov [value], rcx` writes 105. Without
+contents at this address”: `mov rdx, [value]` reads 7, and `mov [value], rdx` writes 105. Without
 the brackets, a label stands for its address.
 
 Run the program. Then enter `402000` in the **address box** of the memory panel. In this
 playground, the data section starts at `0x402000`, so those are the eight bytes belonging to
 `value`. They should read `69 00 00 00 00 00 00 00`: `69` is hexadecimal for 105, and x86 keeps
-the lowest byte first. In the register panel, `rbx` holds 15 and `rcx` holds 105. `rax` no longer
+the lowest byte first. In the register panel, `rbx` holds 15 and `rdx` holds 105. `rax` no longer
 holds 10 because the exit code put 60 there. The panel shows `3C`, hexadecimal for 60. A register
 shows the value most recently written to it.
 
@@ -107,9 +107,9 @@ _start:
 
 </details>
 
-One more experiment with the first program: replace `mov rcx, [value]` with
-`lea rcx, [value]`, then run it again. `lea` calculates the address instead of reading the 7
-stored there. In this playground `rcx` receives `0x402000`; multiplying that address by 15
+One more experiment with the first program: replace `mov rdx, [value]` with
+`lea rdx, [value]`, then run it again. `lea` calculates the address instead of reading the 7
+stored there. In this playground `rdx` receives `0x402000`; multiplying that address by 15
 writes `0x03C1E000` to `value`. Check the memory panel at `402000`: its first eight bytes are now
 `00 E0 C1 03 00 00 00 00`, instead of the earlier `69 00 00 00 00 00 00 00`. Restore `mov` to
 make the program work with the value 7 again.

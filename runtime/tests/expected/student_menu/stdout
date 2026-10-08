@@ -1,0 +1,11 @@
+commands: deposit N, withdraw N, balance, quit
+> ok, balance 100.00
+> ok, balance 69.50
+> balance 69.50
+> insufficient funds
+> expected an amount
+> unknown command 'fly'
+> ok, balance 69.75
+> balance 69.75
+> 
+9 commands, final balance 69.75

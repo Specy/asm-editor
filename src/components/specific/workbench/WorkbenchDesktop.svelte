@@ -15,9 +15,22 @@
     import BottomPanel from './BottomPanel.svelte'
     import DebugColumn from './DebugColumn.svelte'
     import { useWorkbench } from './workbenchContext'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
 
     /** Below this, the editor beside an open panel and the debug column is too narrow to use. */
     const EDITOR_MIN_WIDTH = 360
+    /**
+     * The debug column's width left to itself, measured per language and rounded up: its registers
+     * beside a row of memory, for the first Build, before the column has been shown and measured.
+     */
+    const AUTOMATIC_DEBUG_WIDTH: Record<AvailableLanguages, number> = {
+        Z80: 615,
+        M68K: 650,
+        MIPS: 710,
+        'RISC-V': 710,
+        'RISC-V-64': 765,
+        X86: 800
+    }
 
     const { session, ui } = useWorkbench()
     const layout = workbenchLayout.values
@@ -58,7 +71,9 @@
         if (debugging && !wasDebugging && !session.testing) {
             untrack(() => {
                 if (!ui.activePanel) return
-                const debugColumn = layout.debugWidth ?? 720
+                const debugColumn =
+                    layout.debugWidth ??
+                    (debugWidth || AUTOMATIC_DEBUG_WIDTH[session.project.language])
                 if (bodyWidth - railWidth - panelWidth - debugColumn < EDITOR_MIN_WIDTH) ui.close()
             })
         }

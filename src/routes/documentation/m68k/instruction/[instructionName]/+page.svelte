@@ -15,6 +15,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import InstructionPreview from '$cmp/documentation/site/InstructionPreview.svelte'
     interface Props {
         data: PageData
     }
@@ -25,12 +26,7 @@
     let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
         $state.raw()
     onMount(async () => {
-        //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
-        const imp = await import('$cmp/documentation/site/ClientOnly.svelte')
-        // @ts-ignore -- the dynamic import type omits the generated top-level-await promise
-        await imp?.__tla
-        // @ts-ignore -- the prerender import shim obscures the component's default export
-        component = imp?.default
+        component = (await import('$cmp/documentation/site/ClientOnly.svelte')).default
     })
     let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
 
@@ -144,22 +140,11 @@
         {@const SvelteComponent_1 = component}
         <SvelteComponent_1 bind:code instructionKey={ins.name} language="M68K" />
     {:else}
-        <div class="loading">Loading...</div>
+        <InstructionPreview {code} language="M68K" />
     {/if}
 </Page>
 
 <style lang="scss">
-    .loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex: 1;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        font-size: 2rem;
-        border-radius: 0.5rem;
-        min-height: 19.75rem;
-    }
     .instruction-info {
         display: flex;
         gap: 1rem;

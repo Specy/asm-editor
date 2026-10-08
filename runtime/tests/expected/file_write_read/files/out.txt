@@ -1,0 +1,4 @@
+line 1: fprintf 3.14
+line 2: fputs
+L3
+line 4: fwrite

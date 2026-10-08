@@ -6,7 +6,7 @@
 }
 
 @font-face {
-    font-family: FiraCode;
+    font-family: 'Fira Code';
     src: url(/fonts/FiraCode-Medium.woff2);
 }
 
@@ -19,7 +19,7 @@
     outline: none;
 }
 
-/*TODO remove this in the future, this is to match behaviour from svelte icons*/
+/* Icons fill their parent, preserving the sizing contract configured in unplugin-icons. */
 .unplugin-icon {
     width: 100%;
     height: auto;
@@ -150,6 +150,10 @@ input[type='radio'] {
 button {
     cursor: pointer;
     font-family: Rubik;
+}
+
+.context-view.monaco-menu-container {
+    --vscode-cornerRadius-large: 0.4rem;
 }
 
 /* Names a page for crawlers and screen readers where the design has no room for a

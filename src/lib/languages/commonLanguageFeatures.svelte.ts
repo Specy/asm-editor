@@ -1,6 +1,7 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
+import type { Termination } from '$lib/languages/termination'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
 import type { BuildInput, BuildSources } from '$lib/projectFiles'
@@ -77,6 +78,20 @@ export type MemoryTab = {
 export type DiffedMemory = {
     current: Uint8Array
     prevState: Uint8Array
+    /**
+     * The bytes of the page the Core could not read, which the view marks instead of showing a
+     * value. Null, or absent, when the whole page was read.
+     */
+    unreadable?: UnreadableBytes | null
+}
+
+/** What a memory view found it could not read at `address`, one mask entry per byte of the page. */
+export type UnreadableBytes = {
+    address: bigint
+    /** 1 for each byte that could not be read. */
+    mask: Uint8Array
+    /** Why the lowest of those bytes could not be read, as the Core put it. */
+    reason: string
 }
 
 export type RegisterHex = [hi: string, lo: string]
@@ -225,6 +240,8 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
  */
 export type ExecutionStep = {
     kind: 'instruction' | 'poke'
+    /** False for a visible native History barrier whose effects are not journaled. */
+    undoable?: boolean
     mutations: MutationOperation[]
     pc: number
     old_ccr: {
@@ -237,6 +254,11 @@ export type ExecutionStep = {
     file?: string
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
+    /**
+     * Set on the instruction that started a Step through Runtime library code: the library function
+     * it entered and every instruction the Step ran, which one Undo takes back together.
+     */
+    stretch?: { library: string; instructions: number }
 }
 
 /**
@@ -390,6 +412,43 @@ export function resolveRegisterFileLayout(
     }))
 }
 
+/** Core layout facts; all ranges are half-open and addresses stay lossless. */
+export type MemoryRunKind = 'code' | 'data' | 'reserved'
+export type MemoryLayoutItem = {
+    start: bigint
+    length: bigint
+    kind: MemoryRunKind
+    section: string
+    alignment?: bigint
+}
+export type DataLabel = {
+    /** The assembly unit that defines this symbol, when the Core reports it. */
+    file?: string
+    name: string
+    address: bigint
+    section?: string
+    fromLibrary: boolean
+    displayName?: string
+    preview?: string
+}
+export type MemoryLayout = {
+    sections: { name: string; runs: Omit<MemoryLayoutItem, 'section' | 'alignment'>[] }[]
+    dataLabels: DataLabel[]
+    /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
+    readOnly?: ReadOnlyMemory[]
+}
+/** A half-open range of memory that takes no Pokes, and why, which the memory view shows. */
+export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
+export type HeapBounds = { start: bigint; end: bigint }
+export type DeviceRegion = { name: string; start: bigint; end: bigint }
+export type MemoryRegion = DeviceRegion & {
+    id: string
+    kind: MemoryRunKind | 'heap' | 'stack' | 'device'
+    section?: string
+    /** The live stack jumps to SP, including when its extent is empty. */
+    destination?: bigint
+}
+
 export type EmulatorDecoration = {
     type: 'below-line'
     note?: string
@@ -433,6 +492,12 @@ export type BaseEmulatorState = {
     errors: string[]
     compilerDiagnostics: Diagnostic[]
     terminated: boolean
+    /**
+     * How the program ended, while `terminated` is true: an exit with its status, an end past the
+     * last instruction, a signal or a runtime error. Undefined while it runs, and after an Undo
+     * that takes the end back.
+     */
+    termination?: Termination
     latestSteps: ExecutionStep[]
     callStack: StackFrame[]
     line: number
@@ -462,9 +527,15 @@ export type BaseEmulatorState = {
  * compile" stays correct without having to filter by severity itself.
  */
 export type BaseEmulatorDerivedState = {
+    resolveMemoryLabel(name: string): bigint | undefined
     readonly compilerErrors: Diagnostic[]
+    readonly memoryRegions: readonly MemoryRegion[]
+    readonly dataLabels: readonly DataLabel[]
+    readonly readOnlyMemory: readonly ReadOnlyMemory[]
     /** Immutable Files and Entry used by the current executable, retained until Stop. */
     readonly buildSources?: BuildSources
+    /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
+    readonly buildLibraryFiles?: import('$lib/projectFiles').ProjectFiles
 }
 
 export enum InterpreterStatus {
@@ -494,7 +565,8 @@ export function createMemoryTab(
         userPlaced: false,
         data: {
             current: new Uint8Array(pageSize).fill(initialValue),
-            prevState: new Uint8Array(pageSize).fill(initialValue)
+            prevState: new Uint8Array(pageSize).fill(initialValue),
+            unreadable: null
         }
     }
 }
@@ -508,7 +580,8 @@ export function resetMemoryTab(tab: MemoryTab, initialValue: number): MemoryTab 
         ...tab,
         data: {
             current: new Uint8Array(tab.pageSize).fill(initialValue),
-            prevState: new Uint8Array(tab.pageSize).fill(initialValue)
+            prevState: new Uint8Array(tab.pageSize).fill(initialValue),
+            unreadable: null
         }
     }
 }
@@ -542,7 +615,7 @@ export type EmulatorSettings = {
     stackAddress?: bigint
     initialMemoryValue?: number
     /**
-     * The Screen, Keyboard, Mouse and clock the Emulator runs on
+     * The Screen, Keyboard, Mouse, clock and Random source the Emulator runs on
      * ([ADR 0004](../../../docs/adr/0004-inject-screens-at-emulator-boundary.md)). The GUI creates
      * them so it can bind its widgets to the very instances the Core uses; anything left out is
      * built from the language defaults, which is what every caller that does not care gets.
@@ -569,12 +642,17 @@ export type BaseEmulatorActions = {
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
+    setGlobalMemorySize: (pageSize: number, rowSize: number) => void
     setCode: (code: string) => void
     setSources: (sources: BuildInput) => void
     check: () => Promise<Diagnostic[]>
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number, file?: string) => void
+    /** Translates Breakpoints on Files the Core never sees into the ones it runs with. */
+    setBreakpointResolver: (
+        resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
+    ) => void
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
     /**

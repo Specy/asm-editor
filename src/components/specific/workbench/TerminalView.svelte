@@ -1,46 +1,41 @@
 <script lang="ts">
-    /** The Terminal's text, following its end as the program writes. */
-    import Console from '$cmp/shared/Console.svelte'
+    /**
+     * The Terminal tab: the Emulator's runtime errors, then the program's output, with a caret
+     * where a read waits for what is typed. It follows the end as the program writes.
+     */
+    import TerminalConsole from '$cmp/shared/terminal/TerminalConsole.svelte'
+    import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 
     interface Props {
-        text: string
-        /** Whether its tab is the one shown: a hidden view has no height to scroll. */
+        terminal: Terminal
+        /** The Emulator's runtime errors, shown before what the program wrote. */
+        errors?: string
+        /**
+         * Whether its tab is the one shown: a hidden view has no height to scroll, and is no
+         * console to type in.
+         */
         visible?: boolean
+        /** Whether a program is built and has not ended, so that typing reaches it. */
+        interactive?: boolean
+        /** Whether the output's escape sequences are drawn: the x86 Target's. */
+        escapes?: boolean
     }
 
-    let { text, visible = true }: Props = $props()
-    let element: HTMLDivElement | undefined = $state()
-
-    //also when the tab is shown again, since what was written meanwhile could not be scrolled to
-    $effect(() => {
-        if (element && visible && text) element.scrollTop = element.scrollHeight
-    })
+    let {
+        terminal,
+        errors = '',
+        visible = true,
+        interactive = false,
+        escapes = false
+    }: Props = $props()
 </script>
 
-<div class="terminal" bind:this={element}>
-    {#if text}
-        <Console value={text} />
-    {:else}
-        <p class="empty">What the program writes appears here.</p>
-    {/if}
-</div>
-
-<style>
-    /* the scrollbar keeps its room from the start, so output that starts to scroll does not
-       shift sideways */
-    .terminal {
-        flex: 1;
-        min-height: 0;
-        overflow: auto;
-        scrollbar-gutter: stable;
-        padding: 0.3rem 0.6rem;
-        font-family: FiraCode, monospace;
-    }
-
-    .empty {
-        margin: 0.4rem 0;
-        font-family: Rubik, sans-serif;
-        font-size: 0.8rem;
-        color: var(--hint);
-    }
-</style>
+<TerminalConsole
+    {terminal}
+    prefix={errors ? `${errors}\n` : ''}
+    {visible}
+    {interactive}
+    {escapes}
+    placeholder="What the program writes appears here."
+    style="--terminal-padding: var(--wb-output-padding);"
+/>

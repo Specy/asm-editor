@@ -14,7 +14,10 @@
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
 
+    import type { Emulator } from '$lib/languages/Emulator'
+
     interface Props {
+        emulator?: Emulator
         sp: bigint
         tab: MemoryTab
         memorySize: bigint
@@ -33,6 +36,7 @@
     }
 
     let {
+        emulator,
         systemSize,
         sp,
         tab,
@@ -51,6 +55,7 @@
 <div class="tab column" {style}>
     <div class="controls">
         <MemoryControls
+            {emulator}
             {systemSize}
             bytesPerPage={tab.pageSize}
             {memorySize}
@@ -61,11 +66,17 @@
             }}
             hideLabel
             buttonVar={controlsVar}
+            showRegions={false}
         />
     </div>
     <div class="page">
         <MemoryVisualiser
+            memoryRegions={emulator?.memoryRegions}
+            dataLabels={emulator?.dataLabels}
+            readOnlyMemory={emulator?.readOnlyMemory}
             {systemSize}
+            {memorySize}
+            dense
             {endianess}
             {defaultMemoryValue}
             bytesPerRow={tab.rowSize}
@@ -81,6 +92,10 @@
 </div>
 
 <style lang="scss">
+    .tab {
+        min-width: 13rem;
+    }
+
     .controls {
         display: flex;
         padding: 0.3rem;

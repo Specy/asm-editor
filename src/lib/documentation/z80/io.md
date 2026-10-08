@@ -2,7 +2,11 @@
 
 A Z80 has no system calls. Programs reach the outside world with `in` and `out`, which address one of 256 ports: `out (n), a` sends A to port `n`, `in a, (n)` reads a byte back. The `(c)` forms (`out (c), r` and `in r, (c)`) take the port number from C, which lets a program compute it, and put B on the high byte of the address bus, which is how a read carries a parameter: the key code, the mouse view, the byte of the clock, the length of a wait.
 
-The emulator connects the ports below to the terminal, the screen, the keyboard, the mouse and the clock. Every other port behaves like an empty bus: writes are dropped and reads answer `0xFF`. Reading a connected port with nothing to read pauses the program until there is something, so `in` never fails, it only waits.
+The emulator connects the ports below to the Terminal, Screen, keyboard, mouse, and program clock. Every other port behaves like an empty bus: writes are dropped and reads answer `0xFF`. Reads from console ports `0x10`–`0x14` wait for input; `0x50` waits for its requested delay and `0x51` waits for the next frame. Keyboard-state, mouse, clock-now, and other status reads return immediately, so they can be polled in a loop. Invalid console number input stops the program with an error.
+
+The character port `0x10` reads a Terminal line one byte at a time, ending it with newline `0x0A` when you press Enter. Once the program uses a Screen, Keyboard or Mouse port, character input comes from the focused Screen one keystroke at a time; Enter still gives the character port `0x0A`. The last-key ports report the EASy68K Enter **key code** `0x0D`. Click the Screen to focus it before typing.
+
+For example, `ld c,0x30` / `ld b,0` / `in a,(c)` polls whether a key is waiting; the returned `A` is 1 or 0. To wait for a character, `in a,(0x10)` pauses until input is available, then returns the character in `A`. With the `(c)` form, `C` selects the low-byte port and `B` supplies the high address byte; for parameterized reads, set `B` to the documented parameter before `in`.
 
 ## Screen commands
 
@@ -10,11 +14,11 @@ Written to the command port, `0x27`. One write runs one operation on the coordin
 
 ## The TRS-80 display
 
-Command `14` switches the screen to the memory-mapped display of the TRS-80, the machine this Z80 emulator descends from — the one graphics interface here that programs written elsewhere already target. A program can also ask for it before it starts, with a `; @screen trs80` comment, which is what a program brought in from outside needs. The drawing commands above are not available in this mode, and console output goes only to the terminal: on this machine, printing _is_ storing a byte.
+Command `14` switches the Screen to the TRS-80 memory-mapped text display. A program can select this mode before it starts with a `; @screen trs80` comment. Drawing commands are unavailable in this mode, and console output goes only to the Terminal: display text by storing bytes in the mapped memory below.
 
 {memory}
 
-Port `0x00` is the machine's joystick, and the reason the ports above start at `0x10`: nothing of this editor's is mapped there, so a program's joystick poll reads an empty bus floating high — `0xFF`, exactly what the machine answers with none attached. While the character port lived at `0x00` that poll stopped the program to wait for a line nobody was typing. Everything else the machine decodes is at `0x75` or above, clear of this map entirely.
+Port `0x00` is the joystick input; with no joystick attached, reading it returns `0xFF`.
 
 Characters `0x20` to `0x7F` are text. Characters `128` to `191` are 2 by 3 blocks of chunky pixels — the low six bits are the blocks, bit 0 top-left then across and down — so the screen is also a 128 by 48 pixel grid. `191` is solid and `128` is blank.
 
@@ -29,3 +33,5 @@ A color is one byte: three bits of red in bits 7-5, three of green in bits 4-2 a
 Put one of these in B before reading a mouse port.
 
 {views}
+
+The editor-defined `TIME_NOW` port retains elapsed hundredths since the run started, as specified by its port map. It is not a calendar clock.

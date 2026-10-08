@@ -363,3 +363,24 @@ describe('TestcasesSummary', () => {
         expect(calls).toEqual(['clear'])
     })
 })
+
+describe('failed environment execution', () => {
+    it('shows an empty-expectation runtime failure as a failed case with its message', async () => {
+        const testcase = testcaseWith({})
+        const { target } = render(
+            [testcase],
+            [
+                {
+                    testcase,
+                    passed: false,
+                    errors: [{ type: 'runtime-error', message: 'No external wake source' }]
+                }
+            ],
+            false
+        )
+        expect(headers(target)[0].status).toBe('runtime error')
+        target.querySelector<HTMLButtonElement>('.header')!.click()
+        await tick()
+        expect(target.textContent).toContain('No external wake source')
+    })
+})

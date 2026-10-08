@@ -1,0 +1,23 @@
+time plausible=1 stored equals returned=1
+time(NULL) not before=1
+clock non-decreasing=1 CLOCKS_PER_SEC=1000000
+difftime=7 -86400
+gmtime(0): 1970-01-01 00:00:00 wday=4 yday=0 isdst=0
+gmtime(86399): 1970-01-01 23:59:59 wday=4 yday=0 isdst=0
+gmtime(951782400): 2000-02-29 00:00:00 wday=2 yday=59 isdst=0
+gmtime(951868800): 2000-03-01 00:00:00 wday=3 yday=60 isdst=0
+gmtime(1234567890): 2009-02-13 23:31:30 wday=5 yday=43 isdst=0
+gmtime(2147483647): 2038-01-19 03:14:07 wday=2 yday=18 isdst=0
+gmtime(2147483648): 2038-01-19 03:14:08 wday=2 yday=18 isdst=0
+gmtime(4102444800): 2100-01-01 00:00:00 wday=5 yday=0 isdst=0
+gmtime(-86400): 1969-12-31 00:00:00 wday=3 yday=364 isdst=0
+gmtime(-2208988800): 1900-01-01 00:00:00 wday=1 yday=0 isdst=0
+gmtime(253402300799): 9999-12-31 23:59:59 wday=5 yday=364 isdst=0
+localtime: 2023-11-14 22:13:20 wday=2 yday=317 isdst=0
+mktime=1709339400
+normalized: 2024-03-02 00:30:00 wday=6 yday=61 isdst=0
+mktime(gmtime(now)) == now: 1
+y2k=946684800
+month 13: 2000-02-01 00:00:00 wday=2 yday=31 isdst=0
+asctime: Thu Jan  1 00:00:00 1970
+ctime: Tue Feb 29 00:00:00 2000

@@ -1,0 +1,19 @@
+// Runtime library, ABI v1: <cstdio>, the C header <stdio.h> with its names also in namespace std.
+#ifndef _AED_CSTDIO
+#define _AED_CSTDIO
+
+#include <stdio.h>
+
+extern "C++" {
+namespace std {
+using ::size_t; using ::FILE; using ::fpos_t; using ::fopen; using ::freopen; using ::fclose; using ::fflush;
+using ::setvbuf; using ::setbuf; using ::printf; using ::fprintf; using ::sprintf; using ::snprintf; using ::vprintf;
+using ::vfprintf; using ::vsprintf; using ::vsnprintf; using ::scanf; using ::fscanf; using ::sscanf; using ::vscanf;
+using ::vfscanf; using ::vsscanf; using ::fgetc; using ::getc; using ::getchar; using ::fgets; using ::ungetc;
+using ::fputc; using ::putc; using ::putchar; using ::fputs; using ::puts; using ::fread; using ::fwrite;
+using ::fseek; using ::ftell; using ::rewind; using ::fgetpos; using ::fsetpos; using ::feof; using ::ferror;
+using ::clearerr; using ::perror;
+}
+}
+
+#endif

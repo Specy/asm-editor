@@ -38,7 +38,16 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
             'editorWhitespace.foreground': new TinyColor(text('secondary')).toHexString() + '2A',
             'editorWidget.background': color('tertiary').toHexString(),
             'editorSuggestWidget.selectedBackground': color('accent2').darken(5).toHexString(),
-            'input.background': layer('tertiary', 10).toHexString()
+            'input.background': layer('tertiary', 10).toHexString(),
+            'menu.background': color('tertiary').toHexString(),
+            'menu.foreground': text('tertiary'),
+            'menu.border': color('accent2').toHexString(),
+            'menu.separatorBackground': layer('tertiary', 12).toHexString(),
+            'menu.selectionBackground': layer('tertiary', 6).toHexString(),
+            'menu.selectionForeground': text('tertiary'),
+            //Monaco's context menu uses list hover colors for mouse and keyboard focus.
+            'list.hoverBackground': layer('tertiary', 6).toHexString(),
+            'list.hoverForeground': text('tertiary')
         }
     }
 }

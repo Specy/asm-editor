@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushSync, mount, unmount } from 'svelte'
 import MemoryRenderer from './MemoryRenderer.svelte'
 import { type DiffedMemory, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import { memoryRegionColor } from '$lib/languages/memoryRegions'
 
 //the panel reaches `$lib/utils`, which reaches the projects store, which opens its IndexedDB
 //because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection
@@ -18,20 +19,40 @@ vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () 
 const BYTES = [0x11, 0x01, 0x02, 0x33, 0x44, 0x55, 0x66, 0x77]
 const ADDRESS = 0x1000n
 
-function render(options: { pokeable?: boolean; endianess?: 'big' | 'little' } = {}) {
+function render(
+    options: {
+        memoryRegions?: import('$lib/languages/commonLanguageFeatures.svelte').MemoryRegion[]
+        dataLabels?: import('$lib/languages/commonLanguageFeatures.svelte').DataLabel[]
+        sp?: bigint
+        pokeable?: boolean
+        endianess?: 'big' | 'little'
+        unreadable?: number[]
+        readOnlyMemory?: import('$lib/languages/commonLanguageFeatures.svelte').ReadOnlyMemory[]
+    } = {}
+) {
     const pokes: { address: bigint; bytes: number[] }[] = []
     const target = document.createElement('div')
     document.body.appendChild(target)
     const memory: DiffedMemory = {
         current: Uint8Array.from(BYTES),
-        prevState: Uint8Array.from(BYTES)
+        prevState: Uint8Array.from(BYTES),
+        unreadable: options.unreadable
+            ? {
+                  address: ADDRESS,
+                  mask: Uint8Array.from(options.unreadable),
+                  reason: 'address out of range'
+              }
+            : null
     }
     const app = mount(MemoryRenderer, {
         target,
         props: {
             memory,
             currentAddress: ADDRESS,
-            sp: 0n,
+            sp: options.sp ?? 0n,
+            memoryRegions: options.memoryRegions,
+            dataLabels: options.dataLabels,
+            readOnlyMemory: options.readOnlyMemory,
             pageSize: 8,
             bytesPerRow: 8,
             defaultMemoryValue: 0xff,
@@ -214,4 +235,122 @@ describe('poking memory from the selection popup', () => {
         expect(panel.popup()?.textContent).toContain('51')
         panel.close()
     })
+})
+
+describe('memory that takes no Pokes', () => {
+    const readOnlyMemory = [
+        { start: ADDRESS + 4n, end: ADDRESS + 8n, reason: 'holds instructions' }
+    ]
+
+    it('reads a selection inside it, saying why, and offers no input', () => {
+        const panel = render({ readOnlyMemory })
+        panel.select(5)
+        expect(panel.input()).toBeNull()
+        expect(panel.popup()?.textContent).toContain(String(0x55))
+        expect(panel.popup()?.querySelector('[title="holds instructions"]')).not.toBeNull()
+        panel.close()
+    })
+
+    it('refuses a selection that only reaches into it, and pokes the bytes before it', () => {
+        const panel = render({ readOnlyMemory })
+        panel.select(3, 4)
+        expect(panel.input()).toBeNull()
+        panel.select(2, 3)
+        type(panel.input()!, '1')
+        press(panel.input()!, 'Enter')
+        expect(panel.pokes).toEqual([{ address: ADDRESS + 2n, bytes: [0x00, 0x01] }])
+        panel.close()
+    })
+})
+
+describe('bytes the Core could not read', () => {
+    it('draws them without a value and says why under the page', () => {
+        const panel = render({ unreadable: [0, 0, 0, 0, 0, 0, 1, 1] })
+        //an unreadable byte keeps its cell, so the grid does not move, and reads as `??`
+        const text = panel.cells().map((cell) => cell.textContent?.trim())
+        expect(text).toHaveLength(8)
+        expect(text.slice(0, 6)).not.toContain('??')
+        expect(text.slice(6)).toEqual(['??', '??'])
+        //its hover says why
+        const reasons = [...panel.target.querySelectorAll<HTMLElement>('.byte-error')]
+        expect(reasons.map((reason) => reason.textContent?.trim())).toEqual([
+            'address out of range',
+            'address out of range'
+        ])
+        const notice = panel.target.querySelector<HTMLElement>('.memory-unreadable')!
+        expect(notice.textContent).toContain("2 of 8 bytes can't be read: address out of range")
+        panel.close()
+    })
+
+    it('says the whole page when none of it can be read', () => {
+        const panel = render({ unreadable: [1, 1, 1, 1, 1, 1, 1, 1] })
+        const notice = panel.target.querySelector<HTMLElement>('.memory-unreadable')!
+        expect(notice.textContent).toContain('Nothing on this page can be read')
+        panel.close()
+    })
+
+    it('shows no notice for a page that was read whole', () => {
+        const panel = render()
+        expect(panel.target.querySelector('.memory-unreadable')).toBeNull()
+        panel.close()
+    })
+
+    it('reads a selection across them as nothing and takes no Poke', () => {
+        //bytes 3 and 4 cannot be read, so the third and fourth cells reach into the gap
+        const panel = render({ unreadable: [0, 0, 0, 1, 1, 0, 0, 0] })
+        panel.select(2, 3)
+        expect(panel.popup()!.textContent?.trim()).toBe('??')
+        expect(panel.input()).toBeNull()
+        panel.close()
+    })
+})
+
+it('tints device overlaps, preserves SP and selection highlights, and hovers both owners', () => {
+    const region = {
+        id: 'data',
+        name: '.data',
+        section: '.data',
+        kind: 'data' as const,
+        start: ADDRESS,
+        end: ADDRESS + 8n
+    }
+    const ui = render({
+        memoryRegions: [
+            region,
+            {
+                id: 'bitmap',
+                name: 'Bitmap display',
+                kind: 'device',
+                start: ADDRESS,
+                end: ADDRESS + 8n
+            }
+        ],
+        sp: ADDRESS + 1n,
+        dataLabels: [
+            {
+                name: '_ZN4Game5scoreE',
+                displayName: 'Game::score',
+                section: '.data',
+                address: ADDRESS,
+                fromLibrary: true
+            }
+        ]
+    })
+    //the region is outlined around the byte's cell, so the cell's own highlights stay its own
+    const outline = (index: number) =>
+        ui.cells()[index].closest('.memory-number')!.getAttribute('style')
+    const deviceOutline = `--region-color: ${memoryRegionColor('device')};`
+    try {
+        expect(outline(0)).toContain(deviceOutline)
+        expect(outline(1)).toContain(deviceOutline)
+        expect(ui.cells()[1].getAttribute('style')).toContain('background-color: var(--accent2)')
+        expect(ui.target.querySelector('.region-hover')?.textContent).toBe(
+            'Bitmap display · .data · Game::score (_ZN4Game5scoreE) (library)'
+        )
+        ui.select(0)
+        expect(ui.cells()[0].getAttribute('style')).toContain('background-color: var(--green)')
+        expect(outline(0)).toContain(deviceOutline)
+    } finally {
+        ui.close()
+    }
 })

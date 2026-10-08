@@ -1,0 +1,10 @@
+n=5
+rest of line=[\n] len=1
+name=[Ada Lovelace]
+getc=7
+ungetc=Z
+fgetc after ungetc=Z
+n after pushing back the digit=7123
+ungetc EOF=-1
+line=[a line with   spaces]
+total=15

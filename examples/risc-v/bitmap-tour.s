@@ -4,12 +4,12 @@
 #
 # That comment configures the screen, and every Build reads it: one word drawn one pixel wide and
 # high, a 256 by 256 display area and the grid starting wherever the `display` label ends up, which
-# makes a 256 by 256 grid of words, 256 KB of static data. RARS reads the line as the ordinary
-# comment it is, and you set the same five values in its bitmap display window by hand.
+# makes a 256 by 256 grid of words, 256 KB of static data. The @screen line is an editor directive;
+# other assemblers read it as an ordinary comment.
 #
 # The program paints a red/green ramp over the whole grid, puts a blue square in the middle and
 # draws a white line along the top and bottom rows, then stops. Nothing is animated: it is the
-# picture the manual verification matrix compares against RARS's own bitmap display.
+# picture the manual verification matrix checks for its pixel colors and layout.
 
         .data
 display:.space  262144                  # 256 * 256 * 4

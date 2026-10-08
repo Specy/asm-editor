@@ -1,0 +1,808 @@
+import type { MarsSyscall } from './syscallBinding'
+
+/**
+ * The MARS services of MIPS, as its Documentation shows them and `<sim.h>` calls them. Free of the
+ * Core, so build scripts read it with plain Node. These bindings follow the MARS 4.0.0 Core APIs.
+ */
+export const mipsSyscalls: Record<number, MarsSyscall> = {
+    [1]: {
+        name: 'print integer',
+        code: 1,
+        arguments: [{ name: '$a0', description: 'integer to print' }],
+        result: {},
+        implemented: true,
+        binding: {
+            name: 'sim_print_int',
+            parameters: [{ name: 'value', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [2]: {
+        name: 'print float',
+        code: 2,
+        arguments: [{ name: '$f12', description: 'float to print' }],
+        result: {},
+        implemented: true,
+        binding: {
+            name: 'sim_print_float',
+            parameters: [{ name: 'value', type: 'float', register: '$f12' }],
+            returns: { type: 'void' }
+        }
+    },
+    [3]: {
+        name: 'print double',
+        code: 3,
+        arguments: [{ name: '$f12', description: 'double to print' }],
+        result: {},
+        implemented: true,
+        binding: {
+            name: 'sim_print_double',
+            parameters: [{ name: 'value', type: 'double', register: '$f12' }],
+            returns: { type: 'void' }
+        }
+    },
+    [4]: {
+        name: 'print string',
+        code: 4,
+        arguments: [{ name: '$a0', description: 'address of null-terminated string to print' }],
+        result: {},
+        implemented: true,
+        binding: {
+            name: 'sim_print_string',
+            parameters: [{ name: 'text', type: 'const char *', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [5]: {
+        name: 'read integer',
+        code: 5,
+        arguments: [],
+        result: {
+            arguments: [
+                { name: '$v0', description: 'contains the integer parsed from the input line' }
+            ],
+            other: 'Reads one line, trims surrounding whitespace, and parses it as an integer. Invalid input stops the program with an input error.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_read_int',
+            parameters: [],
+            returns: { type: 'int', register: '$v0' }
+        }
+    },
+    [6]: {
+        name: 'read float',
+        code: 6,
+        arguments: [],
+        result: {
+            arguments: [
+                {
+                    name: '$f0',
+                    description: 'contains the floating-point value parsed from the input line'
+                }
+            ],
+            other: 'Reads one line, trims surrounding whitespace, and parses it as a floating-point value. Invalid input stops the program with an input error.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_read_float',
+            parameters: [],
+            returns: { type: 'float', register: '$f0' }
+        }
+    },
+    [7]: {
+        name: 'read double',
+        code: 7,
+        arguments: [],
+        result: {
+            arguments: [
+                {
+                    name: '$f0',
+                    description: 'contains the double-precision value parsed from the input line'
+                }
+            ],
+            other: 'Reads one line, trims surrounding whitespace, and parses it as a double-precision value. Invalid input stops the program with an input error.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_read_double',
+            parameters: [],
+            returns: { type: 'double', register: '$f0' }
+        }
+    },
+    [8]: {
+        name: 'read string',
+        code: 8,
+        arguments: [
+            { name: '$a0', description: 'address of input buffer' },
+            { name: '$a1', description: 'maximum number of characters to read' }
+        ],
+        result: {
+            other: "Service 8 - Follows semantics of UNIX 'fgets'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer."
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_read_string',
+            parameters: [
+                { name: 'buffer', type: 'char *', register: '$a0', out: true },
+                { name: 'size', type: 'int', register: '$a1' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
+    [9]: {
+        name: 'sbrk (allocate heap memory)',
+        code: 9,
+        arguments: [{ name: '$a0', description: 'number of bytes to allocate' }],
+        result: {
+            arguments: [{ name: '$v0', description: 'contains address of allocated memory' }]
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_sbrk',
+            parameters: [{ name: 'bytes', type: 'int', register: '$a0' }],
+            returns: { type: 'void *', register: '$v0' }
+        }
+    },
+    [10]: {
+        name: 'exit (terminate execution)',
+        code: 10,
+        arguments: [],
+        result: {},
+        implemented: true,
+        binding: {
+            name: 'sim_exit',
+            parameters: [],
+            returns: { type: 'void' },
+            noreturn: true
+        }
+    },
+    [11]: {
+        name: 'print character',
+        code: 11,
+        arguments: [{ name: '$a0', description: 'character to print' }],
+        result: {
+            other: 'Prints the ASCII character whose code is in the low-order byte.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_print_char',
+            parameters: [{ name: 'character', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [12]: {
+        name: 'read character',
+        code: 12,
+        arguments: [],
+        result: { arguments: [{ name: '$v0', description: 'contains the input character code' }] },
+        implemented: true,
+        binding: {
+            name: 'sim_read_char',
+            parameters: [],
+            returns: { type: 'int', register: '$v0' }
+        }
+    },
+    [13]: {
+        name: 'open file',
+        code: 13,
+        arguments: [
+            { name: '$a0', description: 'address of null-terminated string containing filename' },
+            { name: '$a1', description: 'flags' },
+            { name: '$a2', description: 'mode' }
+        ],
+        result: {
+            arguments: [
+                { name: '$v0', description: 'contains file descriptor (negative if error)' }
+            ],
+            other: 'Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. The mode argument is ignored. A negative descriptor means the operation failed. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_open',
+            parameters: [
+                { name: 'path', type: 'const char *', register: '$a0' },
+                { name: 'flags', type: 'int', register: '$a1' },
+                { name: 'mode', type: 'int', register: '$a2' }
+            ],
+            returns: { type: 'int', register: '$v0' }
+        }
+    },
+    [14]: {
+        name: 'read from file',
+        code: 14,
+        arguments: [
+            { name: '$a0', description: 'file descriptor' },
+            { name: '$a1', description: 'address of input buffer' },
+            { name: '$a2', description: 'maximum number of characters to read' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$v0',
+                    description:
+                        'contains number of characters read (0 if end-of-file, negative if error)'
+                }
+            ],
+            other: 'The result, including a negative value on failure, is returned in `$v0`.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_read',
+            parameters: [
+                { name: 'fd', type: 'int', register: '$a0' },
+                { name: 'buffer', type: 'void *', register: '$a1', out: true },
+                { name: 'length', type: 'int', register: '$a2' }
+            ],
+            returns: { type: 'int', register: '$v0' }
+        }
+    },
+    [15]: {
+        name: 'write to file',
+        code: 15,
+        arguments: [
+            { name: '$a0', description: 'file descriptor' },
+            { name: '$a1', description: 'address of output buffer' },
+            { name: '$a2', description: 'number of characters to write' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$v0',
+                    description: 'contains number of characters written (negative if error)'
+                }
+            ],
+            other: 'The result, including a negative value on failure, is returned in `$v0`.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_write',
+            parameters: [
+                { name: 'fd', type: 'int', register: '$a0' },
+                { name: 'buffer', type: 'const void *', register: '$a1' },
+                { name: 'length', type: 'int', register: '$a2' }
+            ],
+            returns: { type: 'int', register: '$v0' }
+        }
+    },
+    [16]: {
+        name: 'close file',
+        code: 16,
+        arguments: [{ name: '$a0', description: 'file descriptor' }],
+        result: {},
+        implemented: true,
+        binding: {
+            name: 'sim_close',
+            parameters: [{ name: 'fd', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [62]: {
+        name: 'lseek (move file position)',
+        code: 62,
+        arguments: [
+            { name: '$a0', description: 'file descriptor' },
+            { name: '$a1', description: 'offset in bytes' },
+            {
+                name: '$a2',
+                description:
+                    'where the offset counts from: 0 the start of the file, 1 the current position, 2 the end of the file'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$v0',
+                    description:
+                        'contains the new position, counted from the beginning of the file (-1 if error)'
+                }
+            ],
+            other: 'Seeks to a byte position in the file. Descriptors 0, 1, and 2 cannot seek.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_lseek',
+            parameters: [
+                { name: 'fd', type: 'int', register: '$a0' },
+                { name: 'offset', type: 'int', register: '$a1' },
+                { name: 'whence', type: 'int', register: '$a2' }
+            ],
+            returns: { type: 'int', register: '$v0' }
+        }
+    },
+    [17]: {
+        name: 'exit2 (terminate with value)',
+        code: 17,
+        arguments: [{ name: '$a0', description: 'termination result' }],
+        result: {
+            other: 'Ends the program with the signed exit code in `$a0`. The editor shows this code in the Log.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_exit2',
+            parameters: [{ name: 'code', type: 'int', register: '$a0' }],
+            returns: { type: 'void' },
+            noreturn: true
+        }
+    },
+    [30]: {
+        name: 'time (program time)',
+        code: 30,
+        arguments: [],
+        result: {
+            arguments: [
+                { name: '$a0', description: 'low order 32 bits of the program time' },
+                { name: '$a1', description: 'high order 32 bits of the program time' }
+            ],
+            other: 'Returns milliseconds since 1970-01-01 UTC. In a Testcase, calendar time starts at 2000-01-01 UTC and advances through waits of service 32.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_time',
+            parameters: [],
+            returns: { type: 'long long', low: '$a0', high: '$a1' }
+        }
+    },
+    [32]: {
+        name: 'sleep',
+        code: 32,
+        arguments: [{ name: '$a0', description: 'the length of time to sleep in milliseconds' }],
+        result: {
+            other: 'Service 32 - Lets that much program time pass before the next instruction. The editor stays responsive while it waits and the wait costs no instructions, so a program idling on the keyboard never reaches the execution limit; in a testcase it completes at once and advances the virtual clock instead.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_sleep',
+            parameters: [{ name: 'milliseconds', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [34]: {
+        name: 'print integer in hexadecimal',
+        code: 34,
+        arguments: [{ name: '$a0', description: 'integer to print' }],
+        result: {
+            other: 'Displayed value is 8 hexadecimal digits, left-padding with zeroes if necessary.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_print_hex',
+            parameters: [{ name: 'value', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [35]: {
+        name: 'print integer in binary',
+        code: 35,
+        arguments: [{ name: '$a0', description: 'integer to print' }],
+        result: { other: 'Displayed value is 32 bits, left-padding with zeroes if necessary.' },
+        implemented: true,
+        binding: {
+            name: 'sim_print_binary',
+            parameters: [{ name: 'value', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [36]: {
+        name: 'print integer as unsigned',
+        code: 36,
+        arguments: [{ name: '$a0', description: 'integer to print' }],
+        result: { other: 'Displayed as unsigned decimal value.' },
+        implemented: true,
+        binding: {
+            name: 'sim_print_unsigned',
+            parameters: [{ name: 'value', type: 'unsigned', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [40]: {
+        name: 'set seed',
+        code: 40,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            },
+            { name: '$a1', description: 'seed for corresponding pseudorandom number generator' }
+        ],
+        result: {
+            other: 'Seeds the generator selected by $a0. Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_random_seed',
+            parameters: [
+                { name: 'generator', type: 'int', register: '$a0' },
+                { name: 'seed', type: 'int', register: '$a1' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
+    [41]: {
+        name: 'random int',
+        code: 41,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$a0',
+                    description:
+                        "contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence"
+                }
+            ],
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_random_int',
+            parameters: [{ name: 'generator', type: 'int', register: '$a0' }],
+            returns: { type: 'int', register: '$a0' }
+        }
+    },
+    [42]: {
+        name: 'random int range',
+        code: 42,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            },
+            { name: '$a1', description: 'upper bound of range of returned values' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$a0',
+                    description:
+                        "contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence"
+                }
+            ],
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_random_int_range',
+            parameters: [
+                { name: 'generator', type: 'int', register: '$a0' },
+                { name: 'bound', type: 'int', register: '$a1' }
+            ],
+            returns: { type: 'int', register: '$a0' }
+        }
+    },
+    [43]: {
+        name: 'random float',
+        code: 43,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$f0',
+                    description:
+                        "contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
+                }
+            ],
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_random_float',
+            parameters: [{ name: 'generator', type: 'int', register: '$a0' }],
+            returns: { type: 'float', register: '$f0' }
+        }
+    },
+    [44]: {
+        name: 'random double',
+        code: 44,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$f0',
+                    description:
+                        "contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
+                }
+            ],
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_random_double',
+            parameters: [{ name: 'generator', type: 'int', register: '$a0' }],
+            returns: { type: 'double', register: '$f0' }
+        }
+    },
+    [50]: {
+        name: 'ConfirmDialog',
+        code: 50,
+        arguments: [
+            {
+                name: '$a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$a0',
+                    description: 'contains value of user-chosen option\n0: Yes\n1: No\n2: Cancel'
+                }
+            ]
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_confirm_dialog',
+            parameters: [{ name: 'message', type: 'const char *', register: '$a0' }],
+            returns: { type: 'int', register: '$a0' }
+        }
+    },
+    [51]: {
+        name: 'InputDialogInt',
+        code: 51,
+        arguments: [
+            {
+                name: '$a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
+        result: {
+            arguments: [
+                { name: '$a0', description: 'contains int read' },
+                {
+                    name: '$a1',
+                    description:
+                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
+                }
+            ]
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_input_dialog_int',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'status', type: 'int *', register: '$a1', out: true }
+            ],
+            returns: { type: 'int', register: '$a0' }
+        }
+    },
+    [52]: {
+        name: 'InputDialogFloat',
+        code: 52,
+        arguments: [
+            {
+                name: '$a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$f0',
+                    description: 'contains the floating-point value parsed from the input line'
+                },
+                {
+                    name: '$a1',
+                    description:
+                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
+                }
+            ]
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_input_dialog_float',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'status', type: 'int *', register: '$a1', out: true }
+            ],
+            returns: { type: 'float', register: '$f0' }
+        }
+    },
+    [53]: {
+        name: 'InputDialogDouble',
+        code: 53,
+        arguments: [
+            {
+                name: '$a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$f0',
+                    description: 'contains the double-precision value parsed from the input line'
+                },
+                {
+                    name: '$a1',
+                    description:
+                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
+                }
+            ]
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_input_dialog_double',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'status', type: 'int *', register: '$a1', out: true }
+            ],
+            returns: { type: 'double', register: '$f0' }
+        }
+    },
+    [54]: {
+        name: 'InputDialogString',
+        code: 54,
+        arguments: [
+            {
+                name: '$a0',
+                description: 'address of null-terminated string that is the message to user'
+            },
+            { name: '$a1', description: 'address of input buffer' },
+            { name: '$a2', description: 'maximum number of characters to read' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: '$a1',
+                    description:
+                        'contains status value\n0: OK status. Buffer contains the input string.\n-2: Cancel was chosen. No change to buffer.\n-3: OK was chosen but no data had been input into field. No change to buffer.\n-4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null.'
+                }
+            ],
+            other: 'See Service 8 note below table'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_input_dialog_string',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'buffer', type: 'char *', register: '$a1', out: true },
+                { name: 'size', type: 'int', register: '$a2' }
+            ],
+            returns: { type: 'int', register: '$a1' }
+        }
+    },
+    [55]: {
+        name: 'MessageDialog',
+        code: 55,
+        arguments: [
+            {
+                name: '$a0',
+                description: 'address of null-terminated string that is the message to user'
+            },
+            {
+                name: '$a1',
+                description:
+                    'the type of message to be displayed:\n0: error message, indicated by Error icon\n1: information message, indicated by Information icon\n2: warning message, indicated by Warning icon\n3: question message, indicated by Question icon\nother: plain message (no icon displayed)'
+            }
+        ],
+        result: { other: 'N/A' },
+        implemented: true,
+        binding: {
+            name: 'sim_message_dialog',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'type', type: 'int', register: '$a1' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
+    [56]: {
+        name: 'MessageDialogInt',
+        code: 56,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'address of null-terminated string that is an information-type message to user'
+            },
+            {
+                name: '$a1',
+                description: 'int value to display in string form after the first string'
+            }
+        ],
+        result: { other: 'N/A' },
+        implemented: true,
+        binding: {
+            name: 'sim_message_dialog_int',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'value', type: 'int', register: '$a1' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
+    [57]: {
+        name: 'MessageDialogFloat',
+        code: 57,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'address of null-terminated string that is an information-type message to user'
+            },
+            {
+                name: '$f12',
+                description: 'float value to display in string form after the first string'
+            }
+        ],
+        result: { other: 'N/A' },
+        implemented: true,
+        binding: {
+            name: 'sim_message_dialog_float',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'value', type: 'float', register: '$f12' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
+    [58]: {
+        name: 'MessageDialogDouble',
+        code: 58,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'address of null-terminated string that is an information-type message to user'
+            },
+            {
+                name: '$f12',
+                description: 'double value to display in string form after the first string'
+            }
+        ],
+        result: { other: 'N/A' },
+        implemented: true,
+        binding: {
+            name: 'sim_message_dialog_double',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'value', type: 'double', register: '$f12' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
+    [59]: {
+        name: 'MessageDialogString',
+        code: 59,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'address of null-terminated string that is an information-type message to user'
+            },
+            {
+                name: '$a1',
+                description: 'address of null-terminated string to display after the first string'
+            }
+        ],
+        result: { other: 'N/A' },
+        implemented: true,
+        binding: {
+            name: 'sim_message_dialog_string',
+            parameters: [
+                { name: 'message', type: 'const char *', register: '$a0' },
+                { name: 'text', type: 'const char *', register: '$a1' }
+            ],
+            returns: { type: 'void' }
+        }
+    }
+}

@@ -1,7 +1,11 @@
 //https://github.com/microsoft/monaco-editor/blob/main/src/basic-languages/riscv/riscv.ts
 
 import type { languages } from 'monaco-editor'
-import { riscvDirectivesMap, riscvInstructionNames } from './RISC-V-documentation'
+import {
+    riscvDirectivesMap,
+    riscvGnuDirectiveNames,
+    riscvInstructionNames
+} from './RISC-V-documentation'
 
 import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
 
@@ -29,16 +33,19 @@ export const RISCVLanguage = <languages.IMonarchLanguage>{
 
     keywords: [
         ...[...Object.keys(riscvDirectivesMap)].map((d) => `.${d}`),
+        ...riscvGnuDirectiveNames.map((d) => `.${d}`),
         ...riscvInstructionNames
     ],
 
     // we include these common regular expressions
     symbols: /[\.,\:]+/,
-    escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+    escapes: /\\(?:[0-7]{1,3}|[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
     // The main tokenizer for our languages
     tokenizer: {
         root: [
+            [/%(?:pcrel_hi|pcrel_lo|hi|lo)\b/, 'keyword'],
+            [/\b[0-9]+[bf]\b/, 'identifier'],
             // identifiers and keywords
             [
                 new RegExp(
@@ -47,7 +54,7 @@ export const RISCVLanguage = <languages.IMonarchLanguage>{
                 'variable.predefined'
             ],
             [
-                /[.a-zA-Z_]\w*/,
+                /[.a-zA-Z_][\w.]*/,
                 {
                     cases: {
                         this: 'variable.predefined',

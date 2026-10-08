@@ -132,3 +132,51 @@ describe('host mode', () => {
         expect(clock.now()).toBe(0)
     })
 })
+
+describe('abortable waits', () => {
+    it('disarms a host wait on its own AbortSignal without cancelling other waits', async () => {
+        vi.useFakeTimers()
+        try {
+            const clock = new ProgramClock()
+            const controller = new AbortController()
+            const aborted = clock.wait(1000, controller.signal).catch((error: unknown) => error)
+            const other = clock.wait(20)
+            expect(clock.pendingWaits).toBe(2)
+            controller.abort(new Error('input woke the wait'))
+            expect(((await aborted) as Error).message).toBe('input woke the wait')
+            expect(clock.pendingWaits).toBe(1)
+            await vi.advanceTimersByTimeAsync(20)
+            await other
+            expect(clock.pendingWaits).toBe(0)
+            expect(vi.getTimerCount()).toBe(0)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+})
+
+describe('calendar and CPU clocks', () => {
+    it('uses host calendar independently of elapsed time', () => {
+        let elapsed = 10,
+            calendar = 1700000000000
+        const clock = new ProgramClock({ now: () => elapsed, calendarNow: () => calendar })
+        elapsed += 500
+        expect(clock.now()).toBe(500)
+        expect(clock.calendarNow()).toBe(calendar)
+        calendar += 1000
+        expect(clock.calendarNow()).toBe(calendar)
+        expect(clock.cpuNow(100_000_000n)).toBe(1000)
+    })
+    it('fixes virtual calendar at Y2K, excludes waits from CPU time and follows Undo counters', async () => {
+        const clock = new ProgramClock({ mode: 'virtual' })
+        expect(clock.calendarNow()).toBe(946684800000)
+        expect(clock.calendarHundredths()).toBe(0)
+        await clock.wait(2500)
+        expect(clock.calendarNow()).toBe(946684802500)
+        expect(clock.calendarHundredths()).toBe(250)
+        expect(clock.cpuNow(100n)).toBe(0.001)
+        expect(clock.cpuNow(0n)).toBe(0)
+        clock.start()
+        expect(clock.calendarNow()).toBe(946684800000)
+    })
+})

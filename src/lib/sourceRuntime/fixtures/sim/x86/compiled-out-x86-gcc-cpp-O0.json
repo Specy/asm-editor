@@ -1,0 +1,21 @@
+{
+    "program": "compiled-out",
+    "target": "X86",
+    "compiler": "gcc",
+    "optimization": "0",
+    "sourcePath": "src/main.cpp",
+    "source": "#include <sim.h>\n\nint main(void) {\n    long child = sim_fork();\n    return child < 0;\n}\n",
+    "compilerId": "g142",
+    "userArguments": "-O0 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -iquote . -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++",
+    "captured": "2026-10-06",
+    "response": {
+        "code": 1,
+        "stderr": [
+            { "text": "src/main.cpp: In function 'int main()':" },
+            {
+                "text": "src/main.cpp:4:18: error: 'sim_fork' was not declared in this scope; did you mean 'sim_flock'?"
+            }
+        ],
+        "lines": [["<Compilation failed>"]]
+    }
+}

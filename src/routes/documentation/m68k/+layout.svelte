@@ -16,6 +16,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
@@ -68,10 +69,13 @@
     </Row>
 </Navbar>
 
-<Sidebar bind:menuOpen>
-    <Column gap="1rem" style="overflow-y: auto;">
+<Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
+    <Column padding="0 1rem">
+        <SearchLauncher placeholder="Search the M68K docs and courses" />
+    </Column>
+
+    <MaskedScroll>
         <Column gap="1rem" padding="0 1rem">
-            <SearchLauncher placeholder="Search the M68K docs and courses" />
             <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
             <MenuLink
                 href="/documentation/m68k/addressing-mode"
@@ -126,7 +130,7 @@
                 {currentInstructionName}
             />
         </TogglableSection>
-    </Column>
+    </MaskedScroll>
 
     <Column style="margin-top: auto;" padding="0.5rem">
         <ButtonLink

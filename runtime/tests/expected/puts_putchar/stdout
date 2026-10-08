@@ -1,0 +1,21 @@
+puts line
+puts returned 1
+A
+putchar returned 75
+B
+putc returned 66
+C
+fputc returned 67
+Á
+fputc wide returned 193
+fputs no newline| fputs returned 1
+fputs empty returned 1
+fwrite data
+fwrite returned 12
+abcdefgh
+fwrite items 2
+fwrite size 0 returned 0
+fwrite count 0 returned 0
+
+after empty puts
+ !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~

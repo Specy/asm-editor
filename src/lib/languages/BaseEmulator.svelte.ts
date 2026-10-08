@@ -7,6 +7,7 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
+import type { Termination } from '$lib/languages/termination'
 import type { Testcase } from '$lib/Project.svelte'
 import type { BuildSources } from '$lib/projectFiles'
 
@@ -116,8 +117,46 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _checkCode(sources: BuildSources): MaybePromise<Diagnostic[]>
 
+    /**
+     * Loads what checking and building these sources needs besides the Files, such as a Runtime
+     * library, before any Core is touched: live checking calls it before it waits for an idle Core
+     * and Build before `_compile`, so `_checkCode` and `_compile` stay synchronous from creating a
+     * Core to assembling it, which the MARS and RARS derived Cores' module globals require.
+     */
+    _prepareBuild?(sources: BuildSources): Promise<void>
+
     /** Restores one CPU instruction and its associated peripheral effects. */
     abstract _undo(): void
+
+    /**
+     * How many entries (instructions or Pokes) the Core's history holds now, for Undo of a Step that
+     * ran through library code: it is undone whole or not at all.
+     */
+    _undoDepth?(): number
+
+    /** Monotone completed guest/tool instruction count; callers measure guest deltas. */
+    _getInstructionsExecuted?(): bigint
+
+    /**
+     * Pauses and resumes the Core's Undo history, so that what runs in between can never be undone:
+     * the Runtime library's start code, which a Build runs up to the program's own first
+     * instruction. Resuming leaves the history off when the Build asked for none. Without it, the
+     * start code is recorded like any instruction and GenericEmulator keeps it behind a floor of its
+     * Undo ledger instead.
+     */
+    _setUndoRecording?(recording: boolean): void
+
+    /** Runs after the fresh FileSystem session exists, before any guest inspection or presets. */
+    _beginExecutionSession?(): void
+
+    /** Detaches native execution before the host ends its FileSystem capability. */
+    _clearExecution?(): void
+
+    /** Preflights a complete grouped rollback before changing any CPU or peripheral state. */
+    _canUndoSteps?(count: number): boolean
+
+    /** Reversibility metadata for a displayed group, without loading its mutation payloads. */
+    _canUndoHistoryRange?(skip: number, count: number): boolean
 
     /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
@@ -136,7 +175,17 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
 
+    /** `max` entries of `_getUndoHistory` after the newest `skip`, for a history with library stretches. */
+    _getUndoHistoryRange?(skip: number, max: number): ExecutionStep[]
+
     abstract _getPc(): bigint
+
+    /** Static layout is read once after Build; moving bounds are read at panel refresh. */
+    _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
+    _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
+    _getStackTop?(): bigint
+    _getDeviceRegions?(): import('./commonLanguageFeatures.svelte').DeviceRegion[]
+    _resolveMemoryLabel?(name: string): bigint | undefined
 
     abstract _getSp(): bigint
 
@@ -198,6 +247,13 @@ export abstract class BaseEmulator<R extends string> {
     abstract _endPoke(): boolean
 
     abstract _hasTerminated(): boolean
+
+    /**
+     * How the program ended, read from the Core, while `_hasTerminated()` answers true; undefined
+     * while it has not ended. A runtime error is not reported here: the Core throws it, and
+     * `GenericEmulator` records it as the termination from what was thrown.
+     */
+    abstract _getTermination(): Termination | undefined
 
     /**
      * Runs one scheduling slice ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)):

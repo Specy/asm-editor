@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import type { InputSettings } from '@specy/s68k'
 import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
 import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { Testcase } from '$lib/Project.svelte'
+import { fileText, type ProjectFiles } from '$lib/projectFiles'
 import { M68K_TRAP_DOCS, screenColorOf } from '$lib/languages/M68K/M68K-traps'
+import { FileSystem } from '$lib/languages/peripherals/FileSystem'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { KEY_CODES, letterKeyCode } from '$lib/languages/peripherals/keyCodes'
 import { BLACK } from '$lib/languages/peripherals/screen/color'
+import { Prompt } from '$stores/promptStore.svelte'
 
 /**
  * The `trap #15` interface against the real Core under node: every task the editor supports, routed
@@ -132,6 +136,17 @@ function inkCount(emulator: Awaited<ReturnType<typeof run>>): number {
 }
 
 describe('M68K text tasks', () => {
+    it('prints Windows-1252 source characters while unsupported Screen glyphs stay blank', async () => {
+        const emulator = await run(trap(14, ['    lea text,a1']) + trap(9) + "text: dc.b '€é',0\n")
+        try {
+            expect(emulator.errors).toEqual([])
+            expect(emulator.stdOut).toBe('€é')
+            expect(inkCount(emulator)).toBe(0)
+            expect(emulator.peripherals.screen.cursorColumn).toBe(2)
+        } finally {
+            emulator.dispose()
+        }
+    })
     it('writes printed text to the transcript and to the Screen at once', async () => {
         const emulator = await run(trap(14, ['    lea text,a1']) + trap(9) + "text: dc.b 'Hi',0\n")
         expect(emulator.errors).toEqual([])
@@ -172,6 +187,83 @@ describe('M68K text tasks', () => {
         expect(emulator.peripherals.screen.cursorRow).toBe(3)
         //D1.W answers with the column in the high byte and the row in the low byte
         expect(Number(registerOf(emulator, 'D1')) & 0xffff).toBe(0x0503)
+    })
+
+    it('displays task 15 in upper case, formatted by the Core as EASy68K does', async () => {
+        const emulator = await run(
+            trap(15, ['    move.l #255,d1', '    move.b #16,d2']) +
+                trap(15, ['    move.l #-1,d1', '    move.b #36,d2']) +
+                trap(9)
+        )
+        expect(emulator.errors).toEqual([])
+        //unsigned: -1 is $FFFFFFFF, 1Z141Z3 in base 36
+        expect(emulator.stdOut).toBe('FF1Z141Z3')
+    })
+
+    it('ends the program on a base task 15 cannot take, naming the register', async () => {
+        const emulator = await run(trap(15, ['    move.l #255,d1', '    move.b #37,d2']) + trap(9))
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination?.kind).toBe('error')
+        expect(emulator.errors.join('\n')).toContain(
+            'Trap task 15 (display unsigned number in a base) was given a value it cannot take: D2.B is 37'
+        )
+    })
+
+    it('pads a negative field width of task 20 on the right', async () => {
+        const emulator = await run(trap(20, ['    move.l #-5,d1', '    move.b #-6,d2']) + trap(9))
+        expect(emulator.stdOut).toBe('-5    ')
+    })
+
+    it('reads a number with atoi, never failing on what was typed', async () => {
+        const code =
+            ORG +
+            trap(4) +
+            '    move.l d1,d3\n' +
+            trap(4) +
+            '    move.l d1,d4\n' +
+            trap(4) +
+            '    move.l d1,d5\n' +
+            trap(4) +
+            '    move.l d1,d6\n' +
+            trap(4) +
+            trap(9)
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.terminal.useScriptedInput(['12abc', '  -7', '', 'abc', '4294967295'])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D3')).toBe(12n)
+        expect(registerOf(emulator, 'D4')).toBe(0xfffffff9n)
+        expect(registerOf(emulator, 'D5')).toBe(0n)
+        expect(registerOf(emulator, 'D6')).toBe(0n)
+        //too long for 32 bits as a signed number, so it wraps into D1.L exactly
+        expect(registerOf(emulator, 'D1')).toBe(0xffffffffn)
+    })
+
+    it('stores at most 79 characters of a line, in Windows-1252, with the count in D1.L', async () => {
+        const code =
+            ORG +
+            '    move.l #$FFFFFFFF,d1\n' +
+            trap(2, ['    lea long,a1']) +
+            '    move.l d1,d5\n' +
+            trap(2, ['    lea euro,a1']) +
+            trap(13, ['    lea euro,a1']) +
+            trap(9) +
+            '    org $2000\n' +
+            'long: dcb.b 100,0\n' +
+            'euro: dcb.b 8,0\n'
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.terminal.useScriptedInput(['x'.repeat(100), '€'])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        //the whole of D1.L, not only its low word
+        expect(registerOf(emulator, 'D5')).toBe(79n)
+        expect([...emulator.readMemoryBytes(0x2000n + 78n, 2)]).toEqual([0x78, 0])
+        //the euro is one byte, $80, and comes back out as itself
+        expect([...emulator.readMemoryBytes(0x2064n, 2)]).toEqual([0x80, 0])
+        expect(emulator.stdOut).toBe('€\n')
+        expect(registerOf(emulator, 'D1')).toBe(1n)
     })
 })
 
@@ -459,6 +551,19 @@ describe('M68K input in graphical use', () => {
         expect(emulator.peripherals.screen.cursorColumn).toBe(2)
     })
 
+    it('gives Enter to task 5 as EASy68K does, $0D', async () => {
+        const code =
+            ORG + trap(80, ['    move.l #$00FFFFFF,d1']) + trap(5) + '    move.l d1,d5\n' + trap(9)
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.keyboard.typeText('\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D5') & 0xffn).toBe(0x0dn)
+        //echoed as the new line it is on the Screen and in the transcript
+        expect(emulator.stdOut).toBe('\n')
+    })
+
     it('journals one Screen record for the whole of a read trap', async () => {
         //a `trap #15` is one Core step and Undo pops one Screen record per step, so the echo of a
         //typed line — a glyph per character, three for a backspace — cannot journal one each
@@ -476,11 +581,11 @@ describe('M68K input in graphical use', () => {
         expect(emulator.peripherals.screen.history.sequence).toBe(2)
     })
 
-    it('keeps the input prompt for a program that never touches the Screen', async () => {
+    it('keeps reading the Terminal for a program that never touches the Screen', async () => {
         const code = ORG + trap(2, ['    lea buffer,a1']) + trap(9) + 'buffer: ds.b 32\n'
         const emulator = M68KEmulator(code)
         await emulator.compile(0, code)
-        expect(emulator.peripherals.terminal.interactiveSource).toBe('prompt')
+        expect(emulator.peripherals.terminal.interactiveSource).toBe('terminal')
         emulator.peripherals.terminal.useScriptedInput(['typed'])
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.errors).toEqual([])
@@ -488,6 +593,634 @@ describe('M68K input in graphical use', () => {
         expect(emulator.stdOut).toBe('')
         expect(inkCount(emulator)).toBe(0)
     })
+})
+
+/**
+ * The text tasks read through the Terminal's Line discipline
+ * ([ADR 0036](../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)): what is typed
+ * in the Terminal, edited until Enter and echoed, and a single keystroke for task 5. The console on
+ * the page is what the input is typed into; the tests attach one and type through the Terminal.
+ */
+describe('M68K input typed in the Terminal', () => {
+    async function built(body: string) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.terminal.attachConsole()
+        return emulator
+    }
+
+    it('reads a line with task 2, edited and echoed', async () => {
+        const emulator = await built(
+            trap(2, ['    lea buffer,a1']) +
+                trap(13, ['    lea buffer,a1']) +
+                trap(9) +
+                'buffer: ds.b 32\n'
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(terminal.pendingRead?.kind).toBe('line')
+        terminal.insertText('hellp')
+        terminal.pressBackspace()
+        terminal.insertText('o')
+        terminal.pressEnter()
+        await running
+        expect(emulator.errors).toEqual([])
+        //the echo of the line, then task 13 printing what the program read
+        expect(emulator.stdOut).toBe('hello\nhello\n')
+        expect(registerOf(emulator, 'D1') & 0xffffn).toBe(5n)
+    })
+
+    it('reads a number with task 4 and with task 18 after its prompt', async () => {
+        const emulator = await built(
+            trap(4) +
+                '    move.l d1,d5\n' +
+                trap(18, ['    lea text,a1']) +
+                trap(9) +
+                "text: dc.b 'n? ',0\n"
+        )
+        const terminal = emulator.peripherals.terminal
+        terminal.insertText('21\n-4\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D5')).toBe(21n)
+        expect(registerOf(emulator, 'D1')).toBe(0xfffffffcn)
+        expect(emulator.stdOut).toBe('21\nn? -4\n')
+    })
+
+    it('reads one keystroke with task 5, without waiting for Enter', async () => {
+        const emulator = await built(trap(5) + '    move.l d1,d5\n' + trap(5) + trap(9))
+        const terminal = emulator.peripherals.terminal
+        terminal.insertText('k')
+        terminal.pressEnter()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D5') & 0xffn).toBe(BigInt('k'.charCodeAt(0)))
+        expect(registerOf(emulator, 'D1') & 0xffn).toBe(0x0dn)
+        expect(emulator.stdOut).toBe('k\n')
+    })
+
+    it('ignores End of input, which only standard input takes', async () => {
+        const emulator = await built(trap(5) + trap(9))
+        const terminal = emulator.peripherals.terminal
+        terminal.sendEndOfInput()
+        terminal.insertText('z')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D1') & 0xffn).toBe(BigInt('z'.charCodeAt(0)))
+    })
+
+    it('echoes Terminal typing onto the Screen and undoes that input instruction', async () => {
+        const code = ORG + trap(2, ['    lea buffer,a1']) + trap(9) + 'buffer: ds.b 80\n'
+        const emulator = M68KEmulator(code)
+        try {
+            await emulator.compile(100, code)
+            const terminal = emulator.peripherals.terminal
+            const screen = emulator.peripherals.screen
+            terminal.insertText('ac')
+            terminal.pressBackspace()
+            terminal.insertText('b')
+            terminal.pressEnter()
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            expect(terminal.interactiveSource).toBe('terminal')
+            expect(emulator.stdOut).toBe('ab\n')
+            expect(inkCount(emulator)).toBeGreaterThan(0)
+            expect(screen.cursorRow).toBe(1)
+            //Task 9 and its move ran after the input; neither pops its echo.
+            expect(emulator.undo(2)).toBe(2)
+            expect(inkCount(emulator)).toBeGreaterThan(0)
+            expect(emulator.undo(1)).toBe(1)
+            expect(inkCount(emulator)).toBe(0)
+            expect(screen.cursorRow).toBe(0)
+            //The transcript deliberately survives Undo.
+            expect(emulator.stdOut).toBe('ab\n')
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+/**
+ * Tasks 12 and 16 set how the read tasks show what is typed. The Core keeps the settings and
+ * journals them for Undo; the adapter hands them to the Terminal's Line discipline at each read.
+ */
+describe('M68K input settings', () => {
+    const ECHO_OFF = trap(12, ['    move.b #0,d1'])
+
+    async function built(body: string, history = 0) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(history, code)
+        emulator.peripherals.terminal.attachConsole()
+        return emulator
+    }
+
+    /** The Core's own record of the settings, which nothing else in the editor keeps. */
+    function settingsOf(emulator: Awaited<ReturnType<typeof built>>): InputSettings {
+        const adapter = emulator as unknown as {
+            interpreter: { getInputSettings(): InputSettings }
+        }
+        return adapter.interpreter.getInputSettings()
+    }
+
+    it('echoes nothing of a line read with the echo off, but still ends it on a new line', async () => {
+        const emulator = await built(
+            ECHO_OFF +
+                trap(2, ['    lea buffer,a1']) +
+                trap(13, ['    lea buffer,a1']) +
+                trap(9) +
+                'buffer: dcb.b 80,0\n'
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(terminal.pendingRead).toMatchObject({ kind: 'line', echo: false, prompt: true })
+        terminal.insertText('secrex')
+        terminal.pressBackspace()
+        terminal.insertText('t')
+        terminal.pressEnter()
+        await running
+        expect(emulator.errors).toEqual([])
+        //the Enter's new line, then task 13 printing what the program read
+        expect(emulator.stdOut).toBe('\nsecret\n')
+        expect(registerOf(emulator, 'D1')).toBe(6n)
+        expect(emulator.peripherals.screen.cursorRow).toBe(2)
+    })
+
+    it('echoes nothing of a key read with the echo off, Enter included', async () => {
+        const emulator = await built(ECHO_OFF + trap(5) + '    move.l d1,d5\n' + trap(5) + trap(9))
+        const terminal = emulator.peripherals.terminal
+        terminal.insertText('k')
+        terminal.pressEnter()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('')
+        expect(registerOf(emulator, 'D5') & 0xffn).toBe(BigInt('k'.charCodeAt(0)))
+        expect(registerOf(emulator, 'D1') & 0xffn).toBe(0x0dn)
+    })
+
+    //EASy68K 5.16.1 simIOu.cpp FormKeyPress always calls doCRLF for line/numeric
+    //input; inputLFdisplay is consulted only in its charInput branch, despite the help text.
+    it.each([
+        { echo: true, lineFeed: true },
+        { echo: true, lineFeed: false },
+        { echo: false, lineFeed: true },
+        { echo: false, lineFeed: false }
+    ])('ends a line with CR/LF for echo=$echo, lineFeed=$lineFeed', async ({ echo, lineFeed }) => {
+        const emulator = await built(
+            trap(12, ['    move.b #' + (echo ? 1 : 0) + ',d1']) +
+                trap(16, ['    move.b #' + (lineFeed ? 3 : 2) + ',d1']) +
+                trap(4) +
+                trap(9)
+        )
+        try {
+            emulator.peripherals.terminal.insertText('12abc\n')
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            expect(registerOf(emulator, 'D1')).toBe(12n)
+            expect(emulator.stdOut).toBe(echo ? '12abc\n' : '\n')
+            expect(emulator.peripherals.screen.cursorRow).toBe(1)
+            expect(emulator.peripherals.screen.cursorColumn).toBe(0)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('draws nothing on the Screen of a line typed there with the echo off', async () => {
+        const emulator = await built(
+            trap(80, ['    move.l #$00FFFFFF,d1']) +
+                ECHO_OFF +
+                trap(2, ['    lea buffer,a1']) +
+                trap(9) +
+                'buffer: dcb.b 80,0\n'
+        )
+        emulator.peripherals.keyboard.typeText('hidden\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(inkCount(emulator)).toBe(0)
+        expect(emulator.stdOut).toBe('\n')
+        //the new line moved the text cursor, which nothing was drawn before
+        expect(emulator.peripherals.screen.cursorRow).toBe(1)
+    })
+
+    it('echoes Enter as a carriage return alone with the line feed off (task 16, D1.B = 2)', async () => {
+        const emulator = await built(
+            trap(16, ['    move.b #2,d1']) +
+                trap(80, ['    move.l #$00FFFFFF,d1']) +
+                trap(14, ['    lea text,a1']) +
+                trap(5) +
+                trap(9) +
+                "text: dc.b 'Key? ',0\n"
+        )
+        emulator.peripherals.keyboard.typeText('\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D1') & 0xffn).toBe(0x0dn)
+        expect(emulator.stdOut).toBe('Key? \r')
+        //back at the start of the line it was on, as EASy68K leaves its cursor
+        expect(emulator.peripherals.screen.cursorColumn).toBe(0)
+        expect(emulator.peripherals.screen.cursorRow).toBe(0)
+    })
+
+    it('hides the prompt of a read with the input prompt off (task 16, D1.B = 0)', async () => {
+        const emulator = await built(trap(16, ['    move.b #0,d1']) + trap(5) + trap(9))
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(terminal.pendingRead).toMatchObject({ kind: 'character', prompt: false, echo: true })
+        terminal.insertText('x')
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('x')
+    })
+
+    it('puts the settings back on Undo, and names the change in the History', async () => {
+        const emulator = await built(ECHO_OFF + trap(16, ['    move.b #2,d1']) + trap(9), 200)
+        //the two moves and the trap of task 12
+        for (let i = 0; i < 3; i++) await emulator.step()
+        expect(settingsOf(emulator)).toEqual({ echo: false, prompt: true, line_feed: true })
+        expect(emulator.latestSteps[0].mutations).toContainEqual({
+            type: 'Other',
+            value: 'Turned the echo off'
+        })
+        for (let i = 0; i < 3; i++) await emulator.step()
+        expect(settingsOf(emulator)).toEqual({ echo: false, prompt: true, line_feed: false })
+        emulator.undo(1)
+        expect(settingsOf(emulator)).toEqual({ echo: false, prompt: true, line_feed: true })
+        emulator.undo(3)
+        expect(settingsOf(emulator)).toEqual({ echo: true, prompt: true, line_feed: true })
+    })
+
+    it('ends the program on a setting task 16 does not have', async () => {
+        const emulator = await built(trap(16, ['    move.b #4,d1']) + trap(9))
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination?.kind).toBe('error')
+        expect(emulator.errors.join('\n')).toContain(
+            'Trap task 16 (input prompt and line feed) was given a value it cannot take: D1.B is 4'
+        )
+    })
+})
+
+/**
+ * Tasks 50 to 59 on the Build's FileSystem session: EASy68K's eight file numbers from 0, every
+ * change journaled under the trap's step id so Undo puts the Files back with the registers
+ * ([ADR 0015](../../../../docs/adr/0015-restore-file-operations-on-undo.md)). The Core writes
+ * EASy68K's results; what is asserted is what the program sees and what the Files hold.
+ */
+describe('M68K file tasks', () => {
+    beforeEach(() => Prompt.cancel())
+
+    async function withFiles(body: string, files: ProjectFiles = {}, history = 200) {
+        const code = ORG + body
+        const fileSystem = new FileSystem(files)
+        const emulator = M68KEmulator(code, { peripherals: { fileSystem } })
+        await emulator.compile(history, code)
+        return { emulator, fileSystem }
+    }
+
+    function textOf(fileSystem: FileSystem, path: string): string | undefined {
+        const file = fileSystem.files[path]
+        return file === undefined ? undefined : fileText(file)
+    }
+
+    it('keeps the open File when exit runs at the same trap address, including replay', async () => {
+        const { emulator, fileSystem } = await withFiles(
+            '    lea name,a1\n' +
+                '    moveq #52,d0\n' +
+                'dispatch: trap #15\n' +
+                '    moveq #9,d0\n' +
+                '    bra dispatch\n' +
+                "name: dc.b 'made.txt',0\n"
+        )
+        try {
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.termination).toEqual({ kind: 'exit' })
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+            expect(emulator.undo(1)).toBe(1)
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+            await emulator.step()
+            expect(emulator.termination).toEqual({ kind: 'exit' })
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+            expect(emulator.undo(4)).toBe(4)
+            expect(textOf(fileSystem, 'made.txt')).toBeUndefined()
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('refuses Undo before the Core changes when a File inverse no longer fits', async () => {
+        const code = ORG + trap(52, ['    lea name,a1']) + trap(9) + "name: dc.b 'made.txt',0\n"
+        const fileSystem = new FileSystem()
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem },
+            fileSystemHistoryBudgetMb: 0
+        })
+        try {
+            await emulator.compile(100, code)
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            //Exit and the move before it remain reversible; the open does not.
+            expect(emulator.undo(2)).toBe(2)
+            expect(emulator.canUndo).toBe(false)
+            const pc = emulator._getPc()
+            const registers = emulator._getRegisterValues()
+            expect(emulator.undo(1)).toBe(0)
+            expect(() => emulator._undo()).toThrow('FileSystem Undo history exhausted')
+            expect(emulator._getPc()).toBe(pc)
+            expect(emulator._getRegisterValues()).toEqual(registers)
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    const plain = (content: string) => ({ encoding: 'plain' as const, content })
+
+    /** Writes `hello` to a new File, reads it back from the start, closes it and prints it. */
+    const WRITE_READ_PRINT =
+        trap(52, ['    lea name,a1']) +
+        '    move.l d1,d7\n' +
+        trap(54, ['    move.l d7,d1', '    lea text,a1', '    move.l #5,d2']) +
+        trap(55, ['    move.l d7,d1', '    move.l #0,d2']) +
+        trap(53, ['    move.l d7,d1', '    lea buffer,a1', '    move.l #64,d2']) +
+        '    move.l d2,d6\n' +
+        trap(56, ['    move.l d7,d1']) +
+        trap(13, ['    lea buffer,a1']) +
+        trap(9) +
+        '    org $2000\n' +
+        "name:   dc.b 'out/greeting.txt',0\n" +
+        "text:   dc.b 'hello'\n" +
+        'buffer: dcb.b 65,0\n'
+
+    it('writes a File, reads it back and prints it', async () => {
+        const { emulator, fileSystem } = await withFiles(WRITE_READ_PRINT)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('hello\n')
+        //the first file number is 0, as EASy68K numbers its eight
+        expect(registerOf(emulator, 'D7')).toBe(0n)
+        expect(registerOf(emulator, 'D6')).toBe(5n)
+        expect(textOf(fileSystem, 'out/greeting.txt')).toBe('hello')
+    })
+
+    it('takes the write back with the instruction that made it, and the File with the open', async () => {
+        const { emulator, fileSystem } = await withFiles(WRITE_READ_PRINT)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(textOf(fileSystem, 'out/greeting.txt')).toBe('hello')
+        //back step by step until the File is empty again, which is the write task's own step
+        while (emulator.canUndo && textOf(fileSystem, 'out/greeting.txt') === 'hello') {
+            emulator.undo(1)
+        }
+        expect(textOf(fileSystem, 'out/greeting.txt')).toBe('')
+        //the next instruction is the write's trap again, line 9 below the ORG, its arguments set
+        expect(emulator.line).toBe(9)
+        expect(registerOf(emulator, 'D2')).toBe(5n)
+        //and the open before it created the File, so undoing it removes the File
+        while (emulator.canUndo && textOf(fileSystem, 'out/greeting.txt') !== undefined) {
+            emulator.undo(1)
+        }
+        expect(textOf(fileSystem, 'out/greeting.txt')).toBeUndefined()
+        //running again does it all again, from the same file number
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(textOf(fileSystem, 'out/greeting.txt')).toBe('hello')
+        expect(registerOf(emulator, 'D7')).toBe(0n)
+        expect(registerOf(emulator, 'D6')).toBe(5n)
+    })
+
+    it('opens an existing File for reading and writing, and fails on one that is missing', async () => {
+        const { emulator } = await withFiles(
+            trap(51, ['    lea missing,a1']) +
+                '    move.l d1,d3\n' +
+                '    move.w d0,d4\n' +
+                trap(51, ['    lea name,a1']) +
+                '    move.w d0,d5\n' +
+                trap(9) +
+                '    org $2000\n' +
+                "name:    dc.b 'data.txt',0\n" +
+                "missing: dc.b 'nothing.txt',0\n",
+            { 'data.txt': plain('abc') }
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D3')).toBe(0xffffffffn)
+        expect(registerOf(emulator, 'D4') & 0xffffn).toBe(2n)
+        expect(registerOf(emulator, 'D1')).toBe(0n)
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(0n)
+    })
+
+    it('answers a ninth open with no file, as EASy68K has eight', async () => {
+        const { emulator } = await withFiles(
+            [
+                '    lea numbers,a2',
+                '    lea codes,a3',
+                '    move.w #8,d7',
+                'again:',
+                '    lea name,a1',
+                '    move.b #51,d0',
+                '    trap #15',
+                '    move.l d1,(a2)+',
+                '    move.w d0,(a3)+',
+                '    dbra d7,again'
+            ].join('\n') +
+                '\n' +
+                trap(9) +
+                '    org $2000\n' +
+                'numbers: ds.l 9\n' +
+                'codes:   ds.w 9\n' +
+                "name:    dc.b 'data.txt',0\n",
+            { 'data.txt': plain('abc') }
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        const numbers = emulator.readMemoryBytes(0x2000n, 36)
+        const view = new DataView(numbers.buffer, numbers.byteOffset, numbers.byteLength)
+        expect(Array.from({ length: 9 }, (_, i) => view.getInt32(i * 4))).toEqual([
+            0, 1, 2, 3, 4, 5, 6, 7, -1
+        ])
+        const codes = emulator.readMemoryBytes(0x2024n, 18)
+        const codeView = new DataView(codes.buffer, codes.byteOffset, codes.byteLength)
+        expect(Array.from({ length: 9 }, (_, i) => codeView.getUint16(i * 2))).toEqual([
+            0, 0, 0, 0, 0, 0, 0, 0, 2
+        ])
+    })
+
+    it('reports a short read, then the end of the File without touching D2.L', async () => {
+        const { emulator } = await withFiles(
+            trap(51, ['    lea name,a1']) +
+                '    move.l d1,d7\n' +
+                trap(53, ['    move.l d7,d1', '    lea buffer,a1', '    move.l #64,d2']) +
+                '    move.w d0,d4\n' +
+                '    move.l d2,d5\n' +
+                trap(53, ['    move.l d7,d1', '    lea buffer,a1']) +
+                '    move.w d0,d6\n' +
+                trap(9) +
+                '    org $2000\n' +
+                "name:   dc.b 'data.txt',0\n" +
+                'buffer: dcb.b 64,0\n',
+            { 'data.txt': plain('abc') }
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D4') & 0xffffn).toBe(0n)
+        expect(registerOf(emulator, 'D5')).toBe(3n)
+        //the end of the file is 1, and the count is left as the program set it
+        expect(registerOf(emulator, 'D6') & 0xffffn).toBe(1n)
+        expect(registerOf(emulator, 'D2')).toBe(3n)
+    })
+
+    it('checks, deletes and closes all, each with its result in D0.W', async () => {
+        const { emulator, fileSystem } = await withFiles(
+            trap(59, ['    lea name,a1']) +
+                '    move.w d0,d3\n' +
+                trap(51, ['    lea name,a1']) +
+                '    move.l d1,d7\n' +
+                trap(57, ['    lea name,a1']) +
+                '    move.w d0,d4\n' +
+                trap(59, ['    lea name,a1']) +
+                '    move.w d0,d5\n' +
+                //the deleted File is still open, and still readable through its number
+                trap(53, ['    move.l d7,d1', '    lea buffer,a1', '    move.l #8,d2']) +
+                '    move.l d2,d6\n' +
+                trap(50) +
+                trap(53, ['    move.l d7,d1', '    lea buffer,a1', '    move.l #8,d2']) +
+                '    move.w d0,d1\n' +
+                trap(9) +
+                '    org $2000\n' +
+                "name:   dc.b 'data.txt',0\n" +
+                'buffer: dcb.b 8,0\n',
+            { 'data.txt': plain('abc') }
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D3') & 0xffffn).toBe(0n)
+        expect(registerOf(emulator, 'D4') & 0xffffn).toBe(0n)
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(2n)
+        expect(registerOf(emulator, 'D6')).toBe(3n)
+        //closed by task 50, so the last read fails
+        expect(registerOf(emulator, 'D1') & 0xffffn).toBe(2n)
+        expect(textOf(fileSystem, 'data.txt')).toBeUndefined()
+    })
+
+    const DIALOG =
+        trap(58, ['    move.l #1,d1', '    lea title,a1', '    move.l #0,a2', '    lea path,a3']) +
+        '    move.w d0,d5\n' +
+        trap(9) +
+        '    org $2000\n' +
+        "title: dc.b 'Save the scores',0\n" +
+        'path:  dcb.b 256,0\n'
+
+    it('answers the file dialog with the path typed in the Prompt', async () => {
+        const { emulator } = await withFiles(DIALOG)
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(Prompt.question).toContain('Save the scores')
+        Prompt.answerText('scores.txt')
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D1')).toBe(1n)
+        expect(new TextDecoder().decode(emulator.readMemoryBytes(0x2010n, 11))).toBe('scores.txt\0')
+    })
+
+    it('shows the file dialog’s suggested path without echoing the dialog answer', async () => {
+        const body = DIALOG.replace('path:  dcb.b 256,0', "path:  dc.b 'old.txt',0\n    ds.b 248")
+        const { emulator } = await withFiles(body)
+        try {
+            const running = emulator.run(INSTRUCTION_LIMIT)
+            await new Promise((resolve) => setTimeout(resolve, 20))
+            expect(Prompt.placeholder).toBe('old.txt')
+            Prompt.answerText('new.txt')
+            await running
+            expect(emulator.errors).toEqual([])
+            expect(emulator.stdOut).toBe('')
+            expect(new TextDecoder().decode(emulator.readMemoryBytes(0x2010n, 8))).toBe('new.txt\0')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('answers a cancelled file dialog with 0 in D1.L, leaving the buffer alone', async () => {
+        const { emulator } = await withFiles(DIALOG)
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(Prompt.promise).not.toBeNull()
+        Prompt.cancel()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D1')).toBe(0n)
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(0n)
+        expect([...emulator.readMemoryBytes(0x2010n, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('treats an empty file-dialog answer as Cancel, without echo or memory writes', async () => {
+        const { emulator } = await withFiles(DIALOG)
+        try {
+            const running = emulator.run(INSTRUCTION_LIMIT)
+            await new Promise((resolve) => setTimeout(resolve, 20))
+            Prompt.answerText('')
+            await running
+            expect(emulator.errors).toEqual([])
+            expect(registerOf(emulator, 'D1')).toBe(0n)
+            expect(emulator.stdOut).toBe('')
+            expect(inkCount(emulator)).toBe(0)
+            expect([...emulator.readMemoryBytes(0x2010n, 4)]).toEqual([0, 0, 0, 0])
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('runs a testcase on its own copy of the Files', async () => {
+        const { emulator, fileSystem } = await withFiles(WRITE_READ_PRINT)
+        const [result] = await emulator.test(
+            ORG + WRITE_READ_PRINT,
+            [
+                {
+                    input: [],
+                    expectedOutput: 'hello\n',
+                    startingRegisters: {},
+                    expectedRegisters: { D6: 5n },
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
+        expect(textOf(fileSystem, 'out/greeting.txt')).toBeUndefined()
+    })
+})
+
+describe('M68K sound tasks', () => {
+    it.each([70, 71, 72, 73, 74, 75, 76, 77])(
+        'ends task %s with its no-audio reason',
+        async (task) => {
+            const code =
+                ORG +
+                trap(task, ['    lea name,a1']) +
+                '    move.l #1,d5\n' +
+                trap(9) +
+                "name: dc.b 'ding.wav',0\n"
+            const emulator = M68KEmulator(code)
+            await emulator.compile(200, code)
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.terminated).toBe(true)
+            expect(emulator.termination?.kind).toBe('error')
+            expect(emulator.errors.join('\n')).toContain(`Trap task ${task}`)
+            expect(emulator.errors.join('\n')).toContain(
+                'the editor provides no audio output for these tasks'
+            )
+            //the program stopped at the task rather than finishing as though it had played
+            expect(registerOf(emulator, 'D5')).toBe(0n)
+            //and Undo takes the end back with the task
+            expect(emulator.undo(1)).toBe(1)
+            expect(emulator.terminated).toBe(false)
+            expect(emulator.termination).toBeUndefined()
+        }
+    )
 })
 
 describe('M68K breakpoints', () => {
@@ -570,9 +1303,9 @@ describe('M68K program time tasks', () => {
         emulator.peripherals.clock.start()
         await emulator.run(INSTRUCTION_LIMIT)
         const time = Number(registerOf(emulator, 'D1'))
-        //hundredths since the run started, not Unix seconds: a program that just started is near 0
+        //EASy68K calendar hundredths since local midnight, wrapping at the next midnight.
         expect(time).toBeGreaterThanOrEqual(0)
-        expect(time).toBeLessThan(1000)
+        expect(time).toBeLessThan(24 * 60 * 60 * 100)
     })
 
     it('lets program time pass with task 23 without blocking the run', async () => {
@@ -602,7 +1335,11 @@ describe('M68K unsupported tasks', () => {
 
     it('lets the Core name the drawing mode it refused', async () => {
         const emulator = await run(trap(92, ['    move.b #14,d1']) + trap(9))
-        expect(emulator.errors.join('\n')).toContain('Unsupported drawing mode: 14')
+        //the Core names the register and what the task takes; the trap table names the task
+        expect(emulator.errors.join('\n')).toContain(
+            'Trap task 92 (set drawing mode) was given a value it cannot take: D1.B is 14'
+        )
+        expect(emulator.termination?.kind).toBe('error')
     })
 })
 
@@ -802,6 +1539,92 @@ describe('M68K Undo and testcases', () => {
     })
 })
 
+describe('M68K termination', () => {
+    async function build(body: string) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        //a history, so the end can be undone
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    it('says task 9 exited, by a Run or a Step', async () => {
+        const program = '    move.l #1,d1\n' + trap(9) + '    move.l #2,d1\n'
+        const ran = await build(program)
+        await ran.run(INSTRUCTION_LIMIT)
+        expect(ran.terminated).toBe(true)
+        //EASy68K's task 9 has no status to report
+        expect(ran.termination).toEqual({ kind: 'exit' })
+        const stepped = await build(program)
+        for (let steps = 0; !stepped.terminated && steps < 10; steps++) await stepped.step()
+        expect(stepped.termination).toEqual({ kind: 'exit' })
+        expect(registerOf(stepped, 'D1')).toBe(1n)
+    })
+
+    it('marks the program ended only when the run is over, beside its running time', async () => {
+        //the Log reads both as soon as `terminated` changes, so the slice must not say it first
+        const emulator = await build(trap(9))
+        const runSlice = emulator._runSlice.bind(emulator)
+        let endedDuringTheRun: boolean | undefined
+        emulator._runSlice = async (request) => {
+            const slice = await runSlice(request)
+            endedDuringTheRun = emulator.terminated
+            return slice
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(endedDuringTheRun).toBe(false)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.executionTime).toBeGreaterThanOrEqual(0)
+    })
+
+    it('says a program that runs past its last instruction ended there', async () => {
+        const emulator = await build('    move.l #1,d1\n    move.l #2,d2\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'end' })
+    })
+
+    it('leaves a program simhalt paused unended, and ends it past the last instruction', async () => {
+        const emulator = await build('    move.l #1,d1\n    simhalt\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination).toEqual({ kind: 'end' })
+    })
+
+    it('forgets how the program ended when Undo takes task 9 back', async () => {
+        const emulator = await build(trap(9))
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination).toEqual({ kind: 'exit' })
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+    })
+
+    it('ends the program on a runtime error, until Undo takes it back', async () => {
+        const emulator = await build('    move.l #1,a0\n    move.w (a0),d0\n' + trap(9))
+        await emulator.run(INSTRUCTION_LIMIT)
+        //The Core’s typed exception and the shared termination state describe the same failure.
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'error', message: emulator.errors[0] })
+        expect(emulator.errors[0]).toContain('Address error')
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+    })
+
+    it('reports a Step’s runtime error on the instruction that failed', async () => {
+        const emulator = await build('    move.l #1,a0\n    move.w (a0),d0\n' + trap(9))
+        await emulator.step()
+        await expect(emulator.step()).rejects.toBeDefined()
+        expect(emulator.termination?.kind).toBe('error')
+        expect(emulator.errors[0]).toContain('Address error')
+        //the `move.w`, below ORG and the `move.l`
+        expect(emulator.line).toBe(2)
+    })
+})
+
 describe('M68K slices', () => {
     /**
      * Clears and repaints the whole 640 by 480 image as fast as it can. The Core charges one
@@ -884,7 +1707,7 @@ describe('M68K slices', () => {
 describe('M68K trap documentation', () => {
     it('documents a task for every group', async () => {
         const groups = new Set(M68K_TRAP_DOCS.map((doc) => doc.group))
-        expect([...groups].sort()).toEqual(['graphics', 'input', 'text', 'time'])
+        expect([...groups].sort()).toEqual(['files', 'graphics', 'input', 'text', 'time'])
     })
 
     it('converts EASy68K colors both ways', () => {

@@ -53,8 +53,8 @@
     const screenOpen = $derived(!workbenchLayout.isCollapsed('debug:screen', true))
     let topHeight = $state(0)
     let columnHeight = $state(0)
-    //left to itself the top is as tall as a whole page of memory, so neither it nor the registers
-    //beside it scrolls; a person who drags the split below it decides instead
+    //left to itself the top is as tall as a whole page of memory or the registers beside it, so
+    //neither scrolls (see .registers); a person who drags the split below it decides instead
     const topStyle = $derived(
         !hasLower
             ? 'flex: 1;'
@@ -80,6 +80,7 @@
             <div class="card memory">
                 <div class="memory-controls">
                     <MemoryControls
+                        {emulator}
                         buttonVar="secondary"
                         systemSize={emulator.systemSize}
                         bytesPerPage={emulator.memory.global.pageSize}
@@ -91,9 +92,14 @@
                 </div>
                 <div class="memory-grid">
                     <MemoryVisualiser
-                        style="border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
+                        memoryRegions={emulator?.memoryRegions}
+                        dataLabels={emulator?.dataLabels}
+                        readOnlyMemory={emulator?.readOnlyMemory}
+                        style="flex: 1 0 auto; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                         systemSize={emulator.systemSize}
                         endianess={emulator.memory.global.endianess}
+                        memorySize={MEMORY_SIZE[language]}
+                        dense
                         defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
                         bytesPerRow={emulator.memory.global.rowSize}
                         pageSize={emulator.memory.global.pageSize}
@@ -191,8 +197,8 @@
         width: max-content;
     }
 
-    /* the registers and memory; the row is as tall as memory asks, and the registers fill it
-       without asking for more, their list scrolling inside when it is longer. When the column is
+    /* the registers and memory; the row is as tall as the taller of them asks, the registers up to
+       their cap, their list scrolling inside when it is longer. When the column is
        narrower than both, memory gives up the width and scrolls sideways */
     .debug-top {
         display: grid;
@@ -212,9 +218,13 @@
     }
 
     /* no padding: the registers inset their own content, so their rules reach the card's edges.
-       A single Register file has no width of its own and is as wide as its content, never less */
+       A single Register file has no width of its own and is as wide as its content, never less.
+       Left to itself the row is also as tall as the registers, up to a page of memory and a few
+       rows more: M68K's flags and x86's files fit without scrolling, while the 32 registers of
+       MIPS and RISC-V scroll rather than stretch memory's rows to their length. A dragged row
+       has its own height, which they fill whatever the cap */
     .registers {
-        height: 0;
+        max-height: 38rem;
         min-height: 100%;
         min-width: max-content;
     }
@@ -225,8 +235,12 @@
         border-left: var(--wb-section-rule, none);
     }
 
-    /* the address controls are ruled off from the page under them, from edge to edge of the card */
+    /* the address controls are ruled off from the page under them, from edge to edge of the card.
+       The page fills the height left under them, its rows sharing it, and scrolls when that is
+       less than its rows need */
     .memory-grid {
+        display: flex;
+        flex-direction: column;
         flex: 1;
         min-height: 0;
         overflow: auto;

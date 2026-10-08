@@ -129,7 +129,7 @@
         padding-top: 0;
         gap: 0.4rem;
         overflow-y: auto;
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
     }
     .input-row {
         justify-content: space-between;

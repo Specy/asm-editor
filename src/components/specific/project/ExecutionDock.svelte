@@ -10,6 +10,26 @@
         tone?: 'red' | 'green'
         onClick: () => void
     }
+
+    /** Source compilation uses the same tray as assembly Build. */
+    export interface DockCompilation {
+        label: string
+        disabled: boolean
+        busy: boolean
+        warning?: string
+        optimization?: {
+            value: string
+            levels: readonly string[]
+            onChange: (value: string) => void
+        }
+        compiler?: {
+            value: string
+            options: readonly { value: string; label: string }[]
+            onChange: (value: string) => void
+        }
+        onCompile: () => void
+        onCancel: () => void
+    }
 </script>
 
 <script lang="ts">
@@ -31,6 +51,9 @@
     import FaStop from '~icons/fa-solid/stop'
     import FaUndo from '~icons/fa-solid/undo'
     import FaFlask from '~icons/fa-solid/flask'
+    import FaCode from '~icons/fa-solid/code'
+    import FaSpinner from '~icons/fa-solid/spinner'
+    import FaFlag from '~icons/fa-solid/flag'
 
     interface Props {
         /** Built: Stop, Run, Undo and Step in place of Build. */
@@ -50,8 +73,24 @@
          * them: no shadow, and each tray rounded only at the corner that faces the code.
          */
         attached?: boolean
+        /** Round the start tray's top-left corner when it sits beside another editor. */
+        roundedStart?: boolean
+        /** Round the end tray's top-right corner when it sits beside another editor. */
+        roundedEnd?: boolean
         actions?: DockAction[]
+        compilation?: DockCompilation
+        /** The displayed File is source, so Compile takes the place of Build. */
+        compileOnly?: boolean
+        /** Compilation-only docks in another pane share one project execution dock. */
+        showExecution?: boolean
+        /** Build's label: "Build entry" where the displayed File is not the one it starts from. */
+        buildLabel?: string
         onBuild: () => void
+        /**
+         * Makes the displayed File the Entry path, offered beside Build when it is assembly that
+         * Build would not start from.
+         */
+        onSetEntry?: () => void
         onStop: () => void
         onRun: () => void
         onPause: () => void
@@ -71,8 +110,15 @@
         hasTests = false,
         fill = false,
         attached = false,
+        roundedStart = false,
+        roundedEnd = false,
         actions = [],
+        compilation,
+        compileOnly = false,
+        showExecution = true,
+        buildLabel = 'Build',
         onBuild,
+        onSetEntry,
         onStop,
         onRun,
         onPause,
@@ -81,36 +127,121 @@
         onTest
     }: Props = $props()
 
-    const hasEnd = $derived(hasTests || actions.length > 0)
+    const hasEnd = $derived(showExecution && (hasTests || actions.length > 0))
 </script>
 
 <div
     class="execution-controls"
     class:fill
     class:attached
+    class:rounded-start={roundedStart}
+    class:rounded-end={roundedEnd}
     class:debugging
     class:with-end={debugging && hasEnd}
     class:with-actions={debugging && actions.length > 0}
+    class:with-compilation={!!compilation}
 >
     <div class="toolbar">
         {#if !debugging}
-            <button
-                type="button"
-                class="tool primary"
-                onclick={onBuild}
-                disabled={buildDisabled || building || running}
-                title="Assemble the program and start debugging it"
-            >
-                <Icon size={1}>
-                    {#if building}
-                        <FaRegClock />
-                    {:else}
-                        <FaWrench />
-                    {/if}
-                </Icon>
-                <span class="label">Build</span>
-            </button>
-        {:else}
+            {#if showExecution && !compileOnly}
+                <button
+                    type="button"
+                    class="tool primary"
+                    onclick={onBuild}
+                    disabled={buildDisabled || building || running}
+                    title="Assemble the program and start debugging it"
+                    aria-label={buildLabel}
+                >
+                    <Icon size={1}>
+                        {#if building}
+                            <FaRegClock />
+                        {:else}
+                            <FaWrench />
+                        {/if}
+                    </Icon>
+                    <span class="label">{buildLabel}</span>
+                </button>
+                {#if onSetEntry}
+                    <button
+                        type="button"
+                        class="tool"
+                        onclick={onSetEntry}
+                        disabled={building || running}
+                        title="Build from this file instead of the current entry file"
+                    >
+                        <Icon size={0.85}>
+                            <FaFlag />
+                        </Icon>
+                        <span class="label">Set file as entry</span>
+                    </button>
+                {/if}
+            {/if}
+            {#if compilation}
+                <button
+                    type="button"
+                    class="tool compile"
+                    class:primary={compileOnly}
+                    disabled={compilation.disabled}
+                    aria-label={compilation.label}
+                    aria-busy={compilation.busy}
+                    title={compilation.warning ??
+                        'Compile source and local headers with Compiler Explorer'}
+                    onclick={compilation.onCompile}
+                >
+                    <Icon size={0.9}>
+                        {#if compilation.busy}
+                            <span class="busy-spinner"><FaSpinner /></span>
+                        {:else}
+                            <FaCode />
+                        {/if}
+                    </Icon>
+                    <span class="label">{compilation.label}</span>
+                </button>
+                {#if compilation.warning}
+                    <span class="compile-warning" role="status">{compilation.warning}</span>
+                {:else if compilation.optimization}
+                    <div class="divider" aria-hidden="true"></div>
+                    <select
+                        class="tool optimization"
+                        aria-label="Optimization"
+                        title="Compiler optimization"
+                        value={compilation.optimization.value}
+                        disabled={compilation.busy || compilation.disabled}
+                        onchange={(event) =>
+                            compilation?.optimization?.onChange(event.currentTarget.value)}
+                    >
+                        {#each compilation.optimization.levels as level (level)}
+                            <option value={level}>-O{level}</option>
+                        {/each}
+                    </select>
+                {/if}
+                {#if compilation.compiler && !compilation.warning}
+                    <div class="divider" aria-hidden="true"></div>
+                    <select
+                        class="tool compiler"
+                        aria-label="Source compiler"
+                        title="Source compiler"
+                        value={compilation.compiler.value}
+                        disabled={compilation.busy || compilation.disabled}
+                        onchange={(event) =>
+                            compilation?.compiler?.onChange(event.currentTarget.value)}
+                    >
+                        {#each compilation.compiler.options as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                        {/each}
+                    </select>
+                {/if}
+                {#if compilation.busy}
+                    <button
+                        type="button"
+                        class="tool"
+                        title="Cancel source compilation"
+                        aria-label="Cancel source compilation"
+                        onclick={compilation.onCancel}>Cancel</button
+                    >
+                {/if}
+            {/if}
+        {:else if showExecution}
             <button type="button" class="tool" onclick={onStop} title="End the Debug session">
                 <Icon size={0.8}>
                     <FaStop />
@@ -313,6 +444,31 @@
         margin-left: 0.45rem;
     }
 
+    .optimization,
+    .compiler {
+        font-size: 0.85rem;
+        background: var(--tray);
+    }
+
+    .compile-warning {
+        max-width: 17rem;
+        padding: 0 0.45rem;
+        color: var(--hint);
+        font-size: 0.7rem;
+        line-height: 1.2;
+    }
+
+    .busy-spinner {
+        display: flex;
+        animation: compile-spin 1s linear infinite;
+    }
+
+    @keyframes compile-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
     /* in the compact layouts one tray across the bar, every button an equal share of it, Test and
        the caller's actions with the others behind a divider */
     .fill {
@@ -338,13 +494,17 @@
             flex: 1 1 0;
             min-width: 0;
         }
+
+        .optimization,
+        .compiler {
+            flex: 0 0 auto;
+        }
     }
 
     /* tucked into the editor's corners: the trays keep only the edges that face the code, and the
-       host's own frame rounds the outer corners. Slightly raised: a shade lighter than the code,
-       and so well clear of the page around the editor, with a soft shadow over the code */
+       host's own frame rounds the outer corners. A translucent tint blurs the code beneath it. */
     .execution-controls.attached {
-        --tray: var(--execution-tray, color-mix(in srgb, var(--secondary) 72%, var(--tertiary)));
+        --tray: color-mix(in srgb, var(--primary) 80%, transparent);
     }
 
     .attached {
@@ -353,7 +513,17 @@
         .toolbar {
             border-bottom: none;
             border-radius: 0;
+            backdrop-filter: blur(4px);
             box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
+        }
+
+        .optimization,
+        .compiler {
+            background: transparent;
+
+            option {
+                background: var(--background);
+            }
         }
 
         .toolbar:first-child {
@@ -371,7 +541,28 @@
         border: none;
         border-top: 1px solid var(--dock-line);
         border-radius: 0;
+        backdrop-filter: blur(4px);
         box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
+    }
+
+    .attached.rounded-start {
+        .toolbar:first-child {
+            border-top-left-radius: 0.6rem;
+        }
+
+        &.fill {
+            border-top-left-radius: 0.6rem;
+        }
+    }
+
+    .attached.rounded-end {
+        .end {
+            border-top-right-radius: 0.6rem;
+        }
+
+        &.fill {
+            border-top-right-radius: 0.6rem;
+        }
     }
 
     /* A narrow bar, beside an open panel and the debug column, in a documentation page or on a
@@ -383,6 +574,20 @@
     @container (max-width: 30rem) {
         .tool {
             padding: 0 0.6rem;
+        }
+    }
+
+    @container (max-width: 38rem) {
+        .with-compilation .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 28rem) {
+        .with-compilation .label,
+        .with-compilation .compiler,
+        .with-compilation .compile-warning {
+            display: none;
         }
     }
 

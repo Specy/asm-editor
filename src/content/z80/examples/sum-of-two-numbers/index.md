@@ -1,6 +1,6 @@
 This program asks for two numbers and prints their sum. Open it in the editor, choose **Build** and
-then **Run**. At each prompt, type a number in the box under the console and press Enter. The run
-waits at `in a, (P_NUM)` until you do.
+then **Run**. At each prompt, type a number in the console and press Enter. The run waits at
+`in a, (P_NUM)` until you do.
 
 Port `0x11` handles decimal numbers in both directions: reading it parses the line you typed and
 puts the resulting byte in `a`; writing a byte to it prints that byte as an unsigned decimal

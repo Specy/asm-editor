@@ -10,7 +10,11 @@ import {
 import { createEmulator, type Emulator } from '$lib/languages/Emulator'
 import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import type { Testcase, TestcaseValidationError } from '$lib/Project.svelte'
+import { makeProject, type Testcase, type TestcaseValidationError } from '$lib/Project.svelte'
+import type { BuildInput } from '$lib/projectFiles'
+import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
+import { sourceLanguage } from '$lib/sourceCompilation/records'
+import { playgroundBuildSources } from './playgroundProgram'
 
 /**
  * Every program a course page shows a reader, built and run against the real Cores the app ships.
@@ -59,6 +63,35 @@ const EXECUTION_LIMIT = /execution limit of/i
  */
 const UNRUNNABLE = {} as Partial<Record<string, string>>
 
+//Assembly content stays fully offline. C/C++ examples require Compiler Explorer; enable their
+//compile-and-run checks explicitly with ASM_EDITOR_CONTENT_COMPILE=1.
+const COMPILE_SOURCES = process.env.ASM_EDITOR_CONTENT_COMPILE === '1'
+const inputs = new WeakMap<ContentPlayground, Promise<BuildInput>>()
+function needsSourceCompiler(playground: ContentPlayground) {
+    return !!playground.program && !!sourceLanguage(playground.program.entry)
+}
+function inputFor(playground: ContentPlayground): Promise<BuildInput> {
+    let pending = inputs.get(playground)
+    if (!pending) {
+        pending = (async () => {
+            if (!playground.program) return playground.code
+            const project = makeProject({
+                ...playground.program,
+                language: playground.settings.language
+            })
+            if (sourceLanguage(project.entry)) {
+                await compileProjectSource(project, project.entry, '2', {
+                    confirm: async () => false,
+                    signal: AbortSignal.timeout(45_000)
+                })
+            }
+            return playgroundBuildSources(project)
+        })()
+        inputs.set(playground, pending)
+    }
+    return pending
+}
+
 type ContentPage = {
     /** Relative to the repository root, which is how a failure names it. */
     path: string
@@ -104,7 +137,7 @@ function nameOf(playground: ContentPlayground): string {
  * ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)).
  */
 async function emulatorFor(playground: ContentPlayground): Promise<Emulator> {
-    return await createEmulator(playground.settings.language, playground.code, {
+    return await createEmulator(playground.settings.language, await inputFor(playground), {
         ...EMULATOR_SETTINGS,
         //the RISC-V adapter reads its word size off `options.language`, the way EmulatorLoader passes
         //it, so without this every riscv64 fence would be assembled by the 32 bit assembler
@@ -130,7 +163,7 @@ async function build(emulator: Emulator, playground: ContentPlayground): Promise
     let failure: string | undefined
     try {
         //no undo history: nothing here steps backwards, and the buffer is the slowest part of a build
-        await emulator.compile(0, playground.code)
+        await emulator.compile(0, await inputFor(playground))
     } catch (e) {
         failure = buildErrorOf(e)
     }
@@ -218,6 +251,8 @@ function describeErrors(errors: TestcaseValidationError[]): string {
     return errors
         .map((error) => {
             switch (error.type) {
+                case 'runtime-error':
+                    return `runtime error: ${error.message}`
                 case 'wrong-register':
                     return `${error.register} is ${error.got}, expected ${error.expected}`
                 case 'wrong-output':
@@ -242,7 +277,7 @@ async function runTestcase(
     testcase: Testcase
 ): Promise<{ passed: boolean; reason: string }> {
     const results = await emulator.test(
-        playground.code,
+        await inputFor(playground),
         [testcase],
         playground.runFor ?? INSTRUCTION_LIMIT,
         0
@@ -321,6 +356,10 @@ for (const page of pages) {
         }
 
         for (const playground of runnable) {
+            if (needsSourceCompiler(playground) && !COMPILE_SOURCES) {
+                it.skip(`${nameOf(playground)} compiles and runs (ASM_EDITOR_CONTENT_COMPILE=1 requires Compiler Explorer)`, () => {})
+                continue
+            }
             //an exercise skeleton is meant to be incomplete, so it is held to its testcase below
             //rather than to a clean run; what it must do here is build, since the reader starts
             //from it

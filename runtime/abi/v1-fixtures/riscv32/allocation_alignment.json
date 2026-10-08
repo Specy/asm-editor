@@ -1,0 +1,9 @@
+{
+  "source": "#include <stdio.h>\n#include <stdlib.h>\n#include <stddef.h>\n#include <stdint.h>\n#include <new>\nstruct alignas(16) A { char data[16]; };\nstatic int aligned(const void *p) { return p && (uintptr_t)p % alignof(max_align_t) == 0; }\nint main() {\n    void *p = malloc(1), *c = calloc(3, 7);\n    printf(\"malloc aligned=%d calloc aligned=%d\\n\", aligned(p), aligned(c));\n    p = realloc(p, 73);\n    printf(\"realloc aligned=%d\\n\", aligned(p));\n    A *a = new A, *array = new A[3];\n    printf(\"new aligned=%d array aligned=%d alignas16=%d\\n\", aligned(a), aligned(array), (uintptr_t)a % 16 == 0);\n    free(p); free(c); delete a; delete[] array;\n}\n",
+  "stdin": null,
+  "inputFiles": {},
+  "stdout": "bWFsbG9jIGFsaWduZWQ9MSBjYWxsb2MgYWxpZ25lZD0xCnJlYWxsb2MgYWxpZ25lZD0xCm5ldyBhbGlnbmVkPTEgYXJyYXkgYWxpZ25lZD0xIGFsaWduYXMxNj0xCg==",
+  "stderr": "",
+  "status": 0,
+  "files": {}
+}

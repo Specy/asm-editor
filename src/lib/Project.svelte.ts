@@ -16,6 +16,12 @@ import {
 import { serializer } from '$lib/json'
 import { detectAssemblyLanguage } from './languages/languageDetector'
 import { cleanProjectSettings, type ProjectSettingsDecisions } from './projectSettings'
+import {
+    cleanCompilationRecords,
+    compilationStatus,
+    type CompilationRecord,
+    type CompilationSourceMap
+} from './sourceCompilation/records'
 
 export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' | 'Z80'
 
@@ -28,7 +34,7 @@ export const AVAILABLE_LANGUAGES: readonly AvailableLanguages[] = [
     'Z80'
 ]
 
-export type AvailableProgrammingLanguages = 'c'
+export type AvailableProgrammingLanguages = 'c' | 'cpp'
 
 /**
  * A Project as stored and shared: a record of typed parts, of which only `files` is visible to the
@@ -50,6 +56,7 @@ export interface ProjectData {
     testcases: Testcase[]
     exam?: Exam
     display?: ProjectDisplay
+    compilations?: CompilationRecord[]
 }
 
 /**
@@ -111,6 +118,7 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
         files = { [defaultEntryPath(language)]: { encoding: 'plain', content } }
     }
     const now = Date.now()
+    const compilations = cleanCompilationRecords(raw?.compilations)
     return {
         id: raw?.id ?? '',
         files: cleanFiles(files),
@@ -123,7 +131,8 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
         description: raw?.description ?? '',
         testcases: cleanTestcases(Array.isArray(raw?.testcases) ? raw.testcases : []),
         exam: raw?.exam,
-        display: raw?.display ? cleanDisplay(raw.display) : undefined
+        display: raw?.display ? cleanDisplay(raw.display) : undefined,
+        ...(compilations ? { compilations } : {})
     }
 }
 
@@ -151,7 +160,8 @@ function contentKey(project: ProjectData): string {
         settings: project.settings,
         testcases: project.testcases,
         display: project.display,
-        exam: project.exam
+        exam: project.exam,
+        compilations: project.compilations
     })
 }
 
@@ -186,6 +196,7 @@ export type Testcase = {
 }
 
 export type TestcaseValidationError =
+    | { type: 'runtime-error'; message: string }
     | {
           type: 'wrong-register'
           register: string
@@ -262,6 +273,7 @@ type ProjectMetadata = {
     entry: string
     settings: ProjectSettingsDecisions
     files: ProjectFiles
+    compilations?: CompilationRecord[]
 }
 
 const metaVersion = 2
@@ -335,11 +347,27 @@ export function makeProjectFromExternal(codeAndMeta: string): ExternalImport {
 
 export function makeProject(data?: StoredProject) {
     const state = $state(normalizeProjectData(data))
+    let sourceMaps = $state.raw<Readonly<Record<string, CompilationSourceMap>>>({})
     const fileSystem = new FileSystem(state.files, {
         read: () => state.files,
         write: (files) => {
             state.files = files
         }
+    })
+    function reconcileSourceMaps() {
+        if (!Object.keys(sourceMaps).length) return
+        const next = Object.fromEntries(
+            Object.entries(sourceMaps).filter(([path]) => {
+                const record = state.compilations?.find((item) => item.outputPath === path)
+                if (!record || !state.files[path]) return false
+                const status = compilationStatus(record, state.files, state.language)
+                return !status.stale && !status.edited
+            })
+        )
+        if (Object.keys(next).length !== Object.keys(sourceMaps).length) sourceMaps = next
+    }
+    fileSystem.subscribe((changed) => {
+        if (changed) reconcileSourceMaps()
     })
 
     function toObject(): ProjectData {
@@ -355,7 +383,8 @@ export function makeProject(data?: StoredProject) {
             testcases: state.testcases,
             id: state.id,
             exam: state.exam,
-            display: state.display
+            display: state.display,
+            ...(state.compilations ? { compilations: state.compilations } : {})
         }) as ProjectData
     }
 
@@ -377,7 +406,8 @@ export function makeProject(data?: StoredProject) {
             display: snapshot.display,
             entry: snapshot.entry,
             settings: snapshot.settings,
-            files
+            files,
+            ...(snapshot.compilations ? { compilations: snapshot.compilations } : {})
         }
         const metaJson = serializer.stringify(meta, null, 4)
         const commentCharacter = COMMENT_CHARACTER[snapshot.language]
@@ -420,6 +450,7 @@ export function makeProject(data?: StoredProject) {
             ...(legacyCode ? { files: undefined, entry: undefined } : {})
         })
         Object.assign(state, merged)
+        reconcileSourceMaps()
     }
 
     return {
@@ -464,6 +495,44 @@ export function makeProject(data?: StoredProject) {
         get display() {
             return state.display
         },
+        get compilations() {
+            return state.compilations ?? []
+        },
+        get sourceMaps() {
+            return sourceMaps
+        },
+
+        /** Commit provenance and the transient line map only after the output File is written. */
+        recordCompilation(record: CompilationRecord, map: CompilationSourceMap) {
+            const records = cleanCompilationRecords([
+                ...(state.compilations ?? []).filter(
+                    (item) => item.outputPath !== record.outputPath
+                ),
+                record
+            ])
+            state.compilations = records
+            sourceMaps = { ...sourceMaps, [record.outputPath]: map }
+        },
+        renameCompilationFile(from: string, to: string) {
+            state.compilations = state.compilations?.map((record) => {
+                const input = Object.prototype.hasOwnProperty.call(record.inputs, from)
+                return {
+                    ...record,
+                    sourcePath: record.sourcePath === from ? to : record.sourcePath,
+                    outputPath: record.outputPath === from ? to : record.outputPath,
+                    inputs: input
+                        ? Object.fromEntries(
+                              Object.entries(record.inputs).map(([path, hash]) => [
+                                  path === from ? to : path,
+                                  hash
+                              ])
+                          )
+                        : record.inputs,
+                    ...(input ? { renamedInput: true as const } : {})
+                }
+            })
+            sourceMaps = {}
+        },
 
         set code(v: string) {
             setCode(v)
@@ -485,6 +554,7 @@ export function makeProject(data?: StoredProject) {
         set language(v: AvailableLanguages) {
             fileSystem.assertEditable()
             state.language = v
+            sourceMaps = {}
         },
         set description(v: string) {
             state.description = v

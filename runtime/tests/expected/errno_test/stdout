@@ -1,0 +1,8 @@
+initial errno=0
+strtol overflow: ERANGE=1
+strtod overflow: ERANGE=1
+strtod underflow: ERANGE=1
+fopen missing: 1 ENOENT=1
+malloc success keeps errno 0: 1
+success leaves errno: 12345
+errno is assignable lvalue: 1

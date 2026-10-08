@@ -1,0 +1,5 @@
+getchar=-1
+feof=1
+fgets=NULL buf=unchanged
+scanf=-1 x=7
+fread=0

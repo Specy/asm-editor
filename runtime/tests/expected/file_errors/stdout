@@ -1,0 +1,13 @@
+missing: NULL errno==ENOENT 1
+bad mode: NULL errno==EINVAL 1
+fgetc on write-only: -1 ferror=1 errno==EBADF 1
+after clearerr ferror=0
+fread on write-only: 0 ferror=1
+still writable: 1
+fclose=0
+fputc on read-only: -1 ferror=1 errno==EBADF 1
+fprintf on read-only: 1
+fwrite on read-only: 0
+still readable: data
+wx on existing: NULL errno==EEXIST 1
+wx on new: opened

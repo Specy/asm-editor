@@ -1,0 +1,21 @@
+{
+    "program": "screen-too-large",
+    "target": "RISC-V",
+    "compiler": "gcc",
+    "optimization": "0",
+    "sourcePath": "src/main.c",
+    "source": "#include <sim.h>\n\nSIM_SCREEN(screen, 1024, 1024, 1);\n\nint main(void) {\n    screen[0] = sim_rgb(255, 255, 255);\n    return 0;\n}\n",
+    "compilerId": "rv32-cgcc1420",
+    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-section-anchors -nostdinc -isystem sysroot/include -march=rv32imfd -mabi=ilp32d -iquote 'src' -iquote . -std=c17",
+    "captured": "2026-10-06",
+    "response": {
+        "code": 1,
+        "stderr": [
+            { "text": "In file included from src/main.c:1:" },
+            {
+                "text": "src/main.c:3:1: error: static assertion failed: \"SIM_SCREEN: the grid does not fit in the 4128768 bytes of static data a RISC-V program has, which its other global variables and constants share; use a larger unit or a smaller display\""
+            }
+        ],
+        "lines": [["<Compilation failed>"]]
+    }
+}

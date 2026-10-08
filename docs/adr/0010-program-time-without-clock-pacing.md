@@ -1,5 +1,7 @@
 # Program time without clock pacing
 
+Amended in part by [ADR 0040](./0040-programs-see-calendar-elapsed-and-cpu-clocks.md).
+
 Every environment gives programs **program time** through two operations, a wait for a duration and a read of elapsed time, and none of them emulates a clock rate: program time follows host time, and compute runs as fast as the host allows. EASy68K's delay and time tasks and MARS's sleep and time syscalls already have this shape, and the Z80 gets the equivalent as timer and wait ports on its port device, so interactive Screen programs can animate and poll input at a stable pace in every language while exams, Testcases and compute-only runs keep full speed. Real-time pacing, as done by the TRS-80 emulator that `@specy/z80` descends from ([Trs80.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-emulator/src/Trs80.ts)), was rejected: the generic Z80 machine has no ROM and no documented clock to honor, any rate would be invented, and pacing would slow every Z80 program or need a mode switch.
 
 ## Consequences
@@ -9,7 +11,7 @@ Every environment gives programs **program time** through two operations, a wait
 - Program time coincides with host time, so the keyboard hold interval of [ADR 0008](./0008-poll-keyboard-and-mouse-input.md) is measured in milliseconds.
 - Delay loops copied from real Z80 programs run at host speed. They would only time correctly under pacing at that machine's rate, which [ADR 0002](./0002-z80-console-ports.md) already gave up.
 - A GUI speed limiter for every language remains possible later as a debugging aid; it would not change any guest interface.
-- Scripted Testcase runs use a virtual **Time Source**: waits complete immediately and advance a virtual clock, time reads return that clock, and it starts at zero for every scripted run, so elapsed-time output is reproducible and a sleeping program cannot slow down or stall a test. The same run configuration that selects scripted input selects virtual time. MIPS and RISC-V need a Core hook for their time syscall, which reads the real clock inside the Core today; x86 keeps real time until its scope is decided. A program that polls the clock instead of waiting never sees virtual time advance and runs into the instruction limit; if that pattern ever matters, the virtual clock can also advance a fixed amount per instruction, a constant deliberately not invented now.
+- Scripted Testcase runs use a virtual **Time Source**: waits complete immediately and advance a virtual clock, time reads return that clock, and it starts at zero for every scripted run, so elapsed-time output is reproducible and a sleeping program cannot slow down or stall a test. The same run configuration that selects scripted input selects virtual time. MIPS and RISC-V need a Core hook for their time syscall, which reads the real clock inside the Core today; x86 keeps real time until its scope is decided (decided in [ADR 0037](./0037-testcases-run-on-a-seeded-random-source.md): x86 joins the virtual Time Source). A program that polls the clock instead of waiting never sees virtual time advance and runs into the instruction limit; if that pattern ever matters, the virtual clock can also advance a fixed amount per instruction, a constant deliberately not invented now.
 
 ## Considered options
 
