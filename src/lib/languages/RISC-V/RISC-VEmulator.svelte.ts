@@ -51,6 +51,7 @@ import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import type { Termination } from '$lib/languages/termination'
 import { type ExecutionSlice, type ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
 import { MarsSlicePacer } from '$lib/languages/mars/marsSlice'
+import { canUndoMarsHistoryRange } from '$lib/languages/mars/marsUndo'
 import type { Testcase } from '$lib/Project.svelte'
 import { MarsDevices } from '$lib/languages/mars/MarsDevices'
 import {
@@ -270,6 +271,14 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     /** The Core groups its history by instruction or Poke, so the group count is the depth. */
     _undoDepth(): number {
         return this.riscv?.getUndoDepth() ?? 0
+    }
+
+    _canUndoSteps(count: number): boolean {
+        return this._canUndoHistoryRange(0, count)
+    }
+
+    _canUndoHistoryRange(skip: number, count: number): boolean {
+        return canUndoMarsHistoryRange(this.riscv, this.fileSystemSession, skip, count)
     }
 
     _setUndoRecording(recording: boolean): void {

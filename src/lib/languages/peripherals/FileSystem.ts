@@ -429,6 +429,30 @@ export class FileSystemSession {
         const latest = this.history[this.history.length - 1]
         return !latest || latest.id !== id || this.canUndo(id)
     }
+    /**
+     * Preflight a Core history window whose instruction ids are increasing numeric serials.
+     * Serial gaps after Undo are valid. Binary search skips unrelated frames, and only availability
+     * metadata is inspected; no inverse is read or applied before the whole window is accepted.
+     */
+    canUndoSerialRange(oldest: bigint, newest: bigint): boolean {
+        if (this.stopped || this.frame || oldest > newest) return false
+        const lowerBound = (serial: bigint, inclusive: boolean) => {
+            let low = 0
+            let high = this.history.length
+            while (low < high) {
+                const middle = Math.floor((low + high) / 2)
+                const id = BigInt(this.history[middle].id)
+                if (id < serial || (!inclusive && id === serial)) low = middle + 1
+                else high = middle
+            }
+            return low
+        }
+        const start = lowerBound(oldest, true)
+        const end = lowerBound(newest, false)
+        for (let index = start; index < end; index++)
+            if (!this.history[index].available) return false
+        return true
+    }
     undoAfter(id: FileSystemInstructionId) {
         if (this.history[this.history.length - 1]?.id === id) this.undo(id)
     }

@@ -247,6 +247,46 @@ describe('FileSystem', () => {
         expect(fs.files.log).toBeDefined()
     })
 
+    it('preflights every filesystem frame inside a serial range without rolling back any of them', () => {
+        const fs = new FileSystem()
+        const run = fs.beginSession(0)
+        run.performInstruction('9007199254740993', () => run.open('created', 'write'))
+        run.performInstruction('9007199254740998', () => undefined)
+        expect(run.canUndoSerialRange(9007199254740993n, 9007199254740998n)).toBe(false)
+        expect(run.canUndoSerialRange(9007199254740994n, 9007199254740998n)).toBe(true)
+        expect(run.canUndoSerialRange(9007199254740993n, 9007199254740993n)).toBe(false)
+        expect(run.canUndoSerialRange(9007199254740990n, 9007199254740992n)).toBe(true)
+        expect(fs.readText('created')).toBe('')
+        expect(run.canUndo('9007199254740998')).toBe(true)
+        run.undo('9007199254740998')
+        run.performInstruction('9007199254741000', () => undefined)
+        expect(run.canUndoSerialRange(9007199254740998n, 9007199254741000n)).toBe(true)
+        run.stop()
+        expect(run.canUndoSerialRange(9007199254740998n, 9007199254741000n)).toBe(false)
+    })
+
+    it('skips unrelated journal frames and never reads their inverse payloads during preflight', () => {
+        const run = new FileSystem().beginSession(0, 10_000)
+        for (let id = 1; id <= 10_000; id++) run.performInstruction(String(id), () => undefined)
+        const internal = run as unknown as { history: { changes: unknown }[] }
+        let reads = 0
+        for (const frame of internal.history)
+            Object.defineProperty(frame, 'changes', {
+                get: () => {
+                    throw new Error('Preflight must not read inverses')
+                }
+            })
+        internal.history = new Proxy(internal.history, {
+            get: (frames, key, receiver) => {
+                if (typeof key === 'string' && /^\d+$/.test(key)) reads++
+                return Reflect.get(frames, key, receiver)
+            }
+        })
+        expect(run.canUndoSerialRange(9998n, 10_000n)).toBe(true)
+        expect(reads).toBeLessThan(40)
+        run.stop()
+    })
+
     it('charges closing a descriptor by what it retains, not by the size of the File', () => {
         const big = 'x'.repeat(64 * 1024)
         const fs = new FileSystem({ data: { encoding: 'plain', content: big } })
