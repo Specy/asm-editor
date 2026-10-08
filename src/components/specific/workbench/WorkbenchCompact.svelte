@@ -158,6 +158,7 @@
                                 <MemoryVisualiser
                                     memoryRegions={emulator?.memoryRegions}
                                     dataLabels={emulator?.dataLabels}
+                                    readOnlyMemory={emulator?.readOnlyMemory}
                                     systemSize={emulator.systemSize}
                                     endianess={emulator.memory.global.endianess}
                                     memorySize={MEMORY_SIZE[language]}

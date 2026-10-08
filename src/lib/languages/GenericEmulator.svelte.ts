@@ -1,5 +1,5 @@
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
-import { mergeMemoryRegions } from './memoryRegions'
+import { mergeMemoryRegions, readOnlyMemoryAt } from './memoryRegions'
 import {
     BaseEmulator,
     CompilationFailedError,
@@ -21,6 +21,7 @@ import {
     type MemoryLayout,
     type HeapBounds,
     type DeviceRegion,
+    type ReadOnlyMemory,
     numbersOfSizeToSlice,
     type RegisterFile,
     type RegisterPoke,
@@ -165,6 +166,9 @@ export abstract class GenericEmulator<T, R extends string>
 
     get dataLabels() {
         return this.memoryLayout?.dataLabels ?? []
+    }
+    get readOnlyMemory(): readonly ReadOnlyMemory[] {
+        return this.memoryLayout?.readOnly ?? []
     }
     get memoryRegions() {
         return this.memoryLayout
@@ -1536,6 +1540,17 @@ export abstract class GenericEmulator<T, R extends string>
         this.placeMemoryView(this.state.memory.global, address)
     }
 
+    /** Resize the main memory view and read its new page without changing execution state. */
+    setGlobalMemorySize(pageSize: number, rowSize: number): void {
+        const view = this.state.memory.global
+        if (view.pageSize === pageSize && view.rowSize === rowSize) return
+        const userPlaced = view.userPlaced
+        view.pageSize = pageSize
+        view.rowSize = rowSize
+        this.placeMemoryView(view, view.address - (view.address % BigInt(pageSize)))
+        view.userPlaced = userPlaced
+    }
+
     setTabMemoryAddress(address: bigint, tabId: number): void {
         const tab = this.state.memory.tabs.find((e) => e.id == tabId)
         if (!tab) return
@@ -2072,6 +2087,8 @@ export abstract class GenericEmulator<T, R extends string>
      */
     pokeMemory(address: bigint, bytes: Uint8Array): boolean {
         if (!this.canPoke || bytes.length === 0 || !this.getInstance()) return false
+        //the memory view offers no Poke there, and the Core would refuse the write anyway
+        if (readOnlyMemoryAt(this.readOnlyMemory, address, BigInt(bytes.length))) return false
         try {
             if (isMemoryChunkEqual(this._readMemoryBytes(address, BigInt(bytes.length)), bytes)) {
                 return false

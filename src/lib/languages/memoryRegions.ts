@@ -4,8 +4,34 @@ import type {
     HeapBounds,
     MemoryLayout,
     MemoryLayoutItem,
-    MemoryRegion
+    MemoryRegion,
+    ReadOnlyMemory
 } from './commonLanguageFeatures.svelte'
+
+/**
+ * The read only memory of a MARS or RARS Core, from its `getTextSegments` start and end pairs: a
+ * text segment holds statements rather than bytes, so it reads as their encodings but cannot be
+ * written by the host.
+ */
+export function textSegmentsReadOnly(segments: ArrayLike<number>): ReadOnlyMemory[] {
+    const ranges: ReadOnlyMemory[] = []
+    for (let i = 0; i + 1 < segments.length; i += 2)
+        ranges.push({
+            start: BigInt(segments[i] >>> 0),
+            end: BigInt(segments[i + 1] >>> 0),
+            reason: "The text segment holds assembled instructions, which can't be poked"
+        })
+    return ranges
+}
+
+/** The first read only range that `length` bytes from `address` overlap. */
+export function readOnlyMemoryAt(
+    ranges: readonly ReadOnlyMemory[],
+    address: bigint,
+    length: bigint
+): ReadOnlyMemory | undefined {
+    return ranges.find((range) => address < range.end && address + length > range.start)
+}
 
 /** Merge Core items without bridging holes created by org or a section change. */
 export function memoryLayoutFromItems(
@@ -130,9 +156,6 @@ const regionColors = {
 } as const
 export function memoryRegionColor(kind: MemoryRegion['kind']): string {
     return `color-mix(in srgb, ${regionColors[kind]} 85%, var(--secondary-text))`
-}
-export function memoryTint(kind: MemoryRegion['kind']): string {
-    return `color-mix(in srgb, ${memoryRegionColor(kind)} 22%, transparent)`
 }
 
 /** Hex keeps the existing input contract; decimal offsets make buffer+16 useful. */

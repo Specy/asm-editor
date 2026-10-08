@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushSync, mount, unmount } from 'svelte'
 import MemoryRenderer from './MemoryRenderer.svelte'
 import { type DiffedMemory, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import { memoryRegionColor } from '$lib/languages/memoryRegions'
 
 //the panel reaches `$lib/utils`, which reaches the projects store, which opens its IndexedDB
 //because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection
@@ -26,6 +27,7 @@ function render(
         pokeable?: boolean
         endianess?: 'big' | 'little'
         unreadable?: number[]
+        readOnlyMemory?: import('$lib/languages/commonLanguageFeatures.svelte').ReadOnlyMemory[]
     } = {}
 ) {
     const pokes: { address: bigint; bytes: number[] }[] = []
@@ -50,6 +52,7 @@ function render(
             sp: options.sp ?? 0n,
             memoryRegions: options.memoryRegions,
             dataLabels: options.dataLabels,
+            readOnlyMemory: options.readOnlyMemory,
             pageSize: 8,
             bytesPerRow: 8,
             defaultMemoryValue: 0xff,
@@ -234,12 +237,46 @@ describe('poking memory from the selection popup', () => {
     })
 })
 
+describe('memory that takes no Pokes', () => {
+    const readOnlyMemory = [
+        { start: ADDRESS + 4n, end: ADDRESS + 8n, reason: 'holds instructions' }
+    ]
+
+    it('reads a selection inside it, saying why, and offers no input', () => {
+        const panel = render({ readOnlyMemory })
+        panel.select(5)
+        expect(panel.input()).toBeNull()
+        expect(panel.popup()?.textContent).toContain(String(0x55))
+        expect(panel.popup()?.querySelector('[title="holds instructions"]')).not.toBeNull()
+        panel.close()
+    })
+
+    it('refuses a selection that only reaches into it, and pokes the bytes before it', () => {
+        const panel = render({ readOnlyMemory })
+        panel.select(3, 4)
+        expect(panel.input()).toBeNull()
+        panel.select(2, 3)
+        type(panel.input()!, '1')
+        press(panel.input()!, 'Enter')
+        expect(panel.pokes).toEqual([{ address: ADDRESS + 2n, bytes: [0x00, 0x01] }])
+        panel.close()
+    })
+})
+
 describe('bytes the Core could not read', () => {
     it('draws them without a value and says why under the page', () => {
         const panel = render({ unreadable: [0, 0, 0, 0, 0, 0, 1, 1] })
-        const marked = [...panel.target.querySelectorAll<HTMLElement>('.unreadable-byte')]
-        expect(marked.map((byte) => byte.textContent?.trim())).toEqual(['??', '??'])
-        expect(panel.cells()).toHaveLength(6)
+        //an unreadable byte keeps its cell, so the grid does not move, and reads as `??`
+        const text = panel.cells().map((cell) => cell.textContent?.trim())
+        expect(text).toHaveLength(8)
+        expect(text.slice(0, 6)).not.toContain('??')
+        expect(text.slice(6)).toEqual(['??', '??'])
+        //its hover says why
+        const reasons = [...panel.target.querySelectorAll<HTMLElement>('.byte-error')]
+        expect(reasons.map((reason) => reason.textContent?.trim())).toEqual([
+            'address out of range',
+            'address out of range'
+        ])
         const notice = panel.target.querySelector<HTMLElement>('.memory-unreadable')!
         expect(notice.textContent).toContain("2 of 8 bytes can't be read: address out of range")
         panel.close()
@@ -259,7 +296,7 @@ describe('bytes the Core could not read', () => {
     })
 
     it('reads a selection across them as nothing and takes no Poke', () => {
-        //the readable cells are bytes 0, 1, 2, 5, 6 and 7, so the third and fourth span the gap
+        //bytes 3 and 4 cannot be read, so the third and fourth cells reach into the gap
         const panel = render({ unreadable: [0, 0, 0, 1, 1, 0, 0, 0] })
         panel.select(2, 3)
         expect(panel.popup()!.textContent?.trim()).toBe('??')
@@ -299,17 +336,20 @@ it('tints device overlaps, preserves SP and selection highlights, and hovers bot
             }
         ]
     })
+    //the region is outlined around the byte's cell, so the cell's own highlights stay its own
+    const outline = (index: number) =>
+        ui.cells()[index].closest('.memory-number')!.getAttribute('style')
+    const deviceOutline = `--region-color: ${memoryRegionColor('device')};`
     try {
-        expect(ui.cells()[0].getAttribute('style')).toContain('var(--red)')
+        expect(outline(0)).toContain(deviceOutline)
+        expect(outline(1)).toContain(deviceOutline)
         expect(ui.cells()[1].getAttribute('style')).toContain('background-color: var(--accent2)')
         expect(ui.target.querySelector('.region-hover')?.textContent).toBe(
             'Bitmap display · .data · Game::score (_ZN4Game5scoreE) (library)'
         )
         ui.select(0)
         expect(ui.cells()[0].getAttribute('style')).toContain('background-color: var(--green)')
-        expect(ui.cells()[0].getAttribute('style')!.lastIndexOf('var(--green)')).toBeGreaterThan(
-            ui.cells()[0].getAttribute('style')!.lastIndexOf('var(--red)')
-        )
+        expect(outline(0)).toContain(deviceOutline)
     } finally {
         ui.close()
     }

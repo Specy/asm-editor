@@ -1,4 +1,4 @@
-import { memoryLayoutFromItems } from '../memoryRegions'
+import { memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
 import { makeMipsCore, type MipsLink } from './MIPS-core'
 import {
     coreLibrary,
@@ -640,7 +640,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                   ]
                 : []
         )
-        return memoryLayoutFromItems(items, labels)
+        return {
+            ...memoryLayoutFromItems(items, labels),
+            readOnly: textSegmentsReadOnly(core.getTextSegments())
+        }
     }
     _getHeapBounds() {
         const core = this.mips

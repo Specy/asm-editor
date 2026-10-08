@@ -847,6 +847,10 @@
         border-top: 1px solid var(--accent2) !important;
     }
 
+    :global(.monaco-editor .monaco-hover hr) {
+        margin: 0.4rem 0 !important;
+    }
+
     :global(.monaco-hover table) {
         border-collapse: collapse;
         overflow-x: auto;

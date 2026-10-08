@@ -491,6 +491,11 @@ export class WorkbenchSession {
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
 
+        $effect(() => {
+            const pageSize = preferencesStore.values.memoryPanelSize.value
+            untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
+        })
+
         let previousPairKey = ''
         let previousPairMap: CompilationSourceMap | undefined
         $effect(() => {

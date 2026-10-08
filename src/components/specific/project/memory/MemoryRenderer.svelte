@@ -1,6 +1,15 @@
 <script lang="ts">
-    import { memoryRegionColor, memoryHover, regionsAt } from '$lib/languages/memoryRegions'
-    import type { MemoryRegion, DataLabel } from '$lib/languages/commonLanguageFeatures.svelte'
+    import {
+        memoryRegionColor,
+        memoryHover,
+        readOnlyMemoryAt,
+        regionsAt
+    } from '$lib/languages/memoryRegions'
+    import type {
+        MemoryRegion,
+        DataLabel,
+        ReadOnlyMemory
+    } from '$lib/languages/commonLanguageFeatures.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
@@ -36,6 +45,8 @@
     interface Props {
         memoryRegions?: readonly MemoryRegion[]
         dataLabels?: readonly DataLabel[]
+        /** Memory that takes no Pokes: a selection touching it reads as it would in a read only panel. */
+        readOnlyMemory?: readonly ReadOnlyMemory[]
         memory: DiffedMemory
         currentAddress: bigint
         callStackAddresses?: ColorizedLabel[]
@@ -67,6 +78,7 @@
     let {
         memoryRegions = [],
         dataLabels = [],
+        readOnlyMemory = [],
         memory,
         currentAddress,
         sp,
@@ -105,7 +117,7 @@
             ]
             return {
                 ...cell,
-                outline: `--region-color: ${memoryRegionColor(region.kind)}; --region-edges: ${edges.map(edge => edge ? '1px' : '0').join(' ')};`
+                outline: `--region-color: ${memoryRegionColor(region.kind)}; --region-edges: ${edges.map((edge) => (edge ? '1px' : '0')).join(' ')};`
             }
         })
     })
@@ -179,6 +191,13 @@
         //here and only blurs the input when the pointerdown's default action runs, by which time
         //the effect below has already put the popup back to the bytes
         commitPoke()
+        if (selectedAddressesIndexes.start === index && selectedAddressesIndexes.len === 0) {
+            selectingAddresses = false
+            selectedAddressesIndexes.start = -1
+            selectedAddressesIndexes.len = 0
+            lastIdx = -1
+            return
+        }
         selectedAddressesIndexes.start = index
         selectedAddressesIndexes.len = 0
     }
@@ -241,6 +260,15 @@
             selectionLength > 0 &&
             unreadable.mask.subarray(selectionStart, selectionStart + selectionLength).includes(1)
     )
+    const selectionReadOnly = $derived(
+        selectionLength > 0
+            ? readOnlyMemoryAt(
+                  readOnlyMemory,
+                  currentAddress + BigInt(selectionStart),
+                  BigInt(selectionLength)
+              )
+            : undefined
+    )
     const pokeReading: MemoryReading = $derived(
         type === DisplayType.Hex ? 'hex' : type === DisplayType.Char ? 'char' : 'decimal'
     )
@@ -266,6 +294,15 @@
         pokeReason = null
         pokeAnchor = null
     }
+
+    //A resized page has different cell positions and may no longer contain the selection.
+    $effect(() => {
+        void pageSize
+        void bytesPerRow
+        selectingAddresses = false
+        selectedAddressesIndexes = { start: -1, len: 0 }
+        cancelPoke()
+    })
 
     //a new selection, or a new reading of it, is a new value to read, and a Run or a Build taking
     //the Core takes the input away entirely: in every case the popup goes back to the bytes
@@ -303,7 +340,8 @@
      */
     function commitPoke() {
         //nothing was typed since the popup last showed the bytes, so there is nothing to commit
-        if (pokeText === null || pokeAnchor === null || !pokeable || !onPoke) return
+        if (pokeText === null || pokeAnchor === null || !pokeable || !onPoke || selectionReadOnly)
+            return
         const anchor = pokeAnchor
         const parsed = parseMemoryPoke(pokeText, anchor.bytes.length, endianess, pokeReading)
         if (!parsed.ok) {
@@ -318,7 +356,8 @@
 
     /** The run being typed into, taken as it stands the moment the typing starts. */
     function anchorPoke() {
-        if (pokeAnchor !== null || selectionLength <= 0 || selectionUnreadable) return
+        if (pokeAnchor !== null || selectionLength <= 0 || selectionUnreadable || selectionReadOnly)
+            return
         pokeAnchor = {
             address: currentAddress + BigInt(selectionStart),
             bytes: memory.current.slice(selectionStart, selectionStart + selectionLength)
@@ -353,7 +392,12 @@
     }
 </script>
 
-<div class="memory-grid" bind:this={memoryGrid} class:dense style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
+<div
+    class="memory-grid"
+    bind:this={memoryGrid}
+    class:dense
+    style={`--bytesPerRow: ${bytesPerRow}; ${style}`}
+>
     <div class="memory-offsets">
         {#each new Array(bytesPerRow).keys() as offset (offset)}
             <div>
@@ -423,7 +467,11 @@
                 selectedAddressesIndexes.len,
                 bytesPerRow
             )}
-            <div class="memory-number" class:outlined={!!annotations[i].region} style={annotations[i].outline}>
+            <div
+                class="memory-number"
+                class:outlined={!!annotations[i].region}
+                style={annotations[i].outline}
+            >
                 {#if i === selectedAddressesIndexes.start}
                     {@const signedSelection = unsignedBigIntToSigned(
                         selectionValue.current,
@@ -446,7 +494,7 @@
                         {/if}
                         {#if selectionUnreadable}
                             <!-- nothing to read, and nothing a Poke could be written over -->
-                        {:else if pokeable && onPoke}
+                        {:else if pokeable && onPoke && !selectionReadOnly}
                             <!--
                                 the popup is the input while the panel takes Pokes: it holds what
                                 the selection reads as, and its previous-value line is drawn in the
@@ -474,7 +522,11 @@
                                 {selectionReading(selectionValue.prev)}
                             </div>
                         {:else}
-                            <div style="user-select: all;">
+                            <!-- a panel that takes Pokes still reads read only memory, saying why -->
+                            <div
+                                style="user-select: all;"
+                                title={pokeable ? selectionReadOnly?.reason : undefined}
+                            >
                                 {selectionValue.current}
                             </div>
                             <div style="color: var(--accent); user-select: all">
@@ -483,17 +535,21 @@
                         {/if}
                     </div>
                 {/if}
-                    <ValueDiff
-                        value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 0, type)}
-                        id={`${id}-${i}`}
-                        diff={unreadableByte ? '??' : getTextFromValue(
-                            BigInt(memory.prevState[i] ?? defaultMemoryValue),
-                            0,
-                            type
-                        )}
-                        hasSoftDiff={!unreadableByte && !annotations[i].region && word !== defaultMemoryValue}
-                        hoverBoundary={memoryGrid}
-                        style={`padding: 0.3rem var(--cell-pad-x); min-width: calc(var(--cell-pad-x) * 2 + 2ch); height: calc(2ch + 0.65rem);
+                <ValueDiff
+                    value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 0, type)}
+                    id={`${id}-${i}`}
+                    diff={unreadableByte
+                        ? '??'
+                        : getTextFromValue(
+                              BigInt(memory.prevState[i] ?? defaultMemoryValue),
+                              0,
+                              type
+                          )}
+                    hasSoftDiff={!unreadableByte &&
+                        !annotations[i].region &&
+                        word !== defaultMemoryValue}
+                    hoverBoundary={memoryGrid}
+                    style={`padding: 0.3rem var(--cell-pad-x); min-width: calc(var(--cell-pad-x) * 2 + 2ch); height: calc(2ch + 0.65rem);
                     ${unreadableByte ? 'color: var(--hint);' : ''}
                     ${
                         currentAddress + BigInt(i) === sp
@@ -515,31 +571,31 @@
                             : ''
                     }
 								`}
-                        monospaced
-                    >
-                        {#snippet hoverValue()}
-                            <div>
-                                {#if annotations[i].hover}
-                                    <div class="region-hover">
-                                        {annotations[i].hover}
+                    monospaced
+                >
+                    {#snippet hoverValue()}
+                        <div>
+                            {#if annotations[i].hover}
+                                <div class="region-hover">
+                                    {annotations[i].hover}
+                                </div>
+                            {/if}
+                            {#if unreadableByte}
+                                <div class="byte-value">??</div>
+                                <div class="byte-error">{unreadable?.reason}</div>
+                            {:else}
+                                {#if BigInt(word) !== signed}
+                                    <div class="byte-value" style="user-select: all;">
+                                        {signed}
                                     </div>
                                 {/if}
-                                {#if unreadableByte}
-                                    <div class="byte-value">??</div>
-                                    <div class="byte-error">{unreadable?.reason}</div>
-                                {:else}
-                                    {#if BigInt(word) !== signed}
-                                        <div class="byte-value" style="user-select: all;">
-                                            {signed}
-                                        </div>
-                                    {/if}
-                                    <div class="byte-value" style="user-select: all">
-                                        {word}
-                                    </div>
-                                {/if}
-                            </div>
-                        {/snippet}
-                    </ValueDiff>
+                                <div class="byte-value" style="user-select: all">
+                                    {word}
+                                </div>
+                            {/if}
+                        </div>
+                    {/snippet}
+                </ValueDiff>
             </div>
         {/each}
     </div>
@@ -657,6 +713,9 @@
     .memory-grid {
         display: grid;
         position: relative;
+        //Keep the table around its cells so a smaller host scrolls the whole table.
+        min-width: min-content;
+        min-height: min-content;
         font-family: monospace;
         font-size: 1rem;
         grid-template-columns: min-content;

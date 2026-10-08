@@ -434,7 +434,11 @@ export type DataLabel = {
 export type MemoryLayout = {
     sections: { name: string; runs: Omit<MemoryLayoutItem, 'section' | 'alignment'>[] }[]
     dataLabels: DataLabel[]
+    /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
+    readOnly?: ReadOnlyMemory[]
 }
+/** A half-open range of memory that takes no Pokes, and why, which the memory view shows. */
+export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
 export type HeapBounds = { start: bigint; end: bigint }
 export type DeviceRegion = { name: string; start: bigint; end: bigint }
 export type MemoryRegion = DeviceRegion & {
@@ -527,6 +531,7 @@ export type BaseEmulatorDerivedState = {
     readonly compilerErrors: Diagnostic[]
     readonly memoryRegions: readonly MemoryRegion[]
     readonly dataLabels: readonly DataLabel[]
+    readonly readOnlyMemory: readonly ReadOnlyMemory[]
     /** Immutable Files and Entry used by the current executable, retained until Stop. */
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
@@ -637,6 +642,7 @@ export type BaseEmulatorActions = {
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
+    setGlobalMemorySize: (pageSize: number, rowSize: number) => void
     setCode: (code: string) => void
     setSources: (sources: BuildInput) => void
     check: () => Promise<Diagnostic[]>

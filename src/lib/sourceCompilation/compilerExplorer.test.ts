@@ -580,7 +580,15 @@ describe('x86 compilation', () => {
         const request = requestFor(fixture)
         const result = await compileSource(request, undefined, respond(fixture.response))
         const lines = result.assembly.split('\n')
-        expect(lines.slice(0, 3)).toEqual(['    default rel', '    section .text', 'twice:'])
+        //GCC's .L labels are not local in NASM, so the translation renames them and records the
+        //compiler's own spelling for the memory view's data labels
+        expect(lines.slice(0, 5)).toEqual([
+            '    default rel',
+            '    ; compiler-symbol L4 .L4',
+            '    ; compiler-symbol L5 .L5',
+            '    section .text',
+            'twice:'
+        ])
         expect(result.assembly).not.toMatch(/\.(?:file|loc|intel_syntax|cfi_\w+)\b|PTR/)
         //twice comes from the header and main from the source, each at its own line
         expect(result.map.lines[lines.indexOf('twice:') + 1]).toEqual({

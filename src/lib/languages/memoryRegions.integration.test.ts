@@ -80,3 +80,56 @@ for (const [name, factory, source, top] of cases)
             emulator.dispose()
         }
     }, 20000)
+
+const textCases = [
+    [
+        'MIPS',
+        MIPSEmulator,
+        '.text\n.globl main\nmain:\nli $v0,10\nsyscall',
+        //addiu $v0,$zero,10 and syscall, little endian
+        [0x0a, 0x00, 0x02, 0x24, 0x0c, 0x00, 0x00, 0x00]
+    ],
+    [
+        'RISC-V',
+        RISCVEmulator,
+        '.text\n.globl main\nmain:\nli a7,10\necall',
+        //addi a7,zero,10 and ecall, little endian
+        [0x93, 0x08, 0xa0, 0x00, 0x73, 0x00, 0x00, 0x00]
+    ]
+] as const
+for (const [name, factory, source, encoding] of textCases)
+    it(`${name}: the text segment reads as its encodings and takes no Poke`, async () => {
+        const emulator: Emulator = await factory(source, { automaticChecking: false })
+        try {
+            await emulator.compile(100, undefined)
+            const code = emulator.memoryRegions.find((region) => region.kind === 'code')!
+            expect(Array.from(emulator.readMemoryBytes(code.start, encoding.length))).toEqual(
+                encoding
+            )
+            const readOnly = emulator.readOnlyMemory.find(
+                (range) => range.start <= code.start && code.end <= range.end
+            )
+            expect(readOnly?.reason).toMatch(/can't be poked/)
+            expect(emulator.pokeMemory(code.start, new Uint8Array([1, 2, 3, 4]))).toBe(false)
+            expect(Array.from(emulator.readMemoryBytes(code.start, 4))).toEqual(
+                encoding.slice(0, 4)
+            )
+            expect(emulator.errors).toEqual([])
+            emulator.clear()
+            expect(emulator.readOnlyMemory).toEqual([])
+        } finally {
+            emulator.dispose()
+        }
+    }, 20000)
+
+it('M68K: code in flat memory stays pokeable', async () => {
+    const emulator: Emulator = await M68KEmulator(' org $1000\nstart: simhalt\n end start', {
+        automaticChecking: false
+    })
+    try {
+        await emulator.compile(100, undefined)
+        expect(emulator.readOnlyMemory).toEqual([])
+    } finally {
+        emulator.dispose()
+    }
+}, 20000)

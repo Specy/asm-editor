@@ -1,4 +1,4 @@
-import { memoryLayoutFromItems } from '../memoryRegions'
+import { memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
 import { makeRiscVCore, type RiscVLink } from './RISC-V-core'
 import {
     coreLibrary,
@@ -646,7 +646,10 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                   ]
                 : []
         )
-        return memoryLayoutFromItems(items, labels)
+        return {
+            ...memoryLayoutFromItems(items, labels),
+            readOnly: textSegmentsReadOnly(core.getTextSegments())
+        }
     }
     _getHeapBounds() {
         const core = this.riscv

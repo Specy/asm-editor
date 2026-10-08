@@ -94,6 +94,7 @@
                     <MemoryVisualiser
                         memoryRegions={emulator?.memoryRegions}
                         dataLabels={emulator?.dataLabels}
+                        readOnlyMemory={emulator?.readOnlyMemory}
                         style="flex: 1 0 auto; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                         systemSize={emulator.systemSize}
                         endianess={emulator.memory.global.endianess}

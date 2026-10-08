@@ -51,6 +51,9 @@
 
     let hexAddress = $derived(currentAddress.toString(16))
     let inputRef = $state<HTMLInputElement | undefined>()
+    let addressFocused = $state(false)
+    let caretAtEnd = $state(false)
+    let inputScroll = $state(0)
 
     let error = $state('')
     let filter = $state('')
@@ -58,6 +61,66 @@
     let chosen = $state<bigint | undefined>()
     const regions = $derived(emulator?.memoryRegions ?? [])
     const labels = $derived(emulator?.dataLabels ?? [])
+    function addressInView(address: bigint) {
+        return address >= currentAddress && address < currentAddress + BigInt(bytesPerPage)
+    }
+    const searchChangesView = $derived.by(() => {
+        try {
+            const address = resolveMemoryAddress(
+                hexAddress || '0',
+                !!emulator?.buildSources,
+                name => emulator?.resolveMemoryLabel(name)
+            )
+            return address >= 0n && address <= memorySize && !addressInView(address)
+        } catch {
+            return false
+        }
+    })
+    const sourceLabelNames = $derived.by(() => {
+        const files = [
+            ...Object.values(emulator?.buildSources?.files ?? {}),
+            ...(showLibrary ? Object.values(emulator?.buildLibraryFiles ?? {}) : [])
+        ]
+        // Include code labels from the built sources. Resolution below rejects other tokens.
+        return files.filter(file => file.encoding === 'plain').flatMap(file =>
+            Array.from(file.content.matchAll(/^[\t ]*([A-Za-z_.$?@][\w.$?@]*)(?=[:\t ]|$)/gm), match => match[1])
+        )
+    })
+    const completionNames = $derived(
+        [...new Set([
+            ...labels.filter(label => showLibrary || !label.fromLibrary)
+                .flatMap(label => label.displayName ? [label.displayName, label.name] : [label.name]),
+            ...sourceLabelNames
+        ])]
+            .sort((a, b) => a.localeCompare(b))
+    )
+    const completion = $derived.by(() => {
+        const builtEmulator = emulator
+        if (!builtEmulator?.buildSources || !addressFocused || !caretAtEnd || !hexAddress) return ''
+        const match = completionNames.find(name =>
+            name.startsWith(hexAddress) && builtEmulator.resolveMemoryLabel(name) !== undefined
+        )
+        return match && match !== hexAddress ? match : ''
+    })
+
+    function updateAddressInputState() {
+        if (!inputRef) return
+        caretAtEnd = inputRef.selectionStart === inputRef.selectionEnd &&
+            inputRef.selectionEnd === inputRef.value.length
+        inputScroll = inputRef.scrollLeft
+    }
+
+    function onAddressKeyDown(event: KeyboardEvent) {
+        if (event.key !== 'Tab' || event.shiftKey || event.isComposing || !completion) return
+        event.preventDefault()
+        const value = completion
+        hexAddress = value
+        error = ''
+        const input = event.currentTarget as HTMLInputElement
+        input.value = value
+        input.setSelectionRange(value.length, value.length)
+        updateAddressInputState()
+    }
     type Destination = {
         key: string
         searchText?: string
@@ -141,7 +204,7 @@
                 throw new Error('Address is outside memory')
             error = ''
             hexAddress = toHexString(newAddress, systemSize)
-            updateAddress(newAddress)
+            if (!addressInView(newAddress)) updateAddress(newAddress)
         } catch (cause) {
             error = cause instanceof Error ? cause.message : 'Invalid address'
         }
@@ -175,21 +238,42 @@
             }}
         >
             {#if !hideLabel}
-                <span> Address </span>
+                <span class="address-caption"> Address </span>
             {/if}
             <span class="hex-address-label" class:hex-address-label-no-prefix={hideLabel}>
                 0x
             </span>
-            <input
-                bind:this={inputRef}
-                spellcheck="false"
-                bind:value={hexAddress}
-                class="hex-address-input"
-                aria-label="Address or label"
-                aria-invalid={!!error}
-                title={error || 'Hex address or label+offset'}
-                oninput={() => (error = '')}
-            />
+            <div class="hex-address-entry">
+                {#if completion}
+                    <div class="address-completion" aria-hidden="true">
+                        <span style:transform={`translateX(-${inputScroll}px)`}><span class="completion-prefix">{hexAddress}</span><span class="completion-suffix">{completion.slice(hexAddress.length)}</span></span>
+                    </div>
+                {/if}
+                <input
+                    bind:this={inputRef}
+                    spellcheck="false"
+                    autocomplete="off"
+                    bind:value={hexAddress}
+                    class="hex-address-input"
+                    aria-label="Address or label"
+                    aria-autocomplete="inline"
+                    aria-invalid={!!error}
+                    title={error || 'Hex address or label+offset (Tab completes labels)'}
+                    oninput={() => {
+                        error = ''
+                        updateAddressInputState()
+                    }}
+                    onfocus={() => {
+                        addressFocused = true
+                        updateAddressInputState()
+                    }}
+                    onblur={() => (addressFocused = false)}
+                    onselect={updateAddressInputState}
+                    onscroll={updateAddressInputState}
+                    onkeyup={updateAddressInputState}
+                    onkeydown={onAddressKeyDown}
+                />
+            </div>
         <Button
             onClick={searchAddress}
             hasIcon
@@ -198,13 +282,37 @@
             bg="transparent"
             color="var(--secondary-text)"
             title="Search address"
-            active={hexAddress !== currentAddress.toString(16)}
+            active={searchChangesView}
         >
             <Icon size={1}>
                 <FaSearch />
             </Icon>
         </Button>
         </div>
+
+        <Button
+            onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
+            hasIcon
+            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
+            cssVar={buttonVar}
+            title="Previous page"
+        >
+            <Icon size={1.2}>
+                <FaAngleLeft />
+            </Icon>
+        </Button>
+
+        <Button
+            onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
+            hasIcon
+            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
+            cssVar={buttonVar}
+            title="Next page"
+        >
+            <Icon size={1.2}>
+                <FaAngleRight />
+            </Icon>
+        </Button>
 
         <div class="region-picker" title={emulator?.buildSources ? currentRegion || 'Memory regions' : 'Build to see memory regions'}>
             <Select
@@ -263,29 +371,6 @@
             </Select>
         </div>
 
-        <Button
-            onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
-            hasIcon
-            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
-            cssVar={buttonVar}
-            title="Previous page"
-        >
-            <Icon size={1.2}>
-                <FaAngleLeft />
-            </Icon>
-        </Button>
-
-        <Button
-            onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
-            hasIcon
-            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
-            cssVar={buttonVar}
-            title="Next page"
-        >
-            <Icon size={1.2}>
-                <FaAngleRight />
-            </Icon>
-        </Button>
     </div>
     {#if error}<div class="address-error" role="alert">{error}</div>{/if}
 </Form>
@@ -344,7 +429,6 @@
         flex: 0 1 11rem;
         min-width: 0;
         max-width: 45%;
-        margin: 0 0.3rem;
     }
     .picker-current-region {
         display: block;
@@ -369,6 +453,7 @@
         display: flex;
         flex: 1;
         width: 100%;
+        gap: 0.3rem;
     }
 
     .hex-address {
@@ -385,12 +470,40 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
     }
-    .hex-address-input {
-        width: 100%;
+    .hex-address-entry {
+        position: relative;
         min-width: 0;
+        flex: 1;
+    }
+    .hex-address-input,
+    .address-completion {
         padding: 0.3rem 0.3rem 0.3rem 0;
         font-size: 1rem;
         font-family: monospace;
+    }
+    .address-completion {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        white-space: pre;
+        pointer-events: none;
+        color: var(--secondary-text);
+    }
+    .address-completion > span {
+        flex-shrink: 0;
+    }
+    .completion-prefix {
+        visibility: hidden;
+    }
+    .completion-suffix {
+        opacity: 0.45;
+    }
+    .hex-address-input {
+        position: relative;
+        width: 100%;
+        min-width: 0;
         color: var(--secondary-text);
         display: flex;
         flex: 1;
@@ -413,6 +526,23 @@
             grid-row: 2;
             max-width: none;
             margin: 0;
+        }
+    }
+    @container memory-controls (max-width: 14rem) {
+        .address-search {
+            grid-template-columns: repeat(2, 1.8rem) minmax(0, 1fr);
+        }
+        .hex-address {
+            grid-column: 1 / -1;
+        }
+        .address-caption {
+            display: none;
+        }
+        .hex-address-label {
+            margin-left: 0;
+        }
+        .region-picker {
+            grid-column: 3;
         }
     }
 </style>

@@ -1,6 +1,6 @@
 # Memory regions: implementation plan
 
-Written on 2026-10-08 after the design interview. The decisions are in [memory-regions.md](./memory-regions.md), the export shape in [ADR 0042](../adr/0042-memory-regions-from-core-layout-exports.md), the vocabulary in [CONTEXT.md](../../CONTEXT.md) (**Memory region**). The plan covers one release of each of the five Cores, the editor's mapping in the five adapters and the picker and tint in the memory view. Implemented in local Core builds and editor code; publication and registry dependency integration remain pending.
+Written on 2026-10-08 after the design interview. The decisions are in [memory-regions.md](./memory-regions.md), the export shape in [ADR 0042](../adr/0042-memory-regions-from-core-layout-exports.md), the vocabulary in [CONTEXT.md](../../CONTEXT.md) (**Memory region**). The plan covers one release of each of the five Cores, the editor's mapping in the five adapters and the picker and outlines in the memory view. Implemented in local Core builds and editor code; publication and registry dependency integration remain pending.
 
 ## Starting point
 
@@ -96,13 +96,13 @@ Per language, after its Core release and the dependency bump:
 
 ### M4: Memory view
 
-- **Picker** in `MemoryControls`: a button beside the search button opening a popover built on `components/shared/input/Select.svelte`'s anchored popover and type-ahead. Regions grouped by section (one row for a section of one run, a header over the runs of a split one), each run named by kind and first label with address and size, data labels under their run, devices as their own group, the "Show library labels" toggle, the tint swatches as the key. Disabled outside a Debug session ("Build to see memory regions").
+- **Picker** in `MemoryControls`: a button beside the search button opening a popover built on `components/shared/input/Select.svelte`'s anchored popover and type-ahead. Regions grouped by section (one row for a section of one run, a header over the runs of a split one), each run named by kind and first label with address and size, data labels under their run, devices as their own group, the "Show library labels" toggle, the outline swatches as the key. Disabled outside a Debug session ("Build to see memory regions").
 - **Current region** shown in the controls (`.data · buffer`).
 - **Address input** accepts `label` and `label+offset` (decision 9), resolved through the emulator's data labels and, for code labels, the Core's lookup.
-- **Tint** in `MemoryRenderer`: a background per kind with `color-mix(in srgb, var(--…) N%, transparent)` over theme colours so it follows light and dark themes; the device tint wins on overlap; the stack pointer highlight, the `??` overlay and the selection win over the tint, and the call stack keeps the text colour.
+- **Outline** in `MemoryRenderer`: a border per region drawn on the exposed edges of its cells, in `memoryRegionColor` (kind hex mixed 85% with the secondary text colour); the device outline wins on overlap; the stack pointer highlight and the selection stay on top.
 - **Hover** through `ValueDiff`'s `hoverValue`: region, nearest data label at or below with the offset, the raw name for a demangled one, both names on a device overlap, "(library)" for library labels.
 - Pass the regions and labels to all four render sites; the Playground's narrow card shows the picker as an icon button.
-- Tests: `MemoryRenderer.dom.test.ts` for tint precedence and hover text, a new `MemoryControls.dom.test.ts` for the picker, the toggle and label input. Verify in Chrome on a MARS program with the bitmap display, a RISC-V C program with `malloc`, an M68K program with interleaved `dc`, a Z80 TRS-80 program and an x86 C++ program.
+- Tests: `MemoryRenderer.dom.test.ts` for outline precedence and hover text, a new `MemoryControls.dom.test.ts` for the picker, the toggle and label input. Verify in Chrome on a MARS program with the bitmap display, a RISC-V C program with `malloc`, an M68K program with interleaved `dc`, a Z80 TRS-80 program and an x86 C++ program.
 
 ### M5: Records
 
@@ -111,7 +111,7 @@ Per language, after its Core release and the dependency bump:
 ## Implementation choices
 
 - Demangler: lazy libc++abi Emscripten module; license and rebuild script included.
-- Tint: 13% mixes of shared theme colours, verified with every built-in theme and a light palette.
+- Outline: kind colours mixed 85% with the secondary text colour (superseded the 13% background tint; see memory-regions.md decision 6).
 - Playground: icon trigger; preferred 360 px popup clamped to the viewport, verified on a 241 px card.
 - Stack threshold: 4 KiB retained in four Cores; existing course/corpus suites pass. RARS uses the fixed initial-SP fallback after benchmarking.
 
@@ -127,7 +127,7 @@ Per language, after its Core release and the dependency bump:
 | M1 Z80 | Emission kinds, alignment and adaptive stack top with Undo/snapshot restoration implemented; machine and distribution tests pass. |
 | M2 | MARS MMIO/current bitmap and enabled TRS-80 regions implemented. |
 | M3 | All five adapters map Core facts; compiled names, collision handling and literal previews implemented. |
-| M4 | Picker, current-region description, label/offset input, tint and hover wired to every render site. DOM and real-browser checks pass. |
+| M4 | Picker, current-region description, label/offset input, outline and hover wired to every render site. DOM and real-browser checks pass. |
 | M5 | Design updated with implementation choices and deviations. |
 | Releases | Core manifests and README APIs prepared. Owner release commits, pushes/publication, editor submodule pointers and registry dependency pins pending. |
 

@@ -5,7 +5,7 @@ date: 2026-10-08
 
 # Work out Memory regions in the editor from each Core's own layout exports
 
-The memory view's region picker and byte tint need to know where a program's code, data and reserved room lie, where its heap and stack end, and which data labels fall where. Each Core exports the layout facts it already holds, in its own words: MARS and RARS their symbol table with its data/text flag, their section bases and their heap break; s68k each line's item kind and address range with its symbols; Blink the linked ELF's section headers and symbol table; Z80 its typed symbols and each line's kind. The language adapter turns those facts into **Memory regions** and data labels, as it turns flat register arrays into **Register files** ([ADR 0021](./0021-register-files-from-core-exports.md)). Memory-mapped devices are not the Cores' to report: each **Peripheral** that maps memory reports its own regions, and the Emulator merges them with the program's.
+The memory view's region picker and byte outlines need to know where a program's code, data and reserved room lie, where its heap and stack end, and which data labels fall where. Each Core exports the layout facts it already holds, in its own words: MARS and RARS their symbol table with its data/text flag, their section bases and their heap break; s68k each line's item kind and address range with its symbols; Blink the linked ELF's section headers and symbol table; Z80 its typed symbols and each line's kind. The language adapter turns those facts into **Memory regions** and data labels, as it turns flat register arrays into **Register files** ([ADR 0021](./0021-register-files-from-core-exports.md)). Memory-mapped devices are not the Cores' to report: each **Peripheral** that maps memory reports its own regions, and the Emulator merges them with the program's.
 
 ## Considered options
 
@@ -17,4 +17,4 @@ The memory view's region picker and byte tint need to know where a program's cod
 
 - All five Cores release before the editor half lands, and the per-language mapping lives in five adapters.
 - The static layout is read once per Build. Only the moving ends, the heap break and the stack's top, are read on each refresh, as plain numbers beside the stack pointer the editor already reads. The Core keeps the stack's top itself, applying its rule after every instruction and restoring it on Undo, because the editor sees a Run only in slices.
-- A device region can overlap a program region, as the MARS bitmap does `.data` by default. Both stay regions, and the grid tints the device.
+- A device region can overlap a program region, as the MARS bitmap does `.data` by default. Both stay regions, and the grid outlines the device.

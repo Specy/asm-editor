@@ -72,6 +72,7 @@
         <MemoryVisualiser
             memoryRegions={emulator?.memoryRegions}
             dataLabels={emulator?.dataLabels}
+            readOnlyMemory={emulator?.readOnlyMemory}
             {systemSize}
             {memorySize}
             dense

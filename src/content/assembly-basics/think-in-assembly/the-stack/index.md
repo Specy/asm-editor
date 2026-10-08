@@ -182,6 +182,7 @@ Execute this code step by step and look at the memory to see how the stack is ma
 
 ```m68k|playground|no-registers|memory|no-flags|allow-open
 * ignore this, it sets things up *
+ org $2000
 move.l #$11111111, $101C
 move.l #$22222222, $1018
 move.l #$1018, sp

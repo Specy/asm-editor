@@ -92,6 +92,7 @@
     <div class="code-area">
         <CompilationNotice
             notice={group.compilationNotice}
+            rightAligned={group.sourceMappingLost}
             recompile={group.sourceMappingLost
                 ? {
                       busy: session.compiling && session.compilingGroupId === group.id,

@@ -3,8 +3,10 @@ import {
     memoryLayoutFromItems,
     mergeMemoryRegions,
     memoryHover,
+    readOnlyMemoryAt,
     regionsAt,
-    resolveMemoryAddress
+    resolveMemoryAddress,
+    textSegmentsReadOnly
 } from './memoryRegions'
 
 describe('memory regions', () => {
@@ -64,5 +66,19 @@ describe('memory regions', () => {
         expect(resolveMemoryAddress('0xDEAD', false, lookup)).toBe(0xdeadn)
         expect(() => resolveMemoryAddress('buffer', false, lookup)).toThrow('Build')
         expect(() => resolveMemoryAddress('missing', true, lookup)).toThrow('Unknown label')
+    })
+    it('reads text segments as unsigned read only ranges and finds overlaps', () => {
+        const ranges = textSegmentsReadOnly(
+            Int32Array.of(0x00400000, 0x10000000, 0x80000000 | 0, 0x90000000 | 0)
+        )
+        expect(ranges.map(({ start, end }) => [start, end])).toEqual([
+            [0x00400000n, 0x10000000n],
+            [0x80000000n, 0x90000000n]
+        ])
+        expect(readOnlyMemoryAt(ranges, 0x003ffffcn, 4n)).toBeUndefined()
+        expect(readOnlyMemoryAt(ranges, 0x003ffffcn, 5n)).toBe(ranges[0])
+        expect(readOnlyMemoryAt(ranges, 0x0ffffffcn, 4n)).toBe(ranges[0])
+        expect(readOnlyMemoryAt(ranges, 0x10000000n, 16n)).toBeUndefined()
+        expect(readOnlyMemoryAt(ranges, 0x80000180n, 1n)).toBe(ranges[1])
     })
 })

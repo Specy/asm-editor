@@ -43,6 +43,7 @@ export function editorGroupsFixture(language: AvailableLanguages = 'RISC-V') {
         setBreakpointResolver: (resolver: typeof breakpointResolver) => {
             breakpointResolver = resolver
         },
+        setGlobalMemorySize: (_pageSize: number, _rowSize: number) => {},
         clear: () => {}
     })
     let session!: WorkbenchSession

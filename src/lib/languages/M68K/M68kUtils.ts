@@ -33,6 +33,14 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
                 return `${prepend} Address error: Tried to read/write to an odd memory address "${error.value.address}" using non-byte operation with size "${error.value.size}" `
             }
             break
+        case 'InstructionAccess':
+            if (isRecord(error.value) && typeof error.value.address === 'number') {
+                const address = `$${error.value.address.toString(16).toUpperCase()}`
+                return error.value.write
+                    ? `${prepend} Cannot write to an instruction: address ${address} is not available as it holds assembled instructions`
+                    : `${prepend} Cannot read from an instruction: address ${address} is not available as it holds assembled instructions`
+            }
+            break
         case 'ChkOutOfBounds':
             if (isRecord(error.value)) {
                 return `${prepend} CHK exception: ${error.value.value} is outside 0..${error.value.bound}`
