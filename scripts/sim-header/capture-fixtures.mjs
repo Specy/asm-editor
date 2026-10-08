@@ -15,6 +15,11 @@
  * response, and so are the fields of a line it never reads. x86's translator reads every line's
  * text, its `.file` and `.loc` included, and nothing else, so an x86 fixture keeps exactly that.
  */
+import {
+    compilerPreset,
+    compilerCodeFlags,
+    compilerLanguageFlags
+} from '../../src/lib/sourceCompilation/compilerContract.mjs'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,20 +33,26 @@ const runtimeHeaders = JSON.parse(
     readFileSync(join(repository, 'src/lib/sourceRuntime/generated/v1/include.json'), 'utf8')
 )
 
-const TARGETS = {
-    MIPS: { header: 'mips', compilers: { gcc: 'cmipsg1420', clang: 'mipsel-cclang2110' } },
-    'RISC-V': {
-        header: 'riscv32',
-        compilers: { gcc: 'rv32-cgcc1420', clang: 'rv32-cclang2110' },
-        flags: '-march=rv32imfd -mabi=ilp32d'
-    },
-    'RISC-V-64': {
-        header: 'riscv64',
-        compilers: { gcc: 'rv64-cgcc1420', clang: 'rv64-cclang2110' },
-        flags: '-march=rv64imfd -mabi=lp64d'
-    },
-    X86: { header: 'x86_64', compilers: { gcc: 'cg142' }, cpp: { gcc: 'g142' } }
-}
+const TARGETS = Object.fromEntries(
+    [
+        ['MIPS', 'mips'],
+        ['RISC-V', 'riscv32'],
+        ['RISC-V-64', 'riscv64'],
+        ['X86', 'x86_64']
+    ].map(([target, header]) => [
+        target,
+        {
+            header,
+            compilers: Object.fromEntries(
+                (target === 'X86' ? ['gcc'] : ['gcc', 'clang']).map((compiler) => [
+                    compiler,
+                    compilerPreset(target, 'c', compiler, GCC_INTEL_V1).id
+                ])
+            ),
+            cpp: { gcc: compilerPreset(target, 'cpp', 'gcc', GCC_INTEL_V1).id }
+        }
+    ])
+)
 const MARS_TARGETS = ['MIPS', 'RISC-V', 'RISC-V-64']
 
 /** The Runtime library's headers an x86 program may include: `X86_HEADERS` in compilerExplorer.ts. */
@@ -62,36 +73,12 @@ const X86_HEADERS = [
     'new'
 ]
 
-/** `compilerPreset`'s architecture flags. */
-function architecture(target, compiler) {
-    if (target !== 'MIPS') return TARGETS[target].flags
-    const delaySlots =
-        compiler === 'clang' ? '-mllvm -disable-mips-delay-filler' : '-fno-delayed-branch'
-    return `-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 ${delaySlots} -mfp32 -mhard-float -EL`
-}
-
-/**
- * `createCompilerRequest`'s arguments for a source under `src/`, without source annotations: x86's
- * from its translation profile, the others' for C.
- */
 function userArguments(target, compiler, optimization, language) {
     const sourcePath = language === 'cpp' ? 'src/main.cpp' : 'src/main.c'
     const projectFlags = `-iquote 'project/src' -iquote project -include 'project/${sourcePath}'`
-    if (target === 'X86') {
-        const profile = GCC_INTEL_V1.flags
-        const common = [
-            `-O${optimization}`,
-            '-fdiagnostics-color=never',
-            '-fno-section-anchors',
-            '-ffreestanding',
-            ...profile.translation,
-            ...profile.locations
-        ].join(' ')
-        const cpp = language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''
-        return `${common} -nostdinc -isystem sysroot/include ${profile.target.join(' ')} ${projectFlags} ${profile.language[language].join(' ')}${cpp}`
-    }
-    const options = compiler === 'clang' ? '-fno-addrsig' : '-fno-section-anchors'
-    return `-O${optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie ${options} -nostdinc -isystem sysroot/include ${architecture(target, compiler)} ${projectFlags} -std=c17`
+    const profile = target === 'X86' ? GCC_INTEL_V1 : undefined
+    const preset = compilerPreset(target, language, compiler, profile)
+    return `${compilerCodeFlags(compiler, optimization, false, profile)} -nostdinc -isystem sysroot/include ${preset.architecture} ${projectFlags} ${compilerLanguageFlags(language, profile)}`
 }
 
 /**

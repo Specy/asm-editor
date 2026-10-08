@@ -1,11 +1,6 @@
 import { tick, untrack } from 'svelte'
-import {
-    compiledLanguages,
-    resolveAssemblyProfile,
-    resolveRuntimeLink,
-    resolveX86Start
-} from '$lib/sourceCompilation/assemblyProfile'
-import { hasRuntimeLibrary, RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import { projectBuildSources } from '$lib/buildSources'
+import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
 import {
     linksX86StartUnit,
     X86_START_UNIT_FILES,
@@ -303,38 +298,19 @@ export class WorkbenchSession {
             resolveProjectSettings(this.project.language, this.project.settings)
         )
         this.sourceInput = $derived.by<BuildSources>(() => {
-            const sources = {
-                files: $state.snapshot(this.project.files),
-                compiledLanguages: compiledLanguages(
-                    { files: this.project.files, entry: this.project.entry },
-                    this.project.compilations
-                ),
-                entry: this.project.entry
-            }
-            const x86 = this.project.language === 'X86'
-            if (!hasRuntimeLibrary(this.project.language) && !x86) return sources
+            const files = $state.snapshot(this.project.files)
             try {
-                //x86 has no Runtime library yet: compiled code links the editor's start unit
-                if (x86)
-                    return { ...sources, ...resolveX86Start(sources, this.project.compilations) }
-                return {
-                    ...sources,
-                    //the profile Setting chooses between RISC-V dialects; MIPS has only MARS's own
-                    //and the GNU compiler profile its Generated assembly requires
-                    assemblerProfile: resolveAssemblyProfile(
-                        sources,
-                        this.project.compilations,
-                        this.project.language === 'MIPS' ? undefined : this.project.settings
-                    ),
-                    ...resolveRuntimeLink(
-                        sources,
-                        this.project.compilations,
-                        this.project.settings?.linkRuntimeLibrary
-                    )
-                }
+                return projectBuildSources({
+                    files,
+                    entry: this.project.entry,
+                    language: this.project.language,
+                    compilations: this.project.compilations,
+                    settings: this.project.settings
+                })
             } catch (error) {
                 return {
-                    ...sources,
+                    files,
+                    entry: this.project.entry,
                     assemblyError: error instanceof Error ? error.message : String(error)
                 }
             }

@@ -1,3 +1,12 @@
+import {
+    compilerPreset,
+    compilerCodeFlags,
+    compilerLanguageFlags,
+    prepareCompilerLines
+} from './compilerContract.mjs'
+export { compilerPreset } from './compilerContract.mjs'
+import { compilationInputs } from './compilationInputs'
+export { compilationInputs } from './compilationInputs'
 import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
 import {
     fileFingerprint,
@@ -11,7 +20,7 @@ import {
     type SourceCompiler,
     type SourceLocation
 } from './records'
-import { isValidFilePath, resolveFilePath, type ProjectFiles } from '$lib/projectFiles'
+import { isValidFilePath, type ProjectFiles } from '$lib/projectFiles'
 import { CURRENT_RUNTIME_ABI } from '$lib/runtimeAbi'
 import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
 import {
@@ -95,43 +104,6 @@ export type X86Translator = {
 function x86Flags(profile: TranslationProfile | undefined) {
     if (!profile) throw new Error('An x86 compilation needs the translation profile of its output.')
     return profile.flags
-}
-
-export function compilerPreset(
-    target: CompilationTarget,
-    language: SourceLanguage,
-    compiler: SourceCompiler = defaultSourceCompiler(target),
-    profile?: TranslationProfile
-) {
-    //GCC whatever was asked for: the translation of x86 output to NASM is verified on GCC 14.2's
-    //output alone, so x86 offers no other compiler
-    if (target === 'X86')
-        return {
-            id: language === 'cpp' ? 'g142' : 'cg142',
-            architecture: x86Flags(profile).target.join(' ')
-        }
-    const ids = {
-        MIPS: { c: 'cmipsg1420', cpp: 'mipsg1420' },
-        'RISC-V': { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' },
-        'RISC-V-64': { c: 'rv64-cgcc1420', cpp: 'rv64-gcc1420' }
-    }
-    // MARS skips branch delay slots, so the compiler must fill them with nops.
-    const mipsDelaySlots =
-        compiler === 'clang' ? '-mllvm -disable-mips-delay-filler' : '-fno-delayed-branch'
-    const architecture =
-        target === 'MIPS'
-            ? // little-endian: MARS memory is, so -EB code read its bytes and halves the wrong way round
-              `-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 ${mipsDelaySlots} -mfp32 -mhard-float -EL`
-            : target === 'RISC-V'
-              ? '-march=rv32imfd -mabi=ilp32d'
-              : '-march=rv64imfd -mabi=lp64d'
-    const clangIds = {
-        MIPS: { c: 'mipsel-cclang2110', cpp: 'mipsel-clang2110' },
-        'RISC-V': { c: 'rv32-cclang2110', cpp: 'rv32-clang2110' },
-        'RISC-V-64': { c: 'rv64-cclang2110', cpp: 'rv64-clang2110' }
-    }
-    const id = compiler === 'clang' ? clangIds[target][language] : ids[target][language]
-    return { id, architecture }
 }
 
 function diagnostic(
@@ -288,52 +260,6 @@ function compilerDiagnostics(
 }
 
 /**
- * Track quoted local includes recursively; computed includes conservatively depend on all headers.
- * An angle-bracket include never reads a Project File, as the request searches the Project only
- * for quoted ones.
- */
-export function compilationInputs(
-    sourcePath: string,
-    files: ProjectFiles
-): Readonly<Record<string, string>> {
-    const headers = Object.keys(files).filter(
-        (path) => /\.(h|hpp|hh|hxx|inc)$/i.test(path) && files[path].encoding === 'plain'
-    )
-    const seen = new Set<string>()
-    const visit = (path: string) => {
-        if (seen.has(path)) return
-        seen.add(path)
-        const content = files[path]?.content ?? ''
-        // Comments cannot introduce an include dependency. Preserve newlines for the directive scan.
-        const text = content
-            .replace(/\/\*[\s\S]*?\*\//g, (s) => s.replace(/[^\n]/g, ' '))
-            .replace(/\/\/[^\n]*/g, '')
-        for (const match of text.matchAll(/^\s*#\s*include\s+([^\n]+)/gm)) {
-            if (match[1].startsWith('<')) continue
-            const include = /^"([^"]+)"/.exec(match[1])
-            if (!include) {
-                for (const header of headers) visit(header)
-                continue
-            }
-            const directory = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
-            for (const candidate of [directory + include[1], include[1]]) {
-                try {
-                    const resolved = resolveFilePath(candidate)
-                    if (headers.includes(resolved)) {
-                        visit(resolved)
-                        break
-                    }
-                } catch {
-                    /* An external/system include is left to the compiler. */
-                }
-            }
-        }
-    }
-    visit(sourcePath)
-    return Object.fromEntries([...seen].map((path) => [path, fileFingerprint(files[path])!]))
-}
-
-/**
  * The Compiler Explorer request. A program is hosted: it compiles with `-nostdinc` against the
  * Runtime library's headers, uploaded as `sysroot/include`, so an unsupported header is a clear
  * error and no toolchain header leaks in, and `main` keeps its name and its implicit `return 0`.
@@ -366,26 +292,13 @@ export function createCompilerRequest(
         ([path, file]) => /\.(h|hpp|hh|hxx|inc)$/i.test(path) && file.encoding === 'plain'
     )
     const sourceAnnotations = compiler === 'clang' && request.sourceAnnotations
-    const annotations = sourceAnnotations ? '-fverbose-asm' : '-fno-verbose-asm'
-    const compilerOptions =
-        compiler === 'clang'
-            ? `-fno-addrsig${sourceAnnotations ? ' -fno-discard-value-names' : ''}`
-            : '-fno-section-anchors'
-    const common = x86
-        ? [
-              `-O${request.optimization}`,
-              '-fdiagnostics-color=never',
-              '-fno-section-anchors',
-              '-ffreestanding',
-              ...x86.translation,
-              ...x86.locations
-          ].join(' ')
-        : `-O${request.optimization} -g1 -fdiagnostics-color=never ${annotations} -fno-stack-protector -fno-pie ${compilerOptions}`
-    const standard = x86
-        ? x86.language[language].join(' ')
-        : language === 'cpp'
-          ? '-std=c++17 -fno-exceptions -fno-rtti'
-          : '-std=c17'
+    const common = compilerCodeFlags(
+        compiler,
+        request.optimization,
+        !!sourceAnnotations,
+        x86 ? profile : undefined
+    )
+    const standard = compilerLanguageFlags(language, x86 ? profile : undefined)
     // Compiler Explorer writes the primary input as example.c/cpp at its working directory's
     // root. A #line directive only changes locations, so compiling the source there would search
     // root headers before the source's own directory. Include an uploaded source instead, keeping
@@ -396,7 +309,7 @@ export function createCompilerRequest(
         contents: `#line 1 ${JSON.stringify(path)}\n${content}`
     })
     const quoteDirectory = directory === '.' ? projectDirectory : `${projectDirectory}/${directory}`
-    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(quoteDirectory)} -iquote ${projectDirectory} -include ${quote(`${projectDirectory}/${request.sourcePath}`)} ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
+    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(quoteDirectory)} -iquote ${projectDirectory} -include ${quote(`${projectDirectory}/${request.sourcePath}`)} ${standard}`
     const body = {
         source: '/* The program is uploaded at its Project path and read through -include. */\n',
         lang: language === 'cpp' ? 'c++' : 'c',
@@ -432,38 +345,9 @@ export function createCompilerRequest(
     return { compilerId: preset.id, language, body, json }
 }
 
-/** Labels GCC's MIPS output defines only for the debug sections, which are dropped. */
-const MIPS_DEBUG_LABEL = /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/
-/**
- * The one comment the output keeps: the `@screen` directive `SIM_SCREEN` writes through a file-scope
- * `__asm__`, which a Build reads to configure the bitmap display, as it reads an assembly example's.
- * The `#APP` and `#NO_APP` markers around it go with every other comment.
- */
-const SCREEN_DIRECTIVE = /^\s*#+[ \t]*@screen\b/i
-
-/**
- * A code line without a trailing comment that reads as an `@screen` directive. Clang's source
- * annotations name a symbol after its directives, `.type screen,@object  # @screen`, which a Build
- * would take for a second directive, or for the only one in a program with a global named `screen`;
- * the directive itself is always a line of its own. A `#` inside a string literal is no comment.
- */
-function withoutScreenAnnotation(code: string) {
-    let quoted = false
-    for (let index = 0; index < code.length; index++) {
-        const character = code[index]
-        if (quoted && character === '\\') index++
-        else if (character === '"') quoted = !quoted
-        else if (!quoted && character === '#')
-            return SCREEN_DIRECTIVE.test(code.slice(index)) ? code.slice(0, index).trimEnd() : code
-    }
-    return code
-}
-
 /**
  * Remove debug payloads and compose the Source map. Every other section stays as the compiler
- * wrote it, for the GNU compiler profile to place and check, and no startup lines are added: the
- * Runtime library's `_start` calls `main`. Kept in step with `prepare` in
- * scripts/runtime/build.mjs, which prepares the Library members the same way.
+ * wrote it. Library members use the same preparation; startup stays in the runtime library.
  */
 export function prepareAssembly(
     lines: readonly AssemblyLine[],
@@ -472,34 +356,15 @@ export function prepareAssembly(
 ) {
     const text: string[] = []
     const mapping: (SourceLocation | null)[] = []
-    let debugSection = false
     let foundMain = false
     const lineCounts = new Map<string, number>()
     const sourceAnnotations =
         (request.compiler ?? defaultSourceCompiler(request.target)) === 'clang' &&
         request.sourceAnnotations
-    for (const line of lines) {
-        const code = line.text
-        const blockComment = sourceAnnotations && /^\s*#\s*%bb\.\d+:\s*#\s*%[\w.]+\s*$/.test(code)
-        const section = /^\s*\.section\s+(?:"([^"]+)"|([^\s,]+))/.exec(code)?.slice(1).find(Boolean)
-        if (section) debugSection = /^\.(?:debug|zdebug|mdebug|note|comment|eh_frame)/.test(section)
-        else if (/^\s*\.(?:text|data|bss|sdata|sbss|rodata|rdata)\b/.test(code))
-            debugSection = false
-        else if (debugSection && /^\s*\.previous\b/.test(code)) {
-            //back to the section before the debug one, where the lines after it belong
-            debugSection = false
-            continue
-        }
-        if (
-            debugSection ||
-            /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
-            (request.target === 'MIPS' && MIPS_DEBUG_LABEL.test(code)) ||
-            (/^\s*#/.test(code) && !blockComment && !SCREEN_DIRECTIVE.test(code)) ||
-            !code.trim()
-        )
-            continue
-        if (/^\s*main:/.test(code)) foundMain = true
-        text.push(/^\s*#/.test(code) ? code : withoutScreenAnnotation(code))
+    for (const prepared of prepareCompilerLines(lines, request.target, !!sourceAnnotations)) {
+        const line = lines[prepared.index]
+        if (/^\s*main:/.test(prepared.text)) foundMain = true
+        text.push(prepared.text)
         const path = projectPath(
             line.source?.file,
             request.sourcePath,

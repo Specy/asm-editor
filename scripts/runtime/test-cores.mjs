@@ -10,6 +10,13 @@
 //
 // Compiler Explorer responses are cached under runtime/.cache/corpus by a hash of the request, so a
 // rerun needs no network unless a program, a header or the flags changed; --offline fails instead.
+import {
+    RUNTIME_TARGETS,
+    compilerPreset,
+    compilerCodeFlags,
+    compilerLanguageFlags,
+    prepareCompilerLines
+} from '../../src/lib/sourceCompilation/compilerContract.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -23,38 +30,7 @@ const generated = join(repository, 'src', 'lib', 'sourceRuntime', 'generated', '
 const cache = join(runtime, '.cache', 'corpus')
 const INSTRUCTION_LIMIT = Number(process.env.INSTRUCTION_LIMIT ?? 200_000_000)
 
-/** Kept in step with compilerPreset in src/lib/sourceCompilation/compilerExplorer.ts. */
-const TARGETS = {
-    riscv32: {
-        core: 'risc-v',
-        width: 32,
-        compilers: {
-            gcc: { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' },
-            clang: { c: 'rv32-cclang2110', cpp: 'rv32-clang2110' }
-        },
-        flags: () => '-march=rv32imfd -mabi=ilp32d'
-    },
-    riscv64: {
-        core: 'risc-v',
-        width: 64,
-        compilers: {
-            gcc: { c: 'rv64-cgcc1420', cpp: 'rv64-gcc1420' },
-            clang: { c: 'rv64-cclang2110', cpp: 'rv64-clang2110' }
-        },
-        flags: () => '-march=rv64imfd -mabi=lp64d'
-    },
-    mips: {
-        core: 'mips',
-        width: 32,
-        compilers: {
-            gcc: { c: 'cmipsg1420', cpp: 'mipsg1420' },
-            clang: { c: 'mipsel-cclang2110', cpp: 'mipsel-clang2110' }
-        },
-        // MARS skips branch delay slots, so the compiler must leave a nop in each
-        flags: (compiler) =>
-            `-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 ${compiler === 'clang' ? '-mllvm -disable-mips-delay-filler' : '-fno-delayed-branch'} -mfp32 -mhard-float -EL`
-    }
-}
+const TARGETS = RUNTIME_TARGETS
 
 const args = process.argv.slice(2)
 const option = (name) => {
@@ -98,10 +74,10 @@ function walk(directory) {
 /** The editor's compile request for a hosted program (createCompilerRequest in compilerExplorer.ts). */
 function request(target, name, source, language, optimization, headers) {
     const settings = TARGETS[target]
-    const compilerOptions = compiler === 'clang' ? '-fno-addrsig' : '-fno-section-anchors'
-    const userArguments = `-O${optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie ${compilerOptions} -nostdinc -isystem sysroot/include ${settings.flags(compiler)} -iquote '.' -iquote . ${language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++' : '-std=c17'}`
+    const preset = compilerPreset(settings.language, language, compiler)
+    const userArguments = `${compilerCodeFlags(compiler, optimization)} -nostdinc -isystem sysroot/include ${preset.architecture} -iquote '.' -iquote . ${compilerLanguageFlags(language)}`
     return {
-        compilerId: settings.compilers[compiler][language],
+        compilerId: preset.id,
         body: {
             // Compiled under its bare name, as the native oracle is, so __FILE__ matches.
             source: `#line 1 ${JSON.stringify(name)}\n${source}`,
@@ -157,33 +133,12 @@ async function compile(target, prepared) {
     }
 }
 
-/** The editor's preparation of hosted output (prepareAssembly): debug material out, every other section kept. */
 function prepare(lines, target) {
-    const text = []
-    let debug = false
-    for (const { text: code } of lines) {
-        const section = /^\s*\.section\s+(?:"([^"]+)"|([^\s,]+))/.exec(code)?.slice(1).find(Boolean)
-        if (section) debug = /^\.(?:debug|zdebug|mdebug|note|comment|eh_frame)/.test(section)
-        else if (/^\s*\.(?:text|data|bss|sdata|sbss|rodata|rdata)\b/.test(code)) debug = false
-        else if (debug && /^\s*\.previous\b/.test(code)) {
-            debug = false
-            continue
-        }
-        if (
-            debug ||
-            /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
-            /^\s*#/.test(code) ||
-            !code.trim()
-        )
-            continue
-        if (
-            TARGETS[target].core === 'mips' &&
-            /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/.test(code)
-        )
-            continue
-        text.push(code)
-    }
-    return text.join('\n') + '\n'
+    return (
+        prepareCompilerLines(lines, TARGETS[target].language)
+            .map((line) => line.text)
+            .join('\n') + '\n'
+    )
 }
 
 /** A Core with the program and the library, started at the library's `_start`. */

@@ -155,6 +155,9 @@ export abstract class BaseEmulator<R extends string> {
     /** Preflights a complete grouped rollback before changing any CPU or peripheral state. */
     _canUndoSteps?(count: number): boolean
 
+    /** Reversibility metadata for a displayed group, without loading its mutation payloads. */
+    _canUndoHistoryRange?(skip: number, count: number): boolean
+
     /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
 

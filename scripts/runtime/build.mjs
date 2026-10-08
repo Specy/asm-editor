@@ -17,6 +17,11 @@
 // the same strong global, when a documented function has no member, or when the ABI changes
 // against runtime/abi/<abi>.json (exported names removed or struct layouts changed) unless
 // --update-abi records the new baseline.
+import {
+    RUNTIME_TARGETS,
+    compilerLanguageFlags,
+    prepareCompilerLines
+} from '../../src/lib/sourceCompilation/compilerContract.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -29,39 +34,10 @@ const API = 'https://godbolt.org/api'
 const output = join(repository, 'src', 'lib', 'sourceRuntime', 'generated', ABI)
 const cacheDirectory = join(runtime, '.cache')
 
-/** Kept in step with compilerPreset in src/lib/sourceCompilation/compilerExplorer.ts. */
-export const TARGETS = {
-    riscv32: {
-        language: 'RISC-V',
-        core: 'risc-v',
-        width: 32,
-        arch: 'riscv32',
-        compilers: { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' },
-        flags: '-march=rv32imfd -mabi=ilp32d'
-    },
-    riscv64: {
-        language: 'RISC-V-64',
-        core: 'risc-v',
-        width: 64,
-        arch: 'riscv64',
-        compilers: { c: 'rv64-cgcc1420', cpp: 'rv64-gcc1420' },
-        flags: '-march=rv64imfd -mabi=lp64d'
-    },
-    mips: {
-        language: 'MIPS',
-        core: 'mips',
-        width: 32,
-        arch: 'mips',
-        compilers: { c: 'cmipsg1420', cpp: 'mipsg1420' },
-        // little-endian, as MARS memory is
-        flags: '-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 -fno-delayed-branch -mfp32 -mhard-float -EL'
-    }
-}
+export const TARGETS = RUNTIME_TARGETS
 
 const LIBRARY_FLAGS =
     '-Os -g1 -fdiagnostics-color=never -fno-verbose-asm -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns -fno-stack-protector -fno-pie -fno-section-anchors -nostdinc -isystem sysroot/include -I src/internal'
-const C_FLAGS = '-std=c17'
-const CPP_FLAGS = '-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++'
 
 const args = process.argv.slice(2)
 const option = (name) => {
@@ -116,7 +92,7 @@ async function compile(target, path, files) {
     const language = path.endsWith('.cpp') ? 'cpp' : 'c'
     const relativePath = posix(relative(runtime, path))
     const directory = posix(dirname(relativePath))
-    const userArguments = `${LIBRARY_FLAGS} -iquote ${directory} -I arch ${settings.flags} ${language === 'cpp' ? CPP_FLAGS : C_FLAGS}`
+    const userArguments = `${LIBRARY_FLAGS} -iquote ${directory} -I arch ${settings.flags} ${compilerLanguageFlags(language)}`
     const body = {
         source: `#line 1 "${relativePath}"\n${read(path)}`,
         lang: language === 'cpp' ? 'c++' : 'c',
@@ -167,49 +143,20 @@ async function compile(target, path, files) {
     }
 }
 
-const DEBUG_SECTION = /^\.(?:debug|zdebug|mdebug|note|comment|eh_frame)/
-/** Labels GCC's MIPS output defines only for the debug sections, which are dropped. */
-const MIPS_DEBUG_LABEL = /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/
-/** The one comment kept: a `@screen` directive, which `<sim.h>`'s `SIM_SCREEN` writes. */
-const SCREEN_DIRECTIVE = /^\s*#+[ \t]*@screen\b/i
-/**
- * The editor's preparation of hosted compiler output (prepareAssembly in compilerExplorer.ts):
- * debug material out, every other section kept.
- */
 function prepare(lines, target) {
-    const text = []
-    const map = []
-    let debug = false
-    for (const line of lines) {
-        const code = line.text
-        const section = /^\s*\.section\s+(?:"([^"]+)"|([^\s,]+))/.exec(code)?.slice(1).find(Boolean)
-        if (section) debug = DEBUG_SECTION.test(section)
-        else if (/^\s*\.(?:text|data|bss|sdata|sbss|rodata|rdata)\b/.test(code)) debug = false
-        else if (debug && /^\s*\.previous\b/.test(code)) {
-            // Back to the section before the debug one, which is where the lines after belong.
-            debug = false
-            continue
-        }
-        if (
-            debug ||
-            /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
-            (TARGETS[target].core === 'mips' && MIPS_DEBUG_LABEL.test(code)) ||
-            (/^\s*#/.test(code) && !SCREEN_DIRECTIVE.test(code)) ||
-            !code.trim()
-        )
-            continue
-        text.push(code)
-        const source = line.source
-        map.push(
-            source &&
-                (source.file === null || source.file === undefined || source.mainsource) &&
+    const prepared = prepareCompilerLines(lines, TARGETS[target].language)
+    return {
+        text: prepared.map((line) => line.text).join('\n') + '\n',
+        map: prepared.map(({ index }) => {
+            const source = lines[index].source
+            return source &&
+                (source.file == null || source.mainsource) &&
                 Number.isSafeInteger(source.line) &&
                 source.line > 0
                 ? source.line - 1
                 : null
-        )
+        })
     }
-    return { text: text.join('\n') + '\n', map }
 }
 
 function memberPath(path) {
@@ -360,6 +307,10 @@ function inputsDigest(target) {
         JSON.stringify({
             compilers: settings.compilers,
             flags: settings.flags,
+            libraryFlags: LIBRARY_FLAGS,
+            compilerContract: sha(
+                read(join(repository, 'src/lib/sourceCompilation/compilerContract.mjs'))
+            ),
             files: headerFiles(target),
             sources: sources().map((path) => [posix(relative(runtime, path)), read(path)]),
             crt0: read(join(runtime, 'arch', settings.arch, 'crt0.s'))

@@ -1,5 +1,9 @@
 import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import {
+    normalizeBuildInput,
+    buildConfiguration,
+    buildConfigurationsEqual
+} from '$lib/projectFiles'
 import { languageWorkerManager } from './LanguageWorkerManager'
 import type {
     ProjectAnalysisSnapshot,
@@ -58,12 +62,7 @@ export class ProjectLanguageSession {
             target,
             entry: sources.entry,
             files: sources.files,
-            ...(sources.assemblyError ? { assemblyError: sources.assemblyError } : {}),
-            ...(sources.assemblerProfile !== undefined
-                ? { assemblerProfile: sources.assemblerProfile }
-                : {}),
-            ...(sources.runtimeAbi !== undefined ? { runtimeAbi: sources.runtimeAbi } : {}),
-            ...(sources.entrySymbol !== undefined ? { entrySymbol: sources.entrySymbol } : {})
+            ...buildConfiguration(sources)
         })
     }
 
@@ -125,10 +124,7 @@ export class ProjectLanguageSession {
         if (
             changes.length === 0 &&
             sources.entry === this.currentSources.entry &&
-            sources.assemblerProfile === this.currentSources.assemblerProfile &&
-            sources.assemblyError === this.currentSources.assemblyError &&
-            sources.runtimeAbi === this.currentSources.runtimeAbi &&
-            sources.entrySymbol === this.currentSources.entrySymbol
+            buildConfigurationsEqual(sources, this.currentSources)
         )
             return
         this.currentSources = sources
@@ -143,12 +139,7 @@ export class ProjectLanguageSession {
             revision: this.revision,
             entry: sources.entry,
             changes,
-            ...(sources.assemblyError ? { assemblyError: sources.assemblyError } : {}),
-            ...(sources.assemblerProfile !== undefined
-                ? { assemblerProfile: sources.assemblerProfile }
-                : {}),
-            ...(sources.runtimeAbi !== undefined ? { runtimeAbi: sources.runtimeAbi } : {}),
-            ...(sources.entrySymbol !== undefined ? { entrySymbol: sources.entrySymbol } : {})
+            ...buildConfiguration(sources)
         })
     }
 

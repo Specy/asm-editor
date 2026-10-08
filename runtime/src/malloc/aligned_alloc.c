@@ -15,7 +15,7 @@ void *aligned_alloc(size_t align, size_t n)
 		return 0;
 	}
 	if (align <= ALIGN) return malloc(n);
-	if (n > MAX_REQUEST - align - MIN_CHUNK) {
+	if (align > MAX_REQUEST - MIN_CHUNK || n > MAX_REQUEST - align - MIN_CHUNK) {
 		errno = ENOMEM;
 		return 0;
 	}

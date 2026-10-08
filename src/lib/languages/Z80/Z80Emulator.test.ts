@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
 import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 
@@ -375,6 +375,26 @@ describe('Z80 Pokes', () => {
         expect(registerOf(emulator, 'a')).toBe(2n)
     })
 
+    it('keeps Poke Undo inspection bounded and preserves the last executed instruction', async () => {
+        const emulator = await stepped(LOADS, 2)
+        const machine = (
+            emulator as unknown as { machine: { getHistory(max?: number): unknown[] } }
+        ).machine
+        const history = vi.spyOn(machine, 'getHistory')
+        const instruction = emulator._getLastInstruction()
+        try {
+            for (let i = 1; i <= 60; i++)
+                emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: BigInt(i) }])
+            emulator.undo(1)
+            expect(emulator._getLastInstruction()).toEqual(instruction)
+            await emulator.step()
+            emulator.undo(1)
+            expect(emulator._getLastInstruction()).toEqual(instruction)
+            expect(history.mock.calls.every(([max]) => max !== undefined && max <= 20)).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
     it('records poked memory as one step, however many bytes it spans', async () => {
         const emulator = await stepped(LOADS, 2)
         const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])

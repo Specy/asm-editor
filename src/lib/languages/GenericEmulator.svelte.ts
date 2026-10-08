@@ -1,3 +1,4 @@
+import { buildSourcesEqual } from '$lib/projectFiles'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 import { mergeMemoryRegions, readOnlyMemoryAt } from './memoryRegions'
 import {
@@ -129,31 +130,6 @@ type UndoSegment = { entries: number; grouped: boolean; floor?: true }
 const STEP_THROUGH_LIMIT = 50_000_000
 /** How often a Step running through library code hands the host a turn. */
 const STEP_THROUGH_YIELD = 2_000
-
-function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
-    if (
-        left.entry !== right.entry ||
-        left.assemblerProfile !== right.assemblerProfile ||
-        left.assemblyError !== right.assemblyError ||
-        left.runtimeAbi !== right.runtimeAbi ||
-        left.entrySymbol !== right.entrySymbol ||
-        JSON.stringify(left.compiledLanguages) !== JSON.stringify(right.compiledLanguages)
-    )
-        return false
-    const leftPaths = Object.keys(left.files)
-    const rightPaths = Object.keys(right.files)
-    if (leftPaths.length !== rightPaths.length) return false
-    return leftPaths.every((path) => {
-        const leftFile = left.files[path]
-        const rightFile = right.files[path]
-        return (
-            leftFile !== undefined &&
-            rightFile !== undefined &&
-            leftFile.encoding === rightFile.encoding &&
-            leftFile.content === rightFile.content
-        )
-    })
-}
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
@@ -865,12 +841,13 @@ export abstract class GenericEmulator<T, R extends string>
                 //newest first: the first library instruction, then the call that reached it
                 const [entered, call] = this._getUndoHistoryRange(skip + segment.entries - 2, 2)
                 if (!call) break
-                const group = this._getUndoHistoryRange(skip, segment.entries)
                 rows.push({
                     ...call,
                     undoable:
-                        group.length === segment.entries &&
-                        group.every((row) => row.undoable !== false),
+                        (this._undoDepth?.() ?? 0) >= skip + segment.entries &&
+                        (this._canUndoHistoryRange?.(skip, segment.entries) ??
+                            (skip === 0 ? this._canUndoSteps?.(segment.entries) : undefined) ??
+                            true),
                     stretch: {
                         library:
                             entered?.file

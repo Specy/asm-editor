@@ -147,9 +147,7 @@ export function cleanFiles(raw: unknown): ProjectFiles {
     return Object.freeze(files)
 }
 
-export type BuildSources = Readonly<{
-    files: ProjectFiles
-    entry: string
+export type BuildConfiguration = Readonly<{
     assemblerProfile?: import('./assemblerProfiles').AssemblerProfile
     /** A source-unit resolution failure, carried to live checking and Build as a Diagnostic. */
     assemblyError?: string
@@ -171,6 +169,54 @@ export type BuildSources = Readonly<{
         Record<string, import('./sourceCompilation/records').SourceLanguage>
     >
 }>
+
+export type BuildSources = Readonly<{ files: ProjectFiles; entry: string }> & BuildConfiguration
+
+// Exhaustive at compile time: a new configuration field must participate in every consumer.
+const BUILD_CONFIGURATION_KEYS: Record<keyof Required<BuildConfiguration>, true> = {
+    assemblerProfile: true,
+    assemblyError: true,
+    runtimeAbi: true,
+    entrySymbol: true,
+    x86Support: true,
+    compiledLanguages: true
+}
+
+export function buildConfiguration(sources: BuildConfiguration): BuildConfiguration {
+    const configuration: Record<string, unknown> = {}
+    for (const key of Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]) {
+        if (sources[key] !== undefined) configuration[key] = sources[key]
+    }
+    if (sources.compiledLanguages)
+        configuration.compiledLanguages = Object.freeze({ ...sources.compiledLanguages })
+    return Object.freeze(configuration) as BuildConfiguration
+}
+
+export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildConfiguration) {
+    return (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).every((key) => {
+        if (key !== 'compiledLanguages') return left[key] === right[key]
+        const a = left.compiledLanguages ?? {}
+        const b = right.compiledLanguages ?? {}
+        return (
+            Object.keys(a).length === Object.keys(b).length &&
+            Object.keys(a).every((path) => hasOwn(b, path) && a[path] === b[path])
+        )
+    })
+}
+
+export function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
+    return (
+        left.entry === right.entry &&
+        buildConfigurationsEqual(left, right) &&
+        Object.keys(left.files).length === Object.keys(right.files).length &&
+        Object.keys(left.files).every(
+            (path) =>
+                hasOwn(right.files, path) &&
+                left.files[path].encoding === right.files[path].encoding &&
+                left.files[path].content === right.files[path].content
+        )
+    )
+}
 
 export type BuildInput = string | BuildSources
 
@@ -211,6 +257,8 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
         ) {
             throw new ProjectFormatError(`Invalid entry symbol: ${String(input.entrySymbol)}`)
         }
+        if (hasOwn(input, 'x86Support') && typeof input.x86Support !== 'boolean')
+            throw new ProjectFormatError('Invalid x86 compiler support setting')
         if (
             hasOwn(input, 'compiledLanguages') &&
             (!input.compiledLanguages ||
@@ -225,16 +273,7 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
         return Object.freeze({
             files: cleanFiles(input.files),
             entry: input.entry,
-            ...(input.assemblyError ? { assemblyError: input.assemblyError } : {}),
-            ...(Object.prototype.hasOwnProperty.call(input, 'assemblerProfile')
-                ? { assemblerProfile: input.assemblerProfile }
-                : {}),
-            ...(hasOwn(input, 'compiledLanguages')
-                ? { compiledLanguages: Object.freeze({ ...input.compiledLanguages }) }
-                : {}),
-            ...(hasOwn(input, 'runtimeAbi') ? { runtimeAbi: input.runtimeAbi } : {}),
-            ...(hasOwn(input, 'entrySymbol') ? { entrySymbol: input.entrySymbol } : {}),
-            ...(hasOwn(input, 'x86Support') ? { x86Support: input.x86Support } : {})
+            ...buildConfiguration(input)
         })
     }
     return Object.freeze({

@@ -5,6 +5,7 @@ on:
         paths:
             - runtime/**
             - scripts/runtime/**
+            - src/lib/sourceCompilation/compilerContract.mjs
             - src/lib/sourceRuntime/generated/v1/**
             - emulators/**
             - .github/workflows/runtime-compatibility.yml
@@ -13,6 +14,7 @@ on:
         paths:
             - runtime/**
             - scripts/runtime/**
+            - src/lib/sourceCompilation/compilerContract.mjs
             - src/lib/sourceRuntime/generated/v1/**
             - emulators/**
             - .github/workflows/runtime-compatibility.yml

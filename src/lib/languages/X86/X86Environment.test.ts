@@ -83,6 +83,34 @@ describe('x86 selected environment and native transport', () => {
         }
     })
 
+    it('keeps random checkpoints bounded without fetching history during a run, including after branching', async () => {
+        const random = new RandomSource({ mode: 'seeded' })
+        const input = sources(program(['again:', 'rdrand r12', 'inc rbx', 'jmp again']))
+        const emulator = await X86Emulator(input, {
+            automaticChecking: false,
+            peripherals: { random }
+        })
+        try {
+            await emulator.compile(8, input)
+            const history = vi.spyOn(native(emulator), 'getUndoHistory')
+            const range = vi.spyOn(native(emulator), 'getUndoHistoryRange')
+            await emulator.run(1000)
+            // Inspection is bounded by the displayed history and last-instruction lookback.
+            expect(history.mock.calls.every(([max]) => max <= 32)).toBe(true)
+            expect(range.mock.calls.every(([, max]) => max <= 32)).toBe(true)
+            expect(
+                (emulator as unknown as { randomPositions: Map<string, number> }).randomPositions
+                    .size
+            ).toBeLessThanOrEqual(8)
+            const position = random.position
+            expect(emulator.undo(3)).toBe(3)
+            expect(random.position).toBe(position - 8)
+            await emulator.run(3)
+            expect(random.position).toBe(position)
+        } finally {
+            emulator.dispose()
+        }
+    })
     it('keeps history0 random loops outside the bounded Undo journal', async () => {
         const input = sources(program(['again:', 'rdrand r12', 'jmp again']))
         const emulator = await X86Emulator(input, { automaticChecking: false })

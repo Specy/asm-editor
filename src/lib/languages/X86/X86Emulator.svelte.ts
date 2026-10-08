@@ -184,8 +184,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     !this.randomPositions.has(serial)
                 ) {
                     this.randomPositions.set(serial, this._peripherals.random.position)
-                    // Native capacity bounds the oldest retained instruction; do not grow during
-                    // one long testcase/native call before control returns to the adapter.
+                    // Keep at most one checkpoint per possible retained history entry. Obsolete
+                    // serials are harmless (never reused), so no history scan is needed to prune
+                    // them. Every newer checkpoint consumes an entry; evicting the oldest beyond
+                    // capacity therefore cannot discard a checkpoint that Undo could still reach.
                     if (this.randomPositions.size > this.undoSize)
                         this.randomPositions.delete(this.randomPositions.keys().next().value!)
                 }
@@ -239,6 +241,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _canUndoSteps(count: number): boolean {
         return this.core?.canUndoSteps(count) ?? false
+    }
+
+    _canUndoHistoryRange(skip: number, count: number): boolean {
+        return this.core?.canUndoHistoryRange(skip, count) ?? false
     }
 
     _clearExecution(): void {
@@ -417,8 +423,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * is left to the caller's own fallback — the instruction about to run — as it was before Pokes.
      */
     _getLastInstruction(): Instruction | null {
-        const history = this.core?.getUndoHistory(LAST_INSTRUCTION_LOOKBACK) ?? []
-        if (history[0]?.kind !== 'poke') return null
+        if (this.core?.getUndoHistory(1)[0]?.kind !== 'poke') return null
+        const history = this.core.getUndoHistoryRange(1, LAST_INSTRUCTION_LOOKBACK - 1)
         const executed = history.find((step) => step.kind === 'instruction')
         if (!executed) return null
         return this._getInstructionAt(BigInt(executed.pc))
@@ -518,9 +524,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
+        return this._getUndoHistoryRange(0, max)
+    }
+
+    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
-            this.core?.getUndoHistory(max).map((step) => {
+            this.core?.getUndoHistoryRange(skip, max).map((step) => {
                 const mapped = mapExecutionStep(step)
                 //a Poke ran no instruction, so it has no line of its own even though the Core reads
                 //one off the pc the machine is parked on, and the History row draws no PC line for
@@ -529,15 +539,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 return { ...mapped, file: step.file || entry }
             }) ?? []
         )
-    }
-
-    /**
-     * `max` entries of the history after the newest `skip`, which is how GenericEmulator lists a Step
-     * through the start unit as the one row Undo takes back. The Core lists from the newest entry
-     * only, so the `skip` newer ones are read too; between twenty rows they are few.
-     */
-    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
-        return this._getUndoHistory(skip + max).slice(skip)
     }
 
     _hasTerminated(): boolean {
@@ -584,7 +585,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const breakpoints = request.breakpoints.map(({ file, line }) => ({ path: file, line }))
         const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
         const instructions = Number(core.getInstructionsExecuted() - before)
-        this.pruneRandomHistory()
         if (status === CoreEmulatorStatus.Running)
             return {
                 reason: core.stopReason?.kind === 'breakpoint' ? 'breakpoint' : 'budget',
@@ -623,7 +623,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const execution = this.executionController.capture()
         await this.executionController.waitFor(execution, () => core.step())
         await this.finishBlockedInstruction(execution)
-        this.pruneRandomHistory()
         return { terminated: core.hasTerminated() }
     }
 
@@ -639,18 +638,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const position = step && this.randomPositions.get(step.serial)
         if (position !== undefined) this._peripherals.random.seek(position)
         if (step) this.randomPositions.delete(step.serial)
-        this.pruneRandomHistory()
-    }
-
-    private pruneRandomHistory(): void {
-        if (this.randomPositions.size === 0) return
-        const retained = new Set(
-            this.requireCore()
-                .getUndoHistory(this.undoSize)
-                .map((step) => step.serial)
-        )
-        for (const serial of this.randomPositions.keys())
-            if (!retained.has(serial)) this.randomPositions.delete(serial)
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {

@@ -1835,6 +1835,42 @@ function controlledPerformanceTime(): { advance(milliseconds: number): void } {
 }
 
 describe('atomic grouped Undo preflight', () => {
+    it('reads only the call-site rows when displaying a long library stretch', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let pc = 0
+        emulator._getNextInstruction = () => ({
+            file: pc > 0 && pc < 1001 ? '@runtime/helper.s' : 'main.s',
+            lineNumber: pc,
+            address: BigInt(pc),
+            code: 'nop'
+        })
+        emulator._step = async () => {
+            pc++
+            emulator.coreSteps++
+            return { terminated: false }
+        }
+        emulator._undoDepth = () => emulator.coreSteps
+        const preflight = vi.fn(() => true)
+        emulator._canUndoSteps = preflight
+        const range = vi.fn((skip: number, max: number): ExecutionStep[] =>
+            Array.from({ length: max }, (_, i) => ({
+                kind: 'instruction',
+                pc: 1000 - skip - i,
+                line: 1000 - skip - i,
+                file: skip + i === 1000 ? 'main.s' : '@runtime/helper.s',
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 },
+                mutations: []
+            }))
+        )
+        emulator._getUndoHistoryRange = range
+        await emulator.step()
+        expect(emulator.latestSteps).toHaveLength(1)
+        expect(emulator.latestSteps[0].stretch?.instructions).toBe(1001)
+        expect(range).toHaveBeenCalledWith(999, 2)
+        expect(range.mock.calls.every(([, count]) => count === 2)).toBe(true)
+        expect(preflight).toHaveBeenCalledWith(1001)
+    })
     it('refuses the whole Step before CPU or Peripheral rollback when a middle entry is blocked', async () => {
         const emulator = new FakeEmulator({ automaticChecking: false })
         let pc = 0

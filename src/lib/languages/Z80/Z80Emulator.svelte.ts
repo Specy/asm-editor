@@ -133,6 +133,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * machine, which is a perfectly valid address, and `undo()` does not rewind it.
      */
     private lastInstructionAddress: number | null = null
+    private pokeInstructionAddresses = new Map<number, number | null>()
+    private historyCapacity = 0
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -243,6 +245,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _initialize(undoSize: number): void {
+        this.historyCapacity = normalizeUndoSize(undoSize)
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
         const peripherals = this._peripherals
@@ -333,6 +336,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.machine = machine
         this.screenInstructions = screenInstructions
         this.lastInstructionAddress = null
+        this.pokeInstructionAddresses.clear()
     }
 
     _dispose(): void {
@@ -344,6 +348,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.device = null
         this.cliffBreakpoints = []
         this.lastInstructionAddress = null
+        this.pokeInstructionAddresses.clear()
     }
 
     _beginPoke(): void {
@@ -351,7 +356,20 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _endPoke(): boolean {
-        return this.requireMachine().endPoke()
+        const machine = this.requireMachine()
+        const committed = machine.endPoke()
+        if (committed) {
+            const record = machine.getHistory(1)[0]
+            if (record && isPokeRecord(record)) {
+                this.pokeInstructionAddresses.set(record.stepId, this.lastInstructionAddress)
+                // Each newer checkpoint occupies a retained entry; serials are never reused.
+                if (this.pokeInstructionAddresses.size > this.historyCapacity)
+                    this.pokeInstructionAddresses.delete(
+                        this.pokeInstructionAddresses.keys().next().value!
+                    )
+            }
+        }
+        return committed
     }
 
     _canUndo(): boolean {
@@ -371,10 +389,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         if (record && !isPokeRecord(record)) {
             this.screenInstructions?.undoAfter(record.tStateCountBefore)
         }
-        //the core restores the registers but not `instructionAddress`, so without this the panel
-        //would keep naming the instruction that was just undone. The newest surviving instruction
-        //is the one that ran last, and there always is one while the machine could undo at all.
-        this.lastInstructionAddress = this.newestInstructionAddress()
+        // The core restores registers but not instructionAddress. A Poke keeps the remembered
+        // address; an instruction restores it from the newest entry's address or Poke checkpoint.
+        if (record && !isPokeRecord(record))
+            this.lastInstructionAddress = this.newestInstructionAddress()
+        if (record && isPokeRecord(record)) this.pokeInstructionAddresses.delete(record.stepId)
     }
 
     /**
@@ -845,22 +864,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.lastInstructionAddress = this.requireMachine().z80.instructionAddress
     }
 
-    /**
-     * Where the machine last executed: the newest record that is an instruction. A Poke ran none and
-     * carries no instruction address, so it is looked past
-     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)). The window grows because
-     * a run of Pokes can be any length; the usual one Poke costs a window of two.
-     */
+    /** A Poke remembers the last instruction, so even a long edit sequence needs just one row. */
     private newestInstructionAddress(): number | null {
-        const machine = this.machine
-        if (!machine) return null
-        for (let window = 2; ; window *= 2) {
-            const records = machine.getHistory(window)
-            for (let i = records.length - 1; i >= 0; i--) {
-                if (!isPokeRecord(records[i])) return records[i].address
-            }
-            if (records.length < window) return null
-        }
+        const newest = this.machine?.getHistory(1)[0]
+        if (!newest) return null
+        if (!isPokeRecord(newest)) return newest.address
+        return this.pokeInstructionAddresses.get(newest.stepId) ?? null
     }
 
     private recordToMutations(record: ExecutionRecord, after: RegisterSet): MutationOperation[] {

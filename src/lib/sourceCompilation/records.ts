@@ -1,13 +1,10 @@
+import { fileFingerprint } from './fingerprints'
+import { compilationInputs } from './compilationInputs'
 import type { AvailableLanguages } from '$lib/Project.svelte'
 import { isAssemblerProfile, type AssemblerProfile } from '$lib/assemblerProfiles'
 import { hasRuntimeLibrary, isRuntimeAbiName } from '$lib/runtimeAbi'
 import { LANGUAGE_EXTENSIONS } from '$lib/Config'
-import {
-    isValidFilePath,
-    ProjectFormatError,
-    type ProjectFile,
-    type ProjectFiles
-} from '$lib/projectFiles'
+import { isValidFilePath, ProjectFormatError, type ProjectFiles } from '$lib/projectFiles'
 
 export type CompilationTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86'
 const COMPILATION_TARGETS: readonly string[] = ['MIPS', 'RISC-V', 'RISC-V-64', 'X86']
@@ -56,10 +53,7 @@ export function isCompilationTarget(target: AvailableLanguages): target is Compi
     return COMPILATION_TARGETS.includes(target)
 }
 
-/** x86 compiles with GCC only: its translation to NASM is verified on GCC 14.2's output alone. */
-export function defaultSourceCompiler(target: AvailableLanguages): SourceCompiler {
-    return isCompilationTarget(target) && target !== 'X86' ? 'clang' : 'gcc'
-}
+export { defaultSourceCompiler } from './compilerContract.mjs'
 
 export function generatedAssemblyPath(sourcePath: string, target: AvailableLanguages): string {
     return `${sourcePath}.${LANGUAGE_EXTENSIONS[target]}`
@@ -75,31 +69,7 @@ export function sourceTemplate(target: AvailableLanguages, language: SourceLangu
         : '#include <stdio.h>\n#include <sim.h>\n\nint main(void) {\n    int result = 6 * 7;\n    printf("The answer is %d\\n", result);\n    return 0;\n}\n'
 }
 
-/** A deterministic 128-bit content fingerprint, for change detection, not authentication. */
-export function contentFingerprint(text: string): string {
-    let a = 1779033703,
-        b = 3144134277,
-        c = 1013904242,
-        d = 2773480762
-    for (let i = 0; i < text.length; i++) {
-        const k = text.charCodeAt(i)
-        a = b ^ Math.imul(a ^ k, 597399067)
-        b = c ^ Math.imul(b ^ k, 2869860233)
-        c = d ^ Math.imul(c ^ k, 951274213)
-        d = a ^ Math.imul(d ^ k, 2716044179)
-    }
-    a = Math.imul(c ^ (a >>> 18), 597399067)
-    b = Math.imul(d ^ (b >>> 22), 2869860233)
-    c = Math.imul(a ^ (c >>> 17), 951274213)
-    d = Math.imul(b ^ (d >>> 19), 2716044179)
-    return [a ^ b ^ c ^ d, b ^ a, c ^ a, d ^ a]
-        .map((value) => (value >>> 0).toString(16).padStart(8, '0'))
-        .join('')
-}
-
-export function fileFingerprint(file: ProjectFile | undefined): string | undefined {
-    return file ? contentFingerprint(`${file.encoding}\0${file.content}`) : undefined
-}
+export { contentFingerprint, fileFingerprint } from './fingerprints'
 
 export function compilationStatus(
     record: CompilationRecord,
@@ -112,6 +82,9 @@ export function compilationStatus(
             record.target !== target ||
             Object.entries(record.inputs).some(
                 ([path, fingerprint]) => fileFingerprint(files[path]) !== fingerprint
+            ) ||
+            Object.entries(compilationInputs(record.sourcePath, files)).some(
+                ([path, fingerprint]) => record.inputs[path] !== fingerprint
             ),
         edited:
             !!files[record.outputPath] &&

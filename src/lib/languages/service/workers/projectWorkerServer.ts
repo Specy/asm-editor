@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
-import type { ProjectFile, BuildSources } from '$lib/projectFiles'
+import type { BuildConfiguration, ProjectFile, BuildSources } from '$lib/projectFiles'
+import { buildConfiguration } from '$lib/projectFiles'
 import { validateAssemblerProfile } from '$lib/assemblerProfiles'
 import type {
     ProjectAnalysisSnapshot,
@@ -9,14 +10,10 @@ import type {
     ProjectWorkerResponse
 } from '../protocol'
 
-type WorkerSession = {
+type WorkerSession = BuildConfiguration & {
     revision: number
     target: ProjectAnalysisTarget
     entry: string
-    assemblerProfile?: import('$lib/assemblerProfiles').AssemblerProfile
-    assemblyError?: string
-    runtimeAbi?: `v${number}`
-    entrySymbol?: string
     /** A Map, so a File named `__proto__` is a key like any other rather than a prototype write. */
     files: Map<string, ProjectFile>
 }
@@ -60,16 +57,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                     const target = current.target
                     const sources = {
                         entry: current.entry,
-                        ...(current.assemblyError ? { assemblyError: current.assemblyError } : {}),
-                        ...(current.assemblerProfile !== undefined
-                            ? { assemblerProfile: current.assemblerProfile }
-                            : {}),
-                        ...(current.runtimeAbi !== undefined
-                            ? { runtimeAbi: current.runtimeAbi }
-                            : {}),
-                        ...(current.entrySymbol !== undefined
-                            ? { entrySymbol: current.entrySymbol }
-                            : {}),
+                        ...buildConfiguration(current),
                         files: Object.fromEntries(current.files)
                     }
                     try {
@@ -122,10 +110,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                 revision: request.revision,
                 target: request.target,
                 entry: request.entry,
-                assemblerProfile: request.assemblerProfile,
-                assemblyError: request.assemblyError,
-                runtimeAbi: request.runtimeAbi,
-                entrySymbol: request.entrySymbol,
+                ...buildConfiguration(request),
                 files: new Map(Object.entries(request.files))
             })
             scheduleAnalysis(request.sessionId)
@@ -133,12 +118,15 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         }
         const session = sessions.get(request.sessionId)
         if (!session || request.revision <= session.revision) return
-        session.revision = request.revision
-        session.entry = request.entry
-        session.assemblerProfile = request.assemblerProfile
-        session.assemblyError = request.assemblyError
-        session.runtimeAbi = request.runtimeAbi
-        session.entrySymbol = request.entrySymbol
+        // Replace configuration, rather than merge, so omitted fields are cleared on updates.
+        const next = {
+            revision: request.revision,
+            target: session.target,
+            entry: request.entry,
+            files: session.files,
+            ...buildConfiguration(request)
+        }
+        sessions.set(request.sessionId, next)
         for (const change of request.changes) {
             //A plain object would route a File named `__proto__` into the prototype instead of the
             //map, so it would never be analysed and could never be deleted.
