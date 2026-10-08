@@ -12,6 +12,7 @@ static void dummy()
 
 /* atexit.c overrides this when a program registers a handler. */
 weak_alias(dummy, __funcs_on_exit);
+weak_alias(dummy, __stdio_exit);
 
 extern weak void (*const __fini_array_start)(void), (*const __fini_array_end)(void);
 
@@ -26,5 +27,6 @@ _Noreturn void exit(int code)
 {
 	__funcs_on_exit();
 	libc_exit_fini();
+	__stdio_exit();
 	_Exit(code);
 }

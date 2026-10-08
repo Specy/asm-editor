@@ -1,12 +1,12 @@
-The Runtime library is the C standard library that programs compiled from C and C++ use: `printf` and `scanf` on the Terminal, `fopen` and `fprintf` on the Project's Files, `malloc`, `<string.h>`, `<ctype.h>`, `<math.h>` and the support C++ needs for constructors, `new` and `delete`. Its functions are ordinary RISC-V code that the Build links into the program: only the functions the program uses, and the ones those need in turn.
+The Runtime library provides the C functions used by compiled RISC-V C and C++ programs. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
 
 ## Compiled programs {#compiled-programs}
 
-Compiling a C or C++ File links the Runtime library automatically. The program starts at the library's `_start`, which runs global constructors, calls `main`, and passes its result to `exit`. A Build runs `_start` up to the program's own code, so it stops at the first line of `main`, or of a C++ global constructor, which runs before `main`; Undo never goes back into `_start`. Output appears as soon as each call returns, so stepping over a `printf` shows its text on the Terminal at once.
+Compiling a C or C++ file links the Runtime library automatically. Startup runs global constructors, calls `main`, and passes its result to `exit`. Build completes startup before execution begins in your code: the first instruction is in `main`, or in a C++ global constructor that runs before `main`. Undo can reverse steps from that point onward; it does not reverse startup. Streams are unbuffered by default, so stepping over `printf` shows its text at once. Requested output buffering delays output until a flush, a full buffer, or a newline for line buffering.
 
 ## From hand-written assembly {#from-assembly}
 
-Hand-written assembly can call the library too. Turn on _Link Runtime library_ in the Project Settings, then call a function with its arguments in `a0` to `a7` (floating point arguments in `fa0` to `fa7`) and find its result in `a0` or `fa0`. The setting is off by default, so a call to a function you have not written yet still reports an undefined symbol; that message says when the function is in the library.
+Hand-written assembly can call the library too. In the Workbench's **Settings** panel, open **Project Settings** and set **Link Runtime library** to **Runtime ABI v1**. For ordinary fixed-argument calls, integer and pointer arguments use `a0` to `a7`, and floating-point arguments use `fa0` to `fa7`; each register sequence is assigned independently. Arguments that do not fit in registers go on the stack. Variadic arguments (the arguments represented by `...`, as in `printf`) use the integer argument registers and then the stack, including floating-point values. Integer or pointer results return in `a0`; floating-point results return in `fa0`. Follow the RISC-V psABI for aggregate arguments and other special cases. The setting is off by default, so an unresolved call can still report an undefined symbol; the diagnostic identifies names supplied by the library.
 
 ```riscv
 .data
@@ -30,8 +30,10 @@ Reading standard input (`scanf`, `fgets`, `getchar`) waits for a line typed in t
 
 ## Reading the library {#reading-the-library}
 
-The library's code is RISC-V assembly like any other, compiled from C. The Explorer lists, read-only, the functions the current Build linked; go to definition on a `call printf` opens `printf`'s code, and _Show C source_ opens the C it was compiled from beside it, with the lines of the two matched as in a compiled program.
+The **Explorer** is the file list for the current Build. It includes linked library functions as read-only files. From a call such as `call printf`, choose **Go to Definition** to open the function's assembly; choose **Show C source** to open its C implementation with matching source lines.
 
 ## Stepping {#stepping}
 
-Step does not stop inside the library: stepping over `call printf` runs the whole call, and one Undo takes it back. A library function that calls back into the program, such as the comparison function `qsort` receives, stops there. Turn on _Step into Runtime library code_ in the Preferences to step through the library instruction by instruction, starting at `_start`.
+By default, **Step** over `call printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into Runtime library code** in **Preferences**. With this enabled, stepping begins in startup code at `_start`.
+
+`main` receives `argc == 0` and a valid `argv` array containing one null pointer. `malloc` follows the compiler's `max_align_t` alignment and returns NULL with ENOMEM on exhaustion. `clock()` counts executed instructions at nominal 100 MHz and excludes waiting time; Undo rewinds that counter. `time()` reports calendar time, with 2000-01-01 UTC as the fixed Testcase epoch. Library calendar conversions use UTC. Input buffering requests fail; default input remains unbuffered.

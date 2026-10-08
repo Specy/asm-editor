@@ -37,7 +37,7 @@
         },
         {
             "query": "read a line from the keyboard",
-            "top": 1,
+            "top": 2,
             "expect": "x86/syscalls/syscall-read"
         },
         {

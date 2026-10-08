@@ -1,5 +1,5 @@
 # Runtime library: program start for native testing on i386 Linux (AT&T syntax). Same contract as the Targets'
-# crt0: align the stack to 16 bytes, call every .init_array entry (4 bytes each), call main(0, NULL), then exit.
+# crt0: align the stack to 16 bytes, call every .init_array entry (4 bytes each), call main(0, empty_argv), then exit.
 	.text
 	.globl	_start
 	.type	_start, @function
@@ -14,8 +14,9 @@ _start:
 	addl	$4, %ebx
 	jmp	.Linit
 .Lmain:
-	subl	$8, %esp
-	pushl	$0
+	subl	$4, %esp
+	pushl	$__aed_empty_argv
+	pushl	$__aed_empty_argv
 	pushl	$0
 	call	main
 	addl	$16, %esp
@@ -25,3 +26,8 @@ _start:
 	hlt
 	.size	_start, .-_start
 	.section	.note.GNU-stack,"",@progbits
+
+	.section .rodata
+	.align 4
+__aed_empty_argv:
+	.long 0

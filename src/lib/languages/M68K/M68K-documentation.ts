@@ -367,9 +367,7 @@ const desc = {
     rts: 'Returns from a subroutine, pops the return address from the stack and jumps to it',
     jsr: 'Jumps to the specified address, like the "lea" instruction, when resolving the address, it does not read the memory, so "jsr 4(a0)" will jump to the value of "a0 + 4", the address is loaded and stores the return address in the stack',
     trap: `
-Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
-The register d0 holds the task number. The full table, with the registers each task takes and
-answers with, is on the [trap tasks page](/documentation/m68k/traps).
+Raises the trap exception selected by the operand. In this editor, \`trap #15\` enters the simulator’s service handler; put its decimal task number in \`D0.B\` (for example, task 13 prints a NUL-terminated string). These tasks are separate from CPU exception handling. See the [trap tasks reference](/documentation/m68k/traps) for each task’s register inputs and results.
 | Task | Description   |
 |:------:|-------------------------------------------------------------------------------------------------------|
 | 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.      |

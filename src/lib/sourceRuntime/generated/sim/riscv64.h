@@ -51,7 +51,7 @@ static inline void sim_print_string(const char *text) {
     __asm__ volatile("ecall" : : "r"(a7), "r"(a0) : "memory");
 }
 
-/** Read integer, service 5. Returns a0, contains integer read. */
+/** Read integer, service 5. Returns a0, contains the integer parsed from the input line. */
 static inline int sim_read_int(void) {
     register int a7 __asm__("a7") = 5;
     register int a0 __asm__("a0");
@@ -59,7 +59,7 @@ static inline int sim_read_int(void) {
     return a0;
 }
 
-/** Read float, service 6. Returns fa0, contains float read. */
+/** Read float, service 6. Returns fa0, contains the floating-point value parsed from the input line. */
 static inline float sim_read_float(void) {
     register int a7 __asm__("a7") = 6;
     register float fa0 __asm__("fa0");
@@ -67,7 +67,7 @@ static inline float sim_read_float(void) {
     return fa0;
 }
 
-/** Read double, service 7. Returns fa0, contains double read. */
+/** Read double, service 7. Returns fa0, contains the double-precision value parsed from the input line. */
 static inline double sim_read_double(void) {
     register int a7 __asm__("a7") = 7;
     register double fa0 __asm__("fa0");
@@ -106,7 +106,7 @@ static inline void sim_print_char(int character) {
     __asm__ volatile("ecall" : : "r"(a7), "r"(a0) : "memory");
 }
 
-/** Read character, service 12. Returns a0, contains character read. */
+/** Read character, service 12. Returns a0, contains the input character code. */
 static inline int sim_read_char(void) {
     register int a7 __asm__("a7") = 12;
     register int a0 __asm__("a0");
@@ -161,7 +161,7 @@ static inline void sim_print_unsigned(unsigned value) {
     __asm__ volatile("ecall" : : "r"(a7), "r"(a0) : "memory");
 }
 
-/** Set seed, service 40. Takes a0, i.d. of pseudorandom number generator (any int); a1, seed for corresponding pseudorandom number generator. */
+/** Set seed, service 40. Takes a0, generator ID: any integer selects an independent pseudorandom sequence; a1, seed for corresponding pseudorandom number generator. */
 static inline void sim_random_seed(int generator, int seed) {
     register int a7 __asm__("a7") = 40;
     register int a0 __asm__("a0") = generator;
@@ -169,7 +169,7 @@ static inline void sim_random_seed(int generator, int seed) {
     __asm__ volatile("ecall" : : "r"(a7), "r"(a0), "r"(a1) : "memory");
 }
 
-/** Random int, service 41. Takes a0, i.d. of pseudorandom number generator (any int). Returns a0, contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence. */
+/** Random int, service 41. Takes a0, generator ID: any integer selects an independent pseudorandom sequence. Returns a0, contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence. */
 static inline int sim_random_int(int generator) {
     register int a7 __asm__("a7") = 41;
     register int a0 __asm__("a0") = generator;
@@ -177,7 +177,7 @@ static inline int sim_random_int(int generator) {
     return a0;
 }
 
-/** Random int range, service 42. Takes a0, i.d. of pseudorandom number generator (any int); a1, upper bound of range of returned values. Returns a0, contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence. */
+/** Random int range, service 42. Takes a0, generator ID: any integer selects an independent pseudorandom sequence; a1, upper bound of range of returned values. Returns a0, contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence. */
 static inline int sim_random_int_range(int generator, int bound) {
     register int a7 __asm__("a7") = 42;
     register int a0 __asm__("a0") = generator;
@@ -186,7 +186,7 @@ static inline int sim_random_int_range(int generator, int bound) {
     return a0;
 }
 
-/** Random float, service 43. Takes a0, i.d. of pseudorandom number generator (any int). Returns fa0, contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence. */
+/** Random float, service 43. Takes a0, generator ID: any integer selects an independent pseudorandom sequence. Returns fa0, contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence. */
 static inline float sim_random_float(int generator) {
     register int a7 __asm__("a7") = 43;
     register int a0 __asm__("a0") = generator;
@@ -195,7 +195,7 @@ static inline float sim_random_float(int generator) {
     return fa0;
 }
 
-/** Random double, service 44. Takes a0, i.d. of pseudorandom number generator (any int). Returns fa0, contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence. */
+/** Random double, service 44. Takes a0, generator ID: any integer selects an independent pseudorandom sequence. Returns fa0, contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence. */
 static inline double sim_random_double(int generator) {
     register int a7 __asm__("a7") = 44;
     register int a0 __asm__("a0") = generator;
@@ -224,7 +224,7 @@ static inline int sim_input_dialog_int(const char *message, int *status) {
     return result;
 }
 
-/** InputDialogFloat, service 52. Takes a0, address of null-terminated string that is the message to user. Returns f0, contains float read; a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
+/** InputDialogFloat, service 52. Takes a0, address of null-terminated string that is the message to user. Returns f0, contains the floating-point value parsed from the input line; a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
 static inline float sim_input_dialog_float(const char *message, int *status) {
     register int a7 __asm__("a7") = 52;
     register const char *a0 __asm__("a0") = message;
@@ -235,7 +235,7 @@ static inline float sim_input_dialog_float(const char *message, int *status) {
     return f0;
 }
 
-/** InputDialogDouble, service 53. Takes a0, address of null-terminated string that is the message to user. Returns fa0, contains double read; a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
+/** InputDialogDouble, service 53. Takes a0, address of null-terminated string that is the message to user. Returns fa0, contains the double-precision value parsed from the input line; a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
 static inline double sim_input_dialog_double(const char *message, int *status) {
     register int a7 __asm__("a7") = 53;
     register const char *a0 __asm__("a0") = message;

@@ -1082,11 +1082,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
                 // ------------------------------------------------------- program time
                 case 'GetTime': {
-                    //hundredths of a second since the run started, from the clock a testcase swaps
-                    //for a virtual one (ADR 0010); EASy68K counts from midnight instead
+                    //EASy68K counts hundredths since local midnight; Testcases use UTC.
                     interpreter.answerInterrupt({
                         type,
-                        value: this._peripherals.clock.nowHundredths()
+                        value: this._peripherals.clock.calendarHundredths()
                     })
                     break
                 }

@@ -15,6 +15,7 @@ import {
     X86_REGISTERS,
     X86_SYSCALLS,
     describeX86Instruction,
+    X86_SUMMARY_OVERRIDES,
     describeX86Syscall,
     formatX86Form,
     x86DocumentedInstructions,
@@ -221,7 +222,10 @@ function memberSummary(members: X86Instruction[]): string {
  * is listed here; every other group's heading already names its extension.
  */
 function memberLine(member: X86Instruction, withFeatures: boolean): string {
-    const summary = member.summary ? ` — ${member.summary}` : ''
+    const text =
+        X86_SUMMARY_OVERRIDES[member.name.toLowerCase()] ??
+        member.summary.replaceAll('Singed', 'Signed')
+    const summary = text ? ` — ${text}` : ''
     const features =
         withFeatures && member.features.length > 0 ? ` (${member.features.join(', ')})` : ''
     return `- ${code(member.name)}${summary}${features}`
@@ -274,7 +278,7 @@ function extensions(): Chapter {
         title: 'Extensions',
         href,
         description:
-            'Every other instruction the assembler accepts, under the heading NASM files it under.',
+            'Extension mnemonics grouped under NASM’s headings, with a short summary. NASM accepting an instruction does not guarantee emulator execution.',
         entries: [
             ...proseEntries({
                 language: 'x86',
@@ -574,7 +578,7 @@ function syscalls(): Chapter {
         title: 'Syscalls',
         href,
         description:
-            'The Linux calls a program makes with `syscall`, as this emulator implements them.',
+            'The Linux calls this emulator implements, with register inputs, results, and C wrapper names where available. Errors return as negative values in `rax`.',
         entries: interleave(
             proseEntries({
                 language: 'x86',

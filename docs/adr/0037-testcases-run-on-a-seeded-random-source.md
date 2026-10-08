@@ -5,6 +5,8 @@ date: 2026-10-05
 
 # Testcases run on a seeded Random source
 
+Amended in part by [ADR 0040](./0040-programs-see-calendar-elapsed-and-cpu-clocks.md).
+
 Every Target's random services draw from a **Random source** selected for the whole run, as the **Time Source** is ([ADR 0010](./0010-program-time-without-clock-pacing.md)). In an interactive run an unseeded generator starts from host randomness, as in its Reference environment; in a Testcase's scripted run it starts from a fixed seed, and x86 `getrandom` returns a fixed stream, so the same program and Testcase produce the same numbers every time and a random program can be tested. A program that seeds a generator itself (MARS and RARS service 40) gets that seed's sequence in both kinds of run. MARS's and RARS's generators implement `java.util.Random`'s algorithm exactly, rather than TeaVM's, which differs in `nextInt(bound)`, so a seeded program prints the numbers MARS prints ([ADR 0035](./0035-environments-match-their-reference.md)). The fixed seed is a deviation that helps a learner, documented with each random service.
 
 x86 also joins the virtual Time Source, ending the exception ADR 0010 recorded: Blink's clock and sleep calls go through Core hooks, the way MARS's time and sleep syscalls do, and a sleep becomes an asynchronous wait instead of a busy loop that froze the page.

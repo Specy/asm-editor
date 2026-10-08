@@ -8,15 +8,15 @@ Behaviour is checked byte for byte against host glibc 2.43 by the native tests. 
 
 ## `<stdio.h>`
 
-Streams are unbuffered: every output call has issued its `write` before it returns, and `printf` formats into an 80-byte local buffer and writes once per buffer. Input is read one byte per `read` call (whole buffers for `fread`). `FILE` is opaque. `stdin`, `stdout` and `stderr` are statically initialized objects.
+Streams are unbuffered by default: every output call has issued its `write` before it returns, and `printf` formats into an 80-byte local buffer and writes once per buffer. Input is read one byte per `read` call (whole buffers for `fread`). `FILE` is opaque. `stdin`, `stdout` and `stderr` are statically initialized objects.
 
 | Function | Implementation | Notes |
 | --- | --- | --- |
 | `fopen` | musl `stdio/fopen.c`, `stdio/__fdopen.c` | Modes `r`, `w`, `a`, optional `b` and `x`; `+` modes are approximated (see Limitations). A failed open sets `errno` to `ENOENT`. |
 | `freopen` | own | Commonly `freopen("in.txt", "r", stdin)`. A replaced Terminal descriptor (0–2) stays open; a NULL path fails with `EINVAL`. |
 | `fclose` | musl `stdio/fclose.c` | |
-| `fflush` | own | Succeeds and does nothing: there is never buffered output. |
-| `setvbuf` | own | Accepts `_IOFBF`, `_IOLBF`, `_IONBF` and changes nothing; another mode fails. |
+| `fflush` | own | Flushes pending output; `fflush(NULL)` flushes every open output stream. |
+| `setvbuf` | own | Honors output buffering with `_IOFBF`, `_IOLBF`, `_IONBF`; input buffering requests fail. |
 | `setbuf` | musl `stdio/setbuf.c` | Calls `setvbuf`. |
 | `printf` | musl `stdio/printf.c` | |
 | `fprintf` | musl `stdio/fprintf.c` | |
@@ -60,7 +60,7 @@ Objects and macros: `stdin`, `stdout`, `stderr` (musl `stdio/stdin.c`, `stdout.c
 
 | Function | Implementation | Notes |
 | --- | --- | --- |
-| `malloc` | own | First fit over `sbrk`, set up on first use; 8-byte alignment on 32-bit Targets, 16 on 64-bit. |
+| `malloc` | own | First fit over `sbrk`, set up on first use; `max_align_t` alignment: MIPS 8 bytes; RV32/RV64 16 bytes. |
 | `calloc` | own | Overflow of `count * size` returns NULL with `ENOMEM`. |
 | `realloc` | own | Grows in place into a free neighbour when possible; `realloc(p, 0)` returns `p` shrunk. |
 | `aligned_alloc` | own | Any power-of-two alignment; the result is freed with `free`. |
@@ -205,7 +205,7 @@ Macros (from GCC builtins, no library code): `fpclassify`, `isfinite`, `isinf`, 
 | Function | Implementation | Notes |
 | --- | --- | --- |
 | `time` | own | Seconds from the platform's millisecond clock. |
-| `clock` | own | Wall time since the program's first `clock` call; `CLOCKS_PER_SEC` is 1000000, with millisecond resolution. |
+| `clock` | own | Executed instructions at nominal 100 MHz; `CLOCKS_PER_SEC` is 1000000, with microsecond resolution. |
 | `difftime` | musl `time/difftime.c` | |
 | `mktime` | musl `time/mktime.c` | Reads its argument as UTC and normalizes it. |
 | `gmtime` | musl `time/gmtime.c`, `time/gmtime_r.c` | 64-bit `time_t`. |
@@ -235,7 +235,7 @@ Also every `PRI*` and `SCN*` macro for the exact, least, fast, `MAX` and `PTR` t
 
 ## Freestanding headers
 
-`<stddef.h>`, `<stdint.h>`, `<stdbool.h>`, `<stdarg.h>`, `<limits.h>`, `<float.h>`, `<iso646.h>` and `<stdnoreturn.h>` contain only types and macros, all derived from GCC's predefined macros (`__SIZE_TYPE__`, `__INT64_TYPE__`, `__INT_MAX__`, `__DBL_MANT_DIG__`, …), so the same file is right for ILP32 (RV32, MIPS) and LP64 (RV64). `va_list` and the `va_*` macros use GCC's builtins. `max_align_t` has 8-byte alignment (the library has no `long double`).
+`<stddef.h>`, `<stdint.h>`, `<stdbool.h>`, `<stdarg.h>`, `<limits.h>`, `<float.h>`, `<iso646.h>` and `<stdnoreturn.h>` contain only types and macros, all derived from GCC's predefined macros (`__SIZE_TYPE__`, `__INT64_TYPE__`, `__INT_MAX__`, `__DBL_MANT_DIG__`, …), so the same file is right for ILP32 (RV32, MIPS) and LP64 (RV64). `va_list` and the `va_*` macros use GCC's builtins. `max_align_t` includes `long double` to match compiler fundamental alignment, even though long-double arithmetic is unsupported.
 
 ## C++ support
 
@@ -270,19 +270,22 @@ GCC calls these on 32-bit Targets for 64-bit operations the hardware lacks, and 
 | `__floatdidf`, `__floatundidf`, `__floatdisf`, `__floatundisf` | 64-bit integer to floating point, correctly rounded (one rounding). |
 | `__clzsi2`, `__clzdi2`, `__ctzsi2`, `__ctzdi2`, `__popcountsi2`, `__popcountdi2`, `__bswapsi2`, `__bswapdi2` | Bit counts and byte swaps; RV64 uses the `di` forms for 32-bit counts too. |
 
-## Limitations
+## Deviations
 
 - **No `long double`.** The library contains no `long double` code (on RISC-V it is 128-bit software floating point and would need helper routines that are not shipped). `printf` rejects the `L` modifier (the call returns -1 with `errno` `EINVAL`) and `scanf` treats `%Lf` and friends as a matching failure, except on MIPS, where `long double` is `double` and `L` works. There is no `strtold` and no `long double` overload in C++.
 - **No wide characters or multibyte conversions**: no `<wchar.h>`; `%lc`, `%ls`, `%C`, `%S` are invalid in `printf`, and `%lc`, `%ls`, `%l[` in `scanf`. `MB_CUR_MAX` and `MB_LEN_MAX` are 1.
 - **"C" locale only**; no `<locale.h>`. No `%m` in `printf` or `scanf` (GNU extensions).
-- **Write-through output** (`docs/design/source-runtime.md`, Stream buffering): `fflush` and `setvbuf` succeed without effect; output appears on the step that produced it and is never lost by `_Exit`, `abort` or a raw exit system call. Only the timing differs from C's buffering, which `tests/corpus/writethrough.c` records.
-- **`+` modes**: the Cores open a File for reading or for writing, never both, so `"r+"` reads, `"w+"` truncates and writes, and `"a+"` appends; writing an `"r+"` stream or reading a `"w+"`/`"a+"` stream sets the error indicator. `"x"` checks that the File cannot already be opened for reading.
+- **Streams**: unbuffered by default. Requested output buffering is honored, including flush on `exit`; `_Exit`, abort and raw exit can lose explicitly buffered output. Input buffering requests fail. Reading stdin flushes line-buffered stdout.
+- **`+` modes**: `"r+"`, `"w+"` and `"a+"` permit reading and writing on one descriptor with a shared position. Writes in append mode go to the end. Use the standard positioning/flush rules when changing direction. `"x"` checks that the File cannot already be opened for reading.
 - **No File removal or renaming**: `remove`, `rename`, `tmpfile` and `tmpnam` are not provided (the platform has no such system call); neither are `fdopen`, `fileno`, `getline` or `gets`.
 - **`errno` values chosen by the library**: the platform reports failures as -1 without a reason, so a failed `fopen` sets `ENOENT`, a failed read or write `EIO`, a failed seek `ESPIPE` (Terminal) or `EINVAL`, and reading a write-only stream (or the reverse) `EBADF`. Like glibc, `strtol` and `strtod` leave `errno` unchanged when nothing is converted. Whether underflow to a subnormal result sets `ERANGE` is implementation-defined, and this library's answer (musl's) can differ from glibc's; overflow to infinity and underflow to zero always set it.
 - **`errno` after an allocation, with Clang**: from `-O1`, LLVM assumes `malloc`, `calloc` and `realloc` never set `errno` and folds a read of it in the same function right after one, on every platform. Functions that read it themselves, such as `perror`, see `ENOMEM`.
 - **No environment, signals or processes**: `getenv` returns NULL; `abort` ends the program with status 134 instead of raising `SIGABRT`; no `system`, `signal` or `raise`.
-- **Time**: programs run in UTC (`localtime` is `gmtime`, `mktime` reads UTC, `tm_isdst` is 0); `clock` measures wall time from its first call; there is no `strftime`.
-- **Heap**: never returned to the system (the Cores reject a negative `sbrk`); a single request of about 2 GiB or more fails with NULL; on the Cores, running out of heap is reported by the Core's `sbrk` as a runtime error rather than as NULL. Alignment is 8 bytes on RV32 and MIPS (GCC's `__STDCPP_DEFAULT_NEW_ALIGNMENT__` is 16 on RV32, but no RV32IMFD instruction needs more than 8).
+- **Time**: library conversions use UTC (`localtime` is `gmtime`, `tm_isdst` is 0); `clock` counts instructions at nominal 100 MHz; Testcase calendar starts at 2000-01-01 UTC. There is no `strftime`.
+- **Heap**: memory is never returned to the system. Exhaustion returns NULL/ENOMEM through recoverable runtime service 1100; service 9 retains its reference behavior. Alignment follows `max_align_t`: MIPS 8, RV32/RV64 16 bytes.
 - **`printf("%#g")` and glibc**: for a value whose rounding carries into a new digit (999999.5), glibc 2.43 prints `1.e+06`; C requires `1.00000e+06`, which this library prints.
 - **C++**: no exceptions (`operator new` aborts on exhaustion), no RTTI, no C++ standard library beyond `<new>` and the C wrappers (no `<iostream>`, `<string>`, `<vector>`, `<initializer_list>`). `<cstring>` keeps C's non-const `strchr` family. `std::nan` is not provided.
 - No threads: no locks, no `errno` per thread, no `thrd_*`.
+
+- **Arguments**: MIPS/RISC-V startup calls `main(0, argv)` with a valid `{ NULL }` array. x86 startup uses the loader's Linux arguments.
+- **ABI scope**: required symbols, public function types, layouts and constants are frozen per target. Top-level C `restrict` qualifications are not part of function types; mangled type probes cannot encode that annotation. Internal implementation symbols are excluded.

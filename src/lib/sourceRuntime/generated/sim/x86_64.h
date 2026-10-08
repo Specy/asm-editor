@@ -69,7 +69,7 @@ static inline long sim_close(long fd) {
     return rax;
 }
 
-/** stat, syscall 4. */
+/** stat, syscall 4. Reads file metadata for the path at `rdi` and writes it to the Linux `struct stat` buffer at `rsi`. */
 static inline long sim_stat(const void *path, void *statbuf) {
     register long rax __asm__("rax") = 4;
     register const void *rdi __asm__("rdi") = path;
@@ -78,7 +78,7 @@ static inline long sim_stat(const void *path, void *statbuf) {
     return rax;
 }
 
-/** fstat, syscall 5. Fills the structure at `rsi` with what is known about the descriptor in `rdi`, including its size. */
+/** fstat, syscall 5. Reads file metadata for the descriptor in `rdi` and writes it to the Linux `struct stat` buffer at `rsi`. */
 static inline long sim_fstat(long fd, void *statbuf) {
     register long rax __asm__("rax") = 5;
     register long rdi __asm__("rdi") = fd;
@@ -87,7 +87,7 @@ static inline long sim_fstat(long fd, void *statbuf) {
     return rax;
 }
 
-/** lstat, syscall 6. */
+/** lstat, syscall 6. Like `stat`, but reports a symbolic link itself instead of the file it points to. Writes a Linux `struct stat` to the buffer at `rsi`. */
 static inline long sim_lstat(const void *path, void *statbuf) {
     register long rax __asm__("rax") = 6;
     register const void *rdi __asm__("rdi") = path;
@@ -96,7 +96,7 @@ static inline long sim_lstat(const void *path, void *statbuf) {
     return rax;
 }
 
-/** poll, syscall 7. */
+/** poll, syscall 7. Waits for the `pollfd` array at `rdi` to report requested events, checking `rsi` entries for up to `rdx` milliseconds. A negative timeout waits without a time limit. */
 static inline long sim_poll(void *fds, long nfds, long timeout) {
     register long rax __asm__("rax") = 7;
     register void *rdi __asm__("rdi") = fds;
@@ -129,7 +129,7 @@ static inline long sim_mmap(void *address, long size, long prot, long flags, lon
     return rax;
 }
 
-/** mprotect, syscall 10. */
+/** mprotect, syscall 10. Changes the read, write, or execute permissions of the `rsi` bytes starting at the page-aligned address in `rdi`. */
 static inline long sim_mprotect(void *address, long size, long prot) {
     register long rax __asm__("rax") = 10;
     register void *rdi __asm__("rdi") = address;
@@ -148,7 +148,7 @@ static inline long sim_munmap(void *address, long size) {
     return rax;
 }
 
-/** brk, syscall 12. */
+/** brk, syscall 12. Sets the end address of the heap area. Returns the current break; a request the emulator cannot satisfy leaves it unchanged. */
 static inline long sim_brk(void *address) {
     register long rax __asm__("rax") = 12;
     register void *rdi __asm__("rdi") = address;
@@ -210,7 +210,7 @@ static inline long sim_pwrite64(long fd, const void *buffer, long count, long of
     return rax;
 }
 
-/** readv, syscall 19. */
+/** readv, syscall 19. Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read. */
 static inline long sim_readv(long fd, const void *iov, long count) {
     register long rax __asm__("rax") = 19;
     register long rdi __asm__("rdi") = fd;
@@ -220,7 +220,7 @@ static inline long sim_readv(long fd, const void *iov, long count) {
     return rax;
 }
 
-/** writev, syscall 20. */
+/** writev, syscall 20. Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written. */
 static inline long sim_writev(long fd, const void *iov, long count) {
     register long rax __asm__("rax") = 20;
     register long rdi __asm__("rdi") = fd;
@@ -239,7 +239,7 @@ static inline long sim_access(const void *path, long mode) {
     return rax;
 }
 
-/** pipe, syscall 22. */
+/** pipe, syscall 22. Creates a pair of connected file descriptors and writes both integers to the two-element array at `rdi`; reads from one end receive bytes written to the other. */
 static inline long sim_pipe(void *pfds) {
     register long rax __asm__("rax") = 22;
     register void *rdi __asm__("rdi") = pfds;
@@ -247,7 +247,7 @@ static inline long sim_pipe(void *pfds) {
     return rax;
 }
 
-/** select, syscall 23. */
+/** select, syscall 23. Takes the descriptor limit in `rdi`, pointers to the read, write, and exception sets in `rsi`, `rdx`, and `r10`, and an optional timeout in `r8`. Waits until a descriptor is ready or the timeout expires, then updates the sets and timeout. */
 static inline long sim_select(long number, void *fds1, void *fds2, void *fds3, void *timeout) {
     register long rax __asm__("rax") = 23;
     register long rdi __asm__("rdi") = number;
@@ -298,7 +298,7 @@ static inline long sim_madvise(void *address, long size, long advice) {
     return rax;
 }
 
-/** dup, syscall 32. */
+/** dup, syscall 32. Returns a new file descriptor that refers to the same open file description as the descriptor in `rdi`. */
 static inline long sim_dup(long fd) {
     register long rax __asm__("rax") = 32;
     register long rdi __asm__("rdi") = fd;
@@ -306,7 +306,7 @@ static inline long sim_dup(long fd) {
     return rax;
 }
 
-/** dup2, syscall 33. */
+/** dup2, syscall 33. Makes descriptor `rsi` refer to the same open file description as `rdi`, closing the old `rsi` first if needed. */
 static inline long sim_dup2(long fd, long number) {
     register long rax __asm__("rax") = 33;
     register long rdi __asm__("rdi") = fd;
@@ -365,7 +365,7 @@ static inline long sim_getpid(void) {
     return rax;
 }
 
-/** sendfile, syscall 40. */
+/** sendfile, syscall 40. Copies up to `r10` bytes from the input descriptor in `rsi` to the output descriptor in `rdi`, optionally updating the input position through the pointer in `rdx`. */
 static inline long sim_sendfile(long outfd, long infd, void *offset, long count) {
     register long rax __asm__("rax") = 40;
     register long rdi __asm__("rdi") = outfd;
@@ -404,7 +404,7 @@ static inline long sim_kill(long pid, long sig) {
     return rax;
 }
 
-/** uname, syscall 63. */
+/** uname, syscall 63. Writes system name and version fields to the Linux `struct utsname` buffer at `rdi`. */
 static inline long sim_uname(void *buffer) {
     register long rax __asm__("rax") = 63;
     register void *rdi __asm__("rdi") = buffer;
@@ -465,7 +465,7 @@ static inline long sim_ftruncate(long fd, long offset) {
     return rax;
 }
 
-/** getcwd, syscall 79. */
+/** getcwd, syscall 79. Writes the current working directory as a NUL-terminated path to the buffer at `rdi`, up to `rsi` bytes. */
 static inline long sim_getcwd(void *buffer, long count) {
     register long rax __asm__("rax") = 79;
     register void *rdi __asm__("rdi") = buffer;
@@ -474,7 +474,7 @@ static inline long sim_getcwd(void *buffer, long count) {
     return rax;
 }
 
-/** chdir, syscall 80. */
+/** chdir, syscall 80. Changes the program’s current working directory to the path at `rdi`. */
 static inline long sim_chdir(const void *path) {
     register long rax __asm__("rax") = 80;
     register const void *rdi __asm__("rdi") = path;
@@ -482,7 +482,7 @@ static inline long sim_chdir(const void *path) {
     return rax;
 }
 
-/** fchdir, syscall 81. */
+/** fchdir, syscall 81. Changes the program’s current working directory to the directory referred to by descriptor `rdi`. */
 static inline long sim_fchdir(long fd) {
     register long rax __asm__("rax") = 81;
     register long rdi __asm__("rdi") = fd;
@@ -490,7 +490,7 @@ static inline long sim_fchdir(long fd) {
     return rax;
 }
 
-/** rename, syscall 82. */
+/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. */
 static inline long sim_rename(const void *path1, const void *path2) {
     register long rax __asm__("rax") = 82;
     register const void *rdi __asm__("rdi") = path1;
@@ -499,7 +499,7 @@ static inline long sim_rename(const void *path1, const void *path2) {
     return rax;
 }
 
-/** mkdir, syscall 83. */
+/** mkdir, syscall 83. Creates a directory at the path in `rdi`; `rsi` supplies its permission mode. */
 static inline long sim_mkdir(const void *path, long mode) {
     register long rax __asm__("rax") = 83;
     register const void *rdi __asm__("rdi") = path;
@@ -508,7 +508,7 @@ static inline long sim_mkdir(const void *path, long mode) {
     return rax;
 }
 
-/** rmdir, syscall 84. */
+/** rmdir, syscall 84. Removes the empty directory named by the path at `rdi`. */
 static inline long sim_rmdir(const void *path) {
     register long rax __asm__("rax") = 84;
     register const void *rdi __asm__("rdi") = path;
@@ -534,7 +534,7 @@ static inline long sim_link(const void *path1, const void *path2) {
     return rax;
 }
 
-/** unlink, syscall 87. */
+/** unlink, syscall 87. Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. */
 static inline long sim_unlink(const void *path) {
     register long rax __asm__("rax") = 87;
     register const void *rdi __asm__("rdi") = path;
@@ -617,7 +617,7 @@ static inline long sim_umask(long mode) {
     return rax;
 }
 
-/** gettimeofday, syscall 96. */
+/** gettimeofday, syscall 96. Writes the current run’s elapsed program time, in seconds and microseconds, to the `timeval` structure at `rdi`; this is not calendar time. */
 static inline long sim_gettimeofday(void *timeval, void *timezone) {
     register long rax __asm__("rax") = 96;
     register void *rdi __asm__("rdi") = timeval;
@@ -635,7 +635,7 @@ static inline long sim_getrlimit(long resource, void *rlim) {
     return rax;
 }
 
-/** getrusage, syscall 98. */
+/** getrusage, syscall 98. Writes resource-usage counters for the selected process or children to the `rusage` structure at `rsi`. */
 static inline long sim_getrusage(long who, void *usage) {
     register long rax __asm__("rax") = 98;
     register long rdi __asm__("rdi") = who;
@@ -644,7 +644,7 @@ static inline long sim_getrusage(long who, void *usage) {
     return rax;
 }
 
-/** sysinfo, syscall 99. */
+/** sysinfo, syscall 99. Writes the emulator’s uptime, memory, and process-count values to a Linux `struct sysinfo` buffer at `rdi`. */
 static inline long sim_sysinfo(void *info) {
     register long rax __asm__("rax") = 99;
     register void *rdi __asm__("rdi") = info;
@@ -752,7 +752,7 @@ static inline long sim_setregid(long gid1, long gid2) {
     return rax;
 }
 
-/** getgroups, syscall 115. */
+/** getgroups, syscall 115. Writes up to `rdi` supplementary group IDs to the array at `rsi`; with a zero size, returns how many IDs are needed. */
 static inline long sim_getgroups(long size, void *groups) {
     register long rax __asm__("rax") = 115;
     register long rdi __asm__("rdi") = size;
@@ -761,7 +761,7 @@ static inline long sim_getgroups(long size, void *groups) {
     return rax;
 }
 
-/** setgroups, syscall 116. */
+/** setgroups, syscall 116. Replaces the process’s supplementary group list with the `rdi` group IDs in the array at `rsi`. */
 static inline long sim_setgroups(long size, const void *groups) {
     register long rax __asm__("rax") = 116;
     register long rdi __asm__("rdi") = size;
@@ -932,7 +932,7 @@ static inline long sim_tkill(long pid, long sig) {
     return rax;
 }
 
-/** time, syscall 201. Returns the current time in whole seconds since 1 January 1970 (UTC), and also stores it at the address in `rdi` unless `rdi` is 0. */
+/** time, syscall 201. Returns the current run’s elapsed program time in whole seconds, and also stores it at the address in `rdi` unless `rdi` is 0. */
 static inline long sim_time(void *buffer) {
     register long rax __asm__("rax") = 201;
     register void *rdi __asm__("rdi") = buffer;
@@ -979,7 +979,7 @@ static inline long sim_fadvise64(long value1, long value2, long value3, long val
     return rax;
 }
 
-/** clock_gettime, syscall 228. Writes the time of the clock named in `rdi` into the structure at `rsi`. */
+/** clock_gettime, syscall 228. Writes the current run’s elapsed program time to the `timespec` structure at `rsi` (seconds and nanoseconds). This is simulator time, not calendar time. */
 static inline long sim_clock_gettime(long clockid, void *tp) {
     register long rax __asm__("rax") = 228;
     register long rdi __asm__("rdi") = clockid;

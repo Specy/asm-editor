@@ -320,9 +320,10 @@ describe('independent editor groups', () => {
             { session } = fixture
         const second = openSecond(session, 'main.s')
         const { record, map } = result(fixture, 'main.c', 'X86')
+        session.setEntry('main.s')
         flushSync()
         expect(second.recompilationNeeded).toBe(false)
-        //x86 links every source File, so the Generated assembly starts the Build at the start code
+        //the Entry is Generated assembly, so the Build starts at the start code
         expect(session.sourceInput.entrySymbol).toBe('_start')
         expect(session.sourceInput.assemblyError).toBeUndefined()
         fixture.project.recordCompilation({ ...record, runtimeAbi: 'v1' }, map)
@@ -538,8 +539,9 @@ describe('failed Build diagnostics', () => {
     it('opens a failed Build diagnostic on the x86 start unit read-only', async () => {
         const fixture = setup('X86'),
             { session } = fixture
-        //Generated assembly in the Project, so the Build links the start unit
+        //Generated assembly as the Entry, so the Build links the start unit
         result(fixture, 'main.c', 'X86')
+        session.setEntry('main.s')
         //where it lands when the File with the other `_start` is linked first
         const clash = error(
             '@runtime/start.asm',

@@ -7,6 +7,8 @@
 #include <string.h>
 #include <errno.h>
 
+hidden FILE *__aed_open_streams;
+
 FILE *fopen(const char *restrict filename, const char *restrict mode)
 {
 	FILE *f;
@@ -51,6 +53,7 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 
 	f->fd = fd;
 	f->buf = (unsigned char *)f + sizeof *f + UNGET;
+	f->input_buffer = f->buf;
 	f->buf_size = 0;
 	f->lbf = EOF;
 
@@ -60,5 +63,7 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 	f->seek = __stdio_seek;
 	f->close = __stdio_close;
 
+	f->next_open = __aed_open_streams;
+	__aed_open_streams = f;
 	return f;
 }

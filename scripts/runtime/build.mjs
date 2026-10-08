@@ -74,7 +74,10 @@ const only = option('--only')
 const dryRun = args.includes('--dry-run')
 // While the library is still changing: write the assets but neither check nor record the ABI.
 const skipAbi = args.includes('--skip-abi')
+const abiOnly = args.includes('--abi-only')
+const checkAssets = args.includes('--check-assets')
 const updateAbi = args.includes('--update-abi')
+const abiReport = option('--abi-report')
 const targets = (option('--target') ?? Object.keys(TARGETS).join(',')).split(',')
 
 function walk(directory, accept) {
@@ -336,18 +339,26 @@ async function buildTarget(target, functions) {
     )
     // GCC refers to these weakly from vtables, so only the library saying it supplies them pulls
     // their member.
-    const resolveWeak = ['__cxa_pure_virtual', '__cxa_deleted_virtual'].filter(
+    const resolveWeak = ['__cxa_pure_virtual', '__cxa_deleted_virtual', '__stdio_exit'].filter(
         (name) => index[name]
     )
     return {
         abi: ABI,
         target,
+        inputsDigest: inputsDigest(target),
         compiler: settings.compilers.c,
         members,
         index,
         resolveWeak,
         memberSources
     }
+}
+
+function inputsDigest(target) {
+    const settings = TARGETS[target]
+    return sha(JSON.stringify({ compilers: settings.compilers, flags: settings.flags,
+        files: headerFiles(target), sources: sources().map(path => [posix(relative(runtime, path)), read(path)]),
+        crt0: read(join(runtime, 'arch', settings.arch, 'crt0.s')) }))
 }
 
 /** Sizes and offsets of the public structs, read back from a compiled table. */
@@ -389,32 +400,82 @@ async function layouts(target) {
     return Object.fromEntries(names.map((name, i) => [name, values[i]]))
 }
 
-function checkAbi(baseline, current) {
+const COMPILER_SUPPORT = /^(?:_Z(?:n[aw]|d[la])|__cxa_|__dso_handle$|__(?:u?(?:div|mod)di3|(?:ashl|ashr|lshr)di3|(?:mul|div)(?:sc|dc)3|(?:clz|ctz|popcount|parity|cmp|ucmp)di2)$)/
+
+async function requiredSymbols(target, library, functions) {
+    const required = new Set([...functions.map(entry => entry.name), 'stdin', 'stdout', 'stderr', 'errno', 'bcmp', '_start'])
+    // Corpus caches are optional in CI; previously protected names must still be provided.
+    const baselinePath = join(runtime, 'abi', `${ABI}.json`)
+    const protectedNames = existsSync(baselinePath) ? JSON.parse(read(baselinePath)).exported?.[target] : undefined
+    if (Array.isArray(protectedNames)) for (const name of protectedNames) required.add(name)
+    const support = new Set(JSON.parse(read(join(runtime, 'abi', 'compiler-support.json'))))
+    for (const name of Object.keys(library.index)) if (COMPILER_SUPPORT.test(name) || support.has(name)) required.add(name)
+    const analyze = await analyzer(target)
+    const seen = new Set()
+    for (const path of walk(join(cacheDirectory, 'corpus', target), path => path.endsWith('.json'))) {
+        const response = JSON.parse(read(path))
+        if (response.code !== 0 || !response.asm?.length) continue
+        const text = prepare(response.asm, target).text
+        const key = sha(text)
+        if (seen.has(key)) continue
+        seen.add(key)
+        const symbols = analyze(path, text)
+        if (symbols.errors.length) continue
+        for (const name of symbols.references) {
+            if (name.startsWith('__aed_')) continue
+            // Corpus sources can deliberately reference symbols they define in another unit.
+            if (library.index[name]) required.add(name)
+        }
+    }
+    for (const name of required) if (!library.index[name]) throw new Error(`${target}: required ABI symbol ${name} is not provided`)
+    return [...required].sort()
+}
+
+async function signatures(target, functions) {
+    const includes = walk(join(runtime, 'include'), path => path.endsWith('.h')).map(path => posix(relative(join(runtime, 'include'), path)))
+    const source = includes.map(header => `#include <${header}>`).join('\n') + '\n' + functions.map(({name, prototype}) => {
+        const type = prototype.replace(new RegExp(`\\b${name}\\s*\\(`), '(')
+        const template = `__aed_sig_${name}`
+        return `using __aed_type_${name} = ${type};\ntemplate<class T> __attribute__((used,noinline)) void ${template}(T *) {}\nvoid __aed_use_${name}() { ${template}(static_cast<__aed_type_${name} *>(&${name})); }`
+    }).join('\n')
+    const path = join(runtime, 'abi', 'signatures.cpp')
+    writeFileSync(path, source + '\n')
+    const { response } = await compile(target, path, headerFiles(target))
+    if (response.code !== 0) throw new Error(`${target}: signature probe failed:\n${(response.stderr ?? []).map(line => line.text).join('\n')}`)
+    const labels = response.asm.map(line => /^\s*(_Z[^: ]+):/.exec(line.text)?.[1]).filter(Boolean)
+    return Object.fromEntries(functions.map(({name}) => {
+        const template = `__aed_sig_${name}`
+        const prefix = `_Z${template.length}${template}I`
+        const matches = labels.filter(label => label.startsWith(prefix))
+        if (matches.length !== 1) throw new Error(`${target}: expected one signature for ${name}, found ${matches.length}`)
+        return [name, matches[0]]
+    }))
+}
+
+export function checkAbi(baseline, current) {
     const problems = []
-    for (const name of baseline.exported ?? [])
-        if (!current.exported.includes(name)) problems.push(`removed export ${name}`)
-    for (const [target, table] of Object.entries(baseline.layouts ?? {}))
-        for (const [name, value] of Object.entries(table))
-            if (current.layouts[target]?.[name] !== value)
-                problems.push(
-                    `${target}: ${name} was ${value}, now ${current.layouts[target]?.[name]}`
-                )
+    for (const [target, names] of Object.entries(baseline.exported ?? {}))
+        for (const name of names)
+            if (!current.exported[target]?.includes(name)) problems.push(`${target}: removed export ${name}`)
+    for (const section of ['layouts', 'signatures'])
+        for (const [target, table] of Object.entries(baseline[section] ?? {}))
+            for (const [name, value] of Object.entries(table))
+                if (current[section][target]?.[name] !== value)
+                    problems.push(`${target}: ${section} ${name} was ${value}, now ${current[section][target]?.[name]}`)
     return problems
 }
 
 async function main() {
     mkdirSync(output, { recursive: true })
     const functions = documentedFunctions()
-    const exported = new Set(functions.map((entry) => entry.name))
+    const exported = {}
+    const signatureTables = {}
     const layoutTables = {}
     for (const target of targets) {
         if (!TARGETS[target]) throw new Error(`Unknown target ${target}`)
         console.log(`Building ${target}`)
-        const library = await buildTarget(target, functions)
-        // Globals no header declares as a function but programs use: the streams and errno, and
-        // bcmp, which Clang calls for memcmp
-        for (const name of ['stdin', 'stdout', 'stderr', 'errno', 'bcmp'])
-            if (library.index[name]) exported.add(name)
+        const library = abiOnly ? JSON.parse(read(join(output, `${target}.json`))) : await buildTarget(target, functions)
+        if (checkAssets && library.inputsDigest !== inputsDigest(target)) throw new Error(`${target}: generated library does not match runtime sources; rebuild it`)
         if (dryRun) {
             console.log(`  ${Object.keys(library.members).length} members (dry run)`)
             for (const [path, text] of Object.entries(library.members))
@@ -423,6 +484,10 @@ async function main() {
         }
         writeFileSync(join(output, `${target}.json`), JSON.stringify(library))
         layoutTables[target] = await layouts(target)
+        if (!skipAbi) {
+            exported[target] = await requiredSymbols(target, library, functions)
+            signatureTables[target] = await signatures(target, functions)
+        }
         console.log(
             `  ${Object.keys(library.members).length} members, ${Object.keys(library.index).length} indexed globals`
         )
@@ -455,7 +520,8 @@ async function main() {
     ])
     writeFileSync(join(output, 'sources.json'), JSON.stringify(cSources))
     if (skipAbi) return
-    const current = { abi: ABI, exported: [...exported].sort(), layouts: layoutTables }
+    const current = { abi: ABI, exported, signatures: signatureTables, layouts: layoutTables }
+    if (abiReport) { writeFileSync(abiReport, JSON.stringify(current, null, 2) + '\n'); return }
     const baselinePath = join(runtime, 'abi', `${ABI}.json`)
     if (existsSync(baselinePath) && !updateAbi) {
         const problems = checkAbi(JSON.parse(read(baselinePath)), current)
@@ -465,20 +531,16 @@ async function main() {
             )
     }
     if (!existsSync(baselinePath) || updateAbi) {
-        const merged = existsSync(baselinePath)
-            ? JSON.parse(read(baselinePath))
-            : { abi: ABI, exported: [], layouts: {} }
-        merged.exported = [...new Set([...merged.exported, ...current.exported])].sort()
-        merged.layouts = { ...merged.layouts, ...current.layouts }
+        if (targets.length !== Object.keys(TARGETS).length) throw new Error('--update-abi must build every target')
         mkdirSync(dirname(baselinePath), { recursive: true })
-        writeFileSync(baselinePath, JSON.stringify(merged, null, 2) + '\n')
+        writeFileSync(baselinePath, JSON.stringify(current, null, 2) + '\n')
     }
     console.log(
         `Headers: ${Object.keys(headers).length} files, ${(headerBytes / 1024).toFixed(1)} KiB`
     )
 }
 
-main().catch((error) => {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((error) => {
     console.error(error.message ?? error)
     process.exit(1)
 })

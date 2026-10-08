@@ -8,10 +8,13 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
 typedef __WCHAR_TYPE__ wchar_t;
 #endif
 
-/* The library never uses long double, so its strictest alignment is that of long long and double: 8 bytes on every Target. */
+/* Match the compiler's fundamental alignment, including long double even though its arithmetic is unsupported. */
 typedef struct {
 	long long __aed_ll __attribute__((__aligned__(__alignof__(long long))));
-	double __aed_d __attribute__((__aligned__(__alignof__(double))));
+	long double __aed_ld __attribute__((__aligned__(__alignof__(long double))));
+#ifdef __i386__
+	__float128 __aed_f128 __attribute__((__aligned__(__alignof__(__float128))));
+#endif
 } max_align_t;
 
 #if defined(__cplusplus) && __cplusplus >= 201103L

@@ -108,17 +108,14 @@ export function resolveRuntimeLink(
 }
 
 /**
- * Where an x86 Build starts. x86 links every source File, so Generated assembly anywhere in the
- * Project makes the Build a compiled program whatever the Entry: it starts at `_start` in the start
- * code linked with it, which calls `main`. Until x86 has a Runtime library that start code is the
- * editor's own start unit, so a record that requires a Runtime ABI, as a later editor writes them,
- * has nothing to link until its source is compiled again
- * ([the plan](../../../docs/design/x86-compiler-assembly-translation-plan.md), milestone 3a).
+ * A compiled x86 Entry receives a startup object. Other compiled Files receive the trailing
+ * support archive without replacing the Entry's _start. A Runtime ABI recorded by a future
+ * compiler still needs recompilation until x86 has that library.
  */
 export function resolveX86Start(
     sources: BuildSources,
     records: readonly CompilationRecord[] | undefined
-): Pick<BuildSources, 'entrySymbol'> {
+): Pick<BuildSources, 'entrySymbol' | 'x86Support'> {
     const compiled = (records ?? []).filter(
         (record) =>
             record.target === 'X86' &&
@@ -135,5 +132,6 @@ export function resolveX86Start(
         throw new ProjectFormatError(
             `${shadowed} is inside ${RUNTIME_NAMESPACE}, which the start code of compiled programs reserves. Move it to link the start code.`
         )
-    return { entrySymbol: RUNTIME_ENTRY_SYMBOL }
+    return { x86Support: true, ...(compiled.some(record => record.outputPath === sources.entry)
+        ? { entrySymbol: RUNTIME_ENTRY_SYMBOL } : {}) }
 }

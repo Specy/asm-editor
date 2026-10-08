@@ -123,6 +123,10 @@ function docComment(syscall) {
 function serviceFunction(syscall, target) {
     const { binding } = syscall
     const label = `${syscall.code} ${binding.name}`
+    // A writable buffer passes its address in an input register. Only a pointer whose register
+    // is absent from the service's inputs receives a copied register result after the call.
+    const registerOutput = (parameter) =>
+        parameter.out && !syscall.arguments.some((argument) => argument.name === parameter.register)
     /** @type {Map<string, { input?: { type: string, value: string }, output?: { type: string, use: string } }>} */
     const registers = new Map()
     const at = (register) => {
@@ -132,7 +136,7 @@ function serviceFunction(syscall, target) {
     }
     at(target.serviceRegister).input = { type: 'int', value: String(syscall.code) }
     for (const parameter of binding.parameters) {
-        if (parameter.out) continue
+        if (registerOutput(parameter)) continue
         const entry = at(parameter.register)
         if (entry.input) throw new Error(`${label}: ${parameter.register} is passed twice`)
         entry.input = { type: parameter.type, value: parameter.name }
@@ -144,7 +148,7 @@ function serviceFunction(syscall, target) {
         at(returns.high).output = { type: 'int', use: 'high' }
     }
     for (const parameter of binding.parameters) {
-        if (!parameter.out) continue
+        if (!registerOutput(parameter)) continue
         if (parameter.type !== 'int *') throw new Error(`${label}: ${parameter.name} is no int *`)
         const entry = at(parameter.register)
         if (entry.output) throw new Error(`${label}: ${parameter.register} is read back twice`)
@@ -190,7 +194,8 @@ function serviceFunction(syscall, target) {
     const statement = `__asm__ volatile("${target.call}" :${operands(outputs)}:${operands(inputs)}: ${clobbers.join(', ')});`
     const body = [...declarations, statement]
     for (const parameter of binding.parameters)
-        if (parameter.out) body.push(`*${parameter.name} = ${reads.get(parameter.name)};`)
+        if (registerOutput(parameter))
+            body.push(`*${parameter.name} = ${reads.get(parameter.name)};`)
     if (binding.noreturn) body.push('__builtin_unreachable();')
     else if ('register' in returns) body.push(`return ${reads.get('return')};`)
     else if ('low' in returns)

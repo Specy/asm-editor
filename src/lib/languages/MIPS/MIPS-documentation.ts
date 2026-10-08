@@ -282,16 +282,17 @@ export const mipsDirectivesMap = {
     align: {
         name: 'align',
         description:
-            'Aligns the next data to a **2^n-byte boundary**.\n\nExample:\n```mips\n.align 2   # Aligns to a 4-byte boundary\n```'
+            'Aligns the next data address to a boundary of 2^n bytes: `.align 2` moves it to a 4-byte boundary, and `.align 3` to an 8-byte boundary. The operand is an exponent, not a byte count.\n\nExample:\n```mips\n.align 2   # Aligns to a 4-byte boundary\n```'
     },
     globl: {
         name: 'globl',
         description:
-            "Marks a **symbol as global**, making it accessible from other files.\n\nExample:\n```mips\n.globl main   # Makes 'main' visible to the linker\n```"
+            'Marks a symbol as global so other source files or a linker can refer to it. For example, `.globl main` gives the symbol `main` external visibility.\n\nExample:\n```mips\n.globl main\n```'
     },
     extern: {
         name: 'extern',
-        description: 'Declares a **symbol that is defined in another file**, specifying its size.'
+        description:
+            'Declares an external data symbol and its size in bytes, so the assembler can reserve its address for references to that symbol.'
     },
     macro: {
         name: 'macro',
@@ -345,7 +346,7 @@ export const mipsDirectivesMap = {
     section: {
         name: 'section',
         description:
-            'Switches to the named section. A read-only or zeroed section becomes part of the data segment here.\n\nExample:\n```mips\n.section .rodata\n```'
+            'Switches to the named section. In this simulator, `.rodata` and `.bss` share the data segment with `.data`; use `.text` for instructions.\n\nExample:\n```mips\n.section .rodata\nmessage: .asciiz "Ready"\n```'
     },
     rdata: {
         name: 'rdata',

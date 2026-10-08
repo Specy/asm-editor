@@ -6,13 +6,15 @@ The simulator includes a screen, keyboard and console for your program to use. T
 
 One word of memory is one pixel. Its low 24 bits are the color, red in bits 23-16, green in 15-8 and blue in 7-0; the top byte is ignored. Words run left to right and then top to bottom, so the pixel below a word is one row of words further on.
 
-The screen panel's **Display** button configures it, and a program can set those same five parameters with the [@screen comment](#screen-directive) below. The parameters are saved with the project, and testcases run with them too.
+The screen panel's **Display** button configures it, and a program can set those same five parameters with the [@screen comment](#screen-directive) below. The parameters are saved with the project, and testcases run with them too. Width and height are physical display pixels; divide each by its matching unit size to get the number of memory words across and down. For example, 512 by 256 pixels with 2 by 4 pixel units gives 256 by 64 words, so the grid occupies 16,384 words (65,536 bytes). The default unit is 1 by 1, so the default 512 by 256 pixel display uses 512 by 256 words.
 
 {parameters}
 
+The bitmap example configures its own 256 by 256 word grid with `@screen`, so its 256-word row stride is 1024 bytes.
+
 {bitmapExample}
 
-Reserve the memory the grid covers, with `.space` or a label of your own: the screen shows whatever those words hold, and a program that writes past what it reserved is writing over something else. Undo walks the picture back with the code, because the picture _is_ the memory the emulator rolled back.
+Reserve the memory the grid covers, with `.space` or a label of your own. The example reserves 256 × 256 words, or 262,144 bytes; the screen shows whatever those words hold, and writing past the reserved range overwrites other memory. Undo walks the picture back with the code, because the picture _is_ the memory the emulator rolled back.
 
 ## Configuring the screen from the program {#screen-directive}
 

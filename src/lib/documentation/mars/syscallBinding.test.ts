@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { mipsSyscalls } from './mipsSyscalls'
 import { riscvSyscalls } from './riscvSyscalls'
-import { simPrototype, type MarsSyscall, type SimBinding } from './syscallBinding'
+import { simPrototype, type MarsSyscall } from './syscallBinding'
 
 /**
  * The services' C bindings are what `<sim.h>` is generated from and what the Documentation prints as
@@ -29,14 +29,19 @@ const TYPES = [
 ]
 
 /** The registers a binding passes arguments in. */
-function argumentRegisters(binding: SimBinding): string[] {
-    return binding.parameters
-        .filter((parameter) => !parameter.out)
+function argumentRegisters(syscall: MarsSyscall): string[] {
+    return syscall.binding.parameters
+        .filter(
+            (parameter) =>
+                !parameter.out ||
+                syscall.arguments.some((argument) => argument.name === parameter.register)
+        )
         .map((parameter) => parameter.register)
 }
 
 /** The registers a binding reads back after the service: its return value and out-parameters. */
-function resultRegisters(binding: SimBinding): string[] {
+function resultRegisters(syscall: MarsSyscall): string[] {
+    const { binding } = syscall
     const returns = binding.returns
     const value =
         'register' in returns
@@ -44,7 +49,11 @@ function resultRegisters(binding: SimBinding): string[] {
             : 'low' in returns
               ? [returns.low, returns.high]
               : []
-    const outputs = binding.parameters.filter((parameter) => parameter.out)
+    const outputs = binding.parameters.filter(
+        (parameter) =>
+            parameter.out &&
+            !syscall.arguments.some((argument) => argument.name === parameter.register)
+    )
     return [...value, ...outputs.map((parameter) => parameter.register)]
 }
 
@@ -64,7 +73,11 @@ describe.each(Object.entries(TARGETS))('the %s syscall bindings', (_, target) =>
                 expect(parameter.type, label).not.toBe('void')
                 expect(parameter.register, label).toMatch(target.register)
                 //the function stores the register's value through the pointer
-                if (parameter.out) expect(parameter.type, label).toBe('int *')
+                if (
+                    parameter.out &&
+                    !syscall.arguments.some((argument) => argument.name === parameter.register)
+                )
+                    expect(parameter.type, label).toBe('int *')
             }
             const returns = binding.returns
             expect(TYPES, label).toContain(returns.type)
@@ -76,11 +89,11 @@ describe.each(Object.entries(TARGETS))('the %s syscall bindings', (_, target) =>
                       ? ['high', 'low', 'type']
                       : ['register', 'type']
             expect(Object.keys(returns).sort(), label).toEqual(shape)
-            for (const register of resultRegisters(binding))
+            for (const register of resultRegisters(syscall))
                 expect(register, label).toMatch(target.register)
             for (const register of binding.clobbers ?? []) {
                 expect(register, label).toMatch(target.register)
-                expect(resultRegisters(binding), label).not.toContain(register)
+                expect(resultRegisters(syscall), label).not.toContain(register)
             }
             if (binding.noreturn) expect(binding.returns, label).toEqual({ type: 'void' })
         }
@@ -98,10 +111,10 @@ describe.each(Object.entries(TARGETS))('the %s syscall bindings', (_, target) =>
     it('bind exactly the registers the Documentation names', () => {
         for (const [, syscall] of syscalls) {
             const label = `${syscall.code} ${syscall.binding.name}`
-            expect(argumentRegisters(syscall.binding), label).toEqual(
+            expect(argumentRegisters(syscall), label).toEqual(
                 syscall.arguments.map((argument) => argument.name)
             )
-            expect(resultRegisters(syscall.binding).sort(), label).toEqual(
+            expect(resultRegisters(syscall).sort(), label).toEqual(
                 (syscall.result.arguments ?? []).map((result) => result.name).sort()
             )
         }

@@ -2,7 +2,7 @@
 #ifndef AED_SYS_ARCH_H
 #define AED_SYS_ARCH_H
 
-#define AED_SYS_SBRK 9
+#define AED_SYS_SBRK 1100
 #define AED_SYS_OPEN 13
 #define AED_SYS_READ 14
 #define AED_SYS_WRITE 15
@@ -66,6 +66,15 @@ static inline long long __aed_time_ms(void)
 	register long a1 __asm__("$5");
 	__asm__ __volatile__ ("syscall" : "+r"(v0), "=r"(a0), "=r"(a1) : : "memory");
 	return (long long)(((unsigned long long)(unsigned int)a1 << 32) | (unsigned int)a0);
+}
+
+static inline unsigned long long __aed_cpu_ticks(void)
+{
+    register long v0 __asm__("$2") = 1101;
+    register long lo __asm__("$4");
+    register long hi __asm__("$5");
+    __asm__ __volatile__("syscall" : "+r"(v0), "=r"(lo), "=r"(hi) : : "memory");
+    return (((unsigned long long)(unsigned int)hi << 32) | (unsigned int)lo) / 100;
 }
 
 #endif

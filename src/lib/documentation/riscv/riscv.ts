@@ -128,7 +128,8 @@ function syscalls(): Chapter {
         language: 'risc-v',
         title: 'Syscalls',
         href,
-        description: 'The services a program asks the simulator for with `ecall`.',
+        description:
+            'RARS simulator services selected by the number in `a7`, with arguments and results in the registers listed for each service.',
         entries
     }
 }

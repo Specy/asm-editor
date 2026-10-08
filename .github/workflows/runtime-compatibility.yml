@@ -1,0 +1,62 @@
+name: Runtime compatibility
+on:
+    pull_request:
+        branches: [main]
+        paths:
+            - runtime/**
+            - scripts/runtime/**
+            - src/lib/sourceRuntime/generated/v1/**
+            - emulators/**
+            - .github/workflows/runtime-compatibility.yml
+    push:
+        branches: [main]
+        paths:
+            - runtime/**
+            - scripts/runtime/**
+            - src/lib/sourceRuntime/generated/v1/**
+            - emulators/**
+            - .github/workflows/runtime-compatibility.yml
+
+concurrency:
+    group: runtime-compatibility-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    compatibility:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: recursive
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24.6.0
+            - uses: actions/setup-java@v4
+              with:
+                  distribution: temurin
+                  java-version: '17'
+                  cache: maven
+            - uses: actions/cache@v4
+              with:
+                  path: runtime/.cache
+                  key: runtime-probes-${{ hashFiles('runtime/**', 'scripts/runtime/build.mjs') }}
+                  restore-keys: runtime-probes-
+            - name: Build the checked-out Cores
+              run: |
+                  npm ci --prefix emulators/mips/marsjs/ts
+                  npm --prefix emulators/mips/marsjs/ts run build:all
+                  npm ci --prefix emulators/risc-v/rarsjs/ts
+                  npm --prefix emulators/risc-v/rarsjs/ts run build:all
+            - name: Check ABI guard and generated library inputs
+              run: |
+                  node --test scripts/runtime/abi-check.test.mjs
+                  node scripts/runtime/build.mjs --abi-only --check-assets
+                  git diff --exit-code -- runtime/abi/signatures.cpp src/lib/sourceRuntime/generated/v1
+            - name: Run frozen assembly against the current library
+              run: node scripts/runtime/test-cores.mjs --abi-fixtures
+            - name: Install native test compilers
+              run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+            - name: Compare the native runtime with glibc
+              run: node runtime/scripts/test-native.mjs

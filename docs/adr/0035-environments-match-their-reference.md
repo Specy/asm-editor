@@ -5,6 +5,8 @@ date: 2026-10-05
 
 # Environments match their reference
 
+Amended in part by [ADR 0041](./0041-runtime-compatibility-protects-calls-and-standard-meanings.md).
+
 Every service a program reaches the outside world through (syscalls, traps, ports, memory-mapped devices) behaves as it does in the Target's **Reference environment**: EASy68K 5.16 for M68K, MARS 4.5 for MIPS, RARS 1.6 for RISC-V, a Linux process on a tty for x86, and, for the Z80, whose Port map has no real counterpart, the Port map as [ADR 0002](./0002-z80-console-ports.md) and [ADR 0011](./0011-z80-peripherals-through-the-port-map.md) define it. This extends [ADR 0003](./0003-preserve-simulator-graphics-conventions.md) from graphics to every service. Three rules apply:
 
 1. **The same result for every input the reference accepts:** formatting, parsing (EASy68K's `atoi` reads `"12abc"` as 12), key codes (Enter is `$0D` to EASy68K), dialog answers (Cancel is 2 or -2 in MARS), exit codes and error returns.

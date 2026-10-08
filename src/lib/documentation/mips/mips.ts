@@ -124,7 +124,8 @@ function syscalls(): Chapter {
         language: 'mips',
         title: 'Syscalls',
         href,
-        description: 'The services a program asks the simulator for with `syscall`.',
+        description:
+            'MARS simulator services selected by the number in `$v0`, with arguments and results in the registers listed for each service.',
         entries
     }
 }

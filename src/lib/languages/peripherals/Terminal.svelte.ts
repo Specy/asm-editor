@@ -439,7 +439,7 @@ export class Terminal {
     ): Promise<string> {
         const scripted = this.readScriptedInput()
         if (scripted !== null) return scripted
-        return (await this.readLine('line', question, execution, options)) ?? ''
+        return (await this.readLine('line', question, execution, options))?.text ?? ''
     }
 
     /**
@@ -471,7 +471,7 @@ export class Terminal {
         if (this.lineBuffer.length === 0) {
             const line = await this.readStandardInputLine(question, execution)
             if (line === null) return new Uint8Array(0)
-            this.lineBuffer = encodeText(line + LINE_FEED, this.encoding)
+            this.lineBuffer = encodeText(line.text + (line.newline ? LINE_FEED : ''), this.encoding)
         }
         const bytes = this.lineBuffer.slice(0, length)
         this.lineBuffer = this.lineBuffer.subarray(bytes.length)
@@ -492,7 +492,7 @@ export class Terminal {
         let text: string
         if (scripted !== null) text = scripted + LINE_FEED
         else if (this._keyboardInput !== null) text = await this.readCharacter(question, execution)
-        else text = `${(await this.readLine('line', question, execution)) ?? ''}${LINE_FEED}`
+        else text = `${(await this.readLine('line', question, execution))?.text ?? ''}${LINE_FEED}`
         this.lineBuffer = encodeText(text, this.encoding)
         const byte = this.readBufferedByte()
         if (byte === undefined) throw new Error(NO_INPUT_LEFT_ERROR)
@@ -599,9 +599,12 @@ export class Terminal {
     private async readStandardInputLine(
         question: string,
         execution: ExecutionGeneration
-    ): Promise<string | null> {
+    ): Promise<{ text: string; newline: boolean } | null> {
         const source = this._inputSource
-        if (source.type === 'scripted') return source.values.shift() ?? null
+        if (source.type === 'scripted') {
+            const text = source.values.shift()
+            return text === undefined ? null : { text, newline: true }
+        }
         return this.readLine('standard-input', question, execution)
     }
 
@@ -619,18 +622,21 @@ export class Terminal {
         question: string,
         execution: ExecutionGeneration,
         options: TerminalReadOptions = {}
-    ): Promise<string | null> {
+    ): Promise<{ text: string; newline: boolean } | null> {
         const read = this.beginRead(kind, question, options)
         try {
             for (;;) {
                 const character = await this.nextKeystroke(read, execution)
                 if (character === END_OF_TRANSMISSION) {
-                    if (kind === 'standard-input' && read.line.length === 0) return null
+                    if (kind === 'standard-input')
+                        return read.line.length
+                            ? { text: read.line.join(''), newline: false }
+                            : null
                     continue
                 }
                 if (character === LINE_FEED) {
                     this.echo(read, LINE_FEED)
-                    return read.line.join('')
+                    return { text: read.line.join(''), newline: true }
                 }
                 if (character === BACKSPACE) {
                     const erased = read.line.pop()

@@ -329,7 +329,7 @@ function trapTasks(): Chapter {
         title: 'Trap tasks',
         href,
         description:
-            'The tasks of `trap #15`, the one system call: text, graphics, the keyboard and mouse, time and files.',
+            'The editor’s services use the 68000 `trap` instruction with vector 15. Put the task number in D0.B (the values below are decimal); the task’s other inputs and results use the listed registers. These simulator tasks are distinct from the CPU’s exception and interrupt handling.',
         entries
     }
 }

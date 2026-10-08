@@ -190,7 +190,9 @@ describe('the x86 Documentation', () => {
         expect(find('syscalls', 'lseek').summary).toBe(
             'Moves the read and write position of the descriptor in rdi to the offset in rsi, interpreted according to rdx, and returns the new position.'
         )
-        expect(find('syscalls', 'stat').summary).toBe('Takes path in rdi, o_stat in rsi.')
+        expect(find('syscalls', 'stat').summary).toBe(
+            'Reads file metadata for the path at rdi and writes it to the Linux struct stat buffer at rsi.'
+        )
     })
 
     it("names each call's <sim.h> function, as the header declares it", () => {

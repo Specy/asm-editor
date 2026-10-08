@@ -6,6 +6,9 @@
 /* __aed_open modes, the flags MARS and RARS accept. */
 #define AED_OPEN_READ 0
 #define AED_OPEN_WRITE 1   /* create or truncate */
+#define AED_OPEN_READWRITE 2
+#define AED_OPEN_READWRITE_TRUNCATE 3
+#define AED_OPEN_READWRITE_APPEND 10
 #define AED_OPEN_APPEND 9  /* create, write at the end */
 
 /* Returns the number of bytes read, 0 at the end of input, or -1 on error. Descriptor 0 delivers at most one line per call. */
@@ -24,6 +27,8 @@ static inline void *__aed_sbrk(long increment);
 static inline _Noreturn void __aed_exit(int code);
 /* Returns the current time in milliseconds since 1970-01-01 UTC. */
 static inline long long __aed_time_ms(void);
+
+static inline unsigned long long __aed_cpu_ticks(void);
 
 #include "aed_sys_arch.h"
 

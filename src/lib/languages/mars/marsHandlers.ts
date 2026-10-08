@@ -184,7 +184,10 @@ export class MarsHandlers {
                 try {
                     return this.requireFileSystem().open(
                         path,
-                        flags === 0 ? 'read' : append ? 'append' : 'write'
+                        flags === 2 ? { access: 'read-write' } :
+                        flags === 3 ? { access: 'read-write', create: true, truncate: true } :
+                        flags === 10 ? { access: 'read-write', create: true, append: true } :
+                        flags === 0 ? 'read' : append ? 'append' : 'write' 
                     )
                 } catch (error) {
                     return guestFileFailure(error)
@@ -217,10 +220,9 @@ export class MarsHandlers {
             },
 
             sleep: (milliseconds) => this.sleep(milliseconds),
-            //syscall 30 and, on RISC-V, a read of the `time` CSR: elapsed program time. Host time in
-            //an interactive run and the virtual clock of a Testcase, which starts at zero so
-            //elapsed-time output is reproducible (ADR 0010)
-            time: () => this.host.peripherals.clock.now(),
+            //Service 30 and RISC-V time/timeh: Unix epoch milliseconds.
+            //Testcases use the fixed Y2K epoch plus virtual waits (ADR 0040).
+            time: () => this.host.peripherals.clock.calendarNow(),
             //the first seed of a generator the program did not seed with service 40: host randomness
             //interactively and the fixed seed in a Testcase, read at the point of use because a
             //Testcase swaps the Random source in (ADR 0037)

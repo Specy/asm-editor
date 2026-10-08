@@ -352,13 +352,15 @@ describe('End of input', () => {
         expect(terminal.output).toBe('')
     })
 
-    it('does nothing on a line with text typed, which Enter still submits', async () => {
+    it('delivers pending text without a newline and then EOF on an empty read', async () => {
         const { terminal, execution } = makeConsole()
         const read = terminal.readStandardInput(64, 'q', execution)
         terminal.insertText('ab')
         terminal.sendEndOfInput()
-        terminal.pressEnter()
-        expect(text(await read)).toBe('ab\n')
+        expect(text(await read)).toBe('ab')
+        const next = terminal.readStandardInput(64, 'q', execution)
+        terminal.sendEndOfInput()
+        expect((await next).length).toBe(0)
     })
 
     it('is no character to the educational reads, which wait on', async () => {

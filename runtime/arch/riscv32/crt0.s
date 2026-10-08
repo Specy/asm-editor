@@ -1,6 +1,6 @@
 # Runtime library, ABI v1: program start for RV32 (RARS), in the GNU assembler syntax GCC emits.
 # _start aligns sp to 16 bytes, calls every function pointer in .init_array (4 bytes each; the linker
-# provides __init_array_start and __init_array_end), calls main(0, NULL) and passes its result to exit.
+# provides __init_array_start and __init_array_end), calls main(0, empty_argv) and passes its result to exit.
 	.text
 	.align	2
 	.globl	_start
@@ -19,7 +19,14 @@ _start:
 	j	.Linit
 .Lmain:
 	li	a0,0
-	li	a1,0
+	lui	a1,%hi(__aed_empty_argv)
+	addi	a1,a1,%lo(__aed_empty_argv)
+	mv	a2,a1
 	call	main
 	call	exit
 	.size	_start, .-_start
+
+	.section .rodata
+	.align 2
+__aed_empty_argv:
+	.word 0

@@ -49,11 +49,25 @@ After changing the source or a local header, **Compile** again, then **Build** t
 
 ## Libraries and simulator services {#libraries}
 
-Runtime support is supplied automatically. Supported C functions include `printf` and `scanf` from `<stdio.h>`, `malloc` and `free` from `<stdlib.h>`, string helpers from `<string.h>` and math functions from `<math.h>`. Functions such as `fopen` and `fprintf` work with the project's files. See the [Runtime library](/documentation/mips/runtime-library) for more detail.
+Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` use the project's files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/mips/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging.
 
-C uses C17 and C++ uses C++17. C++ supports constructors, `new` and `delete`, and C compatibility headers: for example, include `<cstdio>` and use `std::printf("Hello from MIPS\n");`. The full C++ standard library is not provided: `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI.
+C uses C17 and C++ uses C++17. C++ supports constructors, `new` and `delete`, and the provided compatibility headers `<cassert>`, `<cctype>`, `<cerrno>`, `<cfloat>`, `<cinttypes>`, `<climits>`, `<cmath>`, `<cstdarg>`, `<cstddef>`, `<cstdint>`, `<cstdio>`, `<cstdlib>`, `<cstring>`, `<ctime>` and `<new>`. For example, include `<cstdio>` and use `std::printf("Hello from MIPS\n");`. The full C++ standard library is not provided: `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI.
 
-When a standard input function waits, type in the Terminal and press **Enter**. Unread characters remain available to later calls. On an empty input line, press **Ctrl+D** or **End of input** to signal end of file.
+When a standard input function waits, type in the Terminal and press **Enter**. Unread characters remain available to later calls. Press **Ctrl+D** or **End of input** to release pending text without a newline. On an empty input line, this signals end of file for that read.
+
+For example, this reads one integer and prints it only when the input is valid:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int value;
+    if (scanf("%d", &value) == 1) {
+        printf("You entered %d\n", value);
+    }
+    return 0;
+}
+```
 
 Include `<sim.h>` to use simulator services such as `sim_print_string` or `sim_read_int`. Find their signatures and results under **From C** in [Syscalls](/documentation/mips/syscall), also available in the editor's Documentation panel. The number and string `sim_read_*` functions take a line, while `sim_read_char` takes one key. Standard input functions share buffered input; avoid mixing the two interfaces on one line.
 

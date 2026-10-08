@@ -7,6 +7,8 @@
  * same ABI (ADR 0031). Add entries at the end; never reorder or remove one.
  */
 #include <errno.h>
+#include <math.h>
+#include <stdarg.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -74,4 +76,22 @@ const long __aed_layout[] = {
 	LAYOUT(ENOSYS),
 	LAYOUT(EOVERFLOW),
 	LAYOUT(EILSEQ),
+    LAYOUT(EILSEQ),
+    LAYOUT(_Alignof(fpos_t)),
+    LAYOUT(sizeof(intptr_t)),
+    LAYOUT(sizeof(uintptr_t)),
+    LAYOUT(sizeof(uintmax_t)),
+    LAYOUT(_Alignof(div_t)),
+    LAYOUT(_Alignof(ldiv_t)),
+    LAYOUT(_Alignof(lldiv_t)),
+    LAYOUT(_Alignof(imaxdiv_t)),
+    LAYOUT(_Alignof(struct tm)),
+    LAYOUT(_Alignof(time_t)),
+    LAYOUT(_Alignof(clock_t)),
+    LAYOUT(sizeof(ptrdiff_t)),
+    LAYOUT(sizeof(wchar_t)),
+    LAYOUT(sizeof(float_t)),
+    LAYOUT(sizeof(double_t)),
+    LAYOUT(sizeof(va_list)),
+    LAYOUT(_Alignof(va_list)),
 };

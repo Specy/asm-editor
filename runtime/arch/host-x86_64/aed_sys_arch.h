@@ -24,7 +24,7 @@ static inline long __aed_write(int fd, const void *buf, unsigned long n)
 static inline int __aed_open(const char *path, int mode)
 {
 	/* O_RDONLY 0; O_WRONLY 1 | O_CREAT 0100 | O_TRUNC 01000 or O_APPEND 02000. */
-	long flags = mode == 0 ? 0 : mode == 9 ? 01 | 0100 | 02000 : 01 | 0100 | 01000;
+	long flags = mode == 0 ? 0 : mode == 2 ? 02 : mode == 3 ? 02 | 0100 | 01000 : mode == 10 ? 02 | 0100 | 02000 : mode == 9 ? 01 | 0100 | 02000 : 01 | 0100 | 01000;
 	long r = __aed_linux3(2, (long)path, flags, 0644);
 	return r < 0 ? -1 : (int)r;
 }
@@ -59,6 +59,13 @@ static inline long long __aed_time_ms(void)
 	struct { long sec, nsec; } ts;
 	__aed_linux3(228, 0 /* CLOCK_REALTIME */, (long)&ts, 0);
 	return ts.sec * 1000LL + ts.nsec / 1000000;
+}
+
+static inline unsigned long long __aed_cpu_ticks(void)
+{
+    struct { long sec, nsec; } ts;
+    if (__aed_linux3(228, 2 /* CLOCK_PROCESS_CPUTIME_ID */, (long)&ts, 0) < 0) return ~0ULL;
+    return (unsigned long long)ts.sec * 1000000 + ts.nsec / 1000;
 }
 
 #endif

@@ -28,6 +28,9 @@ typedef long ssize_t;
 
 struct _IO_FILE {
 	unsigned flags;
+	FILE *next_open;
+	unsigned char *owned_buffer;
+	unsigned char *input_buffer;
 	unsigned char *rpos, *rend;
 	int (*close)(FILE *);
 	unsigned char *wend, *wpos;
@@ -44,6 +47,8 @@ struct _IO_FILE {
 	unsigned char *shend;
 	off_t shlim, shcnt;
 };
+
+extern hidden FILE *__aed_open_streams;
 
 hidden size_t __stdio_read(FILE *, unsigned char *, size_t);
 hidden size_t __stdio_write(FILE *, const unsigned char *, size_t);

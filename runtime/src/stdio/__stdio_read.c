@@ -9,6 +9,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	ssize_t cnt;
 
 	if (!len) return 0;
+	if (f->fd == 0 && stdout->lbf >= 0) fflush(stdout);
 	cnt = __aed_read(f->fd, buf, len);
 	if (cnt <= 0) {
 		if (cnt) errno = EIO;

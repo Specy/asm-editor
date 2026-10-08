@@ -319,7 +319,7 @@ export const riscvDirectivesMap = {
     align: {
         name: 'align',
         description:
-            'Align next data item on specified byte boundary (0=byte, 1=half, 2=word, 3=double)'
+            'Aligns the next data address to a 2^n-byte boundary: `.align 0` is byte alignment, `.align 1` is 2 bytes, `.align 2` is 4 bytes, and `.align 3` is 8 bytes. Here the operand is the exponent; `.balign` takes the byte count directly.'
     },
     half: {
         name: 'half',
@@ -339,15 +339,17 @@ export const riscvDirectivesMap = {
     },
     extern: {
         name: 'extern',
-        description: 'Declare the listed label and byte length to be a global data field'
+        description:
+            'Declares an external data symbol and its size in bytes, so the assembler can reserve its address for references to that symbol.'
     },
     globl: {
         name: 'globl',
-        description: 'Declare the listed label(s) as global to enable referencing from other files'
+        description:
+            'Marks the listed symbol as global so it can be used as an external name, such as a program entry point: `.globl main`.'
     },
     global: {
         name: 'global',
-        description: 'Declare the listed label(s) as global to enable referencing from other files'
+        description: 'Alias for `.globl`: marks a symbol as global, for example `.global main`.'
     },
     eqv: {
         name: 'eqv',
@@ -369,7 +371,7 @@ export const riscvDirectivesMap = {
     section: {
         name: 'section',
         description:
-            'Allows specifying sections without .text or .data directives. Included for gcc comparability'
+            'Switches to the named section, such as `.text`, `.data`, `.rodata`, or `.bss`. In this simulator, `.rodata` and `.bss` share the data segment with `.data`; use `.text` for instructions.'
     },
     bss: {
         name: 'bss',

@@ -1,8 +1,8 @@
 /* Runtime library: internal layout of the heap (written for this library).
  *
  * The heap grows with sbrk and never shrinks (the Cores reject a negative sbrk). Every chunk starts with a
- * two-word header; the caller's memory follows it, so it is aligned to ALIGN: 8 bytes on 32-bit Targets and
- * 16 on 64-bit ones. Free chunks form one list in address order, and neighbouring free chunks are merged.
+ * two-word header padded to ALIGN; the caller's memory follows it, aligned to max_align_t:
+ * 8 bytes on MIPS and 16 on RISC-V. Free chunks form one list in address order, and neighbouring free chunks are merged.
  * The tag word lets free and realloc reject pointers that malloc did not return, and double frees. */
 #ifndef AED_MALLOC_IMPL_H
 #define AED_MALLOC_IMPL_H
@@ -10,7 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ALIGN (2 * sizeof(size_t))
+#define ALIGN _Alignof(max_align_t)
 #define HDR ALIGN
 #define MIN_CHUNK (2 * ALIGN)
 /* Each sbrk request must stay below 2 GiB: the Cores read its size as a signed 32-bit value. */
@@ -24,6 +24,7 @@ struct chunk {
 	size_t tag;         /* size ^ TAG_USED while allocated, size ^ TAG_FREE while free */
 	struct chunk *next; /* free chunks only: the next free chunk, in address order */
 };
+_Static_assert(sizeof(struct chunk) <= MIN_CHUNK, "free chunk fits minimum allocation");
 
 #define CHUNK(p) ((struct chunk *)((char *)(p) - HDR))
 #define MEM(c) ((void *)((char *)(c) + HDR))

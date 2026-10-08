@@ -1,5 +1,7 @@
 # Program time without clock pacing
 
+Amended in part by [ADR 0040](./0040-programs-see-calendar-elapsed-and-cpu-clocks.md).
+
 Every environment gives programs **program time** through two operations, a wait for a duration and a read of elapsed time, and none of them emulates a clock rate: program time follows host time, and compute runs as fast as the host allows. EASy68K's delay and time tasks and MARS's sleep and time syscalls already have this shape, and the Z80 gets the equivalent as timer and wait ports on its port device, so interactive Screen programs can animate and poll input at a stable pace in every language while exams, Testcases and compute-only runs keep full speed. Real-time pacing, as done by the TRS-80 emulator that `@specy/z80` descends from ([Trs80.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-emulator/src/Trs80.ts)), was rejected: the generic Z80 machine has no ROM and no documented clock to honor, any rate would be invented, and pacing would slow every Z80 program or need a mode switch.
 
 ## Consequences

@@ -3,6 +3,7 @@
  * (0-2) is left open. Changing only the mode (path NULL) is not supported and fails with EINVAL. */
 #include "stdio_impl.h"
 #include <string.h>
+#include <stdlib.h>
 #include <errno.h>
 
 FILE *freopen(const char *restrict filename, const char *restrict mode, FILE *restrict f)
@@ -13,6 +14,7 @@ FILE *freopen(const char *restrict filename, const char *restrict mode, FILE *re
 		errno = EINVAL;
 		goto fail;
 	}
+	if (fflush(f)) goto fail;
 	fd = __aed_open(filename, __fmodeflags(mode));
 	if (fd < 0) {
 		errno = ENOENT;
@@ -20,6 +22,10 @@ FILE *freopen(const char *restrict filename, const char *restrict mode, FILE *re
 	}
 	if (f->fd > 2) f->close(f);
 
+	if (f->input_buffer) f->buf = f->input_buffer;
+	free(f->owned_buffer);
+	f->owned_buffer = 0;
+	f->buf_size = 0;
 	f->fd = fd;
 	f->flags &= F_PERM;
 	if (!strchr(mode, '+')) f->flags |= (*mode == 'r') ? F_NOWR : F_NORD;

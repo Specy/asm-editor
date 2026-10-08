@@ -164,6 +164,8 @@ export type BuildSources = Readonly<{
      * defines it: the Runtime library's `crt0` once x86 has one, the editor's start unit until then.
      */
     entrySymbol?: string
+    /** x86 compiler support archive; startup is selected only for a compiled Entry. */
+    x86Support?: boolean
 }>
 
 export type BuildInput = string | BuildSources
@@ -213,7 +215,8 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
                 ? { assemblerProfile: input.assemblerProfile }
                 : {}),
             ...(hasOwn(input, 'runtimeAbi') ? { runtimeAbi: input.runtimeAbi } : {}),
-            ...(hasOwn(input, 'entrySymbol') ? { entrySymbol: input.entrySymbol } : {})
+            ...(hasOwn(input, 'entrySymbol') ? { entrySymbol: input.entrySymbol } : {}),
+            ...(hasOwn(input, 'x86Support') ? { x86Support: input.x86Support } : {})
         })
     }
     return Object.freeze({

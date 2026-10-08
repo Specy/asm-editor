@@ -26,7 +26,8 @@ describe('the start code beside an x86 Project', () => {
         expect(x86CoreProject(compiled)).toEqual({
             entry: 'src/main.c.asm',
             files: { 'main.asm': BASE_CODE.X86, 'src/main.c.asm': files['src/main.c.asm'].content },
-            library: units
+            startUnits: { [X86_START_UNIT_PATH]: X86_START_UNIT },
+            library: { [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT }
         })
     })
 

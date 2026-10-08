@@ -13,7 +13,7 @@ int main(void)
 {
 	time_t stored = 0;
 	time_t now = time(&stored);
-	printf("time plausible=%d stored equals returned=%d\n", now > 1700000000LL, stored == now);
+	printf("time plausible=%d stored equals returned=%d\n", now >= 946684800LL, stored == now);
 	printf("time(NULL) not before=%d\n", time(NULL) >= now);
 	clock_t c1 = clock();
 	volatile double sink = 0;

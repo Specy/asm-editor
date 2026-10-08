@@ -45,17 +45,12 @@ export function linksX86StartUnit(sources: BuildSources): boolean {
 }
 
 /**
- * The Core's Project for these sources: their Files, and the start code when they ask for it. A
- * Core that links a Project as an archive takes the start code as library units, ahead of the
- * Project's own, so it supplies `_start` to a program without one, and a default Project's
- * `main.asm`, which defines its own, stays out of a Build whose Entry is compiled code.
+ * The compiled Entry receives an always-linked start object. Support units follow user
+ * archive members so secondary user definitions take precedence.
  */
 export function x86CoreProject(sources: BuildSources): X86Project {
     const project = toX86Project(sources)
-    if (!linksX86StartUnit(sources)) return project
-    const units = {
-        [X86_START_UNIT_PATH]: X86_START_UNIT,
-        [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT
-    }
-    return { ...project, library: units }
+    if (!linksX86StartUnit(sources) && !sources.x86Support) return project
+    return { ...project, ...(linksX86StartUnit(sources) ? { startUnits: { [X86_START_UNIT_PATH]: X86_START_UNIT } } : {}),
+        library: { [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT } }
 }

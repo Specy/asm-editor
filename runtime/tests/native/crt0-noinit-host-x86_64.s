@@ -1,4 +1,4 @@
-# Test start file: calls main(0, NULL) and ends with the raw exit_group system call. It runs no .init_array entry
+# Test start file: calls main(0, empty_argv) and ends with the raw exit_group system call. It runs no .init_array entry
 # and never calls exit(), like a bare assembly program that calls library functions: output must already have
 # been written and no library function may depend on initialization.
 	.text
@@ -7,7 +7,7 @@
 _start:
 	andq	$-16, %rsp
 	xorl	%edi, %edi
-	xorl	%esi, %esi
+	leaq __aed_empty_argv(%rip), %rsi
 	call	main
 	movl	%eax, %edi
 	movl	$231, %eax
@@ -15,3 +15,8 @@ _start:
 	hlt
 	.size	_start, .-_start
 	.section	.note.GNU-stack,"",@progbits
+
+.section .rodata
+.align 8
+__aed_empty_argv:
+.quad 0

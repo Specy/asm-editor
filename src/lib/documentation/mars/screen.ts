@@ -32,7 +32,8 @@ function fence(variant: Variant, code: string): string {
 }
 
 const BITMAP_EXAMPLE: Record<Variant, string> = {
-    MIPS: `        .data
+    MIPS: `# @screen unit=1 width=256 height=256 base=display
+        .data
 display:.space  262144          # 256 * 256 words
         .text
 main:
@@ -40,7 +41,8 @@ main:
         li      $t1, 0x00ff8000 # low 24 bits: red 0xff, green 0x80, blue 0x00
         sw      $t1, 0($t0)     # the pixel at the top left
         sw      $t1, 1024($t0)  # 256 words further on: the one below it`,
-    'RISC-V': `        .data
+    'RISC-V': `# @screen unit=1 width=256 height=256 base=display
+        .data
 display:.space  262144          # 256 * 256 words
         .text
 main:

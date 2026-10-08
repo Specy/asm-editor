@@ -9,7 +9,7 @@
 #define AED_SYS_READ 63
 #define AED_SYS_WRITE 64
 #define AED_SYS_EXIT 93
-#define AED_SYS_SBRK 9
+#define AED_SYS_SBRK 1100
 #define AED_SYS_TIME 30
 
 static inline long __aed_ecall3(long n, long a, long b, long c)
@@ -66,6 +66,13 @@ static inline long long __aed_time_ms(void)
 	register long a1 __asm__("a1");
 	__asm__ __volatile__ ("ecall" : "=r"(a0), "=r"(a1) : "r"(a7) : "memory");
 	return (long long)(((unsigned long long)(unsigned int)a1 << 32) | (unsigned int)a0);
+}
+
+static inline unsigned long long __aed_cpu_ticks(void)
+{
+    unsigned long count;
+    __asm__ __volatile__("rdinstret %0" : "=r"(count));
+    return count / 100;
 }
 
 #endif

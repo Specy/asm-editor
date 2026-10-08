@@ -69,9 +69,17 @@ describe.each(['mips', 'risc-v', 'x86'] as const)('%s C documentation', (languag
         expect(chapter?.href).toBe(`/documentation/${language}/using-c`)
         expect(chapter?.entries.map((entry) => entry.anchor)).toEqual(
             language === 'x86'
-                ? ['overview', 'compiling', 'libraries', 'following-execution']
+                ? [
+                      'overview',
+                      'editing-help',
+                      'compiling',
+                      'libraries',
+                      'following-execution',
+                      'linking-project-files'
+                  ]
                 : [
                       'overview',
+                      'editing-help',
                       'compiling',
                       'libraries',
                       'screen-and-devices',

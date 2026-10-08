@@ -127,13 +127,13 @@ for (const bits of [8, 16, 32, 64]) {
             add(
                 `${prefix}${variant}${bits}_MAX`,
                 'stdint.h',
-                `Maximum value of ${prefix === 'INT' ? 'int' : 'uint'}${variant.toLowerCase()}${bits}_t on this Target.`
+                `Maximum value of ${prefix === 'INT' ? 'int' : 'uint'}${variant.toLowerCase()}${bits}_t on the selected compilation target.`
             )
             if (prefix === 'INT')
                 add(
                     `${prefix}${variant}${bits}_MIN`,
                     'stdint.h',
-                    `Minimum value of int${variant.toLowerCase()}${bits}_t on this Target.`
+                    `Minimum value of int${variant.toLowerCase()}${bits}_t on the selected compilation target.`
                 )
         }
     }
@@ -141,7 +141,7 @@ for (const bits of [8, 16, 32, 64]) {
         add(
             `${prefix}${bits}_C`,
             'stdint.h',
-            `Writes an integer constant of the ${prefix === 'INT' ? 'signed' : 'unsigned'} ${bits}-bit least-width type.`,
+            `Writes an integer constant of the ${prefix === 'INT' ? 'signed' : 'unsigned'} ${bits}-bit minimum-width type (with at least that many bits).`,
             'macro',
             { declaration: `${prefix}${bits}_C(value)` }
         )
@@ -176,9 +176,17 @@ for (const prefix of [
     'WCHAR',
     'WINT'
 ]) {
-    add(`${prefix}_MAX`, 'stdint.h', 'Maximum value of the corresponding type on this Target.')
+    add(
+        `${prefix}_MAX`,
+        'stdint.h',
+        'Maximum value of the corresponding type on the selected compilation target.'
+    )
     if (!['UINTPTR', 'UINTMAX', 'SIZE'].includes(prefix))
-        add(`${prefix}_MIN`, 'stdint.h', 'Minimum value of the corresponding type on this Target.')
+        add(
+            `${prefix}_MIN`,
+            'stdint.h',
+            'Minimum value of the corresponding type on the selected compilation target.'
+        )
 }
 for (const name of [
     'CHAR_BIT',
@@ -204,10 +212,10 @@ for (const name of [
     add(
         name,
         'limits.h',
-        'Integer limit or property for this Target; include the header rather than assuming a numeric value.'
+        'Integer limit or property for the selected compilation target; include the header rather than assuming a numeric value.'
     )
 for (const name of ['FLT_RADIX', 'FLT_ROUNDS', 'FLT_EVAL_METHOD', 'DECIMAL_DIG'])
-    add(name, 'float.h', 'Floating-point property of this Target.')
+    add(name, 'float.h', 'Floating-point property of the selected compilation target.')
 for (const prefix of ['FLT', 'DBL', 'LDBL'])
     for (const suffix of [
         'MANT_DIG',
@@ -226,10 +234,15 @@ for (const prefix of ['FLT', 'DBL', 'LDBL'])
         add(
             `${prefix}_${suffix}`,
             'float.h',
-            'Floating-point limit or precision property of this Target.'
+            'Floating-point limit or precision property of the selected compilation target.'
         )
 for (const name of ['float_t', 'double_t'])
-    add(name, 'math.h', 'Floating-point evaluation type selected for this Target.', 'type')
+    add(
+        name,
+        'math.h',
+        'Floating-point evaluation type selected for the compilation target.',
+        'type'
+    )
 for (const name of [
     'HUGE_VAL',
     'HUGE_VALF',
@@ -281,7 +294,11 @@ for (const name of [
         'macro',
         { declaration: `${name}(x, y)` }
     )
-add('errno', 'errno.h', 'Error code set by standard-library functions that report a failure.')
+add(
+    'errno',
+    'errno.h',
+    'Error indicator used by functions that document an errno result; check the function result before reading it.'
+)
 for (const name of [
     'EPERM',
     'ENOENT',
@@ -304,7 +321,9 @@ for (const name of [
     add(
         name,
         'errno.h',
-        'Standard-library error code; compare it with errno after a function reports failure.'
+        name === 'ERANGE'
+            ? 'Range error: the requested value is outside the range the function can represent.'
+            : 'Standard-library error code; compare it with errno after a function reports failure.'
     )
 for (const name of ['time_t', 'clock_t'])
     add(

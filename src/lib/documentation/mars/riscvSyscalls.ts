@@ -58,7 +58,12 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         name: 'read integer',
         code: 5,
         arguments: [],
-        result: { arguments: [{ name: 'a0', description: 'contains integer read' }] },
+        result: {
+            arguments: [
+                { name: 'a0', description: 'contains the integer parsed from the input line' }
+            ],
+            other: 'Reads one line, trims surrounding whitespace, and parses it as an integer. Invalid input stops the program with an input error.'
+        },
         implemented: true,
         binding: {
             name: 'sim_read_int',
@@ -70,7 +75,15 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         name: 'read float',
         code: 6,
         arguments: [],
-        result: { arguments: [{ name: 'fa0', description: 'contains float read' }] },
+        result: {
+            arguments: [
+                {
+                    name: 'fa0',
+                    description: 'contains the floating-point value parsed from the input line'
+                }
+            ],
+            other: 'Reads one line, trims surrounding whitespace, and parses it as a floating-point value. Invalid input stops the program with an input error.'
+        },
         implemented: true,
         binding: {
             name: 'sim_read_float',
@@ -82,7 +95,15 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         name: 'read double',
         code: 7,
         arguments: [],
-        result: { arguments: [{ name: 'fa0', description: 'contains double read' }] },
+        result: {
+            arguments: [
+                {
+                    name: 'fa0',
+                    description: 'contains the double-precision value parsed from the input line'
+                }
+            ],
+            other: 'Reads one line, trims surrounding whitespace, and parses it as a double-precision value. Invalid input stops the program with an input error.'
+        },
         implemented: true,
         binding: {
             name: 'sim_read_double',
@@ -142,7 +163,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         code: 11,
         arguments: [{ name: 'a0', description: 'character to print' }],
         result: {
-            other: 'Service 11 - Prints ASCII character corresponding to contents of low-order byte.'
+            other: 'Prints the ASCII character whose code is in the low-order byte.'
         },
         implemented: true,
         binding: {
@@ -155,7 +176,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         name: 'read character',
         code: 12,
         arguments: [],
-        result: { arguments: [{ name: 'a0', description: 'contains character read' }] },
+        result: { arguments: [{ name: 'a0', description: 'contains the input character code' }] },
         implemented: true,
         binding: {
             name: 'sim_read_char',
@@ -202,7 +223,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 { name: 'a0', description: 'contains file descriptor (negative if error)' }
             ],
-            other: 'Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). The mode argument is ignored. A negative descriptor means the operation failed. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3.'
+            other: 'Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. The mode argument is ignored. A negative descriptor means the operation failed. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3.'
         },
         implemented: true,
         binding: {
@@ -302,7 +323,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                         'contains the new position, counted from the beginning of the file (-1 if error)'
                 }
             ],
-            other: 'Service 62 - Descriptors 0, 1 and 2 cannot seek.'
+            other: 'Descriptors 0, 1, and 2 (standard input, output, and error) cannot be repositioned.'
         },
         implemented: true,
         binding: {
@@ -339,7 +360,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                 { name: 'a0', description: 'low order 32 bits of the program time' },
                 { name: 'a1', description: 'high order 32 bits of the program time' }
             ],
-            other: 'Returns milliseconds since the run started. In a Testcase, a virtual clock starts at zero and advances only through waits of service 32.'
+            other: 'Returns milliseconds since 1970-01-01 UTC. In a Testcase, calendar time starts at 2000-01-01 UTC and advances through waits of service 32.'
         },
         implemented: true,
         binding: {
@@ -404,11 +425,15 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         name: 'set seed',
         code: 40,
         arguments: [
-            { name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' },
+            {
+                name: 'a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            },
             { name: 'a1', description: 'seed for corresponding pseudorandom number generator' }
         ],
         result: {
-            other: 'No values are returned. Sets the seed of the corresponding underlying Java pseudorandom number generator (java.util.Random). Each stream (identified by a0 contents) is modeled by a different Random object. An unseeded stream starts from host randomness in an interactive run and a fixed per-generator seed in a Testcase. Service 40 supplies an explicit seed in either run mode. Sequences match java.util.Random on JDK 21; Undo restores the stream before a draw or reseed.'
+            other: 'Seeds the generator selected by a0. Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
         },
         implemented: true,
         binding: {
@@ -423,7 +448,13 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
     [41]: {
         name: 'random int',
         code: 41,
-        arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
+        arguments: [
+            {
+                name: 'a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            }
+        ],
         result: {
             arguments: [
                 {
@@ -432,7 +463,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                         "contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence"
                 }
             ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. An unseeded stream starts from host randomness in an interactive run and a fixed per-generator seed in a Testcase. Service 40 supplies an explicit seed in either run mode. Sequences match java.util.Random on JDK 21; Undo restores the stream before a draw or reseed.'
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
         },
         implemented: true,
         binding: {
@@ -445,7 +476,11 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         name: 'random int range',
         code: 42,
         arguments: [
-            { name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' },
+            {
+                name: 'a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            },
             { name: 'a1', description: 'upper bound of range of returned values' }
         ],
         result: {
@@ -456,7 +491,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                         "contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence"
                 }
             ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. An unseeded stream starts from host randomness in an interactive run and a fixed per-generator seed in a Testcase. Service 40 supplies an explicit seed in either run mode. Sequences match java.util.Random on JDK 21; Undo restores the stream before a draw or reseed.'
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
         },
         implemented: true,
         binding: {
@@ -471,7 +506,13 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
     [43]: {
         name: 'random float',
         code: 43,
-        arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
+        arguments: [
+            {
+                name: 'a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            }
+        ],
         result: {
             arguments: [
                 {
@@ -480,7 +521,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                         "contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
                 }
             ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. An unseeded stream starts from host randomness in an interactive run and a fixed per-generator seed in a Testcase. Service 40 supplies an explicit seed in either run mode. Sequences match java.util.Random on JDK 21; Undo restores the stream before a draw or reseed.'
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
         },
         implemented: true,
         binding: {
@@ -492,7 +533,13 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
     [44]: {
         name: 'random double',
         code: 44,
-        arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
+        arguments: [
+            {
+                name: 'a0',
+                description:
+                    'generator ID: any integer selects an independent pseudorandom sequence'
+            }
+        ],
         result: {
             arguments: [
                 {
@@ -501,7 +548,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                         "contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
                 }
             ],
-            other: 'Each stream (identified by a0 contents) is modeled by a different Random object. An unseeded stream starts from host randomness in an interactive run and a fixed per-generator seed in a Testcase. Service 40 supplies an explicit seed in either run mode. Sequences match java.util.Random on JDK 21; Undo restores the stream before a draw or reseed.'
+            other: 'Each generator ID has an independent sequence. An unseeded ID starts from host randomness in an interactive run and a fixed per-ID seed in a testcase, making testcase runs repeatable. Service 40 sets an explicit seed. Values follow Java’s `Random` sequence for the same seed. Undo restores the state before a draw or reseed.'
         },
         implemented: true,
         binding: {
@@ -574,7 +621,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         ],
         result: {
             arguments: [
-                { name: 'f0', description: 'contains float read' },
+                {
+                    name: 'f0',
+                    description: 'contains the floating-point value parsed from the input line'
+                },
                 {
                     name: 'a1',
                     description:
@@ -604,7 +654,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         ],
         result: {
             arguments: [
-                { name: 'fa0', description: 'contains double read' },
+                {
+                    name: 'fa0',
+                    description: 'contains the double-precision value parsed from the input line'
+                },
                 {
                     name: 'a1',
                     description:

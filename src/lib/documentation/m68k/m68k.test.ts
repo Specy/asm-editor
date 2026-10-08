@@ -177,13 +177,13 @@ describe('the M68K Documentation', () => {
         }
     })
 
-    it('groups rejected tasks by reason and distinguishes timing and Audio gaps', () => {
+    it('groups rejected tasks by reason and distinguishes timing and audio limits', () => {
         const text = markdownOf(entry('trap-tasks', 'unsupported')).join('\n')
         const lines = text.split('\n')
         expect(lines.find((line) => line.includes('`30`'))).toContain('`31`')
-        expect(lines.find((line) => line.includes('`30`'))).toContain('timing model')
+        expect(lines.find((line) => line.includes('`30`'))).toContain('cycle count')
         expect(lines.find((line) => line.includes('`70`'))).toContain('`77`')
-        expect(lines.find((line) => line.includes('`70`'))).toContain('Audio Peripheral')
+        expect(lines.find((line) => line.includes('`70`'))).toContain('audio output')
         expect(text).not.toMatch(/`(?:12|16|5[0-9])`/)
         expect(markdownOf(entry('trap-tasks', 'differences')).join('\n')).toContain('Windows-1252')
     })

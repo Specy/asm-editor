@@ -2,7 +2,7 @@
     "extends": "./.svelte-kit/tsconfig.json",
     "compilerOptions": {
         "types": ["@types/wicg-file-system-access", "unplugin-icons/types/svelte", "vite/client"],
-        "lib": ["es2020", "DOM"],
+        "lib": ["es2022", "DOM"],
         "target": "es2020",
         "isolatedModules": true,
         "resolveJsonModule": true,

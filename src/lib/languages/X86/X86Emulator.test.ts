@@ -1077,12 +1077,13 @@ describe('x86 start unit', () => {
             expect(await emulator.check()).toEqual([])
             //the linker takes `_start` from the start code, and nothing from main.asm
             await emulator.compile(20, project)
-            expect(emulator.compilerErrors).toEqual([])
+            expect(emulator.compilerErrors.filter(d => d.severity === 'error')).toEqual([])
+            expect(emulator.compilerDiagnostics.some(d => d.file === 'main.asm' && d.severity === 'suggestion')).toBe(true)
             await emulator.run(100_000)
             expect(emulator.terminated).toBe(true)
             expect(cpuRegister(emulator, 'rdi')).toBe(20n)
             //the same Files built from main.asm run the hand-written program instead
-            const handWritten = { ...project, entry: 'main.asm' }
+            const handWritten = { entry: 'main.asm', files: project.files }
             await emulator.compile(20, handWritten)
             expect(emulator.compilerErrors).toEqual([])
             expect(emulator.currentFile).toBe('main.asm')
@@ -1165,13 +1166,13 @@ describe('x86 start unit', () => {
             await expect(emulator.compile(20, twoMains)).rejects.toThrow()
             expect(emulator.compilerErrors).toContainEqual(
                 expect.objectContaining({
-                    message: expect.stringContaining("multiple definition of `main'"),
+                    message: expect.stringContaining("multiple definition of 'main'"),
                     hint: expect.stringContaining('Only one File linked into a program')
                 })
             )
             await expect(emulator.compile(20, twoStarts)).rejects.toThrow()
             const [error] = emulator.compilerErrors
-            expect(error?.message).toContain("multiple definition of `_start'")
+            expect(error?.message).toContain("multiple definition of '_start'")
             expect(error?.hint).toBeUndefined()
         } finally {
             emulator.dispose()

@@ -174,10 +174,10 @@ describe('x86 start code', () => {
         outputFingerprint: fileFingerprint(x86Sources.files['main.c.asm'])!
     }
 
-    it('starts every Build holding Generated assembly at _start, whatever the Entry', () => {
-        expect(resolveX86Start(x86Sources, [x86Record])).toEqual({ entrySymbol: '_start' })
+    it('adds startup only for a compiled Entry and keeps support for secondary compiled Files', () => {
+        expect(resolveX86Start(x86Sources, [x86Record])).toEqual({ x86Support: true })
         expect(resolveX86Start({ ...x86Sources, entry: 'main.c.asm' }, [x86Record])).toEqual({
-            entrySymbol: '_start'
+            entrySymbol: '_start', x86Support: true
         })
     })
     it('leaves hand-written programs and removed Generated assembly alone', () => {
@@ -219,7 +219,7 @@ describe('x86 start code', () => {
                     { files: reopened.files, entry: reopened.entry },
                     reopened.compilations
                 )
-            ).toEqual({ entrySymbol: '_start' })
+            ).toEqual({ x86Support: true })
         }
     })
 })

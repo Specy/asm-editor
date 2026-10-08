@@ -167,7 +167,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         )
         this.core = core
         core.setEnvironment({
-            now: () => this._peripherals.clock.now(),
+            now: (id) => {
+                const clock = this._peripherals.clock
+                if (id === 0 || id === 5 || id === 11) return clock.calendarNow()
+                if (id === 2 || id === 3) return clock.cpuNow(core.getInstructionsExecuted())
+                return clock.now()
+            },
             random: (length) => {
                 const serial = core.getCurrentInstructionSerial()
                 // Loader AT_RANDOM has no instruction. Keep its draw outside the Undo journal.
@@ -900,7 +905,7 @@ function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoErro
     const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
-        severity: error.severity ?? 'error',
+        severity: error.severity === 'hint' ? 'suggestion' : error.severity ?? 'error',
         file: source.path,
         lineIndex: source.line,
         column: Math.max(1, error.column),
@@ -926,7 +931,7 @@ function coreDiagnosticToDiagnostic(
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
     return {
-        severity: diagnostic.severity ?? 'error',
+        severity: diagnostic.severity === 'hint' ? 'suggestion' : diagnostic.severity ?? 'error',
         file: source.path,
         lineIndex: source.line,
         column: span.column,
@@ -954,8 +959,8 @@ const DUPLICATE_MAIN_HINT =
  * line it lands on.
  */
 function x86LinkHint(message: string, sources: BuildSources): string | undefined {
-    if (message.includes("multiple definition of `main'")) return DUPLICATE_MAIN_HINT
-    if (message.includes("multiple definition of `_start'") && linksX86StartUnit(sources))
+    if (/multiple definition of [`']main'/.test(message)) return DUPLICATE_MAIN_HINT
+    if (/multiple definition of [`']_start'/.test(message) && linksX86StartUnit(sources))
         return DUPLICATE_START_HINT
     return undefined
 }

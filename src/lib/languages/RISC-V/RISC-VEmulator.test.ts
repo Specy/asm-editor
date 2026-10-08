@@ -686,7 +686,7 @@ describe('RISC-V program time', () => {
             [
                 {
                     input: [],
-                    expectedOutput: '5000',
+                    expectedOutput: String((946684800000 + 5000) | 0),
                     startingRegisters: {},
                     expectedRegisters: {},
                     startingMemory: [],

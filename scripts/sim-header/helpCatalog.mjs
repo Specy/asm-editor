@@ -25,7 +25,10 @@ export function marsHelpCatalog(target, syscalls) {
             const descriptions = binding.parameters
                 .map((parameter) => {
                     const description = (
-                        parameter.out ? call.result.arguments : call.arguments
+                        parameter.out &&
+                        !call.arguments.some((argument) => argument.name === parameter.register)
+                            ? call.result.arguments
+                            : call.arguments
                     )?.find((argument) => argument.name === parameter.register)?.description
                     return description ? `${parameter.name}: ${clean(description)}.` : ''
                 })

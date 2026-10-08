@@ -1196,7 +1196,7 @@ describe('M68K file tasks', () => {
 
 describe('M68K sound tasks', () => {
     it.each([70, 71, 72, 73, 74, 75, 76, 77])(
-        'ends task %s with its Audio Peripheral reason',
+        'ends task %s with its no-audio reason',
         async (task) => {
             const code =
                 ORG +
@@ -1210,7 +1210,7 @@ describe('M68K sound tasks', () => {
             expect(emulator.terminated).toBe(true)
             expect(emulator.termination?.kind).toBe('error')
             expect(emulator.errors.join('\n')).toContain(`Trap task ${task}`)
-            expect(emulator.errors.join('\n')).toContain('sound needs the Audio Peripheral')
+            expect(emulator.errors.join('\n')).toContain('the editor provides no audio output for these tasks')
             //the program stopped at the task rather than finishing as though it had played
             expect(registerOf(emulator, 'D5')).toBe(0n)
             //and Undo takes the end back with the task
@@ -1301,9 +1301,9 @@ describe('M68K program time tasks', () => {
         emulator.peripherals.clock.start()
         await emulator.run(INSTRUCTION_LIMIT)
         const time = Number(registerOf(emulator, 'D1'))
-        //hundredths since the run started, not Unix seconds: a program that just started is near 0
+        //EASy68K calendar hundredths since local midnight, wrapping at the next midnight.
         expect(time).toBeGreaterThanOrEqual(0)
-        expect(time).toBeLessThan(1000)
+        expect(time).toBeLessThan(24 * 60 * 60 * 100)
     })
 
     it('lets program time pass with task 23 without blocking the run', async () => {

@@ -1,5 +1,5 @@
 /* Runtime library, ABI v1: <stdio.h>.
-   Every output call writes its bytes with a write syscall before it returns, so fflush and setvbuf succeed without changing anything.
+   Streams write through by default; requested output buffering is flushed by fflush, fclose and exit.
    FILE is opaque: getc, putc, feof and the rest are real functions. */
 #ifndef _STDIO_H
 #define _STDIO_H
@@ -47,11 +47,11 @@ FILE *fopen(const char *path, const char *mode);
 FILE *freopen(const char *path, const char *mode, FILE *stream);
 /** Closes a stream opened by fopen and returns 0, or EOF on error. */
 int fclose(FILE *stream);
-/** Succeeds without doing anything: every stream already writes through. Returns 0. */
+/** Flushes pending output; NULL flushes all output streams. Returns 0, or EOF on failure. */
 int fflush(FILE *stream);
-/** Accepts a buffering request and ignores it, because every stream writes through; returns 0 for a valid mode. */
+/** Sets output buffering (_IOFBF, _IOLBF or _IONBF); input buffering is unsupported. Returns 0, or nonzero on failure. */
 int setvbuf(FILE *stream, char *buf, int mode, size_t size);
-/** Accepts a buffer for stream and ignores it, because every stream writes through. */
+/** Requests full output buffering with BUFSIZ bytes, or unbuffered output when buf is NULL. */
 void setbuf(FILE *stream, char *buf);
 
 /** Writes formatted output to stdout and returns the number of bytes written, or a negative value on error. */

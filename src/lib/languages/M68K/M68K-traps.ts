@@ -28,7 +28,7 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'text',
         title: 'Text I/O',
         description:
-            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor. Testcases compare the transcript. Typed input is echoed to both, unless task 12 turned echo off. Text uses Windows-1252 bytes: one byte per character, including `€` and curly quotes.'
+            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor. Testcases compare the transcript. Typed input is echoed to both, unless task 12 turned echo off. Text uses Windows-1252, a single-byte character encoding: each character takes one byte, including `€` and curly quotes.'
     },
     {
         group: 'graphics',
@@ -52,7 +52,7 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'files',
         title: 'Files',
         description:
-            'Reading and writing the Project’s Files. A path is a NULL terminated string of at most 255 characters, from the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W says how a task went: 0 success, 1 end of file, 2 error, 3 read only. Undo puts back what a file task changed, and each testcase works on its own copy of the Files.'
+            'Reading and writing the Project’s Files. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. Undo restores changes made by a file task, and each testcase works on its own copy of the Files.'
     }
 ]
 
@@ -80,7 +80,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string with CR, LF',
         input: 'A1 = string address, D1.W = length',
         description:
-            'Displays D1.W characters of the string at (A1), at most 255, stopping early at a NULL, then a new line. See task 13 for the NULL terminated form.'
+            'Displays D1.W characters of the string at (A1), at most 255, stopping early at a NUL, then a new line. See task 13 for the NUL terminated form.'
     },
     {
         task: 1,
@@ -88,16 +88,16 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string',
         input: 'A1 = string address, D1.W = length',
         description:
-            'Displays D1.W characters of the string at (A1), at most 255, stopping early at a NULL, without a new line. See task 14 for the NULL terminated form.'
+            'Displays D1.W characters of the string at (A1), at most 255, stopping early at a NUL, without a new line. See task 14 for the NUL terminated form.'
     },
     {
         task: 2,
         group: 'text',
         title: 'Read string',
         input: 'A1 = buffer address',
-        output: 'The NULL terminated string at (A1), D1.L = its length',
+        output: 'The NUL terminated string at (A1), D1.L = its length',
         description:
-            'Reads a line of input, typed in the console, or on the screen once the program has used it, and ended with Enter; a testcase answers it from its scripted input. Its first 79 characters are stored, then a NULL. A character Windows-1252 has no byte for is stored as `?`.',
+            'Reads a line of input, typed in the console, or on the screen once the program has used it, and ended with Enter; a testcase answers it from its scripted input. Its first 79 characters are stored, then a NUL (zero byte). Text is converted to Windows-1252, a single-byte encoding; a character it cannot represent is stored as `?`.',
         deviation:
             'Only the first 79 characters are stored. Additional typed characters are dropped.'
     },
@@ -147,7 +147,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D1.L = hundredths of a second',
         description: 'The time the program has been running, in hundredths of a second.',
         deviation:
-            'The clock starts at zero when a run starts. Programs can measure elapsed time by subtracting two reads.'
+            'Returns hundredths since local midnight; Testcases use UTC midnight at 2000-01-01. The value wraps at midnight.'
     },
     {
         task: 9,
@@ -175,16 +175,16 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
     {
         task: 13,
         group: 'text',
-        title: 'Display NULL terminated string with CR, LF',
+        title: 'Display NUL terminated string with CR, LF',
         input: 'A1 = string address',
-        description: 'Displays the NULL terminated string at (A1), then a new line.'
+        description: 'Displays the NUL terminated string at (A1), then a new line.'
     },
     {
         task: 14,
         group: 'text',
-        title: 'Display NULL terminated string',
+        title: 'Display NUL terminated string',
         input: 'A1 = string address',
-        description: 'Displays the NULL terminated string at (A1) without a new line.'
+        description: 'Displays the NUL terminated string at (A1) without a new line.'
     },
     {
         task: 15,
@@ -209,7 +209,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         group: 'text',
         title: 'Display string and number',
         input: 'A1 = string address, D1.L = number',
-        description: 'Task 14 then task 3: the NULL terminated string, then the signed number.'
+        description: 'Task 14 then task 3: the NUL terminated string, then the signed number.'
     },
     {
         task: 18,
@@ -217,7 +217,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string and read number',
         input: 'A1 = string address',
         output: 'D1.L = number',
-        description: 'Task 14 then task 4: the NULL terminated string as a prompt, then a number.'
+        description: 'Task 14 then task 4: the NUL terminated string as a prompt, then a number.'
     },
     {
         task: 19,
@@ -274,16 +274,16 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         task: 51,
         group: 'files',
         title: 'Open an existing file',
-        input: 'A1 = NULL terminated path',
+        input: 'A1 = NUL terminated path',
         output: 'D1.L = file number, or -1; D0.W = 0, 3 when it opened for reading only, 2 when it did not open',
         description:
-            'Opens the File at the path for reading and writing, at its start. A path with no File, a Directory and a ninth open file are errors. A Project’s Files can all be written, so the read only result is for a File that some day cannot be.'
+            'Opens the existing File at the path at its start. D0.W is 0 when it opens for reading and writing, or 3 when it opens for reading only. A path with no File, a Directory, or a ninth open file is an error.'
     },
     {
         task: 52,
         group: 'files',
         title: 'Open a new file',
-        input: 'A1 = NULL terminated path',
+        input: 'A1 = NUL terminated path',
         output: 'D1.L = file number, or -1; D0.W = 0, or 2 when it did not open',
         description:
             'Creates the File at the path, or empties the one that is there, and opens it for reading and writing. The Directories on its path are created with it.'
@@ -329,7 +329,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         task: 57,
         group: 'files',
         title: 'Delete a file',
-        input: 'A1 = NULL terminated path',
+        input: 'A1 = NUL terminated path',
         output: 'D0.W = 0, or 2 when there is no File there',
         description:
             'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.',
@@ -351,7 +351,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         task: 59,
         group: 'files',
         title: 'Check that a file exists',
-        input: 'A1 = NULL terminated path',
+        input: 'A1 = NUL terminated path',
         output: 'D0.W = 0 when the File can be written, 3 when it can only be read, 2 when there is none',
         description: 'Whether there is a File at the path. A Directory is not one, so it answers 2.'
     },
@@ -485,7 +485,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         task: 95,
         group: 'graphics',
         title: 'Draw text at a pixel position',
-        input: 'A1 = NULL terminated string, D1.W = X, D2.W = Y',
+        input: 'A1 = NUL terminated string, D1.W = X, D2.W = Y',
         description:
             'Draws the string in the pen color with its top left corner at X, Y, over whatever is already there, so a label can sit on a drawing. Control characters are ignored. Text printed with the text tasks lands at the text cursor instead (task 11).'
     },
@@ -500,11 +500,11 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
 
 /** Why the cycle counter is rejected, which [the plan's decision 9](../../../../docs/design/environment-library-plan.md) settles. */
 const NO_CYCLE_TIMING =
-    'counting the 68000’s clock cycles needs a timing model of the processor, which the emulator does not have yet'
+    'instruction timing is not modeled, so these tasks cannot report a 68000 cycle count'
 const NO_TEXT_GRID = 'the screen holds pixels, not a grid of characters'
-const NO_SERIAL_PORT = 'the editor does not expose serial devices through its Peripherals'
-const NO_AUDIO = 'sound needs the Audio Peripheral, which the editor does not have yet'
-const NO_NETWORK = 'a web page cannot open the network connections these tasks make'
+const NO_SERIAL_PORT = 'no serial device is available to a program'
+const NO_AUDIO = 'the editor provides no audio output for these tasks'
+const NO_NETWORK = 'programs in this editor cannot open network connections'
 
 /**
  * The tasks that stop the program with an error naming them, each with the reason the error gives,

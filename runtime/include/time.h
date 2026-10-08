@@ -34,7 +34,7 @@ struct tm {
 
 /** Returns the current time in seconds since 1970-01-01 UTC and also stores it in *t when t is not NULL. */
 time_t time(time_t *t);
-/** Returns the time elapsed since the program's first call to clock, in units of CLOCKS_PER_SEC. */
+/** Returns processor time in CLOCKS_PER_SEC units; simulator instructions run at nominal 100 MHz. Returns -1 on overflow. */
 clock_t clock(void);
 /** Returns end - start in seconds. */
 double difftime(time_t end, time_t start);

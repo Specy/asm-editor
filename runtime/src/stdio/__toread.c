@@ -13,6 +13,7 @@ int __toread(FILE *f)
 		f->flags |= F_ERR;
 		return EOF;
 	}
-	f->rpos = f->rend = f->buf + f->buf_size;
+	/* Output buffers may be supplied by the caller and have no UNGET prefix. */
+	f->rpos = f->rend = f->input_buffer ? f->input_buffer : f->buf;
 	return (f->flags & F_EOF) ? EOF : 0;
 }

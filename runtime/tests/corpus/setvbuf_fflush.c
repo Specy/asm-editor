@@ -1,4 +1,5 @@
-/* setvbuf, setbuf and fflush succeed (the library writes through, so they change no output). */
+/* runtime-test: skip-noinit requested buffering requires the runtime exit hook.
+ * setvbuf, setbuf and fflush succeed (the library writes through, so they change no output). */
 #include <stdio.h>
 
 static char buffer[256];

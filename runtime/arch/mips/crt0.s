@@ -3,7 +3,7 @@
 # whether or not delayed branching is enabled.
 # _start aligns $sp to 16 bytes and reserves the 16-byte argument area o32 callers provide, calls every
 # function pointer in .init_array (4 bytes each; the linker provides __init_array_start and __init_array_end),
-# calls main(0, NULL) and passes its result to exit.
+# calls main(0, empty_argv) and passes its result to exit.
 	.text
 	.align	2
 	.globl	_start
@@ -32,7 +32,9 @@ $Linit:
 	nop
 $Lmain:
 	move	$4,$0
-	move	$5,$0
+	lui	$5,%hi(__aed_empty_argv)
+	addiu	$5,$5,%lo(__aed_empty_argv)
+	move	$6,$5
 	jal	main
 	nop
 	move	$4,$2
@@ -42,3 +44,8 @@ $Lmain:
 	.set	reorder
 	.end	_start
 	.size	_start, .-_start
+
+	.section .rodata
+	.align 2
+__aed_empty_argv:
+	.word 0
