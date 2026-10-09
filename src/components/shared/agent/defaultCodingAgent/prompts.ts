@@ -162,6 +162,7 @@ type PromptOptions = {
     enabledToolNames: DefaultCodingAgentToolName[]
     enabledWorkflows: AgentWorkflow[]
     additionalInstructions?: string
+    sourceCompilationAvailable?: boolean
 }
 
 function hasTool(enabledToolNames: DefaultCodingAgentToolName[], name: DefaultCodingAgentToolName) {
@@ -200,7 +201,7 @@ function renderTemplates(enabledToolNames: DefaultCodingAgentToolName[]) {
         .join('\n\n')
 
     return `# Starting Templates
-When writing fresh code, start from the matching template unless the user gave an explicit full program.
+When writing fresh assembly code, start from the matching template unless the user gave an explicit full program.
 <templates>
 ${initialCodes}
 </templates>`
@@ -221,10 +222,10 @@ function renderCorePrinciples(enabledToolNames: DefaultCodingAgentToolName[]) {
             ? '- Preserve user work. Before changing existing code, call view_file (or list_files). Never replace unrelated code or files unless the user explicitly asks for a rewrite.'
             : '- Read-only code context. You cannot edit the editor here; analyze the visible code and suggest changes in chat only.',
         canEditCode
-            ? '- Code edits: Use replace_file_content for surgical edits (providing exact target_content and replacement_content) and write_to_file for fresh files or full rewrites. Edits check assembler syntax immediately. If an edit succeeds, do not compile again just for syntax. If behavior matters, run or step and verify observed results.'
+            ? '- Code edits: Use replace_file_content for surgical edits (providing exact target_content and replacement_content) and write_to_file for fresh files or full rewrites. Assembly edits check assembler syntax immediately. C/C++ and header edits require compile_source to check source syntax and regenerate assembly, then compile to build. If an edit succeeds, do not compile again just for syntax. If behavior matters, run or step and verify observed results.'
             : '',
         '- Tool results are authoritative. Do not say the editor changed, the code compiles, or the bug is fixed unless a tool result confirms it.',
-        '- Follow tool errorKind and nextAction fields. A compile_error means fix assembler errors; execution_state usually means compile/reset first; emulator_unavailable means wait or explain that the emulator is still loading.',
+        '- Follow tool errorKind and nextAction fields. A compile_error means fix the reported source or assembler errors; execution_state usually means compile/reset first; emulator_unavailable means wait or explain that the emulator is still loading.',
         canManageBreakpoints
             ? '- Use breakpoints as inspection points. Set breakpoints with set_breakpoint (by instruction, address, or line) and remove them with remove_breakpoint. Inspect active breakpoints with list_breakpoints (which shows surrounding instructions). The emulator stops at the breakpoint line before executing that instruction. Specify the file path when working with multiple files.'
             : ''
@@ -443,7 +444,7 @@ function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
 }
 
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports assembly projects with one or more assembly files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
+The editor supports projects with assembly, C/C++ sources, local headers and data files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
@@ -483,17 +484,47 @@ ${Z80_SCREEN_COMMAND_INFORMATION}
 Reached with screen command 14, or before the program starts with a "; @screen trs80" comment line. This is the real machine's interface, so a program written for a TRS-80 elsewhere runs here; use it when the user asks for that machine, and use the ports above otherwise.
 ${Z80_TRS80_INFORMATION}`
 
+function renderSourceInstructions(
+    enabledToolNames: DefaultCodingAgentToolName[],
+    available: boolean
+) {
+    if (!available || !hasTool(enabledToolNames, 'compile_source')) {
+        return '# C/C++\nC/C++ examples can be explained in chat. Source compilation is unavailable in this context; do not send C to the assembler or claim it was compiled.'
+    }
+    return `# C/C++ source workflow
+These instructions take precedence over assembly workflow steps when editing C/C++.
+- The project language is the target architecture; C is the source language of a .c file. Do not pass "C" as write_to_file's language. Write to an explicit path such as main.c or main.cpp, preserving existing assembly files.
+- C/C++ compilation supports MIPS, RISC-V, RISC-V-64 and X86. Keep a saved project's target; for a fresh C example without a requested target, choose RISC-V using write_to_file's language parameter. M68K and Z80 do not support source compilation.
+- Read existing source before editing. Edit the original C/C++ source or local headers rather than generated assembly. Source and header writes are saved without assembler checks and invalidate execution.
+- Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the local headers to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not linked automatically; use local headers for helpers.
+- Start with optimization "0". compile_source sets the generated assembly as the entry. Then call compile (the assembly Build) before running or stepping. Compiler errors must be fixed in the source and recompiled; a saved source edit alone does not prove validity.
+- MIPS and RISC-V support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. X86 is freestanding: use <sim.h> for I/O; printf, malloc and the hosted runtime are unavailable.
+- <sim.h> declares simulator services; use search_documentation to find their signatures rather than guessing. C++ uses C++17 with compatibility headers and no full standard library, exceptions or RTTI.
+- Debug execution through the generated assembly. Use generated assembly paths and instruction lines for breakpoints; registers and memory describe the target architecture. Keep user-facing explanations tied to the original source.
+- For a fresh C example on MIPS or RISC-V, start with:
+\`\`\`c
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello from C\\n");
+    return 0;
+}
+\`\`\``
+}
+
 export function buildDefaultCodingAgentPrompt({
     enabledToolNames,
     enabledWorkflows,
-    additionalInstructions = ''
+    additionalInstructions = '',
+    sourceCompilationAvailable = false
 }: PromptOptions) {
     const sections = [
-        'You are an assembly language assistant with access to an interactive editor and emulator.',
+        'You are an assembly and C/C++ coding assistant with access to an interactive editor and emulator.',
         `# Core Principles\n${renderCorePrinciples(enabledToolNames)}`,
         `# Workflows\nPick the workflow that matches the user request. These are playbooks, not rigid scripts; skip steps only when they are clearly irrelevant. Context-specific workflows appended by the page take precedence.\n\n${renderWorkflowInstructions(enabledWorkflows)}`,
         renderToolSelectionTips(enabledToolNames),
         renderTemplates(enabledToolNames),
+        renderSourceInstructions(enabledToolNames, sourceCompilationAvailable),
         EMULATOR_INFORMATION,
         additionalInstructions.trim()
     ].filter(Boolean)

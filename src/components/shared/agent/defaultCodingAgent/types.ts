@@ -1,5 +1,6 @@
 import type { Emulator } from '$lib/languages/Emulator'
-import type { ProjectFiles } from '$lib/projectFiles'
+import type { Project } from '$lib/Project.svelte'
+import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
 
 export const SUPPORTED_LANGUAGES = ['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64', 'Z80'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
@@ -22,6 +23,7 @@ export const DEFAULT_CODING_AGENT_TOOL_NAMES = [
     'undo',
     'get_line_from_address',
     'compile',
+    'compile_source',
     'read_memory',
     'poke_register',
     'poke_memory',
@@ -75,6 +77,11 @@ export type DefaultCodingAgentToolContext = {
     getEditorLanguage: () => SupportedLanguage | null
     setEditorLanguage: (language: SupportedLanguage) => void
     getEmulator: () => Emulator | null
+
+    /** Source compilation and build provenance for hosts backed by a Project. */
+    getProject?: () => Project | undefined
+    getBuildSources?: () => BuildSources
+    confirmSourceOverwrite?: (question: string) => Promise<boolean | null>
 
     // Multi-file support
     getFiles?: () => Record<string, string> | ProjectFiles

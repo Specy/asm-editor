@@ -8,7 +8,7 @@ import type { AgentWorkflow } from './defaultCodingAgent/types'
  */
 export function projectAgentInstructions(language: AvailableLanguages): string {
     return `
-            The user is working on a saved project in the ${language} assembly language. The editor language is locked to ${language} for this project.
+            The user is working on a saved project targeting ${language}. Files may contain assembly, C/C++ source, headers or data. The target architecture is locked to ${language} for this project.
             The project editor has a code editor, registers view, memory view, execution controls, and breakpoints.
 
             This context is primarily the *Modify or extend existing code* and *Debug broken code* workflows:

@@ -8,6 +8,8 @@ import {
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 import { delay } from '$lib/utils'
+import { compilationStatus, sourceLanguage } from '$lib/sourceCompilation/records'
+import { createCompileSourceTool, isSourceFile } from './sourceTools'
 import { defaultEntryPath } from '$lib/Project.svelte'
 import { fileText, type ProjectFile } from '$lib/projectFiles'
 import {
@@ -251,6 +253,10 @@ export function deleteFile(context: DefaultCodingAgentToolContext, path: string)
 }
 
 export function syncEmulator(context: DefaultCodingAgentToolContext, emulator: Emulator) {
+    if (context.getBuildSources) {
+        emulator.setSources(context.getBuildSources())
+        return
+    }
     const all = getAllProjectFiles(context)
     const entry = getEffectiveEntry(context)
     const projectFiles: Record<string, ProjectFile> = {}
@@ -497,6 +503,24 @@ async function handleCodeWrite(
     previousEmulator: Emulator | null = null
 ) {
     setFile(context, targetPath, newContent)
+    context.setActivePath?.(targetPath)
+    // Source edits invalidate generated output, but must never be sent to the assembler.
+    if (isSourceFile(targetPath)) {
+        context.getEmulator()?.clear()
+        return toolRun.success({
+            path: targetPath,
+            language: context.getEditorLanguage(),
+            sourceLanguage: sourceLanguage(targetPath) ?? 'header',
+            previousLanguage,
+            languageChanged,
+            ...sliceLinesRange(newContent, Math.max(1, previewLine), undefined, MAX_TAKE_LINES),
+            files: Object.keys(getAllProjectFiles(context)),
+            compilationRequired: true,
+            canExecute: false,
+            nextAction:
+                'Call compile_source on the C/C++ source file, then compile to build its generated assembly before running or stepping.'
+        })
+    }
 
     const waitResult = languageChanged
         ? await waitForReplacementEmulator(context, previousEmulator)
@@ -638,6 +662,9 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
                 return toolRun.success({
                     path: targetPath,
                     language: context.getEditorLanguage(),
+                    sourceLanguage:
+                        sourceLanguage(targetPath) ??
+                        (isSourceFile(targetPath) ? 'header' : 'assembly'),
                     code: preview.code,
                     lineCount: preview.lineCount,
                     startLine: preview.startLine,
@@ -658,7 +685,7 @@ function createReplaceFileContentTool(context: DefaultCodingAgentToolContext) {
         description: `Edits an existing file by replacing an exact snippet of code with new code.
 - "target_content" must match exact existing text, including whitespace, comments, and indentation.
 - If target_content appears multiple times, provide "start_line" and "end_line" bounds to disambiguate.
-- Immediately runs assembler checks and returns errors or diagnostics.`,
+- Assembly edits run assembler checks. C/C++ and header edits require compile_source before building.`,
         schema: z.object({
             path: z
                 .string()
@@ -737,13 +764,15 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
             .string()
             .optional()
             .describe(
-                'File path to write (e.g. "main.s", "sub.s"). Defaults to active or entry file.'
+                'File path to write (e.g. "main.c", "helpers.h", "main.s"). Defaults to active or entry file.'
             ),
         code: z.string().describe('The full code to write to the file.'),
         language: z
             .enum(SUPPORTED_LANGUAGES)
             .optional()
-            .describe('The assembly language for the editor (when language can be updated)')
+            .describe(
+                'Target architecture, including for C/C++ files (when the target can be updated)'
+            )
     })
 
     return tool({
@@ -751,14 +780,17 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
         description: `Creates a new file or completely writes an existing file.
 - Use this when creating fresh files or when rewriting an entire file.
 - For targeted modifications to existing code, prefer replace_file_content.
-- Immediately runs assembler checks and reports compile errors if any.`,
+- Assembly writes run assembler checks. C/C++ and header writes require compile_source before building.
+- Write C to a .c path (for example main.c); language selects the target architecture, not the source language.`,
         schema,
         execute: async (args) =>
             runAgentTool(async (toolRun) => {
                 const { path, code } = args as { path?: string; code: string }
-                const requestedLanguage = (
-                    args as { language?: (typeof SUPPORTED_LANGUAGES)[number] }
-                ).language
+                const requestedLanguage =
+                    (args as { language?: (typeof SUPPORTED_LANGUAGES)[number] }).language ??
+                    (sourceLanguage(path ?? '') && !context.getEditorLanguage()
+                        ? 'RISC-V'
+                        : undefined)
                 const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
 
                 const previousLanguage = context.getEditorLanguage()
@@ -1315,6 +1347,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
     const searchDocumentationTool = createSearchDocumentationTool(context)
 
     return {
+        compile_source: createCompileSourceTool(context),
         search_documentation: searchDocumentationTool,
         view_file: viewFileTool,
         replace_file_content: replaceFileContentTool,
@@ -1322,7 +1355,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
         list_files: tool({
             name: 'list_files',
             description:
-                'Lists all files in the current assembly project with their line counts, sizes, and which file is the entry file.',
+                'Lists all source, header, assembly and data files in the current project with their line counts, sizes, and which file is the entry file.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
@@ -1643,6 +1676,24 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         })
                     }
 
+                    const project = context.getProject?.()
+                    const generated = project?.compilations.find(
+                        (record) => record.outputPath === project.entry
+                    )
+                    if (
+                        project &&
+                        generated &&
+                        compilationStatus(generated, project.files, project.language).stale
+                    ) {
+                        return toolRun.failure(
+                            'execution_state',
+                            'Generated assembly is stale after source or header changes.',
+                            {
+                                retryable: true,
+                                nextAction: `Call compile_source with path "${generated.sourcePath}", then compile again.`
+                            }
+                        )
+                    }
                     syncEmulator(context, emulator)
 
                     let thrownError: unknown = null
@@ -1653,7 +1704,20 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         for (const [p, c] of Object.entries(all)) {
                             projectFiles[p] = { encoding: 'plain', content: c }
                         }
-                        await emulator.compile(100, { files: projectFiles, entry })
+                        if (sourceLanguage(entry)) {
+                            return toolRun.failure(
+                                'execution_state',
+                                'The entry file is C/C++ source; it needs source compilation first.',
+                                {
+                                    retryable: true,
+                                    nextAction: `Call compile_source with path "${entry}", then compile again.`
+                                }
+                            )
+                        }
+                        await emulator.compile(
+                            100,
+                            context.getBuildSources?.() ?? { files: projectFiles, entry }
+                        )
                     } catch (error) {
                         thrownError = error
                     }

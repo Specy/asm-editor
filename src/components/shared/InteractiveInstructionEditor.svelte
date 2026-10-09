@@ -66,6 +66,8 @@
         code: string
         /** Optional transient Project: named files, a C/C++ or assembly entry, and compilation records. */
         project?: Project
+        /** Selected project file, shared with a host such as the AI chat. */
+        activePath?: string
         testcases?: Testcase[]
         showMemory?: boolean
         /** Whether the memory view has the region picker and tints its bytes by region. */
@@ -105,6 +107,7 @@
     let {
         code = $bindable(),
         project,
+        activePath = $bindable(undefined),
         language = 'M68K',
         showMemory: showMemoryProp,
         showMemoryRegions = false,
@@ -127,6 +130,10 @@
         dockActions = []
     }: Props = $props()
     const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
+    $effect(() => {
+        if (session && activePath && session.project.files[activePath])
+            session.selected = activePath
+    })
     const modelSessionId = createProjectLanguageSessionId()
     const selectedFile = $derived(session?.selected)
     const editorLanguage = $derived(
@@ -177,6 +184,7 @@
         if (!session || running || building) return
         try {
             await session.compile(confirmReplacement)
+            activePath = session.selected
         } catch (error) {
             toast.error(getM68kErrorMessage(error))
         }
@@ -398,7 +406,10 @@
             if (typeof source === 'string') emulator.setCode(source)
             else emulator.setSources(source)
             await emulator.compile(undoHistorySize(settings), source)
-            if (session) session.selected = session.project.entry
+            if (session) {
+                session.selected = session.project.entry
+                activePath = session.selected
+            }
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -507,6 +518,7 @@
                         aria-selected={selectedFile === path}
                         onclick={() => {
                             session.selected = path
+                            activePath = path
                         }}>{path}</button
                     >
                 {/each}

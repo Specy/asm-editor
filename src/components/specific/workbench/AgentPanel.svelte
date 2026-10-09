@@ -21,6 +21,8 @@
 
 <div class="agent-panel">
     <DefaultCodingAgent
+        {project}
+        onOpenFile={(path) => session.selectFile(path)}
         editorLanguage={project.language}
         bind:editorCode={project.code}
         bind:files={project.files}

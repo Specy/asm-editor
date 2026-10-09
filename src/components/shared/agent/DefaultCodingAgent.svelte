@@ -24,7 +24,9 @@
     import type { Emulator } from '$lib/languages/Emulator'
     import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
     import { fileText, type ProjectFiles } from '$lib/projectFiles'
-    import { defaultEntryPath } from '$lib/Project.svelte'
+    import { projectBuildSources } from '$lib/buildSources'
+    import { Prompt } from '$stores/promptStore.svelte'
+    import { defaultEntryPath, type Project } from '$lib/Project.svelte'
     import type { RegisteredTool } from '@discerns/sdk'
     import {
         DEFAULT_CODING_AGENT_TOOL_NAMES,
@@ -45,6 +47,8 @@
 
     interface Props {
         editorLanguage: SupportedLanguage | null
+        project?: Project
+        onOpenFile?: (path: string) => void
         editorCode?: string
         files?: ProjectFiles
         entry?: string
@@ -68,6 +72,8 @@
 
     let {
         editorLanguage = $bindable(),
+        project,
+        onOpenFile,
         editorCode = $bindable(''),
         files = $bindable(undefined),
         entry = $bindable(undefined),
@@ -87,13 +93,15 @@
     let accent = $derived(ThemeStore.get('accent').color)
 
     const effectiveEntry = $derived(
-        entry ?? (editorLanguage ? defaultEntryPath(editorLanguage) : 'main.s')
+        project?.entry ?? entry ?? (editorLanguage ? defaultEntryPath(editorLanguage) : 'main.s')
     )
+
+    const effectiveFileSystem = $derived(project?.fileSystem ?? fileSystem)
 
     let internalFiles = $state<Record<string, string>>({})
 
     $effect(() => {
-        if (!fileSystem && !files && editorCode !== undefined) {
+        if (!effectiveFileSystem && !files && editorCode !== undefined) {
             const current = internalFiles[effectiveEntry]
             if (current !== editorCode) {
                 internalFiles[effectiveEntry] = editorCode
@@ -104,6 +112,9 @@
     const defaultToolFactories = $derived.by(() => {
         return createDefaultCodingAgentTools({
             canUpdateLanguage,
+            getProject: () => project,
+            getBuildSources: project ? () => projectBuildSources(project!) : undefined,
+            confirmSourceOverwrite: (question) => Prompt.confirm(question),
             canEditCode:
                 allowListAllows(allowToolList, 'replace_file_content') ||
                 allowListAllows(allowToolList, 'write_to_file'),
@@ -115,16 +126,16 @@
                 searchForAgent(searchPlace, query, language, editorLanguage, limit),
 
             getFiles: () => {
-                if (fileSystem) return fileSystem.files
+                if (effectiveFileSystem) return effectiveFileSystem.files
                 if (files) return files
                 if (Object.keys(internalFiles).length > 0) return internalFiles
                 return { [effectiveEntry]: editorCode ?? '' }
             },
             getFile: (path) => {
                 const target = path || activePath || effectiveEntry
-                if (fileSystem) {
+                if (effectiveFileSystem) {
                     try {
-                        return fileSystem.readText(target)
+                        return effectiveFileSystem.readText(target)
                     } catch {
                         return null
                     }
@@ -142,21 +153,21 @@
             },
             setFile: (path, nextCode) => {
                 const target = path || activePath || effectiveEntry
-                if (fileSystem) {
-                    fileSystem.writeText(target, nextCode)
+                if (effectiveFileSystem) {
+                    effectiveFileSystem.writeText(target, nextCode)
                 }
                 if (files) {
                     files = { ...files, [target]: { encoding: 'plain', content: nextCode } }
                 }
                 internalFiles[target] = nextCode
-                if (target === effectiveEntry || (!files && !fileSystem)) {
+                if (target === effectiveEntry || (!files && !effectiveFileSystem)) {
                     editorCode = nextCode
                 }
             },
             deleteFile: (path) => {
-                if (fileSystem) {
+                if (effectiveFileSystem) {
                     try {
-                        fileSystem.remove(path)
+                        effectiveFileSystem.remove(path)
                     } catch {
                         // ignore
                     }
@@ -173,12 +184,15 @@
             },
             getEntryPath: () => effectiveEntry,
             getActivePath: () => activePath ?? effectiveEntry,
-            setActivePath: (path) => (activePath = path),
+            setActivePath: (path) => {
+                activePath = path
+                onOpenFile?.(path)
+            },
 
             getEditorCode: () => {
-                if (fileSystem) {
+                if (effectiveFileSystem) {
                     try {
-                        return fileSystem.readText(effectiveEntry)
+                        return effectiveFileSystem.readText(effectiveEntry)
                     } catch {
                         // ignore
                     }
@@ -189,8 +203,8 @@
                 return internalFiles[effectiveEntry] ?? editorCode ?? ''
             },
             setEditorCode: (code) => {
-                if (fileSystem) {
-                    fileSystem.writeText(effectiveEntry, code)
+                if (effectiveFileSystem) {
+                    effectiveFileSystem.writeText(effectiveEntry, code)
                 }
                 if (files) {
                     files = { ...files, [effectiveEntry]: { encoding: 'plain', content: code } }
@@ -219,7 +233,8 @@
         buildDefaultCodingAgentPrompt({
             enabledToolNames: enabledDefaultToolNames,
             enabledWorkflows,
-            additionalInstructions
+            additionalInstructions,
+            sourceCompilationAvailable: !!project
         })
     )
 </script>

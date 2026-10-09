@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultCodingAgentTools } from './tools'
+import { makeProject } from '$lib/Project.svelte'
+import { projectBuildSources } from '$lib/buildSources'
+import {
+    compilerExplorerDriver,
+    SourceCompilationError,
+    type CompilationRequest
+} from '$lib/sourceCompilation/compilerExplorer'
+import { fileFingerprint } from '$lib/sourceCompilation/records'
 import { buildDefaultCodingAgentPrompt } from './prompts'
 import {
     DEFAULT_TAKE_LINES,
@@ -1593,5 +1601,219 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             })
             expect(prompt).toContain('Use search_documentation before relying on an instruction')
         })
+    })
+})
+
+describe('C/C++ agent workflow', () => {
+    function sourceContext(language: SupportedLanguage = 'RISC-V') {
+        const project = makeProject({ language, code: 'original assembly' })
+        const emulator = createMockEmulator()
+        const { context } = createTestContext({}, emulator)
+        context.getProject = () => project
+        context.getEditorLanguage = () => project.language
+        context.getFiles = () => project.files
+        context.getFile = (path) =>
+            path in project.files ? project.fileSystem.readText(path) : null
+        context.setFile = (path, code) => project.fileSystem.writeText(path, code)
+        context.getEntryPath = () => project.entry
+        context.getBuildSources = () => projectBuildSources(project)
+        context.setActivePath = vi.fn()
+        return { project, emulator, context, tools: createDefaultCodingAgentTools(context) }
+    }
+
+    function mockSourceCompiler() {
+        return vi
+            .spyOn(compilerExplorerDriver, 'compile')
+            .mockImplementation(async (request: CompilationRequest) => {
+                const assembly = '.text\nmain:\nli a0, 42\nret\n'
+                const outputFingerprint = fileFingerprint({ encoding: 'plain', content: assembly })!
+                return {
+                    assembly,
+                    diagnostics: [],
+                    record: {
+                        sourcePath: request.sourcePath,
+                        outputPath: request.outputPath,
+                        target: request.target,
+                        language: 'c',
+                        compilerId: 'rv32-cgcc1420',
+                        optimization: request.optimization,
+                        assemblerProfile: 'gnu-compiler-v1',
+                        runtimeAbi: 'v1',
+                        inputs: {
+                            [request.sourcePath]: fileFingerprint(
+                                request.files[request.sourcePath]
+                            )!
+                        },
+                        outputFingerprint
+                    },
+                    map: {
+                        sourcePath: request.sourcePath,
+                        outputFingerprint,
+                        lines: [null, null, { path: request.sourcePath, line: 0 }, null]
+                    }
+                }
+            })
+    }
+
+    it('writes and edits C and headers without assembler checks or replacing assembly', async () => {
+        const { project, emulator, tools } = sourceContext()
+        const entry = project.entry
+        for (const path of ['main.c', 'helpers.h', 'main.cpp']) {
+            const written = await tools.write_to_file.execute({ path, code: 'int answer = 42;' })
+            expect(written).toMatchObject({
+                success: true,
+                compilationRequired: true,
+                canExecute: false
+            })
+            const edited = await tools.replace_file_content.execute({
+                path,
+                target_content: '42',
+                replacement_content: '43'
+            })
+            expect(edited).toMatchObject({ success: true, compilationRequired: true })
+            expect(project.fileSystem.readText(path)).toBe('int answer = 43;')
+        }
+        expect(project.code).toBe('original assembly')
+        expect(project.entry).toBe(entry)
+        expect(emulator.check).not.toHaveBeenCalled()
+        expect(emulator.clear).toHaveBeenCalled()
+    })
+
+    it('compiles C with provenance, then builds with the runtime and compiler assembler profile', async () => {
+        const compiler = mockSourceCompiler()
+        try {
+            const { project, emulator, tools } = sourceContext()
+            await tools.write_to_file.execute({
+                path: 'main.c',
+                code: 'int main(void) { return 42; }'
+            })
+            const result = await tools.compile_source.execute({ path: 'main.c' })
+            expect(result).toMatchObject({
+                success: true,
+                outputPath: 'main.c.riscv',
+                canExecute: false
+            })
+            expect(compiler).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sourcePath: 'main.c',
+                    optimization: '0',
+                    target: 'RISC-V'
+                }),
+                expect.any(AbortSignal)
+            )
+            expect(project.compilations).toHaveLength(1)
+            expect(project.sourceMaps[project.entry]).toBeDefined()
+            const built = await tools.compile.execute({})
+            expect(built).toMatchObject({ success: true })
+            expect(emulator.compile).toHaveBeenCalledWith(
+                100,
+                expect.objectContaining({
+                    entry: 'main.c.riscv',
+                    assemblerProfile: 'gnu-compiler-v1',
+                    runtimeAbi: 'v1'
+                })
+            )
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    it('blocks building stale output until source changes are recompiled', async () => {
+        const compiler = mockSourceCompiler()
+        try {
+            const { emulator, tools } = sourceContext()
+            await tools.write_to_file.execute({
+                path: 'main.c',
+                code: 'int main(void) { return 42; }'
+            })
+            await tools.compile_source.execute({ path: 'main.c' })
+            await tools.replace_file_content.execute({
+                path: 'main.c',
+                target_content: '42',
+                replacement_content: '43'
+            })
+            expect(await tools.compile.execute({})).toMatchObject({
+                success: false,
+                errorKind: 'execution_state',
+                nextAction: expect.stringContaining('compile_source')
+            })
+            expect(emulator.compile).not.toHaveBeenCalled()
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    it('returns compiler diagnostics and keeps the previous entry on a C error', async () => {
+        const compiler = vi
+            .spyOn(compilerExplorerDriver, 'compile')
+            .mockRejectedValue(new SourceCompilationError('bad C source'))
+        try {
+            const { project, tools } = sourceContext()
+            const entry = project.entry
+            await tools.write_to_file.execute({ path: 'main.c', code: 'broken' })
+            expect(await tools.compile_source.execute({ path: 'main.c' })).toMatchObject({
+                success: false,
+                errorKind: 'compile_error',
+                error: 'bad C source'
+            })
+            expect(project.entry).toBe(entry)
+            expect(project.compilations).toEqual([])
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    it('preserves manually edited generated assembly when replacement is declined', async () => {
+        const compiler = mockSourceCompiler()
+        try {
+            const { project, context, tools } = sourceContext()
+            await tools.write_to_file.execute({
+                path: 'main.c',
+                code: 'int main(void) { return 42; }'
+            })
+            await tools.compile_source.execute({ path: 'main.c' })
+            project.fileSystem.writeText(project.entry, 'manual edits')
+            context.confirmSourceOverwrite = vi.fn(async () => false)
+            expect(await tools.compile_source.execute({ path: 'main.c' })).toMatchObject({
+                success: false
+            })
+            expect(context.confirmSourceOverwrite).toHaveBeenCalledOnce()
+            expect(project.code).toBe('manual edits')
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    it('reports unsupported targets and hosts without source compilation', async () => {
+        const { tools } = sourceContext('M68K')
+        expect(await tools.compile_source.execute({ path: 'main.c' })).toMatchObject({
+            success: false,
+            errorKind: 'invalid_input'
+        })
+        const { context } = createTestContext({})
+        expect(
+            await createDefaultCodingAgentTools(context).compile_source.execute({ path: 'main.c' })
+        ).toMatchObject({ success: false, errorKind: 'unavailable' })
+    })
+
+    it('describes C source compilation only when that context supports it', () => {
+        const options = {
+            enabledToolNames: ['write_to_file', 'compile_source', 'compile'] as const,
+            enabledWorkflows: []
+        }
+        const prompt = buildDefaultCodingAgentPrompt({
+            ...options,
+            enabledToolNames: [...options.enabledToolNames],
+            sourceCompilationAvailable: true
+        })
+        expect(prompt).toContain('C/C++ source workflow')
+        expect(prompt).toContain('printf("Hello from C\\n")')
+        expect(prompt).toContain('Then call compile')
+        const readOnly = buildDefaultCodingAgentPrompt({
+            enabledToolNames: ['view_file'],
+            enabledWorkflows: []
+        })
+        expect(readOnly).toContain('Source compilation is unavailable')
+        expect(readOnly).not.toContain('C/C++ source workflow')
     })
 })

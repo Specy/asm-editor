@@ -8,13 +8,17 @@
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import { makeProject, type AvailableLanguages } from '$lib/Project.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
 
     const MOBILE_LAYOUT_QUERY = '(max-width: 900px)'
 
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
+    const project = $derived.by(() =>
+        makeProject({ language: editorLanguage ?? 'RISC-V', code: '' })
+    )
+    let activePath = $state<string | undefined>(undefined)
     let emulatorInstance: Emulator | null = $state(null)
     let agentOpen = $state(true)
     let isMobile = $state(false)
@@ -95,6 +99,8 @@
         aria-hidden={!agentVisible}
     >
         <DefaultCodingAgent
+            {project}
+            bind:activePath
             bind:editorLanguage
             bind:editorCode
             {emulatorInstance}
@@ -107,7 +113,8 @@
             {#key editorLanguage}
                 <EmulatorLoader
                     language={editorLanguage}
-                    code={editorCode}
+                    code={project.code}
+                    source={{ files: project.files, entry: project.entry }}
                     bind:emulator={emulatorInstance}
                     settings={{
                         globalPageElementsPerRow: 16,
@@ -116,6 +123,8 @@
                 >
                     {#snippet children(emulator)}
                         <InteractiveInstructionEditor
+                            {project}
+                            bind:activePath
                             bind:code={editorCode}
                             layout="fullscreen"
                             language={editorLanguage as AvailableLanguages}
