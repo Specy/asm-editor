@@ -29,9 +29,7 @@ export default defineConfig({
         sveltekit(),
         Icons({
             compiler: 'svelte',
-            // `scale: 0` drops the em-based width/height attributes; sizing comes from
-            // the `.unplugin-icon` rule in global.css so icons fill their parent, the
-            // same contract svelte-icons' IconBase provided.
+            // `scale: 0` drops the em-based width/height attributes
             scale: 0,
             defaultClass: 'unplugin-icon'
         }),
@@ -45,10 +43,10 @@ export default defineConfig({
     // The tests run on the app's own Vite config so a test resolves `$lib`, `$cmp` and the other
     // SvelteKit aliases exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
     // module a test reaches. Peripheral logic itself stays plain TypeScript, which is why the
-    // default environment is node: nothing under test needs a DOM.
+    // default environment is node.
     //
     // `*.dom.test.ts` is the exception. Mounting a component needs a DOM and Svelte's browser
-    // build, so those files run in their own project; the two never share an environment.
+    // build, so those files run in their own project.
     test: {
         projects: [
             {

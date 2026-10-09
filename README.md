@@ -1,6 +1,6 @@
 # Asm editor
 
-A webapp to write, run and learn M68K, MIPS, RISC-V, X86 and Z80 assembly code with a focus on teaching and learning assembly.
+A web IDE to write, run and learn M68K, MIPS, RISC-V, X86 and Z80 assembly code with a focus on teaching and learning assembly.
 
 It includes many debugging and inspection tools aimed to help you understand assembly more easily.
 
@@ -13,27 +13,29 @@ It includes many debugging and inspection tools aimed to help you understand ass
 
 - Code completion and syntax highlighting
 - Run the program or step through it
-- Undo execution and breakpoints
-- Compile C/C++ into MIPS or RISC-V assembly, compare mapped source lines, and follow them while debugging
-- Built in devices like terminal with input/output interrupts, screen, keyboard and mouse
-- Inspect the value of each register and memory address to see which was changed with each instruction
+- Breakpoints and undo of execution (backwards stepping)
+- Compile C/C++ into assembly and then execute it to learn how C/C++ is run by a machine
+- Built in peripherals like terminal, screen, keyboard, mouse and file system
+- Inspect the value of each register and memory address to see what was changed with each instruction
 - Create new projects and manage them all in the webapp then share it with others through links or project files
-- IDE with useful errors and warnings to help you learn better
+- Useful errors and warnings to help you learn better
 - Built-in documentation and intellisense with addressing modes, descriptions and examples
 - Customisable settings and shortcuts, including theme customization
+- IDE can be embedded in other websites. You can also create exams, useful for schools and universities
+- Interactive courses for each assembly language to learn low level coding from scratch 
 
-## Editor Tools
+## IDE Tools
 
-Once running the program there are many tools to help you understand what instructions did and debug the code.
+While running, there are many tools to help you understand what instructions did and debug the code.
 
-- Values which changed between each instructions are highlighted and the old value is also visible. registers and memory have tooltips to show the decimal/hexadecimal value.
-- Follow the stack pointer with the dedicated tab, it's split in rows of 4 bytes to make it easier to see the changes
-- Whenever a jump with link instruction is executed, the callstack is saved so that it can be seen
-- A view of the changes to the state of the interpreter is visible to see what each instruction did, like register / memory writes and changes to the ccr, it is also possible to jump back to a previous state
+- Values which changed between each instructions are highlighted and the old value is also visible. Registers and memory have tooltips to show the decimal/hexadecimal value.
+- Follow the stack pointer with the dedicated tab, it's split in rows of 4 bytes to make it easier to see the changes. The stack is also color coded so that the frames of each function call can be more easily debugged.
+- When calling functions, a callstack is built so that you can trace execution of code more easily.
+- A view of the changes to the state of the simulator is visible so you can see what each instruction did, like register / memory writes and changes to the ccr, it is also possible to jump back to a previous state
 - step/undo the code, add breakpoints, and jump to a specific execution step
 - Testcase runner, with IO and initial memory/register setup to create "exercises" and test your code
 - Full memory viewer to inspect a memory region, string conversion, hex/dec conversion, signed/unsigned conversion, and more
-- The editor suggests you with the available instructions and the valid addressing modes for each operand, while also giving a simple description and example.
+- The editor suggests you with the available instructions and the valid addressing modes for each operand, while also giving a simple description and example
 
 ## Documentation
 
@@ -43,23 +45,20 @@ The webapp comes with a [built-in documentation](https://asm-editor.specy.app/do
 
 Projects are stored locally on your browser, and with the app also working offline, you can create and manage them all in the webapp.
 
-Create a `.c` or `.cpp` File in a MIPS, RISC-V, or RISC-V-64 Project and select **Compile** in the bottom control bar. Compilation sends that File and local headers to Compiler Explorer and requires an internet connection. Define a parameterless `int main()` without standard-library dependencies. The generated assembly becomes the Entry file; use **Build**, **Step**, **Run**, and **Undo** to explore it alongside its source. Matching colored sections connect each source line to its assembly blocks. Editing source or assembly removes the mapping, and replacing manually edited output asks for confirmation. Source maps last for the current session; recompilation restores them after reopening a Project. See the [source-compilation design](docs/design/source-compilation.md) for scope and future extensions.
-
 ## Embed the editor
 
 You can embed the editor in your website [here](https://asm-editor.specy.app/embed), you can set the initial code and additional settings.
 
 # Tech stack
 
-The webapp is made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust-lang.org/it) webassembly and [java TEAVM](https://teavm.org/).
+The webapp is made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust-lang.org/it), wasm, Java, [java TEAVM](https://teavm.org/), [emscripten](https://emscripten.org/), monaco editor (vs-code's editor), C and Typescript
 
-Uses the same editor as vs-code, and the emulators:
-
-- [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code
+- [M68K Simulator](https://github.com/Specy/s68k) compiled from rust to wasm
 - [MIPS Simulator (mars)](https://github.com/Specy/mars) compiled from java to javascript
 - [RISC-V Simulator (rars)](https://github.com/Specy/rars) compiled from java to javascript
 - [Z80 assembler and machine](https://github.com/Specy/trs80)
-- [X86 assembler and machine](https://github.com/Specy/x86-js) compiled from C to javascript
+- [X86 assembler and machine](https://github.com/Specy/x86-js) compiled from C to wasm
+- C and C++ compilation is provided by [Compiler Explorer](https://godbolt.org/)
 
 # Citing ASM Editor
 
@@ -82,6 +81,7 @@ If ASM Editor supports your course or your research, please cite the paper:
 }
 ```
 
+
 # Local setup
 
 You must have node.js 24+ installed, then you can clone the repository and run:
@@ -92,12 +92,10 @@ npm run dev # to run the dev server
 # npm run build # to build the app
 ```
 
-The emulator sources are available as Git submodules for local development. Normal installs and
-deployments continue to use the npm packages. See [Working on the emulators](docs/local-emulators.md)
-to opt into local builds.
+The emulator sources are available as Git submodules for local development.
 
 # Contributing
 
 If you wish to contribute, make a new issue to discuss the changes you want to make (or comment on an existing one).
 
-We are looking for people to help with documentation and courses, you can look at more info [here](https://github.com/Specy/asm-editor/issues/27)
+We are looking for people to help with documentation and courses!
