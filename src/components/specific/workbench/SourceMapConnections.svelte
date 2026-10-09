@@ -18,6 +18,9 @@
         coloring: SourceMapColoring
         /** Palette indices of the emphasized connections; the others dim. */
         activeColors?: ReadonlySet<number>
+        /** Zero-based executing lines, -1 when there is none; a line joins them. */
+        sourceLine?: number
+        assemblyLine?: number
         divider?: Snippet
     }
 
@@ -28,6 +31,8 @@
         sourcePath,
         coloring,
         activeColors,
+        sourceLine = -1,
+        assemblyLine = -1,
         divider
     }: Props = $props()
     let gutter = $state<HTMLDivElement>()
@@ -44,12 +49,32 @@
                 : []
         })
     })
+    //The executing lines are joined like any other connector, over the block that holds them.
+    const allConnections = $derived.by(() => {
+        if (sourceLine < 0 || assemblyLine < 0) return connections
+        const owner = connections.find(
+            (item) =>
+                item.assembly.startLine <= assemblyLine && assemblyLine <= item.assembly.endLine
+        )
+        if (!owner) return connections
+        const colorIndex = owner.assembly.colorIndex
+        return [
+            ...connections,
+            {
+                source: { startLine: sourceLine, endLine: sourceLine, colorIndex },
+                assembly: { startLine: assemblyLine, endLine: assemblyLine, colorIndex },
+                color: owner.color,
+                executing: true
+            }
+        ]
+    })
     const isActive = (colorIndex: number) => activeColors?.has(colorIndex) ?? false
     const isDimmed = (colorIndex: number) =>
         activeColors !== undefined && !activeColors.has(colorIndex)
 
     type Band = { top: number; bottom: number }
     type Ribbon = {
+        executing: boolean
         key: number
         sourceLine: number
         colorIndex: number
@@ -57,7 +82,13 @@
         path: string
         borderPath: string
     }
-    type Bridge = Band & { key: number; colorIndex: number; color: string; borderPath: string }
+    type Bridge = Band & {
+        executing: boolean
+        key: number
+        colorIndex: number
+        color: string
+        borderPath: string
+    }
     type Geometry = {
         width: number
         height: number
@@ -174,7 +205,7 @@
         const bridges: Bridge[] = []
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Local deduplication during geometry calculation.
         const bridged = new Set<number>()
-        for (const connection of connections) {
+        for (const connection of allConnections) {
             const leftRange = sourceOnLeft ? connection.source : connection.assembly
             const rightRange = sourceOnLeft ? connection.assembly : connection.source
             const leftBand = connectionBand(left, leftRange, leftViewport, leftScroll)
@@ -183,7 +214,8 @@
             const colorIndex = connection.assembly.colorIndex
             //One bridge per left-side range. With assembly on the left, one color can
             //own several disjoint ranges, so the color alone is not a unique key.
-            const bridgeKey = leftRange.startLine
+            const executing = 'executing' in connection
+            const bridgeKey = executing ? -1 - leftRange.startLine : leftRange.startLine
             if (!bridged.has(bridgeKey)) {
                 bridged.add(bridgeKey)
                 //The scrollbar bridge belongs only to visible source code, not its heading.
@@ -191,6 +223,7 @@
                 const bottom = Math.min(leftBand.bottom, leftViewport.bottom)
                 if (bottom > top)
                     bridges.push({
+                        executing,
                         key: bridgeKey,
                         top,
                         bottom,
@@ -200,7 +233,8 @@
                     })
             }
             ribbons.push({
-                key: connection.assembly.startLine,
+                executing,
+                key: executing ? -1 - connection.assembly.startLine : connection.assembly.startLine,
                 sourceLine: connection.source.startLine,
                 colorIndex,
                 color: connection.color,
@@ -262,7 +296,9 @@
     })
 
     $effect(() => {
-        void connections
+        void allConnections
+        void sourceLine
+        void assemblyLine
         schedule?.()
     })
 </script>
@@ -292,6 +328,7 @@
                 class="bridge"
                 class:active={isActive(bridge.colorIndex)}
                 class:dimmed={isDimmed(bridge.colorIndex)}
+                class:executing={bridge.executing}
                 style:color={bridge.color}
                 x="0"
                 y={bridge.top}
@@ -304,6 +341,7 @@
                 class="ribbon"
                 class:active={isActive(ribbon.colorIndex)}
                 class:dimmed={isDimmed(ribbon.colorIndex)}
+                class:executing={ribbon.executing}
                 style:color={ribbon.color}
                 data-source-line={ribbon.sourceLine + 1}
                 data-assembly-line={ribbon.key + 1}
@@ -316,6 +354,7 @@
                     class="section-border"
                     class:active={isActive(section.colorIndex)}
                     class:dimmed={isDimmed(section.colorIndex)}
+                    class:executing={section.executing}
                     style:color={section.color}
                     d={section.borderPath}
                 />
@@ -380,6 +419,11 @@
         &.dimmed {
             fill-opacity: var(--source-map-dimmed-opacity);
         }
+        //The executing lines use the editors' solid highlighted-line color.
+        &.executing {
+            fill: var(--accent);
+            fill-opacity: 1;
+        }
     }
     .section-border {
         fill: none;
@@ -397,6 +441,10 @@
                 var(--source-map-dimmed-opacity) * var(--source-map-border-opacity)
             );
         }
+    }
+    .section-border.executing {
+        stroke: var(--accent);
+        stroke-opacity: 1;
     }
     @media (max-width: 700px) {
         .connector-gutter {

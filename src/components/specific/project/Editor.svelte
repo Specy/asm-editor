@@ -634,6 +634,10 @@
                               ),
                               options: {
                                   className: hasError ? 'error-line' : 'selected-line',
+                                  marginClassName: hasError ? 'error-line' : 'selected-line',
+                                  lineNumberClassName: hasError
+                                      ? 'error-line-number'
+                                      : 'selected-line-number',
                                   inlineClassName: 'selected-line-text',
                                   isWholeLine: true,
                                   zIndex: 2
@@ -644,13 +648,19 @@
                 ...breakpoints.map((e) => ({
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
-                        glyphMarginClassName: 'breakpoint-glyph'
+                        glyphMarginClassName:
+                            e === highlightedLine
+                                ? 'breakpoint-glyph selected-line-glyph'
+                                : 'breakpoint-glyph'
                     }
                 })),
                 ...mappedBreakpoints.map((e) => ({
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
-                        glyphMarginClassName: 'mapped-breakpoint-glyph',
+                        glyphMarginClassName:
+                            e === highlightedLine
+                                ? 'mapped-breakpoint-glyph selected-line-glyph'
+                                : 'mapped-breakpoint-glyph',
                         glyphMarginHoverMessage: {
                             value: 'Breakpoint set on the source line this instruction compiles from'
                         }
@@ -933,6 +943,23 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    :global(.selected-line-number) {
+        color: var(--accent-text) !important;
+    }
+
+    :global(.error-line-number) {
+        color: var(--red-text) !important;
+    }
+
+    //A breakpoint on the highlighted line would vanish into the same accent color.
+    :global(.breakpoint-glyph.selected-line-glyph) {
+        background-color: var(--accent-text);
+    }
+
+    :global(.mapped-breakpoint-glyph.selected-line-glyph) {
+        border-color: var(--accent-text);
     }
 
     :global(.mapped-breakpoint-glyph) {

@@ -53,6 +53,8 @@
                         sourcePath={session.mappingPair.source.displayedPath}
                         coloring={session.mappingColors}
                         activeColors={session.activeMappingColors}
+                        sourceLine={session.mappingPair.source.highlightedLine}
+                        assemblyLine={session.mappingPair.assembly.instructionLine}
                         {divider}
                     />
                 {:else}
