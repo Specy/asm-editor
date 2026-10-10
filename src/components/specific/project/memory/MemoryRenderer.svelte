@@ -3,6 +3,7 @@
         memoryRegionColor,
         memoryHover,
         readOnlyMemoryAt,
+        regionChunkStart,
         regionsAt
     } from '$lib/languages/memoryRegions'
     import type {
@@ -100,6 +101,7 @@
             const region = regionsAt(memoryRegions, address)[0]
             return {
                 region,
+                chunk: region ? regionChunkStart(region, dataLabels, address) : 0n,
                 hover: memoryHover(memoryRegions, dataLabels, address)
             }
         })
@@ -107,13 +109,17 @@
             const region = cell.region
             if (!region) return { ...cell, outline: '' }
             const sameRegion = (neighbor: number) => cells[neighbor]?.region?.id === region.id
+            const sameChunk = (neighbor: number) =>
+                sameRegion(neighbor) && cells[neighbor].chunk === cell.chunk
             const column = index % bytesPerRow
-            // Only the exposed edges of a region's cells form its continuous outline.
+            // Only the exposed edges of a region's cells form its continuous outline. Inside it,
+            // the labels cut the region into chunks in the same colour: the line between two
+            // chunks is drawn once, by the later chunk's top and left edges.
             const edges = [
-                !sameRegion(index - bytesPerRow),
+                !sameChunk(index - bytesPerRow),
                 column === bytesPerRow - 1 || !sameRegion(index + 1),
                 !sameRegion(index + bytesPerRow),
-                column === 0 || !sameRegion(index - 1)
+                column === 0 || !sameChunk(index - 1)
             ]
             return {
                 ...cell,

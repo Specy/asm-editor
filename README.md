@@ -22,7 +22,7 @@ It includes many debugging and inspection tools aimed to help you understand ass
 - Built-in documentation and intellisense with addressing modes, descriptions and examples
 - Customisable settings and shortcuts, including theme customization
 - IDE can be embedded in other websites. You can also create exams, useful for schools and universities
-- Interactive courses for each assembly language to learn low level coding from scratch 
+- Interactive courses for each assembly language to learn low level coding from scratch
 
 ## IDE Tools
 
@@ -80,7 +80,6 @@ If ASM Editor supports your course or your research, please cite the paper:
     doi       = {10.1109/EDUCON67543.2026.11574463}
 }
 ```
-
 
 # Local setup
 

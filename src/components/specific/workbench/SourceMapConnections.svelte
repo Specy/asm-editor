@@ -123,8 +123,14 @@
         let last = range.endLine + 1
         const lineTop = (line: number) =>
             viewport.top + editor.getTopForLineNumber(line) - scrollTop
+        //Pseudo-instruction expansions are view zones under their line. They belong to the
+        //section, so its bottom includes them. Monaco's typings omit this runtime argument.
+        const bottomOf = editor.getBottomForLineNumber as (
+            line: number,
+            includeViewZones?: boolean
+        ) => number
         const lineBottom = (line: number) =>
-            viewport.top + editor.getBottomForLineNumber(line) - scrollTop
+            viewport.top + bottomOf.call(editor, line, true) - scrollTop
         const padding =
             (viewport.bottom - viewport.top) * Math.max(0, SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO)
         const retainedTop = viewport.top - padding

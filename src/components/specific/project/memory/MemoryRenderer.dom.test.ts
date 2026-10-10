@@ -24,6 +24,7 @@ function render(
         memoryRegions?: import('$lib/languages/commonLanguageFeatures.svelte').MemoryRegion[]
         dataLabels?: import('$lib/languages/commonLanguageFeatures.svelte').DataLabel[]
         sp?: bigint
+        bytesPerRow?: number
         pokeable?: boolean
         endianess?: 'big' | 'little'
         unreadable?: number[]
@@ -54,7 +55,7 @@ function render(
             dataLabels: options.dataLabels,
             readOnlyMemory: options.readOnlyMemory,
             pageSize: 8,
-            bytesPerRow: 8,
+            bytesPerRow: options.bytesPerRow ?? 8,
             defaultMemoryValue: 0xff,
             endianess: options.endianess ?? 'big',
             systemSize: RegisterSize.Long,
@@ -350,6 +351,52 @@ it('tints device overlaps, preserves SP and selection highlights, and hovers bot
         ui.select(0)
         expect(ui.cells()[0].getAttribute('style')).toContain('background-color: var(--green)')
         expect(outline(0)).toContain(deviceOutline)
+    } finally {
+        ui.close()
+    }
+})
+
+it('cuts a data region into chunks at its labels, each line drawn once in the region colour', () => {
+    const region = {
+        id: 'data',
+        name: '.data',
+        section: '.data',
+        kind: 'data' as const,
+        start: ADDRESS,
+        end: ADDRESS + 8n
+    }
+    const label = (name: string, offset: bigint) => ({
+        name,
+        section: '.data',
+        address: ADDRESS + offset,
+        fromLibrary: false
+    })
+    const ui = render({
+        memoryRegions: [region],
+        dataLabels: [label('one', 2n), label('two', 6n)],
+        bytesPerRow: 4
+    })
+    //the page is two rows of four: bytes 0-1 before any label, 2-5 under one, 6-7 under two
+    const edges = (index: number) =>
+        /--region-edges: ([^;]*);/.exec(
+            ui.cells()[index].closest('.memory-number')!.getAttribute('style')!
+        )![1]
+    try {
+        //each chunk draws its own top and left edges, and only the region draws the right and
+        //bottom ones, so the line between two chunks is a single line, not two side by side
+        expect([0, 1, 2, 3, 4, 5, 6, 7].map(edges)).toEqual([
+            '1px 0 0 1px',
+            '1px 0 0 0',
+            '1px 0 0 1px',
+            '1px 1px 0 0',
+            '1px 0 1px 1px',
+            '1px 0 1px 0',
+            '1px 0 1px 1px',
+            '1px 1px 1px 0'
+        ])
+        expect(ui.cells()[2].closest('.memory-number')!.getAttribute('style')).toContain(
+            `--region-color: ${memoryRegionColor('data')};`
+        )
     } finally {
         ui.close()
     }

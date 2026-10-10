@@ -4,6 +4,7 @@ import {
     mergeMemoryRegions,
     memoryHover,
     readOnlyMemoryAt,
+    regionChunkStart,
     regionsAt,
     resolveMemoryAddress,
     textSegmentsReadOnly
@@ -80,5 +81,50 @@ describe('memory regions', () => {
         expect(readOnlyMemoryAt(ranges, 0x0ffffffcn, 4n)).toBe(ranges[0])
         expect(readOnlyMemoryAt(ranges, 0x10000000n, 16n)).toBeUndefined()
         expect(readOnlyMemoryAt(ranges, 0x80000180n, 1n)).toBe(ranges[1])
+    })
+})
+
+describe('region chunks', () => {
+    const layout = memoryLayoutFromItems(
+        [
+            { start: 0x1000n, length: 16n, kind: 'data', section: '.data' },
+            { start: 0x1010n, length: 8n, kind: 'reserved', section: '.data' },
+            { start: 0x2000n, length: 8n, kind: 'code', section: '.text' }
+        ],
+        [
+            { name: 'first', address: 0x1004n, fromLibrary: false },
+            { name: 'alias', address: 0x1004n, fromLibrary: false },
+            { name: 'second', address: 0x100cn, fromLibrary: true },
+            { name: 'buffer', address: 0x1014n, fromLibrary: false }
+        ]
+    )
+    const [data, reserved, text] = mergeMemoryRegions(layout, undefined, undefined, [])
+
+    it('starts a chunk at each label, and before the first at the region start', () => {
+        const chunk = (address: bigint) => regionChunkStart(data, layout.dataLabels, address)
+        expect([0x1000n, 0x1003n, 0x1004n, 0x100bn, 0x100cn, 0x100fn].map(chunk)).toEqual([
+            0x1000n,
+            0x1000n,
+            0x1004n,
+            0x1004n,
+            0x100cn,
+            0x100cn
+        ])
+    })
+    it('keeps labels of one run out of the neighbouring run of the same section', () => {
+        expect(regionChunkStart(reserved, layout.dataLabels, 0x1010n)).toBe(0x1010n)
+        expect(regionChunkStart(reserved, layout.dataLabels, 0x1017n)).toBe(0x1014n)
+        expect(regionChunkStart(data, layout.dataLabels, 0x100fn)).toBe(0x100cn)
+    })
+    it('leaves the regions without data labels in one piece', () => {
+        expect(regionChunkStart(text, layout.dataLabels, 0x2004n)).toBe(0x2000n)
+        const heap = {
+            id: 'heap',
+            name: 'Heap',
+            kind: 'heap' as const,
+            start: 0x3000n,
+            end: 0x4000n
+        }
+        expect(regionChunkStart(heap, layout.dataLabels, 0x3800n)).toBe(0x3000n)
     })
 })

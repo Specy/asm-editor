@@ -125,6 +125,24 @@ export function regionLabels(region: MemoryRegion, labels: readonly DataLabel[])
     )
 }
 
+/**
+ * Where the chunk holding `address` starts: the nearest data label at or below it inside the
+ * region, or the region's own start before its first label. A chunk is the part of a region one
+ * label names, so the memory view can draw each variable's bytes apart. Only the program's data
+ * and reserved runs have labels, so every other region is one chunk.
+ */
+export function regionChunkStart(
+    region: MemoryRegion,
+    labels: readonly DataLabel[],
+    address: bigint
+): bigint {
+    if (region.kind !== 'data' && region.kind !== 'reserved') return region.start
+    let start = region.start
+    for (const label of regionLabels(region, labels))
+        if (label.address <= address && label.address > start) start = label.address
+    return start
+}
+
 export function memoryHover(
     regions: readonly MemoryRegion[],
     labels: readonly DataLabel[],

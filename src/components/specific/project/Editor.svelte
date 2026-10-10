@@ -221,7 +221,10 @@
             },
             colorDecorators: false,
             glyphMargin: true,
-            lineNumbersMinChars: 3,
+            //Monaco sizes the line-number column to the model's digit count and only uses this as
+            //the floor, so a short file gets a narrow gutter and one past 99 or 999 lines widens it.
+            //Two keeps files up to 99 lines from shifting the code every time a digit is added.
+            lineNumbersMinChars: 2,
             cursorBlinking: 'phase',
             fontSize: 16,
             ...fontOptions,
@@ -930,13 +933,16 @@
         flex: 1;
     }
 
+    //The glyph slot is one line high and wide, and line numbers are right-aligned just after it.
+    //A circle pushed against the slot's right edge touches every number as wide as the column
+    //(3 digits and up), so it sits near the left edge and leaves a gap that does not depend on the digits.
     :global(.breakpoint-glyph),
     :global(.hovered-glyph) {
         width: calc(22px - 0.6rem) !important;
         height: calc(22px - 0.6rem) !important;
         margin-top: 0.3rem;
         cursor: pointer;
-        margin-left: 0.6rem;
+        margin-left: 0.4rem;
         background-color: var(--accent);
         border-radius: 1rem;
     }
@@ -966,7 +972,7 @@
         width: calc(22px - 0.6rem) !important;
         height: calc(22px - 0.6rem) !important;
         margin-top: 0.3rem;
-        margin-left: 0.6rem;
+        margin-left: 0.4rem;
         cursor: pointer;
         box-sizing: border-box;
         border: 0.15rem solid var(--accent);
