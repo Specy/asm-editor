@@ -935,7 +935,12 @@
 
     //The glyph slot is one line high and wide, and line numbers are right-aligned just after it.
     //A circle pushed against the slot's right edge touches every number as wide as the column
-    //(3 digits and up), so it sits near the left edge and leaves a gap that does not depend on the digits.
+    //(3 digits and up), so it sits near the left edge, and the numbers are nudged right to leave
+    //a gap as wide as the circle's left margin that does not depend on the digits.
+    .editor :global(.margin-view-overlays .line-numbers) {
+        margin-left: 0.2rem;
+    }
+
     :global(.breakpoint-glyph),
     :global(.hovered-glyph) {
         width: calc(22px - 0.6rem) !important;
