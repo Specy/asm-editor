@@ -21,6 +21,6 @@ The Runtime library is a package rather than a folder the app reaches into. It o
 ## Consequences
 
 - `pnpm dev`, `pnpm build` and `pnpm test` at the root build the Cores first, with the toolchains `mise.toml` pins, which `mise install` sets up locally and CI installs from the same file. The build output stays at the repository root in `build/`, where the deploy picks it up.
-- Cloudflare Pages builds nothing: its build image has no JDK or Rust for the Cores. The Deploy workflow builds every pushed branch and uploads it with Wrangler, `main` as production and any other branch as its preview, and the Pages project's automatic deployments are off.
+- Cloudflare Pages builds nothing: its build image has no JDK or Rust for the Cores, and the Pages project's automatic deployments are off. The CI workflow builds the Cores once and shares them as an artifact with the jobs that check, test and build the site; once every check passes it uploads that site with Wrangler, `main` as production and a pull request from this repository as its preview.
 - A Core's dev dependencies resolve through this workspace's lockfile, not the Core's own `package-lock.json`, which its CD keeps using.
 - Paths in documents name the package: `packages/asm-editor/src/...`, `packages/runtime/...`, `packages/<core>/...`. Inside a package, its scripts and comments use paths relative to the package.

@@ -6,7 +6,6 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "test": "node --test scripts/abi-check.test.mjs",
         "test:native": "node scripts/test-native.mjs",
         "check:targets": "node scripts/check-targets.mjs"
     },

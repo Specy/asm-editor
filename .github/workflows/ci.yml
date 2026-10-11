@@ -1,0 +1,205 @@
+name: CI
+# Pull requests and main. The Cores build once and the jobs after them share that build as an
+# artifact; the site deploys only when every check passed: main as production, a pull request from
+# this repository as its preview at <branch>.asm-editor.pages.dev.
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+# A newer push to a pull request makes its run redundant; runs on main finish, one at a time.
+concurrency:
+    group: ci-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+    contents: read
+
+jobs:
+    lint:
+        name: Lint and format
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+            - run: pnpm lint
+            - run: pnpm format:check
+
+    cores:
+        name: Build the Cores
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+              with:
+                  tools: ''
+                  task-cache: true
+            - run: pnpm cores:build
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: cores
+                  path: |
+                      packages/mips/marsjs/ts/dist
+                      packages/risc-v/rarsjs/ts/dist
+                      packages/m68k/ts-lib/dist
+                      packages/x86/blink-js/dist
+                      packages/z80/packages/z80-machine/dist
+                  if-no-files-found: error
+                  retention-days: 1
+
+    # The jobs below take the Cores from the artifact, so they run their tasks with
+    # `--ignore-depends-on` instead of building them again.
+
+    check:
+        name: Type check
+        needs: cores
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+            - uses: actions/download-artifact@v8
+              with:
+                  name: cores
+                  path: packages
+            - run: pnpm check
+
+    test:
+        name: Test (${{ matrix.shard }}/3)
+        needs: cores
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2, 3]
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+            - uses: actions/download-artifact@v8
+              with:
+                  name: cores
+                  path: packages
+            # The search model and the index's vectors (ADR 0026), which the site job saves.
+            - uses: actions/cache/restore@v6
+              with:
+                  path: packages/asm-editor/.cache/search-model
+                  key: search-model-${{ hashFiles('packages/asm-editor/src/lib/search/searchModel.json') }}
+            - uses: actions/cache/restore@v6
+              with:
+                  path: packages/asm-editor/.cache/search-vectors
+                  key: search-vectors-${{ github.sha }}
+                  restore-keys: search-vectors-
+            - working-directory: packages/asm-editor
+              run: |
+                  node scripts/search-model.mjs --optional
+                  pnpm exec vp test run --shard=${{ matrix.shard }}/3
+
+    runtime:
+        name: Runtime compatibility
+        needs: cores
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+            - uses: actions/download-artifact@v8
+              with:
+                  name: cores
+                  path: packages
+            - uses: actions/cache@v6
+              with:
+                  path: packages/runtime/.cache
+                  key: runtime-probes-${{ hashFiles('packages/runtime/**', '!packages/runtime/node_modules/**') }}
+                  restore-keys: runtime-probes-
+            - name: Check ABI guard and generated library inputs
+              run: |
+                  pnpm exec vp run --ignore-depends-on @asm-editor/runtime#test
+                  pnpm exec vp run --ignore-depends-on @asm-editor/runtime#generate:check
+                  git diff --exit-code -- packages/runtime/abi/signatures.cpp packages/runtime/generated/v1
+            - name: Run frozen assembly against the current library
+              run: pnpm exec vp run --ignore-depends-on @asm-editor/runtime#test:cores --abi-fixtures
+            - name: Install native test compilers
+              run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+            - name: Compare the native runtime with glibc
+              run: pnpm exec vp run @asm-editor/runtime#test:native
+
+    site:
+        name: Build the app
+        needs: cores
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+            - uses: actions/download-artifact@v8
+              with:
+                  name: cores
+                  path: packages
+            # The search model and the index's vectors (ADR 0026): the model by its pinned
+            # revision, the vectors from the newest run, since only changed text is embedded again.
+            - uses: actions/cache@v6
+              with:
+                  path: packages/asm-editor/.cache/search-model
+                  key: search-model-${{ hashFiles('packages/asm-editor/src/lib/search/searchModel.json') }}
+            - uses: actions/cache@v6
+              with:
+                  path: packages/asm-editor/.cache/search-vectors
+                  key: search-vectors-${{ github.sha }}
+                  restore-keys: search-vectors-
+            - run: pnpm exec vp run --ignore-depends-on asm-editor#build
+            - if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+              uses: actions/upload-artifact@v7
+              with:
+                  name: site
+                  path: build
+                  if-no-files-found: error
+                  retention-days: 1
+
+    # The one check branch protection requires, so renaming or sharding the jobs above never
+    # changes what a merge waits for.
+    passed:
+        name: CI passed
+        if: ${{ !cancelled() }}
+        needs: [lint, cores, check, test, runtime, site]
+        runs-on: ubuntu-latest
+        steps:
+            - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+              run: exit 1
+
+    deploy:
+        name: Deploy
+        needs: passed
+        # A fork's pull request gets no secrets, so no preview.
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-latest
+        environment:
+            name: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+            url: ${{ github.event_name == 'push' && 'https://asm-editor.specy.app' || steps.publish.outputs.pages-deployment-alias-url }}
+        steps:
+            # For the Wrangler the lockfile pins, installed before the token is in any step.
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true
+            - uses: ./.github/actions/setup-workspace
+            - uses: actions/download-artifact@v8
+              with:
+                  name: site
+                  path: build
+            - id: publish
+              uses: cloudflare/wrangler-action@v4
+              with:
+                  apiToken: ${{ secrets.CF_PAGES_TOKEN }}
+                  accountId: ${{ secrets.CF_ACCOUNT_ID }}
+                  # main is the production branch; a pull request deploys as its own branch, and
+                  # the commit is its head, not the merge commit the run checked out.
+                  command: pages deploy ./build/ --project-name=asm-editor --branch=${{ github.head_ref || github.ref_name }} --commit-hash=${{ github.event.pull_request.head.sha || github.sha }}

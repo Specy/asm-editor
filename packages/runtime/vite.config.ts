@@ -10,6 +10,12 @@ const CORES = [
 export default defineConfig({
     run: {
         tasks: {
+            // The ABI guard's unit test; `scripts/build.mjs` loads the x86 Core when imported.
+            test: {
+                command: 'node --test scripts/abi-check.test.mjs',
+                dependsOn: ['asm-editor-monorepo#build:x86'],
+                cache: false
+            },
             // Compiles the library through Compiler Explorer and writes `generated/`.
             generate: { command: 'node scripts/build.mjs', dependsOn: CORES, cache: false },
             // Fails when `generated/` no longer matches the sources or the ABI baseline.
