@@ -3,24 +3,6 @@ import { CURRENT_RUNTIME_ABI, isShippedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import { isCompilationTarget, type CompilationTarget } from './records'
 
 /** Header availability shared by Compile and source help; no compiler or Core imports. */
-export const X86_HEADERS = {
-    c: [
-        'stddef.h',
-        'stdint.h',
-        'stdbool.h',
-        'stdarg.h',
-        'limits.h',
-        'float.h',
-        'iso646.h',
-        'stdnoreturn.h'
-    ],
-    cpp: ['cstddef', 'cstdint', 'climits', 'cfloat', 'cstdarg', 'new']
-} as const
-export const X86_HEADER_NAMES: ReadonlySet<string> = new Set([
-    ...X86_HEADERS.c,
-    ...X86_HEADERS.cpp,
-    'sim.h'
-])
 export const HOSTED_C_HEADERS = [
     'assert.h',
     'ctype.h',
@@ -72,15 +54,14 @@ export function compilerCapabilities(
     abi: string = CURRENT_RUNTIME_ABI
 ): CompilerCapabilities | undefined {
     if (!isCompilationTarget(target)) return undefined
-    const hosted = target !== 'X86'
-    const headerAbi = hosted ? abi : CURRENT_RUNTIME_ABI
+    const headerAbi = abi
     const available = isShippedRuntimeAbi(headerAbi)
-    const c = available ? [...(hosted ? HOSTED_C_HEADERS : X86_HEADERS.c), 'sim.h'] : ['sim.h']
-    const cpp = available ? [...c, ...(hosted ? HOSTED_CPP_HEADERS : X86_HEADERS.cpp)] : ['sim.h']
+    const c = available ? [...HOSTED_C_HEADERS, 'sim.h'] : ['sim.h']
+    const cpp = available ? [...c, ...HOSTED_CPP_HEADERS] : ['sim.h']
     return Object.freeze({
         target,
         headerAbi,
-        ...(hosted ? { runtimeAbi: abi } : {}),
+        runtimeAbi: abi,
         catalogRevision: SOURCE_HELP_REVISION,
         headers: Object.freeze({ c: Object.freeze(c), cpp: Object.freeze(cpp) })
     })

@@ -1552,12 +1552,12 @@
                 "labels": []
             },
             {
-                "text": ".LASF6:",
+                "text": ".LASF4:",
                 "source": null,
                 "labels": []
             },
             {
-                "text": "        .string \"twice\"",
+                "text": "        .string \"GNU C++17 14.2.0 -masm=intel -masm=intel -march=x86-64 -mtune=generic -g -g1 -O2 -std=c++17 -fno-section-anchors -fno-pie -fno-stack-protector -fcf-protection=none -fno-exceptions -fno-rtti -fno-threadsafe-statics\"",
                 "source": null,
                 "labels": []
             },
@@ -1582,22 +1582,22 @@
                 "labels": []
             },
             {
-                "text": ".LASF4:",
-                "source": null,
-                "labels": []
-            },
-            {
-                "text": "        .string \"GNU C++17 14.2.0 -masm=intel -masm=intel -march=x86-64 -mtune=generic -g -g1 -O2 -std=c++17 -fno-section-anchors -ffreestanding -fno-pie -fno-stack-protector -fcf-protection=none -fno-exceptions -fno-rtti -fno-threadsafe-statics\"",
-                "source": null,
-                "labels": []
-            },
-            {
                 "text": ".LASF5:",
                 "source": null,
                 "labels": []
             },
             {
                 "text": "        .string \"main\"",
+                "source": null,
+                "labels": []
+            },
+            {
+                "text": ".LASF6:",
+                "source": null,
+                "labels": []
+            },
+            {
+                "text": "        .string \"twice\"",
                 "source": null,
                 "labels": []
             },
@@ -1639,6 +1639,6 @@
         ],
         "stderr": []
     },
-    "captured": "2026-10-05",
+    "captured": "2026-10-11",
     "hosted": false
 }

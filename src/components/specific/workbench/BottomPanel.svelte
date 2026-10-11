@@ -27,7 +27,7 @@
 
     let { actions, open = true, style = '' }: Props = $props()
 
-    const { session } = useWorkbench()
+    const { session, ui } = useWorkbench()
     const problems = $derived(session.activeDiagnostics.length)
     const terminal = session.emulator.peripherals.terminal
     const interactive = $derived(session.emulator.canExecute && !session.emulator.terminated)
@@ -76,8 +76,9 @@
             </button>
         {/each}
         <div class="spacer"></div>
-        {#if session.runInfo}
-            <span class="run-info">{session.runInfo}</span>
+        <!-- a phone's strip has no room for it beside the tabs; the Log says it too -->
+        {#if session.runInfo && ui.deviceClass !== 'phone'}
+            <span class="run-info" title={session.runInfo}><span>{session.runInfo}</span></span>
         {/if}
         {@render actions?.()}
     </div>
@@ -222,9 +223,17 @@
     .run-info {
         display: flex;
         align-items: center;
+        min-width: 0;
         padding: 0 0.9rem 0 0.6rem;
         font-size: 0.78rem;
         color: var(--hint);
+
+        /* one line, cut short rather than wrapped in a strip one line tall */
+        > span {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
     }
 
     .tab-body {

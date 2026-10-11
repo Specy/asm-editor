@@ -47,7 +47,7 @@
         "@specy/mips": "4.2.1",
         "@specy/risc-v": "4.2.2",
         "@specy/s68k": "3.1.2",
-        "@specy/x86": "6.1.2",
+        "@specy/x86": "6.2.0",
         "@specy/z80": "1.2.1",
         "@ungap/structured-clone": "^1.4.0",
         "carta-md": "^4.11.3",

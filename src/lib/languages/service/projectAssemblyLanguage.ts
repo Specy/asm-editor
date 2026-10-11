@@ -487,7 +487,10 @@ export function createProjectDefinitionProvider(
             const definitions = sourceSymbols(context.sources, options).filter(
                 (symbol) => symbol.name === token.name
             )
-            if (definitions.length === 0 && options.dialect === 'mars') {
+            if (
+                definitions.length === 0 &&
+                (options.dialect === 'mars' || options.dialect === 'x86')
+            ) {
                 //a function of the Runtime library the Build links: its member, read-only
                 const library = runtimeDefinition(
                     context.sources.runtimeAbi,

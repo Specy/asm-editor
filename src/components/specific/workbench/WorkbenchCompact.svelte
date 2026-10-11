@@ -16,7 +16,11 @@
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
-    import { makeColorizedLabels } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import {
+        makeColorizedLabels,
+        RegisterSize
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import TopBar from './TopBar.svelte'
@@ -46,6 +50,13 @@
     const phone = $derived(ui.deviceClass === 'phone')
     const hasScreen = $derived(languageHasScreen(language))
     const tools = $derived(debugTools(emulator.memory.tabs))
+    //the registers are as wide as the CPU file asks at the grouping picked, as in the desktop's
+    //column, and never give up any of it; a single file has no tabs and asks for its content
+    let registersSize = $state(RegisterSize.Word)
+    const registersWidth = $derived(registerColumnWidth(emulator.registerFiles, registersSize))
+    //a page of memory, which the registers fill beside it and are no taller than under it
+    let memoryBox: readonly ResizeObserverSize[] | undefined = $state()
+    const memoryHeight = $derived(memoryBox?.[0]?.blockSize ?? 0)
     const bottomOpen = $derived(!workbenchLayout.isCollapsed('compact:bottom', false))
     const readWaiting = $derived(emulator.peripherals.terminal.pendingRead?.source === 'terminal')
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
@@ -138,10 +149,15 @@
                 <div class="debug-sections" class:hidden={!session.debugSession}>
                     <CollapsibleSection id="compact:registers" title="Registers & memory">
                         <div class="registers-memory">
-                            <div class="card registers">
-                                <RegistersArea />
+                            <div
+                                class="card registers"
+                                style:width={registersWidth || undefined}
+                                style:min-width={registersWidth || undefined}
+                                style:max-height={memoryHeight ? `${memoryHeight}px` : undefined}
+                            >
+                                <RegistersArea style="flex: 1;" bind:size={registersSize} />
                             </div>
-                            <div class="card memory">
+                            <div class="card memory" bind:borderBoxSize={memoryBox}>
                                 <div class="memory-controls">
                                     <MemoryControls
                                         {emulator}
@@ -337,26 +353,26 @@
         }
     }
 
-    /* past about twice the screen, the Debug session's sections scroll inside themselves */
     .debug-sections.hidden {
         display: none;
     }
 
+    /* the sections grow with what is open in them: the column is what scrolls, never them */
     .debug-sections {
         display: flex;
         flex-direction: column;
         gap: var(--wb-gap);
         flex: none;
-        max-height: calc(var(--screen-height) * 1.1);
-        overflow-y: auto;
     }
 
-    /* registers beside memory, as tall as a page of memory and no taller: the registers fill that
-       height and scroll inside, the row scrolls sideways when the screen is narrower than both */
+    /* registers beside memory when both fit, memory under them when not. Beside it the registers
+       fill the height of its page and scroll inside; above it they are as tall as their list, up
+       to a page. Beside each other memory takes the width left, and alone on its line each fills
+       it; the row scrolls sideways only when one of them is wider than the screen */
     .registers-memory {
-        display: grid;
-        grid-template-columns: auto auto;
-        gap: var(--wb-gap);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem var(--wb-gap);
         padding: 0.3rem;
         overflow-x: auto;
     }
@@ -369,9 +385,14 @@
     }
 
     .registers {
-        height: 0;
-        min-height: 100%;
-        min-width: 11rem;
+        flex: 1 0 auto;
+        min-width: max-content;
+    }
+
+    /* never stretched to the registers' height, which is measured from this one */
+    .memory {
+        flex: 1000 1 auto;
+        align-self: flex-start;
     }
 
     /* each section is as tall as what it holds, not as the tallest in its row */

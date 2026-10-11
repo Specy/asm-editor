@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Recaptures the editor's Compiler Explorer fixtures (src/lib/sourceCompilation/fixtures): the same
-// request the editor sends, compiled against the Runtime library's headers, or for x86, which has
-// no Runtime library yet, against its freestanding ones alone. Each fixture keeps its source,
+// request the editor sends, compiled against the Runtime library's headers. Each fixture keeps its source,
 // headers and expected result; only `response` changes.
 //
 //   node scripts/runtime/capture-compile-fixtures.mjs [--target MIPS,RISC-V,RISC-V-64,X86]
@@ -21,22 +20,7 @@ const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const fixtures = join(repository, 'src', 'lib', 'sourceCompilation', 'fixtures')
 const include = join(repository, 'runtime', 'include')
 const TARGETS = ['RISC-V', 'RISC-V-64', 'MIPS', 'X86']
-const X86_HEADERS = [
-    'stddef.h',
-    'stdint.h',
-    'stdbool.h',
-    'stdarg.h',
-    'limits.h',
-    'float.h',
-    'iso646.h',
-    'stdnoreturn.h',
-    'cstddef',
-    'cstdint',
-    'climits',
-    'cfloat',
-    'cstdarg',
-    'new'
-]
+
 /** The Environment library's header each Target's compile uploads as `sysroot/include/sim.h`. */
 const SIM_HEADERS = {
     MIPS: 'mips.h',
@@ -73,11 +57,7 @@ for (const name of readdirSync(fixtures)
     const standard = compilerLanguageFlags(language, profile)
     //and the Target's own <sim.h>
     const headers = [
-        ...(x86
-            ? sysroot.filter(({ filename }) =>
-                  X86_HEADERS.includes(filename.slice('sysroot/include/'.length))
-              )
-            : sysroot),
+        ...sysroot,
         {
             filename: 'sysroot/include/sim.h',
             contents: readFileSync(

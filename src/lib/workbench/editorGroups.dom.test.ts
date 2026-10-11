@@ -467,7 +467,7 @@ describe('independent editor groups', () => {
         expect(second.recompilationNeeded).toBe(true)
         expect(second.compilationNotice).toContain('Runtime ABI v9')
     })
-    it('offers Recompile for x86 assembly compiled against any Runtime ABI, which x86 lacks', () => {
+    it('links x86 assembly compiled against Runtime ABI v1, and offers Recompile for one it lacks', () => {
         const fixture = setup('X86'),
             { session } = fixture
         const second = openSecond(session, 'main.s')
@@ -480,12 +480,18 @@ describe('independent editor groups', () => {
         expect(session.sourceInput.assemblyError).toBeUndefined()
         fixture.project.recordCompilation({ ...record, runtimeAbi: 'v1' }, map)
         flushSync()
+        expect(second.unsupportedRuntimeAbi).toBe(false)
+        expect(session.sourceInput.runtimeAbi).toBe('v1')
+        expect(session.sourceInput.entrySymbol).toBe('_start')
+        expect(session.sourceInput.assemblyError).toBeUndefined()
+        fixture.project.recordCompilation({ ...record, runtimeAbi: 'v9' }, map)
+        flushSync()
         expect(second.unsupportedRuntimeAbi).toBe(true)
         expect(second.recompilationNeeded).toBe(true)
-        expect(second.compilationNotice).toContain('no x86 Runtime library')
+        expect(second.compilationNotice).toContain('which this editor does not provide')
         //and the Build is refused for the same reason
         expect(session.sourceInput.entrySymbol).toBeUndefined()
-        expect(session.sourceInput.assemblyError).toContain('Recompile main.c')
+        expect(session.sourceInput.assemblyError).toContain('Recompile its source')
     })
     it('offers Recompile in the notice when only the Source map is missing', () => {
         const fixture = setup(),

@@ -51,7 +51,6 @@ export function compilerCodeFlags(compiler, optimization, sourceAnnotations = fa
             `-O${optimization}`,
             '-fdiagnostics-color=never',
             '-fno-section-anchors',
-            '-ffreestanding',
             ...profile.flags.translation,
             ...profile.flags.locations
         ].join(' ')
@@ -76,7 +75,8 @@ export const RUNTIME_TARGETS = Object.fromEntries(
     [
         ['riscv32', 'RISC-V', 'risc-v', 32],
         ['riscv64', 'RISC-V-64', 'risc-v', 64],
-        ['mips', 'MIPS', 'mips', 32]
+        ['mips', 'MIPS', 'mips', 32],
+        ['x86_64', 'X86', 'x86', 64]
     ].map(([arch, language, core, width]) => [
         arch,
         {
@@ -84,11 +84,16 @@ export const RUNTIME_TARGETS = Object.fromEntries(
             language,
             core,
             width,
+            //x86's preset takes the translator's profile, which this module does not load: its
+            //compilers, and the target and Intel-syntax flags of GCC_INTEL_V1 the translator reads
             compilers: {
-                c: compilerPreset(language, 'c', 'gcc').id,
-                cpp: compilerPreset(language, 'cpp', 'gcc').id
+                c: language === 'X86' ? 'cg142' : compilerPreset(language, 'c', 'gcc').id,
+                cpp: language === 'X86' ? 'g142' : compilerPreset(language, 'cpp', 'gcc').id
             },
-            flags: compilerPreset(language, 'c', 'gcc').architecture
+            flags:
+                language === 'X86'
+                    ? '-march=x86-64 -mtune=generic -masm=intel -fcf-protection=none'
+                    : compilerPreset(language, 'c', 'gcc').architecture
         }
     ])
 )

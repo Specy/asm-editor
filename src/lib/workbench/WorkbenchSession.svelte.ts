@@ -170,7 +170,7 @@ export class WorkbenchSession {
     runtimeMemberFile(path: string): ProjectFile | undefined {
         const built = this.emulator.buildLibraryFiles?.[path]
         if (built) return built
-        //x86 has no Runtime library yet, only the start unit its compiled programs link
+        //x86 programs compiled before x86 had a Runtime library link the start unit instead
         if (path === X86_START_UNIT_PATH && this.project.language === 'X86')
             return linksX86StartUnit(this.sourceInput) ? X86_START_UNIT_FILES[path] : undefined
         const source = parseRuntimeSourcePath(path)

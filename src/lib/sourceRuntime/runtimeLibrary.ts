@@ -55,7 +55,8 @@ type Loader = () => Promise<{ default: unknown }>
 const LOADERS: Record<string, Loader> = {
     'v1:RISC-V': () => import('./generated/v1/riscv32.json'),
     'v1:RISC-V-64': () => import('./generated/v1/riscv64.json'),
-    'v1:MIPS': () => import('./generated/v1/mips.json')
+    'v1:MIPS': () => import('./generated/v1/mips.json'),
+    'v1:X86': () => import('./generated/v1/x86_64.json')
 }
 
 const FUNCTION_LOADERS: Record<string, Loader> = {
@@ -202,7 +203,12 @@ export function coreLibrary(data: RuntimeLibraryData) {
     return { members: data.members, index: data.index, resolveWeak: data.resolveWeak ?? [] }
 }
 
-const UNRESOLVED = [/^Unresolved symbol: (\S+)$/, /^Symbol "([^"]+)" not found in symbol table\.?$/]
+const UNRESOLVED = [
+    /^Unresolved symbol: (\S+)$/,
+    /^Symbol "([^"]+)" not found in symbol table\.?$/,
+    //x86's linker
+    /^undefined reference to `([^']+)'$/
+]
 
 /** The name an "undefined symbol" Diagnostic is about, or undefined for any other message. */
 export function unresolvedSymbol(message: string): string | undefined {

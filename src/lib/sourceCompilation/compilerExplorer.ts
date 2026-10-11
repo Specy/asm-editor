@@ -16,7 +16,6 @@ import {
     type CompilationSourceMap,
     type CompilationTarget,
     type Optimization,
-    type SourceLanguage,
     type SourceCompiler,
     type SourceLocation
 } from './records'
@@ -34,7 +33,6 @@ import type {
     TranslationProfile,
     translateCompilerOutput
 } from '@specy/x86/compiler-output'
-import { X86_HEADERS, X86_HEADER_NAMES } from './capabilities'
 
 const API_ROOT = 'https://godbolt.org/api'
 export const COMPILE_BYTE_LIMIT = 1024 * 1024
@@ -86,11 +84,6 @@ export class SourceCompilationError extends Error {
     }
 }
 
-/**
- * Runtime ABI v1's freestanding headers, the only ones of the library an x86 program gets until x86
- * has a Runtime library. They are written on GCC's predefined macros, so they describe x86-64 as
- * they are. `<sim.h>`, the Environment library, comes with them.
- */
 /**
  * What x86 compilation uses of `@specy/x86/compiler-output`, which only an x86 compilation loads,
  * so no other Target's users download the translator.
@@ -266,11 +259,7 @@ function compilerDiagnostics(
  * The caller adds the Target's `<sim.h>` to the sysroot (`compileSource` does).
  * Project Files are found by quoted includes only (`-iquote`, from the source's directory and from
  * the Project root), so a Project's `stdio.h` or `sim.h` never shadows `<stdio.h>` or `<sim.h>`.
- * An x86 program is freestanding until x86 has a Runtime library: only the library's freestanding
- * headers and `<sim.h>` are uploaded, and it compiles exactly as the corpus its translation is
- * verified on did, with the translation profile's flags and `-ffreestanding`, under which GCC
- * still gives `main` its implicit `return 0`. The profile is the caller's to pass, as it comes with
- * the translator.
+ * x86 uses the same Runtime ABI headers, translating GCC's output to NASM with its pinned profile.
  */
 export function createCompilerRequest(
     request: CompilationRequest,
@@ -329,12 +318,10 @@ export function createCompilerRequest(
         files: [
             upload(request.sourcePath, source.content),
             ...headers.map(([path, file]) => upload(path, file.content)),
-            ...Object.entries(sysroot)
-                .filter(([path]) => !x86 || X86_HEADER_NAMES.has(path))
-                .map(([path, contents]) => ({
-                    filename: `${SYSROOT_INCLUDE}/${path}`,
-                    contents
-                }))
+            ...Object.entries(sysroot).map(([path, contents]) => ({
+                filename: `${SYSROOT_INCLUDE}/${path}`,
+                contents
+            }))
         ]
     }
     const json = JSON.stringify(body)
@@ -479,35 +466,6 @@ function translationDiagnostic(
     return entry
 }
 
-/** "a, b and c" */
-function listed(items: readonly string[]) {
-    return items.length > 1
-        ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
-        : items[0]
-}
-
-/**
- * Explain a standard header the Runtime library has but an x86 program cannot include yet, whose
- * error alone reads as a misspelt include, and point to `<sim.h>` for what the missing library does.
- */
-function x86HeaderHint(
-    item: Diagnostic,
-    language: SourceLanguage,
-    runtimeHeaders: Readonly<Record<string, string>>
-) {
-    const header = /^(.+): No such file or directory$/.exec(item.message)?.[1]
-    if (
-        item.severity !== 'error' ||
-        !header ||
-        !Object.prototype.hasOwnProperty.call(runtimeHeaders, header) ||
-        X86_HEADER_NAMES.has(header)
-    )
-        return
-    const headers = language === 'cpp' ? [...X86_HEADERS.cpp, ...X86_HEADERS.c] : X86_HEADERS.c
-    item.hint = `x86 programs have no C standard library yet, so they can include only ${listed([...headers, ENVIRONMENT_HEADER])}. <${ENVIRONMENT_HEADER}> has a function for each Linux system call: sim_write(1, text, length) prints.`
-    item.formatted = `${item.message}\n${item.hint}`
-}
-
 export const compilerExplorerDriver: CompilerDriver = {
     name: 'Compiler Explorer',
     compile: (request, signal) => compileSource(request, signal)
@@ -556,8 +514,6 @@ export async function compileSource(
         Array.isArray(items) ? items : []
     )
     const diagnostics = compilerDiagnostics(messages, request, result.code !== 0, readOnly)
-    if (request.target === 'X86')
-        for (const item of diagnostics) x86HeaderHint(item, prepared.language, runtimeHeaders)
     if (result.code !== 0 || result.timedOut || result.truncated) {
         throw new SourceCompilationError(
             result.timedOut
@@ -614,13 +570,8 @@ export async function compileSource(
     return {
         assembly: output.assembly,
         record: {
-            //x86 output is NASM, and links the editor's start unit until x86 has a Runtime library
-            ...(request.target === 'X86'
-                ? {}
-                : {
-                      assemblerProfile: 'gnu-compiler-v1' as const,
-                      runtimeAbi: CURRENT_RUNTIME_ABI
-                  }),
+            runtimeAbi: CURRENT_RUNTIME_ABI,
+            ...(request.target === 'X86' ? {} : { assemblerProfile: 'gnu-compiler-v1' as const }),
             sourcePath: request.sourcePath,
             outputPath: request.outputPath,
             target: request.target,

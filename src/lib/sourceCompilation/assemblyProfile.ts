@@ -9,6 +9,7 @@ import {
     isRuntimeLibrarySetting,
     RUNTIME_ENTRY_SYMBOL,
     RUNTIME_NAMESPACE,
+    unsupportedRuntimeAbi,
     type RuntimeLibrarySetting
 } from '#lib/runtimeAbi.ts'
 import type { CompilationRecord } from './records'
@@ -114,34 +115,39 @@ export function resolveRuntimeLink(
 
 /**
  * A compiled x86 Entry receives a startup object. Other compiled Files receive the trailing
- * support archive without replacing the Entry's _start. A Runtime ABI recorded by a future
- * compiler still needs recompilation until x86 has that library.
+ * support archive without replacing the Entry's _start. New compilations use the Runtime
+ * library; records without an ABI retain the original freestanding startup and support.
  */
 export function resolveX86Start(
     sources: BuildSources,
-    records: readonly CompilationRecord[] | undefined
-): Pick<BuildSources, 'entrySymbol' | 'x86Support'> {
+    records: readonly CompilationRecord[] | undefined,
+    setting?: RuntimeLibrarySetting
+): Pick<BuildSources, 'entrySymbol' | 'x86Support' | 'runtimeAbi'> {
     const compiled = (records ?? []).filter(
         (record) =>
             record.target === 'X86' &&
             Object.prototype.hasOwnProperty.call(sources.files, record.outputPath)
     )
-    if (!compiled.length) return {}
-    const hosted = compiled.find((record) => record.runtimeAbi !== undefined)
-    if (hosted)
-        throw new ProjectFormatError(
-            `${hosted.outputPath} was compiled against Runtime ABI ${hosted.runtimeAbi}, and this editor has no x86 Runtime library. Recompile ${hosted.sourcePath} to build it.`
-        )
+    const required = new Set(
+        compiled.flatMap((record) => (record.runtimeAbi ? [record.runtimeAbi] : []))
+    )
+    if (required.size > 1)
+        throw new ProjectFormatError('Conflicting required Runtime ABIs in the x86 project')
+    const runtimeAbi =
+        required.values().next().value ?? (setting && setting !== 'off' ? setting : undefined)
+    if (runtimeAbi) {
+        const problem = unsupportedRuntimeAbi(runtimeAbi, required.size > 0)
+        if (problem) throw new ProjectFormatError(problem)
+    }
+    if (!compiled.length && !runtimeAbi) return {}
     const shadowed = Object.keys(sources.files).find((path) => path.startsWith(RUNTIME_NAMESPACE))
     if (shadowed)
         throw new ProjectFormatError(
             `${shadowed} is inside ${RUNTIME_NAMESPACE}, which the start code of compiled programs reserves. Move it to link the start code.`
         )
     return {
-        x86Support: true,
-        ...(compiled.some((record) => record.outputPath === sources.entry)
-            ? { entrySymbol: RUNTIME_ENTRY_SYMBOL }
-            : {})
+        ...(runtimeAbi ? { runtimeAbi } : { x86Support: true }),
+        ...(reachableRecords(sources, compiled).length ? { entrySymbol: RUNTIME_ENTRY_SYMBOL } : {})
     }
 }
 

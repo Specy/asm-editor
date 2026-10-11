@@ -6,8 +6,8 @@
     "sourcePath": "src/main.c",
     "source": "#include <sim.h>\n\n/* A string literal's bytes, without the NUL that ends it. */\n#define PRINT(text) sim_write(1, text, sizeof(text) - 1)\n\nstatic char line[32];\n\n/* A number in decimal, with its sign. */\nstatic void print_number(long value) {\n    char digits[24];\n    int at = (int)sizeof digits;\n    unsigned long magnitude = value < 0 ? 0ul - (unsigned long)value : (unsigned long)value;\n    do {\n        digits[--at] = (char)('0' + magnitude % 10);\n        magnitude /= 10;\n    } while (magnitude != 0);\n    if (value < 0) digits[--at] = '-';\n    sim_write(1, digits + at, (long)sizeof digits - at);\n}\n\nint main(void) {\n    PRINT(\"name? \");\n    long length = sim_read(0, line, sizeof line);\n    PRINT(\"hello \");\n    sim_write(1, line, length);\n\n    if (sim_getpid() > 0) PRINT(\"pid positive\\n\");\n    else PRINT(\"pid missing\\n\");\n\n    long now[2]; /* a struct timespec: seconds, then nanoseconds */\n    PRINT(\"clock \");\n    print_number(sim_clock_gettime(1 /* CLOCK_MONOTONIC */, now));\n    if (now[1] >= 0 && now[1] < 1000000000) PRINT(\" ok\\n\");\n    else PRINT(\" out of range\\n\");\n\n    /* the kernel's own result: -9, EBADF, for a descriptor that is not open */\n    PRINT(\"bad descriptor \");\n    print_number(sim_write(99, line, 1));\n    PRINT(\"\\n\");\n\n    sim_exit_group(length);\n}\n",
     "compilerId": "cg142",
-    "userArguments": "-O0 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -iquote . -std=c17",
-    "captured": "2026-10-06",
+    "userArguments": "-O0 -fdiagnostics-color=never -fno-section-anchors -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.c' -std=c17",
+    "captured": "2026-10-11",
     "response": {
         "code": 0,
         "stderr": [],
@@ -618,10 +618,6 @@
             ["        .section        .debug_str,\"MS\",@progbits,1"],
             [".LASF5:"],
             ["        .string \"sim_write\""],
-            [".LASF7:"],
-            [
-                "        .string \"GNU C17 14.2.0 -masm=intel -masm=intel -march=x86-64 -mtune=generic -g -g1 -O0 -std=c17 -fno-section-anchors -ffreestanding -fno-pie -fno-stack-protector -fcf-protection=none\""
-            ],
             [".LASF2:"],
             ["        .string \"print_number\""],
             [".LASF9:"],
@@ -632,6 +628,10 @@
             ["        .string \"sim_getpid\""],
             [".LASF6:"],
             ["        .string \"sim_read\""],
+            [".LASF7:"],
+            [
+                "        .string \"GNU C17 14.2.0 -masm=intel -masm=intel -march=x86-64 -mtune=generic -g -g1 -O0 -std=c17 -fno-section-anchors -fno-pie -fno-stack-protector -fcf-protection=none\""
+            ],
             [".LASF8:"],
             ["        .string \"main\""],
             ["        .section        .debug_line_str,\"MS\",@progbits,1"],

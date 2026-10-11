@@ -112,7 +112,7 @@ describe('the captured x86 <sim.h> compiles', () => {
             expect(files.find((file) => file.filename === 'sysroot/include/sim.h')?.contents).toBe(
                 header
             )
-            expect(files.map((file) => file.filename)).not.toContain('sysroot/include/stdio.h')
+            expect(files.map((file) => file.filename)).toContain('sysroot/include/stdio.h')
         }
     )
 })

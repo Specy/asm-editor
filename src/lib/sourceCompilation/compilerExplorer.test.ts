@@ -118,7 +118,7 @@ describe('real Compiler Explorer output', () => {
                 expect(result.map.lines[0]).toBeNull()
                 expect(result.map.lines[assembly.indexOf('main:')]).toBeNull()
                 expect(result.record).not.toHaveProperty('assemblerProfile')
-                expect(result.record).not.toHaveProperty('runtimeAbi')
+                expect(result.record.runtimeAbi).toBe('v1')
             } else {
                 expect(result.map.lines.slice(0, 6).every((location) => location === null)).toBe(
                     true
@@ -541,24 +541,8 @@ describe('x86 compilation', () => {
             () => expect.unreachable('the compilation succeeded'),
             (error: SourceCompilationError) => error
         )
-    const FREESTANDING = [
-        'stddef.h',
-        'stdint.h',
-        'stdbool.h',
-        'stdarg.h',
-        'limits.h',
-        'float.h',
-        'iso646.h',
-        'stdnoreturn.h',
-        'cstddef',
-        'cstdint',
-        'climits',
-        'cfloat',
-        'cstdarg',
-        'new'
-    ]
 
-    it("asks GCC 14.2 for its translation profile's output, with only the freestanding headers", async () => {
+    it("asks GCC 14.2 for its translation profile's output, with the Runtime ABI headers", async () => {
         const headers = await loadRuntimeHeaders('v1')
         const c = createCompilerRequest(x86(), headers, GCC_INTEL_V1)
         expect(c.compilerId).toBe('cg142')
@@ -567,7 +551,7 @@ describe('x86 compilation', () => {
             contents: '#line 1 "src/main.c"\nint main(void) { return 0; }\n'
         })
         expect(c.body.options.userArguments).toBe(
-            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.c' -std=c17"
+            "-O2 -fdiagnostics-color=never -fno-section-anchors -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.c' -std=c17"
         )
         //the translation reads GCC's raw output, its .file and .loc directives included
         expect(Object.values(c.body.options.filters).every((filter) => filter === false)).toBe(true)
@@ -575,7 +559,7 @@ describe('x86 compilation', () => {
             [
                 'project/src/main.c',
                 'project/src/values.h',
-                ...FREESTANDING.map((name) => `sysroot/include/${name}`)
+                ...Object.keys(headers).map((name) => `sysroot/include/${name}`)
             ].sort()
         )
         expect(c.body.files).toContainEqual({
@@ -589,7 +573,7 @@ describe('x86 compilation', () => {
         )
         expect(cpp.compilerId).toBe('g142')
         expect(cpp.body.options.userArguments).toBe(
-            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.cpp' -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++"
+            "-O2 -fdiagnostics-color=never -fno-section-anchors -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'project/src' -iquote project -include 'project/src/main.cpp' -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++"
         )
     })
 
@@ -602,7 +586,7 @@ describe('x86 compilation', () => {
                 'project/src/main.c',
                 'project/src/values.h',
                 'sysroot/include/sim.h',
-                ...FREESTANDING.map((name) => `sysroot/include/${name}`)
+                ...Object.keys(headers).map((name) => `sysroot/include/${name}`)
             ].sort()
         )
         expect(c.body.files).toContainEqual({
@@ -663,6 +647,7 @@ describe('x86 compilation', () => {
         })
         expect(result.map.lines[result.map.lines.length - 1]).toBeNull()
         expect(result.record).toEqual({
+            runtimeAbi: 'v1',
             sourcePath: 'src/main.c',
             outputPath: 'src/main.c.asm',
             target: 'X86',
@@ -849,34 +834,12 @@ describe('x86 compilation', () => {
         ])
     })
 
-    it('explains a standard header x86 programs cannot include yet', async () => {
-        const missing = (header: string, sourcePath = 'src/main.c') => ({
+    it('reports unavailable headers without claiming x86 lacks a runtime', async () => {
+        const error = await failure(x86('#include <vector>\n'), {
             code: 1,
-            stderr: [
-                { text: `${sourcePath}:1:10: fatal error: ${header}: No such file or directory` },
-                { text: 'compilation terminated.' }
-            ]
+            stderr: [{ text: 'src/main.c:1:10: fatal error: vector: No such file or directory' }]
         })
-        const [c] = (await failure(x86('#include <stdio.h>\n'), missing('stdio.h'))).diagnostics
-        expect(c).toMatchObject({
-            severity: 'error',
-            file: 'src/main.c',
-            lineIndex: 0,
-            column: 10,
-            message: 'stdio.h: No such file or directory',
-            hint: 'x86 programs have no C standard library yet, so they can include only stddef.h, stdint.h, stdbool.h, stdarg.h, limits.h, float.h, iso646.h, stdnoreturn.h and sim.h. <sim.h> has a function for each Linux system call: sim_write(1, text, length) prints.'
-        })
-        expect(c.formatted).toBe(`${c.message}\n${c.hint}`)
-        const cpp = x86('#include <cstdio>\n', 'src/main.cpp')
-        const [header] = (await failure(cpp, missing('cstdio', 'src/main.cpp'))).diagnostics
-        expect(header.hint).toBe(
-            'x86 programs have no C standard library yet, so they can include only cstddef, cstdint, climits, cfloat, cstdarg, new, stddef.h, stdint.h, stdbool.h, stdarg.h, limits.h, float.h, iso646.h, stdnoreturn.h and sim.h. <sim.h> has a function for each Linux system call: sim_write(1, text, length) prints.'
-        )
-        //a header no Runtime library has is an ordinary error, as on every Target
-        const [vector] = (await failure(cpp, missing('vector', 'src/main.cpp'))).diagnostics
-        expect(vector.hint).toBeUndefined()
-        const riscv = { ...x86(), target: 'RISC-V' as const, outputPath: 'src/main.c.riscv' }
-        const [hosted] = (await failure(riscv, missing('stdio.h'))).diagnostics
-        expect(hosted.hint).toBeUndefined()
+        expect(error.diagnostics[0].message).toBe('vector: No such file or directory')
+        expect(error.diagnostics[0].hint).toBeUndefined()
     })
 })

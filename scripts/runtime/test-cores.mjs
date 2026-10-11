@@ -6,7 +6,7 @@
 // exit status and Files must equal what the same program did against the host's glibc, which
 // runtime/scripts/test-native.mjs stored under runtime/tests/expected/<name>/.
 //
-//   node scripts/runtime/test-cores.mjs [--target riscv32,riscv64,mips] [--only a,b] [--optimization 0,2] [--compiler gcc|clang] [--offline]
+//   node scripts/runtime/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only a,b] [--optimization 0,2] [--compiler gcc|clang] [--offline]
 //
 // Compiler Explorer responses are cached under runtime/.cache/corpus by a hash of the request, so a
 // rerun needs no network unless a program, a header or the flags changed; --offline fails instead.
@@ -21,6 +21,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { GCC_INTEL_V1, makeX86Core, prepareX86 } from './x86.mjs'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const runtime = join(repository, 'runtime')
@@ -37,7 +38,17 @@ const option = (name) => {
     const index = args.indexOf(name)
     return index === -1 ? undefined : args[index + 1]
 }
-const targets = (option('--target') ?? Object.keys(TARGETS).join(',')).split(',')
+const compiler = option('--compiler') ?? 'gcc'
+if (compiler !== 'gcc' && compiler !== 'clang') throw new Error(`Unknown compiler ${compiler}`)
+//x86's translation to NASM is verified on GCC's output alone, so Clang runs leave it out
+const targets =
+    option('--target')?.split(',') ??
+    Object.keys(TARGETS).filter((target) => compiler === 'gcc' || TARGETS[target].core !== 'x86')
+for (const target of targets) {
+    if (!TARGETS[target]) throw new Error(`Unknown target ${target}`)
+    if (compiler === 'clang' && TARGETS[target].core === 'x86')
+        throw new Error(`${target} compiles with GCC alone; run it without --compiler clang`)
+}
 const only = option('--only')?.split(',')
 const optimizations = (option('--optimization') ?? '0,2').split(',')
 const offline = args.includes('--offline')
@@ -56,8 +67,6 @@ const fixtureNames = new Set([
     'hosted_argv'
 ])
 const fixtureRoot = join(runtime, 'abi', 'v1-fixtures')
-const compiler = option('--compiler') ?? 'gcc'
-if (compiler !== 'gcc' && compiler !== 'clang') throw new Error(`Unknown compiler ${compiler}`)
 
 const read = (path) => readFileSync(path, 'utf8')
 const sha = (text) => createHash('sha256').update(text).digest('hex')
@@ -74,8 +83,9 @@ function walk(directory) {
 /** The editor's compile request for a hosted program (createCompilerRequest in compilerExplorer.ts). */
 function request(target, name, source, language, optimization, headers) {
     const settings = TARGETS[target]
-    const preset = compilerPreset(settings.language, language, compiler)
-    const userArguments = `${compilerCodeFlags(compiler, optimization)} -nostdinc -isystem sysroot/include ${preset.architecture} -iquote '.' -iquote . ${compilerLanguageFlags(language)}`
+    const profile = settings.core === 'x86' ? GCC_INTEL_V1 : undefined
+    const preset = compilerPreset(settings.language, language, compiler, profile)
+    const userArguments = `${compilerCodeFlags(compiler, optimization, false, profile)} -nostdinc -isystem sysroot/include ${preset.architecture} -iquote '.' -iquote . ${compilerLanguageFlags(language, profile)}`
     return {
         compilerId: preset.id,
         body: {
@@ -134,6 +144,7 @@ async function compile(target, prepared) {
 }
 
 function prepare(lines, target) {
+    if (TARGETS[target].core === 'x86') return prepareX86(lines).text
     return (
         prepareCompilerLines(lines, TARGETS[target].language)
             .map((line) => line.text)
@@ -143,6 +154,8 @@ function prepare(lines, target) {
 
 /** A Core with the program and the library, started at the library's `_start`. */
 function makeCore(cores, target, entry, text, library) {
+    if (TARGETS[target].core === 'x86')
+        return makeX86Core(entry, text, library, cores.StopReason.NORMAL_TERMINATION)
     const options = {
         assemblerProfile: 'gnu-compiler-v1',
         libraries: [
@@ -242,7 +255,7 @@ function environment(stdinText, inputFiles) {
             elapsed += ms
         }
     }
-    return { handlers, stdout, stderr, files }
+    return { handlers, stdout, stderr, files, handles }
 }
 
 function firstDifference(expected, actual) {
@@ -286,6 +299,7 @@ async function main() {
               .filter((program) => !only || only.includes(program.name))
               .filter((program) => !(fixtures || writeFixtures) || fixtureNames.has(program.name))
     let passed = 0
+    let skipped = 0
     const failures = []
     for (const target of targets) {
         const library = JSON.parse(read(join(generated, `${target}.json`)))
@@ -300,7 +314,16 @@ async function main() {
         for (const optimization of optimizations) {
             if ((fixtures || writeFixtures) && optimization !== '2') continue
             for (const program of programs) {
+                if (target === 'x86_64' && program.name === 'c_constructors') {
+                    console.log(
+                        'SKIP x86_64 c_constructors: prioritized constructors and .fini_array are outside gcc-intel-v1'
+                    )
+                    skipped++
+                    continue
+                }
                 const label = `${target} ${compiler} -O${optimization} ${program.name}`
+                if (args.includes('--verbose')) console.log(`RUN ${label}`)
+                let core
                 try {
                     const frozen = fixtures
                         ? JSON.parse(read(join(fixtureRoot, target, `${program.name}.json`)))
@@ -324,7 +347,7 @@ async function main() {
                             `does not compile:\n${(response.stderr ?? []).map((line) => line.text).join('\n')}`
                         )
                     const entry = `${program.file}.s`
-                    const core = makeCore(
+                    core = await makeCore(
                         cores,
                         target,
                         entry,
@@ -334,7 +357,7 @@ async function main() {
                         library
                     )
                     core.setUndoSize(1)
-                    const assembled = core.assemble()
+                    const assembled = await core.assemble()
                     const errors = assembled.errors.filter((error) => !error.isWarning)
                     if (errors.length)
                         throw new Error(
@@ -368,8 +391,10 @@ async function main() {
                               )
                             : inputFiles
                     )
-                    for (const [name, handler] of Object.entries(world.handlers))
-                        core.registerHandler(name, handler)
+                    if (core.attachEnvironment) core.attachEnvironment(world)
+                    else
+                        for (const [name, handler] of Object.entries(world.handlers))
+                            core.registerHandler(name, handler)
                     // A stress program can ask for more: `core-instruction-limit: N` in a comment.
                     const limit = Number(
                         /core-instruction-limit:\s*(\d+)/.exec(source)?.[1] ?? INSTRUCTION_LIMIT
@@ -470,11 +495,13 @@ async function main() {
                     console.log(
                         `FAIL ${label}\n  ${String(error.message).split('\n').join('\n  ')}`
                     )
+                } finally {
+                    core?.dispose?.()
                 }
             }
         }
     }
-    console.log(`${passed} passed, ${failures.length} failed`)
+    console.log(`${passed} passed, ${failures.length} failed, ${skipped} skipped`)
     if (failures.length) process.exit(1)
 }
 

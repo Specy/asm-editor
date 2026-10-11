@@ -1,5 +1,8 @@
 import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
-import { RUNTIME_ENTRY_SYMBOL } from '#lib/runtimeAbi.ts'
+import { RUNTIME_ENTRY_SYMBOL, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
+import { ProjectFormatError } from '#lib/projectFiles.ts'
+import { loadRuntimeLibrary, loadedRuntimeLibrary } from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { x86RuntimeUnits } from '#lib/sourceRuntime/x86Runtime.mjs'
 import type { X86Project } from '@specy/x86'
 import { toX86Project } from './x86Project'
 import START_UNIT from './start.asm?raw'
@@ -16,8 +19,9 @@ export const X86_START_UNIT_PATH = '@runtime/start.asm'
 export const X86_SUPPORT_UNIT_PATH = '@runtime/support.asm'
 
 /**
- * The start code of an x86 program compiled from C or C++, until x86 has a Runtime library: it
- * runs the constructors, calls `main`, runs the static destructors and exits with `main`'s result.
+ * The start code of an x86 program compiled from C or C++ before x86 had a Runtime library, whose
+ * Compilation record names no Runtime ABI: it runs the constructors, calls `main`, runs the static
+ * destructors and exits with `main`'s result. Newer records link the library's `crt0` instead.
  */
 export const X86_START_UNIT: string = START_UNIT
 
@@ -50,6 +54,12 @@ export function linksX86StartUnit(sources: BuildSources): boolean {
  */
 export function x86CoreProject(sources: BuildSources): X86Project {
     const project = toX86Project(sources)
+    if (sources.runtimeAbi) {
+        const runtime = loadedRuntimeLibrary(sources.runtimeAbi, 'X86')
+        if (!runtime)
+            throw new ProjectFormatError(`The Runtime library ${sources.runtimeAbi} is not loaded`)
+        return { ...project, ...x86RuntimeUnits(runtime, sources.entrySymbol) }
+    }
     if (!linksX86StartUnit(sources) && !sources.x86Support) return project
     return {
         ...project,
@@ -58,4 +68,12 @@ export function x86CoreProject(sources: BuildSources): X86Project {
             : {}),
         library: { [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT }
     }
+}
+
+/** Loads and validates the library a Build links, for execution and live analysis alike. */
+export async function prepareX86Runtime(sources: BuildSources): Promise<void> {
+    if (!sources.runtimeAbi) return
+    const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
+    if (problem) throw new ProjectFormatError(problem)
+    await loadRuntimeLibrary(sources.runtimeAbi, 'X86')
 }

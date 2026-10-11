@@ -16,6 +16,10 @@ import {
     x86InstructionMap,
     type X86Instruction
 } from './X86-documentation'
+import {
+    runtimeFunctionDocumentation,
+    runtimeFunctionsForModel
+} from '#lib/sourceRuntime/runtimeLanguage.ts'
 
 const instructionSet = new Set(X86Instructions.map((instruction) => instruction.toLowerCase()))
 const registerSet = new Set(X86Registers.map((register) => register.toLowerCase()))
@@ -205,6 +209,24 @@ export function createX86CompletionProvider(
 
             const operation = parsed.operation?.text.toLowerCase() ?? ''
             const labels = labelsIn(model.getValue())
+            //the Runtime library's functions, when the Build links it
+            const libraryFunctions = () =>
+                runtimeFunctionsForModel(model)
+                    .filter(
+                        (entry) =>
+                            entry.name.toLowerCase().startsWith(typed) &&
+                            !labels.includes(entry.name)
+                    )
+                    .map((entry) => ({
+                        label: entry.name,
+                        kind: monacoInstance.languages.CompletionItemKind.Function,
+                        insertText: entry.name,
+                        detail: entry.prototype,
+                        documentation: { value: runtimeFunctionDocumentation(entry, 'X86') },
+                        sortText: `040${entry.name}`,
+                        range
+                    }))
+            if (operation === 'extern') return { suggestions: libraryFunctions() }
             if (operation === 'bits') {
                 for (const bits of ['16', '32', '64']) {
                     suggestions.push(
@@ -244,6 +266,7 @@ export function createX86CompletionProvider(
                         )
                     }
                 }
+                suggestions.push(...libraryFunctions())
                 return { suggestions }
             }
 
@@ -372,6 +395,12 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
                 contents.push({ value: `**NASM directive:** \`${original}\`` })
             } else if (sizeSpecifierSet.has(word)) {
                 contents.push({ value: `**Size specifier:** \`${original}\`` })
+            } else {
+                const library = runtimeFunctionsForModel(model).find(
+                    (entry) => entry.name === original
+                )
+                if (library && !labelsIn(model.getValue()).includes(original))
+                    contents.push({ value: runtimeFunctionDocumentation(library, 'X86') })
             }
             if (contents.length === 0) return null
             return {

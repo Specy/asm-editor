@@ -113,6 +113,11 @@
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
+                    href="/documentation/x86/runtime-library"
+                    title="Runtime library"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
                     href="/documentation/x86/all"
                     title="Complete documentation"
                     onClick={() => (menuOpen = false)}

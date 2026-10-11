@@ -43,6 +43,10 @@ import extensionsProse from './extensions.md?raw'
 import registersProse from './registers.md?raw'
 import syscallsProse from './syscalls.md?raw'
 import usingCProse from './using-c.md?raw'
+import runtimeProse from './runtime-library.md?raw'
+import runtimeFunctions from '#lib/sourceRuntime/generated/v1/functions.json'
+import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { x86CallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
     x86SimBinding,
     x86SimPrototype,
@@ -602,7 +606,7 @@ function usingC(): Chapter {
         title: 'Using C and C++',
         href,
         description:
-            'Compile freestanding C or C++, call Linux services through <sim.h>, and debug the generated NASM assembly.',
+            'Compile C or C++, use the C runtime and Linux services, and debug the generated NASM assembly.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'using-c',
@@ -610,6 +614,54 @@ function usingC(): Chapter {
             markdown: usingCProse,
             openingTitle: 'Using C and C++'
         })
+    }
+}
+
+/** The C library a Build links when the Project or its Compilation asks for it. */
+function runtimeLibrary(): Chapter {
+    const href = `${BASE}/runtime-library`
+    const entries: DocumentationEntry[] = [
+        ...proseEntries({
+            language: 'x86',
+            chapter: 'runtime-library',
+            chapterHref: href,
+            markdown: runtimeProse
+        }),
+        ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
+            const convention = x86CallingConvention(entry.prototype)
+            return {
+                id: `x86/runtime-library/${entry.name}`,
+                language: 'x86',
+                chapter: 'runtime-library',
+                kind: 'function',
+                title: entry.name,
+                names: names(entry.name),
+                signature: `<${entry.header}>`,
+                summary: summaryOf(entry.doc),
+                href: `${href}#${entry.name}`,
+                anchor: entry.name,
+                view: {
+                    type: 'fields',
+                    markdown: entry.doc,
+                    fields: [
+                        { label: 'Declaration', value: `\`${entry.prototype}\`` },
+                        { label: 'Header', value: `\`<${entry.header}>\`` },
+                        ...(convention ? [{ label: 'From assembly', value: convention }] : [])
+                    ],
+                    example: `call ${entry.name}`
+                },
+                searchText: `${entry.prototype}. ${entry.doc}`
+            }
+        })
+    ]
+    return {
+        id: 'runtime-library',
+        language: 'x86',
+        title: 'Runtime library',
+        href,
+        description:
+            'The C standard library compiled programs use, which hand-written assembly can call too.',
+        entries
     }
 }
 
@@ -623,7 +675,8 @@ export function chapters(): Chapter[] {
         directives(),
         registersAndFlags(),
         syscalls(),
-        usingC()
+        usingC(),
+        runtimeLibrary()
     ]
     return cached
 }

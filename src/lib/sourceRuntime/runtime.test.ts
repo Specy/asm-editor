@@ -1,14 +1,21 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vite-plus/test'
 import { resolveRuntimeLink } from '#lib/sourceCompilation/assemblyProfile.ts'
 import { cleanCompilationRecords, type CompilationRecord } from '#lib/sourceCompilation/records.ts'
 import { cleanProjectSettings, resolveProjectSettings } from '#lib/projectSettings.ts'
 import { normalizeBuildInput, ProjectFormatError, type BuildSources } from '#lib/projectFiles.ts'
 import { unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
-import { runtimeLibraryHint, unresolvedSymbol, type RuntimeFunctionList } from './runtimeLibrary'
+import {
+    runtimeLibraryHint,
+    unresolvedSymbol,
+    type RuntimeFunctionList,
+    type RuntimeLibraryData
+} from './runtimeLibrary'
 import {
     mipsCallingConvention,
     riscvCallingConvention,
-    runtimeFunctionDocumentation
+    runtimeFunctionDocumentation,
+    x86CallingConvention
 } from './runtimeLanguage'
 
 const text = (content: string) => ({ encoding: 'plain' as const, content })
@@ -125,6 +132,7 @@ describe('library hints and documentation', () => {
     it('explains an undefined library function in both assembler dialects', () => {
         expect(unresolvedSymbol('Unresolved symbol: printf')).toBe('printf')
         expect(unresolvedSymbol('Symbol "printf" not found in symbol table.')).toBe('printf')
+        expect(unresolvedSymbol("undefined reference to `printf'")).toBe('printf')
         expect(runtimeLibraryHint('Unresolved symbol: printf', list)).toMatch(
             /Link Runtime library/
         )
@@ -162,4 +170,60 @@ describe('library hints and documentation', () => {
             'a → $a0; b → $a2:$a3; returns int in $v0'
         )
     })
+
+    it('summarizes the x86-64 System V calling convention from the prototype', () => {
+        expect(x86CallingConvention('int printf(const char *format, ...)')).toBe(
+            'format → rdi; the remaining arguments → the next free integer or xmm registers, then the stack; al = how many xmm registers hold arguments; returns int in rax'
+        )
+        expect(x86CallingConvention('double pow(double x, double y)')).toBe(
+            'x → xmm0; y → xmm1; returns double in xmm0'
+        )
+        expect(x86CallingConvention('double ldexp(double x, int exp)')).toBe(
+            'x → xmm0; exp → rdi; returns double in xmm0'
+        )
+        expect(
+            x86CallingConvention(
+                'size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream)'
+            )
+        ).toBe('ptr → rdi; size → rsi; count → rdx; stream → rcx; returns size_t in rax')
+        expect(x86CallingConvention('ldiv_t ldiv(long num, long den)')).toBe(
+            'num → rdi; den → rsi; returns ldiv_t in rax:rdx'
+        )
+        expect(x86CallingConvention('int f(int a, int b, int c, int d, int e, int g, int h)')).toBe(
+            'a → rdi; b → rsi; c → rdx; d → rcx; e → r8; g → r9; h → stack; returns int in rax'
+        )
+        expect(x86CallingConvention('void exit(int status)')).toBe('status → rdi; returns nothing')
+        expect(runtimeFunctionDocumentation(list.functions[0], 'X86')).toContain('call printf')
+    })
+})
+
+describe('the generated library members', () => {
+    const generated = 'src/lib/sourceRuntime/generated/v1'
+    const sources: Record<string, string> = JSON.parse(
+        readFileSync(`${generated}/sources.json`, 'utf8')
+    )
+    //Show C source pairs a member's lines with these; a library compiled under `#line` names its
+    //source as no main file, which once left every MIPS and RISC-V line unmapped
+    it.each(['mips', 'riscv32', 'riscv64', 'x86_64'])(
+        'map %s instructions to lines of their own C source',
+        (target) => {
+            const library: RuntimeLibraryData = JSON.parse(
+                readFileSync(`${generated}/${target}.json`, 'utf8')
+            )
+            const origins = Object.values(library.memberSources)
+            const mapped = origins.filter((origin) => origin.lines.some((line) => line !== null))
+            expect(mapped.length / origins.length).toBeGreaterThan(0.9)
+            for (const origin of origins) {
+                const count = sources[origin.source].split('\n').length
+                for (const line of origin.lines) if (line !== null) expect(line).toBeLessThan(count)
+            }
+            const strlen = library.memberSources['@runtime/v1/string/strlen.s']
+            const text = sources[strlen.source].split('\n')
+            expect(
+                strlen.lines.some(
+                    (line) => line !== null && text[line].includes('for (; *s; s++);')
+                )
+            ).toBe(true)
+        }
+    )
 })

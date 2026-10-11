@@ -37,7 +37,12 @@ export function isRuntimeLibrarySetting(value: unknown): value is RuntimeLibrary
 
 /** The Targets a Runtime library exists for. */
 export function hasRuntimeLibrary(language: AvailableLanguages): boolean {
-    return language === 'RISC-V' || language === 'RISC-V-64' || language === 'MIPS'
+    return (
+        language === 'RISC-V' ||
+        language === 'RISC-V-64' ||
+        language === 'MIPS' ||
+        language === 'X86'
+    )
 }
 
 /**

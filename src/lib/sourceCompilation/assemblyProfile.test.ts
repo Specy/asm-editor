@@ -189,10 +189,19 @@ describe('x86 start code', () => {
         //only x86 Generated assembly links into an x86 Build
         expect(resolveX86Start(x86Sources, [{ ...x86Record, target: 'RISC-V' }])).toEqual({})
     })
-    it('blocks a record that requires a Runtime ABI until its source is compiled again', () => {
-        expect(() => resolveX86Start(x86Sources, [{ ...x86Record, runtimeAbi: 'v1' }])).toThrow(
-            /main\.c\.asm was compiled against Runtime ABI v1, and this editor has no x86 Runtime library\. Recompile main\.c/
+    it('links the runtime required by new records and rejects unknown ABIs', () => {
+        expect(resolveX86Start(x86Sources, [{ ...x86Record, runtimeAbi: 'v1' }])).toEqual({
+            runtimeAbi: 'v1'
+        })
+        expect(
+            resolveX86Start({ ...x86Sources, entry: 'main.c.asm' }, [
+                { ...x86Record, runtimeAbi: 'v1' }
+            ])
+        ).toEqual({ runtimeAbi: 'v1', entrySymbol: '_start' })
+        expect(() => resolveX86Start(x86Sources, [{ ...x86Record, runtimeAbi: 'v9' }])).toThrow(
+            'Recompile its source'
         )
+        expect(resolveX86Start(x86Sources, undefined, 'v1')).toEqual({ runtimeAbi: 'v1' })
     })
     it('blocks a Project File inside the namespace the start code is linked in', () => {
         const shadowed = {

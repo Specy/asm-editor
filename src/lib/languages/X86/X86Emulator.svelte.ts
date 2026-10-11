@@ -46,9 +46,21 @@ import {
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
+import {
+    loadedRuntimeFunctions,
+    loadedRuntimeLibrary,
+    loadRuntimeFunctions,
+    runtimeLibraryHint
+} from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { x86DiagnosticHint } from './X86-diagnostics'
 import { ProjectFormatError, type BuildInput, type BuildSources } from '#lib/projectFiles.ts'
-import { linksX86StartUnit, x86CoreProject, X86_START_UNIT_FILES } from './x86StartUnit'
+import {
+    linksX86StartUnit,
+    prepareX86Runtime,
+    x86CoreProject,
+    X86_START_UNIT_FILES
+} from './x86StartUnit'
 import type { Termination } from '#lib/languages/termination.ts'
 
 /**
@@ -263,6 +275,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _beginExecutionSession(): void {
         if (!this.fileSystemSession) throw new Error('Missing x86 FileSystem session')
         this.requireCore().mountProjectFileSystem(this.fileSystemSession)
+        const library = this.buildSources?.runtimeAbi
+            ? loadedRuntimeLibrary(this.buildSources.runtimeAbi, 'X86')
+            : undefined
+        if (library) {
+            // Reading instructions loads the ELF. Mount the session before that loader runs.
+            const paths = new Set(
+                this.requireCore()
+                    .getCompiledInstructions()
+                    .map((item) => item.file)
+            )
+            this._buildLibraryFiles = Object.fromEntries(
+                Object.entries(library.members)
+                    .filter(([path]) => paths.has(path))
+                    .map(([path, content]) => [path, { encoding: 'plain' as const, content }])
+            )
+        }
         this.updateMemoryAddresses()
     }
 
@@ -290,12 +318,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         //what stops the Build stops the check too, and `semanticCheck` reports it the same way
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const currentCheck = this.checkCodeQueue.then(async () => {
+            await prepareX86Runtime(sources)
             const checker = await this.getDiagnosticCore()
             const errors = await checker.checkProject(x86CoreProject(sources))
             return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
+    }
+
+    /**
+     * Loads the Runtime library a Build links, or the list of library functions that explains an
+     * undefined `printf` in a Build that does not link it.
+     */
+    async _prepareBuild(sources: BuildSources): Promise<void> {
+        if (sources.runtimeAbi === undefined) await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
+        else await prepareX86Runtime(sources)
     }
 
     async _compile(sources: BuildSources): Promise<CompileResult> {
@@ -326,7 +364,19 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         )
         if (!('errors' in result)) {
             //the start unit is no File of the Project, so the debugger reads it from here
-            this._buildLibraryFiles = linked ? X86_START_UNIT_FILES : undefined
+            const library = sources.runtimeAbi
+                ? loadedRuntimeLibrary(sources.runtimeAbi, 'X86')
+                : undefined
+            this._buildLibraryFiles = library
+                ? Object.fromEntries(
+                      Object.entries(library.members).map(([path, content]) => [
+                          path,
+                          { encoding: 'plain' as const, content }
+                      ])
+                  )
+                : linked || sources.x86Support
+                  ? X86_START_UNIT_FILES
+                  : undefined
             return { ok: true, diagnostics }
         }
         return { ok: false, diagnostics, report: result.report }
@@ -980,6 +1030,9 @@ function x86LinkHint(message: string, sources: BuildSources): string | undefined
     if (/multiple definition of [`']main'/.test(message)) return DUPLICATE_MAIN_HINT
     if (/multiple definition of [`']_start'/.test(message) && linksX86StartUnit(sources))
         return DUPLICATE_START_HINT
+    //hand-written assembly links no library by default: say how to get printf
+    if (sources.runtimeAbi === undefined)
+        return runtimeLibraryHint(message, loadedRuntimeFunctions(CURRENT_RUNTIME_ABI))
     return undefined
 }
 

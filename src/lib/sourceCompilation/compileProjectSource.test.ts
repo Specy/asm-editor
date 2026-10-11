@@ -9,8 +9,7 @@ import {
     cleanCompilationRecords,
     defaultSourceCompiler,
     isCompilationTarget,
-    sourceTemplate,
-    SOURCE_TEMPLATE
+    sourceTemplate
 } from './records'
 import {
     SourceCompilationError,
@@ -288,11 +287,12 @@ describe('x86 Source compilation', () => {
         )
     })
 
-    it('compiles for x86 with GCC, from the template of a program without a library', async () => {
+    it('compiles for x86 with GCC, from the template of a program that prints', async () => {
         expect(isCompilationTarget('X86')).toBe(true)
         expect(defaultSourceCompiler('X86')).toBe('gcc')
         expect(defaultSourceCompiler('RISC-V')).toBe('clang')
-        expect(sourceTemplate('X86', 'cpp')).toBe(SOURCE_TEMPLATE)
+        expect(sourceTemplate('X86', 'cpp')).toBe(sourceTemplate('RISC-V', 'cpp'))
+        expect(sourceTemplate('X86', 'c')).toContain('printf(')
         expect(isCompilationTarget('M68K')).toBe(false)
         const p = makeProject({
             language: 'M68K',

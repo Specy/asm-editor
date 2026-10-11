@@ -2,7 +2,7 @@
 // Builds the Runtime library for each Target through the Compiler driver's service (Compiler
 // Explorer), so Library members come from the same compiler, version and flags as student code.
 //
-//   node scripts/runtime/build.mjs [--target riscv32,riscv64,mips] [--update-abi] [--offline]
+//   node scripts/runtime/build.mjs [--target riscv32,riscv64,mips,x86_64] [--update-abi] [--offline]
 //
 // Every library source is compiled once per Target. Responses are cached under runtime/.cache by a
 // hash of everything that affects them, so a rebuild only asks the service about changed sources;
@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { analyzeX86, prepareX86 } from './x86.mjs'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const runtime = join(repository, 'runtime')
@@ -143,14 +144,19 @@ async function compile(target, path, files) {
     }
 }
 
-function prepare(lines, target) {
+/**
+ * A member's text, and each of its lines' zero-based line in `sourceFile`. The compile names the
+ * source with `#line 1 "<sourceFile>"`, so Compiler Explorer reports its lines under that name,
+ * never as the main source; lines from a header (an inlined function) map to nothing.
+ */
+function prepare(lines, target, sourceFile) {
+    if (TARGETS[target].core === 'x86') return prepareX86(lines, sourceFile)
     const prepared = prepareCompilerLines(lines, TARGETS[target].language)
     return {
         text: prepared.map((line) => line.text).join('\n') + '\n',
         map: prepared.map(({ index }) => {
             const source = lines[index].source
-            return source &&
-                (source.file == null || source.mainsource) &&
+            return source?.file === sourceFile &&
                 Number.isSafeInteger(source.line) &&
                 source.line > 0
                 ? source.line - 1
@@ -204,6 +210,7 @@ function documentedFunctions() {
 /** The Target's Core, reduced to reading a member's symbols the way a link will. */
 async function analyzer(target) {
     const settings = TARGETS[target]
+    if (settings.core === 'x86') return analyzeX86
     if (settings.core === 'mips') {
         const dist = join(repository, 'emulators', 'mips', 'marsjs', 'ts', 'dist', 'index.mjs')
         const { MIPS } = await import(dist)
@@ -257,7 +264,7 @@ async function buildTarget(target, functions) {
             problems.push(`${relativePath} (${target}) does not compile:\n${messages}`)
             continue
         }
-        const prepared = prepare(response.asm, target)
+        const prepared = prepare(response.asm, target, relativePath)
         const member = memberPath(path)
         if (members[member]) throw new Error(`Two sources make the member ${member}`)
         members[member] = prepared.text
@@ -386,7 +393,12 @@ async function requiredSymbols(target, library, functions) {
     )) {
         const response = JSON.parse(read(path))
         if (response.code !== 0 || !response.asm?.length) continue
-        const text = prepare(response.asm, target).text
+        let text
+        try {
+            text = prepare(response.asm, target).text
+        } catch {
+            continue
+        }
         const key = sha(text)
         if (seen.has(key)) continue
         seen.add(key)
@@ -518,12 +530,19 @@ async function main() {
     ])
     writeFileSync(join(output, 'sources.json'), JSON.stringify(cSources))
     if (skipAbi) return
-    const current = { abi: ABI, exported, signatures: signatureTables, layouts: layoutTables }
+    const baselinePath = join(runtime, 'abi', `${ABI}.json`)
+    const baseline = existsSync(baselinePath) ? JSON.parse(read(baselinePath)) : {}
+    // A targeted rebuild must still check its target without erasing the other ABI tables.
+    const current = {
+        abi: ABI,
+        exported: { ...baseline.exported, ...exported },
+        signatures: { ...baseline.signatures, ...signatureTables },
+        layouts: { ...baseline.layouts, ...layoutTables }
+    }
     if (abiReport) {
         writeFileSync(abiReport, JSON.stringify(current, null, 2) + '\n')
         return
     }
-    const baselinePath = join(runtime, 'abi', `${ABI}.json`)
     if (existsSync(baselinePath) && !updateAbi) {
         const problems = checkAbi(JSON.parse(read(baselinePath)), current)
         if (problems.length)

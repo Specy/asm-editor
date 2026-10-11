@@ -218,12 +218,12 @@ describe('C/C++ Monaco help providers', () => {
             )
         ).toBe(true)
     })
-    it('keeps standard-library APIs out of x86 and device helpers out of unsupported Targets', async () => {
+    it('offers standard-library APIs on x86 and keeps device helpers out of unsupported Targets', async () => {
         expect(
             (await harness('pri', 'main.c', 'X86').complete())!.suggestions.some(
                 (item) => item.label === 'printf'
             )
-        ).toBe(false)
+        ).toBe(true)
         expect(
             (await harness('sim_', 'main.c', 'X86').complete())!.suggestions.some(
                 (item) => item.label === 'sim_write'
@@ -252,6 +252,11 @@ describe('C/C++ Monaco help providers', () => {
         ).toBe(true)
         expect(
             (await harness('#include <std', 'main.c', 'X86').complete())!.suggestions.some(
+                (item) => item.label === 'stdio.h'
+            )
+        ).toBe(true)
+        expect(
+            (await harness('#include <std', 'main.c', 'M68K').complete())!.suggestions.some(
                 (item) => item.label === 'stdio.h'
             )
         ).toBe(false)

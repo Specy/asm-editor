@@ -288,5 +288,10 @@
         :global(.settings-value) {
             flex-wrap: wrap;
         }
+
+        /* a control wrapped under its name stays at the right, where the others are */
+        :global(.settings-value > :last-child) {
+            margin-left: auto;
+        }
     }
 </style>

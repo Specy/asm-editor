@@ -178,11 +178,55 @@ export function mipsCallingConvention(prototype: string): string {
     return [...placed, result].join('; ')
 }
 
+const X86_INTEGER_ARGUMENTS = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+
+/**
+ * The same summary for x86-64's System V convention: integers and pointers in rdi, rsi, rdx, rcx,
+ * r8 and r9, floating point in xmm0-xmm7, each sequence assigned independently, the rest on the
+ * stack; a variadic call also sets al to the number of xmm registers it fills. The result is in
+ * rax, or xmm0, and a 16-byte quotient and remainder pair (`ldiv_t`) comes back in rax and rdx.
+ */
+export function x86CallingConvention(prototype: string): string {
+    const parsed = parameters(prototype)
+    if (!parsed) return ''
+    let integer = 0,
+        floating = 0
+    const placed: string[] = []
+    for (const param of parsed.params) {
+        if (param === '...') {
+            placed.push(
+                'the remaining arguments → the next free integer or xmm registers, then the stack; al = how many xmm registers hold arguments'
+            )
+            break
+        }
+        if (isFloating(param) && floating < 8)
+            placed.push(`${parameterLabel(param)} → xmm${floating++}`)
+        else if (!isFloating(param) && integer < X86_INTEGER_ARGUMENTS.length)
+            placed.push(`${parameterLabel(param)} → ${X86_INTEGER_ARGUMENTS[integer++]}`)
+        else placed.push(`${parameterLabel(param)} → stack`)
+    }
+    const result =
+        parsed.returns === 'void' ||
+        /\bvoid\s*$/.test(parsed.returns) ||
+        parsed.returns.endsWith('_Noreturn')
+            ? 'returns nothing'
+            : `returns ${parsed.returns} in ${
+                  isFloating(parsed.returns)
+                      ? 'xmm0'
+                      : /^(?:ldiv_t|lldiv_t|imaxdiv_t)$/.test(parsed.returns)
+                        ? 'rax:rdx'
+                        : 'rax'
+              }`
+    return [...placed, result].join('; ')
+}
+
 /** Where a call's arguments go on a Target, from the prototype. */
 export function callingConvention(prototype: string, language: AvailableLanguages): string {
     return language === 'MIPS'
         ? mipsCallingConvention(prototype)
-        : riscvCallingConvention(prototype)
+        : language === 'X86'
+          ? x86CallingConvention(prototype)
+          : riscvCallingConvention(prototype)
 }
 
 /** The hover and completion documentation of one library function. */

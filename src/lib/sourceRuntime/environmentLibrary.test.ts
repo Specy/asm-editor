@@ -90,7 +90,7 @@ describe('the committed headers', () => {
         expect(committed(X86_SIM_HEADER.file), `run node scripts/sim-header/generate.mjs`).toBe(
             text
         )
-        //about 110 functions, uploaded with every x86 compile beside the freestanding headers
+        //about 110 functions, uploaded with every x86 compile beside the Runtime ABI headers
         const size = new TextEncoder().encode(text).length
         expect(size, `x86_64.h is ${size} bytes`).toBeLessThan(64 * 1024)
     })
@@ -480,7 +480,7 @@ describe('loading <sim.h>', () => {
         expect(parseRuntimeSourcePath('@runtime/v1/stdio/puts.s')).toBeUndefined()
     })
 
-    it('is uploaded for x86 too, beside the freestanding headers', async () => {
+    it('is uploaded for x86 too, beside the Runtime ABI headers', async () => {
         const fetcher = vi.fn(
             async () => new Response(JSON.stringify({ code: 1, stderr: [], asm: [] }))
         )
@@ -504,7 +504,7 @@ describe('loading <sim.h>', () => {
             committed('x86_64')
         )
         //and no header of the C library x86 does not have yet
-        expect(files.map((file) => file.filename)).not.toContain('sysroot/include/stdio.h')
+        expect(files.map((file) => file.filename)).toContain('sysroot/include/stdio.h')
     })
 })
 

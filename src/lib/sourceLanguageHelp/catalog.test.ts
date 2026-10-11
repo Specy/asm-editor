@@ -106,19 +106,10 @@ describe('authoritative source help catalogs', () => {
                 )
             ).toBe(false)
     })
-    it('never advertises the hosted library or allocating new in x86', async () => {
+    it('advertises the runtime library in x86', async () => {
         const entries = await sourceHelpEntries(compilerCapabilities('X86'), 'cpp')
-        for (const name of [
-            'printf',
-            'std::printf',
-            'malloc',
-            'scanf',
-            'fopen',
-            'operator new',
-            'new',
-            'std::nothrow'
-        ])
-            expect(entries.some((entry) => entry.name === name)).toBe(false)
+        for (const name of ['printf', 'std::printf', 'malloc', 'scanf', 'fopen', 'std::printf'])
+            expect(entries.some((entry) => entry.name === name)).toBe(true)
         for (const name of [
             'NULL',
             'size_t',
@@ -129,7 +120,7 @@ describe('authoritative source help catalogs', () => {
             'sim_write'
         ])
             expect(entries.some((entry) => entry.name === name)).toBe(true)
-        expect(entries.some((entry) => entry.headers.includes('stdio.h'))).toBe(false)
+        expect(entries.some((entry) => entry.headers.includes('stdio.h'))).toBe(true)
     })
     it('keeps device and screen declarations shared with generated headers', async () => {
         for (const file of ['mips', 'riscv32', 'riscv64']) {

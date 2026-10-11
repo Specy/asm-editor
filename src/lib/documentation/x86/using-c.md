@@ -1,11 +1,10 @@
 Create `main.c` for C, or `main.cpp` for C++, in an x86 project. Replace its starting text with this complete program, which works in either language:
 
 ```c
-#include <sim.h>
+#include <stdio.h>
 
 int main(void) {
-    const char text[] = "Hello from x86\n";
-    sim_write(1, text, sizeof(text) - 1);
+    printf("Hello from x86\n");
     return 0;
 }
 ```
@@ -16,7 +15,7 @@ Select the source file and choose **Compile**. The generated assembly opens besi
 
 Type `sim_` to see the simulator functions for this project, or press **Ctrl+Space** to open suggestions. Small snippets help you write loops, functions and structures; press **Tab** to move through their editable fields. Suggestions inside an `#include` path offer available headers.
 
-Hover over a known function such as `sim_write` to see its declaration, required header and a documentation link. Parameter hints highlight the current argument while you write a call. Selecting a function inserts its name; add the indicated header yourself.
+Hover over a known function such as `printf` to see its declaration, required header and a documentation link. Parameter hints highlight the current argument while you write a call. Selecting a function inserts its name; add the indicated header yourself.
 
 Names you declare in the current file also appear in suggestions, with variable types or function declarations. Ordinary functions get parameter hints, and nearer block declarations take priority. Complex declarations may be missed.
 
@@ -31,18 +30,17 @@ Compile creates an assembly file and makes it the project's entry file, which Bu
 To use a local header, create `helpers.h` beside your source file in the same project:
 
 ```c
-#define GREETING "Hello from a header\n"
+#define ANSWER 42
 ```
 
 Include it with quotes, as in this complete replacement for `main.c`:
 
 ```c
-#include <sim.h>
+#include <stdio.h>
 #include "helpers.h"
 
 int main(void) {
-    const char text[] = GREETING;
-    sim_write(1, text, sizeof(text) - 1);
+    printf("The answer is %d\n", ANSWER);
     return 0;
 }
 ```
@@ -51,11 +49,27 @@ After changing the source or a local header, **Compile** again, then **Build** t
 
 ## Libraries and simulator services {#libraries}
 
-x86 programs use `<sim.h>` as their C interface to the simulator's Linux-style system calls. Programs are compiled freestanding, so the C standard library is unavailable on this target: you cannot use `printf`, `scanf`, `malloc` or standard file functions such as `fopen`. Only basic headers such as `<stddef.h>`, `<stdint.h>` and `<stdarg.h>` are provided.
+Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` use the project's files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/x86/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging.
 
-C uses C17 and C++ uses C++17. C++ can use basic headers such as `<cstddef>` and `<cstdint>`, together with `<sim.h>`. The full C++ standard library is not provided: `<cstdio>`, `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI. Ordinary dynamic allocation with `new` and `delete` is not provided on this target. Use fixed arrays and objects stored locally or globally.
+C uses C17 and C++ uses C++17. C++ supports constructors, `new` and `delete`, and the provided compatibility headers `<cassert>`, `<cctype>`, `<cerrno>`, `<cfloat>`, `<cinttypes>`, `<climits>`, `<cmath>`, `<cstdarg>`, `<cstddef>`, `<cstdint>`, `<cstdio>`, `<cstdlib>`, `<cstring>`, `<ctime>` and `<new>`. For example, include `<cstdio>` and use `std::printf("Hello from x86\n");`. The full C++ standard library is not provided: `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI.
 
-Find the simulator functions' signatures and results under **From C** in [Syscalls](/documentation/x86/syscall), also available in the editor's Documentation panel. In the first program, `sim_write` uses descriptor `1` for Terminal output. Its final argument is the number of bytes to print; `sizeof(text) - 1` excludes the string's terminating zero. Each function returns its system call's result, with failures reported as negative error numbers.
+When a standard input function waits, type in the Terminal and press **Enter**. Unread characters remain available to later calls. Press **Ctrl+D** or **End of input** to release pending text without a newline. On an empty input line, this signals end of file for that read.
+
+For example, this reads one integer and prints it only when the input is valid:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int value;
+    if (scanf("%d", &value) == 1) {
+        printf("You entered %d\n", value);
+    }
+    return 0;
+}
+```
+
+Include `<sim.h>` to make the simulator's Linux-style system calls directly. Find the simulator functions' signatures and results under **From C** in [Syscalls](/documentation/x86/syscall), also available in the editor's Documentation panel. `sim_write(1, text, length)` writes `length` bytes to descriptor `1`, the Terminal. Each function returns its system call's result, with failures reported as negative error numbers. Standard input functions can keep characters they read ahead, so avoid mixing `sim_read` and functions such as `scanf` on one line.
 
 For Terminal input, `sim_read(0, buffer, size)` reads bytes into a character array and returns how many it read. Type your input and press **Enter**. On an empty input line, press **Ctrl+D** or **End of input** to finish standard input; `sim_read` then returns `0`. It does not add a string terminator. A failed simulator call returns a negative error number; check the result before using it.
 
@@ -85,4 +99,4 @@ Compile again after reopening a saved project to restore source highlights and b
 
 ## Linking project Files {#linking-project-files}
 
-Build links the generated Entry and its startup object, then searches other assembly Files for referenced symbols, then searches support code. Your secondary File can replace a support function. Duplicate strong globals are errors on both Files, even if a File would otherwise stay unused. A Problems Hint identifies each File that was not linked; constructor-only Files also need a referenced symbol to join the program. Startup passes Blink's arguments to `main`; `argv[0]` is `/program`.
+Build links the generated Entry and its startup object, then searches other assembly Files for referenced symbols, then searches the Runtime library. Your secondary File can replace a support function. Duplicate strong globals are errors on both Files, even if a File would otherwise stay unused. A Problems Hint identifies each File that was not linked; constructor-only Files also need a referenced symbol to join the program. Startup passes Blink's arguments to `main`; `argv[0]` is `/program`.

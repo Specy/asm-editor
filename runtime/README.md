@@ -14,7 +14,7 @@ This directory holds ABI `v1` ([ADR 0031](../docs/adr/0031-projects-pin-the-runt
 | `include/` | The public headers, uploaded with every compilation as `sysroot/include` (about 54 KB). Declarations, macros and typedefs only, a one-line `/** ... */` doc comment before every function declaration, `FILE` opaque, nothing included from outside this directory. Freestanding headers derive their types from GCC's predefined macros, so they serve ILP32 and LP64 alike. |
 | `src/<area>/` | The library: one global function per file where practical (musl's grouping elsewhere, e.g. the `strto*` family), so a program using only `strlen` links only `strlen`. 262 members; the C++ ones are the `src/cxx/*.cpp` files. |
 | `src/internal/` | Private headers (`aed_sys.h` platform contract, `stdio_impl.h`, `libm.h`, `features.h`, `endian.h`, ...) and the shared scanners `shgetc.c`, `intscan.c`, `floatscan.c`. |
-| `arch/<target>/` | `aed_sys_arch.h`, the system calls as inline assembly, and `crt0.s`, for `riscv32`, `riscv64`, `mips`, and the native test layers `host-x86_64` and `host-i386`. |
+| `arch/<target>/` | `aed_sys_arch.h`, the system calls as inline assembly, and `crt0.s`, for `riscv32`, `riscv64`, `mips`, `x86_64`, and the native test layers `host-x86_64` and `host-i386`. |
 | `tests/corpus/` | Test programs (C and C++), their standard input (`name.in`), input Files (`name.files/`) and deliberate-difference overrides (`name.expect.*`). |
 | `tests/expected/` | The reviewed glibc results of each program: `stdout`, `stderr`, `status` and the `files/` left in its directory. The Cores' corpus runner can compare against them without glibc. |
 | `tests/native/` | The compiler-support-routine test and the start files of the no-initialization runs. |
@@ -25,7 +25,7 @@ This directory holds ABI `v1` ([ADR 0031](../docs/adr/0031-projects-pin-the-runt
 
 ## Building members
 
-Library members are compiled per Target with the Target's GCC 14.2 (the editor's Compiler Explorer compilers `rv32-cgcc1420`, `rv64-cgcc1420`, `cmipsg1420`):
+Library members are compiled per Target with the Target's GCC 14.2 (the editor's Compiler Explorer compilers `rv32-cgcc1420`, `rv64-cgcc1420`, `cmipsg1420`, `cg142`):
 
 ```
 -Os -g1 -std=c17 -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns -fno-stack-protector -fno-pie
@@ -37,7 +37,9 @@ C++ members (`src/cxx/*.cpp`) add `-std=c++17 -fno-exceptions -fno-rtti -fno-thr
 
 User programs are compiled hosted (no `-ffreestanding`) with `-nostdinc -isystem sysroot/include`, and C++ with `-nostdinc++` too. GCC then also calls functions the program never names, which the library provides: `memcpy`, `memset`, `memmove` and `memcmp` for copies, `puts`/`putchar`/`fwrite`/`fputs` for simple `printf`/`fprintf` calls, `sincos`/`sincosf` for `sin` and `cos` of one argument, and the helper routines of FUNCTIONS.md on 32-bit Targets. Clang also calls `bcmp` for a `memcmp` only compared with zero.
 
-`crt0.s` is one file per Target: `arch/riscv32/crt0.s`, `arch/riscv64/crt0.s` (they differ only in pointer size) and `arch/mips/crt0.s`.
+`crt0.s` is one file per Target: `arch/riscv32/crt0.s`, `arch/riscv64/crt0.s` (they differ only in pointer size) `arch/mips/crt0.s`, and the NASM `arch/x86_64/crt0.s`.
+
+x86 members compile with `-march=x86-64 -mtune=generic -masm=intel -fcf-protection=none` and pass through the Core's `gcc-intel-v1` translator before NASM assembly. Prioritized constructors and `.fini_array` remain outside that profile; the corpus reports their test as skipped.
 
 ## Linking
 
@@ -53,11 +55,11 @@ The Cores link with `ld` semantics ([ADR 0030](../docs/adr/0030-cores-resolve-ru
 ## Editor assets and the Cores
 
 ```
-node scripts/runtime/build.mjs [--target riscv32,riscv64,mips] [--offline] [--update-abi]
-node scripts/runtime/test-cores.mjs [--target riscv32,riscv64,mips] [--only name,...] [--optimization 0,2]
+node scripts/runtime/build.mjs [--target riscv32,riscv64,mips,x86_64] [--offline] [--update-abi]
+node scripts/runtime/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only name,...] [--optimization 0,2]
 ```
 
-`scripts/runtime/build.mjs` compiles every member through Compiler Explorer (cached under `runtime/.cache/`, so `--offline` rebuilds without network), checks each with the Core that will link it, and writes the editor's assets to `src/lib/sourceRuntime/generated/v1/`. It fails when two members define one strong global, when a documented function has no member, or when an export or a struct layout of `abi/layout.c` differs from the baseline `abi/v1.json`. `scripts/runtime/test-cores.mjs` compiles every corpus program as the editor does, links it with those assets on the RARS and MARS Cores, runs it with tty standard input and an in-memory FileSystem, and compares the result with `tests/expected/`.
+`scripts/runtime/build.mjs` compiles every member through Compiler Explorer (cached under `runtime/.cache/`, so `--offline` rebuilds without network), checks each with the Core that will link it, and writes the editor's assets to `src/lib/sourceRuntime/generated/v1/`. It fails when two members define one strong global, when a documented function has no member, or when an export or a struct layout of `abi/layout.c` differs from the baseline `abi/v1.json`. `scripts/runtime/test-cores.mjs` compiles every corpus program as the editor does, links it with those assets on the RARS, MARS and x86 Cores, runs it with tty standard input and an in-memory FileSystem, and compares the result with `tests/expected/`.
 
 ## Native tests
 

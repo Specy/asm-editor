@@ -33,8 +33,6 @@ describe('the start code beside an x86 Project', () => {
             entry: 'main.asm',
             files: { 'main.asm': BASE_CODE.X86, 'src/main.c.asm': files['src/main.c.asm'].content }
         })
-        //with a Runtime ABI, the library's crt0 starts the program instead of the start code
-        expect(x86CoreProject({ ...compiled, runtimeAbi: 'v1' }).library).toBeUndefined()
     })
 
     it('splits the start code so a program with a _start of its own can still take the rest', () => {

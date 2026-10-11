@@ -1,7 +1,7 @@
 import { createX86Emulator, type MonacoError } from '@specy/x86'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
-import { x86CoreProject } from '#lib/languages/X86/x86StartUnit.ts'
+import { x86CoreProject, prepareX86Runtime } from '#lib/languages/X86/x86StartUnit.ts'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 
@@ -43,6 +43,7 @@ export async function analyzeX86Project(
     //sources the Build refuses are not checked either: why they cannot be built is the one error
     if (sources.assemblyError)
         return unresolvedSnapshot(sources, sources.assemblyError, sessionId, revision)
+    await prepareX86Runtime(sources)
     checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
     const diagnostics = await checker.checkProject(x86CoreProject(sources))
     // NASM reports no reached set, so the editor follows literal includes for file-status hints.

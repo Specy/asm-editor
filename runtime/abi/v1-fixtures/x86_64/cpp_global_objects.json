@@ -1,0 +1,9 @@
+{
+  "source": "// Global constructors run before main through .init_array, in definition order; destructors of globals and\n// function-local statics run after main returns, interleaved with atexit handlers in reverse order of\n// registration (C++ [basic.start.term]).\n#include <cstdio>\n#include <cstdlib>\n\nstruct Tracer {\n\tconst char *name;\n\texplicit Tracer(const char *n) : name(n) { std::printf(\"construct %s\\n\", name); }\n\t~Tracer() { std::printf(\"destroy %s\\n\", name); }\n};\n\nTracer first(\"global first\");\nTracer second(\"global second\");\nstatic int initialized_value = std::printf(\"dynamic initializer of an int\\n\");\n\nstatic void handler() { std::puts(\"atexit handler\"); }\n\nstatic Tracer &local()\n{\n\tstatic Tracer t(\"function-local static\");\n\treturn t;\n}\n\nint main()\n{\n\tstd::printf(\"main starts, initializer returned %d\\n\", initialized_value);\n\tstd::atexit(handler);\n\tlocal();\n\tlocal();\n\tstd::printf(\"main returns\\n\");\n\treturn 0;\n}\n\nTracer third(\"global third, defined after main\");\n",
+  "stdin": null,
+  "inputFiles": {},
+  "stdout": "Y29uc3RydWN0IGdsb2JhbCBmaXJzdApjb25zdHJ1Y3QgZ2xvYmFsIHNlY29uZApkeW5hbWljIGluaXRpYWxpemVyIG9mIGFuIGludApjb25zdHJ1Y3QgZ2xvYmFsIHRoaXJkLCBkZWZpbmVkIGFmdGVyIG1haW4KbWFpbiBzdGFydHMsIGluaXRpYWxpemVyIHJldHVybmVkIDMwCmNvbnN0cnVjdCBmdW5jdGlvbi1sb2NhbCBzdGF0aWMKbWFpbiByZXR1cm5zCmRlc3Ryb3kgZnVuY3Rpb24tbG9jYWwgc3RhdGljCmF0ZXhpdCBoYW5kbGVyCmRlc3Ryb3kgZ2xvYmFsIHRoaXJkLCBkZWZpbmVkIGFmdGVyIG1haW4KZGVzdHJveSBnbG9iYWwgc2Vjb25kCmRlc3Ryb3kgZ2xvYmFsIGZpcnN0Cg==",
+  "stderr": "",
+  "status": 0,
+  "files": {}
+}

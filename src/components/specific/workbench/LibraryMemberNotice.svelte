@@ -19,7 +19,7 @@
 <div class="library-notice" class:with-action={onShowSource} role="status">
     <span>
         {#if path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH}
-            <!-- x86 has no Runtime library yet: this is the start code compiled programs link -->
+            <!-- the start code x86 programs compiled before x86 had a Runtime library link -->
             Start code of compiled programs, read-only.
         {:else if isEnvironmentHeaderPath(path)}
             <!-- compiled into the program's own Generated assembly, so it is no library code -->

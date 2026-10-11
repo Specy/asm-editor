@@ -127,9 +127,7 @@ export class EditorGroup {
         const record = this.displayedCompilation
         if (!record) return ''
         if (this.unsupportedRuntimeAbi)
-            return this.session.project.language === 'X86'
-                ? `Compiled against Runtime ABI ${record.runtimeAbi}, but this editor has no x86 Runtime library yet. Recompile to build it.`
-                : `Compiled against Runtime ABI ${record.runtimeAbi}, which this editor does not provide. Recompile to build it.`
+            return `Compiled against Runtime ABI ${record.runtimeAbi}, which this editor does not provide. Recompile to build it.`
         const status = compilationStatus(
             record,
             this.session.project.files,
@@ -159,8 +157,8 @@ export class EditorGroup {
     }
     /**
      * Whether the displayed Generated assembly requires a Runtime ABI whose library this editor
-     * does not ship for the Project's Target: an ABI from a newer editor, or any ABI on x86, which
-     * has no library yet. Its Build is blocked until it is compiled again
+     * does not ship for the Project's Target, such as an ABI from a newer editor. Its Build is
+     * blocked until it is compiled again
      * ([ADR 0031](../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
      */
     get unsupportedRuntimeAbi() {

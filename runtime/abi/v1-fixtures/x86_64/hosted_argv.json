@@ -1,0 +1,9 @@
+{
+  "source": "#include <stdio.h>\nint main(int argc, char **argv) {\n    printf(\"valid argv=%d\\n\", argv != NULL && argv[argc] == NULL);\n    return 0;\n}\n",
+  "stdin": null,
+  "inputFiles": {},
+  "stdout": "dmFsaWQgYXJndj0xCg==",
+  "stderr": "",
+  "status": 0,
+  "files": {}
+}

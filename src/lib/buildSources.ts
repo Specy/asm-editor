@@ -24,7 +24,10 @@ export function projectBuildSources(project: {
         compiledLanguages: compiledLanguages(project, project.compilations)
     }
     if (project.language === 'X86')
-        return { ...sources, ...resolveX86Start(sources, project.compilations) }
+        return {
+            ...sources,
+            ...resolveX86Start(sources, project.compilations, project.settings?.linkRuntimeLibrary)
+        }
     if (!hasRuntimeLibrary(project.language)) return sources
     return {
         ...sources,

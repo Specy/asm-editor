@@ -51,6 +51,8 @@ jobs:
                   npm --prefix emulators/mips/marsjs/ts run build:all
                   npm ci --prefix emulators/risc-v/rarsjs/ts
                   npm --prefix emulators/risc-v/rarsjs/ts run build:all
+                  npm ci --prefix emulators/x86/blink-js
+                  npm --prefix emulators/x86/blink-js run build
             - name: Check ABI guard and generated library inputs
               run: |
                   node --test scripts/runtime/abi-check.test.mjs

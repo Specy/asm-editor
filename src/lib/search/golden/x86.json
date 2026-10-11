@@ -61,9 +61,17 @@
             "meaning": true
         },
         {
-            "query": "freestanding environment library",
+            "query": "libraries and simulator services",
             "top": 5,
             "expect": "x86/using-c/libraries"
+        },
+        {
+            "query": "printf",
+            "first": "x86/runtime-library/printf"
+        },
+        {
+            "query": "malloc",
+            "first": "x86/runtime-library/malloc"
         },
         {
             "query": "following execution source map",

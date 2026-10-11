@@ -19,7 +19,7 @@ export type CompilationRecord = {
      * The Runtime ABI the Generated assembly was compiled against, which its Builds link whatever
      * the Project Setting says ([ADR 0031](../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
      * Absent in records written before the Runtime library, whose programs are self-contained, and
-     * in x86 records until x86 has a Runtime library: their Builds link the editor's start unit.
+     * in x86 records written before x86 had one: their Builds link the editor's start unit.
      */
     runtimeAbi?: `v${number}`
     sourcePath: string

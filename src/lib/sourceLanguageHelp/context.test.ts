@@ -82,12 +82,12 @@ describe('source help context', () => {
     it('keeps two Projects with the same path and different Targets distinct', () => {
         session('a', 'MIPS')
         session('b', 'X86')
-        expect(
-            resolveSourceHelpContext(model('main.c', 'a').value)?.capabilities?.headers.c
-        ).toContain('stdio.h')
-        expect(
-            resolveSourceHelpContext(model('main.c', 'b').value)?.capabilities?.headers.c
-        ).not.toContain('stdio.h')
+        expect(resolveSourceHelpContext(model('main.c', 'a').value)?.capabilities?.target).toBe(
+            'MIPS'
+        )
+        expect(resolveSourceHelpContext(model('main.c', 'b').value)?.capabilities?.target).toBe(
+            'X86'
+        )
     })
     it('freezes a Build source set and unavailable ABI rather than replacing it with live data', () => {
         const owner = session()
@@ -122,9 +122,9 @@ describe('source help context', () => {
         expect(alive.current()).toBe(false)
         expect(resolveSourceHelpContext(model('missing.c').value)).toBeUndefined()
     })
-    it('limits x86 headers and declines library help on unsupported Targets', () => {
-        expect(compilerCapabilities('X86')?.headers.cpp).toContain('new')
-        expect(compilerCapabilities('X86')?.headers.cpp).not.toContain('cstdio')
+    it('gives x86 the hosted headers and declines library help on unsupported Targets', () => {
+        expect(compilerCapabilities('X86')?.headers).toEqual(compilerCapabilities('MIPS')?.headers)
+        expect(compilerCapabilities('X86')?.headers.cpp).toContain('cstdio')
         expect(compilerCapabilities('M68K')).toBeUndefined()
         expect(compilerCapabilities('Z80')).toBeUndefined()
         session('project', 'M68K')

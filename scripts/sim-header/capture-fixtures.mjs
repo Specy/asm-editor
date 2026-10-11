@@ -4,7 +4,7 @@
  * programs below compiled through Compiler Explorer as the editor requests them, against the
  * Runtime library's headers and the committed `<sim.h>` of each Target, by GCC and Clang at `-O0`
  * and `-O2`. x86's go to `fixtures/sim/x86`: GCC 14.2 alone, under its translation profile's flags,
- * against the freestanding headers and `<sim.h>`, in C and C++. The editor's tests run them on the
+ * against the Runtime library headers and `<sim.h>`, in C and C++. The editor's tests run them on the
  * Cores without network access.
  *
  *   node scripts/sim-header/capture-fixtures.mjs [--only <text in a fixture's name>] [--raw <directory>]
@@ -54,24 +54,6 @@ const TARGETS = Object.fromEntries(
     ])
 )
 const MARS_TARGETS = ['MIPS', 'RISC-V', 'RISC-V-64']
-
-/** The Runtime library's headers an x86 program may include: `X86_HEADERS` in compilerExplorer.ts. */
-const X86_HEADERS = [
-    'stddef.h',
-    'stdint.h',
-    'stdbool.h',
-    'stdarg.h',
-    'limits.h',
-    'float.h',
-    'iso646.h',
-    'stdnoreturn.h',
-    'cstddef',
-    'cstdint',
-    'climits',
-    'cfloat',
-    'cstdarg',
-    'new'
-]
 
 function userArguments(target, compiler, optimization, language) {
     const sourcePath = language === 'cpp' ? 'src/main.cpp' : 'src/main.c'
@@ -376,10 +358,7 @@ for (const [program, settings] of Object.entries(PROGRAMS)) {
             join(repository, SIM_HEADER_DIRECTORY, `${TARGETS[target].header}.h`),
             'utf8'
         )
-        //an x86 program gets only the library's freestanding headers, beside `<sim.h>`
-        const sysroot = Object.entries(runtimeHeaders).filter(
-            ([path]) => !x86 || X86_HEADERS.includes(path)
-        )
+        const sysroot = Object.entries(runtimeHeaders)
         const directory = x86 ? join(output, 'x86') : output
         mkdirSync(directory, { recursive: true })
         for (const compiler of settings.compilers) {
