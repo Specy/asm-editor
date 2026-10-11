@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
 
 type FakeModel = { value: string; createdFrom: string; disposed: boolean }

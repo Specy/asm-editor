@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import type { ProjectWorkerRequest, ProjectWorkerResponse } from './protocol'
 

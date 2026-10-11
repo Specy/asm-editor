@@ -113,7 +113,10 @@
                 </a>
             {/if}
             <div class="mobile-only">
-                <Icon onClick={() => (menuOpen = !menuOpen)}>
+                <Icon
+                    onClick={() => (menuOpen = !menuOpen)}
+                    label={menuOpen ? 'Close the menu' : 'Open the menu'}
+                >
                     {#if menuOpen}
                         <FaTimes />
                     {:else}
@@ -254,19 +257,9 @@
         .desktop-only {
             display: none;
         }
-        .menu-open {
-            transform: translateX(0);
-        }
         .icon {
             font-size: 0.9rem;
         }
-    }
-
-    .instruction-search {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        padding: 0.6rem;
-        border-radius: 0.4rem;
     }
 
     .hidden-very-small {

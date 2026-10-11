@@ -4,7 +4,8 @@ import type { LanguageDiagnostic, SourceLocation, SymbolKind } from './sourceMod
 export type ProjectAnalysisTarget = 'M68K' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86' | 'Z80'
 
 export type ProjectFileChange =
-    { type: 'set'; path: string; file: ProjectFile } | { type: 'delete'; path: string }
+    | { type: 'set'; path: string; file: ProjectFile }
+    | { type: 'delete'; path: string }
 
 /**
  * `unknown` is for a Core that assembles the whole Project itself and does not report which Files it

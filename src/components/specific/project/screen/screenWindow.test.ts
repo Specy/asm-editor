@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { screenWindowGeometry } from './screenWindow'
 
 const desktop = { viewportWidth: 1600, viewportHeight: 900, rootFontSize: 16 }

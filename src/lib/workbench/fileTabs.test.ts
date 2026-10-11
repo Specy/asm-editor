@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { closeTab, initialTabs, openTab, removeTab, renameTab, retainTabs } from './fileTabs'
 
 describe('openTab', () => {

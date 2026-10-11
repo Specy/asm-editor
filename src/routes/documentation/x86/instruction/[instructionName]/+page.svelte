@@ -145,10 +145,6 @@
         color: var(--accent);
         text-decoration: underline;
     }
-    .no-example {
-        line-height: 1.5;
-        color: var(--background-text-muted);
-    }
     .forms-hint {
         line-height: 1.5;
     }

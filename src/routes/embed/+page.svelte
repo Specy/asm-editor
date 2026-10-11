@@ -57,10 +57,11 @@
         { key: 'X86', value: 'X86' },
         { key: 'Z80', value: 'Z80' }
     ]
+    const defaultLanguage: AvailableLanguages = 'M68K'
 
     let settings: Settings = $state({
         showMemory: true,
-        language: 'M68K',
+        language: defaultLanguage,
         showConsole: false,
         showTests: true,
         showPc: false,
@@ -72,7 +73,7 @@
         registerFile: undefined
     })
     let inIframe = $state(true)
-    let code = $state(BASE_CODE[settings.language])
+    let code = $state(BASE_CODE[defaultLanguage])
     let project = $state<Project>()
     let ready = $state(false)
     let testcases = $state([] as Testcase[])
@@ -165,7 +166,7 @@
     function getSettings() {
         const searchParams = page.url.searchParams
         const showMemory = searchParams.get('showMemory') === 'true'
-        const language = (searchParams.get('language') ?? 'M68K') as AvailableLanguages
+        const language = (searchParams.get('language') ?? defaultLanguage) as AvailableLanguages
         const showConsole = searchParams.get('showConsole') === 'true'
         const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
         const showPc = searchParams.get('showPc') === 'true'

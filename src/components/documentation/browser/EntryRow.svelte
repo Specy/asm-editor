@@ -65,6 +65,9 @@
     {/if}
 </div>
 
+<!-- `.entry-row + .entry-row` never matches: each row is its own instance of this component, so
+     the compiler drops it and no divider renders. Kept until it is decided whether rows get one -->
+<!-- svelte-ignore css_unused_selector -->
 <style>
     .entry-row {
         border-radius: 0.45rem;

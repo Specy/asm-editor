@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { AssemblyCodingHarness } from './harness'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import {

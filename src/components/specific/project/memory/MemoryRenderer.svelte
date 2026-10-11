@@ -127,7 +127,6 @@
             }
         })
     })
-    const maxAddresses = systemSize
     let memoryGrid = $state<HTMLDivElement>()
     const addressDigits = $derived(memorySize ? memorySize.toString(16).length : 4)
     let selectedAddressesIndexes = $state({
@@ -228,12 +227,12 @@
             if (selectedAddressesIndexes.len < 0) {
                 selectedAddressesIndexes.len = Math.max(
                     selectedAddressesIndexes.len,
-                    -maxAddresses + 1
+                    -systemSize + 1
                 )
             } else {
                 selectedAddressesIndexes.len = Math.min(
                     selectedAddressesIndexes.len,
-                    maxAddresses - 1
+                    systemSize - 1
                 )
             }
             if (selectedAddressesIndexes.len <= -1 || selectedAddressesIndexes.len >= 1) {
@@ -620,17 +619,6 @@
 </div>
 
 <style lang="scss">
-    .memory-selection-cancel {
-        position: absolute;
-        bottom: 0rem;
-        right: 0rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: var(--green);
-        color: var(--green-text);
-    }
-
     //the value fills its cell, so that in a page stretched taller than its rows need, a
     //Playground's, it is centred beside its address and a highlighted byte still covers the cell
     .memory-number {

@@ -44,8 +44,4 @@
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
         gap: 1rem;
     }
-    h1 {
-        font-size: 1.8rem;
-        font-weight: normal;
-    }
 </style>

@@ -1,0 +1,6 @@
+{
+    "name": "Memory regions and executable files",
+    "description": "Inspect x86 data addresses and connect source sections, runtime memory regions and ELF executable loading.",
+    "order": 8,
+    "topic": "memory-layout"
+}

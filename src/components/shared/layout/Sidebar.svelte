@@ -57,10 +57,6 @@
         position: sticky;
     }
 
-    .mobile-only {
-        display: none;
-    }
-
     .content {
         width: 100%;
         display: flex;
@@ -93,33 +89,8 @@
             //completely
             transform: translateX(-100%);
         }
-        .mobile-only {
-            display: flex;
-        }
         .menu-open {
             transform: translateX(0);
-        }
-    }
-
-    .instruction-search {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        padding: 0.6rem;
-        border-radius: 0.4rem;
-    }
-
-    .icon {
-        height: 2.2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-
-        img {
-            height: 100%;
-        }
-
-        &:hover {
-            color: var(--accent);
         }
     }
 

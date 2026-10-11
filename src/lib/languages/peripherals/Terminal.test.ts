@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vite-plus/test'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { Keyboard } from './Keyboard'

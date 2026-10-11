@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { assemblyLinesOf, sameLocations, sourceLocationsOf } from './mappingSelection'
 import type { CompilationSourceMap } from './records'
 

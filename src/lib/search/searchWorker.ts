@@ -23,7 +23,8 @@ export type WorkerRequest =
 export type SearchAnswer = { results: SearchResult[]; mode: 'text' | 'hybrid' }
 
 export type WorkerResponse =
-    { id: number; ok: true; value: unknown } | { id: number; ok: false; error: string }
+    | { id: number; ok: true; value: unknown }
+    | { id: number; ok: false; error: string }
 
 const engine = SearchEngine.create()
 let embedder: Embedder | null = null

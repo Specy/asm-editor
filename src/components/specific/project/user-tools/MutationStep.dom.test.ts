@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import MutationStep from './MutationStep.svelte'
 import { historyRowProps } from './MutationStep.fixture.svelte'

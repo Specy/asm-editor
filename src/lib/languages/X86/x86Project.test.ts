@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { normalizeBuildInput, type ProjectFiles } from '#lib/projectFiles.ts'
 import { analyzeX86Project } from '#lib/languages/service/adapters/x86Adapter.ts'
 import { toX86Project, x86ReachableFiles } from './x86Project'

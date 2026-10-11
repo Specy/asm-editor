@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { LANGUAGE_THEMES } from '#lib/Config.ts'
 import { AVAILABLE_LANGUAGES } from '#lib/Project.svelte.ts'
 import { BUILTIN_THEMES, DEFAULT_THEME } from '#stores/themeStore.svelte.ts'

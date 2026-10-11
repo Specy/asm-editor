@@ -87,6 +87,9 @@ pre.code-block .asm-comment {
 pre.code-block .asm-keyword {
     color: var(--asm-keyword);
 }
+pre.code-block .asm-keyword-size {
+    color: var(--asm-keyword-size);
+}
 pre.code-block .asm-directive {
     color: var(--asm-directive);
 }
@@ -114,11 +117,24 @@ pre.code-block .asm-number-immediate {
 pre.code-block .asm-string {
     color: var(--asm-string);
 }
-pre.code-block .asm-tag {
-    color: var(--asm-tag);
+pre.code-block .asm-invalid {
+    color: var(--asm-invalid);
+    text-decoration: line-through;
 }
 pre.code-block .asm-label {
     text-decoration: underline;
+}
+pre.code-block .asm-bracket-1 {
+    color: var(--asm-bracket-1);
+}
+pre.code-block .asm-bracket-2 {
+    color: var(--asm-bracket-2);
+}
+pre.code-block .asm-bracket-3 {
+    color: var(--asm-bracket-3);
+}
+pre.code-block .asm-bracket-unexpected {
+    color: var(--asm-bracket-unexpected);
 }
 
 .playground-filename {

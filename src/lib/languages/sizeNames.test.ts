@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { REGISTER_SIZES, sizeName, sizeNames } from '#lib/languages/sizeNames.ts'
 import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { AVAILABLE_LANGUAGES } from '#lib/Project.svelte.ts'

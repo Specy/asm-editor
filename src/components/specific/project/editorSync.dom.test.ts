@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import ProjectSyncHarness from './__fixtures__/ProjectSyncHarness.svelte'
 

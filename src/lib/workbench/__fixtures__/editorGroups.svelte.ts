@@ -22,7 +22,8 @@ export function editorGroupsFixture(
         ...data
     })
     let breakpointResolver:
-        ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
+        | ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[])
+        | undefined
     const emulator = $state({
         pc: 0n,
         systemSize: 4,

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { isRuntimeError as isMipsRuntimeError } from '@specy/mips'
 import { isRuntimeError as isRiscVRuntimeError } from '@specy/risc-v'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'

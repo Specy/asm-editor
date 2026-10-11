@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { resolveRuntimeLink } from '#lib/sourceCompilation/assemblyProfile.ts'
 import { cleanCompilationRecords, type CompilationRecord } from '#lib/sourceCompilation/records.ts'
 import { cleanProjectSettings, resolveProjectSettings } from '#lib/projectSettings.ts'

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { scanSource } from './scan'
 import { indexSourceSymbols, visibleSourceSymbols } from './symbols'
 import type { HelpLanguage } from './context'

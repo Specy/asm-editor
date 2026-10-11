@@ -12,6 +12,14 @@
         "sourceMap": true
     },
 
-    "include": ["src/**/*.d.ts", "src/**/*.js", "src/**/*.ts", "src/**/*.svelte"],
+    "include": [
+        "src/**/*.d.ts",
+        "src/**/*.js",
+        "src/**/*.ts",
+        "src/**/*.svelte",
+        "vite.config.ts",
+        "vitest.measure.config.ts",
+        "scripts/**/*.ts"
+    ],
     "exclude": ["src/service-worker"]
 }

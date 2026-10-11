@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { selectedLines } from './selectedLines'
 
 const selection = (startLineNumber: number, endLineNumber: number, endColumn = 2) => ({

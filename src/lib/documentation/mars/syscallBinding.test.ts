@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { mipsSyscalls } from './mipsSyscalls'
 import { riscvSyscalls } from './riscvSyscalls'
 import { simPrototype, type MarsSyscall } from './syscallBinding'

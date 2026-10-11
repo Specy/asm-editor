@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
 import { BLACK } from '#lib/languages/peripherals/screen/color.ts'
 import { Z80_PORT_DOCS } from '#lib/languages/Z80/Z80-model.ts'

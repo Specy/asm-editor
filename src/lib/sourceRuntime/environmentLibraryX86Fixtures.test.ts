@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { GCC_INTEL_V1 } from '@specy/x86/compiler-output'
 import { X86Emulator } from '#lib/languages/X86/X86Emulator.svelte.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'

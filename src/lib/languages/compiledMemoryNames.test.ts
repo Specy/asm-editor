@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 
 it('demangles C++ data, preserves assembly names and collision suffixes, and previews literals', async () => {

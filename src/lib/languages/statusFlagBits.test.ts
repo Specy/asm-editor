@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { ccrToFlagsArray } from '@specy/s68k'
 import { statusFlagsFromBits } from './statusFlagBits'
 import { Z80_FLAGS } from './Z80/Z80-model'

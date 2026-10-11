@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { MIPS } from '@specy/mips'
 import { RISCV } from '@specy/risc-v'
 import { assemble as assembleZ80 } from '@specy/z80'

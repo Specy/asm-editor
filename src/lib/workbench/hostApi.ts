@@ -44,4 +44,9 @@ export type WorkbenchHostLink = {
 
 /** The sections of the Settings panel, in their order. */
 export type SettingsSectionId =
-    'project' | 'display' | 'preferences' | 'layout' | 'shortcuts' | 'theme'
+    | 'project'
+    | 'display'
+    | 'preferences'
+    | 'layout'
+    | 'shortcuts'
+    | 'theme'

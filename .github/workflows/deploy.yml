@@ -16,7 +16,7 @@ jobs:
               uses: actions/checkout@v7
             - uses: actions/setup-node@v7
               with:
-                  node-version: 24.6.0
+                  node-version: 24.11.0
                   cache: npm
             # The search model and the index's vectors (ADR 0026): the model by its pinned
             # revision, the vectors from the newest run, since only changed text is embedded again.

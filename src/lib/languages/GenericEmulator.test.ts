@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
     ANIMATING_PANEL_REFRESH_MS,
     CPU_REGISTER_FILE_ID,

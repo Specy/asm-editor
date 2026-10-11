@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { buildX86Example } from '../../../routes/documentation/x86/instruction/[instructionName]/example'
 import { x86DocumentedNames } from './X86-documentation'
 import { X86Emulator } from './X86Emulator.svelte'

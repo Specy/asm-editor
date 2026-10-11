@@ -75,7 +75,12 @@ export type ExecutionSliceRequest = {
  *   Stop cancels it, and then runs the next slice.
  */
 export type ExecutionSliceReason =
-    'budget' | 'breakpoint' | 'paused' | 'terminated' | 'limit' | 'wait'
+    | 'budget'
+    | 'breakpoint'
+    | 'paused'
+    | 'terminated'
+    | 'limit'
+    | 'wait'
 
 export type ExecutionSlice = {
     reason: ExecutionSliceReason

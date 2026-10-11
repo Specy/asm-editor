@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'

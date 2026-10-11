@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { screenZoom, screenZoomLabel } from './screenZoom'
 
 //the two Screens the design record gives a default size to, plus the panel boxes they are hosted in

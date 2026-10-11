@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
 import { Z80_PORTS } from '#lib/languages/Z80/Z80-model.ts'
 import {

@@ -35,17 +35,19 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
             [/^\s*[;*].*$/, 'comment'],
 
             // A colon always wins over a mnemonic/directive spelling: `end:` is a label.
-            [/(?:[A-Za-z_]\w*|\.[A-Za-z0-9_]\w*):/, 'label'],
+            [/([A-Za-z_]\w*|\.[A-Za-z0-9_]\w*)(:)/, ['label', 'delimiter']],
             // so is a name being given a value, indented or not: the directive after it opens
             // the statement
             [/[A-Za-z_]\w*(?=\s+(?:equ|set)\b|\s*=)/, 'label'],
+            // a size suffix is coloured apart from the word it sizes, here and on instructions and
+            // registers: `dc.w` is the `dc` directive, `.w` wide
             [
-                new RegExp(`(?:${refusedDirectives})${sizeSuffix}\\b`),
-                { token: 'invalid', next: '@operands' }
+                new RegExp(`(${refusedDirectives})(${sizeSuffix})\\b`),
+                ['invalid', { token: 'keyword.size', next: '@operands' }]
             ],
             [
-                new RegExp(`(?:${directives})${sizeSuffix}\\b`),
-                { token: 'directive', next: '@operands' }
+                new RegExp(`(${directives})(${sizeSuffix})\\b`),
+                ['directive', { token: 'keyword.size', next: '@operands' }]
             ],
 
             // In column one, an unknown identifier without a colon is treated as a bare label.
@@ -59,17 +61,19 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
                     }
                 }
             ],
-            // The word is told apart without its size suffix, which is then coloured with it:
-            // `move.l` is one instruction.
+            // The word is told apart without its size suffix: `move.l` is the `move` instruction.
             [
                 new RegExp(`(\\.?[A-Za-z_]\\w*)(${sizeSuffix})`),
-                {
-                    cases: {
-                        '$1@refusedKeywords': { token: 'invalid', next: '@operands' },
-                        '$1@keywords': { token: 'keyword.$1', next: '@operands' },
-                        '@default': { token: 'identifier', next: '@operands' }
-                    }
-                }
+                [
+                    {
+                        cases: {
+                            '$1@refusedKeywords': 'invalid',
+                            '$1@keywords': 'keyword.$1',
+                            '@default': 'identifier'
+                        }
+                    },
+                    { token: 'keyword.size', next: '@operands' }
+                ]
             ],
             { include: '@common' }
         ],
@@ -77,17 +81,23 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
         // the rest of the statement, until the next line starts another one
         operands: [
             [/^/, { token: '', next: '@pop' }],
-            // `d0.w` is one register, its size suffix coloured with it
+            // the size an absolute address or an expression is taken at: `($1000).w`, before the
+            // rule below reads `.w` as a dotted name
+            [/\.[bwlsBWLS](?![\w.])/, 'keyword.size'],
+            // `d0.w` is the `d0` register, its index sized as a word
             [
                 new RegExp(`(\\.?[A-Za-z_]\\w*)(${sizeSuffix})`),
-                {
-                    cases: {
-                        '$1~[dD][0-7]': 'data-register',
-                        '$1~(?:[aA][0-7]|sp)': 'address-register',
-                        '$1~(?:pc|sr|ccr|usp)': 'register',
-                        '@default': 'identifier'
-                    }
-                }
+                [
+                    {
+                        cases: {
+                            '$1~[dD][0-7]': 'data-register',
+                            '$1~(?:[aA][0-7]|sp)': 'address-register',
+                            '$1~(?:pc|sr|ccr|usp)': 'variable.predefined',
+                            '@default': 'identifier'
+                        }
+                    },
+                    'keyword.size'
+                ]
             ],
             { include: '@common' }
         ],
@@ -102,7 +112,7 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
             [/[ \t\f\v\r\n]+/, ''],
             [/#/, 'number.immediate'],
             [/%[0-1][\w]*/, 'number'],
-            [/\$[0-9a-fA-F][\w]*/, 'number'],
+            [/\$[0-9a-fA-F][\w]*/, 'number.hex'],
             [/@[0-7][\w]*/, 'number'],
             [/\d[\w]*/, 'number'],
             [/[+\-*\/\\&!|^~]|<<|>>/, 'operator'],

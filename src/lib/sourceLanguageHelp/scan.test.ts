@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { callAt, identifierAt, includeAt, scanSource } from './scan'
 
 const scan = (text: string, cpp = true) => {

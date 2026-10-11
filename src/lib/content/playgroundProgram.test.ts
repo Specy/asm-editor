@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'

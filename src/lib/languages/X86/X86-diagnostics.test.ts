@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { X86Emulator } from './X86Emulator.svelte'
 import { X86_DIAGNOSTIC_HINTS, x86DiagnosticHint } from './X86-diagnostics'
 

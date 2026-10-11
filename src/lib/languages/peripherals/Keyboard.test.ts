@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { DEFAULT_KEY_HOLD_INTERVAL_MS, Keyboard } from './Keyboard'
 import { KEY_CODES, letterKeyCode } from './keyCodes'
 

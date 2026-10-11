@@ -25,7 +25,8 @@ import {
 
 /** What `base=` asked for: an address the source spelled out, or a label to resolve. */
 export type ScreenDirectiveBase =
-    { kind: 'address'; address: number } | { kind: 'label'; label: string }
+    | { kind: 'address'; address: number }
+    | { kind: 'label'; label: string }
 
 /** One parsed directive: where it is, and the parameters it names. Anything absent stays as it was. */
 export type ScreenDirective = {

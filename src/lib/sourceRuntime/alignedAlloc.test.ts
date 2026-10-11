@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'

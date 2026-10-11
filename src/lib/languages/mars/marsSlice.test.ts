@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import {
     MarsSlicePacer,
     MAX_MARS_CHUNK_GROWTH,

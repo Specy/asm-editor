@@ -578,19 +578,6 @@
         gap: 0.5rem;
     }
 
-    textarea {
-        min-height: 14rem;
-        width: 100%;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border: solid 0.1rem var(--border-color-dark);
-        border-radius: 0.5rem;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.95rem;
-        padding: 0.8rem;
-        resize: vertical;
-    }
-
     :global(.carta-editor) {
         height: 100%;
         flex: 1;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { ProjectFiles } from '#lib/projectFiles.ts'
 import { fileFingerprint, type CompilationRecord, type CompilationSourceMap } from './records'
 import {

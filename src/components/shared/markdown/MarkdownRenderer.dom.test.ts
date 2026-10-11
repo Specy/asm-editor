@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import lzstring from 'lz-string'
 import { readFileSync } from 'node:fs'
@@ -317,9 +317,9 @@ describe('playground rendering', () => {
                 [...(block?.querySelectorAll('span') ?? [])]
                     .find((span) => span.textContent === text)
                     ?.className.replace('asm-', '')
-            //painted as the RISC-V editor paints them, which leaves a label plain
+            //painted as the RISC-V editor paints them
             expect(kindOf('.text')).toBe('directive')
-            expect(kindOf('main')).toBeUndefined()
+            expect(kindOf('main')).toBe('label')
             expect(kindOf('li')).toBe('keyword')
             expect(kindOf('0xFF')).toBe('number-hex')
             expect(kindOf('# keep it')).toBe('comment')
@@ -396,7 +396,8 @@ describe('playgrounds as plain code', () => {
             const block = target.querySelector('pre.plain-playground')
             expect(block?.classList.contains('code-gutter-spacing')).toBe(false)
             expect(block?.textContent).toContain('move.l #1, d0')
-            expect(block?.querySelector('.asm-keyword')?.textContent).toBe('move.l')
+            expect(block?.querySelector('.asm-keyword')?.textContent).toBe('move')
+            expect(block?.querySelector('.asm-keyword-size')?.textContent).toBe('.l')
             expect(target.textContent).not.toContain('expectedRegisters')
             await new Promise((resolve) => setTimeout(resolve, 100))
             expect(target.querySelector('iframe')).toBeNull()

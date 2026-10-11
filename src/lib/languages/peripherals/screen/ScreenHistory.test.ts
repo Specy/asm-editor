@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Screen } from './Screen'
 import { RECORD_OVERHEAD_BYTES, ScreenHistory } from './ScreenHistory'
 import { SCREEN_CELL_8X16, SCREEN_CELL_8X8 } from './bitmapFont'

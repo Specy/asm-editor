@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { M68KEmulator } from './M68K/M68KEmulator.svelte'
 import { Z80Emulator } from './Z80/Z80Emulator.svelte'
 import { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync } from 'svelte'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { compilerExplorerDriver, compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'

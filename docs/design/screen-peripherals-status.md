@@ -56,7 +56,8 @@ The two new exported types:
 
 ```ts
 type KeyStateRequest =
-    { type: 'Keys'; value: [number, number, number, number] } | { type: 'LastKeys' }
+    | { type: 'Keys'; value: [number, number, number, number] }
+    | { type: 'LastKeys' }
 
 type KeyStateResult =
     | { type: 'Keys'; value: [boolean, boolean, boolean, boolean] }

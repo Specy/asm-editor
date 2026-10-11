@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { modShortcutKey, shortcutLabel, shortcutsStore, ShortcutAction } from './shortcutsStore'
 
 function keydown(init: KeyboardEventInit & { code: string }): KeyboardEvent {

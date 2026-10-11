@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vite-plus/test'
 import { Screen } from './Screen'
 import { SCREEN_CELL_8X16, SCREEN_CELL_8X8, glyphRows } from './bitmapFont'
 import { BLACK, WHITE, rgb } from './color'

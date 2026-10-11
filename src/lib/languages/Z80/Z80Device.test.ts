@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
 import { Mouse } from '#lib/languages/peripherals/Mouse.ts'

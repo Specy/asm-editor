@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { startProjectWorker } from './projectWorkerServer'
 import type { ProjectWorkerRequest } from '../protocol'
 

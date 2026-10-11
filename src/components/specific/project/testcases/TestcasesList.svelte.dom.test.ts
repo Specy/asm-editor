@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import TestcasesList from './TestcasesList.svelte'
 import TestcasesSummary from './TestcasesSummary.svelte'

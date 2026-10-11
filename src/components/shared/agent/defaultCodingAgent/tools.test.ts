@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { createDefaultCodingAgentTools } from './tools'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { projectBuildSources } from '#lib/buildSources.ts'

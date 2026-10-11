@@ -6,7 +6,8 @@ import type { Chapter, DocumentationEntry } from './entries'
  * Links between entries stay in the panel), which is also why it may follow one in an Exam.
  */
 export type DocumentationTarget =
-    { kind: 'entry'; entry: DocumentationEntry } | { kind: 'chapter'; chapter: Chapter }
+    | { kind: 'entry'; entry: DocumentationEntry }
+    | { kind: 'chapter'; chapter: Chapter }
 
 export function resolveDocumentationLink(
     href: string,

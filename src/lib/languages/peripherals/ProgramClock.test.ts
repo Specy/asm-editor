@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { HOST_FRAME_FALLBACK_MS, ProgramClock, VIRTUAL_FRAME_INTERVAL_MS } from './ProgramClock'
 
 /** A settled promise takes one microtask, which is what "resolves immediately" means here. */

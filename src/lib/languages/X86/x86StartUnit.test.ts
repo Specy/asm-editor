@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { BASE_CODE } from '#lib/Config.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import {

@@ -248,6 +248,9 @@
 <div class="memory-controls-layout">
     <Form style="width:100%; {style}" on:submit={searchAddress}>
         <div class="address-search" class:without-regions={!showRegions}>
+            <!-- a click anywhere on the field puts the caret in its input, which the keyboard
+                 reaches by Tab -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div
                 class="hex-address"
                 style={inputStyle}

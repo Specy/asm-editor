@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import MemoryRenderer from './MemoryRenderer.svelte'
 import { type DiffedMemory, RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'

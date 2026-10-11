@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { makeProject, normalizeProjectData } from '#lib/Project.svelte.ts'
 import { makeProjectFromArchive, projectToArchive } from '#lib/projectArchive.ts'
 import {

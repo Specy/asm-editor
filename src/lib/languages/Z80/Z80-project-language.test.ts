@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { analyzeZ80Project } from '#lib/languages/service/adapters/z80Adapter.ts'

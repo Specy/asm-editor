@@ -3,27 +3,28 @@
     "license": "AGPL-3.0",
     "version": "0.0.1",
     "engines": {
-        "node": ">=24.0.0"
+        "node": ">=24.11.0"
     },
     "scripts": {
         "predev": "node scripts/search-model.mjs --optional",
-        "dev": "vite dev",
+        "dev": "vp dev",
         "prebuild": "node scripts/search-model.mjs",
-        "build": "cross-env NODE_OPTIONS=--max_old_space_size=6000 vite build",
-        "preview": "vite preview",
-        "fix": "eslint --fix . && prettier --write .",
-        "format": "prettier --write .",
-        "format:check": "prettier --check .",
+        "build": "cross-env NODE_OPTIONS=--max_old_space_size=6000 vp build",
+        "preview": "vp preview",
+        "fix": "vp lint --fix && eslint --fix . && vp fmt",
+        "format": "vp fmt",
+        "format:check": "vp fmt --check",
         "check": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json && tsc --project src/service-worker/tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json --watch",
-        "lint": "eslint .",
+        "lint": "vp lint && npm run lint:svelte",
+        "lint:svelte": "eslint .",
         "pretest": "node scripts/search-model.mjs --optional",
-        "test": "vitest run",
-        "test:watch": "vitest",
+        "test": "vp test run",
+        "test:watch": "vp test",
         "search:model": "node scripts/search-model.mjs",
         "source:help:generate": "node scripts/sim-header/generate.mjs && node scripts/source-language-help/generate.mjs",
         "source:help:check": "node scripts/sim-header/generate.mjs --check && node scripts/source-language-help/generate.mjs --check",
-        "measure": "vitest run --config vitest.measure.config.ts",
+        "measure": "vp test run --config vitest.measure.config.ts",
         "emulators:init": "git submodule update --init --recursive",
         "emulators:status": "node scripts/local-emulators.mjs status",
         "emulators:local": "node scripts/local-emulators.mjs link",
@@ -46,7 +47,7 @@
         "@specy/mips": "4.2.1",
         "@specy/risc-v": "4.2.2",
         "@specy/s68k": "3.1.2",
-        "@specy/x86": "6.1.1",
+        "@specy/x86": "6.1.2",
         "@specy/z80": "1.2.1",
         "@ungap/structured-clone": "^1.4.0",
         "carta-md": "^4.11.3",
@@ -90,8 +91,6 @@
         "fake-indexeddb": "6.2.5",
         "mdsvex": "^0.12.8",
         "onnxruntime-node": "1.30.0",
-        "prettier": "^3.9.9",
-        "prettier-plugin-svelte": "^4.1.1",
         "sass": "^1.105.0",
         "svelte": "^5.57.1",
         "svelte-body": "^2.0.0",
@@ -100,9 +99,9 @@
         "typescript": "^6.0.3",
         "typescript-eslint": "8.70.1",
         "unplugin-icons": "24.0.0",
-        "vite": "^8.3.1",
+        "vite": "npm:@voidzero-dev/vite-plus-core@1.1.0",
         "vite-plugin-wasm": "^3.6.0",
-        "vitest": "5.0.2"
+        "vite-plus": "1.1.0"
     },
     "type": "module",
     "imports": {
@@ -112,5 +111,8 @@
         "#src/*": "./src/*",
         "#stores/*": "./src/stores/*",
         "#content/*": "./src/content/*"
+    },
+    "overrides": {
+        "vite": "npm:@voidzero-dev/vite-plus-core@1.1.0"
     }
 }

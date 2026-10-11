@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { render } from 'svelte/server'
 import DOMPurify from 'isomorphic-dompurify'
 import EntryBody from '#cmp/documentation/entries/EntryBody.svelte'

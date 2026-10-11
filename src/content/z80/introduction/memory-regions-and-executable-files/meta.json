@@ -1,0 +1,6 @@
+{
+    "name": "Memory regions and executable files",
+    "description": "Map Z80 code, data and reserved space with familiar directives, and distinguish memory addresses from positions in executable files.",
+    "order": 8,
+    "topic": "memory-layout"
+}

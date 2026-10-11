@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import DOMPurify from 'isomorphic-dompurify'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { headingSlug, HeadingSlugger } from './headings'
 import { splitLecture } from './lectureSections'
 

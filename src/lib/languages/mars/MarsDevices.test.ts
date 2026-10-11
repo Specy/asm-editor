@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'

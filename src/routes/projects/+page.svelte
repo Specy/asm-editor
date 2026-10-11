@@ -314,14 +314,6 @@
         height: 100%;
     }
 
-    @media screen and (min-width: 650px) {
-        .go-back {
-            position: absolute;
-            top: 4.2rem;
-            left: 1rem;
-        }
-    }
-
     .project-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));

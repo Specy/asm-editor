@@ -68,6 +68,7 @@
 >
     <!-- `touch-action: none`: a finger on the bar drags the window, where the browser would
          otherwise take the gesture over for scrolling a moment in and cancel the drag -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="row"
         onpointerdown={onPointerDown}

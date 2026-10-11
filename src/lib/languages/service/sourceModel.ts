@@ -18,7 +18,13 @@ export type LanguageDiagnostic = {
 }
 
 export type SymbolKind =
-    'label' | 'constant' | 'variable' | 'register-list' | 'macro' | 'section' | 'data'
+    | 'label'
+    | 'constant'
+    | 'variable'
+    | 'register-list'
+    | 'macro'
+    | 'section'
+    | 'data'
 
 export type SymbolOccurrence = {
     symbolId?: string

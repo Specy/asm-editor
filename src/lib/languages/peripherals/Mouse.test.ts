@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Keyboard } from './Keyboard'
 import { KEY_CODES } from './keyCodes'
 import { DEFAULT_DOUBLE_CLICK_INTERVAL_MS, Mouse, MOUSE_EVENT_COUNTER_MODULO } from './Mouse'

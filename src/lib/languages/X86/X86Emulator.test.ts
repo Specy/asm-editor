@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vite-plus/test'
 import { X86_SSE_REGISTERS, X86_X87_REGISTERS } from '@specy/x86'
 import { Prompt } from '#stores/promptStore.svelte.ts'
 import {

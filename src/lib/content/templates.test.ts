@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { getProjectTemplates } from '#lib/content/templates.ts'
 import { createEmulator } from '#lib/languages/Emulator.ts'
 import { InterpreterStatus } from '#lib/languages/commonLanguageFeatures.svelte.ts'

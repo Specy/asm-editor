@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'

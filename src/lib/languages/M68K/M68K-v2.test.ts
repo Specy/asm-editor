@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { M68KEmulator } from './M68KEmulator.svelte'
 
 describe('M68K v2 execution', () => {

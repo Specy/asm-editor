@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { zipSync } from 'fflate'
 import { makeProject, makeProjectFromExternal } from '#lib/Project.svelte.ts'
 import {

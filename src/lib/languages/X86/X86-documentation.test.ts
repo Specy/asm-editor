@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import {
     X86_ADDRESS_KEYWORDS,
     X86_COMMON_SYSCALLS,

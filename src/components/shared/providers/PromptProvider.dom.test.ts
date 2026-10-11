@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import PromptProvider from './PromptProvider.svelte'
 import { Prompt } from '#stores/promptStore.svelte.ts'

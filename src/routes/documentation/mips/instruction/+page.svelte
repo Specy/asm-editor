@@ -129,15 +129,4 @@
         opacity: 1;
         transform: translateX(0);
     }
-
-    .icon {
-        height: 2.2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-
-        img {
-            height: 100%;
-        }
-    }
 </style>

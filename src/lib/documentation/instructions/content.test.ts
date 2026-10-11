@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { instructionContentFromFiles, instructionDescription } from './content'
 import { withInstructionContent } from './resolve'
 import type { DocumentationEntry } from '../entries'

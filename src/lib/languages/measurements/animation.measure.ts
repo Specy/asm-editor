@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, it } from 'vite-plus/test'
 import { UNDO_HISTORY_SIZE } from '#lib/projectSettings.ts'
 import {
     ANIMATION_EXAMPLES,

@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import MemoryControls from './MemoryControls.svelte'
 import type { Emulator } from '#lib/languages/Emulator.ts'

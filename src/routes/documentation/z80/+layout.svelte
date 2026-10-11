@@ -66,7 +66,10 @@
             </a>
 
             <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
-                <Icon onClick={() => (menuOpen = !menuOpen)}>
+                <Icon
+                    onClick={() => (menuOpen = !menuOpen)}
+                    label={menuOpen ? 'Close the menu' : 'Open the menu'}
+                >
                     {#if menuOpen}
                         <FaTimes />
                     {:else}

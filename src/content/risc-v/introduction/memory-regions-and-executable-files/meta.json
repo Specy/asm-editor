@@ -1,0 +1,6 @@
+{
+    "name": "Memory regions and executable files",
+    "description": "Inspect RISC-V data across sections, read the editor's memory map, and distinguish RV32/RV64 execution from ELF executable files.",
+    "order": 9,
+    "topic": "memory-layout"
+}

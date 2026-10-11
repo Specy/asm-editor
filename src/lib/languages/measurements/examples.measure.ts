@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
 import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'

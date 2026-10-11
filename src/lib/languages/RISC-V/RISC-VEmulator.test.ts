@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import {

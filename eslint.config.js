@@ -8,7 +8,12 @@ import { loadConfig } from '@sveltejs/load-config'
 const svelteConfig = (await loadConfig('./', { traverse: false }))?.config
 
 export default ts.config(
-    { ignores: ['src/lib/languages/demangle/module.js'] },
+    {
+        // Oxlint (`lint` in vite.config.ts) lints every other script. ESLint stays for what
+        // eslint-plugin-svelte understands: components and the `.svelte.ts` / `.svelte.js`
+        // modules that use runes.
+        ignores: ['**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}', '!**/*.svelte.{js,ts}']
+    },
     js.configs.recommended,
     ...ts.configs.recommended,
     ...svelte.configs.recommended,
@@ -33,13 +38,6 @@ export default ts.config(
         rules: {
             'no-undef': 'off',
             'no-import-assign': 'off'
-        }
-    },
-    {
-        // The service worker runs off-main-thread and has its own global scope.
-        files: ['src/service-worker/**/*.ts'],
-        languageOptions: {
-            globals: { ...globals.serviceworker }
         }
     },
     {
@@ -79,8 +77,7 @@ export default ts.config(
             'node_modules/',
             'emulators/',
             'examples/',
-            'static/',
-            '*.cjs'
+            'static/'
         ]
     }
 )

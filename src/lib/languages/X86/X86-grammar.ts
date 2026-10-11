@@ -14,6 +14,12 @@ export const X86Instructions = X86_MNEMONICS
 
 export { X86Directives, X86SizeSpecifiers }
 
+/**
+ * The directives a bare name before which is the label they define, colon or not: `msg db "hi"`,
+ * `COUNT equ 5`. The preprocessor's own (`%define`) open their line instead.
+ */
+const labelledDirectives = X86Directives.filter((directive) => !directive.startsWith('%'))
+
 export const X86Language: monaco.languages.IMonarchLanguage = {
     ignoreCase: true,
 
@@ -57,17 +63,31 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
 
     symbols: /[=><!~?:&|+\-*/^%]+/,
 
-    // C# style strings
-    escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+    // the escapes of a backquoted string, the only kind NASM reads escapes in
+    escapes: /\\(?:[abtnvfre'"`\\?]|[0-7]{1,3}|x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
     // A statement's first word is its instruction or directive and the words after it are its
     // operands, so a label spelled like an instruction (`jmp loop`) reads as a name there.
     tokenizer: {
         root: [
             // These context-sensitive forms must run before the general identifier rule.
-            [/^[ \t]*%[a-zA-Z_]\w*/, 'preprocessor'],
-            [/^[ \t]*[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'],
-            [/[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'],
+            [/([a-zA-Z_@$.][\w@$.]*)(:)/, ['label', 'delimiter']],
+            // a name a data or value directive follows is the label it defines, without a colon
+            [
+                new RegExp(
+                    `[a-zA-Z_@$.][\\w@$.]*(?=[ \\t]+(?:${labelledDirectives.join('|')})(?![\\w@$.]))`
+                ),
+                {
+                    cases: {
+                        '@prefixes': 'keyword.prefix',
+                        '@instructions': { token: 'keyword.instruction', next: '@operands' },
+                        '@directives': { token: 'directive', next: '@operands' },
+                        '@default': 'label'
+                    }
+                }
+            ],
+            // NASM's deprecated `$0FF`, before the rule that reads `$` as the start of a name
+            [/\$[0-9][0-9a-fA-F_]*/, 'number.hex'],
 
             // Identifiers and keywords (instructions, directives, registers, size specifiers).
             // A prefix and `times`, which repeats what follows its count, leave the statement's
@@ -92,6 +112,7 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
         // the rest of the statement, until the next line starts another one
         operands: [
             [/^/, { token: '', next: '@pop' }],
+            [/\$[0-9][0-9a-fA-F_]*/, 'number.hex'],
             [
                 /[a-zA-Z_@$.%][\w@$.]*/,
                 {
@@ -129,6 +150,7 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
             // Hex patterns: 0x123, 123h
             [/-?\d+(\.\d+)/, 'number.float'],
             [/0[xX][0-9a-fA-F]+/, 'number.hex'],
+            [/0[hH][0-9a-fA-F]+/, 'number.hex'],
             [/[0-9][0-9a-fA-F]*h/, 'number.hex'],
             // Binary patterns: 0b0101, 0101b
             [/0[bB][01]+/, 'number.binary'],
@@ -139,40 +161,25 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
             // Decimal
             [/[0-9]+/, 'number'],
 
-            // Strings (double quoted, single quoted)
-            [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-terminated string
-            [/'([^'\\]|\\.)*$/, 'string.invalid'], // non-terminated string
-            [/"/, { token: 'string.quote', bracket: '@open', next: '@string_dq' }],
-            [/'/, { token: 'string.quote', bracket: '@open', next: '@string_sq' }],
-
-            // Characters (single quoted) - treat like strings for simplicity here
-            [/'[^\\']'/, 'string'],
-            [/(')(@escapes)(')/, ['string', 'string.escape', 'string']],
-            [/'/, 'string.invalid']
-        ],
-
-        comment: [
-            [/[;#].*$/, 'comment'] // Allow comments after whitespace
+            // Strings and characters. NASM reads a quoted string as it is written, a backslash
+            // included (`"C:\"`), and escapes only in a backquoted one (`` `hi\n` ``). One left
+            // open runs to the end of its line.
+            [/"[^"]*"?/, 'string'],
+            [/'[^']*'?/, 'string'],
+            [/`/, { token: 'string', next: '@string_bq' }]
         ],
 
         whitespace: [
             [/[ \t\r\n]+/, 'white'],
-            [/[;#].*$/, 'comment'], // Allow comments after whitespace
-            [/^\s*%[a-zA-Z_]+.*$/, 'preprocessor'] // NASM preprocessor directives
+            [/;.*$/, 'comment']
         ],
 
-        string_dq: [
-            [/[^\\"]+/, 'string'],
+        string_bq: [
+            [/^/, { token: '', next: '@pop' }],
+            [/[^\\`]+/, 'string'],
             [/@escapes/, 'string.escape'],
             [/\\./, 'string.escape.invalid'],
-            [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
-        ],
-
-        string_sq: [
-            [/[^\\']+/, 'string'],
-            [/@escapes/, 'string.escape'],
-            [/\\./, 'string.escape.invalid'],
-            [/'/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
+            [/`/, { token: 'string', next: '@pop' }]
         ]
     } // tokenizer
 }

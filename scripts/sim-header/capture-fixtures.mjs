@@ -20,10 +20,10 @@ import {
     compilerCodeFlags,
     compilerLanguageFlags
 } from '../../src/lib/sourceCompilation/compilerContract.mjs'
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as prettier from 'prettier'
 import { GCC_INTEL_V1 } from '@specy/x86/compiler-output'
 import { SIM_HEADER_DIRECTORY } from './simHeader.mjs'
 
@@ -367,6 +367,8 @@ const only = option('--only') ?? ''
 //the whole response as Compiler Explorer sent it, for checking what the stored lines leave out
 const raw = option('--raw')
 let lastRequest = 0
+//the fixtures written this run, stored minified and formatted together once the last is captured
+const written = []
 for (const [program, settings] of Object.entries(PROGRAMS)) {
     for (const target of settings.targets) {
         const x86 = target === 'X86'
@@ -403,6 +405,14 @@ for (const [program, settings] of Object.entries(PROGRAMS)) {
             }
         }
     }
+}
+
+if (written.length > 0) {
+    const format = spawnSync('npx', ['vp', 'fmt', ...written], {
+        cwd: repository,
+        stdio: 'inherit'
+    })
+    if (format.status !== 0) throw new Error('vp fmt failed on the captured fixtures')
 }
 
 /** One compile, stored in `directory` as `<name>.json`. */
@@ -469,8 +479,8 @@ async function capture(name, fixture, sysroot, header, directory) {
         lines: storedLines(response.asm ?? [], fixture.target)
     }
     const path = join(directory, `${name}.json`)
-    const options = { ...(await prettier.resolveConfig(path)), filepath: path }
-    writeFileSync(path, await prettier.format(JSON.stringify(fixture), options))
+    writeFileSync(path, JSON.stringify(fixture))
+    written.push(path)
     if (raw) writeFileSync(join(raw, `${name}.json`), JSON.stringify(response))
     console.log(`captured ${name}`)
 }

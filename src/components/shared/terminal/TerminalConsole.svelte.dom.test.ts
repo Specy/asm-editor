@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import TerminalConsole from './TerminalConsole.svelte'
 import { Terminal, type TerminalOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'

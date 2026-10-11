@@ -6,7 +6,12 @@ import {
 } from '#stores/themeStore.svelte.ts'
 import { TinyColor } from '@ctrl/tinycolor'
 import type monaco from 'monaco-editor'
-import { ASSEMBLY_TOKEN_COLORS, type AssemblyThemeToken } from './assemblyTokenColors'
+import {
+    ASSEMBLY_BRACKET_COLORS,
+    ASSEMBLY_TOKEN_COLORS,
+    ASSEMBLY_TOKEN_FONT_STYLES,
+    type AssemblyThemeToken
+} from './assemblyTokenColors'
 
 /**
  * The store's own `getColor`/`getText`/`layer`, over whichever theme is being asked about: those
@@ -31,12 +36,16 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
     //the page disagreeing with the panels around it.
     const { color, text, layer } = readerOf(ScopedTheme.theme?.theme ?? ThemeStore.theme)
     const isDark = color('secondary').isDark()
+    const tokens = ASSEMBLY_TOKEN_COLORS[isDark ? 'dark' : 'light']
+    const brackets = ASSEMBLY_BRACKET_COLORS[isDark ? 'dark' : 'light']
     return {
         base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
         rules: [
             ...(isDark ? darkOverride : whiteOverride),
-            ...assemblyRules(ASSEMBLY_TOKEN_COLORS[isDark ? 'dark' : 'light']),
+            ...assemblyRules(tokens),
+            //C's preprocessor lines are directives too, red like the assemblers' own
+            { token: 'keyword.directive', foreground: tokens.directive.replace('#', '') },
             //punctuation is text, in the editor's own text colour rather than the near-match
             //Monaco's base themes give it, so a code block's plain text reads the same
             ...['delimiter', 'operator'].map((token) => ({
@@ -62,7 +71,11 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
             'menu.selectionForeground': text('tertiary'),
             //Monaco's context menu uses list hover colors for mouse and keyboard focus.
             'list.hoverBackground': layer('tertiary', 6).toHexString(),
-            'list.hoverForeground': text('tertiary')
+            'list.hoverForeground': text('tertiary'),
+            'editorBracketHighlight.foreground1': brackets.levels[0],
+            'editorBracketHighlight.foreground2': brackets.levels[1],
+            'editorBracketHighlight.foreground3': brackets.levels[2],
+            'editorBracketHighlight.unexpectedBracket.foreground': brackets.unexpected
         }
     }
 }
@@ -74,7 +87,7 @@ function assemblyRules(
     return Object.entries(colors).map(([token, foreground]) => ({
         token,
         foreground: foreground.replace('#', ''),
-        fontStyle: token === 'comment' ? 'italic' : undefined
+        fontStyle: ASSEMBLY_TOKEN_FONT_STYLES[token as AssemblyThemeToken]
     }))
 }
 
@@ -142,11 +155,6 @@ const darkOverride = [
     {
         foreground: 'ffee80',
         token: 'meta.function-call'
-    },
-    {
-        foreground: 'f8f8f8',
-        background: '800f00',
-        token: 'invalid'
     },
     {
         foreground: 'ffffff',

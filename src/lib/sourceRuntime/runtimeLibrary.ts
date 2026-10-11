@@ -187,7 +187,8 @@ export function runtimeSourcePath(abi: string, source: string): string {
  * Environment library's header, which belongs to no ABI.
  */
 export type RuntimeSourcePath =
-    { kind: 'library'; abi: string; source: string } | { kind: 'environment' }
+    | { kind: 'library'; abi: string; source: string }
+    | { kind: 'environment' }
 
 /** What a path under `@runtime/` names among the C sources, or undefined for anything else. */
 export function parseRuntimeSourcePath(path: string): RuntimeSourcePath | undefined {

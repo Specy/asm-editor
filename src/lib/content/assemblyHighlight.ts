@@ -18,7 +18,7 @@ import { X86Directives, X86Prefixes, X86SizeSpecifiers } from '#lib/languages/X8
  * and what a `$` means. The word lists it does keep are each language's registers, since every
  * assembly listing on a page is coloured by it, and an operand reads as a register or as a name;
  * the directives the languages spell like instructions (`section`, `equ`, `dc.w`); x86's size
- * keywords and prefixes; and the Z80's conditions.
+ * keywords and prefixes; the Z80's conditions; RISC-V's CSRs; and the M68K words s68k refuses.
  * Those are rules rather than imports where the lists the editor and the Cores define come with the
  * Cores themselves, an emulator too many for a lecture page, so the tests hold the rules to them.
  * Anything it is unsure of stays plain.
@@ -36,13 +36,21 @@ export type AssemblyTokenKind =
     | 'register'
     | 'condition'
     | 'keyword'
+    | 'size'
     | 'number'
     | 'immediate'
+    | 'bracket'
+    | 'invalid'
     | 'plain'
 
 export type AssemblyToken = {
     kind: AssemblyTokenKind
     text: string
+    /**
+     * How deeply a bracket is nested, counted across the whole program as the editor counts it,
+     * from 0; none for a closing bracket that closes nothing open.
+     */
+    level?: number
 }
 
 type Syntax = {
@@ -71,8 +79,29 @@ type Syntax = {
      * `times 4 db 0`; the others read a label spelled like one there as a name (`bra end`).
      */
     operandDirectives: boolean
-    /** Operand words that are neither registers nor names: x86's `byte`, `rel`. */
-    keywords?: ReadonlySet<string>
+    /** Operand words that size or place an operand: x86's `byte`, `rel`. */
+    sizes?: ReadonlySet<string>
+    /** Whether a name carries a size suffix coloured apart from it, as the M68K's `move.l` does. */
+    sizeSuffixes: boolean
+    /** The operators that take half of an address, MIPS and RISC-V's `%hi(msg)`. */
+    relocations?: RegExp
+    /** The CSRs, which are registers among the operands of the instructions that name one. */
+    csrs?: ReadonlySet<string>
+    /** Whether a number with a colon is a label, as RISC-V's local `1:` is. */
+    numericLabels: boolean
+    /**
+     * Whether a name in the first column is a label, colon or not, as the M68K and Z80 assemblers
+     * read one: `loop dbra d0, loop`. Only when another word follows that is not a register, since
+     * an unindented `rts` is still the instruction.
+     */
+    columnLabels: boolean
+    /** The instructions and directives the assembler knows but refuses, the M68K's `stop`. */
+    refused?: ReadonlySet<string>
+    /** The bracket pairs the editor colours by how deeply they nest, each opener before its closer. */
+    brackets: string
+    /** What opens a string or character, and which of those read a backslash as an escape. */
+    quotes: string
+    escapingQuotes: string
     /** What can stand before the instruction on its line: x86's `rep movsb`. */
     prefixes?: ReadonlySet<string>
     /** The conditions a jump, call or return takes as its first operand, as the Z80's do. */
@@ -81,17 +110,12 @@ type Syntax = {
     decimalFractions: boolean
     /** Whether `#` is a token of its own, the M68K's immediate marker, rather than the literal's. */
     immediates: boolean
-    /** Whether a label's colon is part of it, as the M68K and x86 editors colour it. */
-    labelColon: boolean
 }
 
 /** `0`..`31`, the register numbers of the two RISC architectures. */
 const UPTO_31 = '(?:[12]?[0-9]|3[01])'
 
-/**
- * The integer and floating-point registers by number and by ABI name, `fp` (`s0`) and `pc`
- * included; a CSR is named in an instruction like any symbol and stays plain.
- */
+/** The integer and floating-point registers by number and by ABI name, `fp` (`s0`) and `pc` included. */
 const RISCV_REGISTER = new RegExp(
     `^(?:x${UPTO_31}|f${UPTO_31}|zero|ra|sp|gp|tp|fp|pc|t[0-6]|a[0-7]|s(?:[0-9]|1[01])|ft(?:[0-9]|1[01])|fa[0-7]|fs(?:[0-9]|1[01]))$`
 )
@@ -123,6 +147,19 @@ const Z80_DIRECTIVES = new Set([
     ...['end', '#target', '#code', '#include', '#local', '#endlocal', '#insert']
 ])
 
+/** RARS's CSRs, which `csrr t0, fcsr` names among its operands. */
+const RISCV_CSRS = new Set([
+    ...['ustatus', 'fflags', 'frm', 'fcsr', 'uie', 'utvec', 'uscratch', 'uepc', 'ucause'],
+    ...['utval', 'uip', 'cycle', 'time', 'instret', 'cycleh', 'timeh', 'instreth']
+])
+
+/** The 68000 instructions s68k refuses, and the directives of other assemblers it does. */
+const M68K_REFUSED = new Set([
+    ...['rte', 'stop', 'reset', 'memory', 'macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
+    ...['ifle', 'ifgt', 'ifge', 'ifc', 'ifnc', 'ifarg', 'endc', 'if', 'else', 'endi', 'while'],
+    ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless']
+])
+
 /** `jr c, loop` takes the carry condition, where `c` is otherwise a register. */
 const Z80_CONDITIONS = {
     after: new Set(['jp', 'jr', 'call', 'ret']),
@@ -133,12 +170,13 @@ const Z80_CONDITIONS = {
 const X86_REGISTERS = new Set(X86_ASSEMBLER_REGISTERS)
 const lowerCased = (words: readonly string[]) => new Set(words.map((word) => word.toLowerCase()))
 const X86_DIRECTIVES = lowerCased(X86Directives)
-const X86_KEYWORDS = lowerCased(X86SizeSpecifiers)
+const X86_SIZES = lowerCased(X86SizeSpecifiers)
 const X86_PREFIXES = lowerCased([...X86Prefixes, 'times'])
 
 /** MIPS spells every register with a `$`, by number or by name: `$8`, `$t0`, `$f2`. */
 const isMipsRegister = (name: string) => name.startsWith('$')
 const isRiscvRegister = (name: string) => RISCV_REGISTER.test(name)
+const RISCV_RELOCATIONS = /^%(?:pcrel_hi|pcrel_lo|hi|lo)$/i
 
 const SYNTAX: Record<AvailableLanguages, Syntax> = {
     M68K: {
@@ -147,12 +185,19 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         dollarIsHex: true,
         percentIsBinary: true,
         isRegister: (name) => M68K_REGISTER.test(name),
-        dotDirectives: true,
+        //s68k's directives have no dot: `.loop` is a local label
+        dotDirectives: false,
         operandDirectives: false,
         directives: M68K_DIRECTIVES,
+        sizeSuffixes: true,
+        numericLabels: false,
+        columnLabels: true,
+        refused: M68K_REFUSED,
+        brackets: '()',
+        quotes: `"'`,
+        escapingQuotes: `"'`,
         decimalFractions: false,
-        immediates: true,
-        labelColon: true
+        immediates: true
     },
     Z80: {
         lineComment: [';'],
@@ -164,9 +209,14 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         operandDirectives: false,
         directives: Z80_DIRECTIVES,
         conditions: Z80_CONDITIONS,
+        sizeSuffixes: false,
+        numericLabels: false,
+        columnLabels: true,
+        brackets: '()[]',
+        quotes: `"'`,
+        escapingQuotes: `"'`,
         decimalFractions: false,
-        immediates: false,
-        labelColon: false
+        immediates: false
     },
     X86: {
         lineComment: [';'],
@@ -178,11 +228,17 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         dotDirectives: false,
         operandDirectives: true,
         directives: X86_DIRECTIVES,
-        keywords: X86_KEYWORDS,
+        sizes: X86_SIZES,
         prefixes: X86_PREFIXES,
+        sizeSuffixes: false,
+        numericLabels: false,
+        columnLabels: false,
+        brackets: '()[]{}',
+        //NASM reads escapes in a backquoted string only: `"C:\"` is a string ending in a backslash
+        quotes: '"\'`',
+        escapingQuotes: '`',
         decimalFractions: true,
-        immediates: false,
-        labelColon: true
+        immediates: false
     },
     MIPS: {
         lineComment: ['#'],
@@ -192,9 +248,15 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         isRegister: isMipsRegister,
         dotDirectives: true,
         operandDirectives: false,
+        sizeSuffixes: false,
+        relocations: /^%(?:hi|lo)$/i,
+        numericLabels: false,
+        columnLabels: false,
+        brackets: '()',
+        quotes: `"'`,
+        escapingQuotes: `"'`,
         decimalFractions: true,
-        immediates: false,
-        labelColon: false
+        immediates: false
     },
     'RISC-V': {
         lineComment: ['#'],
@@ -204,9 +266,16 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         isRegister: isRiscvRegister,
         dotDirectives: true,
         operandDirectives: false,
+        sizeSuffixes: false,
+        relocations: RISCV_RELOCATIONS,
+        csrs: RISCV_CSRS,
+        numericLabels: true,
+        columnLabels: false,
+        brackets: '()',
+        quotes: `"'`,
+        escapingQuotes: `"'`,
         decimalFractions: true,
-        immediates: false,
-        labelColon: false
+        immediates: false
     },
     'RISC-V-64': {
         lineComment: ['#'],
@@ -216,9 +285,16 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         isRegister: isRiscvRegister,
         dotDirectives: true,
         operandDirectives: false,
+        sizeSuffixes: false,
+        relocations: RISCV_RELOCATIONS,
+        csrs: RISCV_CSRS,
+        numericLabels: true,
+        columnLabels: false,
+        brackets: '()',
+        quotes: `"'`,
+        escapingQuotes: `"'`,
         decimalFractions: true,
-        immediates: false,
-        labelColon: false
+        immediates: false
     }
 }
 
@@ -253,7 +329,8 @@ function operandKind(
         return 'condition'
     }
     if (syntax.operandDirectives && isDirective(name, syntax)) return 'directive'
-    if (syntax.keywords?.has(name)) return 'keyword'
+    if (syntax.sizes?.has(name)) return 'size'
+    if (syntax.csrs?.has(name) && mnemonic.startsWith('csr')) return 'register'
     return syntax.isRegister(name) ? 'register' : 'plain'
 }
 
@@ -280,12 +357,17 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
         if (last?.kind === kind && kind === 'plain') last.text += text
         else tokens.push({ kind, text })
     }
+    //the colon is punctuation, left out of the label as the editors leave it out
     const pushLabel = (name: string) => {
-        if (syntax.labelColon) push('label', `${name}:`)
-        else {
-            push('label', name)
-            push('plain', ':')
-        }
+        push('label', name)
+        push('plain', ':')
+    }
+    //an M68K size suffix is coloured apart from the name it sizes: `move` `.l`, `d0` `.w`
+    const pushSized = (kind: AssemblyTokenKind, name: string) => {
+        const suffix = syntax.sizeSuffixes ? /\.[bwls]$/i.exec(name) : null
+        if (!suffix || suffix.index === 0) return push(kind, name)
+        push(kind, name.slice(0, suffix.index))
+        push('size', suffix[0])
     }
 
     while (cursor < line.length) {
@@ -296,12 +378,13 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
             break
         }
 
-        if (char === '"' || char === "'") {
+        if (syntax.quotes.includes(char)) {
+            const escapes = syntax.escapingQuotes.includes(char)
             let end = cursor + 1
             while (end < line.length && line[end] !== char) {
                 //a backslash takes the character after it with it, so an escaped quote does not
                 //close the string
-                end += line[end] === '\\' ? 2 : 1
+                end += escapes && line[end] === '\\' ? 2 : 1
             }
             //an unterminated string runs to the end of the line rather than swallowing the next one
             const close = Math.min(end + 1, line.length)
@@ -320,6 +403,12 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
             if (line[end] === ':') {
                 pushLabel(name)
                 cursor = end + 1
+                continue
+            }
+            //the size an M68K address or expression is taken at: `($1000).w`
+            if (syntax.sizeSuffixes && /^\.[bwls]$/i.test(name)) {
+                push('size', name)
+                cursor = end
                 continue
             }
             push(syntax.dotDirectives ? 'directive' : 'plain', name)
@@ -355,7 +444,12 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                     following !== undefined &&
                     (cursor === 0 || syntax.operandDirectives) &&
                     isDirective(following.toLowerCase(), syntax)
-                if (named || ASSIGNMENT.test(line.slice(end))) push('label', name)
+                const columnLabel =
+                    syntax.columnLabels &&
+                    cursor === 0 &&
+                    following !== undefined &&
+                    !syntax.isRegister(following.toLowerCase())
+                if (named || columnLabel || ASSIGNMENT.test(line.slice(end))) push('label', name)
                 //a prefix leaves the instruction it stands before still to come: `rep movsb`, and
                 //so does x86's `times`, which repeats what follows its count: `times 4 db 0`
                 else if (syntax.prefixes?.has(lower)) {
@@ -363,10 +457,14 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                 } else {
                     seenInstruction = true
                     mnemonic = lower
-                    push(isDirective(lower, syntax) ? 'directive' : 'mnemonic', name)
+                    const refused = syntax.refused?.has(lower.replace(/\.[bwls]$/, ''))
+                    pushSized(
+                        refused ? 'invalid' : isDirective(lower, syntax) ? 'directive' : 'mnemonic',
+                        name
+                    )
                 }
             } else {
-                push(operandKind(name.toLowerCase(), syntax, mnemonic, operands), name)
+                pushSized(operandKind(name.toLowerCase(), syntax, mnemonic, operands), name)
                 operands += 1
             }
             cursor = end
@@ -380,17 +478,35 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                 cursor += 1
                 continue
             }
-            //and the Z80 spells some directives with one: `#include`
-            if (syntax.directives && isNameStart(line[cursor + 1] ?? '')) {
-                let end = cursor + 1
-                while (end < line.length && isNameBody(line[end])) end += 1
-                const word = line.slice(cursor, end)
-                if (syntax.directives.has(word.toLowerCase())) {
-                    push('directive', word)
-                    seenInstruction = true
-                    cursor = end
-                    continue
-                }
+        }
+
+        //a word with a sigil: the Z80's `#include` and x86's `%define` directives, and the operators
+        //that take half of an address, `%hi(msg)`
+        if ((char === '#' || char === '%') && isNameStart(line[cursor + 1] ?? '')) {
+            let end = cursor + 1
+            while (end < line.length && isNameBody(line[end])) end += 1
+            const word = line.slice(cursor, end)
+            if (syntax.directives?.has(word.toLowerCase())) {
+                push('directive', word)
+                seenInstruction = true
+                cursor = end
+                continue
+            }
+            if (syntax.relocations?.test(word)) {
+                push('keyword', word)
+                cursor = end
+                continue
+            }
+        }
+
+        //RISC-V's local labels are numbers: `1:`, which `1b` and `1f` refer to
+        if (syntax.numericLabels && !seenInstruction && isDigit(char)) {
+            let end = cursor
+            while (end < line.length && isDigit(line[end])) end += 1
+            if (line[end] === ':') {
+                pushLabel(line.slice(cursor, end))
+                cursor = end + 1
+                continue
             }
         }
 
@@ -418,10 +534,31 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
             continue
         }
 
-        push('plain', char)
+        push(syntax.brackets.includes(char) ? 'bracket' : 'plain', char)
         cursor += 1
     }
     return tokens
+}
+
+/**
+ * Each bracket's nesting level, counted through the whole program the way the editor counts it: an
+ * opener takes the depth it opens at and its closer the same, and a closer that does not close the
+ * innermost open bracket is unexpected and gets none.
+ */
+function levelBrackets(lines: AssemblyToken[][], syntax: Syntax): AssemblyToken[][] {
+    const open: string[] = []
+    for (const token of lines.flat()) {
+        if (token.kind !== 'bracket') continue
+        const at = syntax.brackets.indexOf(token.text)
+        if (at % 2 === 0) {
+            token.level = open.length
+            open.push(syntax.brackets[at + 1])
+        } else if (open[open.length - 1] === token.text) {
+            open.pop()
+            token.level = open.length
+        }
+    }
+    return lines
 }
 
 /**
@@ -431,9 +568,9 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
  */
 export function tokenizeAssembly(code: string, language: AvailableLanguages): AssemblyToken[][] {
     const syntax = SYNTAX[language]
-    return code
-        .split('\n')
-        .map((line) =>
-            syntax ? tokenizeLine(line, syntax) : [{ kind: 'plain' as const, text: line }]
-        )
+    if (!syntax) return code.split('\n').map((line) => [{ kind: 'plain' as const, text: line }])
+    return levelBrackets(
+        code.split('\n').map((line) => tokenizeLine(line, syntax)),
+        syntax
+    )
 }

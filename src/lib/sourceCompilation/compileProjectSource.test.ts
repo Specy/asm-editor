@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { makeProject, normalizeProjectData, projectContentEquals } from '#lib/Project.svelte.ts'
 import { makeProjectFromArchive, projectToArchive } from '#lib/projectArchive.ts'
 import { BASE_CODE } from '#lib/Config.ts'

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import { appendLog, buildEntry, exitEntry, testRunEntry, type LogDraft } from './workbenchLog'

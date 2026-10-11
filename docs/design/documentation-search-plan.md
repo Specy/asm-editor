@@ -116,7 +116,7 @@ A Search scope loads the shards it needs, and the browser keeps each one cached 
     - Tests: the dimensions, the normalisation and the quantization round-trip error. With the model in
       `.cache`, the spike's six M68K queries keep their first results.
 - **`payload.ts`.** A shard is `{ format: 1, model: <revision>, dims: 256, documents: […], vectors:
-<base64 Int8Array> }`. A Lecture section that is embedded in several windows is stored once, with
+  <base64 Int8Array> }`. A Lecture section that is embedded in several windows is stored once, with
   several vectors. Tests: a round trip.
     - Orama's own `save()` was ruled out by the spike: 44.6 MiB of JSON against 3.1 MiB for this format,
       for every Course together.

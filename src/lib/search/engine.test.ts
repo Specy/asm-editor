@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { excerpt, queryTerms, SearchEngine } from './engine'
 import { VECTOR_DIMS } from './model'
 import { createPayload, type EntryDocument, type SectionDocument } from './payload'

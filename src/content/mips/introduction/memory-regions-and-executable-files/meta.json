@@ -1,0 +1,6 @@
+{
+    "name": "Memory regions and executable files",
+    "description": "Connect MIPS declarations to the Playground memory map, distinguish static data from stack and heap space, and compare Build with ELF loading.",
+    "order": 8,
+    "topic": "memory-layout"
+}

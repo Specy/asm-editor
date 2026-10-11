@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import type { EditorSource } from '#cmp/specific/project/editorSource.ts'
 import { projectSourceModelKey } from '#lib/languages/service/uri.ts'
 import { EditorModels } from './editorModels'

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import type { X86Emulator as CoreX86Emulator } from '@specy/x86'
 import { X86Emulator } from './X86Emulator.svelte'
 import { RandomSource } from '../peripherals/RandomSource'

@@ -1,0 +1,6 @@
+{
+    "name": "Memory regions and executable files",
+    "description": "Read a simple memory map, distinguish sections from runtime regions, and see how an ELF executable tells the loader where code and data belong.",
+    "order": 9,
+    "topic": "memory-layout"
+}

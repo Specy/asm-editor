@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { registerLanguageSession } from './sessionRegistry'

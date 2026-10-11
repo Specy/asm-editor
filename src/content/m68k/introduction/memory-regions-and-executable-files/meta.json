@@ -1,0 +1,6 @@
+{
+    "name": "Memory regions and executable files",
+    "description": "Map M68K code and data placed with org, dc and ds, then compare this editor's Build with sections and loading in executable files.",
+    "order": 8,
+    "topic": "memory-layout"
+}

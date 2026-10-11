@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { createMIPSCompletion, createMIPSSignatureHelpProvider } from './MIPS/MIPS-language'
 import { createRISCVCompletion, createRISCVSignatureHelpProvider } from './RISC-V/RISC-V-language'

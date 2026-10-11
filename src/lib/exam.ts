@@ -54,7 +54,10 @@ export type CCodingSection = ExamSectionBase & {
 }
 
 export type ExamSection =
-    OpenQuestionSection | MultipleChoiceSection | AssemblyCodingSection | CCodingSection
+    | OpenQuestionSection
+    | MultipleChoiceSection
+    | AssemblyCodingSection
+    | CCodingSection
 
 export type OpenQuestionAnswer = {
     type: 'open-question'
@@ -77,7 +80,10 @@ export type CCodingAnswer = {
 }
 
 export type ExamSectionAnswer =
-    OpenQuestionAnswer | MultipleChoiceAnswer | AssemblyCodingAnswer | CCodingAnswer
+    | OpenQuestionAnswer
+    | MultipleChoiceAnswer
+    | AssemblyCodingAnswer
+    | CCodingAnswer
 
 export type ExamSubmission = {
     name: string

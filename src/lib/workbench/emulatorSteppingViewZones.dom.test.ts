@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { flushSync } from 'svelte'
 import { setupRealStepping } from './__fixtures__/realSteppingRunner.svelte'
 

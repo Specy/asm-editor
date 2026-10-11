@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { getProjectTemplates } from '#lib/content/templates.ts'
 import { detectAssemblyLanguage } from './languageDetector'
 

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import { RISCVEmulator } from './RISC-V/RISC-VEmulator.svelte'
 import { M68KEmulator } from './M68K/M68KEmulator.svelte'

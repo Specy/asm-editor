@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { FONT_ROWS, SCREEN_CELL_8X16, SCREEN_CELL_8X8, glyphRows, hasGlyph } from './bitmapFont'
 
 /** One glyph as a picture, so an expectation is readable and a wrong table entry is obvious. */

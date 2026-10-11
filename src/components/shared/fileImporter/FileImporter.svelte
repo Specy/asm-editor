@@ -38,6 +38,8 @@
 </script>
 
 <input type="file" bind:this={input} {accept} style="display: none;" onchange={onChange} />
-<div onclick={() => input?.click()} style="cursor:pointer; width:fit-content" role="button">
+<!-- the control is whatever the caller puts inside, a button, whose click (or Enter) bubbles here -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div onclick={() => input?.click()} style="cursor:pointer; width:fit-content">
     {@render children?.()}
 </div>

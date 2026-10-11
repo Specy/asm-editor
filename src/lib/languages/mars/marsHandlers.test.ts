@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import type { EmulatorInterrupt } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'

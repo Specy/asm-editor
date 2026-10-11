@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { DOCUMENTATION_LANGUAGES } from '#lib/search/scope.ts'
 import { documentationFor, entriesOf } from './documentation'
 import { documentationProblems } from './entries'

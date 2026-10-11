@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { makeTokenSpanIndex, tokenSpanEnd } from '#lib/languages/mars/tokenSpans.ts'
 
 /** One line as the Cores shape it, with the token columns the tokenizer would report. */
