@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { tokenizeAssembly, type AssemblyTokenKind } from './assemblyHighlight'
 import { z80Registers } from '#lib/languages/Z80/Z80-documentation.ts'
 import {
-    RISCVFloatingPointRegisterNames,
+    RISCVLanguageFloatingPointRegisterNames,
     RISCVLanguageRegisterNames
 } from '#lib/languages/RISC-V/RISC-V-registers.ts'
+import { z80ConditionCodes, z80DirectiveNames } from '#lib/languages/Z80/Z80-documentation.ts'
+import { M68KDirectives } from '#lib/languages/M68K/M68K-documentation.ts'
 import { X86Registers } from '#lib/languages/X86/X86-grammar.ts'
 
 /**
@@ -60,12 +62,12 @@ describe('tokenizeAssembly', () => {
         expect(tokenizeAssembly('* a whole line', 'M68K')[0]).toEqual([
             { kind: 'comment', text: '* a whole line' }
         ])
-        expect(kindOf('    mulu #2, d0', 'M68K', '#2')).toBe('number')
+        expect(kindOf('    mulu #2, d0', 'M68K', '2')).toBe('number')
     })
 
     it('reads a constant definition as a name being assigned, not as an instruction', () => {
         expect(kindOf('count equ 12', 'M68K', 'count')).toBe('label')
-        expect(kindOf('count equ 12', 'M68K', 'equ')).toBe('mnemonic')
+        expect(kindOf('count equ 12', 'M68K', 'equ')).toBe('directive')
         expect(kindOf('count equ 12', 'M68K', '12')).toBe('number')
         //a statement opening with a directive has no instruction; the name after it is its operand
         expect(kindOf('.eqv COUNT 12', 'MIPS', '.eqv')).toBe('directive')
@@ -76,7 +78,7 @@ describe('tokenizeAssembly', () => {
 
     it('tells a hex literal from a register name by the language', () => {
         //`$` opens a hex literal for the two older assemblers
-        expect(kindOf('    move.l #$FF, d0', 'M68K', '#$FF')).toBe('number')
+        expect(kindOf('    move.l #$FF, d0', 'M68K', '$FF')).toBe('number')
         expect(kindOf('    ld a, $FF', 'Z80', '$FF')).toBe('number')
         //and belongs to a name for MIPS, whose registers are spelled with it
         expect(kindOf('    addi $t0, $zero, 1', 'MIPS', '$t0')).toBe('register')
@@ -123,7 +125,10 @@ describe('tokenizeAssembly', () => {
             )
         ).toEqual([])
         expect(
-            unknown('RISC-V', [...RISCVLanguageRegisterNames, ...RISCVFloatingPointRegisterNames])
+            unknown('RISC-V', [
+                ...RISCVLanguageRegisterNames,
+                ...RISCVLanguageFloatingPointRegisterNames
+            ])
         ).toEqual([])
         expect(unknown('X86', X86Registers)).toEqual([])
         expect(unknown('M68K', ['d0', 'd7', 'a0', 'a7', 'sp', 'pc', 'sr', 'ccr', 'usp'])).toEqual(
@@ -131,10 +136,115 @@ describe('tokenizeAssembly', () => {
         )
     })
 
+    it("reads x86's directives, which have no dot, and its dotted names, which are not directives", () => {
+        expect(kindOf('section .data', 'X86', 'section')).toBe('directive')
+        expect(kindOf('section .data', 'X86', '.data')).toBe('plain')
+        expect(kindOf('    global _start', 'X86', 'global')).toBe('directive')
+        expect(kindOf('    dq 1, 2', 'X86', 'dq')).toBe('directive')
+        expect(kindOf('COUNT equ 4', 'X86', 'equ')).toBe('directive')
+        //`times` repeats the directive after it, which is still one
+        expect(kindOf('    times 4 db 0', 'X86', 'times')).toBe('directive')
+        expect(kindOf('    times 4 db 0', 'X86', 'db')).toBe('directive')
+        expect(kindOf('    times 4 nop', 'X86', 'nop')).toBe('mnemonic')
+        expect(kindOf('    jmp .done', 'X86', '.done')).toBe('plain')
+        //the other languages keep their dotted directives
+        expect(kindOf('.data', 'MIPS', '.data')).toBe('directive')
+    })
+
+    it('reads a dotted name with a colon as a local label', () => {
+        expect(kindOf('.done:', 'X86', '.done')).toBe('label')
+        expect(kindOf('.L2:', 'RISC-V', '.L2')).toBe('label')
+        //and the instruction after it is still the instruction
+        expect(kindOf('.L2: ret', 'RISC-V', 'ret')).toBe('mnemonic')
+    })
+
+    it('keeps the colon in the label where the editor does', () => {
+        expect(tokenizeAssembly('loop: rts', 'M68K')[0][0]).toEqual({
+            kind: 'label',
+            text: 'loop:'
+        })
+        expect(tokenizeAssembly('.done:', 'X86')[0][0]).toEqual({ kind: 'label', text: '.done:' })
+        expect(tokenizeAssembly('loop:', 'Z80')[0]).toEqual([
+            { kind: 'label', text: 'loop' },
+            { kind: 'plain', text: ':' }
+        ])
+    })
+
+    it('reads the directives the M68K and the Z80 spell like instructions', () => {
+        expect(kindOf('    dc.w 1, 2', 'M68K', 'dc.w')).toBe('directive')
+        expect(kindOf('    org $1000', 'M68K', 'org')).toBe('directive')
+        expect(kindOf('    end start', 'M68K', 'end')).toBe('directive')
+        expect(kindOf('count equ 4', 'Z80', 'equ')).toBe('directive')
+        expect(kindOf('    defb 1, 2', 'Z80', 'defb')).toBe('directive')
+        expect(kindOf('#include "x.asm"', 'Z80', '#include')).toBe('directive')
+        //an M68K instruction with the same size suffix is still one
+        expect(kindOf('    move.w d0, d1', 'M68K', 'move.w')).toBe('mnemonic')
+        //a name the directive follows is the label it defines, where the editors read one
+        expect(kindOf('val defb 1', 'Z80', 'val')).toBe('label')
+        expect(kindOf('table dc.w 1', 'M68K', 'table')).toBe('label')
+        expect(kindOf('    msg db "hi", 0', 'X86', 'msg')).toBe('label')
+        expect(kindOf('    msg db "hi", 0', 'X86', 'db')).toBe('directive')
+        //and a label spelled like a directive is a name among the operands
+        expect(kindOf('    bra end', 'M68K', 'end')).toBe('plain')
+        expect(kindOf('    jp end', 'Z80', 'end')).toBe('plain')
+    })
+
+    it('knows every directive the M68K and Z80 grammars do', () => {
+        const notDirective = (
+            language: Parameters<typeof tokenizeAssembly>[1],
+            names: readonly string[]
+        ) => names.filter((name) => kindOf(`    ${name} 1`, language, name) !== 'directive')
+        expect(notDirective('M68K', M68KDirectives)).toEqual([])
+        //`=` is punctuation, coloured as such
+        expect(
+            notDirective(
+                'Z80',
+                z80DirectiveNames.filter((name) => name !== '=')
+            )
+        ).toEqual([])
+    })
+
+    it("reads the M68K's immediate marker apart from what it introduces", () => {
+        const tokens = tokenizeAssembly('    move.l #count, d0', 'M68K')[0]
+        expect(tokens.find((t) => t.kind === 'immediate')?.text).toBe('#')
+        expect(kindOf('    move.l #count, d0', 'M68K', 'count')).toBe('plain')
+    })
+
+    it('reads x86 size keywords, and the instruction after a prefix', () => {
+        expect(kindOf('    mov byte [rdi], 0', 'X86', 'byte')).toBe('keyword')
+        expect(kindOf('    jmp short done', 'X86', 'short')).toBe('keyword')
+        expect(kindOf('    repne scasb', 'X86', 'repne')).toBe('mnemonic')
+        expect(kindOf('    repne scasb', 'X86', 'scasb')).toBe('mnemonic')
+        expect(kindOf('    lock add [rdi], eax', 'X86', 'rdi')).toBe('register')
+    })
+
+    it('reads a Z80 condition only where a jump, call or return takes one', () => {
+        expect(kindOf('    jr c, loop', 'Z80', 'c')).toBe('condition')
+        expect(kindOf('    jp nz, loop', 'Z80', 'nz')).toBe('condition')
+        expect(kindOf('    ret z', 'Z80', 'z')).toBe('condition')
+        expect(kindOf('    call m, handler', 'Z80', 'm')).toBe('condition')
+        //`c` is the register everywhere else, and so is a second operand
+        expect(kindOf('    ld a, c', 'Z80', 'c')).toBe('register')
+        expect(kindOf('    jp loop, c', 'Z80', 'c')).toBe('register')
+        //by exact text, since `p` is also inside `jp`
+        const kindOfExactly = (line: string, text: string) =>
+            tokenizeAssembly(line, 'Z80')[0].find((t) => t.text === text)?.kind
+        const names = z80ConditionCodes.map((condition) => condition.name)
+        expect(
+            names.filter((name) => kindOfExactly(`    jp ${name}, x`, name) !== 'condition')
+        ).toEqual([])
+    })
+
+    it('reads a decimal fraction as one number where the editor does', () => {
+        expect(kindOf('x: .float 1.5', 'MIPS', '1.5')).toBe('number')
+        expect(kindOf('x: .double 2.25', 'RISC-V', '2.25')).toBe('number')
+        expect(kindOf('x: dq 1.5', 'X86', '1.5')).toBe('number')
+    })
+
     it('reads the number prefixes and suffixes the languages write', () => {
         expect(kindOf('    li t0, 0xFF', 'RISC-V', '0xFF')).toBe('number')
         expect(kindOf('    li t0, 0b1010', 'RISC-V', '0b1010')).toBe('number')
-        expect(kindOf('    move.l #%1010, d0', 'M68K', '#%1010')).toBe('number')
+        expect(kindOf('    move.l #%1010, d0', 'M68K', '%1010')).toBe('number')
         expect(kindOf('    ld a, 0FFh', 'Z80', '0FFh')).toBe('number')
         expect(kindOf('    mov eax, 42', 'X86', '42')).toBe('number')
     })

@@ -28,6 +28,17 @@ export type RISCVCsrRegisterName = CsrRegisterName
 export const RISCVFloatingPointRegisterNames: readonly RISCVFloatingPointRegisterName[] =
     RISCV_FLOATING_POINT_REGISTERS
 
+/** `f0..f31`, the numbered spellings of the FPU registers, which the assembler takes as well. */
+export const ALTERNATIVE_RISCVFloatingPointRegister_NAMES = RISCV_FLOATING_POINT_REGISTERS.map(
+    (_, index) => `f${index}`
+)
+
+/** Every spelling of an FPU register a program can use, for the editor to colour. */
+export const RISCVLanguageFloatingPointRegisterNames: readonly string[] = [
+    ...RISCV_FLOATING_POINT_REGISTERS,
+    ...ALTERNATIVE_RISCVFloatingPointRegister_NAMES
+]
+
 /** The CSR Register file, in the order the Core reads and writes it. */
 export const RISCVCsrRegisterNames: readonly RISCVCsrRegisterName[] = RISCV_CSR_REGISTERS
 

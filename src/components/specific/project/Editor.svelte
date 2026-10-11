@@ -15,6 +15,7 @@
     import type { MonacoType } from '#lib/monaco/Monaco.ts'
     import { Monaco } from '#lib/monaco/Monaco.ts'
     import { generateTheme } from '#lib/monaco/editorTheme.ts'
+    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
     import type { BuildArtifact, Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import {
         parseProjectSourceUri,
@@ -68,11 +69,6 @@
         /** Text can be read-only while the Debug session still accepts breakpoint changes. */
         breakpointsEditable?: boolean
         editor?: monaco.editor.IStandaloneCodeEditor
-        /** A preview host can keep its static source and Monaco's typography identical. */
-        fontOptions?: Pick<
-            monaco.editor.IStandaloneEditorConstructionOptions,
-            'fontFamily' | 'fontSize' | 'lineHeight'
-        >
         viewZones?: {
             afterLineNumber: number
             content: Component<ViewZoneProps>
@@ -100,7 +96,6 @@
         mappedBreakpoints = [],
         breakpointsEditable = true,
         editor = $bindable(),
-        fontOptions,
         viewZones = [],
         buildArtifacts = []
     }: Props = $props()
@@ -226,8 +221,9 @@
             //Two keeps files up to 99 lines from shifting the code every time a digit is added.
             lineNumbersMinChars: 2,
             cursorBlinking: 'phase',
-            fontSize: 16,
-            ...fontOptions,
+            //Fira Code everywhere, at the size and line height the static code blocks standing in
+            //for an editor are drawn with, so neither the font nor the lines move when it loads
+            ...EDITOR_FONT,
             smoothScrolling: true,
             cursorSmoothCaretAnimation: 'on'
         })

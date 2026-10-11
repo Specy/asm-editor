@@ -7,11 +7,22 @@ import {
     riscvInstructionNames
 } from './RISC-V-documentation'
 
-import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
+import {
+    RISCVLanguageFloatingPointRegisterNames,
+    RISCVLanguageRegisterNames
+} from './RISC-V-registers'
+
+/** The integer and the FPU registers, longest first so `ft10` is not read as `ft1`. */
+const RISCVRegisterNames = [
+    ...RISCVLanguageRegisterNames,
+    ...RISCVLanguageFloatingPointRegisterNames
+].sort((a, b) => b.length - a.length)
 
 export const RISCVLanguageConfiguration: languages.LanguageConfiguration = {
+    // dots stay inside a name so hovering `fadd.s` or `fcvt.w.s` finds the whole mnemonic,
+    // while a directive's leading dot stays outside it
     wordPattern:
-        /(-?\d*\.\d\w*)|([^\`\~\!\@\#%\^\&\*\(\)\=\$\-\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/g,
+        /(-?\d*\.\d\w*)|([a-zA-Z_][\w.]*)|([^\`\~\!\@\#%\^\&\*\(\)\=\$\-\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/g,
     comments: {
         blockComment: ['###', '###'],
         lineComment: '#'
@@ -31,38 +42,48 @@ export const RISCVLanguage = <languages.IMonarchLanguage>{
 
     regEx: /\/(?!\/\/)(?:[^\/\\]|\\.)*\/[igm]*/,
 
-    keywords: [
-        ...[...Object.keys(riscvDirectivesMap)].map((d) => `.${d}`),
-        ...riscvGnuDirectiveNames.map((d) => `.${d}`),
-        ...riscvInstructionNames
+    keywords: riscvInstructionNames,
+    // their own token, coloured apart from the instructions as the other languages' are
+    directives: [
+        ...Object.keys(riscvDirectivesMap).map((d) => `.${d}`),
+        ...riscvGnuDirectiveNames.map((d) => `.${d}`)
     ],
 
     // we include these common regular expressions
     symbols: /[\.,\:]+/,
     escapes: /\\(?:[0-7]{1,3}|[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
-    // The main tokenizer for our languages
+    // The main tokenizer for our languages. A statement's first name is its instruction or
+    // directive and the names after it are its operands, so a label spelled like an instruction
+    // (`b:`, `j b`) reads as the name it is.
     tokenizer: {
         root: [
-            [/%(?:pcrel_hi|pcrel_lo|hi|lo)\b/, 'keyword'],
-            [/\b[0-9]+[bf]\b/, 'identifier'],
-            // identifiers and keywords
-            [
-                new RegExp(
-                    `\\b(?:${[...RISCVRegisterNames].sort((a, b) => b.length - a.length).join('|')})\\b`
-                ),
-                'variable.predefined'
-            ],
+            // a name with a colon defines a label, whatever it is spelled like
+            [/[.a-zA-Z_][\w.]*(?=\s*:)/, ''],
             [
                 /[.a-zA-Z_][\w.]*/,
                 {
                     cases: {
-                        this: 'variable.predefined',
-                        '@keywords': { token: 'keyword.$0' },
-                        '@default': ''
+                        '@directives': { token: 'directive', next: '@operands' },
+                        '@keywords': { token: 'keyword.$0', next: '@operands' },
+                        '@default': { token: '', next: '@operands' }
                     }
                 }
             ],
+            { include: '@common' }
+        ],
+
+        // the rest of the statement, until the next line starts another one
+        operands: [
+            [/^/, { token: '', next: '@pop' }],
+            { include: '@common' },
+            [/[.a-zA-Z_][\w.]*/, { cases: { this: 'variable.predefined', '@default': '' } }]
+        ],
+
+        common: [
+            [/%(?:pcrel_hi|pcrel_lo|hi|lo)\b/, 'keyword'],
+            [/\b[0-9]+[bf]\b/, 'identifier'],
+            [new RegExp(`\\b(?:${RISCVRegisterNames.join('|')})\\b`), 'variable.predefined'],
 
             // whitespace
             [/[ \t\r\n]+/, ''],

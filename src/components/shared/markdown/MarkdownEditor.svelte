@@ -8,9 +8,9 @@
     import type { Plugin } from 'carta-md'
     import { code as codeExt } from '@cartamd/plugin-code'
     import { codeBlocks } from '#lib/content/codeBlocks.ts'
-    import { assemblyPalette } from '#lib/content/assemblyPalette.ts'
+    import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
+    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
     import './codeBlocks.css'
 
     let {
@@ -26,7 +26,7 @@
     } = $props()
 
     const isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.secondary.color))
-    const palette = $derived(assemblyPalette(isDark))
+    const palette = $derived(assemblyPaletteStyle(isDark))
 
     const ext: Plugin = {
         transformers: [
@@ -57,16 +57,11 @@
     class="markdown-editor"
     class:dark-code={isDark}
     class:code-gutter-spacing={gutterSpacing}
+    style={palette}
     style:--code-block-gutter-display={lineNumbers ? 'block' : 'none'}
-    style:--asm-comment={palette.comment}
-    style:--asm-mnemonic={palette.mnemonic}
-    style:--asm-directive={palette.directive}
-    style:--asm-number={palette.number}
-    style:--asm-string={palette.string}
-    style:--asm-register={palette.register}
-    style:--example-font-family={EXAMPLE_EDITOR_FONT.fontFamily}
-    style:--example-font-size={`${EXAMPLE_EDITOR_FONT.fontSize}px`}
-    style:--example-line-height={`${EXAMPLE_EDITOR_FONT.lineHeight}px`}
+    style:--example-font-family={EDITOR_FONT.fontFamily}
+    style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
+    style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
 >
     <MarkdownEditor {carta} bind:value theme="github" />
 </div>

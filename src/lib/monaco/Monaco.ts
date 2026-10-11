@@ -1,5 +1,6 @@
 import { browser } from '$app/env'
 import { generateTheme } from '#lib/monaco/editorTheme.ts'
+import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
 import type monaco from 'monaco-editor'
 import editorWorker from 'monaco-editor/editor/editor.worker?worker'
 import type { AvailableLanguages, AvailableProgrammingLanguages } from '#lib/Project.svelte.ts'
@@ -36,7 +37,17 @@ class MonacoLoader {
 
     async load(): Promise<MonacoType> {
         if (this.loading) return this.loading
-        const loading = import('monaco-editor')
+        //Monaco measures the font once, when an editor is created, and does not measure it again
+        //when a web font arrives later, so an editor made before Fira Code had loaded would place
+        //its cursor and columns by the fallback's widths. The font is a fraction of Monaco's size
+        //and loads alongside it; a font that fails to load leaves the fallback, as before. Tests load
+        //Monaco where there is no document, or one without a font set
+        const loading = Promise.all([
+            import('monaco-editor'),
+            globalThis.document?.fonts
+                ?.load(`${EDITOR_FONT.fontSize}px ${EDITOR_FONT.fontFamily}`)
+                .catch(() => undefined)
+        ]).then(([monacoInstance]) => monacoInstance)
         this.loading = loading
         const monacoInstance = await loading
         monacoInstance.editor.defineTheme('custom-theme', generateTheme())

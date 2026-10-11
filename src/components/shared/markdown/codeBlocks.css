@@ -58,13 +58,15 @@ pre.code-block > .code-gutter {
     user-select: none;
 }
 
-/* Editor placeholders reserve Monaco's glyph margin and decoration space. */
+/* Editor placeholders reserve Monaco's glyph margin and decoration space, around a number column
+   at least two digits wide (the editor's lineNumbersMinChars), with the numbers nudged right by
+   the editor's 0.2rem. */
 .code-gutter-spacing pre.code-block > .code-gutter,
 pre.code-block.code-gutter-spacing > .code-gutter {
-    min-width: calc(3ch + var(--example-line-height, 22px) + 26px);
+    min-width: calc(2ch + var(--example-line-height, 22px) + 26px);
     margin-left: -1rem;
-    padding-left: var(--example-line-height, 22px);
-    padding-right: 26px;
+    padding-left: calc(var(--example-line-height, 22px) + 0.2rem);
+    padding-right: calc(26px - 0.2rem);
 }
 
 pre.code-block.code-block-fill {
@@ -77,24 +79,43 @@ pre.code-block.code-block-fill {
     border-radius: 0;
 }
 
+/* One class per editor token (`#lib/content/assemblyPalette.ts`), painted with its colour. */
 pre.code-block .asm-comment {
     color: var(--asm-comment);
     font-style: italic;
 }
-pre.code-block .asm-mnemonic {
-    color: var(--asm-mnemonic);
+pre.code-block .asm-keyword {
+    color: var(--asm-keyword);
 }
 pre.code-block .asm-directive {
     color: var(--asm-directive);
 }
+pre.code-block .asm-variable-predefined {
+    color: var(--asm-variable-predefined);
+}
+pre.code-block .asm-data-register {
+    color: var(--asm-data-register);
+}
+pre.code-block .asm-address-register {
+    color: var(--asm-address-register);
+}
+pre.code-block .asm-condition {
+    color: var(--asm-condition);
+}
 pre.code-block .asm-number {
     color: var(--asm-number);
+}
+pre.code-block .asm-number-hex {
+    color: var(--asm-number-hex);
+}
+pre.code-block .asm-number-immediate {
+    color: var(--asm-number-immediate);
 }
 pre.code-block .asm-string {
     color: var(--asm-string);
 }
-pre.code-block .asm-register {
-    color: var(--asm-register);
+pre.code-block .asm-tag {
+    color: var(--asm-tag);
 }
 pre.code-block .asm-label {
     text-decoration: underline;

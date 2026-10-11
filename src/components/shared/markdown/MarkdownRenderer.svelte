@@ -24,7 +24,7 @@
     } from '#lib/content/playgrounds.ts'
     import { codeBlocks, highlightedAssemblyCode } from '#lib/content/codeBlocks.ts'
     import './codeBlocks.css'
-    import { assemblyPalette } from '#lib/content/assemblyPalette.ts'
+    import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
     import { HeadingSlugger } from '#lib/content/headings.ts'
     import { toString as hastToString } from 'hast-util-to-string'
     import {
@@ -36,12 +36,13 @@
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
 
     /**
-     * The colours of the code block a prerendered playground carries, taken from the editor's own
-     * theme (`#lib/monaco/editorTheme.ts`) so the block reads as the thing it is about to become.
+     * The colours of the code block a prerendered playground carries, the ones the editor's theme
+     * is made from (`#lib/monaco/assemblyTokenColors.ts`), so the block reads as the thing it is
+     * about to become.
      * It follows the reader's chosen secondary surface, the same one the editor draws on.
      */
     let asmPalette = $derived(
-        assemblyPalette(ThemeStore.isColorDark(ThemeStore.theme.secondary.color))
+        assemblyPaletteStyle(ThemeStore.isColorDark(ThemeStore.theme.secondary.color))
     )
 
     type Settings = PlaygroundSettings
@@ -629,7 +630,7 @@
 
 <script lang="ts">
     import { Markdown } from 'carta-md'
-    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
+    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
 
     interface Props {
         source: string
@@ -715,19 +716,13 @@
     class:heading-ids={headingIds}
     class:simple-code={simpleCode}
     class:code-gutter-spacing={gutterSpacing}
-    {style}
+    style={style ? `${asmPalette}; ${style}` : asmPalette}
     style:--gap={spacing}
     style:--md-inline-margin={centered ? null : '0'}
     style:--code-block-gutter-display={lineNumbers ? 'block' : 'none'}
-    style:--asm-comment={asmPalette.comment}
-    style:--asm-mnemonic={asmPalette.mnemonic}
-    style:--asm-directive={asmPalette.directive}
-    style:--asm-number={asmPalette.number}
-    style:--asm-string={asmPalette.string}
-    style:--asm-register={asmPalette.register}
-    style:--example-font-family={EXAMPLE_EDITOR_FONT.fontFamily}
-    style:--example-font-size={`${EXAMPLE_EDITOR_FONT.fontSize}px`}
-    style:--example-line-height={`${EXAMPLE_EDITOR_FONT.lineHeight}px`}
+    style:--example-font-family={EDITOR_FONT.fontFamily}
+    style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
+    style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
 >
     {#key source + theme + disableLinks + playgrounds + headingIds}
         <Markdown value={source} {carta} />

@@ -6,6 +6,7 @@ import {
 } from '#stores/themeStore.svelte.ts'
 import { TinyColor } from '@ctrl/tinycolor'
 import type monaco from 'monaco-editor'
+import { ASSEMBLY_TOKEN_COLORS, type AssemblyThemeToken } from './assemblyTokenColors'
 
 /**
  * The store's own `getColor`/`getText`/`layer`, over whichever theme is being asked about: those
@@ -33,7 +34,16 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
     return {
         base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
-        rules: isDark ? darkOverride : whiteOverride,
+        rules: [
+            ...(isDark ? darkOverride : whiteOverride),
+            ...assemblyRules(ASSEMBLY_TOKEN_COLORS[isDark ? 'dark' : 'light']),
+            //punctuation is text, in the editor's own text colour rather than the near-match
+            //Monaco's base themes give it, so a code block's plain text reads the same
+            ...['delimiter', 'operator'].map((token) => ({
+                token,
+                foreground: new TinyColor(text('secondary')).toHex()
+            }))
+        ],
         colors: {
             'editor.foreground': text('secondary'), //CDCDCD
             'editor.background': color('secondary').toHexString(),
@@ -57,6 +67,17 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
     }
 }
 
+/** The rules for the assembly grammars' tokens, from the table the code blocks paint with too. */
+function assemblyRules(
+    colors: Record<AssemblyThemeToken, string>
+): monaco.editor.ITokenThemeRule[] {
+    return Object.entries(colors).map(([token, foreground]) => ({
+        token,
+        foreground: foreground.replace('#', ''),
+        fontStyle: token === 'comment' ? 'italic' : undefined
+    }))
+}
+
 const common = [
     {
         fontStyle: 'underline',
@@ -67,37 +88,12 @@ const common = [
 const whiteOverride = [
     ...common,
     {
-        foreground: '506696',
-        fontStyle: 'italic',
-        token: 'comment'
-    },
-    {
         foreground: 'ff628c',
         token: 'constant'
     },
     {
         foreground: 'ffdd00',
         token: 'entity'
-    },
-    {
-        foreground: '473fd8',
-        token: 'keyword'
-    },
-    {
-        foreground: '037280',
-        token: 'data-register'
-    },
-    {
-        foreground: '9909eb',
-        token: 'address-register'
-    },
-    {
-        foreground: '9f3b3b',
-        token: 'directive'
-    },
-    {
-        foreground: '006d4c',
-        token: 'number.immediate'
     }
 ]
 
@@ -120,10 +116,6 @@ const darkOverride = [
         token: 'entity'
     },
     {
-        foreground: 'ff9d00',
-        token: 'keyword'
-    },
-    {
         foreground: 'ffee80',
         token: 'storage'
     },
@@ -134,11 +126,6 @@ const darkOverride = [
     {
         foreground: '3ad900',
         token: 'string.unquoted.heredoc string'
-    },
-    {
-        foreground: '1f619a',
-        fontStyle: 'italic',
-        token: 'comment'
     },
     {
         foreground: '80ffbb',
@@ -341,26 +328,6 @@ const darkOverride = [
         background: '001221',
         fontStyle: 'bold',
         token: 'markup.heading'
-    },
-    {
-        foreground: '8673ff',
-        token: 'data-register'
-    },
-    {
-        foreground: '8673ff',
-        token: 'variable.predefined'
-    },
-    {
-        foreground: 'c26ef2',
-        token: 'address-register'
-    },
-    {
-        foreground: 'f26e6e',
-        token: 'directive'
-    },
-    {
-        foreground: '47d3a8',
-        token: 'number.immediate'
     }
     /*
 	,{

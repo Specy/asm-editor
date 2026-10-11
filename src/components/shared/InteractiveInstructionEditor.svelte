@@ -98,10 +98,6 @@
         initialRegisterFile?: string
         /** The initial file's reading, so a floating-point example starts with visible numbers. */
         initialRegisterFormat?: RegisterFormat
-        fontOptions?: Pick<
-            monaco.editor.IStandaloneEditorConstructionOptions,
-            'fontFamily' | 'fontSize' | 'lineHeight'
-        >
         /**
          * The caller's own controls, such as a documentation page's "Try in the editor", at the far
          * end of the execution dock floating over the bottom of the code.
@@ -131,7 +127,6 @@
         layout = 'small',
         initialRegisterFile = undefined,
         initialRegisterFormat = undefined,
-        fontOptions,
         dockActions = []
     }: Props = $props()
     const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
@@ -551,7 +546,6 @@
                     .map((breakpoint) => breakpoint.line)}
                 diagnostics={shownDiagnostics}
                 language={editorLanguage}
-                {fontOptions}
                 highlightedLine={selectedLine}
                 disabled={building ||
                     compiling ||

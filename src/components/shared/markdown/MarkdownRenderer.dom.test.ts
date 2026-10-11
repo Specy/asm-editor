@@ -317,10 +317,11 @@ describe('playground rendering', () => {
                 [...(block?.querySelectorAll('span') ?? [])]
                     .find((span) => span.textContent === text)
                     ?.className.replace('asm-', '')
+            //painted as the RISC-V editor paints them, which leaves a label plain
             expect(kindOf('.text')).toBe('directive')
-            expect(kindOf('main')).toBe('label')
-            expect(kindOf('li')).toBe('mnemonic')
-            expect(kindOf('0xFF')).toBe('number')
+            expect(kindOf('main')).toBeUndefined()
+            expect(kindOf('li')).toBe('keyword')
+            expect(kindOf('0xFF')).toBe('number-hex')
             expect(kindOf('# keep it')).toBe('comment')
             //the spans are presentation only: the embed still gets the source it would have got
             const iframe = await waitForIframe(target)
@@ -395,7 +396,7 @@ describe('playgrounds as plain code', () => {
             const block = target.querySelector('pre.plain-playground')
             expect(block?.classList.contains('code-gutter-spacing')).toBe(false)
             expect(block?.textContent).toContain('move.l #1, d0')
-            expect(block?.querySelector('.asm-mnemonic')?.textContent).toBe('move.l')
+            expect(block?.querySelector('.asm-keyword')?.textContent).toBe('move.l')
             expect(target.textContent).not.toContain('expectedRegisters')
             await new Promise((resolve) => setTimeout(resolve, 100))
             expect(target.querySelector('iframe')).toBeNull()

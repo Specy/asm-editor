@@ -1,9 +1,9 @@
 <script lang="ts">
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { tokenizeAssembly } from '#lib/content/assemblyHighlight.ts'
-    import { assemblyPalette } from '#lib/content/assemblyPalette.ts'
+    import { assemblyPaletteStyle, assemblyTokenClass } from '#lib/content/assemblyPalette.ts'
     import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
+    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
     import { codeLineNumbers } from '#lib/content/codeBlocks.ts'
     import '#cmp/shared/markdown/codeBlocks.css'
 
@@ -28,9 +28,17 @@
         gutterSpacing = false
     }: Props = $props()
     const newline = '\n'
-    const lines = $derived(language ? tokenizeAssembly(code, language) : undefined)
+    const lines = $derived.by(() => {
+        if (!language) return undefined
+        return tokenizeAssembly(code, language).map((tokens) =>
+            tokens.map((token) => ({
+                text: token.text,
+                className: assemblyTokenClass(token, language)
+            }))
+        )
+    })
     const palette = $derived(
-        assemblyPalette(
+        assemblyPaletteStyle(
             ThemeStore.isColorDark(
                 ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
             )
@@ -41,15 +49,10 @@
 <figure
     class="code-sample"
     class:fill
-    style:--asm-comment={palette.comment}
-    style:--asm-mnemonic={palette.mnemonic}
-    style:--asm-directive={palette.directive}
-    style:--asm-number={palette.number}
-    style:--asm-string={palette.string}
-    style:--asm-register={palette.register}
-    style:--example-font-family={EXAMPLE_EDITOR_FONT.fontFamily}
-    style:--example-font-size={`${EXAMPLE_EDITOR_FONT.fontSize}px`}
-    style:--example-line-height={`${EXAMPLE_EDITOR_FONT.lineHeight}px`}
+    style={palette}
+    style:--example-font-family={EDITOR_FONT.fontFamily}
+    style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
+    style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
 >
     {#if label}
         <figcaption>{label}</figcaption>
@@ -58,9 +61,9 @@
         class="code-block"
         class:code-block-fill={fill}
         class:code-gutter-spacing={gutterSpacing}><code
-            >{#if lines}{#each lines as tokens, index (index)}{#if index > 0}{newline}{/if}{#each tokens as token, tokenIndex (tokenIndex)}{#if token.kind === 'plain'}{token.text}{:else}<span
-                                class={`asm-${token.kind}`}>{token.text}</span
-                            >{/if}{/each}{/each}{:else}{code}{/if}</code
+            >{#if lines}{#each lines as tokens, index (index)}{#if index > 0}{newline}{/if}{#each tokens as token, tokenIndex (tokenIndex)}{#if token.className}<span
+                                class={token.className}>{token.text}</span
+                            >{:else}{token.text}{/if}{/each}{/each}{:else}{code}{/if}</code
         >{#if lineNumbers}<span class="code-gutter" aria-hidden="true">{codeLineNumbers(code)}</span
             >{/if}</pre>
 </figure>

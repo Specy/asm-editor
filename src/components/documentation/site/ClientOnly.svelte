@@ -9,7 +9,6 @@
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
     import type { RegisterFormat } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
     import './instructionExample.css'
 
     interface Props {
@@ -80,7 +79,6 @@
                     {showMemory}
                     {initialRegisterFile}
                     {initialRegisterFormat}
-                    fontOptions={EXAMPLE_EDITOR_FONT}
                     showScreen={false}
                     forceMemoryRight
                     dockActions={[
@@ -94,7 +92,7 @@
                 />
             {/snippet}
             {#snippet loading()}
-                <InstructionPreview {code} {language} />
+                <InstructionPreview {code} {language} {showMemory} {showConsole} />
             {/snippet}
         </EmulatorLoader>
     {/key}

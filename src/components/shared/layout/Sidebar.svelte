@@ -68,6 +68,14 @@
         max-width: calc(100vw - var(--side-menu-width));
     }
 
+    /* The page's own column is a flex item here, and a flex item will not shrink below its
+       content's min-content width. A server-rendered code preview (a `white-space: pre` line
+       that only scrolls once it has been given a width) was therefore widening the whole page
+       past the viewport until its editor loaded. */
+    .content > :global(*) {
+        min-width: 0;
+    }
+
     @media (max-width: 600px) {
         .content {
             max-width: unset;

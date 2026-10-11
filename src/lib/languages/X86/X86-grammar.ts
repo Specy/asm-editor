@@ -1,14 +1,7 @@
 import type monaco from 'monaco-editor'
 import { X86_MNEMONICS } from './generated/x86Mnemonics'
-import {
-    X86_ADDRESS_KEYWORDS,
-    X86_ASSEMBLER_REGISTERS,
-    X86_DIRECTIVES,
-    X86_PREPROCESSOR_DIRECTIVES,
-    X86_PSEUDO_OPS,
-    X86_SIZE_SPECIFIERS,
-    X86_STANDARD_MACROS
-} from './generated/x86Tokens'
+import { X86_ASSEMBLER_REGISTERS } from './generated/x86Tokens'
+import { X86Directives, X86Prefixes, X86SizeSpecifiers } from './X86-keywords'
 
 /**
  * The words the assembler accepts, from the tables NASM generates its own parser from, so the
@@ -19,24 +12,7 @@ export const X86Registers = X86_ASSEMBLER_REGISTERS
 
 export const X86Instructions = X86_MNEMONICS
 
-/**
- * Everything that is written where an instruction goes but is not one: the parser's own directives,
- * the user level ones NASM ships as macros (`section`, `struc`, `align`), the data pseudo-ops, and
- * the preprocessor. `times` is in neither table because NASM parses it as a prefix of the line it
- * repeats.
- */
-export const X86Directives = [
-    ...new Set([
-        ...X86_DIRECTIVES,
-        ...X86_STANDARD_MACROS,
-        ...X86_PSEUDO_OPS,
-        ...X86_PREPROCESSOR_DIRECTIVES,
-        'times'
-    ])
-]
-
-/** Operand widths, and the words that pick the reach of a jump or how an address is formed. */
-export const X86SizeSpecifiers = [...X86_SIZE_SPECIFIERS, ...X86_ADDRESS_KEYWORDS]
+export { X86Directives, X86SizeSpecifiers }
 
 export const X86Language: monaco.languages.IMonarchLanguage = {
     ignoreCase: true,
@@ -52,6 +28,9 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
 
     // Size specifiers (often used with PTR or directly)
     sizeSpecifiers: X86SizeSpecifiers,
+
+    // `rep`, `lock`: part of the instruction they stand before, and coloured as one
+    prefixes: X86Prefixes,
 
     operators: [
         '+',
@@ -81,6 +60,8 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
     // C# style strings
     escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
+    // A statement's first word is its instruction or directive and the words after it are its
+    // operands, so a label spelled like an instruction (`jmp loop`) reads as a name there.
     tokenizer: {
         root: [
             // These context-sensitive forms must run before the general identifier rule.
@@ -88,20 +69,44 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
             [/^[ \t]*[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'],
             [/[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'],
 
-            // Identifiers and keywords (instructions, directives, registers, size specifiers)
+            // Identifiers and keywords (instructions, directives, registers, size specifiers).
+            // A prefix and `times`, which repeats what follows its count, leave the statement's
+            // instruction still to come.
             [
                 /[a-zA-Z_@$.%][\w@$.]*/,
                 {
                     cases: {
-                        '@instructions': 'keyword.instruction',
+                        times: 'directive',
+                        '@prefixes': 'keyword.prefix',
+                        '@instructions': { token: 'keyword.instruction', next: '@operands' },
+                        '@directives': { token: 'directive', next: '@operands' },
                         '@registers': 'variable.predefined',
-                        '@directives': 'keyword',
+                        '@sizeSpecifiers': 'keyword.size',
+                        '@default': { token: 'identifier', next: '@operands' }
+                    }
+                }
+            ],
+            { include: '@common' }
+        ],
+
+        // the rest of the statement, until the next line starts another one
+        operands: [
+            [/^/, { token: '', next: '@pop' }],
+            [
+                /[a-zA-Z_@$.%][\w@$.]*/,
+                {
+                    cases: {
+                        '@registers': 'variable.predefined',
+                        '@directives': 'directive',
                         '@sizeSpecifiers': 'keyword.size',
                         '@default': 'identifier'
                     }
                 }
             ],
+            { include: '@common' }
+        ],
 
+        common: [
             // Whitespace
             { include: '@whitespace' },
 

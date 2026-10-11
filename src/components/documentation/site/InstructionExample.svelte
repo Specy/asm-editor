@@ -11,6 +11,7 @@
 
     let { instructionKey, example }: Props = $props()
     let code = $derived(example?.code ?? '')
+    let showMemory = $derived(example?.presentation?.showMemory ?? false)
     let Component: typeof import('./ClientOnly.svelte').default | undefined = $state.raw()
     onMount(async () => {
         Component = (await import('./ClientOnly.svelte')).default
@@ -28,10 +29,15 @@
                 {instructionKey}
                 language={example.target}
                 {...example.presentation}
-                showMemory={example.presentation?.showMemory ?? false}
+                {showMemory}
             />
         {:else}
-            <InstructionPreview {code} language={example.target} />
+            <InstructionPreview
+                {code}
+                language={example.target}
+                {showMemory}
+                showConsole={example.presentation?.showConsole}
+            />
         {/if}
     </div>
 {:else}

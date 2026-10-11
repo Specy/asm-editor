@@ -50,7 +50,7 @@ describe('Markdown editor code previews', () => {
                 expect(block).not.toBe(initialBlock)
                 expect(block?.querySelector('code')?.textContent).toBe(source)
                 if (language === 'riscv') {
-                    expect(block?.querySelector('.asm-mnemonic')?.textContent).toBe('li')
+                    expect(block?.querySelector('.asm-keyword')?.textContent).toBe('li')
                 } else {
                     expect(block?.classList.contains('shiki')).toBe(true)
                 }

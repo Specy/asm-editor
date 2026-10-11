@@ -19,7 +19,7 @@ describe('instruction content integration', () => {
         const body = DOMPurify.sanitize(result.body, { RETURN_DOM: true }) as HTMLElement
         expect(body.querySelector('pre')?.classList.contains('code-gutter-spacing')).toBe(true)
         expect(body.querySelector('pre code')?.textContent).toBe(code)
-        expect(body.querySelector('.asm-mnemonic')).not.toBeNull()
+        expect(body.querySelector('.asm-keyword')).not.toBeNull()
         expect(result.body).not.toContain('Loading...')
     })
 
@@ -36,8 +36,8 @@ describe('instruction content integration', () => {
             const result = render(InstructionExample, { props: { instructionKey: name, example } })
             const body = DOMPurify.sanitize(result.body, { RETURN_DOM: true }) as HTMLElement
             expect(body.querySelector('pre code')?.textContent).toBe(example.code)
-            expect(body.querySelector('.asm-mnemonic')).not.toBeNull()
-            expect(body.querySelector('.asm-register')).not.toBeNull()
+            expect(body.querySelector('.asm-keyword')).not.toBeNull()
+            expect(body.querySelector('.asm-variable-predefined')).not.toBeNull()
             expect(body.querySelector('.asm-number')).not.toBeNull()
             expect(body.querySelector('figcaption')).toBeNull()
             expect(result.body).not.toContain('Loading example')
@@ -59,7 +59,7 @@ describe('instruction content integration', () => {
             samples.some((sample) => sample.textContent === entry.instructionContent!.example!.code)
         ).toBe(true)
         expect(result.body).not.toContain('Runnable example')
-        expect(body.querySelector('.asm-mnemonic')).not.toBeNull()
+        expect(body.querySelector('.asm-keyword')).not.toBeNull()
         expect(result.body).not.toContain('Loading emulator')
     })
 

@@ -4,6 +4,7 @@ import { toString } from 'hast-util-to-string'
 import { visit } from 'unist-util-visit'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { tokenizeAssembly } from './assemblyHighlight'
+import { assemblyTokenClass } from './assemblyPalette'
 import { parsePlaygroundLanguage } from './playgrounds'
 
 /** A terminal newline ends the last line rather than adding a line-number-only row. */
@@ -20,15 +21,16 @@ export function highlightedAssemblyCode(
     tokenizeAssembly(source, language).forEach((tokens, index) => {
         if (index > 0) children.push({ type: 'text', value: '\n' })
         for (const token of tokens) {
+            const className = assemblyTokenClass(token, language)
             children.push(
-                token.kind === 'plain'
-                    ? { type: 'text', value: token.text }
-                    : {
+                className
+                    ? {
                           type: 'element',
                           tagName: 'span',
-                          properties: { className: [`asm-${token.kind}`] },
+                          properties: { className: [className] },
                           children: [{ type: 'text', value: token.text }]
                       }
+                    : { type: 'text', value: token.text }
             )
         }
     })

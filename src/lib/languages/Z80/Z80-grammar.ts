@@ -8,6 +8,11 @@ import {
 
 const registerNames = z80Registers.map((register) => register.name)
 const conditionNames = z80ConditionCodes.map((condition) => condition.name)
+/**
+ * A condition is the first operand of a jump, a call or a return, and only there: `c` is the carry
+ * condition in `jr c, loop` but the register everywhere else, and `z` or `m` elsewhere is a name.
+ */
+const conditionalOperand = new RegExp(`(jp|jr|call|ret)(\\s+)(${conditionNames.join('|')})\\b`)
 // `=` is a directive too (a synonym of `equ`) but it is punctuation, not a word, so it is coloured
 // by the delimiter rule instead of the keyword lists.
 const directiveNames = z80DirectiveNames.filter((name) => /^[#.]?[a-zA-Z_]/.test(name))
@@ -50,20 +55,25 @@ export const Z80Language = <languages.IMonarchLanguage>{
 
     mnemonics: z80InstructionNames,
     registers: registerNames,
-    conditions: conditionNames,
     directives: directiveNames,
 
     escapes: /\\(?:[abfnrtv\\"'0]|x[0-9A-Fa-f]{1,2})/,
 
+    // A statement's first word is its mnemonic or directive and the words after it are its
+    // operands, so a label spelled like one (`jp end`) reads as the name it is there.
     tokenizer: {
         root: [
-            // Comments run to the end of the line and start with `;`.
-            [/;.*$/, 'comment'],
-
             // An identifier followed by a colon is a label definition wherever it appears, even
             // when it is spelled like a mnemonic or a directive (`add:`, `data:`), so this rule
             // comes before the ones that colour those.
             [/[a-zA-Z_][\w.]*(?=\s*:)/, 'label'],
+            // so is a name being given a value, indented or not: the directive after it opens
+            // the statement
+            [/[a-zA-Z_][\w.]*(?=\s+(?:\.?equ|defl)\b|\s*=)/, 'label'],
+
+            // A conditional jump, call or return reads its first operand as the condition, before
+            // the rules below can read `c` as the register
+            [conditionalOperand, ['keyword', '', { token: 'condition', next: '@operands' }]],
 
             // Column 0 belongs to labels: an identifier there defines a label unless it is a
             // mnemonic or a directive, with or without the trailing colon.
@@ -71,8 +81,8 @@ export const Z80Language = <languages.IMonarchLanguage>{
                 /^[#.a-zA-Z_][\w.]*/,
                 {
                     cases: {
-                        '@mnemonics': 'keyword',
-                        '@directives': 'directive',
+                        '@mnemonics': { token: 'keyword', next: '@operands' },
+                        '@directives': { token: 'directive', next: '@operands' },
                         '@default': 'label'
                     }
                 }
@@ -83,26 +93,41 @@ export const Z80Language = <languages.IMonarchLanguage>{
                 /[#.][a-zA-Z_][\w.]*/,
                 {
                     cases: {
-                        '@directives': 'directive',
-                        '@default': ''
+                        '@directives': { token: 'directive', next: '@operands' },
+                        '@default': { token: '', next: '@operands' }
                     }
                 }
             ],
 
-            // Bare words: registers (including the alternate set), condition codes, mnemonics and
-            // the directives that are written without a prefix (`org`, `defb`, `equ`, `end`).
+            // Bare words: mnemonics and the directives that are written without a prefix (`org`,
+            // `defb`, `equ`, `end`).
             [
                 /[a-zA-Z_][\w]*'?/,
                 {
                     cases: {
-                        '@registers': 'variable.predefined',
-                        '@conditions': 'address-register',
-                        '@mnemonics': 'keyword',
-                        '@directives': 'directive',
-                        '@default': ''
+                        '@mnemonics': { token: 'keyword', next: '@operands' },
+                        '@directives': { token: 'directive', next: '@operands' },
+                        '@default': { token: '', next: '@operands' }
                     }
                 }
             ],
+            { include: '@common' }
+        ],
+
+        // the rest of the statement, until the next line starts another one: registers (the
+        // alternate set included) and names
+        operands: [
+            [/^/, { token: '', next: '@pop' }],
+            [
+                /[a-zA-Z_][\w]*'?/,
+                { cases: { '@registers': 'variable.predefined', '@default': '' } }
+            ],
+            { include: '@common' }
+        ],
+
+        common: [
+            // Comments run to the end of the line and start with `;`.
+            [/;.*$/, 'comment'],
 
             [/[ \t\r\n]+/, ''],
 
