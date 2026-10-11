@@ -1,8 +1,8 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import { capitalize } from '$lib/utils'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import { capitalize } from '#lib/utils.ts'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
-    import { riscvInstructionNames } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import { riscvInstructionNames } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
     import { resolve } from '$app/paths'
 
     type Group = {

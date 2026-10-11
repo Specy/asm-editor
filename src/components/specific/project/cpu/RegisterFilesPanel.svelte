@@ -1,17 +1,17 @@
 <script lang="ts">
-    import RegisterFileRows from '$cmp/specific/project/cpu/RegisterFileRows.svelte'
-    import SegmentedControl from '$cmp/specific/project/cpu/SegmentedControl.svelte'
-    import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
-    import StatusCodesRenderer from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
+    import RegisterFileRows from '#cmp/specific/project/cpu/RegisterFileRows.svelte'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SizeSelector from '#cmp/specific/project/cpu/SizeSelector.svelte'
+    import StatusCodesRenderer from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import {
         type Register,
         type RegisterFile,
         type RegisterFormat,
         type RegisterPoke,
         RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { registerFileWidth } from '$lib/languages/registerFormats'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { registerFileWidth } from '#lib/languages/registerFormats.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
     /**
      * The Register file panel ([the design record](../../../../../docs/design/register-files.md)):

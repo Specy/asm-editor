@@ -5,7 +5,7 @@ import {
     resolveProjectSettings,
     UNDO_HISTORY_SIZE,
     undoHistorySize
-} from '$lib/projectSettings'
+} from '#lib/projectSettings.ts'
 
 /**
  * The Settings of a Project are decisions only ([ADR 0014](../../docs/adr/0014-settings-split-by-effect.md)):

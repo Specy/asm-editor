@@ -13,7 +13,7 @@ import {
     DEFAULT_PROJECT_DISPLAY as MARS_DEFAULT_DISPLAY,
     type ProjectDisplay
 } from './languages/mars/marsDisplay'
-import { serializer } from '$lib/json'
+import { serializer } from '#lib/json.ts'
 import { detectAssemblyLanguage } from './languages/languageDetector'
 import { cleanProjectSettings, type ProjectSettingsDecisions } from './projectSettings'
 import {
@@ -57,6 +57,10 @@ export interface ProjectData {
     exam?: Exam
     display?: ProjectDisplay
     compilations?: CompilationRecord[]
+    /** Open editor paths in tab order; an empty array deliberately leaves the editor empty. */
+    openTabs?: string[]
+    /** The last selected editor path, independent of the Entry file. */
+    activeTab?: string
 }
 
 /**
@@ -66,7 +70,17 @@ export interface ProjectData {
  * files map existed loads through the same path as a current one.
  */
 export type StoredProject = Partial<
-    Omit<ProjectData, 'files' | 'entry' | 'settings' | 'language' | 'testcases' | 'display'>
+    Omit<
+        ProjectData,
+        | 'files'
+        | 'entry'
+        | 'settings'
+        | 'language'
+        | 'testcases'
+        | 'display'
+        | 'openTabs'
+        | 'activeTab'
+    >
 > & {
     /** The version 1 program, and the convenience for creating a project from a template. */
     code?: string
@@ -76,6 +90,8 @@ export type StoredProject = Partial<
     settings?: unknown
     testcases?: Testcase[]
     display?: Partial<ProjectDisplay>
+    openTabs?: unknown
+    activeTab?: unknown
 }
 
 /**
@@ -104,6 +120,26 @@ function pickEntry(entry: unknown, files: ProjectFiles, language: AvailableLangu
     return Object.keys(files)[0] ?? preferred
 }
 
+/** Unusable editor state never prevents a Project from opening. */
+function cleanEditorTabs(
+    raw: { openTabs?: unknown; activeTab?: unknown } | undefined,
+    files: ProjectFiles
+): Pick<ProjectData, 'openTabs' | 'activeTab'> {
+    const usable = (path: unknown): path is string =>
+        typeof path === 'string' && isValidFilePath(path) && Object.hasOwn(files, path)
+    const openTabs = Array.isArray(raw?.openTabs)
+        ? [...new Set(raw.openTabs.filter(usable))]
+        : undefined
+    const activeTab =
+        usable(raw?.activeTab) && (openTabs === undefined || openTabs.includes(raw.activeTab))
+            ? raw.activeTab
+            : undefined
+    return {
+        ...(openTabs !== undefined ? { openTabs } : {}),
+        ...(activeTab !== undefined ? { activeTab } : {})
+    }
+}
+
 /**
  * Every stored, exported or shared shape into the current one. A version 1 `code` becomes the
  * default Entry file; a project without any program gets the language's empty one; a missing Entry
@@ -119,10 +155,11 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
     }
     const now = Date.now()
     const compilations = cleanCompilationRecords(raw?.compilations)
+    const entry = pickEntry(raw?.entry, files, language)
     return {
         id: raw?.id ?? '',
         files: cleanFiles(files),
-        entry: pickEntry(raw?.entry, files, language),
+        entry,
         settings: cleanProjectSettings(raw?.settings),
         createdAt: raw?.createdAt ?? now,
         updatedAt: raw?.updatedAt ?? now,
@@ -132,7 +169,8 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
         testcases: cleanTestcases(Array.isArray(raw?.testcases) ? raw.testcases : []),
         exam: raw?.exam,
         display: raw?.display ? cleanDisplay(raw.display) : undefined,
-        ...(compilations ? { compilations } : {})
+        ...(compilations ? { compilations } : {}),
+        ...cleanEditorTabs(raw, files)
     }
 }
 
@@ -161,7 +199,9 @@ function contentKey(project: ProjectData): string {
         testcases: project.testcases,
         display: project.display,
         exam: project.exam,
-        compilations: project.compilations
+        compilations: project.compilations,
+        openTabs: project.openTabs,
+        activeTab: project.activeTab
     })
 }
 
@@ -274,6 +314,8 @@ type ProjectMetadata = {
     settings: ProjectSettingsDecisions
     files: ProjectFiles
     compilations?: CompilationRecord[]
+    openTabs?: string[]
+    activeTab?: string
 }
 
 const metaVersion = 2
@@ -384,7 +426,9 @@ export function makeProject(data?: StoredProject) {
             id: state.id,
             exam: state.exam,
             display: state.display,
-            ...(state.compilations ? { compilations: state.compilations } : {})
+            ...(state.compilations ? { compilations: state.compilations } : {}),
+            ...(state.openTabs !== undefined ? { openTabs: state.openTabs } : {}),
+            ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {})
         }) as ProjectData
     }
 
@@ -407,7 +451,9 @@ export function makeProject(data?: StoredProject) {
             entry: snapshot.entry,
             settings: snapshot.settings,
             files,
-            ...(snapshot.compilations ? { compilations: snapshot.compilations } : {})
+            ...(snapshot.compilations ? { compilations: snapshot.compilations } : {}),
+            ...(snapshot.openTabs !== undefined ? { openTabs: snapshot.openTabs } : {}),
+            ...(snapshot.activeTab !== undefined ? { activeTab: snapshot.activeTab } : {})
         }
         const metaJson = serializer.stringify(meta, null, 4)
         const commentCharacter = COMMENT_CHARACTER[snapshot.language]
@@ -450,6 +496,8 @@ export function makeProject(data?: StoredProject) {
             ...(legacyCode ? { files: undefined, entry: undefined } : {})
         })
         Object.assign(state, merged)
+        state.openTabs = merged.openTabs
+        state.activeTab = merged.activeTab
         reconcileSourceMaps()
     }
 
@@ -497,6 +545,18 @@ export function makeProject(data?: StoredProject) {
         },
         get compilations() {
             return state.compilations ?? []
+        },
+        get openTabs() {
+            return state.openTabs
+        },
+        get activeTab() {
+            return state.activeTab
+        },
+        /** Remembers editor navigation without touching Files or taking their Debug lock. */
+        setOpenTabs(openTabs: readonly string[], activeTab: string) {
+            const clean = cleanEditorTabs({ openTabs, activeTab }, state.files)
+            state.openTabs = clean.openTabs
+            state.activeTab = clean.activeTab
         },
         get sourceMaps() {
             return sourceMaps

@@ -9,9 +9,9 @@
         shortcutLabel,
         shortcutRecording,
         shortcutsStore
-    } from '$stores/shortcutsStore'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    } from '#stores/shortcutsStore.ts'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaCheck from '~icons/fa-solid/check'
     import FaUndo from '~icons/fa-solid/undo'
     import { onMount } from 'svelte'

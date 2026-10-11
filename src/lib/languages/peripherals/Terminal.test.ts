@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { Prompt, PromptType } from '$stores/promptStore.svelte'
-import { ExecutionController } from '$lib/languages/ExecutionController'
+import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
+import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { Keyboard } from './Keyboard'
 import { Terminal, type TerminalOptions } from './Terminal.svelte'
 

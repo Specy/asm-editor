@@ -1,4 +1,4 @@
-import { browser } from '$app/environment'
+import { browser } from '$app/env'
 import { HOVER_QUERY, PHONE_QUERY, TABLET_QUERY, type DeviceClass } from './deviceClass'
 
 export type Viewport = {

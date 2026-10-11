@@ -1,11 +1,9 @@
-import { browser } from '$app/environment'
-import { generateTheme } from '$lib/monaco/editorTheme'
+import { browser } from '$app/env'
+import { generateTheme } from '#lib/monaco/editorTheme.ts'
 import type monaco from 'monaco-editor'
-
 import editorWorker from 'monaco-editor/editor/editor.worker?worker'
-
-import type { AvailableLanguages, AvailableProgrammingLanguages } from '$lib/Project.svelte'
-import { openProjectResource } from '$lib/languages/service/navigation'
+import type { AvailableLanguages, AvailableProgrammingLanguages } from '#lib/Project.svelte.ts'
+import { openProjectResource } from '#lib/languages/service/navigation.ts'
 import { registerAssemblyLanguage } from './assemblyLanguageRegistry'
 
 export type MonacoType = typeof monaco
@@ -27,7 +25,9 @@ class MonacoLoader {
 
     dispose = () => {
         this.sourceHelpGeneration++
+
         for (const disposable of this.toDispose.splice(0).reverse()) disposable.dispose()
+
         this.registeredLanguages.clear()
         this.registeringLanguages.clear()
         this.projectOpener = undefined
@@ -59,12 +59,17 @@ class MonacoLoader {
             })
             return this.sourceHelpRegistration
         }
+
         if (this.registeredLanguages.has(lang)) return
+
         const pending = this.registeringLanguages.get(lang)
+
         if (pending) return pending
 
         const registration = this.installLanguage(lang)
+
         this.registeringLanguages.set(lang, registration)
+
         try {
             await registration
             this.registeredLanguages.add(lang)
@@ -103,13 +108,14 @@ class MonacoLoader {
 
     private async installSourceHelp(generation: number): Promise<void> {
         const monacoInstance = this.monaco ?? (await this.load())
-        const { registerSourceLanguageHelp } = await import('$lib/sourceLanguageHelp/register')
+        const { registerSourceLanguageHelp } = await import('#lib/sourceLanguageHelp/register.ts')
         if (generation !== this.sourceHelpGeneration) return
         this.toDispose.push(...registerSourceLanguageHelp(monacoInstance))
     }
 
     setCustomTheme = (theme: monaco.editor.IStandaloneThemeData) => {
         if (!this.monaco) return
+
         this.monaco.editor.defineTheme('custom-theme', theme)
         this.monaco.editor.setTheme('custom-theme')
     }

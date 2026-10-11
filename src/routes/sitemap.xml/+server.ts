@@ -1,9 +1,9 @@
-import { SITE_URL } from '$lib/seo'
-import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
-import { mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
-import { riscvInstructionMap } from '$lib/languages/RISC-V/RISC-V-documentation'
-import { x86DocumentedNames } from '$lib/languages/X86/X86-documentation'
-import { z80InstructionMap } from '$lib/languages/Z80/Z80-documentation'
+import { SITE_URL } from '#lib/seo.ts'
+import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
+import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
+import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+import { x86DocumentedNames } from '#lib/languages/X86/X86-documentation.ts'
+import { z80InstructionMap } from '#lib/languages/Z80/Z80-documentation.ts'
 
 export const prerender = true
 
@@ -35,7 +35,7 @@ function staticRoutes() {
 
 /**
  * The assembly course lectures. Their routes come from the same content globs the pages
- * themselves load, so the two cannot disagree: `$content/<course>/<module>/<lecture>`.
+ * themselves load, so the two cannot disagree: `#content/<course>/<module>/<lecture>`.
  */
 function courseRoutes() {
     const courses = Object.keys(import.meta.glob('/src/content/*/meta.json')).map((path) => {

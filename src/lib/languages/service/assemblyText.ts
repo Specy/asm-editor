@@ -1,5 +1,5 @@
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 
 export type AssemblyTextOptions = {
     comment: '#' | ';'

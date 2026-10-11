@@ -1,4 +1,4 @@
-import { resolveFilePath } from '$lib/projectFiles'
+import { resolveFilePath } from '#lib/projectFiles.ts'
 import type { SourceHelpContext } from './context'
 import type { IncludeContext } from './scan'
 

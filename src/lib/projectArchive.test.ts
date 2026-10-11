@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { zipSync } from 'fflate'
-import { makeProject, makeProjectFromExternal } from '$lib/Project.svelte'
+import { makeProject, makeProjectFromExternal } from '#lib/Project.svelte.ts'
 import {
     looksLikeZip,
     makeProjectFromArchive,
     projectArchiveName,
     projectDownload,
     projectToArchive
-} from '$lib/projectArchive'
-import { bytesFile, fileBytes, ProjectFormatError } from '$lib/projectFiles'
+} from '#lib/projectArchive.ts'
+import { bytesFile, fileBytes, ProjectFormatError } from '#lib/projectFiles.ts'
 
 const encoder = new TextEncoder()
 
@@ -20,6 +20,8 @@ describe('Project archives', () => {
             description: 'all fields',
             language: 'MIPS',
             entry: 'src/main.mips',
+            openTabs: ['src/lib.mips', 'src/main.mips'],
+            activeTab: 'src/lib.mips',
             files: {
                 'src/main.mips': { encoding: 'plain', content: 'include "lib.mips"\n\n' },
                 'src/lib.mips': { encoding: 'plain', content: 'jr $ra\n' },
@@ -41,6 +43,8 @@ describe('Project archives', () => {
         const imported = makeProjectFromArchive(archive).project
         expect(looksLikeZip(archive)).toBe(true)
         expect(imported.entry).toBe('src/main.mips')
+        expect(imported.openTabs).toEqual(['src/lib.mips', 'src/main.mips'])
+        expect(imported.activeTab).toBe('src/lib.mips')
         expect(imported.code).toBe('include "lib.mips"\n\n')
         expect(imported.testcases[0]?.expectedRegisters.v0).toBe(12n)
         expect(imported.files['data/raw.bin']?.encoding).toBe('base64')

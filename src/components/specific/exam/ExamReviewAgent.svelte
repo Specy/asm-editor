@@ -1,17 +1,17 @@
 <script lang="ts">
-    import { documentationLanguageOf } from '$lib/search/scope'
+    import { documentationLanguageOf } from '#lib/search/scope.ts'
     /**
      * The teacher's review agent for a submitted exam: read-only tools over the submission and the
      * assembly Emulator, no editing, grading only. `ExamReviewAgentSidebar` slides it in over the
      * exam page; the Workbench shows it as a panel of the exam's own.
      */
-    import DefaultCodingAgent from '$cmp/shared/agent/DefaultCodingAgent.svelte'
+    import DefaultCodingAgent from '#cmp/shared/agent/DefaultCodingAgent.svelte'
     import type {
         AgentWorkflow,
         SupportedLanguage
-    } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import { formatDiagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+    } from '#cmp/shared/agent/DefaultCodingAgent.svelte'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import { formatDiagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import {
         ExamSectionType,
         type AssemblyCodingSection,
@@ -19,8 +19,8 @@
         type ExamSection,
         type ExamSectionAnswer,
         type ExamSubmission
-    } from '$lib/exam'
-    import { TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
+    } from '#lib/exam.ts'
+    import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
     import { tool, type RegisteredTool } from '@discerns/sdk'
     import { z } from 'zod'
 

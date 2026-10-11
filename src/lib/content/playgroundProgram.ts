@@ -4,14 +4,14 @@ import {
     ProjectFormatError,
     type BuildSources,
     type ProjectFiles
-} from '$lib/projectFiles'
-import type { Project } from '$lib/Project.svelte'
+} from '#lib/projectFiles.ts'
+import type { Project } from '#lib/Project.svelte.ts'
 import {
     cleanCompilationRecords,
     sourceLanguage,
     type CompilationRecord
-} from '$lib/sourceCompilation/records'
-import { projectBuildSources } from '$lib/buildSources'
+} from '#lib/sourceCompilation/records.ts'
+import { projectBuildSources } from '#lib/buildSources.ts'
 
 /** Named files passed to an embed; the target remains the embed's `language` setting. */
 export type PlaygroundProgram = {

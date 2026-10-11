@@ -1,11 +1,16 @@
-import { validateAssemblerProfile, type AssemblerProfile } from '$lib/assemblerProfiles'
-import { fileText, resolveFilePath, ProjectFormatError, type BuildSources } from '$lib/projectFiles'
+import { validateAssemblerProfile, type AssemblerProfile } from '#lib/assemblerProfiles.ts'
+import {
+    fileText,
+    resolveFilePath,
+    ProjectFormatError,
+    type BuildSources
+} from '#lib/projectFiles.ts'
 import {
     isRuntimeLibrarySetting,
     RUNTIME_ENTRY_SYMBOL,
     RUNTIME_NAMESPACE,
     type RuntimeLibrarySetting
-} from '$lib/runtimeAbi'
+} from '#lib/runtimeAbi.ts'
 import type { CompilationRecord } from './records'
 
 /** The Compilation records whose Generated assembly the Entry file's include unit reaches. */

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { ThemeKeys } from '$stores/themeStore.svelte'
+    import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
 
     interface Props {
         disabled?: boolean

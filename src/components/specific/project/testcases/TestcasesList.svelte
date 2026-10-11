@@ -7,10 +7,10 @@
      * `TestcasesSummary` in the panel's header; `TestcasesEditor` puts both in a floating window
      * for the Interactive editor.
      */
-    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
-    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { makeEmptyTestcase, matchResults, testcaseLabel } from '$lib/testcases'
-    import { Prompt } from '$stores/promptStore.svelte'
+    import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+    import type { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { makeEmptyTestcase, matchResults, testcaseLabel } from '#lib/testcases.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
     import TestcaseItem from './TestcaseItem.svelte'
 
     interface Props {

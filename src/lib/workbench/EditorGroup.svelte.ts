@@ -6,12 +6,12 @@ import {
     canEditProjectBreakpoints,
     isCurrentBuildLocation,
     type ProjectSourceSelection
-} from '$lib/monaco/projectSourceSelection'
-import { projectSourceModelKey, type ProjectModelIdentity } from '$lib/languages/service/uri'
-import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
-import { hasRuntimeLibraryFor } from '$lib/sourceRuntime/runtimeLibrary'
-import { isEnvironmentHeaderPath } from '$lib/sourceRuntime/environmentLibrary'
-import { assemblyLinesOf } from '$lib/sourceCompilation/mappingSelection'
+} from '#lib/monaco/projectSourceSelection.ts'
+import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
+import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
+import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
+import { assemblyLinesOf } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     compilationStatus,
     defaultSourceCompiler,
@@ -21,7 +21,7 @@ import {
     sourceLanguage,
     type Optimization,
     type SourceCompiler
-} from '$lib/sourceCompilation/records'
+} from '#lib/sourceCompilation/records.ts'
 
 /** One editor widget and its tabs; file contents and execution belong to the session. */
 export class EditorGroup {

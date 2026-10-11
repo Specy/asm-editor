@@ -1,9 +1,9 @@
 import { untrack } from 'svelte'
-import type { Project } from '$lib/Project.svelte'
-import type { BuildSources } from '$lib/projectFiles'
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
-import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
-import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
+import type { Project } from '#lib/Project.svelte.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
+import { SourceCompilationError } from '#lib/sourceCompilation/compilerExplorer.ts'
 import {
     compilationStatus,
     defaultSourceCompiler,
@@ -11,9 +11,9 @@ import {
     sourceLanguage,
     type Optimization,
     type SourceCompiler
-} from '$lib/sourceCompilation/records'
+} from '#lib/sourceCompilation/records.ts'
 import { playgroundBuildSources } from './playgroundProgram'
-import { registerLanguageSession } from '$lib/languages/service/sessionRegistry'
+import { registerLanguageSession } from '#lib/languages/service/sessionRegistry.ts'
 
 /** A transient Project gives embeds the same files and compilation lifecycle as the Workbench. */
 export class PlaygroundSession {

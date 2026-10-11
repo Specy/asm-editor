@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * How a Target's text services turn characters into bytes and back, which the Terminal follows for

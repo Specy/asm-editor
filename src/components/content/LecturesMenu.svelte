@@ -1,6 +1,6 @@
 <script lang="ts">
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import type { Lecture } from '$lib/content/getters'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import type { Lecture } from '#lib/content/getters.ts'
     interface Props {
         currentLecture?: Lecture
         lectures: Lecture[]

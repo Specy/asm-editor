@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EmulatorInterrupt } from '$lib/languages/commonLanguageFeatures.svelte'
-import { ExecutionController } from '$lib/languages/ExecutionController'
-import { FileSystem } from '$lib/languages/peripherals/FileSystem'
-import { RandomSource } from '$lib/languages/peripherals/RandomSource'
-import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
-import { MarsHandlers, normalizeUndoSize, toHaltLimit } from '$lib/languages/mars/marsHandlers'
+import type { EmulatorInterrupt } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { ExecutionController } from '#lib/languages/ExecutionController.ts'
+import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
+import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { MarsHandlers, normalizeUndoSize, toHaltLimit } from '#lib/languages/mars/marsHandlers.ts'
 
 /**
  * The handlers MIPS and RISC-V share, against the real Terminal and FileSystem and no Core, for the

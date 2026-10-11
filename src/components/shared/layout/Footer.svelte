@@ -2,9 +2,9 @@
     import FaGithub from '~icons/fa-brands/github'
     import FaRegCopyright from '~icons/fa-regular/copyright'
     import Icon from './Icon.svelte'
-    import { toast } from '$stores/toastStore'
+    import { toast } from '#stores/toastStore.ts'
     import { page } from '$app/state'
-    import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
+    import AnimatedRgbLine from '#cmp/shared/misc/AnimatedRgbLine.svelte'
     import FaDonate from '~icons/fa-solid/heart'
     import { resolve } from '$app/paths'
     interface Props {
@@ -25,9 +25,9 @@
                         <div>Specy</div>
                     </div>
                 </a>
-                <a href={resolve('/changelog', {})}> Changelog </a>
+                <a href={resolve('/changelog')}> Changelog </a>
                 <div class="icon-wrapper">
-                    <a class="icon" href={resolve('/donate', {})} title="Donate and support me">
+                    <a class="icon" href={resolve('/donate')} title="Donate and support me">
                         <Icon size={1.6}>
                             <FaDonate />
                         </Icon>

@@ -1,13 +1,13 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '$lib/seo'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '#lib/seo.ts'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
     import { onMount } from 'svelte'
-    import Z80FlagsCell from '$cmp/documentation/z80/Z80FlagsCell.svelte'
-    import { dedupeZ80Variants } from '$cmp/documentation/z80/z80DocsUtils'
+    import Z80FlagsCell from '#cmp/documentation/z80/Z80FlagsCell.svelte'
+    import { dedupeZ80Variants } from '#cmp/documentation/z80/z80DocsUtils.ts'
 
     interface Props {
         data: PageData
@@ -23,10 +23,10 @@
     // instruction re-derives it, the same way the other languages' instruction pages do.
     let code = $derived(data.props.example)
 
-    let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
+    let component: typeof import('#cmp/documentation/site/ClientOnly.svelte').default | undefined =
         $state.raw()
     onMount(async () => {
-        component = (await import('$cmp/documentation/site/ClientOnly.svelte')).default
+        component = (await import('#cmp/documentation/site/ClientOnly.svelte')).default
     })
 
     function formatCycles(cycles: { taken: number; notTaken: number }): string {

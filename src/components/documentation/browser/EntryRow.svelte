@@ -7,8 +7,8 @@
     import { prefersReducedMotion } from 'svelte/motion'
     import { slide } from 'svelte/transition'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
-    import HighlightedText from '$cmp/search/HighlightedText.svelte'
-    import { hasCodeName, type DocumentationEntry } from '$lib/documentation/entries'
+    import HighlightedText from '#cmp/search/HighlightedText.svelte'
+    import { hasCodeName, type DocumentationEntry } from '#lib/documentation/entries.ts'
     import EntryBody from '../entries/EntryBody.svelte'
 
     interface Props {

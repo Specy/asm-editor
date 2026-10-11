@@ -1,6 +1,6 @@
-import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import type { Screen } from '$lib/languages/peripherals/screen/Screen'
-import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import {
     marsDisplayGeometry,
     marsWordAddress,

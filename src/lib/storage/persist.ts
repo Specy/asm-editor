@@ -1,4 +1,4 @@
-import { browser } from '$app/environment'
+import { browser } from '$app/env'
 
 const REQUESTED_KEY = 'asm-editor_storage-persist-requested'
 

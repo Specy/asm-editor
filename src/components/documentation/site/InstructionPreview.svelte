@@ -1,7 +1,7 @@
 <script lang="ts">
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import CodeSample from '../entries/CodeSample.svelte'
-    import '$cmp/specific/workbench/workbench.css'
+    import '#cmp/specific/workbench/workbench.css'
     import './instructionExample.css'
 
     interface Props {

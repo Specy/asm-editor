@@ -1,8 +1,8 @@
-import { isShippedRuntimeAbi } from '$lib/runtimeAbi'
+import { isShippedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import {
     SOURCE_HELP_REVISION,
     type CompilerCapabilities
-} from '$lib/sourceCompilation/capabilities'
+} from '#lib/sourceCompilation/capabilities.ts'
 import type { HelpCatalog, HelpEntry } from './types'
 import type { HelpLanguage } from './context'
 

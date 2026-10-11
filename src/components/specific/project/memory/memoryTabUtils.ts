@@ -1,4 +1,4 @@
-import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { DiffedMemory } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e

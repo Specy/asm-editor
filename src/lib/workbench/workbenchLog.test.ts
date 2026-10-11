@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
-import type { Termination } from '$lib/languages/termination'
+import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+import type { Termination } from '#lib/languages/termination.ts'
 import { appendLog, buildEntry, exitEntry, testRunEntry, type LogDraft } from './workbenchLog'
 
 const testcase: Testcase = {

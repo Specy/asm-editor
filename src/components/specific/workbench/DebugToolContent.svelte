@@ -1,10 +1,10 @@
 <script lang="ts">
     /** What one Debug tool shows, wherever it is: a floating window, a section, a compact row. */
-    import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
-    import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
-    import StackPointerView from '$cmp/specific/project/memory/StackPointerView.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
-    import { makeColorizedLabels } from '$lib/languages/commonLanguageFeatures.svelte'
+    import CallStack from '#cmp/specific/project/user-tools/CallStack.svelte'
+    import MutationsViewer from '#cmp/specific/project/user-tools/MutationsRenderer.svelte'
+    import StackPointerView from '#cmp/specific/project/memory/StackPointerView.svelte'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
+    import { makeColorizedLabels } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { DebugTool } from './debugTools'
     import { useWorkbench } from './workbenchContext'
 

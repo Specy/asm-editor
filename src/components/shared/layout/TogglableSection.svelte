@@ -1,6 +1,6 @@
 <script lang="ts">
     import FaAngleRight from '~icons/fa-solid/angle-right'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     interface Props {
         open?: boolean
         style?: string

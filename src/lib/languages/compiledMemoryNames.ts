@@ -1,5 +1,5 @@
 import type { DataLabel } from './commonLanguageFeatures.svelte'
-import type { BuildSources } from '$lib/projectFiles'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import type { DemangleModule } from './demangle/module'
 
 let demangler: DemangleModule | undefined

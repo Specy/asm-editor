@@ -1,24 +1,24 @@
 <script lang="ts">
-    import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import Select from '$cmp/shared/input/Select.svelte'
-    import { BASE_CODE } from '$lib/Config'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import MarkdownEditor from '$cmp/shared/markdown/MarkdownEditor.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Input from '$cmp/shared/input/Input.svelte'
-    import { encryptData, makeHash } from '$lib/utils'
-    import { toast } from '$stores/toastStore'
+    import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
+    import { BASE_CODE } from '#lib/Config.ts'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import MarkdownEditor from '#cmp/shared/markdown/MarkdownEditor.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Input from '#cmp/shared/input/Input.svelte'
+    import { encryptData, makeHash } from '#lib/utils.ts'
+    import { toast } from '#stores/toastStore.ts'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTrash from '~icons/fa-solid/trash'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import {
         createDefaultExamSection,
         createExamSessionLink,
@@ -29,9 +29,9 @@
         type ExamSection,
         type MultipleChoiceSection,
         type AssemblyCodingSection
-    } from '$lib/exam'
-    import { serializer } from '$lib/json'
-    import Editor from '$cmp/specific/project/Editor.svelte'
+    } from '#lib/exam.ts'
+    import { serializer } from '#lib/json.ts'
+    import Editor from '#cmp/specific/project/Editor.svelte'
 
     type Settings = {
         title: string

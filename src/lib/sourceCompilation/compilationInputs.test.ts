@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { makeProject } from '$lib/Project.svelte'
-import type { ProjectFiles } from '$lib/projectFiles'
+import { makeProject } from '#lib/Project.svelte.ts'
+import type { ProjectFiles } from '#lib/projectFiles.ts'
 import { compilationInputs } from './compilationInputs'
 import { compilationStatus, fileFingerprint, type CompilationRecord } from './records'
 

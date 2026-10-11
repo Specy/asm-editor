@@ -6,9 +6,9 @@
         SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO,
         SOURCE_MAP_CONNECTION_STYLE,
         SOURCE_MAP_SECTION_BORDER
-    } from '$lib/Config'
-    import type { ColoredLineRange } from '$lib/monaco/lineColoring'
-    import type { SourceMapColoring } from '$lib/sourceCompilation/sourceColoring'
+    } from '#lib/Config.ts'
+    import type { ColoredLineRange } from '#lib/monaco/lineColoring.ts'
+    import type { SourceMapColoring } from '#lib/sourceCompilation/sourceColoring.ts'
 
     interface Props {
         sourceEditor?: monaco.editor.IStandaloneCodeEditor
@@ -18,6 +18,8 @@
         coloring: SourceMapColoring
         /** Palette indices of the emphasized connections; the others dim. */
         activeColors?: ReadonlySet<number>
+        /** Select a connector's zero-based source line and its mapped assembly sections. */
+        onSelect: (sourceLine: number) => void
         /** Zero-based executing lines, -1 when there is none; a line joins them. */
         sourceLine?: number
         assemblyLine?: number
@@ -31,6 +33,7 @@
         sourcePath,
         coloring,
         activeColors,
+        onSelect,
         sourceLine = -1,
         assemblyLine = -1,
         divider
@@ -71,6 +74,13 @@
     const isActive = (colorIndex: number) => activeColors?.has(colorIndex) ?? false
     const isDimmed = (colorIndex: number) =>
         activeColors !== undefined && !activeColors.has(colorIndex)
+
+    function selectWithKeyboard(event: KeyboardEvent, sourceLine: number) {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        event.stopPropagation()
+        onSelect(sourceLine)
+    }
 
     type Band = { top: number; bottom: number }
     type Ribbon = {
@@ -319,7 +329,8 @@
     style:--source-map-border-opacity={SOURCE_MAP_SECTION_BORDER.opacity}
 >
     <svg
-        aria-hidden="true"
+        role="group"
+        aria-label="Source and assembly connections"
         width={geometry.width}
         height={geometry.height}
         viewBox="0 0 {geometry.width} {geometry.height}"
@@ -352,6 +363,12 @@
                 data-source-line={ribbon.sourceLine + 1}
                 data-assembly-line={ribbon.key + 1}
                 d={ribbon.path}
+                role="button"
+                tabindex="0"
+                aria-label="Select {sourcePath} line {ribbon.sourceLine + 1} and its assembly"
+                aria-pressed={isActive(ribbon.colorIndex)}
+                onclick={() => onSelect(ribbon.sourceLine)}
+                onkeydown={(event) => selectWithKeyboard(event, ribbon.sourceLine)}
             />
         {/each}
         {#if SOURCE_MAP_SECTION_BORDER.width > 0}
@@ -429,6 +446,16 @@
         &.executing {
             fill: var(--accent);
             fill-opacity: 1;
+        }
+    }
+    .ribbon {
+        pointer-events: visiblePainted;
+        cursor: pointer;
+        &:focus-visible {
+            outline: none;
+            stroke: var(--accent);
+            stroke-width: 2px;
+            vector-effect: non-scaling-stroke;
         }
     }
     .section-border {

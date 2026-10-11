@@ -1,19 +1,19 @@
 import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { m68kIncludedSourceFiles, m68kWrittenPath, resolveM68kFile } from './m68kAssemblyFiles'
 import {
     analysisForModel,
     languageSession,
     type LanguageSessionView
-} from '$lib/languages/service/sessionRegistry'
+} from '#lib/languages/service/sessionRegistry.ts'
 import {
     parseProjectSourceUri,
     projectSourceUri,
     type ProjectModelIdentity
-} from '$lib/languages/service/uri'
-import type { LanguageSymbol } from '$lib/languages/service/protocol'
-import type { BuildSources } from '$lib/projectFiles'
+} from '#lib/languages/service/uri.ts'
+import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
 
 function sessionForModel(model: monaco.editor.ITextModel): {

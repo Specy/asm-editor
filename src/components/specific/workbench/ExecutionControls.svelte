@@ -7,17 +7,17 @@
      * edge in the bottom corners of the editor on a desktop, along its bottom edge on a phone, and
      * stuck under it on a tablet.
      */
-    import ExecutionDock, { type DockCompilation } from '$cmp/specific/project/ExecutionDock.svelte'
+    import ExecutionDock, { type DockCompilation } from '#cmp/specific/project/ExecutionDock.svelte'
     import {
         isCompilationTarget,
         OPTIMIZATIONS,
         sourceLanguage,
         type Optimization,
         type SourceCompiler
-    } from '$lib/sourceCompilation/records'
+    } from '#lib/sourceCompilation/records.ts'
     import { useWorkbench } from './workbenchContext'
-    import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
-    import { editorFileKind } from '$lib/workbench/editorFileRouting'
+    import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
+    import { editorFileKind } from '#lib/workbench/editorFileRouting.ts'
 
     interface Props {
         fill?: boolean

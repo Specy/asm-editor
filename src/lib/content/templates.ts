@@ -1,8 +1,8 @@
 import * as fs from 'node:fs/promises'
 import { join } from 'node:path'
-import { BASE_CODE } from '$lib/Config'
-import { extractPlaygrounds } from '$lib/content/playgrounds'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import { BASE_CODE } from '#lib/Config.ts'
+import { extractPlaygrounds } from '#lib/content/playgrounds.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * The programs offered when a project is created.

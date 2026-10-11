@@ -1,8 +1,8 @@
-import type { Load } from '@sveltejs/kit'
-import { getCourse, getLecture, getLectureContent, getTopicLinks } from '$lib/content/getters'
-import { redirectRetiredPage } from '$lib/content/redirects'
+import type { PageServerLoad } from './$types'
+import { getCourse, getLecture, getLectureContent, getTopicLinks } from '#lib/content/getters.ts'
+import { redirectRetiredPage } from '#lib/content/redirects.ts'
 
-export const load: Load = async ({ params }) => {
+export const load: PageServerLoad = async ({ params }) => {
     redirectRetiredPage(params.courseId, params.moduleId, params.lectureId)
     return {
         course: await getCourse(params.courseId),

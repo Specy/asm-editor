@@ -1,9 +1,9 @@
 <script lang="ts">
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaCircle from '~icons/fa-solid/circle'
     import FaLongArrowAltUp from '~icons/fa-solid/long-arrow-alt-up'
-    import type { StackFrame } from '$lib/languages/commonLanguageFeatures.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
+    import type { StackFrame } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import Row from '#cmp/shared/layout/Row.svelte'
     interface Props {
         stack: StackFrame[]
         onGoToLabel: (label: StackFrame) => void

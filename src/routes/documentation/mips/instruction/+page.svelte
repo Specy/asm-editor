@@ -1,7 +1,7 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import { mipsInstructionNames } from '$lib/languages/MIPS/MIPS-documentation'
-    import { capitalize } from '$lib/utils'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import { mipsInstructionNames } from '#lib/languages/MIPS/MIPS-documentation.ts'
+    import { capitalize } from '#lib/utils.ts'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import { resolve } from '$app/paths'
 

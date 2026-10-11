@@ -1,10 +1,10 @@
 <script lang="ts">
-    import { Prompt, PromptType } from '$stores/promptStore.svelte'
-    import { ScopedTheme } from '$stores/themeStore.svelte'
+    import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
+    import { ScopedTheme } from '#stores/themeStore.svelte.ts'
     import { fade } from 'svelte/transition'
     import { tick } from 'svelte'
 
-    import Input from '$cmp/shared/input/Input.svelte'
+    import Input from '#cmp/shared/input/Input.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }

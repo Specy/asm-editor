@@ -1,8 +1,8 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte'
     import MutationStep from './MutationStep.svelte'
-    import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import type { ExecutionStep } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     interface Props {
         steps: ExecutionStep[]
         statusRegisterNames: string[]

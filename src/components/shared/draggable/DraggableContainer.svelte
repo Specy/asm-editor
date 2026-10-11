@@ -1,8 +1,8 @@
 <script lang="ts">
-    import Draggable from '$cmp/shared/draggable/Draggable.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Draggable from '#cmp/shared/draggable/Draggable.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaGripHorizontal from '~icons/fa-solid/grip-horizontal'
-    import Button from '$cmp/shared/button/Button.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
     import FaEye from '~icons/fa-solid/eye'
     import FaEyeSlash from '~icons/fa-solid/eye-slash'
     import FaWindowRestore from '~icons/fa-solid/window-restore'

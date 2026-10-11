@@ -2,7 +2,7 @@ import type { Plugin } from 'carta-md'
 import type { Element, ElementContent, Root } from 'hast'
 import { toString } from 'hast-util-to-string'
 import { visit } from 'unist-util-visit'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { tokenizeAssembly } from './assemblyHighlight'
 import { parsePlaygroundLanguage } from './playgrounds'
 

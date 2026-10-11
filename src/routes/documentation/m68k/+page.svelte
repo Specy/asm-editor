@@ -1,8 +1,8 @@
 <script lang="ts">
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import { instructionsDocumentationList } from '$lib/languages/M68K/M68K-documentation'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import { instructionsDocumentationList } from '#lib/languages/M68K/M68K-documentation.ts'
 </script>
 
 <svelte:head>

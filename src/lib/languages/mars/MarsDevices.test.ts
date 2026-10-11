@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { ExecutionController } from '$lib/languages/ExecutionController'
-import { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import { Screen } from '$lib/languages/peripherals/screen/Screen'
-import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+import { ExecutionController } from '#lib/languages/ExecutionController.ts'
+import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import {
     MARS_READY_BIT,
     MARS_RECEIVER_CONTROL,
@@ -10,8 +10,8 @@ import {
     MARS_TRANSMITTER_DATA,
     MarsDevices,
     type MarsCore
-} from '$lib/languages/mars/MarsDevices'
-import { DEFAULT_PROJECT_DISPLAY } from '$lib/languages/mars/marsDisplay'
+} from '#lib/languages/mars/MarsDevices.ts'
+import { DEFAULT_PROJECT_DISPLAY } from '#lib/languages/mars/marsDisplay.ts'
 
 /**
  * The memory-mapped devices against a fake Core and the real Terminal, for the behavior that

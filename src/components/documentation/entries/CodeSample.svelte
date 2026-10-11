@@ -1,11 +1,11 @@
 <script lang="ts">
-    import type { AvailableLanguages } from '$lib/Project.svelte'
-    import { tokenizeAssembly } from '$lib/content/assemblyHighlight'
-    import { assemblyPalette } from '$lib/content/assemblyPalette'
-    import { ScopedTheme, ThemeStore } from '$stores/themeStore.svelte'
-    import { EXAMPLE_EDITOR_FONT } from '$lib/monaco/exampleFont'
-    import { codeLineNumbers } from '$lib/content/codeBlocks'
-    import '$cmp/shared/markdown/codeBlocks.css'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { tokenizeAssembly } from '#lib/content/assemblyHighlight.ts'
+    import { assemblyPalette } from '#lib/content/assemblyPalette.ts'
+    import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
+    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
+    import { codeLineNumbers } from '#lib/content/codeBlocks.ts'
+    import '#cmp/shared/markdown/codeBlocks.css'
 
     /** A short code sample of an entry: an instruction's forms, a syscall's call. */
     interface Props {

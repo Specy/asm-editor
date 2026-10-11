@@ -12,24 +12,24 @@
         AvailableLanguages,
         AvailableProgrammingLanguages
     } from '../../../lib/Project.svelte'
-    import type { MonacoType } from '$lib/monaco/Monaco'
-    import { Monaco } from '$lib/monaco/Monaco'
-    import { generateTheme } from '$lib/monaco/editorTheme'
-    import type { BuildArtifact, Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { MonacoType } from '#lib/monaco/Monaco.ts'
+    import { Monaco } from '#lib/monaco/Monaco.ts'
+    import { generateTheme } from '#lib/monaco/editorTheme.ts'
+    import type { BuildArtifact, Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import {
         parseProjectSourceUri,
         projectSourceUri,
         type ProjectModelIdentity
-    } from '$lib/languages/service/uri'
+    } from '#lib/languages/service/uri.ts'
     import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
-    import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
-    import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
-    import { keepHoverReachable } from '$lib/monaco/hoverReachability'
-    import type { EditorLineColoring } from '$lib/monaco/lineColoring'
-    import { selectedLines } from '$lib/monaco/selectedLines'
-    import { setSourceHelpLanguage } from '$lib/sourceLanguageHelp/context'
-    import type { EditorModels } from '$lib/workbench/editorModels'
-    import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '$lib/Config'
+    import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
+    import { setModelBuildArtifacts } from '#lib/monaco/assemblyInsights.ts'
+    import { keepHoverReachable } from '#lib/monaco/hoverReachability.ts'
+    import type { EditorLineColoring } from '#lib/monaco/lineColoring.ts'
+    import { selectedLines } from '#lib/monaco/selectedLines.ts'
+    import { setSourceHelpLanguage } from '#lib/sourceLanguageHelp/context.ts'
+    import type { EditorModels } from '#lib/workbench/editorModels.ts'
+    import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
 
     interface Props {
         disabled?: boolean

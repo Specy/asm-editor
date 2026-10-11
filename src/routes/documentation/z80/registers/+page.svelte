@@ -1,7 +1,7 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import ChapterView from '$cmp/documentation/ChapterView.svelte'
-    import { chapters } from '$lib/documentation/z80/z80'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import ChapterView from '#cmp/documentation/ChapterView.svelte'
+    import { chapters } from '#lib/documentation/z80/z80.ts'
 
     const chapter = chapters().find((chapter) => chapter.id === 'registers-and-flags')!
 </script>

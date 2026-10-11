@@ -1,6 +1,6 @@
 <script lang="ts">
     import { type Justify, justifyMap } from './layoutUtils'
-    import type { ThemeKeys } from '$stores/themeStore.svelte'
+    import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
 
     interface Props {
         justify?: Justify | undefined

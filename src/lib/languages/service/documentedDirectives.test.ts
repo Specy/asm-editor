@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { MIPS } from '@specy/mips'
 import { RISCV } from '@specy/risc-v'
-import { mipsDirectivesMap } from '$lib/languages/MIPS/MIPS-documentation'
-import { riscvDirectivesMap } from '$lib/languages/RISC-V/RISC-V-documentation'
+import { mipsDirectivesMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
+import { riscvDirectivesMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
 
 /**
  * The directive maps are written by hand, while the directives themselves live in the Cores, and

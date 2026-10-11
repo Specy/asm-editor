@@ -4,12 +4,12 @@ import {
     CPU_REGISTER_FILE_ID,
     GenericEmulator,
     RUNNING_PANEL_REFRESH_MS
-} from '$lib/languages/GenericEmulator.svelte'
+} from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     EmulatorStatus,
     type CompileResult,
     type Instruction
-} from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     InterpreterStatus,
     RegisterSize,
@@ -20,21 +20,21 @@ import {
     type ExecutionStep,
     type RegisterFileDescriptor,
     type StackFrame
-} from '$lib/languages/commonLanguageFeatures.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     COMPUTE_SLICE_MS,
     SCREEN_ACTIVITY_MS,
     SCREEN_SLICE_MS,
     type ExecutionSlice,
     type ExecutionSliceRequest
-} from '$lib/languages/ExecutionSlice'
-import { Screen } from '$lib/languages/peripherals/screen/Screen'
-import { RECORD_OVERHEAD_BYTES } from '$lib/languages/peripherals/screen/ScreenHistory'
-import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
-import type { Testcase } from '$lib/Project.svelte'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
-import type { Termination } from '$lib/languages/termination'
-import { RandomSource } from '$lib/languages/peripherals/RandomSource'
+} from '#lib/languages/ExecutionSlice.ts'
+import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import { RECORD_OVERHEAD_BYTES } from '#lib/languages/peripherals/screen/ScreenHistory.ts'
+import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import type { Termination } from '#lib/languages/termination.ts'
+import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
 
 /**
  * The scheduler, the injection, the reset path and the Undo rule of phase 3, exercised through a

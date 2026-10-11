@@ -8,7 +8,7 @@
  * checked against the real assembler by a probe; keep it that way when changing the rules here.
  */
 
-import type { Z80InstructionVariant } from '$lib/languages/Z80/Z80-documentation'
+import type { Z80InstructionVariant } from '#lib/languages/Z80/Z80-documentation.ts'
 
 /** Where the examples assemble, matching the base code of a new Z80 project. */
 const ORG = '0x8000'

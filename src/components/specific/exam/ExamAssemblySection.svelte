@@ -11,14 +11,14 @@
      * prompt is a panel of the exam's own, open when the section opens, and in review mode the
      * teacher's review agent is another.
      */
-    import Workbench from '$cmp/specific/workbench/Workbench.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import Workbench from '#cmp/specific/workbench/Workbench.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import FaFileAlt from '~icons/fa-solid/file-alt'
-    import type { AssemblyCodingSection } from '$lib/exam'
-    import { makeProject } from '$lib/Project.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import type { WorkbenchHostPanel, WorkbenchPanelContext } from '$lib/workbench/hostApi'
+    import type { AssemblyCodingSection } from '#lib/exam.ts'
+    import { makeProject } from '#lib/Project.svelte.ts'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import type { WorkbenchHostPanel, WorkbenchPanelContext } from '#lib/workbench/hostApi.ts'
     import { untrack, type Snippet } from 'svelte'
 
     interface Props {

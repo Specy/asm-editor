@@ -1,6 +1,6 @@
-import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import type { KeyCode } from '$lib/languages/peripherals/keyCodes'
-import type { Screen } from '$lib/languages/peripherals/screen/Screen'
+import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import type { KeyCode } from '#lib/languages/peripherals/keyCodes.ts'
+import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import {
     buildGlyphSheet,
     isKeyboardAddress,

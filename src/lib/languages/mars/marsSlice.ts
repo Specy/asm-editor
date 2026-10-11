@@ -3,7 +3,7 @@ import {
     type ExecutionSliceRequest,
     sliceDeadline,
     sliceInstructionBudget
-} from '$lib/languages/ExecutionSlice'
+} from '#lib/languages/ExecutionSlice.ts'
 
 /**
  * The slice loop of the MARS and RARS derived adapters (MIPS and RISC-V), whose Cores serve a

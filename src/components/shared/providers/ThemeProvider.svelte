@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ThemeStore, themeCssVariables } from '$stores/themeStore.svelte'
+    import { ThemeStore, themeCssVariables } from '#stores/themeStore.svelte.ts'
     import { TinyColor } from '@ctrl/tinycolor'
     import { Body } from 'svelte-body'
     interface Props {

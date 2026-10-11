@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { X86_START_UNIT_PATH, X86_SUPPORT_UNIT_PATH } from '$lib/languages/X86/x86StartUnit'
-    import { isEnvironmentHeaderPath } from '$lib/sourceRuntime/environmentLibrary'
+    import { X86_START_UNIT_PATH, X86_SUPPORT_UNIT_PATH } from '#lib/languages/X86/x86StartUnit.ts'
+    import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
 
     /**
      * Above a Runtime library member: what it is, and its C source beside it. The library is not

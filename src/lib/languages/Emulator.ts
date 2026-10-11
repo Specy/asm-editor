@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type {
     BaseEmulatorActions,
     BaseEmulatorDerivedState,
@@ -6,7 +6,7 @@ import type {
     EmulatorSettings
 } from './commonLanguageFeatures.svelte'
 import type { EmulatorPeripherals } from './peripherals/peripheralSet'
-import type { BuildInput } from '$lib/projectFiles'
+import type { BuildInput } from '#lib/projectFiles.ts'
 import type { M68KEmulator } from './M68K/M68KEmulator.svelte'
 import type { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import type { X86Emulator } from './X86/X86Emulator.svelte'

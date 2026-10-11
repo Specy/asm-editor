@@ -7,9 +7,9 @@
      * address and number are the 0 their placeholders show.
      */
     import { onMount, untrack } from 'svelte'
-    import type { AvailableLanguages, MemoryValue } from '$lib/Project.svelte'
-    import SegmentedControl from '$cmp/specific/project/cpu/SegmentedControl.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
+    import type { AvailableLanguages, MemoryValue } from '#lib/Project.svelte.ts'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
     import {
         escapeText,
         formatHex,
@@ -18,7 +18,7 @@
         parseNumber,
         parseNumberList,
         unescapeText
-    } from '$lib/testcases'
+    } from '#lib/testcases.ts'
     import { WHEN_ICONS, type When } from './WhenLabel.svelte'
 
     interface Props {

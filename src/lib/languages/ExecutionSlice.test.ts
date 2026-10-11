@@ -11,7 +11,7 @@ import {
     sliceInstructionBudget,
     yieldToHost,
     type ExecutionSliceRequest
-} from '$lib/languages/ExecutionSlice'
+} from '#lib/languages/ExecutionSlice.ts'
 
 /**
  * The pure half of the scheduling contract ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)):

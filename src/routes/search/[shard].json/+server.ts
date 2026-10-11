@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit'
-import { ALL_SHARDS, isShardId } from '$lib/search/scope'
+import { ALL_SHARDS, isShardId } from '#lib/search/scope.ts'
 import type { EntryGenerator, RequestHandler } from './$types'
 
 /**
@@ -16,7 +16,7 @@ export const entries: EntryGenerator = () => ALL_SHARDS.map((shard) => ({ shard 
 export const GET: RequestHandler = async ({ params }) => {
     if (!isShardId(params.shard)) error(404, 'No such shard')
     // Imported here, so that ONNX Runtime and the course reader load only for this route.
-    const { buildShard } = await import('$lib/search/shards')
+    const { buildShard } = await import('#lib/search/shards.ts')
     const payload = await buildShard(params.shard)
     return new Response(JSON.stringify(payload), {
         headers: { 'Content-Type': 'application/json' }

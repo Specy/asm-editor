@@ -1,4 +1,4 @@
-import { capitalize } from '$lib/utils'
+import { capitalize } from '#lib/utils.ts'
 import { summaryOf, type EntryField } from '../entries'
 import { simPrototype, type MarsSyscall } from './syscallBinding'
 

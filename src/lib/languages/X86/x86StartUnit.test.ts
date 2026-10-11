@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BASE_CODE } from '$lib/Config'
-import type { BuildSources } from '$lib/projectFiles'
+import { BASE_CODE } from '#lib/Config.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import {
     x86CoreProject,
     X86_START_UNIT,

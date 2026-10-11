@@ -21,7 +21,7 @@ export function contentFingerprint(text: string): string {
 }
 
 export function fileFingerprint(
-    file: import('$lib/projectFiles').ProjectFile | undefined
+    file: import('#lib/projectFiles.ts').ProjectFile | undefined
 ): string | undefined {
     return file ? contentFingerprint(`${file.encoding}\0${file.content}`) : undefined
 }

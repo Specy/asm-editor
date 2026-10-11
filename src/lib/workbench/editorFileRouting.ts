@@ -1,4 +1,4 @@
-import { LANGUAGE_EXTENSIONS } from '$lib/Config'
+import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
 
 export type EditorFileKind = 'source' | 'assembly'
 

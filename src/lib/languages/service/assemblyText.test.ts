@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
     assemblyOperandContext,
     createAssemblyFoldingProvider,
@@ -8,9 +8,9 @@ import {
     parseAssemblyLine,
     splitAssemblyOperands
 } from './assemblyText'
-import { MIPS_TEXT_OPTIONS } from '$lib/languages/MIPS/MIPS-language'
-import { X86_TEXT_OPTIONS } from '$lib/languages/X86/X86-language'
-import { Z80_TEXT_OPTIONS } from '$lib/languages/Z80/Z80-language'
+import { MIPS_TEXT_OPTIONS } from '#lib/languages/MIPS/MIPS-language.ts'
+import { X86_TEXT_OPTIONS } from '#lib/languages/X86/X86-language.ts'
+import { Z80_TEXT_OPTIONS } from '#lib/languages/Z80/Z80-language.ts'
 
 describe('shared tolerant assembly text model', () => {
     it('keeps delimiters in strings and nested address expressions out of operand splitting', () => {

@@ -4,7 +4,7 @@
      * a search result or a link lands on the entry itself. The URL is the one the Chapter has always
      * had ([the plan](../../../docs/design/documentation-search-plan.md), phase 2c).
      */
-    import { hasCodeName, type Chapter } from '$lib/documentation/entries'
+    import { hasCodeName, type Chapter } from '#lib/documentation/entries.ts'
     import EntryBody from './entries/EntryBody.svelte'
 
     interface Props {

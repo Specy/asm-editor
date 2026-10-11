@@ -5,7 +5,7 @@
      * the palette.
      */
     import FaSearch from '~icons/fa-solid/search'
-    import { shortcutLabel, shortcutsStore, ShortcutAction } from '$stores/shortcutsStore'
+    import { shortcutLabel, shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
     import { openSearchPalette } from './paletteState.svelte'
 
     interface Props {

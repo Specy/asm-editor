@@ -410,7 +410,7 @@ export const mipsDirectivesMap = {
  * The syscalls live in `documentation/mars/mipsSyscalls.ts`, free of the Core, so that build
  * scripts can read them.
  */
-export { mipsSyscalls as mipsSyscall } from '$lib/documentation/mars/mipsSyscalls'
+export { mipsSyscalls as mipsSyscall } from '#lib/documentation/mars/mipsSyscalls.ts'
 
 export const mipsRegisters = {
     zero: {

@@ -8,7 +8,7 @@ import {
     instructionsDocumentationList,
     M68KDirectiveDocumentationList,
     type Size
-} from '$lib/languages/M68K/M68K-documentation'
+} from '#lib/languages/M68K/M68K-documentation.ts'
 import {
     M68K_COLORS,
     M68K_KEY_CODE_DOCS,
@@ -18,7 +18,7 @@ import {
     M68K_TRAP_GROUP_DOCS,
     type M68KTrapDoc,
     type M68KTrapGroup
-} from '$lib/languages/M68K/M68K-traps'
+} from '#lib/languages/M68K/M68K-traps.ts'
 import {
     fillPlaceholders,
     names,

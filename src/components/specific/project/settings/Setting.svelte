@@ -1,7 +1,7 @@
 <script lang="ts">
-    import type { PreferenceValue } from '$stores/preferencesStore.svelte'
-    import Switch from '$cmp/shared/input/Switch.svelte'
-    import Select from '$cmp/shared/input/Select.svelte'
+    import type { PreferenceValue } from '#stores/preferencesStore.svelte.ts'
+    import Switch from '#cmp/shared/input/Switch.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
     import { createEventDispatcher } from 'svelte'
 
     interface Props {

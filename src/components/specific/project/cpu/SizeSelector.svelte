@@ -1,8 +1,8 @@
 <script lang="ts">
-    import SegmentedControl from '$cmp/specific/project/cpu/SegmentedControl.svelte'
-    import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
-    import { REGISTER_SIZES, sizeName } from '$lib/languages/sizeNames'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { REGISTER_SIZES, sizeName } from '#lib/languages/sizeNames.ts'
 
     /**
      * The width grouping strip of the register panel: `SegmentedControl` with the sizes the panel

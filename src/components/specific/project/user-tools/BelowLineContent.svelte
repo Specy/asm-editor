@@ -1,6 +1,6 @@
 <script lang="ts">
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import { Monaco } from '$lib/monaco/Monaco'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import { Monaco } from '#lib/monaco/Monaco.ts'
 
     interface Props {
         md: string

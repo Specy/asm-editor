@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPreferences, readStoredPreferences } from '$stores/preferencesStore.svelte'
+import { defaultPreferences, readStoredPreferences } from '#stores/preferencesStore.svelte.ts'
 
 /**
  * The Preferences store replaced a settings store that wiped everything whenever its version string

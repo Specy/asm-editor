@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import type { InstructionExample } from '$lib/documentation/instructions/content'
+    import type { InstructionExample } from '#lib/documentation/instructions/content.ts'
     import InstructionPreview from './InstructionPreview.svelte'
     import './instructionExample.css'
 

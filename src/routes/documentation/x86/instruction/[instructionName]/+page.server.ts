@@ -1,13 +1,13 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
-import { chapters } from '$lib/documentation/x86/x86'
+import { chapters } from '#lib/documentation/x86/x86.ts'
 import {
     describeX86Instruction,
     formatX86InstructionSummary,
     x86InstructionMap,
     x86InstructionTitle,
     hasX86InstructionPage
-} from '$lib/languages/X86/X86-documentation'
+} from '#lib/languages/X86/X86-documentation.ts'
 import { buildX86Example } from './example'
 
 export const load = (async ({ params }) => {

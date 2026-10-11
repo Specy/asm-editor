@@ -1,10 +1,10 @@
 import { fileFingerprint } from './fingerprints'
 import { compilationInputs } from './compilationInputs'
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { isAssemblerProfile, type AssemblerProfile } from '$lib/assemblerProfiles'
-import { hasRuntimeLibrary, isRuntimeAbiName } from '$lib/runtimeAbi'
-import { LANGUAGE_EXTENSIONS } from '$lib/Config'
-import { isValidFilePath, ProjectFormatError, type ProjectFiles } from '$lib/projectFiles'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { isAssemblerProfile, type AssemblerProfile } from '#lib/assemblerProfiles.ts'
+import { hasRuntimeLibrary, isRuntimeAbiName } from '#lib/runtimeAbi.ts'
+import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
+import { isValidFilePath, ProjectFormatError, type ProjectFiles } from '#lib/projectFiles.ts'
 
 export type CompilationTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86'
 const COMPILATION_TARGETS: readonly string[] = ['MIPS', 'RISC-V', 'RISC-V-64', 'X86']

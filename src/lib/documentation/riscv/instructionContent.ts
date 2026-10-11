@@ -1,7 +1,7 @@
 import {
     instructionContentFromFiles,
     type InstructionExampleMetadata
-} from '$lib/documentation/instructions/content'
+} from '#lib/documentation/instructions/content.ts'
 
 const metadata: Record<string, InstructionExampleMetadata> = {
     add: {

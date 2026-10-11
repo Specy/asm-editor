@@ -1,5 +1,5 @@
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { resolveSourceHelpContext } from './context'
 import { sourceHelpEntries } from './catalog'
 import { callAt, identifierAt, includeAt, scanSource, type ScannedSource } from './scan'

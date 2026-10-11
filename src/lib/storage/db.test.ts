@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Db } from './db'
+import { makeProject } from '#lib/Project.svelte.ts'
 
 /**
  * The one migration a user's browser runs without asking: opening the app after the files map
@@ -69,6 +70,33 @@ describe('the version 2 upgrade', () => {
             ['opqrstu', 'main.z80', 'halt']
         ])
         db.close()
+    })
+
+    it('round trips optional open tabs and their active path through browser storage', async () => {
+        const db = new Db()
+        try {
+            const project = makeProject({
+                language: 'MIPS',
+                entry: 'main.mips',
+                files: {
+                    'main.mips': { encoding: 'plain', content: 'nop' },
+                    'lib.mips': { encoding: 'plain', content: 'jr $ra' }
+                },
+                openTabs: ['lib.mips', 'main.mips'],
+                activeTab: 'lib.mips'
+            })
+            await db.addProject(project)
+            const loaded = await db.getProject(project.id)
+            expect(loaded.openTabs).toEqual(['lib.mips', 'main.mips'])
+            expect(loaded.activeTab).toBe('lib.mips')
+            loaded.setOpenTabs([], '')
+            await db.updateProject(loaded)
+            const empty = await db.getProject(project.id)
+            expect(empty.openTabs).toEqual([])
+            expect(empty.activeTab).toBeUndefined()
+        } finally {
+            db.close()
+        }
     })
 
     it('skips, and keeps, a row this version cannot read', async () => {

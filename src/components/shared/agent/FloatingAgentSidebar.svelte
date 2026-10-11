@@ -7,10 +7,10 @@
         AgentToolAllowList,
         AgentWorkflowAllowList
     } from './DefaultCodingAgent.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
-    import type { AgentSearchPlace } from '$lib/search/scope'
-    import type { ProjectFiles } from '$lib/projectFiles'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+    import type { AgentSearchPlace } from '#lib/search/scope.ts'
+    import type { ProjectFiles } from '#lib/projectFiles.ts'
     import type { RegisteredTool } from '@discerns/sdk'
 
     interface Props {

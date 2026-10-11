@@ -1,10 +1,10 @@
 <script lang="ts">
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
         groupZ80VariantsByDescription,
         type Z80InstructionVariant
-    } from '$lib/languages/Z80/Z80-documentation'
-    import { dedupeZ80Forms } from '$cmp/documentation/z80/z80DocsUtils'
+    } from '#lib/languages/Z80/Z80-documentation.ts'
+    import { dedupeZ80Forms } from '#cmp/documentation/z80/z80DocsUtils.ts'
     import CodeSample from './CodeSample.svelte'
 
     interface Props {

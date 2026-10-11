@@ -1,9 +1,9 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
-import { chapters } from '$lib/documentation/riscv/riscv'
-import { riscvInstructionMap } from '$lib/languages/RISC-V/RISC-V-documentation'
-import { riscvInstructionContent } from '$lib/documentation/riscv/instructionContent'
-import { instructionDescription } from '$lib/documentation/instructions/content'
+import { chapters } from '#lib/documentation/riscv/riscv.ts'
+import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+import { riscvInstructionContent } from '#lib/documentation/riscv/instructionContent.ts'
+import { instructionDescription } from '#lib/documentation/instructions/content.ts'
 
 export const load = (async ({ params }) => {
     const instruction = riscvInstructionMap.get(params.instructionName)

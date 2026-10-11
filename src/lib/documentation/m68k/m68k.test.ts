@@ -5,8 +5,8 @@ import {
     branchConditionsFlags,
     M68KDirectiveDocumentation,
     M68KUncompoundedInstructions
-} from '$lib/languages/M68K/M68K-documentation'
-import { M68K_COLORS, M68K_TRAP_DOCS } from '$lib/languages/M68K/M68K-traps'
+} from '#lib/languages/M68K/M68K-documentation.ts'
+import { M68K_COLORS, M68K_TRAP_DOCS } from '#lib/languages/M68K/M68K-traps.ts'
 import type { DocumentationEntry } from '../entries'
 import { chapters } from './m68k'
 

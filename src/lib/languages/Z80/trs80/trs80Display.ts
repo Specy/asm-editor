@@ -1,5 +1,5 @@
-import { KEY_CODES, type KeyCode } from '$lib/languages/peripherals/keyCodes'
-import type { ScreenCellSize } from '$lib/languages/peripherals/screen/bitmapFont'
+import { KEY_CODES, type KeyCode } from '#lib/languages/peripherals/keyCodes.ts'
+import type { ScreenCellSize } from '#lib/languages/peripherals/screen/bitmapFont.ts'
 
 /**
  * The TRS-80 Model III display and keyboard, as plain data: the memory map a program stores into,

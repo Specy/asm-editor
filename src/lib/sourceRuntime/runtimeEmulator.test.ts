@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
-import type { BuildSources } from '$lib/projectFiles'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import { provideRuntimeFunctions, provideRuntimeLibrary } from './runtimeLibrary'
 
 /**

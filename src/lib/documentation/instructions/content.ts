@@ -1,5 +1,5 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import type { RegisterFormat } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import type { RegisterFormat } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /** Authored content supplements a Core's instruction forms without changing them. */
 export type InstructionContent = {

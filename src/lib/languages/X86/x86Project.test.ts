@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBuildInput, type ProjectFiles } from '$lib/projectFiles'
-import { analyzeX86Project } from '$lib/languages/service/adapters/x86Adapter'
+import { normalizeBuildInput, type ProjectFiles } from '#lib/projectFiles.ts'
+import { analyzeX86Project } from '#lib/languages/service/adapters/x86Adapter.ts'
 import { toX86Project, x86ReachableFiles } from './x86Project'
 
 describe('x86 Project compilation', () => {

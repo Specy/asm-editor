@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { Z80_FLAGS } from './Z80/Z80-model'
 
 /**

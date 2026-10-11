@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { StatusRegister } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { StatusRegister } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
     interface Props {
         statusCodes: StatusRegister[]

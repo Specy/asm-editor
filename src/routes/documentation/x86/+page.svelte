@@ -1,7 +1,7 @@
 <script lang="ts">
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
 </script>
 
 <svelte:head>

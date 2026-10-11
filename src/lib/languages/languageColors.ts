@@ -1,6 +1,6 @@
-import { LANGUAGE_THEMES } from '$lib/Config'
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { BUILTIN_THEMES, DEFAULT_THEME } from '$stores/themeStore.svelte'
+import { LANGUAGE_THEMES } from '#lib/Config.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { BUILTIN_THEMES, DEFAULT_THEME } from '#stores/themeStore.svelte.ts'
 
 /**
  * The colour that stands for each language, read out of the theme that language already owns rather

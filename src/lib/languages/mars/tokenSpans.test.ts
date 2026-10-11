@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeTokenSpanIndex, tokenSpanEnd } from '$lib/languages/mars/tokenSpans'
+import { makeTokenSpanIndex, tokenSpanEnd } from '#lib/languages/mars/tokenSpans.ts'
 
 /** One line as the Cores shape it, with the token columns the tokenizer would report. */
 function line(sourcePath: string, sourceLine: number, source: string, columns: number[]) {

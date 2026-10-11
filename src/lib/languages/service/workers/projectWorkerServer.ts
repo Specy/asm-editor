@@ -1,8 +1,8 @@
 /// <reference lib="webworker" />
 
-import type { BuildConfiguration, ProjectFile, BuildSources } from '$lib/projectFiles'
-import { buildConfiguration } from '$lib/projectFiles'
-import { validateAssemblerProfile } from '$lib/assemblerProfiles'
+import type { BuildConfiguration, ProjectFile, BuildSources } from '#lib/projectFiles.ts'
+import { buildConfiguration } from '#lib/projectFiles.ts'
+import { validateAssemblerProfile } from '#lib/assemblerProfiles.ts'
 import type {
     ProjectAnalysisSnapshot,
     ProjectAnalysisTarget,

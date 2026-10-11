@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makeProject, normalizeProjectData, projectContentEquals } from '$lib/Project.svelte'
-import { makeProjectFromArchive, projectToArchive } from '$lib/projectArchive'
-import { BASE_CODE } from '$lib/Config'
+import { makeProject, normalizeProjectData, projectContentEquals } from '#lib/Project.svelte.ts'
+import { makeProjectFromArchive, projectToArchive } from '#lib/projectArchive.ts'
+import { BASE_CODE } from '#lib/Config.ts'
 import { compileProjectSource } from './compileProjectSource'
 import {
     fileFingerprint,

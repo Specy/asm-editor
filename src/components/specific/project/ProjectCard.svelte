@@ -1,18 +1,18 @@
 <script lang="ts">
-    import type { Project } from '$lib/Project.svelte'
+    import type { Project } from '#lib/Project.svelte.ts'
     import timeAgo from 's-ago'
-    import { ProjectStore } from '$stores/projectsStore.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import FaTrashAlt from '~icons/fa-solid/trash-alt'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { Prompt } from '$stores/promptStore.svelte'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
     import FaDownload from '~icons/fa-solid/download'
     import { createEventDispatcher } from 'svelte'
-    import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
-    import { LANGUAGE_THEMES } from '$lib/Config'
+    import { BUILTIN_THEMES, ThemeStore } from '#stores/themeStore.svelte.ts'
+    import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import FaShareAlt from '~icons/fa-solid/share-alt'
-    import { isSingleSourceProject } from '$lib/projectArchive'
+    import { isSingleSourceProject } from '#lib/projectArchive.ts'
 
     interface Props {
         project: Project

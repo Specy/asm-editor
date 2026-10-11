@@ -3,14 +3,14 @@ import { flushSync, mount, unmount } from 'svelte'
 import lzstring from 'lz-string'
 import { readFileSync } from 'node:fs'
 import MarkdownRenderer from './MarkdownRenderer.svelte'
-import { splitLecture } from '$lib/content/lectureSections'
-import { decodePlaygroundProgram } from '$lib/content/playgroundProgram'
-import { extractPlaygrounds } from '$lib/content/playgrounds'
+import { splitLecture } from '#lib/content/lectureSections.ts'
+import { decodePlaygroundProgram } from '#lib/content/playgroundProgram.ts'
+import { extractPlaygrounds } from '#lib/content/playgrounds.ts'
 
-//the renderer reaches `$lib/Project.svelte`, which reaches the projects store, which opens its
+//the renderer reaches `#lib/Project.svelte.ts`, which reaches the projects store, which opens its
 //IndexedDB because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's
 //rejection would fail the run, so the database is stubbed away
-vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 
 /**
  * The two passes a playground fence goes through. Carta renders twice: `renderSSR`, whose output is

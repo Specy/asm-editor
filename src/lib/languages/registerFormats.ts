@@ -5,8 +5,8 @@ import {
     type RegisterPoke,
     RegisterSize,
     toHexString
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { unsignedBigIntToSigned } from '$lib/utils'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { unsignedBigIntToSigned } from '#lib/utils.ts'
 
 /**
  * Rendering a Register file's values in the Format the panel is showing

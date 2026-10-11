@@ -8,16 +8,16 @@
      * its own. It fills its container, never the viewport, and it creates the Project's Emulator.
      */
     import type { Snippet } from 'svelte'
-    import type { Project } from '$lib/Project.svelte'
-    import type { WorkbenchUi } from '$lib/workbench/WorkbenchUi.svelte'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { resolveProjectSettings } from '$lib/projectSettings'
+    import type { Project } from '#lib/Project.svelte.ts'
+    import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
+    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
+    import { resolveProjectSettings } from '#lib/projectSettings.ts'
     import type {
         BuiltinPanelId,
         PanelAccess,
         WorkbenchHostLink,
         WorkbenchHostPanel
-    } from '$lib/workbench/hostApi'
+    } from '#lib/workbench/hostApi.ts'
     import WorkbenchShell from './WorkbenchShell.svelte'
 
     interface Props {

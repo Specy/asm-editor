@@ -3,8 +3,8 @@
      * What a **Documentation entry** shows when it is read: an expanded row in the Documentation
      * panel, or the entry on its Chapter's page. One renderer per kind of view.
      */
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import type { DocumentationEntry } from '$lib/documentation/entries'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import type { DocumentationEntry } from '#lib/documentation/entries.ts'
     import CodeSample from './CodeSample.svelte'
     import InlineMarkdown from './InlineMarkdown.svelte'
     import M68KInstructionView from './M68KInstructionView.svelte'

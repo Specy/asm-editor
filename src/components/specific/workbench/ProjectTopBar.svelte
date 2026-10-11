@@ -1,6 +1,6 @@
 <script lang="ts">
     import { resolve } from '$app/paths'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaBars from '~icons/fa-solid/bars'
     import FaHeart from '~icons/fa-solid/heart'
@@ -43,7 +43,7 @@
     {:else}
         <a
             class="action brand"
-            href={resolve('/', {})}
+            href={resolve('/')}
             title="Go to the home page"
             aria-label="Go to the home page"
             onclick={(event) => {

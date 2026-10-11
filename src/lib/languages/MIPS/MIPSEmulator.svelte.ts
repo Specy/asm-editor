@@ -7,8 +7,8 @@ import {
     loadRuntimeFunctions,
     loadRuntimeLibrary,
     runtimeLibraryHint
-} from '$lib/sourceRuntime/runtimeLibrary'
-import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '$lib/runtimeAbi'
+} from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import {
     BackStepAction,
     isRuntimeError,
@@ -29,7 +29,7 @@ import {
     type CompileResult,
     EmulatorStatus,
     type Instruction
-} from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -43,14 +43,14 @@ import {
     type SourceBreakpoint,
     RegisterSize,
     type StackFrame
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
-import type { Termination } from '$lib/languages/termination'
-import { type ExecutionSlice, type ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
-import { MarsSlicePacer } from '$lib/languages/mars/marsSlice'
-import { canUndoMarsHistoryRange } from '$lib/languages/mars/marsUndo'
-import type { Testcase } from '$lib/Project.svelte'
-import { MarsDevices } from '$lib/languages/mars/MarsDevices'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
+import type { Termination } from '#lib/languages/termination.ts'
+import { type ExecutionSlice, type ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
+import { MarsSlicePacer } from '#lib/languages/mars/marsSlice.ts'
+import { canUndoMarsHistoryRange } from '#lib/languages/mars/marsUndo.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
 import {
     exitStepText,
     MarsHandlers,
@@ -58,25 +58,25 @@ import {
     normalizeUndoSize,
     randomStreamStepText,
     toHaltLimit
-} from '$lib/languages/mars/marsHandlers'
+} from '#lib/languages/mars/marsHandlers.ts'
 import {
     type MarsDisplayConfiguration,
     type MarsDisplayOrigin,
     normalizeMarsDisplay,
     type ProjectDisplay
-} from '$lib/languages/mars/marsDisplay'
+} from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
-} from '$lib/languages/mars/screenDirective'
+} from '#lib/languages/mars/screenDirective.ts'
 import {
     makeTokenSpanIndex,
     tokenSpanEnd,
     type TokenSpanIndex
-} from '$lib/languages/mars/tokenSpans'
+} from '#lib/languages/mars/tokenSpans.ts'
 import {
     buildAssemblerProfile,
     ProjectFormatError,
@@ -86,7 +86,7 @@ import {
     type BuildInput,
     type BuildSources,
     type ProjectFiles
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 import {
     MIPSCoprocessor0RegisterNames,
     MIPSCoprocessor1RegisterNames,

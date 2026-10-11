@@ -1,5 +1,8 @@
-import { Prompt } from '$stores/promptStore.svelte'
-import type { ExecutionController, ExecutionGeneration } from '$lib/languages/ExecutionController'
+import { Prompt } from '#stores/promptStore.svelte.ts'
+import type {
+    ExecutionController,
+    ExecutionGeneration
+} from '#lib/languages/ExecutionController.ts'
 import {
     createTextStreamDecoder,
     encodeText,

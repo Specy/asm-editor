@@ -4,7 +4,7 @@ import {
     compilerCapabilities,
     HOSTED_C_HEADERS,
     HOSTED_CPP_HEADERS
-} from '$lib/sourceCompilation/capabilities'
+} from '#lib/sourceCompilation/capabilities.ts'
 import { createCatalogLoader, sourceHelpEntries } from './catalog'
 import { entryDocumentation } from './documentation'
 import type { HelpCatalog } from './types'
@@ -75,7 +75,8 @@ describe('authoritative source help catalogs', () => {
         // Chapter adapters load a Core; match the documentation suite's startup timeout.
         { timeout: 60_000 },
         async (target, route) => {
-            const { documentationFor, entriesOf } = await import('$lib/documentation/documentation')
+            const { documentationFor, entriesOf } =
+                await import('#lib/documentation/documentation.ts')
             const destinations = new Set(
                 entriesOf(await documentationFor(route)).map((entry) => entry.href)
             )

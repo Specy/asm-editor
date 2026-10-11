@@ -1,39 +1,37 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '$cmp/search/SearchPalette.svelte'
-    import { languageScope } from '$lib/search/scope'
-    import { searchClient } from '$lib/search/searchClient.svelte'
-    import Navbar from '$cmp/shared/layout/Navbar.svelte'
-    import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
-    import InstructionsMenu from '$cmp/documentation/site/InstructionsMenu.svelte'
-    import { page } from '$app/stores'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import { languageScope } from '#lib/search/scope.ts'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import Navbar from '#cmp/shared/layout/Navbar.svelte'
+    import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
+    import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
+    import InstructionsMenu from '#cmp/documentation/site/InstructionsMenu.svelte'
+    import { page } from '$app/state'
     import FaBars from '~icons/fa-solid/bars'
-
-    import MenuLink from '$cmp/documentation/site/MenuLink.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import MenuLink from '#cmp/documentation/site/MenuLink.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
-    import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
+    import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { ProjectStore } from '$stores/projectsStore.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 
     interface Props {
         children?: import('svelte').Snippet
     }
 
     let { children }: Props = $props()
-
     let instructions = Array.from(M68KUncompoundedInstructions.values()).sort((a, b) =>
         a.name.localeCompare(b.name)
     )
     let menuOpen = $state(false)
-    let currentInstructionName = $derived($page.params.instructionName ?? '')
+    let currentInstructionName = $derived(page.params.instructionName ?? '')
     const instructionNames = instructions.map((instruction) => instruction.name)
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
@@ -44,19 +42,20 @@
 
 <Navbar style="border-bottom-left-radius: 0;">
     <Row gap="0.6rem" align="center" flex1>
-        <a class="icon" href={resolve('/', {})} title="Go to the home">
-            <img src="/favicon.png" alt="logo" />
-        </a>
-        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
-        <a href={resolve('/documentation', {})}> Docs </a>
-        <a href={resolve('/learn/courses', {})}> Learn </a>
+        <a class="icon" href={resolve('/')} title="Go to the home"
+            ><img src="/favicon.png" alt="logo" /></a
+        >
 
-        <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
-            <div class="hidden-very-small">
-                <SparklesIcon />
-            </div>
+        <a class="icon" href={resolve('/projects')} title="Go to your projects">Projects</a>
+
+        <a href={resolve('/documentation')}>Docs</a>
+        <a href={resolve('/learn/courses')}>Learn</a>
+
+        <a class="icon ai" href={resolve('/chat')} title="AI Chat">
+            <div class="hidden-very-small"><SparklesIcon /></div>
             AI Chat
         </a>
+
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}
@@ -77,6 +76,7 @@
     <MaskedScroll>
         <Column gap="1rem" padding="0 1rem">
             <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
+
             <MenuLink
                 href="/documentation/m68k/addressing-mode"
                 title="Addressing Modes"
@@ -152,6 +152,7 @@
         </Column>
     {/snippet}
 </Sidebar>
+
 <SearchPalette {scope} placeholder="Search the M68K docs and courses" />
 
 <style lang="scss">

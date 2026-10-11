@@ -1,4 +1,9 @@
-import type { AvailableLanguages, MemoryValue, Testcase, TestcaseResult } from '$lib/Project.svelte'
+import type {
+    AvailableLanguages,
+    MemoryValue,
+    Testcase,
+    TestcaseResult
+} from '#lib/Project.svelte.ts'
 
 /**
  * What the Testcases panel needs beyond the **Testcase** record itself: reading the numbers a person

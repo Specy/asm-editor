@@ -5,15 +5,15 @@
      * Everything repaints as it changes, the Workbench beside it included. It was the `/themes` page
      * before it became the Theme section of the Workbench's Settings.
      */
-    import Button from '$cmp/shared/button/Button.svelte'
-    import ColorThemeRow from '$cmp/specific/ColorThemeRow.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { ThemeStore } from '$stores/themeStore.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import ColorThemeRow from '#cmp/specific/ColorThemeRow.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { ThemeStore } from '#stores/themeStore.svelte.ts'
     import { scale } from 'svelte/transition'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
     import FaPlus from '~icons/fa-solid/plus'
-    import { Prompt } from '$stores/promptStore.svelte'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
     import FaTrashAlt from '~icons/fa-solid/trash-alt'
 
     let theme = ThemeStore.themeList

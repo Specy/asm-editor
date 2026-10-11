@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
     getInstructionDocumentation,
     M68KDirectives,

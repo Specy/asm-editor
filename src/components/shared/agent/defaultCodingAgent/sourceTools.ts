@@ -1,8 +1,12 @@
 import { tool } from '@discerns/sdk'
 import { z } from 'zod'
-import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
-import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
-import { isCompilationTarget, OPTIMIZATIONS, sourceLanguage } from '$lib/sourceCompilation/records'
+import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
+import { SourceCompilationError } from '#lib/sourceCompilation/compilerExplorer.ts'
+import {
+    isCompilationTarget,
+    OPTIMIZATIONS,
+    sourceLanguage
+} from '#lib/sourceCompilation/records.ts'
 import type { DefaultCodingAgentToolContext } from './types'
 import { runAgentTool } from './toolResults'
 

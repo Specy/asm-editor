@@ -6,14 +6,14 @@ import {
     extractPlaygrounds,
     parsePlaygroundFence,
     type ContentPlayground
-} from '$lib/content/playgrounds'
-import { createEmulator, type Emulator } from '$lib/languages/Emulator'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
-import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import { makeProject, type Testcase, type TestcaseValidationError } from '$lib/Project.svelte'
-import type { BuildInput } from '$lib/projectFiles'
-import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
-import { sourceLanguage } from '$lib/sourceCompilation/records'
+} from '#lib/content/playgrounds.ts'
+import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
+import { InterpreterStatus } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
+import { makeProject, type Testcase, type TestcaseValidationError } from '#lib/Project.svelte.ts'
+import type { BuildInput } from '#lib/projectFiles.ts'
+import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
+import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
 import { playgroundBuildSources } from './playgroundProgram'
 
 /**

@@ -4,9 +4,9 @@
      * a MARS or RARS Project's Display configuration is edited outside a Debug session. In a folding
      * section it draws no header of its own and hands its size and controls to the section's.
      */
-    import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
-    import ScreenDisplayConfiguration from '$cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
-    import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
+    import ScreenRenderer from '#cmp/specific/project/screen/ScreenRenderer.svelte'
+    import ScreenDisplayConfiguration from '#cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
+    import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {

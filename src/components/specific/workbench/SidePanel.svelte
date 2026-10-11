@@ -5,15 +5,15 @@
      * survive switching. Documentation and Testcases can be maximized over the rest of the Workbench
      * ([the design record](../../../../docs/design/workbench.md), Maximized panels).
      */
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
     import FaExpand from '~icons/fa-solid/expand'
     import FaCompress from '~icons/fa-solid/compress'
-    import Explorer from '$cmp/specific/project/Explorer.svelte'
-    import TestcasesList from '$cmp/specific/project/testcases/TestcasesList.svelte'
-    import TestcasesSummary from '$cmp/specific/project/testcases/TestcasesSummary.svelte'
-    import DocumentationBrowser from '$cmp/documentation/browser/DocumentationBrowser.svelte'
-    import { documentationLanguageOf } from '$lib/search/scope'
+    import Explorer from '#cmp/specific/project/Explorer.svelte'
+    import TestcasesList from '#cmp/specific/project/testcases/TestcasesList.svelte'
+    import TestcasesSummary from '#cmp/specific/project/testcases/TestcasesSummary.svelte'
+    import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
+    import { documentationLanguageOf } from '#lib/search/scope.ts'
     import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
     import { useWorkbench } from './workbenchContext'

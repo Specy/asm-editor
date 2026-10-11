@@ -3,8 +3,8 @@ import {
     z80DirectiveNames,
     z80Directives,
     z80InstructionNames
-} from '$lib/languages/Z80/Z80-documentation'
-import { Z80_COLORS, Z80_PORT_DOCS, Z80_SCREEN_COMMAND_DOCS } from '$lib/languages/Z80/Z80-model'
+} from '#lib/languages/Z80/Z80-documentation.ts'
+import { Z80_COLORS, Z80_PORT_DOCS, Z80_SCREEN_COMMAND_DOCS } from '#lib/languages/Z80/Z80-model.ts'
 import type { Chapter, DocumentationEntry } from '../entries'
 import { chapters } from './z80'
 

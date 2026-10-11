@@ -1,5 +1,5 @@
-import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
-import { RUNTIME_ENTRY_SYMBOL } from '$lib/runtimeAbi'
+import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
+import { RUNTIME_ENTRY_SYMBOL } from '#lib/runtimeAbi.ts'
 import type { X86Project } from '@specy/x86'
 import { toX86Project } from './x86Project'
 import START_UNIT from './start.asm?raw'

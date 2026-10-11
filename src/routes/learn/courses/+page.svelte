@@ -1,16 +1,16 @@
 <script lang="ts">
     import type { PageData } from './$types'
-    import Card from '$cmp/shared/layout/Card.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
-    import { courseAccent } from '$lib/languages/languageColors'
+    import { courseAccent } from '#lib/languages/languageColors.ts'
     import { onMount } from 'svelte'
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '$cmp/search/SearchPalette.svelte'
-    import { COURSES_SCOPE } from '$lib/search/scope'
-    import { searchClient } from '$lib/search/searchClient.svelte'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import { COURSES_SCOPE } from '#lib/search/scope.ts'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
 
     interface Props {
         data: PageData

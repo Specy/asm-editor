@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { S68k } from '@specy/s68k'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { s68kColumnToUtf16, s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 

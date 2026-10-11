@@ -1,21 +1,24 @@
 <script lang="ts">
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaPaypal from '~icons/fa-brands/paypal'
-    import Kofi from '$cmp/shared/misc/KoFi.svelte'
-    import Title from '$cmp/shared/layout/Header.svelte'
+    import Kofi from '#cmp/shared/misc/KoFi.svelte'
+    import Title from '#cmp/shared/layout/Header.svelte'
     import { afterNavigate } from '$app/navigation'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Card from '$cmp/shared/layout/Card.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import { PAST_DONATIONS } from '$src/routes/donate/pastDonations'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import { PAST_DONATIONS } from '#src/routes/donate/pastDonations.ts'
     import { resolve } from '$app/paths'
     import type { ResolvedPathname } from '$app/types'
 
-    let previousPage: ResolvedPathname = $state(resolve('/projects', {}))
-    afterNavigate(({ from }) => {
+    let previousPage: ResolvedPathname = $state(resolve('/projects'))
+
+    afterNavigate(({ from, shallow, type }) => {
+        if (shallow && type === 'goto') return
+
         previousPage = (from?.url.pathname as ResolvedPathname) ?? previousPage
     })
 </script>

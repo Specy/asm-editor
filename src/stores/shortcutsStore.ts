@@ -1,4 +1,4 @@
-import { browser } from '$app/environment'
+import { browser } from '$app/env'
 import { writable } from 'svelte/store'
 
 export enum ShortcutAction {
@@ -104,6 +104,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseOverridePairs(value: unknown): Map<number, string> {
     const overrides = new Map<number, string>()
+
     if (!Array.isArray(value)) return overrides
 
     for (const entry of value) {
@@ -119,14 +120,17 @@ function parseStoredSettings(
     value: unknown
 ): { overrides: Map<number, string>; legacy: boolean } | null {
     if (!isRecord(value) || !isRecord(value.meta)) return null
+
     const version = value.meta.version
 
     if (version === CURRENT_VERSION) {
         return { overrides: parseOverridePairs(value.overrides), legacy: false }
     }
+
     if (version !== LEGACY_VERSION || !Array.isArray(value.shortcuts)) return null
 
     const legacyOverrides: Array<[number, string]> = []
+
     for (const entry of value.shortcuts) {
         if (!Array.isArray(entry) || entry.length !== 2) continue
         const [assignedKey, metadata] = entry
@@ -215,12 +219,16 @@ function createShortcutStore() {
     function loadFromStorage() {
         try {
             const storedShortcuts = localStorage.getItem('shortcuts')
+
             if (!storedShortcuts) return
+
             const storedSettings = parseStoredSettings(JSON.parse(storedShortcuts))
+
             if (!storedSettings) return
 
             shortcuts = makeShortcutMap(storedSettings.overrides)
             set(shortcuts)
+
             if (storedSettings.legacy) saveStorage()
         } catch (error) {
             console.error(error)

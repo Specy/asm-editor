@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
-import { BLACK, WHITE } from '$lib/languages/peripherals/screen/color'
-import { Screen } from '$lib/languages/peripherals/screen/Screen'
-import { Trs80Devices } from '$lib/languages/Z80/trs80/Trs80Devices'
+import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
+import { BLACK, WHITE } from '#lib/languages/peripherals/screen/color.ts'
+import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import { Trs80Devices } from '#lib/languages/Z80/trs80/Trs80Devices.ts'
 import {
     TRS80_BLANK_CELL,
     TRS80_VIDEO_BEGIN,
     TRS80_VIDEO_END
-} from '$lib/languages/Z80/trs80/trs80Display'
+} from '#lib/languages/Z80/trs80/trs80Display.ts'
 
 /**
  * The memory-mapped devices against a real `Screen` and `Keyboard`

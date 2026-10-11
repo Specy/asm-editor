@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type { AgentWorkflow } from './defaultCodingAgent/types'
 
 /**

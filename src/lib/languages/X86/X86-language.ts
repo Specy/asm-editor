@@ -1,12 +1,12 @@
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
     assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
     splitAssemblyComment,
     type AssemblyTextOptions
-} from '$lib/languages/service/assemblyText'
+} from '#lib/languages/service/assemblyText.ts'
 import { X86Directives, X86Instructions, X86Registers, X86SizeSpecifiers } from './X86-grammar'
 import {
     describeX86Instruction,

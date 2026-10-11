@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type monaco from 'monaco-editor'
-import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
-import { normalizeBuildInput } from '$lib/projectFiles'
-import { compilerCapabilities } from '$lib/sourceCompilation/capabilities'
+import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { compilerCapabilities } from '#lib/sourceCompilation/capabilities.ts'
 import { helpLanguage, resolveSourceHelpContext, setSourceHelpLanguage } from './context'
 
-vi.mock('$lib/languages/service/LanguageWorkerManager', () => ({
+vi.mock('#lib/languages/service/LanguageWorkerManager.ts', () => ({
     languageWorkerManager: { acquire: () => undefined }
 }))
 const sessions: ProjectLanguageSession[] = []

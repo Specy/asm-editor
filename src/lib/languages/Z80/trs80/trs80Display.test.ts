@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
-import { Z80_PORTS } from '$lib/languages/Z80/Z80-model'
+import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
+import { Z80_PORTS } from '#lib/languages/Z80/Z80-model.ts'
 import {
     buildGlyphSheet,
     isKeyboardAddress,
@@ -16,7 +16,7 @@ import {
     TRS80_SCREEN_HEIGHT,
     TRS80_SCREEN_WIDTH,
     TRS80_VIDEO_SIZE
-} from '$lib/languages/Z80/trs80/trs80Display'
+} from '#lib/languages/Z80/trs80/trs80Display.ts'
 
 /**
  * The character generator and the key matrix as data: what a cell looks like is the whole

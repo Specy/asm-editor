@@ -19,14 +19,14 @@
 </script>
 
 <script lang="ts">
-    import AiAgent from '$cmp/shared/agent/AiAgent.svelte'
-    import { ThemeStore } from '$stores/themeStore.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
-    import { fileText, type ProjectFiles } from '$lib/projectFiles'
-    import { projectBuildSources } from '$lib/buildSources'
-    import { Prompt } from '$stores/promptStore.svelte'
-    import { defaultEntryPath, type Project } from '$lib/Project.svelte'
+    import AiAgent from '#cmp/shared/agent/AiAgent.svelte'
+    import { ThemeStore } from '#stores/themeStore.svelte.ts'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+    import { fileText, type ProjectFiles } from '#lib/projectFiles.ts'
+    import { projectBuildSources } from '#lib/buildSources.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
+    import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
     import type { RegisteredTool } from '@discerns/sdk'
     import {
         DEFAULT_CODING_AGENT_TOOL_NAMES,
@@ -39,7 +39,7 @@
     } from './defaultCodingAgent/types'
     import { createDefaultCodingAgentTools } from './defaultCodingAgent/tools'
     import { searchForAgent } from './defaultCodingAgent/documentationSearch'
-    import type { AgentSearchPlace } from '$lib/search/scope'
+    import type { AgentSearchPlace } from '#lib/search/scope.ts'
     import {
         DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS,
         buildDefaultCodingAgentPrompt

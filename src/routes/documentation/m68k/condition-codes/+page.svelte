@@ -1,7 +1,7 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import ChapterView from '$cmp/documentation/ChapterView.svelte'
-    import { chapters } from '$lib/documentation/m68k/m68k'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import ChapterView from '#cmp/documentation/ChapterView.svelte'
+    import { chapters } from '#lib/documentation/m68k/m68k.ts'
 
     const chapter = chapters().find((chapter) => chapter.id === 'condition-codes')!
 </script>

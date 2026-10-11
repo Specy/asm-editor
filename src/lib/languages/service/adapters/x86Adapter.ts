@@ -1,7 +1,7 @@
 import { createX86Emulator, type MonacoError } from '@specy/x86'
-import type { BuildSources } from '$lib/projectFiles'
-import { x86ReachableFiles } from '$lib/languages/X86/x86Project'
-import { x86CoreProject } from '$lib/languages/X86/x86StartUnit'
+import type { BuildSources } from '#lib/projectFiles.ts'
+import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
+import { x86CoreProject } from '#lib/languages/X86/x86StartUnit.ts'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 

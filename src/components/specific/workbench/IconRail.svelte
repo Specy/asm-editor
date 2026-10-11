@@ -6,7 +6,7 @@
      * desktop and a tablet, which have no top bar, and in a phone's drawer. Their Save, shown while
      * the Project has unsaved changes, heads the bottom group, where appearing moves no other icon.
      */
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaSave from '~icons/fa-solid/save'
     import { useWorkbench, type RailEntry } from './workbenchContext'

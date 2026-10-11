@@ -9,7 +9,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import FaColumns from '~icons/fa-solid/columns'
     import { useWorkbench } from './workbenchContext'
-    import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
+    import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
 
     const { session } = useWorkbench()
     let { group }: { group: EditorGroup } = $props()

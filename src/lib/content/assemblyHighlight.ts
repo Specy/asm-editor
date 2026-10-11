@@ -1,5 +1,5 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { X86_ASSEMBLER_REGISTERS } from '$lib/languages/X86/generated/x86Tokens'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { X86_ASSEMBLER_REGISTERS } from '#lib/languages/X86/generated/x86Tokens.ts'
 
 /**
  * The assembly highlighter for the code block a prerendered lecture carries in place of a

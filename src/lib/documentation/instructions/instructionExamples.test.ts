@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { mipsInstructionNames } from '$lib/languages/MIPS/MIPS-documentation'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { mipsInstructionNames } from '#lib/languages/MIPS/MIPS-documentation.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import {
     riscvInstructionNames,
     riscvInstructionMap
-} from '$lib/languages/RISC-V/RISC-V-documentation'
-import { mipsInstructionContent } from '$lib/documentation/mips/instructionContent'
-import { mipsExampleExpectations } from '$lib/documentation/mips/exampleExpectations'
-import { riscvInstructionContent } from '$lib/documentation/riscv/instructionContent'
-import { riscvExampleExpectations } from '$lib/documentation/riscv/exampleExpectations'
+} from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+import { mipsInstructionContent } from '#lib/documentation/mips/instructionContent.ts'
+import { mipsExampleExpectations } from '#lib/documentation/mips/exampleExpectations.ts'
+import { riscvInstructionContent } from '#lib/documentation/riscv/instructionContent.ts'
+import { riscvExampleExpectations } from '#lib/documentation/riscv/exampleExpectations.ts'
 import type { InstructionExampleExpectation } from './expectations'
 
 const LIMIT = 2_000

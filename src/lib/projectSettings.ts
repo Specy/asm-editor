@@ -10,7 +10,7 @@ import { languageHasScreen } from './languages/peripherals/peripheralSet'
 
 /**
  * The Settings of a Project: the configuration that changes what the Emulator or the program does,
- * as opposed to the Preferences of `$stores/preferencesStore.svelte`, which only change what the
+ * as opposed to the Preferences of `#stores/preferencesStore.svelte.ts`, which only change what the
  * person sees ([ADR 0014](../../docs/adr/0014-settings-split-by-effect.md)).
  *
  * Each Setting is declared once, here: its name in the panel, its type, its default per language

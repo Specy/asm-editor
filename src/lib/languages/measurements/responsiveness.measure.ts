@@ -13,7 +13,7 @@ import {
     type MeasurableEmulator,
     type MeasuredLanguage
 } from './harness'
-import type { EmulatorSettings } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
  * How long the host is held between two slices, and how long Stop then takes to be answered.

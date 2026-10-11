@@ -1,7 +1,7 @@
 <script lang="ts">
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import MainPageLinkPreview from '$cmp/specific/landing/HeroLink.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import MainPageLinkPreview from '#cmp/specific/landing/HeroLink.svelte'
     import FaGithub from '~icons/fa-brands/github'
     import FaBook from '~icons/fa-solid/book'
     import FaSearch from '~icons/fa-solid/search'
@@ -9,24 +9,24 @@
     import FaCode from '~icons/fa-solid/code'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import FaGraduationCap from '~icons/fa-solid/graduation-cap'
-    import MainPageSection from '$cmp/specific/landing/HeroSection.svelte'
-    import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
+    import MainPageSection from '#cmp/specific/landing/HeroSection.svelte'
+    import AnimatedRgbLine from '#cmp/shared/misc/AnimatedRgbLine.svelte'
     import GoLinkExternal from '~icons/octicon/link-external-16'
-    import { ThemeStore } from '$stores/themeStore.svelte'
+    import { ThemeStore } from '#stores/themeStore.svelte.ts'
     import { onMount } from 'svelte'
     import FaDownload from '~icons/fa-solid/download'
     import FaDonate from '~icons/fa-solid/heart'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
 
-    import { ProjectStore } from '$stores/projectsStore.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
-    import { jsonLdScriptTag, softwareApplicationLd } from '$lib/seo'
+    import { jsonLdScriptTag, softwareApplicationLd } from '#lib/seo.ts'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -227,7 +227,7 @@
                 instruction sets including the valid addressing modes, description and examples for
                 each instruction, directive and syscall.
                 <a
-                    href={resolve('/documentation', {})}
+                    href={resolve('/documentation')}
                     title="View documentation"
                     class="external-link"
                 >
@@ -286,7 +286,7 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
                 Create exams for students with the <a
-                    href={resolve('/exam', {})}
+                    href={resolve('/exam')}
                     title="Exam tool"
                     class="external-link"
                 >
@@ -305,7 +305,7 @@
             <div class="description" class:textShadow={textShadowPrimary}>
                 Chat with an AI assistant that can write, run and debug assembly code directly in
                 the browser. Use the <a
-                    href={resolve('/chat', {})}
+                    href={resolve('/chat')}
                     title="AI Chat"
                     class="external-link"
                 >
@@ -323,7 +323,7 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
                 Embed the editor in your website to show and teach how assembly works using the <a
-                    href={resolve('/embed', {})}
+                    href={resolve('/embed')}
                     title="Embedder tool"
                     class="external-link"
                 >

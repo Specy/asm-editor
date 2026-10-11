@@ -5,7 +5,7 @@
         type EnvironmentContext,
         type WebsiteProtocol
     } from '@discerns/sdk'
-    import { DISCERNS_AVATAR_ID, DISCERNS_AVATAR_INSTANCE_ID } from '$lib/Config'
+    import { DISCERNS_AVATAR_ID, DISCERNS_AVATAR_INSTANCE_ID } from '#lib/Config.ts'
 
     interface Props {
         tools?: RegisteredTool[]

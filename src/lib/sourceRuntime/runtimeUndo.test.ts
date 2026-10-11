@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { FileSystem } from '$lib/languages/peripherals/FileSystem'
-import type { BuildSources } from '$lib/projectFiles'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import { provideRuntimeLibrary } from './runtimeLibrary'
 
 afterEach(() => {

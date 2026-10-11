@@ -3,7 +3,7 @@
         X86_FLAG_MEANINGS,
         formatX86Cpu,
         type X86Instruction
-    } from '$lib/languages/X86/X86-documentation'
+    } from '#lib/languages/X86/X86-documentation.ts'
 
     interface Props {
         instruction: X86Instruction

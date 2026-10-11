@@ -11,7 +11,7 @@ import {
     type BuildSources,
     type ProjectFile,
     type ProjectFiles
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 
 const hasOwn = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key)
 const strictDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })

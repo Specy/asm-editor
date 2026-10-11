@@ -1,13 +1,13 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '$lib/seo'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '#lib/seo.ts'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
     import { onMount } from 'svelte'
-    import X86InstructionForms from '$cmp/documentation/x86/X86InstructionForms.svelte'
-    import { formatX86Cpu } from '$lib/languages/X86/X86-documentation'
+    import X86InstructionForms from '#cmp/documentation/x86/X86InstructionForms.svelte'
+    import { formatX86Cpu } from '#lib/languages/X86/X86-documentation.ts'
 
     interface Props {
         data: PageData
@@ -23,10 +23,10 @@
     // instruction re-derives it, the same way the other languages' instruction pages do.
     let code = $derived(data.props.example ?? '')
 
-    let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
+    let component: typeof import('#cmp/documentation/site/ClientOnly.svelte').default | undefined =
         $state.raw()
     onMount(async () => {
-        component = (await import('$cmp/documentation/site/ClientOnly.svelte')).default
+        component = (await import('#cmp/documentation/site/ClientOnly.svelte')).default
     })
 
     let pageTitle = $derived(`${String(name).toUpperCase()} - x86-64 instruction reference`)

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultCodingAgentTools } from './tools'
-import { makeProject } from '$lib/Project.svelte'
-import { projectBuildSources } from '$lib/buildSources'
+import { makeProject } from '#lib/Project.svelte.ts'
+import { projectBuildSources } from '#lib/buildSources.ts'
 import {
     compilerExplorerDriver,
     SourceCompilationError,
     type CompilationRequest
-} from '$lib/sourceCompilation/compilerExplorer'
-import { fileFingerprint } from '$lib/sourceCompilation/records'
+} from '#lib/sourceCompilation/compilerExplorer.ts'
+import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
 import { buildDefaultCodingAgentPrompt } from './prompts'
 import {
     DEFAULT_TAKE_LINES,
@@ -15,7 +15,7 @@ import {
     type DefaultCodingAgentToolContext,
     type SupportedLanguage
 } from './types'
-import type { Emulator } from '$lib/languages/Emulator'
+import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
     InterpreterStatus,
     makeGenericDiagnostic,
@@ -25,9 +25,9 @@ import {
     type ExecutionStep,
     type RegisterFile,
     type RegisterFileDescriptor
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
-import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { M68KEmulator } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
+import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { formatLatestSteps, type FormattedRegisterFile } from './formatting'
 
 interface ToolExecutionResult {

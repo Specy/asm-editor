@@ -1,6 +1,6 @@
-import type { SourceBreakpoint } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import type { ProjectFiles } from '$lib/projectFiles'
+import type { SourceBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import type { ProjectFiles } from '#lib/projectFiles.ts'
 import {
     compilationStatus,
     editorFileLanguage,

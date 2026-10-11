@@ -1,8 +1,8 @@
 <script lang="ts">
-    import AgentSidebarFrame from '$cmp/shared/agent/AgentSidebarFrame.svelte'
+    import AgentSidebarFrame from '#cmp/shared/agent/AgentSidebarFrame.svelte'
     import ExamReviewAgent from './ExamReviewAgent.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import type { ExamPayload, ExamSection, ExamSectionAnswer, ExamSubmission } from '$lib/exam'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import type { ExamPayload, ExamSection, ExamSectionAnswer, ExamSubmission } from '#lib/exam.ts'
 
     interface Props {
         open: boolean

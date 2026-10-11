@@ -1,13 +1,13 @@
 <script lang="ts">
-    import type { AvailableLanguages } from '$lib/Project.svelte'
-    import { createEmulator, type Emulator } from '$lib/languages/Emulator'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
     import { onDestroy, untrack, type Snippet } from 'svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import type { EmulatorSettings } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { createInjectedPeripherals } from '$lib/languages/peripherals/peripheralSet'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import type { BuildInput } from '$lib/projectFiles'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import type { BuildInput } from '#lib/projectFiles.ts'
 
     // Define the props the component expects
     interface Props {

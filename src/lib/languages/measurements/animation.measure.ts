@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest'
-import { UNDO_HISTORY_SIZE } from '$lib/projectSettings'
+import { UNDO_HISTORY_SIZE } from '#lib/projectSettings.ts'
 import {
     ANIMATION_EXAMPLES,
     buildProgram,

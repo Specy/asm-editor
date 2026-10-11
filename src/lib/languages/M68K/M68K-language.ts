@@ -1,4 +1,4 @@
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
 import {

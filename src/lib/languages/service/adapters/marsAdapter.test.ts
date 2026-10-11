@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { analyzeMarsProject } from './marsAdapter'
 
 const sources = (instruction: string) =>

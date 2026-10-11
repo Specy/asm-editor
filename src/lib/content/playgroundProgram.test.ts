@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { makeProject } from '$lib/Project.svelte'
-import { compileSource } from '$lib/sourceCompilation/compilerExplorer'
-import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
-import { createEmulator } from '$lib/languages/Emulator'
-import fixture from '$lib/sourceCompilation/fixtures/risc-v-c-O2.json'
+import { makeProject } from '#lib/Project.svelte.ts'
+import { compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
+import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
+import { createEmulator } from '#lib/languages/Emulator.ts'
+import fixture from '#lib/sourceCompilation/fixtures/risc-v-c-O2.json'
 import { extractPlaygrounds, parsePlaygroundFence } from './playgrounds'
 import {
     decodePlaygroundProgram,

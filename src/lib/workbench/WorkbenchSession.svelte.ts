@@ -1,97 +1,100 @@
 import { tick, untrack } from 'svelte'
-import { projectBuildSources } from '$lib/buildSources'
-import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import { projectBuildSources } from '#lib/buildSources.ts'
+import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import {
     linksX86StartUnit,
     X86_START_UNIT_FILES,
     X86_START_UNIT_PATH
-} from '$lib/languages/X86/x86StartUnit'
+} from '#lib/languages/X86/x86StartUnit.ts'
 import {
     loadedRuntimeLibrary,
     loadedRuntimeSources,
     loadRuntimeSources,
     parseRuntimeSourcePath,
     runtimeSourcePath
-} from '$lib/sourceRuntime/runtimeLibrary'
+} from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
     isEnvironmentHeaderPath,
     loadedEnvironmentHeader
-} from '$lib/sourceRuntime/environmentLibrary'
-import type { ProjectFile } from '$lib/projectFiles'
-import type { Project, TestcaseResult } from '$lib/Project.svelte'
-import type { Emulator } from '$lib/languages/Emulator'
-import { CompilationFailedError } from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/sourceRuntime/environmentLibrary.ts'
+import type { ProjectFile } from '#lib/projectFiles.ts'
+import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
+import type { Emulator } from '#lib/languages/Emulator.ts'
+import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     makeRegister,
     type Diagnostic,
     type RegisterPoke,
     type SourceBreakpoint
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
-import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
+import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
     type ProjectSettingsDecisions,
     resolveProjectSettings,
     undoHistorySize
-} from '$lib/projectSettings'
-import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
+} from '#lib/projectSettings.ts'
+import { rewriteScreenDirective } from '#lib/languages/mars/screenDirective.ts'
 import {
     DEFAULT_PROJECT_DISPLAY,
     type MarsDisplayOrigin,
     marsDisplayEquals,
     normalizeMarsDisplay,
     type ProjectDisplay
-} from '$lib/languages/mars/marsDisplay'
-import type { BuildSources } from '$lib/projectFiles'
+} from '#lib/languages/mars/marsDisplay.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import {
     buildSource,
     isSameProjectSourceSelection,
     liveSource,
     selectProjectFile,
     type ProjectSourceSelection
-} from '$lib/monaco/projectSourceSelection'
-import { createProjectLanguageSessionId, projectSourceModelKey } from '$lib/languages/service/uri'
-import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
-import type { ProjectAnalysisSnapshot } from '$lib/languages/service/protocol'
-import { languageDiagnosticToDiagnostic } from '$lib/languages/service/diagnosticBridge'
-import { registerProjectNavigation } from '$lib/languages/service/navigation'
-import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
+} from '#lib/monaco/projectSourceSelection.ts'
+import {
+    createProjectLanguageSessionId,
+    projectSourceModelKey
+} from '#lib/languages/service/uri.ts'
+import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
+import type { ProjectAnalysisSnapshot } from '#lib/languages/service/protocol.ts'
+import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosticBridge.ts'
+import { registerProjectNavigation } from '#lib/languages/service/navigation.ts'
+import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import {
     modShortcutKey,
     ShortcutAction,
     shortcutRecording,
     shortcutsStore
-} from '$stores/shortcutsStore'
-import { toast } from '$stores/toastStore'
-import { Prompt } from '$stores/promptStore.svelte'
-import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
-import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
+} from '#stores/shortcutsStore.ts'
+import { toast } from '#stores/toastStore.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
+import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
+import { SourceCompilationError } from '#lib/sourceCompilation/compilerExplorer.ts'
 import {
     coreBreakpoints,
     currentSourceMaps,
     isSourceBreakpoint,
     mappedBreakpoints
-} from '$lib/sourceCompilation/sourceBreakpoints'
+} from '#lib/sourceCompilation/sourceBreakpoints.ts'
 import {
     colorSourceMap,
     sourceMapColorIndices,
     type SourceMapColoring
-} from '$lib/sourceCompilation/sourceColoring'
+} from '#lib/sourceCompilation/sourceColoring.ts'
 import {
     assemblyLinesOf,
     sameLocations,
     sourceLocationsOf,
     type MappingSelection
-} from '$lib/sourceCompilation/mappingSelection'
+} from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     editorFileLanguage,
     type CompilationSourceMap,
     type SourceLocation
-} from '$lib/sourceCompilation/records'
-import { serializer } from '$lib/json'
-import { createDebouncer } from '$lib/utils'
-import { terminationSummary } from '$lib/languages/termination'
+} from '#lib/sourceCompilation/records.ts'
+import { serializer } from '#lib/json.ts'
+import { createDebouncer } from '#lib/utils.ts'
+import { terminationSummary } from '#lib/languages/termination.ts'
 import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
 import {
     appendLog,
@@ -157,6 +160,7 @@ export class WorkbenchSession {
     executionGroupId = $state('editor-1')
     editorRatio = $state(0.5)
     private nextGroupId = 1
+    private activeTabGroupId = $state('editor-1')
     readonly models: EditorModels
 
     /**
@@ -291,8 +295,11 @@ export class WorkbenchSession {
         this.project = project
         this.emulator = emulator
         this.host = host
-        const start = project.entry ?? Object.keys(project.files)[0] ?? ''
-        this.groups = [new EditorGroup(this, 'editor-1', start)]
+        const start =
+            project.activeTab ?? project.openTabs?.[0] ?? (project.openTabs ? '' : project.entry)
+        const group = new EditorGroup(this, 'editor-1', start)
+        if (project.openTabs) group.tabs = { paths: [...project.openTabs], active: start }
+        this.groups = [group]
         this.models = new EditorModels((path, value) => this.fileEdited(path, value))
         this.effectiveSettings = $derived(
             resolveProjectSettings(this.project.language, this.project.settings)
@@ -503,6 +510,21 @@ export class WorkbenchSession {
             untrack(() => {
                 this.models.retain(keys)
                 this.models.synchronize(files)
+            })
+        })
+
+        //Batch tab moves and pane changes into one save. The initial view is only a restore;
+        //opening an older Project does not itself create unsaved changes.
+        let knownTabs = serializer.stringify(this.projectTabs())
+        $effect(() => {
+            const tabs = this.projectTabs()
+            const key = serializer.stringify(tabs)
+            if (key === knownTabs) return
+            knownTabs = key
+            untrack(() => {
+                if (this.host.readonly) return
+                this.project.setOpenTabs(tabs.openTabs, tabs.activeTab)
+                this.changed()
             })
         })
 
@@ -825,6 +847,29 @@ export class WorkbenchSession {
 
     // ---- which File is shown -------------------------------------------------------------------
 
+    private projectTabs() {
+        const files = this.project.files
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Temporary deduplication; the effect tracks the groups' reactive tab lists.
+        const openTabs = [...new Set(this.groups.flatMap((group) => group.tabs.paths))].filter(
+            (path) => Object.hasOwn(files, path)
+        )
+        const selected = this.groups.find((group) => group.id === this.activeTabGroupId)?.tabs
+            .active
+        //Library and Build-only Files cannot be restored without their running Build.
+        const previous = untrack(() => this.project.activeTab)
+        const activeTab =
+            selected && openTabs.includes(selected)
+                ? selected
+                : previous && openTabs.includes(previous)
+                  ? previous
+                  : (openTabs[0] ?? '')
+        return { openTabs, activeTab }
+    }
+
+    focusEditorGroup(group: EditorGroup) {
+        if (this.groups.includes(group)) this.activeTabGroupId = group.id
+    }
+
     /** Shows a version of a File, opening its tab. */
     private show(selection: ProjectSourceSelection, group = this.groupForFile(selection.path)) {
         const changedPath = group.displayedPath !== selection.path
@@ -832,6 +877,7 @@ export class WorkbenchSession {
             group.sourceSelection = selection
         }
         group.tabs = openTab(group.tabs, selection.path)
+        this.focusEditorGroup(group)
         if (changedPath) group.resetCompilationOptions()
     }
 
@@ -925,6 +971,7 @@ export class WorkbenchSession {
         )
         this.show(selection, destination)
         this.closeTab(path, origin)
+        this.focusEditorGroup(destination)
         await tick()
         if (viewState && this.groups.includes(destination) && destination.displayedPath === path)
             destination.editor?.restoreViewState(viewState)

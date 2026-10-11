@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import type { ProjectWorkerRequest, ProjectWorkerResponse } from './protocol'
 
 const worker = vi.hoisted(() => ({

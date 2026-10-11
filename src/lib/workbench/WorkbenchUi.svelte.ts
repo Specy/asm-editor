@@ -2,7 +2,7 @@ import { SvelteSet } from 'svelte/reactivity'
 import { canFloat } from './deviceClass'
 import type { Viewport } from './viewport.svelte'
 import type { SettingsSectionId } from './hostApi'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
 /** Reads and writes the open panel where the host keeps it, so a host can bind it. */
 export type ActivePanelAccess = {

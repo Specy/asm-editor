@@ -1,5 +1,5 @@
 import { S68k } from '@specy/s68k'
-import { assemblyFiles, fileBytes, type BuildSources } from '$lib/projectFiles'
+import { assemblyFiles, fileBytes, type BuildSources } from '#lib/projectFiles.ts'
 
 /** A line that cannot contain this token cannot be an `incbin` directive. */
 const INCBIN_TOKEN = /\bincbin\b/i

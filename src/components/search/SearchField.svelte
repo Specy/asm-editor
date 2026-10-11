@@ -6,7 +6,7 @@
      */
     import FaSearch from '~icons/fa-solid/search'
     import FaTimes from '~icons/fa-solid/times'
-    import { searchClient } from '$lib/search/searchClient.svelte'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { HTMLInputAttributes } from 'svelte/elements'
 
     interface Props extends Omit<HTMLInputAttributes, 'value'> {

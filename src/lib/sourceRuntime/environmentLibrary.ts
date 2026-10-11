@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * The Environment library, `<sim.h>`: one `static inline` function for each service a Target's

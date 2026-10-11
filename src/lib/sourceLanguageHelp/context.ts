@@ -1,12 +1,12 @@
 import type monaco from 'monaco-editor'
-import { sourceLanguage } from '$lib/sourceCompilation/records'
+import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
 import {
     compilerCapabilities,
     type CompilerCapabilities
-} from '$lib/sourceCompilation/capabilities'
-import { languageSession } from '$lib/languages/service/sessionRegistry'
-import { parseProjectSourceUri, type ProjectModelIdentity } from '$lib/languages/service/uri'
-import type { BuildSources } from '$lib/projectFiles'
+} from '#lib/sourceCompilation/capabilities.ts'
+import { languageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { parseProjectSourceUri, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 
 export type HelpLanguage = 'c' | 'cpp' | 'header'
 export type SourceHelpSessionContext = Readonly<{

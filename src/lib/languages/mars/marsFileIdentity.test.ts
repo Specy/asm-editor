@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { FileSystem } from '$lib/languages/peripherals/FileSystem'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 
 /** A syscall PC may dispatch different services, while each execution has its own identity. */
 describe.each(['MIPS', 'RISC-V', 'RISC-V-64'] as const)(

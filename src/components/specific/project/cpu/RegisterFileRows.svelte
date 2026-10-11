@@ -1,12 +1,12 @@
 <script lang="ts">
-    import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
+    import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
     import {
         defaultRegisterKind,
         type Register,
         type RegisterFormat,
         type RegisterPoke,
         RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import {
         parseRegisterPoke,
         registerWidthBits,
@@ -14,8 +14,8 @@
         type RegisterFileRendering,
         type RenderedRegister,
         type RenderedRegisterChunk
-    } from '$lib/languages/registerFormats'
-    import { preferencesStore } from '$stores/preferencesStore.svelte'
+    } from '#lib/languages/registerFormats.ts'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
     /**
      * The rows of one Register file: the grid of names and values the CPU panel has always drawn,

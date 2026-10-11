@@ -1,10 +1,10 @@
-import { browser } from '$app/environment'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import { browser } from '$app/env'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * The Preferences: what the person sees and how the editor behaves for them, the same in every
  * Project and kept in localStorage. Anything that changes what the Emulator or the program does is
- * a Setting of the Project instead, see `$lib/projectSettings`
+ * a Setting of the Project instead, see `#lib/projectSettings.ts`
  * ([ADR 0014](../../docs/adr/0014-settings-split-by-effect.md)).
  */
 
@@ -30,6 +30,7 @@ export type PreferenceValue<T> = {
 export type PanelStyle = 'cards' | 'lines'
 /** The Debug tools as draggable windows, or as sections of the debug column. */
 export type DebugToolsPlacement = 'floating' | 'sections'
+
 export type MemoryPanelSize = 256 | 128 | 64
 
 export type PreferenceValues = {
@@ -44,6 +45,7 @@ export type PreferenceValues = {
     debugTools: PreferenceValue<DebugToolsPlacement>
     memoryPanelSize: PreferenceValue<MemoryPanelSize>
 }
+
 export type PreferenceKey = keyof PreferenceValues
 
 /** The key the settings store used before the split, kept so nothing is lost on upgrade. */
@@ -126,13 +128,17 @@ export function readStoredPreferences(
     defaults: PreferenceValues = defaultPreferences()
 ): PreferenceValues {
     if (!json) return defaults
+
     const stored: unknown = JSON.parse(json)
+
     if (typeof stored !== 'object' || stored === null) return defaults
+
     const record = stored as Record<string, unknown>
     const values =
         typeof record.values === 'object' && record.values !== null
             ? (record.values as Record<string, unknown>)
             : record
+
     for (const key of Object.keys(defaults) as PreferenceKey[]) {
         const entry = values[key]
         const value =

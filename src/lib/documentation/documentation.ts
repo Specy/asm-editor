@@ -1,4 +1,4 @@
-import type { DocumentationLanguage } from '$lib/search/scope'
+import type { DocumentationLanguage } from '#lib/search/scope.ts'
 import type { Chapter, DocumentationEntry } from './entries'
 
 /**

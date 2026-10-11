@@ -5,11 +5,11 @@ import {
     type RegisterFileDescriptor,
     RegisterSize,
     type StackFrame
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
-import type { Termination } from '$lib/languages/termination'
-import type { Testcase } from '$lib/Project.svelte'
-import type { BuildSources } from '$lib/projectFiles'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
+import type { Termination } from '#lib/languages/termination.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
 

@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { isRuntimeError as isMipsRuntimeError } from '@specy/mips'
 import { isRuntimeError as isRiscVRuntimeError } from '@specy/risc-v'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
-import { RandomSource } from '$lib/languages/peripherals/RandomSource'
-import { Prompt } from '$stores/promptStore.svelte'
-import type { BuildInput } from '$lib/projectFiles'
-import type { Testcase } from '$lib/Project.svelte'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { InterpreterStatus } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
+import type { BuildInput } from '#lib/projectFiles.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
 
 /** The editor boundary against the locally linked MARS/RARS 4.0.0 APIs. */
 describe.each(['MIPS', 'RISC-V', 'RISC-V-64'] as const)('%s reference services', (language) => {

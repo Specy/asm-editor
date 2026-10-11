@@ -1,9 +1,9 @@
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { makeProject } from '$lib/Project.svelte'
-import { WorkbenchSession } from '$lib/workbench/WorkbenchSession.svelte'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
-import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { makeProject } from '#lib/Project.svelte.ts'
+import { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
 import { flushSync } from 'svelte'
 
 export async function setupRealStepping(language: 'RISC-V' | 'MIPS' = 'RISC-V') {

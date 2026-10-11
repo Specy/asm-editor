@@ -1,8 +1,8 @@
 <script lang="ts">
-    import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
-    import { sourceLanguage, sourceTemplate } from '$lib/sourceCompilation/records'
-    import { Prompt } from '$stores/promptStore.svelte'
-    import { toast } from '$stores/toastStore'
+    import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
+    import { sourceLanguage, sourceTemplate } from '#lib/sourceCompilation/records.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
+    import { toast } from '#stores/toastStore.ts'
     import FaFileMedical from '~icons/fa-solid/file-medical'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaBook from '~icons/fa-solid/book'

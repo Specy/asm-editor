@@ -1,18 +1,18 @@
 <script lang="ts">
-    import { browser } from '$app/environment'
-    import { page } from '$app/stores'
+    import { browser } from '$app/env'
+    import { page } from '$app/state'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Input from '$cmp/shared/input/Input.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import Card from '$cmp/shared/layout/Card.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import Editor from '$cmp/specific/project/Editor.svelte'
-    import ExamAssemblySection from '$cmp/specific/exam/ExamAssemblySection.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Input from '#cmp/shared/input/Input.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Editor from '#cmp/specific/project/Editor.svelte'
+    import ExamAssemblySection from '#cmp/specific/exam/ExamAssemblySection.svelte'
     import {
         createExamSessionLink,
         decodeExamPayload,
@@ -31,20 +31,21 @@
         type MultipleChoiceSection,
         type OpenQuestionAnswer,
         type OpenQuestionSection
-    } from '$lib/exam'
-    import { createDebouncer, makeHash, textDownloader } from '$lib/utils'
-    import { serializer } from '$lib/json'
-    import { toast } from '$stores/toastStore'
-    import { Prompt } from '$stores/promptStore.svelte'
+    } from '#lib/exam.ts'
+
+    import { createDebouncer, makeHash, textDownloader } from '#lib/utils.ts'
+    import { serializer } from '#lib/json.ts'
+    import { toast } from '#stores/toastStore.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
     import { onMount, tick } from 'svelte'
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import ExamReviewAgentSidebar from '$cmp/specific/exam/ExamReviewAgentSidebar.svelte'
-    import ExamReviewAgent from '$cmp/specific/exam/ExamReviewAgent.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import { preloadAllEmulators } from '$lib/languages/Emulator'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import ExamReviewAgentSidebar from '#cmp/specific/exam/ExamReviewAgentSidebar.svelte'
+    import ExamReviewAgent from '#cmp/specific/exam/ExamReviewAgent.svelte'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import { preloadAllEmulators } from '#lib/languages/Emulator.ts'
 
     const EXAM_SESSION_SNAPSHOT_VERSION = 1
     const EXAM_SESSION_SNAPSHOT_PREFIX = 'asm-editor_exam_session_snapshot:'
@@ -61,16 +62,16 @@
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let errorMessage = $state('Invalid exam link.')
     let activeSectionId = $state('')
-
     let examDisabled = $state(false)
     let unlockPasswordInput = $state('')
     let submissionUrl = $state('')
+
     /** The panel open in an assembly section's Workbench; the header's AI button opens the review agent there. */
     let assemblyPanel = $state<string | null>(null)
+
     let teacherAgentOpen = $state(false)
     let snapshotStorageKey = ''
     let snapshotSourceHash = ''
-
     let openAnswers = $state<Record<string, string>>({})
     let multipleChoiceAnswers = $state<Record<string, string[]>>({})
     let assemblyAnswers = $state<Record<string, string>>({})
@@ -88,7 +89,6 @@
     let now = $state(Date.now())
     let timeoutSubmissionTriggered = $state(false)
     const [debouncedSaveSnapshot, clearSnapshotDebounce] = createDebouncer(250)
-
     const activeSection = $derived(sections.find((section) => section.id === activeSectionId))
     const activeVisibleAnswer = $derived(
         activeSection ? collectAnswerForSection(activeSection) : null
@@ -100,14 +100,17 @@
     const canGoToPreviousSection = $derived(
         (activeSectionIndex > 0 || (activeSectionIndex === 0 && hasInstructions)) && !examDisabled
     )
+
     const canGoToNextSection = $derived(
         (activeSectionIndex < 0 ? sections.length > 0 : activeSectionIndex + 1 < sections.length) &&
             !examDisabled
     )
+
     const isOnLastSection = $derived(
         activeSectionIndex >= 0 && activeSectionIndex === sections.length - 1
     )
     const isSubmitted = $derived(!!examSubmission.submissionTimestamp)
+
     const formattedSubmissionTime = $derived(
         examSubmission.submissionTimestamp
             ? new Date(examSubmission.submissionTimestamp).toLocaleString()
@@ -121,6 +124,7 @@
             ? Math.max(0, examSubmission.startedAt + exam.timeLimit - now)
             : -1
     )
+
     const remainingTimeLabel = $derived(formatRemainingTime(remainingMs))
     const exerciseProgressLabel = $derived(
         activeSectionIndex >= 0 ? `${activeSectionIndex + 1}/${sections.length}` : ''
@@ -248,6 +252,7 @@
 
         try {
             const stored = localStorage.getItem(snapshotStorageKey)
+
             if (!stored) return null
 
             const snapshot = serializer.parse<
@@ -308,6 +313,7 @@
         if (!canPersistExamSnapshot()) return
 
         const snapshot = buildExamSnapshot()
+
         if (!snapshot) return
 
         try {
@@ -347,12 +353,14 @@
         if (event.key !== 'Tab' || isReviewMode || examDisabled) return
 
         event.preventDefault()
+
         const textarea = event.currentTarget as HTMLTextAreaElement
         const value = openAnswers[section.id] ?? ''
         const start = textarea.selectionStart
         const end = textarea.selectionEnd
 
         openAnswers[section.id] = `${value.slice(0, start)}\t${value.slice(end)}`
+
         void tick().then(() => {
             textarea.focus()
             textarea.selectionStart = textarea.selectionEnd = start + 1
@@ -545,13 +553,13 @@
     async function loadExam() {
         try {
             timeoutSubmissionTriggered = false
-            const encodedExam = $page.url.searchParams.get('exam')
+            const encodedExam = page.url.searchParams.get('exam')
             if (!encodedExam) {
-                const legacyExam = $page.url.searchParams.get('project')
+                const legacyExam = page.url.searchParams.get('project')
                 if (legacyExam) {
                     const migratedPayload = parseLegacyProjectExamPayload(legacyExam)
                     if (migratedPayload) {
-                        await goto(createExamSessionLink(migratedPayload), { replaceState: true })
+                        await goto(createExamSessionLink(migratedPayload), { replace: true })
                         return
                     }
                 }
@@ -605,19 +613,21 @@
                     fullscreenExitCount: 0,
                     answers: {}
                 }
+
                 examSubmission.hash = (
                     await makeHash(`${examSubmission.name}${examSubmission.startedAt}`)
                 ).slice(0, 4)
 
                 const unlockedSections = await resolveSectionsWithAccessPassword(parsedPayload)
+
                 if (!unlockedSections) {
                     status = 'error'
                     errorMessage = 'Unable to unlock this exam.'
                     return
                 }
+
                 sections = unlockedSections
                 examSubmission.answers = readExamSnapshot()?.answers ?? {}
-
                 await startExam()
             }
 
@@ -651,6 +661,7 @@
 
     $effect(() => {
         if (!canPersistExamSnapshot()) return
+
         collectAnswers()
         scheduleExamSnapshotSave()
     })
@@ -700,7 +711,7 @@
         <div class="overlay">
             <h1 class="error">Failed to load exam</h1>
             <p>{errorMessage}</p>
-            <Button onClick={() => goto(resolve('/exam', {}))}>Back to exam builder</Button>
+            <Button onClick={() => goto(resolve('/exam'))}>Back to exam builder</Button>
         </div>
     {/if}
 

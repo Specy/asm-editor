@@ -8,25 +8,25 @@
      * Debug session, because a change rewrites the program's `@screen` comment.
      */
     import { tick } from 'svelte'
-    import Setting from '$cmp/specific/project/settings/Setting.svelte'
-    import ProjectSetting from '$cmp/specific/project/settings/ProjectSetting.svelte'
-    import ShortcutsSection from '$cmp/specific/project/settings/ShortcutsSection.svelte'
-    import ThemeEditor from '$cmp/specific/project/settings/ThemeEditor.svelte'
-    import DisplayConfigurationForm from '$cmp/specific/project/screen/DisplayConfigurationForm.svelte'
+    import Setting from '#cmp/specific/project/settings/Setting.svelte'
+    import ProjectSetting from '#cmp/specific/project/settings/ProjectSetting.svelte'
+    import ShortcutsSection from '#cmp/specific/project/settings/ShortcutsSection.svelte'
+    import ThemeEditor from '#cmp/specific/project/settings/ThemeEditor.svelte'
+    import DisplayConfigurationForm from '#cmp/specific/project/screen/DisplayConfigurationForm.svelte'
     import {
         isProjectSettingDecided,
         type ProjectSettingId,
         projectSettingsFor,
         resolveProjectSettings
-    } from '$lib/projectSettings'
+    } from '#lib/projectSettings.ts'
     import {
         preferencesStore,
         type PreferenceKey,
         type PreferenceSection,
         type PreferenceValue
-    } from '$stores/preferencesStore.svelte'
-    import { workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
-    import type { SettingsSectionId } from '$lib/workbench/hostApi'
+    } from '#stores/preferencesStore.svelte.ts'
+    import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
+    import type { SettingsSectionId } from '#lib/workbench/hostApi.ts'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import { useWorkbench } from './workbenchContext'
 
@@ -46,7 +46,7 @@
 
     function decide(
         id: ProjectSettingId,
-        value: import('$lib/projectSettings').ProjectSettingValues[ProjectSettingId]
+        value: import('#lib/projectSettings.ts').ProjectSettingValues[ProjectSettingId]
     ) {
         if (readonly) return
         session.applySettings({ ...project.settings, [id]: value })

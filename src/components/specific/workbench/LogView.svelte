@@ -1,6 +1,6 @@
 <script lang="ts">
     /** The Log: what the Workbench did, newest at the bottom. */
-    import type { LogEntry, LogTone } from '$lib/workbench/workbenchLog'
+    import type { LogEntry, LogTone } from '#lib/workbench/workbenchLog.ts'
 
     interface Props {
         entries: readonly LogEntry[]

@@ -1,10 +1,10 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
-import { chapters } from '$lib/documentation/z80/z80'
+import { chapters } from '#lib/documentation/z80/z80.ts'
 import {
     formatZ80InstructionSummary,
     z80InstructionMap
-} from '$lib/languages/Z80/Z80-documentation'
+} from '#lib/languages/Z80/Z80-documentation.ts'
 import { buildZ80Example } from './example'
 
 export const load = (async ({ params }) => {

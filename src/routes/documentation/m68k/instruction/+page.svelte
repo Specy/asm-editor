@@ -1,10 +1,10 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import {
         type InstructionDocumentation,
         M68KUncompoundedInstructions
-    } from '$lib/languages/M68K/M68K-documentation'
-    import { capitalize } from '$lib/utils'
+    } from '#lib/languages/M68K/M68K-documentation.ts'
+    import { capitalize } from '#lib/utils.ts'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import { resolve } from '$app/paths'
 

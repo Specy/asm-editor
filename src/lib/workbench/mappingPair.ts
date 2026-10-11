@@ -3,10 +3,10 @@ import {
     fileFingerprint,
     type CompilationRecord,
     type CompilationSourceMap
-} from '$lib/sourceCompilation/records'
-import type { ProjectFile, ProjectFiles } from '$lib/projectFiles'
-import { isEnvironmentHeaderPath } from '$lib/sourceRuntime/environmentLibrary'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+} from '#lib/sourceCompilation/records.ts'
+import type { ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
+import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 export type MappingPane = { displayedPath: string; displayedFile: ProjectFile | undefined }
 

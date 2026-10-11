@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getProjectTemplates } from '$lib/content/templates'
+import { getProjectTemplates } from '#lib/content/templates.ts'
 import { detectAssemblyLanguage } from './languageDetector'
 
 /**

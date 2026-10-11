@@ -1,4 +1,4 @@
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES,

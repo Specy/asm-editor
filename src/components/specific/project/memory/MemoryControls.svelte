@@ -1,23 +1,23 @@
 <script lang="ts">
-    import Select from '$cmp/shared/input/Select.svelte'
-    import Switch from '$cmp/shared/input/Switch.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
+    import Switch from '#cmp/shared/input/Switch.svelte'
     import {
         memoryHover,
         memoryRegionColor,
         regionLabels,
         resolveMemoryAddress
-    } from '$lib/languages/memoryRegions'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import type { MemoryRegion, DataLabel } from '$lib/languages/commonLanguageFeatures.svelte'
-    import type { ThemeKeys } from '$stores/themeStore.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
+    } from '#lib/languages/memoryRegions.ts'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import type { MemoryRegion, DataLabel } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
+    import Button from '#cmp/shared/button/Button.svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaAngleRight from '~icons/fa-solid/angle-right'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import Form from '$cmp/shared/layout/Form.svelte'
-    import { clampBigInt } from '$lib/utils'
-    import { type RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Form from '#cmp/shared/layout/Form.svelte'
+    import { clampBigInt } from '#lib/utils.ts'
+    import { type RegisterSize, toHexString } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
     interface Props {
         emulator?: Emulator

@@ -1,10 +1,10 @@
-import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
-import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
-import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
-import type { Termination } from '$lib/languages/termination'
-import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
-import { unsignedBigIntToSigned } from '$lib/utils'
-import type { BuildInput, BuildSources } from '$lib/projectFiles'
+import { numberToByteSlice } from '#cmp/specific/project/memory/memoryTabUtils.ts'
+import type { MarsDisplayConfiguration, ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
+import type { InjectedPeripheralOptions } from '#lib/languages/peripherals/peripheralSet.ts'
+import type { Termination } from '#lib/languages/termination.ts'
+import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+import { unsignedBigIntToSigned } from '#lib/utils.ts'
+import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
 
 export type StatusRegister = {
     name: string
@@ -535,7 +535,7 @@ export type BaseEmulatorDerivedState = {
     /** Immutable Files and Entry used by the current executable, retained until Stop. */
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
-    readonly buildLibraryFiles?: import('$lib/projectFiles').ProjectFiles
+    readonly buildLibraryFiles?: import('#lib/projectFiles.ts').ProjectFiles
 }
 
 export enum InterpreterStatus {

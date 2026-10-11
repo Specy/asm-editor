@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { MonacoType } from '$lib/monaco/Monaco'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { registerLanguageSession } from './sessionRegistry'
 import { projectSourceUri } from './uri'
 import {

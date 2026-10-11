@@ -1,7 +1,7 @@
-import type { TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { terminationSummary, type Termination } from '$lib/languages/termination'
-import { testcaseLabel } from '$lib/testcases'
-import { formatTime } from '$lib/utils'
+import type { TestcaseResult, TestcaseValidationError } from '#lib/Project.svelte.ts'
+import { terminationSummary, type Termination } from '#lib/languages/termination.ts'
+import { testcaseLabel } from '#lib/testcases.ts'
+import { formatTime } from '#lib/utils.ts'
 
 /**
  * The **Log** ([CONTEXT.md](../../../CONTEXT.md)): the Workbench's record of what it did for the

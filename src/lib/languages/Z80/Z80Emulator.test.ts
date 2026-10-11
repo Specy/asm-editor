@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
-import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+import { Z80Emulator } from '#lib/languages/Z80/Z80Emulator.svelte.ts'
+import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 
 /**
  * The slice contract against a real Core. `@specy/z80` is plain TypeScript, so it is the one adapter

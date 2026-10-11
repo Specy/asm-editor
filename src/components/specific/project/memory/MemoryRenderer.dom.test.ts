@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushSync, mount, unmount } from 'svelte'
 import MemoryRenderer from './MemoryRenderer.svelte'
-import { type DiffedMemory, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-import { memoryRegionColor } from '$lib/languages/memoryRegions'
+import { type DiffedMemory, RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
 
-//the panel reaches `$lib/utils`, which reaches the projects store, which opens its IndexedDB
+//the panel reaches `#lib/utils.ts`, which reaches the projects store, which opens its IndexedDB
 //because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection
 //would fail the run, so the database is stubbed away: nothing the memory grid does goes near it
-vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 
 /**
  * Poking memory from the selection popup ([the design record](../../../../../docs/design/pokes.md)):
@@ -21,14 +21,14 @@ const ADDRESS = 0x1000n
 
 function render(
     options: {
-        memoryRegions?: import('$lib/languages/commonLanguageFeatures.svelte').MemoryRegion[]
-        dataLabels?: import('$lib/languages/commonLanguageFeatures.svelte').DataLabel[]
+        memoryRegions?: import('#lib/languages/commonLanguageFeatures.svelte.ts').MemoryRegion[]
+        dataLabels?: import('#lib/languages/commonLanguageFeatures.svelte.ts').DataLabel[]
         sp?: bigint
         bytesPerRow?: number
         pokeable?: boolean
         endianess?: 'big' | 'little'
         unreadable?: number[]
-        readOnlyMemory?: import('$lib/languages/commonLanguageFeatures.svelte').ReadOnlyMemory[]
+        readOnlyMemory?: import('#lib/languages/commonLanguageFeatures.svelte.ts').ReadOnlyMemory[]
     } = {}
 ) {
     const pokes: { address: bigint; bytes: number[] }[] = []

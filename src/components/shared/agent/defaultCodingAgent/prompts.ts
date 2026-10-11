@@ -1,23 +1,23 @@
-import { BASE_CODE } from '$lib/Config'
+import { BASE_CODE } from '#lib/Config.ts'
 import {
     M68K_REJECTED_TRAP_TASKS,
     M68K_TRAP_DOCS,
     M68K_TRAP_GROUP_DOCS
-} from '$lib/languages/M68K/M68K-traps'
+} from '#lib/languages/M68K/M68K-traps.ts'
 import {
     Z80_PORT_DOCS,
     Z80_PORT_GROUP_DOCS,
     Z80_SCREEN_COMMAND_DOCS
-} from '$lib/languages/Z80/Z80-model'
-import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '$lib/languages/Z80/trs80/trs80Display'
+} from '#lib/languages/Z80/Z80-model.ts'
+import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '#lib/languages/Z80/trs80/trs80Display.ts'
 import {
     DEFAULT_PROJECT_DISPLAY,
     formatMarsBaseAddress,
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES
-} from '$lib/languages/mars/marsDisplay'
-import { MARS_RECEIVER_CONTROL } from '$lib/languages/mars/MarsDevices'
+} from '#lib/languages/mars/marsDisplay.ts'
+import { MARS_RECEIVER_CONTROL } from '#lib/languages/mars/MarsDevices.ts'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,

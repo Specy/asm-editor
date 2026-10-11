@@ -7,7 +7,7 @@ import {
 export { compilerPreset } from './compilerContract.mjs'
 import { compilationInputs } from './compilationInputs'
 export { compilationInputs } from './compilationInputs'
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     fileFingerprint,
     defaultSourceCompiler,
@@ -20,14 +20,14 @@ import {
     type SourceCompiler,
     type SourceLocation
 } from './records'
-import { isValidFilePath, type ProjectFiles } from '$lib/projectFiles'
-import { CURRENT_RUNTIME_ABI } from '$lib/runtimeAbi'
-import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
+import { isValidFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
+import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
+import { loadRuntimeHeaders } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
     ENVIRONMENT_HEADER,
     ENVIRONMENT_HEADER_PATH,
     loadEnvironmentHeader
-} from '$lib/sourceRuntime/environmentLibrary'
+} from '#lib/sourceRuntime/environmentLibrary.ts'
 import type {
     CompilerLocation,
     TranslationDiagnostic,

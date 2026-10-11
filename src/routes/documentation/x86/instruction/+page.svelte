@@ -1,7 +1,7 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
-    import { x86DocumentedNames } from '$lib/languages/X86/X86-documentation'
+    import { x86DocumentedNames } from '#lib/languages/X86/X86-documentation.ts'
     import { resolve } from '$app/paths'
 
     type Group = {
@@ -35,7 +35,7 @@
     <p class="note">
         The integer instruction set, under NASM's own headings. The vector and system extensions are
         listed with their forms on the
-        <a href={resolve('/documentation/x86/all', {})}>complete documentation</a>
+        <a href={resolve('/documentation/x86/all')}>complete documentation</a>
         page: no source we can publish describes them, and no program here runs one.
     </p>
     {#each groups as group (group.letter)}

@@ -1,7 +1,7 @@
-import { browser } from '$app/environment'
-import { LANGUAGE_THEMES } from '$lib/Config'
-import { id } from '$lib/storage/db'
-import { createDebouncer } from '$lib/utils'
+import { browser } from '$app/env'
+import { LANGUAGE_THEMES } from '#lib/Config.ts'
+import { id } from '#lib/storage/db.ts'
+import { createDebouncer } from '#lib/utils.ts'
 import { TinyColor } from '@ctrl/tinycolor'
 import structuredClone from '@ungap/structured-clone'
 
@@ -435,6 +435,7 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
         extends: _theme.extends,
         editable: _theme.editable
     })
+
     const theme: Record<ThemeKeys, ThemeProp<ThemeKeys>> = $state(_theme.theme)
     const themeArray = $derived(Object.values(theme))
 

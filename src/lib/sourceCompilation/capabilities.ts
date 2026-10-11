@@ -1,5 +1,5 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { CURRENT_RUNTIME_ABI, isShippedRuntimeAbi } from '$lib/runtimeAbi'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { CURRENT_RUNTIME_ABI, isShippedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import { isCompilationTarget, type CompilationTarget } from './records'
 
 /** Header availability shared by Compile and source help; no compiler or Core imports. */

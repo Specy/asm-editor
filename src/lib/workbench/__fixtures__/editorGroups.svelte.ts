@@ -1,11 +1,15 @@
-import { makeProject, type AvailableLanguages } from '$lib/Project.svelte'
-import type { BuildSources } from '$lib/projectFiles'
-import type { Emulator } from '$lib/languages/Emulator'
-import type { Diagnostic, SourceBreakpoint } from '$lib/languages/commonLanguageFeatures.svelte'
-import { WorkbenchSession } from '../WorkbenchSession.svelte'
+import { makeProject, type AvailableLanguages, type StoredProject } from '#lib/Project.svelte.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
+import type { Emulator } from '#lib/languages/Emulator.ts'
+import type { Diagnostic, SourceBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
-export function editorGroupsFixture(language: AvailableLanguages = 'RISC-V') {
+export function editorGroupsFixture(
+    language: AvailableLanguages = 'RISC-V',
+    data: StoredProject = {},
+    host: Partial<WorkbenchSessionHost> = {}
+) {
     const project = makeProject({
         language,
         entry: 'main.c',
@@ -14,7 +18,8 @@ export function editorGroupsFixture(language: AvailableLanguages = 'RISC-V') {
             'value.h': { encoding: 'plain', content: '#define VALUE 0' },
             'main.s': { encoding: 'plain', content: 'nop\nnop' },
             'other.c': { encoding: 'plain', content: 'int main(void) { return 1; }' }
-        }
+        },
+        ...data
     })
     let breakpointResolver:
         ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
@@ -50,7 +55,8 @@ export function editorGroupsFixture(language: AvailableLanguages = 'RISC-V') {
     const disposeEffects = $effect.root(() => {
         session = new WorkbenchSession(project, emulator as unknown as Emulator, {
             readonly: false,
-            canEditTestcases: true
+            canEditTestcases: true,
+            ...host
         })
     })
     return {

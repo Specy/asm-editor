@@ -1,5 +1,5 @@
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
-import { fileText, type BuildSources } from '$lib/projectFiles'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { fileText, type BuildSources } from '#lib/projectFiles.ts'
 import type { LanguageDiagnostic } from './sourceModel'
 
 /** Converts the neutral Worker diagnostic into the Emulator/UI diagnostic contract. */

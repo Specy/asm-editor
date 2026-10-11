@@ -1,4 +1,4 @@
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import type monaco from 'monaco-editor'
 import { AsmTokenizer, getAsmInstructionTrie, type AsmToken, type AsmTrieNode } from '@specy/z80'
 import {
@@ -17,7 +17,7 @@ import {
     instructionSnippet,
     splitAssemblyComment,
     type AssemblyTextOptions
-} from '$lib/languages/service/assemblyText'
+} from '#lib/languages/service/assemblyText.ts'
 
 const registerMap = new Map(z80Registers.map((register) => [register.name, register]))
 const conditionMap = new Map(z80ConditionCodes.map((condition) => [condition.name, condition]))

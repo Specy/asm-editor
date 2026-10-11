@@ -1,6 +1,6 @@
-import { splitLecture } from '$lib/content/lectureSections'
-import { getCourse, getLectureContent } from '$lib/content/getters'
-import { documentationFor } from '$lib/documentation/documentation'
+import { splitLecture } from '#lib/content/lectureSections.ts'
+import { getCourse, getLectureContent } from '#lib/content/getters.ts'
+import { documentationFor } from '#lib/documentation/documentation.ts'
 import {
     entryDocument,
     entryEmbeddingText,

@@ -5,7 +5,7 @@
      * a box opens the next one, and Backspace in an empty box removes it.
      */
     import { tick } from 'svelte'
-    import type { Testcase } from '$lib/Project.svelte'
+    import type { Testcase } from '#lib/Project.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
 
     interface Props {

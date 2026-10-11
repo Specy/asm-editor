@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { DOCUMENTATION_LANGUAGES } from '$lib/search/scope'
+import { DOCUMENTATION_LANGUAGES } from '#lib/search/scope.ts'
 import { documentationFor, entriesOf } from './documentation'
 import { documentationProblems } from './entries'
 
@@ -48,8 +48,9 @@ describe.each(DOCUMENTATION_LANGUAGES)('the %s Documentation', { timeout: 60_000
 
 describe('the instruction Chapters', { timeout: 60_000 }, () => {
     it('have an entry for every MIPS and RISC-V instruction page', async () => {
-        const { mipsInstructionNames } = await import('$lib/languages/MIPS/MIPS-documentation')
-        const { riscvInstructionNames } = await import('$lib/languages/RISC-V/RISC-V-documentation')
+        const { mipsInstructionNames } = await import('#lib/languages/MIPS/MIPS-documentation.ts')
+        const { riscvInstructionNames } =
+            await import('#lib/languages/RISC-V/RISC-V-documentation.ts')
         for (const [language, expected] of [
             ['mips', mipsInstructionNames],
             ['risc-v', riscvInstructionNames]

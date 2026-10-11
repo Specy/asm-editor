@@ -8,9 +8,9 @@
     import { prefersReducedMotion } from 'svelte/motion'
     import { slide } from 'svelte/transition'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
-    import HighlightedText from '$cmp/search/HighlightedText.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import type { SectionDocument } from '$lib/search/payload'
+    import HighlightedText from '#cmp/search/HighlightedText.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import type { SectionDocument } from '#lib/search/payload.ts'
 
     interface Props {
         section: SectionDocument

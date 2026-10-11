@@ -1,34 +1,36 @@
 <script lang="ts">
-    import { page } from '$app/stores'
+    import { page } from '$app/state'
     import {
         makeProject,
         type Project,
         projectContentEquals,
         type StoredProject
-    } from '$lib/Project.svelte'
-    import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
+    } from '#lib/Project.svelte.ts'
+
+    import { ProjectStore, SHARE_ID } from '#stores/projectsStore.svelte.ts'
     import { onMount } from 'svelte'
-    import { toast } from '$stores/toastStore'
-    import Workbench from '$cmp/specific/workbench/Workbench.svelte'
-    import ProjectTopBar from '$cmp/specific/workbench/ProjectTopBar.svelte'
-    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
-    import { preferencesStore } from '$stores/preferencesStore.svelte'
-    import { Monaco } from '$lib/monaco/Monaco'
-    import { Prompt } from '$stores/promptStore.svelte'
+    import { toast } from '#stores/toastStore.ts'
+    import Workbench from '#cmp/specific/workbench/Workbench.svelte'
+    import ProjectTopBar from '#cmp/specific/workbench/ProjectTopBar.svelte'
+    import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+    import { Monaco } from '#lib/monaco/Monaco.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { LANGUAGE_THEMES } from '$lib/Config'
-    import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
-    import { serializer } from '$lib/json'
-    import { createExamSessionLink, parseLegacyProjectExamPayload } from '$lib/exam'
-    import { projectArchiveName, projectToArchive } from '$lib/projectArchive'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { LANGUAGE_THEMES } from '#lib/Config.ts'
+    import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
+    import { serializer } from '#lib/json.ts'
+    import { createExamSessionLink, parseLegacyProjectExamPayload } from '#lib/exam.ts'
+    import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
 
     let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let linkedMigrationNoticeShown = false
+
     /** A change the Workbench reported since the last successful save. */
     let dirty = $state(false)
     let lastSaveFailed = $state(false)
@@ -43,9 +45,9 @@
     )
 
     async function loadProject() {
-        const id = $page.params.project
+        const id = page.params.project ?? ''
         if (id === 'exam') {
-            const code = $page.url.searchParams.get('project')
+            const code = page.url.searchParams.get('project')
             if (!code) {
                 toast.error('Invalid legacy exam link', 10000)
                 status = 'error'
@@ -59,12 +61,12 @@
                 return
             }
 
-            await goto(createExamSessionLink(migratedExam), { replaceState: true })
+            await goto(createExamSessionLink(migratedExam), { replace: true })
             return
         }
 
         if (id === 'share') {
-            const code = $page.url.searchParams.get('project')
+            const code = page.url.searchParams.get('project')
             if (!code) {
                 toast.error('Invalid shared project link', 10000)
                 status = 'error'
@@ -254,7 +256,7 @@
 
 <svelte:window
     onbeforeunload={(e) => {
-        if (!$page.url.hostname.includes('localhost')) {
+        if (!page.url.hostname.includes('localhost')) {
             e.preventDefault()
             e.returnValue = 'You have unsaved changes'
         }

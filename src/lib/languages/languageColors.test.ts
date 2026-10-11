@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { LANGUAGE_THEMES } from '$lib/Config'
-import { AVAILABLE_LANGUAGES } from '$lib/Project.svelte'
-import { BUILTIN_THEMES, DEFAULT_THEME } from '$stores/themeStore.svelte'
+import { LANGUAGE_THEMES } from '#lib/Config.ts'
+import { AVAILABLE_LANGUAGES } from '#lib/Project.svelte.ts'
+import { BUILTIN_THEMES, DEFAULT_THEME } from '#stores/themeStore.svelte.ts'
 import {
     LANGUAGE_ACCENTS,
     courseAccent,

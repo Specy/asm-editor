@@ -3,7 +3,7 @@ import {
     ShortcutAction,
     shortcutRecording,
     shortcutsStore
-} from '$stores/shortcutsStore'
+} from '#stores/shortcutsStore.ts'
 
 /**
  * Ctrl+K (⌘K) on the pages that have a search palette, through the same binding as in the

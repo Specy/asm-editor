@@ -1,59 +1,64 @@
 <script lang="ts">
-    import Editor from '$cmp/specific/project/Editor.svelte'
-    import { toast } from '$stores/toastStore'
+    import Editor from '#cmp/specific/project/Editor.svelte'
+    import { toast } from '#stores/toastStore.ts'
     import ExecutionDock, {
         type DockAction,
         type DockCompilation
-    } from '$cmp/specific/project/ExecutionDock.svelte'
-    import { clampBigInt } from '$lib/utils'
-    import { terminationSummary } from '$lib/languages/termination'
-    import { registerColumnWidth } from '$lib/languages/registerFormats'
-    import { resolveProjectSettings, undoHistorySize } from '$lib/projectSettings'
-    import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
-    import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
-    import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
-    import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
-    import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-    import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
+    } from '#cmp/specific/project/ExecutionDock.svelte'
+    import { clampBigInt } from '#lib/utils.ts'
+    import { terminationSummary } from '#lib/languages/termination.ts'
+    import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
+    import { resolveProjectSettings, undoHistorySize } from '#lib/projectSettings.ts'
+    import { rewriteScreenDirective } from '#lib/languages/mars/screenDirective.ts'
+    import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
+    import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
+    import StatusCodesVisualiser from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
+    import RegistersVisualiser from '#cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
-    import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
-    import type { AvailableLanguages, Project, Testcase, TestcaseResult } from '$lib/Project.svelte'
-    import { PlaygroundSession } from '$lib/content/PlaygroundSession.svelte'
+    import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
+    import type {
+        AvailableLanguages,
+        Project,
+        Testcase,
+        TestcaseResult
+    } from '#lib/Project.svelte.ts'
+    import { PlaygroundSession } from '#lib/content/PlaygroundSession.svelte.ts'
     import {
         editorFileLanguage,
         sourceLanguage,
         OPTIMIZATIONS,
         type Optimization,
         type SourceCompiler
-    } from '$lib/sourceCompilation/records'
-    import { createProjectLanguageSessionId } from '$lib/languages/service/uri'
-    import { Prompt } from '$stores/promptStore.svelte'
-    import { type Emulator } from '$lib/languages/Emulator'
-    import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
-    import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
+    } from '#lib/sourceCompilation/records.ts'
+    import { createProjectLanguageSessionId } from '#lib/languages/service/uri.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
+    import { type Emulator } from '#lib/languages/Emulator.ts'
+    import StdOutRenderer from '#cmp/specific/project/user-tools/StdOutRenderer.svelte'
+    import TestcasesEditor from '#cmp/specific/project/testcases/TestcasesEditor.svelte'
     import type monaco from 'monaco-editor'
-    import Card from '$cmp/shared/layout/Card.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import {
         makeColorizedLabels,
         makeRegister,
         type RegisterPoke,
         type RegisterFormat,
         RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
-    import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
-    import ScreenDisplayConfiguration from '$cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import ScreenRenderer from '#cmp/specific/project/screen/ScreenRenderer.svelte'
+    import ScreenDisplayConfiguration from '#cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
     import {
         DEFAULT_PROJECT_DISPLAY,
         type MarsDisplayOrigin
-    } from '$lib/languages/mars/marsDisplay'
-    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
-    import CollapsibleSection from '$cmp/specific/workbench/CollapsibleSection.svelte'
-    import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
-    import '$cmp/specific/workbench/workbench.css'
+    } from '#lib/languages/mars/marsDisplay.ts'
+    import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
+    import CollapsibleSection from '#cmp/specific/workbench/CollapsibleSection.svelte'
+    import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
+    import '#cmp/specific/workbench/workbench.css'
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
-    import { watchViewport } from '$lib/workbench/viewport.svelte'
+    import { watchViewport } from '#lib/workbench/viewport.svelte.ts'
 
     let running = $state(false)
     let building = $state(false)

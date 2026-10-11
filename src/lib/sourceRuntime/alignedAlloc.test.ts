@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import type { BuildSources } from '$lib/projectFiles'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 
 describe('shipped aligned_alloc overflow handling', () => {
     it.each(['MIPS', 'RISC-V', 'RISC-V-64'] as const)(

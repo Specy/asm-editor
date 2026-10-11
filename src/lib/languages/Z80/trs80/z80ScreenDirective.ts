@@ -1,4 +1,4 @@
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
  * The Z80's `@screen` comment directive: how a program states which Screen mode it wants, so that

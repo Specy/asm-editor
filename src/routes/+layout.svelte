@@ -1,16 +1,16 @@
 <script lang="ts">
     import '../global.css'
-    import ErrorLogger from '$cmp/shared/providers/LoggerProvider.svelte'
-    import PageTransition from '$cmp/shared/providers/PageTransition.svelte'
+    import ErrorLogger from '#cmp/shared/providers/LoggerProvider.svelte'
+    import PageTransition from '#cmp/shared/providers/PageTransition.svelte'
     import { page } from '$app/state'
-    import ThemeProvider from '$cmp/shared/providers/ThemeProvider.svelte'
-    import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
-    import Footer from '$cmp/shared/layout/Footer.svelte'
+    import ThemeProvider from '#cmp/shared/providers/ThemeProvider.svelte'
+    import PromptProvider from '#cmp/shared/providers/PromptProvider.svelte'
+    import Footer from '#cmp/shared/layout/Footer.svelte'
     import { onMount } from 'svelte'
-    import { ScopedTheme, ThemeStore } from '$stores/themeStore.svelte'
+    import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
     import { beforeNavigate } from '$app/navigation'
-    import { navigationStore } from '$stores/navigationStore'
-    import { toAbsoluteUrl } from '$lib/seo'
+    import { navigationStore } from '#stores/navigationStore.ts'
+    import { toAbsoluteUrl } from '#lib/seo.ts'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -25,15 +25,19 @@
 
     onMount(() => {
         // The service worker is registered automatically by SvelteKit from
-        // src/service-worker.ts — no manual registration needed here.
-        import('$lib/monaco/Monaco').then((i) => i.Monaco.registerLanguages())
+        // src/service-worker/index.ts — no manual registration needed here.
+        import('#lib/monaco/Monaco.ts').then((i) => i.Monaco.registerLanguages())
         metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
     })
     beforeNavigate((p) => {
+        if (p.shallow && p.type === 'goto') return
         if (!p.to || !p.from) return
+
         navigationStore.navigatingTo(p.to.url.pathname, p.from.url.pathname, p.to.url.searchParams)
     })
+
     const color = ThemeStore.theme.secondary
+
     $effect(() => {
         if (metaTheme) {
             //a subtree showing a language's colours dresses the browser chrome too: the tag lives

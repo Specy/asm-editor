@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { navigationStore } from '$stores/navigationStore'
+    import { navigationStore } from '#stores/navigationStore.ts'
     import { fly } from 'svelte/transition'
     interface Props {
         cropped?: boolean | string

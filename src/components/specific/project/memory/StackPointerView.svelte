@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { ThemeKeys } from '$stores/themeStore.svelte'
+    import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
     /**
      * A memory tab that follows its own address, the stack pointer's for the one tab there is: the
      * Stack pointer Debug tool, in a draggable window or a section of the debug column. Its address
@@ -12,9 +12,9 @@
         type ColorizedLabel,
         type MemoryTab,
         RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
-    import type { Emulator } from '$lib/languages/Emulator'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
 
     interface Props {
         emulator?: Emulator

@@ -1,5 +1,5 @@
 import { assemble, SymbolType, type AssemblyResult, type SymbolAppearance } from '@specy/z80'
-import { assemblyFiles, fileText, resolveFilePath, type BuildSources } from '$lib/projectFiles'
+import { assemblyFiles, fileText, resolveFilePath, type BuildSources } from '#lib/projectFiles.ts'
 import type {
     LanguageSymbol,
     ProjectAnalysisSnapshot,

@@ -1,5 +1,5 @@
-import type { LectureSection } from '$lib/content/lectureSections'
-import { plainText, type DocumentationEntry } from '$lib/documentation/entries'
+import type { LectureSection } from '#lib/content/lectureSections.ts'
+import { plainText, type DocumentationEntry } from '#lib/documentation/entries.ts'
 import type { EntryDocument, SectionDocument, WindowDocument } from './payload'
 
 /**

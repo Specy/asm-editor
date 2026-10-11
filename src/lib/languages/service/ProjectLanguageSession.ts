@@ -1,9 +1,9 @@
-import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
+import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 import {
     normalizeBuildInput,
     buildConfiguration,
     buildConfigurationsEqual
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 import { languageWorkerManager } from './LanguageWorkerManager'
 import type {
     ProjectAnalysisSnapshot,
@@ -14,8 +14,8 @@ import type {
     ProjectWorkerResponse
 } from './protocol'
 import { registerLanguageSession } from './sessionRegistry'
-import { compilerCapabilities } from '$lib/sourceCompilation/capabilities'
-import type { SourceHelpSessionContext } from '$lib/sourceLanguageHelp/context'
+import { compilerCapabilities } from '#lib/sourceCompilation/capabilities.ts'
+import type { SourceHelpSessionContext } from '#lib/sourceLanguageHelp/context.ts'
 
 type SnapshotListener = (snapshot: ProjectAnalysisSnapshot | undefined, pending: boolean) => void
 

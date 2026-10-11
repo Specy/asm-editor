@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { AvailableLanguages } from '$lib/Project.svelte'
-    import { languageAccent } from '$lib/languages/languageColors'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { languageAccent } from '#lib/languages/languageColors.ts'
     import FaFile from '~icons/fa-solid/file'
     import FaFileCode from '~icons/fa-solid/file-code'
     import FaFileAlt from '~icons/fa-solid/file-alt'

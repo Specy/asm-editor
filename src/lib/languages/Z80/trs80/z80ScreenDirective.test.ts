@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseZ80ScreenDirective } from '$lib/languages/Z80/trs80/z80ScreenDirective'
+import { parseZ80ScreenDirective } from '#lib/languages/Z80/trs80/z80ScreenDirective.ts'
 
 /**
  * The `; @screen` comment directive: the one line a program brought in from outside has to add, so

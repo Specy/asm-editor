@@ -1,4 +1,4 @@
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import type monaco from 'monaco-editor'
 import {
     MIPSAddressingModes,
@@ -14,13 +14,13 @@ import { MIPSNumericRegisterNames } from './MIPS-registers'
 import {
     runtimeFunctionDocumentation,
     runtimeFunctionsForModel
-} from '$lib/sourceRuntime/runtimeLanguage'
+} from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
     assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
     type AssemblyTextOptions
-} from '$lib/languages/service/assemblyText'
+} from '#lib/languages/service/assemblyText.ts'
 
 export const MIPS_TEXT_OPTIONS = {
     comment: '#',

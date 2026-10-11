@@ -1,5 +1,5 @@
 import type monaco from 'monaco-editor'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type { MonacoType } from './Monaco'
 import {
     createBuildArtifactHoverProvider,
@@ -124,10 +124,10 @@ function registerEach<T>(
 
 async function loadM68kDescriptor(monacoInstance: MonacoType): Promise<AssemblyLanguageDescriptor> {
     const [grammar, language, projectLanguage, textFeatures] = await Promise.all([
-        import('$lib/languages/M68K/M68K-grammar'),
-        import('$lib/languages/M68K/M68K-language'),
-        import('$lib/languages/M68K/M68K-project-language'),
-        import('$lib/languages/service/assemblyText')
+        import('#lib/languages/M68K/M68K-grammar.ts'),
+        import('#lib/languages/M68K/M68K-language.ts'),
+        import('#lib/languages/M68K/M68K-project-language.ts'),
+        import('#lib/languages/service/assemblyText.ts')
     ])
     return {
         id: 'm68k',
@@ -183,15 +183,15 @@ async function loadMarsDescriptor(
     rv64: boolean
 ): Promise<AssemblyLanguageDescriptor> {
     const [projectLanguage, textFeatures] = await Promise.all([
-        import('$lib/languages/service/projectAssemblyLanguage'),
-        import('$lib/languages/service/assemblyText')
+        import('#lib/languages/service/projectAssemblyLanguage.ts'),
+        import('#lib/languages/service/assemblyText.ts')
     ])
     const projectOptions = { comment: '#' as const, dialect: 'mars' as const }
 
     if (id === 'mips') {
         const [grammar, language] = await Promise.all([
-            import('$lib/languages/MIPS/MIPS-grammar'),
-            import('$lib/languages/MIPS/MIPS-language')
+            import('#lib/languages/MIPS/MIPS-grammar.ts'),
+            import('#lib/languages/MIPS/MIPS-language.ts')
         ])
         return {
             id,
@@ -209,8 +209,8 @@ async function loadMarsDescriptor(
     }
 
     const [grammar, language] = await Promise.all([
-        import('$lib/languages/RISC-V/RISC-V-grammar'),
-        import('$lib/languages/RISC-V/RISC-V-language')
+        import('#lib/languages/RISC-V/RISC-V-grammar.ts'),
+        import('#lib/languages/RISC-V/RISC-V-language.ts')
     ])
     return {
         id,
@@ -233,10 +233,10 @@ async function loadMarsDescriptor(
 
 async function loadX86Descriptor(monacoInstance: MonacoType): Promise<AssemblyLanguageDescriptor> {
     const [grammar, language, projectLanguage, textFeatures] = await Promise.all([
-        import('$lib/languages/X86/X86-grammar'),
-        import('$lib/languages/X86/X86-language'),
-        import('$lib/languages/service/projectAssemblyLanguage'),
-        import('$lib/languages/service/assemblyText')
+        import('#lib/languages/X86/X86-grammar.ts'),
+        import('#lib/languages/X86/X86-language.ts'),
+        import('#lib/languages/service/projectAssemblyLanguage.ts'),
+        import('#lib/languages/service/assemblyText.ts')
     ])
     return {
         id: 'x86',
@@ -256,11 +256,11 @@ async function loadX86Descriptor(monacoInstance: MonacoType): Promise<AssemblyLa
 async function loadZ80Descriptor(monacoInstance: MonacoType): Promise<AssemblyLanguageDescriptor> {
     const [grammar, language, projectLanguage, z80ProjectLanguage, textFeatures] =
         await Promise.all([
-            import('$lib/languages/Z80/Z80-grammar'),
-            import('$lib/languages/Z80/Z80-language'),
-            import('$lib/languages/service/projectAssemblyLanguage'),
-            import('$lib/languages/Z80/Z80-project-language'),
-            import('$lib/languages/service/assemblyText')
+            import('#lib/languages/Z80/Z80-grammar.ts'),
+            import('#lib/languages/Z80/Z80-language.ts'),
+            import('#lib/languages/service/projectAssemblyLanguage.ts'),
+            import('#lib/languages/Z80/Z80-project-language.ts'),
+            import('#lib/languages/service/assemblyText.ts')
         ])
     const projectOptions = {
         comment: ';' as const,
@@ -300,8 +300,8 @@ async function loadZ80Descriptor(monacoInstance: MonacoType): Promise<AssemblyLa
     }
 }
 
-type GenericProjectModule = typeof import('$lib/languages/service/projectAssemblyLanguage')
-type TextFeatureModule = typeof import('$lib/languages/service/assemblyText')
+type GenericProjectModule = typeof import('#lib/languages/service/projectAssemblyLanguage.ts')
+type TextFeatureModule = typeof import('#lib/languages/service/assemblyText.ts')
 type GenericProjectOptions = Parameters<
     GenericProjectModule['createProjectSymbolCompletionProvider']
 >[1]

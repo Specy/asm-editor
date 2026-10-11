@@ -1,13 +1,14 @@
-import { browser } from '$app/environment'
-import { db } from '$lib/storage/db'
-import { requestPersistentStorage } from '$lib/storage/persist'
+import { browser } from '$app/env'
+import { db } from '#lib/storage/db.ts'
+import { requestPersistentStorage } from '#lib/storage/persist.ts'
 import {
     type ExternalImport,
     makeProject,
     makeProjectFromExternal,
     type Project
-} from '$lib/Project.svelte'
-import { isLegacyLinkedFileCompatible, projectToArchive } from '$lib/projectArchive'
+} from '#lib/Project.svelte.ts'
+
+import { isLegacyLinkedFileCompatible, projectToArchive } from '#lib/projectArchive.ts'
 
 export const SHARE_ID = '__share__'
 

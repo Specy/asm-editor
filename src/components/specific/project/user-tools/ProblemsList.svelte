@@ -4,7 +4,10 @@
      * The Workbench's Problems tab lists them; the Interactive editor's console shows them above the
      * program's output.
      */
-    import { type Diagnostic, formatDiagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+    import {
+        type Diagnostic,
+        formatDiagnostic
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
     interface Props {
         diagnostics: Diagnostic[]

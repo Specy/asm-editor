@@ -1,5 +1,5 @@
-import { SOURCE_MAP_COLOR_PALETTE } from '$lib/Config'
-import type { ColoredLineRange, EditorLineColoring } from '$lib/monaco/lineColoring'
+import { SOURCE_MAP_COLOR_PALETTE } from '#lib/Config.ts'
+import type { ColoredLineRange, EditorLineColoring } from '#lib/monaco/lineColoring.ts'
 import type { CompilationSourceMap, SourceLocation } from './records'
 
 export type SourceMapColoring = {

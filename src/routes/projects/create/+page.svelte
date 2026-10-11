@@ -2,22 +2,22 @@
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
 
-    import Button from '$cmp/shared/button/Button.svelte'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import Input from '$cmp/shared/input/Input.svelte'
-    import Select from '$cmp/shared/input/Select.svelte'
-    import Textarea from '$cmp/shared/input/Textarea.svelte'
-    import Title from '$cmp/shared/layout/Header.svelte'
-    import Form from '$cmp/shared/layout/Form.svelte'
-    import { toast } from '$stores/toastStore'
-    import { type AvailableLanguages, makeProject } from '$lib/Project.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Input from '#cmp/shared/input/Input.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
+    import Textarea from '#cmp/shared/input/Textarea.svelte'
+    import Title from '#cmp/shared/layout/Header.svelte'
+    import Form from '#cmp/shared/layout/Form.svelte'
+    import { toast } from '#stores/toastStore.ts'
+    import { type AvailableLanguages, makeProject } from '#lib/Project.svelte.ts'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
-    import { ProjectStore } from '$stores/projectsStore.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
-    import { isCompilationTarget } from '$lib/sourceCompilation/records'
+    import { isCompilationTarget } from '#lib/sourceCompilation/records.ts'
 
     let { data }: { data: PageData } = $props()
 
@@ -82,7 +82,7 @@
 <Page cropped="40rem" style="padding-top: 3rem">
     <div class="create-project">
         <div class="row top-title">
-            <a href={resolve('/projects', {})} class="go-back" title="Go to the projects page">
+            <a href={resolve('/projects')} class="go-back" title="Go to the projects page">
                 <Button hasIcon cssVar="primary" style="padding: 0.4rem">
                     <Icon size={2}>
                         <FaAngleLeft />

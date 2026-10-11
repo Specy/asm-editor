@@ -5,9 +5,9 @@ import {
     type Project,
     type ProjectData,
     type StoredProject
-} from '$lib/Project.svelte'
-import { LANGUAGE_EXTENSIONS } from '$lib/Config'
-import { serializer } from '$lib/json'
+} from '#lib/Project.svelte.ts'
+import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
+import { serializer } from '#lib/json.ts'
 import {
     cleanFiles,
     FILE_BYTE_LIMIT,
@@ -19,7 +19,7 @@ import {
     projectFileFromBytes,
     ProjectFormatError,
     type FileEncoding
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 import { unzipSync, zipSync, type Unzipped } from 'fflate'
 
 const ARCHIVE_VERSION = 1

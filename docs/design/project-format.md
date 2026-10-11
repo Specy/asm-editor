@@ -35,6 +35,12 @@ Implementation update on 2026-09-09: `base64` is now a recognized lossless stora
 
 Update on 2026-09-08: [ADR 0017](../adr/0017-entry-path-can-name-a-missing-file.md) revises the existence invariant. `entry` is the configured Entry path and may name a missing File after deletion or rename; subsequent Builds report that condition. Explicit Files maps, including empty ones, must retain their contents and Entry path through saving and loading. New Projects and legacy code-only migration still create their default source File.
 
+### Open editor tabs
+
+`openTabs?: string[]` stores open Project File paths in tab order, and `activeTab?: string` stores the last selected path. Both fields are optional. Projects without them open their Entry file; an explicit empty `openTabs` array restores an empty editor. When no valid active path is saved, the first saved tab is selected. Loading removes duplicate, invalid and deleted paths, including a missing Entry file, and drops an active path that no longer exists or is not among the open tabs.
+
+Tab changes follow the Project's autosave setting and are included in browser storage, share links, source metadata and Project archives. Tabs from both editor panes are saved once per path and restored into one pane; split layout is not stored. Runtime library and Build-only paths are omitted because they cannot be restored as Project Files.
+
 ### Settings and Preferences ([ADR 0014](../adr/0014-settings-split-by-effect.md))
 
 | Preferences (global, view or workflow only)                                                                   | Settings (per Project, affect the Emulator or the code)     |

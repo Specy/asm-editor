@@ -6,15 +6,15 @@
      * a memory value half written survives folding it.
      */
     import { onMount, untrack } from 'svelte'
-    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
+    import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
     import {
         checkCount,
         describeCharacter,
         firstTextDifference,
         testcaseLabel
-    } from '$lib/testcases'
+    } from '#lib/testcases.ts'
     import FaCaretRight from '~icons/fa-solid/caret-right'
-    import Header from '$cmp/shared/layout/Header.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import RegistersTable from './RegistersTable.svelte'
     import MemoryTable from './MemoryTable.svelte'
     import InputCells from './InputCells.svelte'

@@ -15,7 +15,7 @@ import {
     type CompileResult,
     EmulatorStatus,
     type Instruction
-} from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -27,9 +27,9 @@ import {
     type PokeWrite,
     RegisterSize,
     type StackFrame
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
-import type { Termination } from '$lib/languages/termination'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
+import type { Termination } from '#lib/languages/termination.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -37,13 +37,13 @@ import {
     nextSliceChunk,
     sliceDeadline,
     sliceInstructionBudget
-} from '$lib/languages/ExecutionSlice'
-import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
-import type { Testcase } from '$lib/Project.svelte'
-import { Z80Device } from '$lib/languages/Z80/Z80Device'
-import { Trs80Devices } from '$lib/languages/Z80/trs80/Trs80Devices'
-import { parseZ80ScreenDirective } from '$lib/languages/Z80/trs80/z80ScreenDirective'
-import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
+} from '#lib/languages/ExecutionSlice.ts'
+import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import { Z80Device } from '#lib/languages/Z80/Z80Device.ts'
+import { Trs80Devices } from '#lib/languages/Z80/trs80/Trs80Devices.ts'
+import { parseZ80ScreenDirective } from '#lib/languages/Z80/trs80/z80ScreenDirective.ts'
+import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
 import {
     Z80_DEFAULT_ORG,
     Z80_FLAGS,
@@ -52,14 +52,14 @@ import {
     Z80_STACK_TOP,
     Z80_STARTING_REGISTER_NAMES,
     type Z80RegisterName
-} from '$lib/languages/Z80/Z80-model'
+} from '#lib/languages/Z80/Z80-model.ts'
 import {
     assemblyFiles,
     resolveFilePath,
     sourceText,
     type BuildInput,
     type BuildSources
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 
 /**
  * The `RegisterSet` field behind each register the panel shows. The alternate registers are spelled

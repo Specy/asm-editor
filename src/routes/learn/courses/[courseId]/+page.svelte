@@ -1,14 +1,14 @@
 <script lang="ts">
     import type { PageData } from './$types'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
-    import Card from '$cmp/shared/layout/Card.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import { courseLanguage } from '$lib/search/scope'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import LecturesMenu from '#cmp/content/LecturesMenu.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import { courseLanguage } from '#lib/search/scope.ts'
 
     interface Props {
         data: PageData & { content: string }

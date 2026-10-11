@@ -9,12 +9,12 @@ import {
     type RegisterPoke,
     RegisterSize,
     resolveRegisterFileLayout
-} from '$lib/languages/commonLanguageFeatures.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
-//the rows reach `$lib/utils`, which reaches the projects store, which opens its IndexedDB because
+//the rows reach `#lib/utils.ts`, which reaches the projects store, which opens its IndexedDB because
 //this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection would fail
 //the run, so the database is stubbed away: nothing a Register file row does goes near it
-vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 
 /**
  * Poking a register from its row ([the design record](../../../../../docs/design/pokes.md)): a

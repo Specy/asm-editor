@@ -1,17 +1,17 @@
 import { tool, type RegisteredTool } from '@discerns/sdk'
 import { z } from 'zod'
-import type { Emulator } from '$lib/languages/Emulator'
+import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
     InterpreterStatus,
     type RegisterFile,
     type RegisterSize
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
-import { delay } from '$lib/utils'
-import { compilationStatus, sourceLanguage } from '$lib/sourceCompilation/records'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
+import { delay } from '#lib/utils.ts'
+import { compilationStatus, sourceLanguage } from '#lib/sourceCompilation/records.ts'
 import { createCompileSourceTool, isSourceFile } from './sourceTools'
-import { defaultEntryPath } from '$lib/Project.svelte'
-import { fileText, type ProjectFile } from '$lib/projectFiles'
+import { defaultEntryPath } from '#lib/Project.svelte.ts'
+import { fileText, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     DEFAULT_TAKE_LINES,
     MAX_TAKE_LINES,

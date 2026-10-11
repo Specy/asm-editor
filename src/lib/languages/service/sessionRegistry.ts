@@ -1,4 +1,4 @@
-import type { BuildSources } from '$lib/projectFiles'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import type { ProjectAnalysisSnapshot } from './protocol'
 import type { ProjectModelIdentity } from './uri'
 
@@ -12,7 +12,7 @@ export type LanguageSessionView = {
     sourceHelpFor?(
         sourceKind: 'live' | 'build',
         buildGeneration?: number
-    ): import('$lib/sourceLanguageHelp/context').SourceHelpSessionContext | undefined
+    ): import('#lib/sourceLanguageHelp/context.ts').SourceHelpSessionContext | undefined
 }
 
 const sessions = new Map<string, LanguageSessionView>()

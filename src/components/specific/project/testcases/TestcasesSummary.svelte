@@ -5,9 +5,9 @@
      * Workbench's Testcases panel and the Interactive editor's Testcases window. A Testcase edited
      * since the run counts as not run.
      */
-    import Button from '$cmp/shared/button/Button.svelte'
-    import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
-    import { matchResults } from '$lib/testcases'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+    import { matchResults } from '#lib/testcases.ts'
 
     interface Props {
         testcases: Testcase[]

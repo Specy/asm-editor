@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types'
-import { getProjectTemplates } from '$lib/content/templates'
+import { getProjectTemplates } from '#lib/content/templates.ts'
 
 /**
  * Runs in the prerender, not in the browser: the templates are read out of `src/content`, which is

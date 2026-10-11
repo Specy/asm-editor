@@ -1,10 +1,10 @@
 <script lang="ts">
     /** The coding agent beside the Project, as the AI assistant panel. */
-    import DefaultCodingAgent from '$cmp/shared/agent/DefaultCodingAgent.svelte'
+    import DefaultCodingAgent from '#cmp/shared/agent/DefaultCodingAgent.svelte'
     import {
         PROJECT_AGENT_WORKFLOWS,
         projectAgentInstructions
-    } from '$cmp/shared/agent/projectAgent'
+    } from '#cmp/shared/agent/projectAgent.ts'
     import { useWorkbench } from './workbenchContext'
 
     const context = useWorkbench()

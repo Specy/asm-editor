@@ -1,8 +1,8 @@
-import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import type { Mouse, MouseSnapshot } from '$lib/languages/peripherals/Mouse'
-import type { ScreenColor } from '$lib/languages/peripherals/screen/color'
-import type { Screen } from '$lib/languages/peripherals/screen/Screen'
-import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
+import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import type { Mouse, MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
+import type { ScreenColor } from '#lib/languages/peripherals/screen/color.ts'
+import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import { echoToScreen } from '#lib/languages/peripherals/screen/textEcho.ts'
 import {
     Z80_MOUSE_FLAGS,
     Z80_MOUSE_VIEWS,
@@ -13,7 +13,7 @@ import {
     type Z80PortGroup,
     type Z80PortName,
     z80PortGroupOf
-} from '$lib/languages/Z80/Z80-model'
+} from '#lib/languages/Z80/Z80-model.ts'
 
 /**
  * The device sitting on the Z80's IO bus: the whole port map of `Z80_PORTS`, which is the whole

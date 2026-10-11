@@ -7,7 +7,7 @@ import {
     z80Operands,
     z80Registers,
     type Z80InstructionVariant
-} from '$lib/languages/Z80/Z80-documentation'
+} from '#lib/languages/Z80/Z80-documentation.ts'
 import {
     Z80_COLORS,
     Z80_FLAGS,
@@ -18,8 +18,8 @@ import {
     Z80_SCREEN_COMMAND_DOCS,
     type Z80PortDoc,
     type Z80PortGroup
-} from '$lib/languages/Z80/Z80-model'
-import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '$lib/languages/Z80/trs80/trs80Display'
+} from '#lib/languages/Z80/Z80-model.ts'
+import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '#lib/languages/Z80/trs80/trs80Display.ts'
 import {
     fillPlaceholders,
     names,

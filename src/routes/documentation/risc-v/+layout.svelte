@@ -1,38 +1,38 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '$cmp/search/SearchPalette.svelte'
-    import { languageScope } from '$lib/search/scope'
-    import { searchClient } from '$lib/search/searchClient.svelte'
-    import Navbar from '$cmp/shared/layout/Navbar.svelte'
-    import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import { page } from '$app/stores'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import { languageScope } from '#lib/search/scope.ts'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import Navbar from '#cmp/shared/layout/Navbar.svelte'
+    import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
+    import { page } from '$app/state'
     import FaBars from '~icons/fa-solid/bars'
-
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
-    import MenuLink from '$cmp/documentation/site/MenuLink.svelte'
-    import InstructionsMenu from '$cmp/documentation/site/InstructionsMenu.svelte'
-    import { LANGUAGE_THEMES } from '$lib/Config'
-    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import { riscvInstructionEntries } from '$lib/languages/RISC-V/RISC-V-documentation'
-    import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
+    import MenuLink from '#cmp/documentation/site/MenuLink.svelte'
+    import InstructionsMenu from '#cmp/documentation/site/InstructionsMenu.svelte'
+    import { LANGUAGE_THEMES } from '#lib/Config.ts'
+    import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import { riscvInstructionEntries } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+    import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { ProjectStore } from '$stores/projectsStore.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+
     interface Props {
         children?: import('svelte').Snippet
     }
 
     let { children }: Props = $props()
-
     let instructions = riscvInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
-    let currentInstructionName = $derived($page.params.instructionName ?? '')
+    let currentInstructionName = $derived(page.params.instructionName ?? '')
+
     const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
@@ -44,21 +44,20 @@
 <ThemeScope theme={LANGUAGE_THEMES['RISC-V']}>
     <Navbar style="border-bottom-left-radius: 0;">
         <Row gap="0.6rem" align="center" flex1>
-            <a class="icon" href={resolve('/', {})} title="Go to the home">
-                <img src="/favicon.png" alt="logo" />
-            </a>
-            <a class="icon" href={resolve('/projects', {})} title="Go to your projects">
-                Projects
-            </a>
+            <a class="icon" href={resolve('/')} title="Go to the home"
+                ><img src="/favicon.png" alt="logo" /></a
+            >
 
-            <a href={resolve('/documentation', {})}> Docs </a>
-            <a href={resolve('/learn/courses', {})}> Learn </a>
-            <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
-                <div class="hidden-very-small">
-                    <SparklesIcon />
-                </div>
+            <a class="icon" href={resolve('/projects')} title="Go to your projects">Projects</a>
+
+            <a href={resolve('/documentation')}>Docs</a>
+            <a href={resolve('/learn/courses')}>Learn</a>
+
+            <a class="icon ai" href={resolve('/chat')} title="AI Chat">
+                <div class="hidden-very-small"><SparklesIcon /></div>
                 AI Chat
             </a>
+
             <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
                 <Icon onClick={() => (menuOpen = !menuOpen)}>
                     {#if menuOpen}
@@ -153,6 +152,7 @@
             </Column>
         {/snippet}
     </Sidebar>
+
     <SearchPalette {scope} placeholder="Search the RISC-V docs and courses" />
 </ThemeScope>
 

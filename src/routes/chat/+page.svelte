@@ -1,18 +1,17 @@
 <script lang="ts">
-    import { browser } from '$app/environment'
+    import { browser } from '$app/env'
     import DefaultCodingAgent, {
         type SupportedLanguage
-    } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
+    } from '#cmp/shared/agent/DefaultCodingAgent.svelte'
     import FaTimes from '~icons/fa-solid/times'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import { makeProject, type AvailableLanguages } from '$lib/Project.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
+    import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import { makeProject, type AvailableLanguages } from '#lib/Project.svelte.ts'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
 
     const MOBILE_LAYOUT_QUERY = '(max-width: 900px)'
-
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
     const project = $derived.by(() =>
@@ -24,6 +23,7 @@
     let isMobile = $state(false)
     let latestExampleSignature = $state<string | null>(null)
     let agentVisible = $derived(!editorLanguage || agentOpen || isMobile)
+
     let agentStyle = $derived(
         editorLanguage
             ? isMobile

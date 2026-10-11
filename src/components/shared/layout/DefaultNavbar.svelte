@@ -1,8 +1,8 @@
 <script lang="ts">
-    import Navbar from '$cmp/shared/layout/Navbar.svelte'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import Navbar from '#cmp/shared/layout/Navbar.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import FaStar from '~icons/fa-solid/star'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import Row from './Row.svelte'
     import SparklesIcon from '../agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
@@ -20,15 +20,15 @@
         <a
             class="icon"
             style="width: 2.2rem; height: 2.2rem;"
-            href={resolve('/', {})}
+            href={resolve('/')}
             title="Go to the home"
         >
             <img src="/favicon.png" alt="logo" />
         </a>
-        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
-        <a class="icon" href={resolve('/documentation', {})} title="Go to the docs"> Docs </a>
-        <a class="icon" href={resolve('/learn/courses', {})} title="Learn assembly"> Learn </a>
-        <a class="icon hidden-on-mobile" href={resolve('/embed', {})} title="Embed the website">
+        <a class="icon" href={resolve('/projects')} title="Go to your projects"> Projects </a>
+        <a class="icon" href={resolve('/documentation')} title="Go to the docs"> Docs </a>
+        <a class="icon" href={resolve('/learn/courses')} title="Learn assembly"> Learn </a>
+        <a class="icon hidden-on-mobile" href={resolve('/embed')} title="Embed the website">
             Embed
         </a>
     </Row>
@@ -49,7 +49,7 @@
         </div>
         {@render children?.()}
         {#if !exclude?.includes('ai-chat')}
-            <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
+            <a class="icon ai" href={resolve('/chat')} title="AI Chat">
                 <div class="hidden-very-small">
                     <SparklesIcon />
                 </div>

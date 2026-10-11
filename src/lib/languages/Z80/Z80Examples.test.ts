@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
-import { BLACK } from '$lib/languages/peripherals/screen/color'
-import { Z80_PORT_DOCS } from '$lib/languages/Z80/Z80-model'
-import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
+import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
+import { BLACK } from '#lib/languages/peripherals/screen/color.ts'
+import { Z80_PORT_DOCS } from '#lib/languages/Z80/Z80-model.ts'
+import { Z80Emulator } from '#lib/languages/Z80/Z80Emulator.svelte.ts'
 
 /**
  * Every program this repository shows a Z80 user, run against the real Core under node: the

@@ -3,7 +3,7 @@ import {
     EmulatorStatus,
     type CompileResult,
     type Instruction
-} from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -15,15 +15,15 @@ import {
     type RegisterFileDescriptor,
     RegisterSize,
     type StackFrame
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
     sliceInstructionBudget
-} from '$lib/languages/ExecutionSlice'
-import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
-import type { Testcase } from '$lib/Project.svelte'
+} from '#lib/languages/ExecutionSlice.ts'
+import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
 import {
     END_OF_INPUT,
     createX86Emulator,
@@ -47,9 +47,9 @@ import {
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
 import { x86DiagnosticHint } from './X86-diagnostics'
-import { ProjectFormatError, type BuildInput, type BuildSources } from '$lib/projectFiles'
+import { ProjectFormatError, type BuildInput, type BuildSources } from '#lib/projectFiles.ts'
 import { linksX86StartUnit, x86CoreProject, X86_START_UNIT_FILES } from './x86StartUnit'
-import type { Termination } from '$lib/languages/termination'
+import type { Termination } from '#lib/languages/termination.ts'
 
 /**
  * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with

@@ -3,8 +3,8 @@ import {
     fileFingerprint,
     type CompilationRecord,
     type CompilationSourceMap
-} from '$lib/sourceCompilation/records'
-import { ENVIRONMENT_HEADER_PATH } from '$lib/sourceRuntime/environmentLibrary'
+} from '#lib/sourceCompilation/records.ts'
+import { ENVIRONMENT_HEADER_PATH } from '#lib/sourceRuntime/environmentLibrary.ts'
 import { resolveMappingPair } from './mappingPair'
 
 const text = (content: string) => ({ encoding: 'plain' as const, content })

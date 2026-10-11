@@ -7,10 +7,10 @@
     import '@cartamd/plugin-code/default.css'
     import type { Plugin } from 'carta-md'
     import { code as codeExt } from '@cartamd/plugin-code'
-    import { codeBlocks } from '$lib/content/codeBlocks'
-    import { assemblyPalette } from '$lib/content/assemblyPalette'
-    import { ThemeStore } from '$stores/themeStore.svelte'
-    import { EXAMPLE_EDITOR_FONT } from '$lib/monaco/exampleFont'
+    import { codeBlocks } from '#lib/content/codeBlocks.ts'
+    import { assemblyPalette } from '#lib/content/assemblyPalette.ts'
+    import { ThemeStore } from '#stores/themeStore.svelte.ts'
+    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
     import './codeBlocks.css'
 
     let {

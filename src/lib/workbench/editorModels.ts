@@ -1,10 +1,10 @@
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
-import type { EditorSource } from '$cmp/specific/project/editorSource'
-import { parseProjectSourceUri, projectSourceUri } from '$lib/languages/service/uri'
-import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
-import type { BuildArtifact } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { ProjectFiles } from '$lib/projectFiles'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import type { EditorSource } from '#cmp/specific/project/editorSource.ts'
+import { parseProjectSourceUri, projectSourceUri } from '#lib/languages/service/uri.ts'
+import { setModelBuildArtifacts } from '#lib/monaco/assemblyInsights.ts'
+import type { BuildArtifact } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { ProjectFiles } from '#lib/projectFiles.ts'
 
 /** Session ownership lets multiple editor widgets attach to one canonical file model. */
 export class EditorModels {

@@ -1,12 +1,12 @@
 <script lang="ts">
-    import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
+    import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import {
         type Register,
         type RegisterFile,
         RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import { createEventDispatcher } from 'svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
     const dispatcher = createEventDispatcher<{
         registerClick: Register

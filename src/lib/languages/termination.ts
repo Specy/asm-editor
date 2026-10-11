@@ -1,4 +1,4 @@
-import { formatTime } from '$lib/utils'
+import { formatTime } from '#lib/utils.ts'
 
 /**
  * How a program ended, which every adapter reads from its Core when the program has terminated

@@ -1,4 +1,4 @@
-import { clamp } from '$lib/utils'
+import { clamp } from '#lib/utils.ts'
 
 /**
  * Where the Screen's floating window sits and how large it is.

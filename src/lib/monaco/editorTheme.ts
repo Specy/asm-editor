@@ -1,4 +1,9 @@
-import { ScopedTheme, type ThemeKeys, type ThemeProp, ThemeStore } from '$stores/themeStore.svelte'
+import {
+    ScopedTheme,
+    type ThemeKeys,
+    type ThemeProp,
+    ThemeStore
+} from '#stores/themeStore.svelte.ts'
 import { TinyColor } from '@ctrl/tinycolor'
 import type monaco from 'monaco-editor'
 

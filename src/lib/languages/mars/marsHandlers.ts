@@ -1,7 +1,10 @@
-import type { EmulatorInterrupt } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { ExecutionController, ExecutionGeneration } from '$lib/languages/ExecutionController'
-import { guestFileFailure, type FileSystemSession } from '$lib/languages/peripherals/FileSystem'
-import type { EmulatorPeripherals } from '$lib/languages/peripherals/peripheralSet'
+import type { EmulatorInterrupt } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type {
+    ExecutionController,
+    ExecutionGeneration
+} from '#lib/languages/ExecutionController.ts'
+import { guestFileFailure, type FileSystemSession } from '#lib/languages/peripherals/FileSystem.ts'
+import type { EmulatorPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
 import type { MarsDevices } from './MarsDevices'
 
 /**

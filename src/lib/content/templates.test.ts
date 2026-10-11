@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getProjectTemplates } from '$lib/content/templates'
-import { createEmulator } from '$lib/languages/Emulator'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
-import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import { getProjectTemplates } from '#lib/content/templates.ts'
+import { createEmulator } from '#lib/languages/Emulator.ts'
+import { InterpreterStatus } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * Every program the create page offers, built and run against the real Cores.

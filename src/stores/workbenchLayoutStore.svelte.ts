@@ -1,4 +1,4 @@
-import { browser } from '$app/environment'
+import { browser } from '$app/env'
 
 /**
  * How the person has arranged the Workbench: panel sizes, collapsed sections and the floating
@@ -49,6 +49,7 @@ export const DEFAULT_PANEL_WIDTHS: Readonly<Record<string, number>> = {
 }
 /** The default width of a panel a host adds. */
 export const DEFAULT_HOST_PANEL_WIDTH = 384
+
 export const DEFAULT_BOTTOM_HEIGHT = 96
 
 export function defaultLayout(): WorkbenchLayout {

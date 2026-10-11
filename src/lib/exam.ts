@@ -1,14 +1,14 @@
 import lzstring from 'lz-string'
-import { BASE_CODE } from '$lib/Config'
+import { BASE_CODE } from '#lib/Config.ts'
 import {
     type AvailableLanguages,
     entryFileContent,
     normalizeProjectData,
     type StoredProject,
     type Testcase
-} from '$lib/Project.svelte'
-import { serializer } from '$lib/json'
-import { decryptData } from '$lib/utils'
+} from '#lib/Project.svelte.ts'
+import { serializer } from '#lib/json.ts'
+import { decryptData } from '#lib/utils.ts'
 
 export enum ExamSectionType {
     OpenQuestion = 'open-question',

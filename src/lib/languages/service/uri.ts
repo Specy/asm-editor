@@ -1,5 +1,5 @@
-import type { MonacoType } from '$lib/monaco/Monaco'
-import { isValidFilePath } from '$lib/projectFiles'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { isValidFilePath } from '#lib/projectFiles.ts'
 
 export const ASSEMBLY_MODEL_SCHEME = 'asm-editor'
 

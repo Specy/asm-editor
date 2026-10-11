@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { Keyboard } from './Keyboard'
 import { Mouse } from './Mouse'
 import { ProgramClock } from './ProgramClock'

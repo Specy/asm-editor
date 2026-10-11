@@ -2,18 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import TestcasesList from './TestcasesList.svelte'
 import TestcasesSummary from './TestcasesSummary.svelte'
-import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
-import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-import { Prompt } from '$stores/promptStore.svelte'
+import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 
 //nothing here goes near the database, but a shared component on the way could reach the projects
 //store, which opens IndexedDB, which jsdom has not got
-vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 
 /**
  * The Testcases panel: the outcome of the last run on each row and inside it, a result going stale
  * when its Testcase is edited, and the values typed in place. The parsing and formatting under it
- * are tested on their own in `$lib/testcases.test.ts`; this file is named `.svelte.` so that the
+ * are tested on their own in `#lib/testcases.test.ts`; this file is named `.svelte.` so that the
  * Testcases can be `$state`, as the Project's are.
  */
 

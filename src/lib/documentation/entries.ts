@@ -1,10 +1,10 @@
-import type { InstructionDocumentation } from '$lib/languages/M68K/M68K-documentation'
-import type { MIPSInstruction } from '$lib/languages/MIPS/MIPS-documentation'
-import type { RISCVInstruction } from '$lib/languages/RISC-V/RISC-V-documentation'
-import type { X86Instruction } from '$lib/languages/X86/X86-documentation'
-import type { Z80InstructionVariant } from '$lib/languages/Z80/Z80-documentation'
-import { splitLecture } from '$lib/content/lectureSections'
-import type { DocumentationLanguage } from '$lib/search/scope'
+import type { InstructionDocumentation } from '#lib/languages/M68K/M68K-documentation.ts'
+import type { MIPSInstruction } from '#lib/languages/MIPS/MIPS-documentation.ts'
+import type { RISCVInstruction } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+import type { X86Instruction } from '#lib/languages/X86/X86-documentation.ts'
+import type { Z80InstructionVariant } from '#lib/languages/Z80/Z80-documentation.ts'
+import { splitLecture } from '#lib/content/lectureSections.ts'
+import type { DocumentationLanguage } from '#lib/search/scope.ts'
 import type { InstructionContent } from './instructions/content'
 
 /**

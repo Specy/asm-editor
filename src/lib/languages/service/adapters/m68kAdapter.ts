@@ -1,10 +1,10 @@
 import { S68k, type Location, type ProgramSymbol } from '@specy/s68k'
-import { m68kAssemblyFiles, m68kReachableFiles } from '$lib/languages/M68K/m68kAssemblyFiles'
+import { m68kAssemblyFiles, m68kReachableFiles } from '#lib/languages/M68K/m68kAssemblyFiles.ts'
 import {
     s68kColumnToUtf16,
     s68kDiagnosticToLanguageDiagnostic
-} from '$lib/languages/M68K/m68kDiagnostics'
-import { fileText, type BuildSources } from '$lib/projectFiles'
+} from '#lib/languages/M68K/m68kDiagnostics.ts'
+import { fileText, type BuildSources } from '#lib/projectFiles.ts'
 import type { LanguageSymbol, M68kAnalysisSnapshot, M68kFileAnalysisStatus } from '../protocol'
 import type { SourceLocation, SymbolKind } from '../sourceModel'
 

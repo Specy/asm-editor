@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Z80FlagEffect } from '$lib/languages/Z80/Z80-documentation'
+    import type { Z80FlagEffect } from '#lib/languages/Z80/Z80-documentation.ts'
 
     interface Props {
         flags: Z80FlagEffect[]

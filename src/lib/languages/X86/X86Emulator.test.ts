@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { X86_SSE_REGISTERS, X86_X87_REGISTERS } from '@specy/x86'
-import { Prompt } from '$stores/promptStore.svelte'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 import {
     type Register,
     type RegisterFile,
     RegisterSize
-} from '$lib/languages/commonLanguageFeatures.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { X86Emulator } from './X86Emulator.svelte'
 import { X86_START_UNIT_FILES, X86_START_UNIT_PATH } from './x86StartUnit'
 

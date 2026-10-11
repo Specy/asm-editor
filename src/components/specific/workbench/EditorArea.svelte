@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Splitter from '$cmp/shared/layout/Splitter.svelte'
+    import Splitter from '#cmp/shared/layout/Splitter.svelte'
     import EditorPane from './EditorPane.svelte'
     import SourceMapConnections from './SourceMapConnections.svelte'
     import { useWorkbench } from './workbenchContext'
@@ -53,6 +53,10 @@
                         sourcePath={session.mappingPair.source.displayedPath}
                         coloring={session.mappingColors}
                         activeColors={session.activeMappingColors}
+                        onSelect={(line) => {
+                            const source = session.mappingPair?.source
+                            if (source) session.selectMappedLines(source, [line])
+                        }}
                         sourceLine={session.mappingPair.source.highlightedLine}
                         assemblyLine={session.mappingPair.assembly.instructionLine}
                         {divider}

@@ -1,13 +1,13 @@
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
-import { analysisForModel, languageSession } from '$lib/languages/service/sessionRegistry'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { analysisForModel, languageSession } from '#lib/languages/service/sessionRegistry.ts'
 import {
     createProjectDefinitionProvider,
     createProjectDocumentSymbolProvider
-} from '$lib/languages/service/projectAssemblyLanguage'
-import { parseProjectSourceUri, projectSourceUri } from '$lib/languages/service/uri'
-import type { LanguageSymbol } from '$lib/languages/service/protocol'
-import type { SourceLocation, SymbolOccurrence } from '$lib/languages/service/sourceModel'
+} from '#lib/languages/service/projectAssemblyLanguage.ts'
+import { parseProjectSourceUri, projectSourceUri } from '#lib/languages/service/uri.ts'
+import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
+import type { SourceLocation, SymbolOccurrence } from '#lib/languages/service/sourceModel.ts'
 import {
     z80ConditionCodes,
     z80DirectiveNames,

@@ -4,7 +4,7 @@ import {
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES
-} from '$lib/languages/mars/marsDisplay'
+} from '#lib/languages/mars/marsDisplay.ts'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
     MARS_READY_BIT,
@@ -12,7 +12,7 @@ import {
     MARS_RECEIVER_DATA,
     MARS_TRANSMITTER_CONTROL,
     MARS_TRANSMITTER_DATA
-} from '$lib/languages/mars/MarsDevices'
+} from '#lib/languages/mars/MarsDevices.ts'
 import { fillPlaceholders, proseEntries, type DocumentationEntry } from '../entries'
 import template from './screen.md?raw'
 

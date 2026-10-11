@@ -480,7 +480,7 @@ export const riscvGnuDirectiveNames = Object.keys(gnuDirectiveDescriptions)
  * The syscalls live in `documentation/mars/riscvSyscalls.ts`, free of the Core, so that build
  * scripts can read them.
  */
-export { riscvSyscalls as riscvSyscall } from '$lib/documentation/mars/riscvSyscalls'
+export { riscvSyscalls as riscvSyscall } from '#lib/documentation/mars/riscvSyscalls.ts'
 
 export type RISCVRegisterDoc = {
     /** The name, or the range of names, the panel and the assembler spell the registers with. */

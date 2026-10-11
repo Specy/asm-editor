@@ -1,7 +1,7 @@
 import { type MIPSAssembleError } from '@specy/mips'
 import { RISCV, type RISCVAssembleError } from '@specy/risc-v'
-import { makeMipsCore } from '$lib/languages/MIPS/MIPS-core'
-import { makeRiscVCore, type RiscVLink } from '$lib/languages/RISC-V/RISC-V-core'
+import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
+import { makeRiscVCore, type RiscVLink } from '#lib/languages/RISC-V/RISC-V-core.ts'
 import {
     coreLibrary,
     loadedRuntimeFunctions,
@@ -9,22 +9,22 @@ import {
     loadRuntimeFunctions,
     loadRuntimeLibrary,
     runtimeLibraryHint
-} from '$lib/sourceRuntime/runtimeLibrary'
-import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '$lib/runtimeAbi'
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
-import { normalizeMarsDisplay } from '$lib/languages/mars/marsDisplay'
+} from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { normalizeMarsDisplay } from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
-} from '$lib/languages/mars/screenDirective'
+} from '#lib/languages/mars/screenDirective.ts'
 import {
     makeTokenSpanIndex,
     tokenSpanEnd,
     type TokenSpanIndex
-} from '$lib/languages/mars/tokenSpans'
+} from '#lib/languages/mars/tokenSpans.ts'
 import {
     buildAssemblerProfile,
     fileText,
@@ -32,7 +32,7 @@ import {
     sourceText,
     textAssemblyFiles,
     type BuildSources
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 import type {
     ProjectAnalysisSnapshot,
     ProjectAnalysisTarget,

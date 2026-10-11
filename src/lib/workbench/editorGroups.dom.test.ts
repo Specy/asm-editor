@@ -2,23 +2,26 @@ import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushSync } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
-import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
-import { fileFingerprint } from '$lib/sourceCompilation/records'
+import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
+import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
 import { fileTransfer } from './__fixtures__/fileTransfer'
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
-import { X86_START_UNIT } from '$lib/languages/X86/x86StartUnit'
-import { CompilationFailedError } from '$lib/languages/BaseEmulator.svelte'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { X86_START_UNIT } from '#lib/languages/X86/x86StartUnit.ts'
+import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
+import type { StoredProject } from '#lib/Project.svelte.ts'
+import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import {
     ENVIRONMENT_HEADER_PATH,
     loadedEnvironmentHeader,
     loadEnvironmentHeader
-} from '$lib/sourceRuntime/environmentLibrary'
+} from '#lib/sourceRuntime/environmentLibrary.ts'
 
-vi.mock('$lib/sourceCompilation/compileProjectSource', () => ({ compileProjectSource: vi.fn() }))
+vi.mock('#lib/sourceCompilation/compileProjectSource.ts', () => ({ compileProjectSource: vi.fn() }))
 
 const disposers: (() => void)[] = []
-function setup(language?: 'X86') {
-    const fixture = editorGroupsFixture(language)
+function setup(language?: 'X86', data?: StoredProject, host?: Partial<WorkbenchSessionHost>) {
+    const fixture = editorGroupsFixture(language, data, host)
     disposers.push(fixture.dispose)
     flushSync()
     return fixture
@@ -57,6 +60,154 @@ function result(
 afterEach(() => {
     disposers.splice(0).forEach((dispose) => dispose())
     vi.resetAllMocks()
+    preferencesStore.values.autoSave.value = true
+})
+
+describe('saved editor tabs', () => {
+    it('opens the Entry file for an older Project without marking it changed', () => {
+        const onChange = vi.fn(),
+            onSave = vi.fn()
+        const { session, project } = setup(undefined, {}, { onChange, onSave })
+        expect(session.groups[0].tabs.paths).toEqual(['main.c'])
+        expect(project.toObject()).not.toHaveProperty('openTabs')
+        expect(onChange).not.toHaveBeenCalled()
+        expect(onSave).not.toHaveBeenCalled()
+    })
+
+    it('restores tab order and the last selected File independently of the Entry', () => {
+        const { session } = setup(undefined, {
+            openTabs: ['value.h', 'other.c', 'main.c'],
+            activeTab: 'other.c'
+        })
+        expect(session.groups[0].tabs.paths).toEqual(['value.h', 'other.c', 'main.c'])
+        expect(session.groups[0].displayedPath).toBe('other.c')
+    })
+
+    it.each(['main.c', 'missing.c'])(
+        'uses the first saved tab when active path %s is missing or no longer open',
+        (activeTab) => {
+            const { session } = setup(undefined, {
+                openTabs: ['missing.c', 'value.h', 'other.c'],
+                activeTab
+            })
+            expect(session.groups[0].tabs.paths).toEqual(['value.h', 'other.c'])
+            expect(session.groups[0].displayedPath).toBe('value.h')
+        }
+    )
+
+    it('does not restore a tab or selection for a missing Entry file', () => {
+        const { session } = setup(undefined, {
+            entry: 'missing.c',
+            openTabs: ['missing.c'],
+            activeTab: 'missing.c'
+        })
+        expect(session.groups[0].tabs.paths).toEqual([])
+        expect(session.groups[0].displayedPath).toBe('')
+    })
+
+    it('saves opens, selection changes and closes, then restores them in a new session', () => {
+        const onSave = vi.fn()
+        const { session, project } = setup(undefined, {}, { onSave })
+        session.selectFile('value.h')
+        session.selectFile('other.c')
+        session.activateTab('value.h')
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c', 'value.h', 'other.c'])
+        expect(project.activeTab).toBe('value.h')
+        expect(onSave).toHaveBeenCalledExactlyOnceWith({ silent: true })
+        session.closeTab('value.h')
+        flushSync()
+        const restored = setup(undefined, project.toObject()).session.groups[0]
+        expect(restored.tabs.paths).toEqual(['main.c', 'other.c'])
+        expect(restored.displayedPath).toBe('other.c')
+    })
+
+    it('preserves closing every tab across a reload', () => {
+        const { session, project } = setup()
+        session.closeTab('main.c')
+        flushSync()
+        const restored = setup(undefined, project.toObject()).session.groups[0]
+        expect(project.openTabs).toEqual([])
+        expect(project.activeTab).toBeUndefined()
+        expect(restored.tabs.paths).toEqual([])
+        expect(restored.displayedPath).toBe('')
+    })
+
+    it('remembers tabs across both panes and the last focused editor', async () => {
+        const { session, project } = setup()
+        const left = session.groups[0],
+            right = openSecond(session, 'main.s')
+        session.selectFile('value.h', left)
+        session.focusEditorGroup(right)
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c', 'value.h', 'main.s'])
+        expect(project.activeTab).toBe('main.s')
+        await session.transferTab('value.h', left, right)
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c', 'main.s', 'value.h'])
+        expect(project.activeTab).toBe('value.h')
+        const restored = setup(undefined, project.toObject()).session
+        expect(restored.groups).toHaveLength(1)
+        expect(restored.groups[0].tabs.paths).toEqual(project.openTabs)
+        expect(restored.groups[0].displayedPath).toBe('value.h')
+        session.closeGroup(right)
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c'])
+        expect(project.activeTab).toBe('main.c')
+    })
+
+    it('updates saved paths after a rename or deletion', () => {
+        const { session, project } = setup()
+        session.selectFile('other.c')
+        project.fileSystem.rename('other.c', 'renamed.c')
+        session.fileRenamed('other.c', 'renamed.c')
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c', 'renamed.c'])
+        expect(project.activeTab).toBe('renamed.c')
+        project.fileSystem.remove('renamed.c')
+        session.fileDeleted('renamed.c')
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c'])
+        expect(project.activeTab).toBe('main.c')
+    })
+
+    it('keeps the last Project tab when navigating to transient Build Files', async () => {
+        const { session, project, emulator } = setup()
+        session.selectFile('value.h')
+        flushSync()
+        emulator.buildSources = {
+            entry: 'build-only.s',
+            files: { 'build-only.s': { encoding: 'plain', content: 'nop' } }
+        }
+        emulator.canExecute = true
+        project.fileSystem.beginSession()
+        await session.revealSourceLocation('build-only.s', 0)
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c', 'value.h'])
+        expect(project.activeTab).toBe('value.h')
+        session.activateTab('main.c')
+        flushSync()
+        expect(project.activeTab).toBe('main.c')
+    })
+
+    it('waits for Save when autosave is off and skips persistence for readonly hosts', () => {
+        preferencesStore.values.autoSave.value = false
+        const onChange = vi.fn(),
+            onSave = vi.fn()
+        const { session, project } = setup(undefined, {}, { onChange, onSave })
+        session.selectFile('other.c')
+        flushSync()
+        expect(project.activeTab).toBe('other.c')
+        expect(onChange).toHaveBeenCalledOnce()
+        expect(onSave).not.toHaveBeenCalled()
+        session.save()
+        expect(onSave).toHaveBeenCalledExactlyOnceWith({ silent: false })
+        const readonly = setup(undefined, {}, { readonly: true, onChange, onSave })
+        readonly.session.selectFile('other.c')
+        flushSync()
+        expect(readonly.project.openTabs).toBeUndefined()
+        expect(onChange).toHaveBeenCalledOnce()
+    })
 })
 
 describe('independent editor groups', () => {
@@ -127,7 +278,8 @@ describe('independent editor groups', () => {
         expect(left.tabs.paths).toEqual(['main.c'])
         expect(right.tabs.paths).toEqual(['main.s', 'other.c'])
         expect(right.displayedPath).toBe('other.c')
-        expect(project.toObject()).toEqual(before)
+        expect(project.toObject().files).toEqual(before.files)
+        expect(project.toObject().compilations).toEqual(before.compilations)
         expect(project.sourceMaps['main.s']).toBe(map)
         expect(session.draggedFile).toBeUndefined()
     })

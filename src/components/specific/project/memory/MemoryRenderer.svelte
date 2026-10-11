@@ -5,15 +5,15 @@
         readOnlyMemoryAt,
         regionChunkStart,
         regionsAt
-    } from '$lib/languages/memoryRegions'
+    } from '#lib/languages/memoryRegions.ts'
     import type {
         MemoryRegion,
         DataLabel,
         ReadOnlyMemory
-    } from '$lib/languages/commonLanguageFeatures.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
     import MdTextFields from '~icons/ic/baseline-text-fields'
     import FaTimes from '~icons/fa-solid/times'
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
@@ -26,14 +26,14 @@
         isMemoryChunkEqual,
         type MemoryReading,
         parseMemoryPoke
-    } from '$cmp/specific/project/memory/memoryTabUtils'
-    import Row from '$cmp/shared/layout/Row.svelte'
+    } from '#cmp/specific/project/memory/memoryTabUtils.ts'
+    import Row from '#cmp/shared/layout/Row.svelte'
     import {
         type ColorizedLabel,
         type DiffedMemory,
         RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { unsignedBigIntToSigned } from '$lib/utils'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { unsignedBigIntToSigned } from '#lib/utils.ts'
 
     const id = Math.random().toString(36).substring(8)
 

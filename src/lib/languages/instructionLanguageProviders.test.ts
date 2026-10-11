@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { createMIPSCompletion, createMIPSSignatureHelpProvider } from './MIPS/MIPS-language'
 import { createRISCVCompletion, createRISCVSignatureHelpProvider } from './RISC-V/RISC-V-language'
 import { createZ80SignatureHelpProvider } from './Z80/Z80-language'

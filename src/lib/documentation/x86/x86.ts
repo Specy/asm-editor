@@ -1,4 +1,4 @@
-import { headingSlug } from '$lib/content/headings'
+import { headingSlug } from '#lib/content/headings.ts'
 import {
     X86_COMMON_SYSCALLS,
     X86_CONDITION_CODES,
@@ -26,8 +26,8 @@ import {
     type X86Instruction,
     type X86Syscall,
     type X86TokenDoc
-} from '$lib/languages/X86/X86-documentation'
-import { capitalize } from '$lib/utils'
+} from '#lib/languages/X86/X86-documentation.ts'
+import { capitalize } from '#lib/utils.ts'
 import {
     fillPlaceholders,
     names,

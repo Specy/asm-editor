@@ -1,7 +1,7 @@
 import type monaco from 'monaco-editor'
-import { languageSession } from '$lib/languages/service/sessionRegistry'
-import { parseProjectSourceUri } from '$lib/languages/service/uri'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import { languageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { parseProjectSourceUri } from '#lib/languages/service/uri.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import {
     loadedRuntimeFunctions,
     loadedRuntimeLibrary,

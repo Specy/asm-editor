@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRuntimeLink } from '$lib/sourceCompilation/assemblyProfile'
-import { cleanCompilationRecords, type CompilationRecord } from '$lib/sourceCompilation/records'
-import { cleanProjectSettings, resolveProjectSettings } from '$lib/projectSettings'
-import { normalizeBuildInput, ProjectFormatError, type BuildSources } from '$lib/projectFiles'
-import { unsupportedRuntimeAbi } from '$lib/runtimeAbi'
+import { resolveRuntimeLink } from '#lib/sourceCompilation/assemblyProfile.ts'
+import { cleanCompilationRecords, type CompilationRecord } from '#lib/sourceCompilation/records.ts'
+import { cleanProjectSettings, resolveProjectSettings } from '#lib/projectSettings.ts'
+import { normalizeBuildInput, ProjectFormatError, type BuildSources } from '#lib/projectFiles.ts'
+import { unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import { runtimeLibraryHint, unresolvedSymbol, type RuntimeFunctionList } from './runtimeLibrary'
 import {
     mipsCallingConvention,

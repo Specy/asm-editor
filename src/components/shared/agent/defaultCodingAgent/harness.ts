@@ -1,8 +1,8 @@
 import type { RegisteredTool } from '@discerns/sdk'
-import type { Emulator } from '$lib/languages/Emulator'
-import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
-import { fileText, type ProjectFiles, type ProjectFile } from '$lib/projectFiles'
-import { defaultEntryPath } from '$lib/Project.svelte'
+import type { Emulator } from '#lib/languages/Emulator.ts'
+import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import { fileText, type ProjectFiles, type ProjectFile } from '#lib/projectFiles.ts'
+import { defaultEntryPath } from '#lib/Project.svelte.ts'
 import {
     type AgentToolAllowList,
     type DefaultCodingAgentToolContext,

@@ -1,10 +1,10 @@
 <script lang="ts">
-    import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
+    import FloatingContainer from '#cmp/shared/layout/FloatingContainer.svelte'
     import TestcasesList from './TestcasesList.svelte'
     import TestcasesSummary from './TestcasesSummary.svelte'
-    import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
-    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+    import type { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
     /** The Interactive editor's Testcases: `TestcasesList` in a floating window. */
     interface Props {

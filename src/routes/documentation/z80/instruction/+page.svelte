@@ -1,7 +1,7 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
-    import { z80InstructionNames } from '$lib/languages/Z80/Z80-documentation'
+    import { z80InstructionNames } from '#lib/languages/Z80/Z80-documentation.ts'
     import { resolve } from '$app/paths'
 
     type Group = {

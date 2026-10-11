@@ -1,21 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { GCC_INTEL_V1 } from '@specy/x86/compiler-output'
-import { X86Emulator } from '$lib/languages/X86/X86Emulator.svelte'
-import type { Testcase } from '$lib/Project.svelte'
-import type { ProjectFiles } from '$lib/projectFiles'
+import { X86Emulator } from '#lib/languages/X86/X86Emulator.svelte.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import type { ProjectFiles } from '#lib/projectFiles.ts'
 import {
     compileSource,
     createCompilerRequest,
     SourceCompilationError,
     type CompilationRequest
-} from '$lib/sourceCompilation/compilerExplorer'
+} from '#lib/sourceCompilation/compilerExplorer.ts'
 import {
     cleanCompilationRecords,
     generatedAssemblyPath,
     type Optimization
-} from '$lib/sourceCompilation/records'
-import { CURRENT_RUNTIME_ABI } from '$lib/runtimeAbi'
+} from '#lib/sourceCompilation/records.ts'
+import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { loadRuntimeHeaders } from './runtimeLibrary'
 import { ENVIRONMENT_HEADER_PATH } from './environmentLibrary'
 

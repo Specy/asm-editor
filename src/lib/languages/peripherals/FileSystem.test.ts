@@ -13,7 +13,7 @@ import {
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
     ProjectFormatError
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 
 const encode = (text: string) => new TextEncoder().encode(text)
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)

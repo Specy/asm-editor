@@ -1,10 +1,10 @@
 <script lang="ts">
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import { versions } from './versions'
     import FaCircle from '~icons/fa-solid/circle'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
 </script>
 
 <svelte:head>

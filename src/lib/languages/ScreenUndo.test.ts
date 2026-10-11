@@ -4,7 +4,7 @@ import { Z80Emulator } from './Z80/Z80Emulator.svelte'
 import { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import { RISCVEmulator } from './RISC-V/RISC-VEmulator.svelte'
 import { FileSystem } from './peripherals/FileSystem'
-import { fileText } from '$lib/projectFiles'
+import { fileText } from '#lib/projectFiles.ts'
 import { CPU_REGISTER_FILE_ID } from './GenericEmulator.svelte'
 
 const display = { unitWidth: 8, unitHeight: 8, width: 64, height: 64, baseAddress: 0x10010000 }

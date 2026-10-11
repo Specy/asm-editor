@@ -1,16 +1,16 @@
 <script lang="ts">
     import { onMount, untrack, type Snippet } from 'svelte'
-    import type { Project } from '$lib/Project.svelte'
-    import type { Emulator } from '$lib/languages/Emulator'
-    import { WorkbenchSession } from '$lib/workbench/WorkbenchSession.svelte'
-    import { WorkbenchUi } from '$lib/workbench/WorkbenchUi.svelte'
-    import { watchViewport } from '$lib/workbench/viewport.svelte'
+    import type { Project } from '#lib/Project.svelte.ts'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
+    import { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
+    import { watchViewport } from '#lib/workbench/viewport.svelte.ts'
     import type {
         BuiltinPanelId,
         PanelAccess,
         WorkbenchHostLink,
         WorkbenchHostPanel
-    } from '$lib/workbench/hostApi'
+    } from '#lib/workbench/hostApi.ts'
     import { setWorkbenchContext, type RailEntry } from './workbenchContext'
     import WorkbenchDesktop from './WorkbenchDesktop.svelte'
     import WorkbenchCompact from './WorkbenchCompact.svelte'
@@ -20,9 +20,9 @@
     import FaBook from '~icons/fa-solid/book'
     import FaShareAlt from '~icons/fa-solid/share-alt'
     import FaCog from '~icons/fa-solid/cog'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import { documentationLanguageOf, languageScope } from '$lib/search/scope'
-    import { searchClient } from '$lib/search/searchClient.svelte'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import { documentationLanguageOf, languageScope } from '#lib/search/scope.ts'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import './workbench.css'
 
     interface Props {

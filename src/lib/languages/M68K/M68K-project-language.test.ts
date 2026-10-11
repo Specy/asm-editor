@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { MonacoType } from '$lib/monaco/Monaco'
-import { normalizeBuildInput } from '$lib/projectFiles'
-import { registerLanguageSession } from '$lib/languages/service/sessionRegistry'
-import { analyzeM68kProject } from '$lib/languages/service/adapters/m68kAdapter'
-import { projectSourceUri } from '$lib/languages/service/uri'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { registerLanguageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { analyzeM68kProject } from '#lib/languages/service/adapters/m68kAdapter.ts'
+import { projectSourceUri } from '#lib/languages/service/uri.ts'
 import {
     createM68kDefinitionProvider,
     createM68kDocumentLinkProvider,

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { BASE_CODE } from '$lib/Config'
-import { createEmulator } from '$lib/languages/Emulator'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
-import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import { BASE_CODE } from '#lib/Config.ts'
+import { createEmulator } from '#lib/languages/Emulator.ts'
+import { InterpreterStatus } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * The default program of a new project, built and run against the real Cores, the way

@@ -1,15 +1,15 @@
 <script lang="ts">
-    import InteractiveEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import { type AvailableLanguages } from '$lib/Project.svelte'
+    import InteractiveEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import { type AvailableLanguages } from '#lib/Project.svelte.ts'
     import InstructionPreview from './InstructionPreview.svelte'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
+    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import FaExternalLink from '~icons/fa-solid/external-link-alt'
-    import { createSharePayload } from '$lib/utils'
-    import { makeProject } from '$lib/Project.svelte'
+    import { createSharePayload } from '#lib/utils.ts'
+    import { makeProject } from '#lib/Project.svelte.ts'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
-    import type { RegisterFormat } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { EXAMPLE_EDITOR_FONT } from '$lib/monaco/exampleFont'
+    import type { RegisterFormat } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
     import './instructionExample.css'
 
     interface Props {

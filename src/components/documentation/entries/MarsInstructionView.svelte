@@ -3,7 +3,7 @@
      * A MIPS or RISC-V instruction: both Cores describe a mnemonic as a list of variants, one per
      * operand shape, many of which share a description.
      */
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import CodeSample from './CodeSample.svelte'
 
     type Variant = { description: string; example: string; isRv64Only?: boolean }

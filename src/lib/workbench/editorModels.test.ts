@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EditorSource } from '$cmp/specific/project/editorSource'
-import { projectSourceModelKey } from '$lib/languages/service/uri'
+import type { EditorSource } from '#cmp/specific/project/editorSource.ts'
+import { projectSourceModelKey } from '#lib/languages/service/uri.ts'
 import { EditorModels } from './editorModels'
 
 function harness() {

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import { createEventDispatcher } from 'svelte'
     import FaUndo from '~icons/fa-solid/undo'
     import {
@@ -7,10 +7,10 @@
         type MutationOperation,
         type PokeWrite,
         type RegisterSize
-    } from '$lib/languages/commonLanguageFeatures.svelte'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
-    import { sizeName } from '$lib/languages/sizeNames'
-    import { statusFlagsFromBits } from '$lib/languages/statusFlagBits'
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { sizeName } from '#lib/languages/sizeNames.ts'
+    import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
 
     interface Props {
         step: ExecutionStep

@@ -3,7 +3,9 @@ import ts from 'typescript-eslint'
 import svelte from 'eslint-plugin-svelte'
 import prettier from 'eslint-config-prettier'
 import globals from 'globals'
-import svelteConfig from './svelte.config.js'
+import { loadConfig } from '@sveltejs/load-config'
+
+const svelteConfig = (await loadConfig('./', { traverse: false }))?.config
 
 export default ts.config(
     { ignores: ['src/lib/languages/demangle/module.js'] },
@@ -35,7 +37,7 @@ export default ts.config(
     },
     {
         // The service worker runs off-main-thread and has its own global scope.
-        files: ['src/service-worker.ts'],
+        files: ['src/service-worker/**/*.ts'],
         languageOptions: {
             globals: { ...globals.serviceworker }
         }

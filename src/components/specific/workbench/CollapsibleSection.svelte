@@ -7,7 +7,7 @@
      */
     import { tick, untrack, type Snippet } from 'svelte'
     import FaAngleRight from '~icons/fa-solid/angle-right'
-    import { workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
+    import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
 
     interface Props {
         /** Where the folded state is remembered. */

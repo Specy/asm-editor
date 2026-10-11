@@ -1,4 +1,4 @@
-import { resolveFilePath, type ProjectFiles } from '$lib/projectFiles'
+import { resolveFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
 import { fileFingerprint } from './fingerprints'
 
 /**

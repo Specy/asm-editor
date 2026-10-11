@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Row from '$cmp/shared/layout/Row.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
 
     interface Props {
         children?: import('svelte').Snippet

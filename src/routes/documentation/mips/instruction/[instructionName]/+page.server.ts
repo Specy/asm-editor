@@ -1,9 +1,9 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
-import { chapters } from '$lib/documentation/mips/mips'
-import { mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
-import { mipsInstructionContent } from '$lib/documentation/mips/instructionContent'
-import { instructionDescription } from '$lib/documentation/instructions/content'
+import { chapters } from '#lib/documentation/mips/mips.ts'
+import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
+import { mipsInstructionContent } from '#lib/documentation/mips/instructionContent.ts'
+import { instructionDescription } from '#lib/documentation/instructions/content.ts'
 
 export const load = (async ({ params }) => {
     const instruction = mipsInstructionMap.get(params.instructionName)

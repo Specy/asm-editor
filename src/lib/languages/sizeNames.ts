@@ -1,5 +1,5 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
  * What each Target calls the widths the editor groups values by.

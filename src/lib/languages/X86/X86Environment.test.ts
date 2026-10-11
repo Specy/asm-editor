@@ -4,7 +4,7 @@ import { X86Emulator } from './X86Emulator.svelte'
 import { RandomSource } from '../peripherals/RandomSource'
 import { FileSystem } from '../peripherals/FileSystem'
 import { ProgramClock } from '../peripherals/ProgramClock'
-import type { Testcase } from '$lib/Project.svelte'
+import type { Testcase } from '#lib/Project.svelte.ts'
 
 const exit = ['mov eax, 60', 'xor edi, edi', 'syscall']
 const sys = (number: number, ...args: (string | number)[]) => [

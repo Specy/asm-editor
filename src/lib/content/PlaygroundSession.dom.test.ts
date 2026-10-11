@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushSync } from 'svelte'
-import { makeProject } from '$lib/Project.svelte'
-import { compilerExplorerDriver, compileSource } from '$lib/sourceCompilation/compilerExplorer'
-import fixture from '$lib/sourceCompilation/fixtures/risc-v-c-O0.json'
+import { makeProject } from '#lib/Project.svelte.ts'
+import { compilerExplorerDriver, compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
+import fixture from '#lib/sourceCompilation/fixtures/risc-v-c-O0.json'
 import { PlaygroundSession } from './PlaygroundSession.svelte'
 import { decodePlaygroundProgram, encodePlaygroundProgram } from './playgroundProgram'
 import type monaco from 'monaco-editor'
-import { resolveSourceHelpContext } from '$lib/sourceLanguageHelp/context'
-import { includeSuggestions } from '$lib/sourceLanguageHelp/includes'
-import { sourceHelpEntries } from '$lib/sourceLanguageHelp/catalog'
+import { resolveSourceHelpContext } from '#lib/sourceLanguageHelp/context.ts'
+import { includeSuggestions } from '#lib/sourceLanguageHelp/includes.ts'
+import { sourceHelpEntries } from '#lib/sourceLanguageHelp/catalog.ts'
 
-vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 const text = (content: string) => ({ encoding: 'plain' as const, content })
 const disposers: (() => void)[] = []
 function setup(assemblyEntry = false) {

@@ -1,5 +1,5 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { isShippedRuntimeAbi } from '$lib/runtimeAbi'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { isShippedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import { ENVIRONMENT_HEADER_PATH } from './environmentLibrary'
 
 /** One public function of the Runtime library, as its header declares and documents it. */

@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * The **Search scope** ([CONTEXT.md](../../../CONTEXT.md)): what one search looks through, set by the

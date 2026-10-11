@@ -1,5 +1,5 @@
 import { RISCV, type RuntimeLibrary } from '@specy/risc-v'
-import { validateAssemblerProfile, type AssemblerProfile } from '$lib/assemblerProfiles'
+import { validateAssemblerProfile, type AssemblerProfile } from '#lib/assemblerProfiles.ts'
 
 /** What a Build links besides its Files: the Runtime library and the global execution starts at. */
 export type RiscVLink = {

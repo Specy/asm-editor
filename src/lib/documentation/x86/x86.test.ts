@@ -11,7 +11,7 @@ import {
     X86_REGISTERS,
     X86_SYSCALLS,
     x86DocumentedNames
-} from '$lib/languages/X86/X86-documentation'
+} from '#lib/languages/X86/X86-documentation.ts'
 import {
     entries as instructionPages,
     load as loadInstructionPage

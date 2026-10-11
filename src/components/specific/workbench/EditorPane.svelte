@@ -1,9 +1,9 @@
 <script lang="ts">
-    import Editor from '$cmp/specific/project/Editor.svelte'
-    import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
-    import { preferencesStore } from '$stores/preferencesStore.svelte'
-    import { sourceLanguage } from '$lib/sourceCompilation/records'
-    import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
+    import Editor from '#cmp/specific/project/Editor.svelte'
+    import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+    import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
+    import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import FileTabs from './FileTabs.svelte'
     import LibraryMemberNotice from './LibraryMemberNotice.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
@@ -79,6 +79,7 @@
     ondragovercapture={over}
     ondragleavecapture={leave}
     ondropcapture={drop}
+    onfocusin={() => session.focusEditorGroup(group)}
 >
     <FileTabs {group} />
     {#if group.displayedLibraryMember && group.displayedFile}

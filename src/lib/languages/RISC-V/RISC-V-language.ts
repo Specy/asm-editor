@@ -1,4 +1,4 @@
-import type { MonacoType } from '$lib/monaco/Monaco'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import type monaco from 'monaco-editor'
 import {
     RISCVAddressingModes,
@@ -11,18 +11,18 @@ import {
     riscvVariantOperands
 } from './RISC-V-documentation'
 import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
-import { languageSession } from '$lib/languages/service/sessionRegistry'
+import { languageSession } from '#lib/languages/service/sessionRegistry.ts'
 import {
     runtimeFunctionDocumentation,
     runtimeFunctionsForModel
-} from '$lib/sourceRuntime/runtimeLanguage'
-import { parseProjectSourceUri } from '$lib/languages/service/uri'
+} from '#lib/sourceRuntime/runtimeLanguage.ts'
+import { parseProjectSourceUri } from '#lib/languages/service/uri.ts'
 import {
     assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
     type AssemblyTextOptions
-} from '$lib/languages/service/assemblyText'
+} from '#lib/languages/service/assemblyText.ts'
 
 export const RISCV_TEXT_OPTIONS = {
     comment: '#',

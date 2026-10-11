@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { GCC_INTEL_V1, translateCompilerOutput } from '@specy/x86/compiler-output'
-import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { X86Emulator } from '$lib/languages/X86/X86Emulator.svelte'
-import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
+import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { X86Emulator } from '#lib/languages/X86/X86Emulator.svelte.ts'
+import { loadRuntimeHeaders } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
     compilationInputs,
     compilerPreset,
@@ -22,7 +22,7 @@ import {
     type CompilationTarget,
     type Optimization
 } from './records'
-import type { ProjectFiles } from '$lib/projectFiles'
+import type { ProjectFiles } from '#lib/projectFiles.ts'
 
 type Fixture = {
     target: CompilationTarget

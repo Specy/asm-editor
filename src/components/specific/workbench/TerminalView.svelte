@@ -3,8 +3,8 @@
      * The Terminal tab: the Emulator's runtime errors, then the program's output, with a caret
      * where a read waits for what is typed. It follows the end as the program writes.
      */
-    import TerminalConsole from '$cmp/shared/terminal/TerminalConsole.svelte'
-    import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+    import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'
+    import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 
     interface Props {
         terminal: Terminal

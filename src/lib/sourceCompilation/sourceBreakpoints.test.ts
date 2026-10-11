@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectFiles } from '$lib/projectFiles'
+import type { ProjectFiles } from '#lib/projectFiles.ts'
 import { fileFingerprint, type CompilationRecord, type CompilationSourceMap } from './records'
 import {
     blockEntryLines,

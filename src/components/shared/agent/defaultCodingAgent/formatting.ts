@@ -1,4 +1,4 @@
-import type { Emulator } from '$lib/languages/Emulator'
+import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
     defaultRegisterKind,
     RegisterSize,
@@ -7,12 +7,12 @@ import {
     type RegisterFile,
     formatDiagnostic,
     toHexString
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { renderRegister } from '$lib/languages/registerFormats'
-import { sizeName } from '$lib/languages/sizeNames'
-import { terminationSummary } from '$lib/languages/termination'
-import type { AvailableLanguages } from '$lib/Project.svelte'
-import { unsignedBigIntToSigned } from '$lib/utils'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { renderRegister } from '#lib/languages/registerFormats.ts'
+import { sizeName } from '#lib/languages/sizeNames.ts'
+import { terminationSummary } from '#lib/languages/termination.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import { unsignedBigIntToSigned } from '#lib/utils.ts'
 
 export type FormattedNumber = {
     decimal: string

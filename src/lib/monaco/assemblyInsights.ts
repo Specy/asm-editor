@@ -1,5 +1,5 @@
 import type monaco from 'monaco-editor'
-import type { BuildArtifact } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { BuildArtifact } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { MonacoType } from './Monaco'
 
 export type AssemblyInsightOptions = {

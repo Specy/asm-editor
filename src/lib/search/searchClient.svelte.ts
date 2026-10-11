@@ -1,5 +1,5 @@
-import { browser } from '$app/environment'
-import { base } from '$app/paths'
+import { browser } from '$app/env'
+import { resolve } from '$app/paths'
 import modelUrls from 'virtual:search-model'
 import type { SearchResult } from './engine'
 import type { SearchModelUrls } from './model'
@@ -16,7 +16,6 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * browser asks to save data; there is no switch for it. Until it is ready, search matches words
  * only, and a query typed after it is ready uses both.
  */
-
 export type ModelStatus =
     /** Not asked for yet. */
     | 'idle'
@@ -37,18 +36,22 @@ function savesData(): boolean {
 }
 
 function shardUrl(shard: ShardId): string {
-    return new URL(`${base}/search/${shard}.json`, location.href).href
+    return new URL(resolve(`search/${shard}.json`), location.href).href
 }
 
 class SearchClient {
     model = $state<ModelStatus>('idle')
-
     private worker: Promise<Worker> | null = null
     private next = 0
+
     private readonly pending = new Map<
         number,
-        { resolve: (value: unknown) => void; reject: (error: Error) => void }
+        {
+            resolve: (value: unknown) => void
+            reject: (error: Error) => void
+        }
     >()
+
     private readonly shards = new Map<ShardId, Promise<void>>()
     private modelLoad: Promise<void> | null = null
 

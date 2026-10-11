@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { analyzeM68kProject } from './m68kAdapter'
 
 describe('M68K Project analysis', () => {

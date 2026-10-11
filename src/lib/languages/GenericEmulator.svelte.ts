@@ -1,4 +1,4 @@
-import { buildSourcesEqual } from '$lib/projectFiles'
+import { buildSourcesEqual } from '#lib/projectFiles.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 import { mergeMemoryRegions, readOnlyMemoryAt } from './memoryRegions'
 import {
@@ -6,7 +6,7 @@ import {
     CompilationFailedError,
     type EmulatorConfig,
     type Instruction
-} from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BaseEmulatorActions,
     type BaseEmulatorState,
@@ -30,17 +30,17 @@ import {
     resolveRegisterFileLayout,
     type SourceBreakpoint,
     type UnreadableBytes
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { type MemoryPage, readMemoryPage } from '$lib/languages/memoryPage'
-import { Terminal, type TerminalReadOptions } from '$lib/languages/peripherals/Terminal.svelte'
-import { terminalTextConventions } from '$lib/languages/peripherals/terminalText'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { type MemoryPage, readMemoryPage } from '#lib/languages/memoryPage.ts'
+import { Terminal, type TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { terminalTextConventions } from '#lib/languages/peripherals/terminalText.ts'
 import {
     createInjectedPeripherals,
     type EmulatorPeripherals
-} from '$lib/languages/peripherals/peripheralSet'
-import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import { RandomSource } from '$lib/languages/peripherals/RandomSource'
-import type { Termination } from '$lib/languages/termination'
+} from '#lib/languages/peripherals/peripheralSet.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
+import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import type { Termination } from '#lib/languages/termination.ts'
 import {
     COMPUTE_SLICE_MS,
     nextSpeedCorrection,
@@ -48,20 +48,23 @@ import {
     SCREEN_ACTIVITY_MS,
     SCREEN_SLICE_MS,
     yieldToHost
-} from '$lib/languages/ExecutionSlice'
-import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
-import { createDebouncer } from '$lib/utils'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
-import { projectSettingDefault } from '$lib/projectSettings'
-import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+} from '#lib/languages/ExecutionSlice.ts'
+import type { Testcase, TestcaseResult, TestcaseValidationError } from '#lib/Project.svelte.ts'
+import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '#lib/Config.ts'
+import { createDebouncer } from '#lib/utils.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import { projectSettingDefault } from '#lib/projectSettings.ts'
+import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import {
     byteSliceToNum,
     isMemoryChunkEqual,
     numberToByteSlice
-} from '$cmp/specific/project/memory/memoryTabUtils'
-import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
-import { Prompt } from '$stores/promptStore.svelte'
+} from '#cmp/specific/project/memory/memoryTabUtils.ts'
+import {
+    ExecutionController,
+    type ExecutionGeneration
+} from '#lib/languages/ExecutionController.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 import structuredClone from '@ungap/structured-clone'
 import {
     normalizeBuildInput,
@@ -71,12 +74,12 @@ import {
     type BuildInput,
     type BuildSources,
     type ProjectFiles
-} from '$lib/projectFiles'
+} from '#lib/projectFiles.ts'
 import {
     FileSystem,
     type FileDescriptorOptions,
     type FileSystemSession
-} from '$lib/languages/peripherals/FileSystem'
+} from '#lib/languages/peripherals/FileSystem.ts'
 
 /**
  * How often the panels a user watches — registers, memory, the call stack, the undo history — are

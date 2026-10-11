@@ -1,10 +1,10 @@
-import type { SearchResult } from '$lib/search/engine'
+import type { SearchResult } from '#lib/search/engine.ts'
 import {
     documentationLanguageOf,
     scopeForAgent,
     type AgentSearchPlace,
     type SearchScope
-} from '$lib/search/scope'
+} from '#lib/search/scope.ts'
 import type { DocumentationSearchAnswer, DocumentationSearchHit, SupportedLanguage } from './types'
 
 /**
@@ -66,7 +66,7 @@ export async function searchForAgent(
     if (!scope) {
         throw new Error('This page has no language of its own: say which one to search.')
     }
-    const { searchClient } = await import('$lib/search/searchClient.svelte')
+    const { searchClient } = await import('#lib/search/searchClient.svelte.ts')
     // An agent that searches once will search again: let the model load for the next query.
     void searchClient.loadModel()
     const answer = await searchClient.search(scope, query, limit)

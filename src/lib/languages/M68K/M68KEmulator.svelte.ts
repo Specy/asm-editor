@@ -19,13 +19,13 @@ import {
     type CompileResult,
     EmulatorStatus,
     type Instruction
-} from '$lib/languages/BaseEmulator.svelte'
+} from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
     sliceDeadline,
     sliceInstructionBudget
-} from '$lib/languages/ExecutionSlice'
+} from '#lib/languages/ExecutionSlice.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -37,11 +37,11 @@ import {
     type PokeWrite,
     RegisterSize,
     type StackFrame
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
-import type { Termination } from '$lib/languages/termination'
-import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
-import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
+import type { Termination } from '#lib/languages/termination.ts'
+import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
+import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
     describeUnsupportedTrapTask,
     easy68kColorOf,
@@ -51,18 +51,18 @@ import {
     M68K_MOUSE_FLAGS,
     M68K_MOUSE_MODES,
     screenColorOf
-} from '$lib/languages/M68K/M68K-traps'
+} from '#lib/languages/M68K/M68K-traps.ts'
 import {
     type FileDescriptorOptions,
     FileSystemGuestError,
     type FileSystemSession
-} from '$lib/languages/peripherals/FileSystem'
-import type { MouseSnapshot } from '$lib/languages/peripherals/Mouse'
-import type { TerminalReadOptions } from '$lib/languages/peripherals/Terminal.svelte'
-import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
-import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
-import type { Testcase } from '$lib/Project.svelte'
-import type { BuildInput, BuildSources } from '$lib/projectFiles'
+} from '#lib/languages/peripherals/FileSystem.ts'
+import type { MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
+import type { TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { echoToScreen } from '#lib/languages/peripherals/screen/textEcho.ts'
+import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 

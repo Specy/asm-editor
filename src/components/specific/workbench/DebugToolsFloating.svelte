@@ -4,13 +4,16 @@
      * over the top of the Workbench, each dragged by its grip and opened or folded by a click on it
      * or on its eye. Where each was left and whether it is open are remembered per person.
      */
-    import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
-    import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
-    import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
-    import StackPointerView from '$cmp/specific/project/memory/StackPointerView.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
-    import { makeColorizedLabels } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { workbenchLayout, type FloatingWindowState } from '$stores/workbenchLayoutStore.svelte'
+    import ToggleableDraggable from '#cmp/shared/draggable/DraggableContainer.svelte'
+    import CallStack from '#cmp/specific/project/user-tools/CallStack.svelte'
+    import MutationsViewer from '#cmp/specific/project/user-tools/MutationsRenderer.svelte'
+    import StackPointerView from '#cmp/specific/project/memory/StackPointerView.svelte'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
+    import { makeColorizedLabels } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import {
+        workbenchLayout,
+        type FloatingWindowState
+    } from '#stores/workbenchLayoutStore.svelte.ts'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {

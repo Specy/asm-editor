@@ -1,4 +1,4 @@
-import type { MemoryTab } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { MemoryTab } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
  * The **Debug tools** ([CONTEXT.md](../../../../CONTEXT.md)): the Stack pointer, the History and

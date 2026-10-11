@@ -9,10 +9,10 @@
     import { code } from '@cartamd/plugin-code'
     import type { Element, Parent, Root, RootContent } from 'hast'
     import { visit } from 'unist-util-visit'
-    import type { Testcase } from '$lib/Project.svelte'
+    import type { Testcase } from '#lib/Project.svelte.ts'
     import lzstring from 'lz-string'
-    import { ThemeStore } from '$stores/themeStore.svelte'
-    import { serializer } from '$lib/json'
+    import { ThemeStore } from '#stores/themeStore.svelte.ts'
+    import { serializer } from '#lib/json.ts'
     import {
         isTestcaseFence,
         parsePlaygroundFence,
@@ -21,20 +21,23 @@
         namedPlaygroundProgram,
         type PlaygroundFence,
         type PlaygroundSettings
-    } from '$lib/content/playgrounds'
-    import { codeBlocks, highlightedAssemblyCode } from '$lib/content/codeBlocks'
+    } from '#lib/content/playgrounds.ts'
+    import { codeBlocks, highlightedAssemblyCode } from '#lib/content/codeBlocks.ts'
     import './codeBlocks.css'
-    import { assemblyPalette } from '$lib/content/assemblyPalette'
-    import { HeadingSlugger } from '$lib/content/headings'
+    import { assemblyPalette } from '#lib/content/assemblyPalette.ts'
+    import { HeadingSlugger } from '#lib/content/headings.ts'
     import { toString as hastToString } from 'hast-util-to-string'
-    import { encodePlaygroundProgram, type PlaygroundProgram } from '$lib/content/playgroundProgram'
+    import {
+        encodePlaygroundProgram,
+        type PlaygroundProgram
+    } from '#lib/content/playgroundProgram.ts'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
 
     /**
      * The colours of the code block a prerendered playground carries, taken from the editor's own
-     * theme (`$lib/monaco/editorTheme.ts`) so the block reads as the thing it is about to become.
+     * theme (`#lib/monaco/editorTheme.ts`) so the block reads as the thing it is about to become.
      * It follows the reader's chosen secondary surface, the same one the editor draws on.
      */
     let asmPalette = $derived(
@@ -626,7 +629,7 @@
 
 <script lang="ts">
     import { Markdown } from 'carta-md'
-    import { EXAMPLE_EDITOR_FONT } from '$lib/monaco/exampleFont'
+    import { EXAMPLE_EDITOR_FONT } from '#lib/monaco/exampleFont.ts'
 
     interface Props {
         source: string

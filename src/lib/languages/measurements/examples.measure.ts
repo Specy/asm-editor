@@ -1,8 +1,8 @@
 import { readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import type { EmulatorSettings } from '$lib/languages/commonLanguageFeatures.svelte'
-import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
-import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
+import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
 import {
     buildProgram,
     createMeasurableEmulator,

@@ -1,7 +1,7 @@
-import { SHARE_ID } from '$stores/projectsStore.svelte'
+import { SHARE_ID } from '#stores/projectsStore.svelte.ts'
 import lzstring from 'lz-string'
-import type { Project } from '$lib/Project.svelte'
-import { serializer } from '$lib/json'
+import type { Project } from '#lib/Project.svelte.ts'
+import { serializer } from '#lib/json.ts'
 
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))

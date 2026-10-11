@@ -4,12 +4,12 @@ const { install, disposed } = vi.hoisted(() => {
     const disposed = vi.fn()
     return { disposed, install: vi.fn(() => [{ dispose: disposed }]) }
 })
-vi.mock('$app/environment', () => ({ browser: false }))
-vi.mock('$lib/monaco/editorTheme', () => ({ generateTheme: () => ({}) }))
+vi.mock('$app/env', () => ({ browser: false }))
+vi.mock('#lib/monaco/editorTheme.ts', () => ({ generateTheme: () => ({}) }))
 vi.mock('monaco-editor/editor/editor.worker?worker', () => ({ default: class {} }))
 vi.mock('monaco-editor', () => ({ editor: { defineTheme() {} } }))
 vi.mock('./assemblyLanguageRegistry', () => ({ registerAssemblyLanguage: vi.fn() }))
-vi.mock('$lib/sourceLanguageHelp/register', () => ({ registerSourceLanguageHelp: install }))
+vi.mock('#lib/sourceLanguageHelp/register.ts', () => ({ registerSourceLanguageHelp: install }))
 import { Monaco } from './Monaco'
 
 beforeAll(() => vi.stubGlobal('self', {}))

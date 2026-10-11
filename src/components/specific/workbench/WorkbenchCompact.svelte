@@ -10,15 +10,15 @@
      * drawer from the left. Each editor keeps its file tabs; the Debug tools are sections.
      */
     import { untrack } from 'svelte'
-    import { sourceLanguage } from '$lib/sourceCompilation/records'
+    import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
     import { prefersReducedMotion } from 'svelte/motion'
     import FaAngleRight from '~icons/fa-solid/angle-right'
-    import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
-    import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
-    import { makeColorizedLabels } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
-    import { workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
+    import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
+    import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
+    import { makeColorizedLabels } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
+    import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import TopBar from './TopBar.svelte'
     import IconRail from './IconRail.svelte'
     import SidePanel from './SidePanel.svelte'
@@ -31,7 +31,7 @@
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle } from './debugTools'
     import { useWorkbench } from './workbenchContext'
-    import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
+    import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
 
     interface Props {
         externalMenu?: boolean

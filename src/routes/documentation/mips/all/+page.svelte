@@ -5,9 +5,9 @@
      * documentation pages), prerendered with every row. Searching it is the palette's job, as on
      * every page of the site.
      */
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import DocumentationBrowser from '$cmp/documentation/browser/DocumentationBrowser.svelte'
-    import { chapters } from '$lib/documentation/mips/mips'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
+    import { chapters } from '#lib/documentation/mips/mips.ts'
 </script>
 
 <svelte:head>

@@ -1,8 +1,12 @@
+import { mdsvex } from 'mdsvex'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import wasm from 'vite-plugin-wasm'
 import Icons from 'unplugin-icons/vite'
 import { defineConfig } from 'vitest/config'
 import { searchModelPlugin } from './scripts/search-model-plugin.ts'
+
 export default defineConfig({
     server: {
         port: 4173,
@@ -26,7 +30,12 @@ export default defineConfig({
         sourcemap: true
     },
     plugins: [
-        sveltekit(),
+        sveltekit({
+            preprocess: [vitePreprocess(), mdsvex()],
+            extensions: ['.svelte', '.svx'],
+            adapter: adapter({ fallback: '404.html' })
+        }),
+
         Icons({
             compiler: 'svelte',
             // `scale: 0` drops the em-based width/height attributes
@@ -40,8 +49,8 @@ export default defineConfig({
         format: 'es',
         plugins: () => [wasm()]
     },
-    // The tests run on the app's own Vite config so a test resolves `$lib`, `$cmp` and the other
-    // SvelteKit aliases exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
+    // The tests run on the app's own Vite config so a test resolves package subpath imports
+    // exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
     // module a test reaches. Peripheral logic itself stays plain TypeScript, which is why the
     // default environment is node.
     //

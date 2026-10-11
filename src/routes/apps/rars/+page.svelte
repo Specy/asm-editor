@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import { isClipboardReadSupported } from '../appsUtils'
 
     type CheerpJWindow = Window &

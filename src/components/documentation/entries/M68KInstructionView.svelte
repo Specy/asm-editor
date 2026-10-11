@@ -1,11 +1,11 @@
 <script lang="ts">
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
         fromSizesToString,
         fromSizeToString,
         getAddressingModeNames,
         type InstructionDocumentation
-    } from '$lib/languages/M68K/M68K-documentation'
+    } from '#lib/languages/M68K/M68K-documentation.ts'
     import CodeSample from './CodeSample.svelte'
 
     interface Props {

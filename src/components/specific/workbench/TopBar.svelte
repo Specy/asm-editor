@@ -4,8 +4,8 @@
      * and the title with Save. The execution controls have their own bar under the editor. A
      * desktop and a tablet have no top bar: Back and Save are in their rail.
      */
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
     import FaSave from '~icons/fa-solid/save'
     import FaBars from '~icons/fa-solid/bars'
     import { useWorkbench } from './workbenchContext'

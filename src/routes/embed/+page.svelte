@@ -1,37 +1,38 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
+    import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import {
         type AvailableLanguages,
         cleanTestcases,
         makeProject,
         type Project,
         type Testcase
-    } from '$lib/Project.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
+    } from '#lib/Project.svelte.ts'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
-    import { page } from '$app/stores'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import Select from '$cmp/shared/input/Select.svelte'
-    import Switch from '$cmp/shared/input/Switch.svelte'
-    import { viewStore } from '$stores/view'
-    import { BASE_CODE, LANGUAGE_THEMES } from '$lib/Config'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { createShareLink } from '$lib/utils'
-    import { toast } from '$stores/toastStore'
+    import { page } from '$app/state'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
+    import Switch from '#cmp/shared/input/Switch.svelte'
+    import { viewStore } from '#stores/view.ts'
+    import { BASE_CODE, LANGUAGE_THEMES } from '#lib/Config.ts'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
+    import { createShareLink } from '#lib/utils.ts'
+    import { toast } from '#stores/toastStore.ts'
     import FaExternal from '~icons/fa-solid/external-link-alt'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import { serializer } from '$lib/json'
-    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
-    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import { serializer } from '#lib/json.ts'
+    import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
+    import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import {
         decodePlaygroundProgram,
         encodePlaygroundProgram,
         playgroundBuildSources
-    } from '$lib/content/playgroundProgram'
-    import { sourceLanguage } from '$lib/sourceCompilation/records'
+    } from '#lib/content/playgroundProgram.ts'
+
+    import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
 
     type Settings = {
         showMemory: boolean
@@ -85,7 +86,7 @@
         settings = getSettings()
         code = getCodeFromUrl() ?? BASE_CODE[settings.language]
         testcases = cleanTestcases(getTestsFromUrl())
-        const encoded = $page.url.searchParams.get('program')
+        const encoded = page.url.searchParams.get('program')
         if (encoded) {
             try {
                 project = makeProject({
@@ -138,7 +139,7 @@
     }
 
     function getCodeFromUrl() {
-        const searchParams = $page.url.searchParams
+        const searchParams = page.url.searchParams
         const code = searchParams.get('code')
         if (!code) return undefined
         try {
@@ -150,7 +151,7 @@
     }
 
     function getTestsFromUrl() {
-        const searchParams = $page.url.searchParams
+        const searchParams = page.url.searchParams
         const tests = searchParams.get('testcases')
         if (!tests) return []
         try {
@@ -162,7 +163,7 @@
     }
 
     function getSettings() {
-        const searchParams = $page.url.searchParams
+        const searchParams = page.url.searchParams
         const showMemory = searchParams.get('showMemory') === 'true'
         const language = (searchParams.get('language') ?? 'M68K') as AvailableLanguages
         const showConsole = searchParams.get('showConsole') === 'true'

@@ -1,10 +1,10 @@
 <script lang="ts">
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
         describeX86Instruction,
         formatX86Form,
         type X86Instruction
-    } from '$lib/languages/X86/X86-documentation'
+    } from '#lib/languages/X86/X86-documentation.ts'
     import CodeSample from './CodeSample.svelte'
 
     interface Props {

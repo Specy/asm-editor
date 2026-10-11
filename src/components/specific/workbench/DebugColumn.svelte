@@ -8,21 +8,24 @@
      * left: the sections have 170vh to open into from the start, and the Screen alone is as tall as
      * it needs to fill the column's width.
      */
-    import Splitter from '$cmp/shared/layout/Splitter.svelte'
-    import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
-    import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
-    import { makeColorizedLabels, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { registerColumnWidth } from '$lib/languages/registerFormats'
-    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
-    import { LAYOUT_LIMITS, workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
+    import Splitter from '#cmp/shared/layout/Splitter.svelte'
+    import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
+    import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
+    import {
+        makeColorizedLabels,
+        RegisterSize
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
+    import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
+    import { LAYOUT_LIMITS, workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import RegistersArea from './RegistersArea.svelte'
     import ScreenArea from './ScreenArea.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle, toolSectionStyle } from './debugTools'
     import { useWorkbench } from './workbenchContext'
-    import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
+    import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
 
     interface Props {
         /** The column's width in pixels, measured, for the splitter that sets it. */

@@ -17,7 +17,7 @@
      * so a tap on the console focuses it again.
      */
     import { tick, untrack } from 'svelte'
-    import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+    import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
     import { TerminalTranscriptReader, styleClasses } from './terminalEscapes'
 
     interface Props {

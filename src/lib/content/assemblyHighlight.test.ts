@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { tokenizeAssembly, type AssemblyTokenKind } from './assemblyHighlight'
-import { z80Registers } from '$lib/languages/Z80/Z80-documentation'
+import { z80Registers } from '#lib/languages/Z80/Z80-documentation.ts'
 import {
     RISCVFloatingPointRegisterNames,
     RISCVLanguageRegisterNames
-} from '$lib/languages/RISC-V/RISC-V-registers'
-import { X86Registers } from '$lib/languages/X86/X86-grammar'
+} from '#lib/languages/RISC-V/RISC-V-registers.ts'
+import { X86Registers } from '#lib/languages/X86/X86-grammar.ts'
 
 /**
  * The highlighter reads structure rather than instruction sets, so what these check is that a line

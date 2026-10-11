@@ -14,14 +14,14 @@ import {
     renderRegister,
     type RegisterFileRendering,
     type RenderableRegister
-} from '$lib/languages/registerFormats'
+} from '#lib/languages/registerFormats.ts'
 import {
     makeRegister,
     type RegisterFileDescriptor,
     type RegisterFormat,
     RegisterSize,
     resolveRegisterFileLayout
-} from '$lib/languages/commonLanguageFeatures.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
  * The decoding and the per-file reading rules of the Register files, tested on bit patterns rather

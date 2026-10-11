@@ -13,32 +13,32 @@ import {
     type SimHeaderData,
     type SimHeaderTargetName
 } from '../../../scripts/sim-header/simHeader.mjs'
-import { mipsSyscalls } from '$lib/documentation/mars/mipsSyscalls'
-import { riscvSyscalls } from '$lib/documentation/mars/riscvSyscalls'
-import { simPrototype, type MarsSyscall } from '$lib/documentation/mars/syscallBinding'
+import { mipsSyscalls } from '#lib/documentation/mars/mipsSyscalls.ts'
+import { riscvSyscalls } from '#lib/documentation/mars/riscvSyscalls.ts'
+import { simPrototype, type MarsSyscall } from '#lib/documentation/mars/syscallBinding.ts'
 import {
     x86SimBinding,
     x86SimHeaderData,
     x86SimPrototype,
     X86_SYSCALL_ARGUMENT_REGISTERS
-} from '$lib/documentation/x86/syscallBinding'
-import { describeX86Syscall, X86_SYSCALLS } from '$lib/languages/X86/X86-documentation'
+} from '#lib/documentation/x86/syscallBinding.ts'
+import { describeX86Syscall, X86_SYSCALLS } from '#lib/languages/X86/X86-documentation.ts'
 import {
     MARS_READY_BIT,
     MARS_RECEIVER_CONTROL,
     MARS_RECEIVER_DATA,
     MARS_TRANSMITTER_CONTROL,
     MARS_TRANSMITTER_DATA
-} from '$lib/languages/mars/MarsDevices'
+} from '#lib/languages/mars/MarsDevices.ts'
 import {
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES
-} from '$lib/languages/mars/marsDisplay'
-import { makeMipsCore } from '$lib/languages/MIPS/MIPS-core'
-import { makeRiscVCore } from '$lib/languages/RISC-V/RISC-V-core'
-import { compileSource, prepareAssembly } from '$lib/sourceCompilation/compilerExplorer'
-import { fileFingerprint } from '$lib/sourceCompilation/records'
+} from '#lib/languages/mars/marsDisplay.ts'
+import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
+import { makeRiscVCore } from '#lib/languages/RISC-V/RISC-V-core.ts'
+import { compileSource, prepareAssembly } from '#lib/sourceCompilation/compilerExplorer.ts'
+import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
 import {
     ENVIRONMENT_HEADER_PATH,
     hasEnvironmentLibrary,

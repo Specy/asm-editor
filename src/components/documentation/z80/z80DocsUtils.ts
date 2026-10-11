@@ -2,7 +2,7 @@
  * Shared helpers for the Z80 documentation pages.
  */
 
-import type { Z80InstructionVariant } from '$lib/languages/Z80/Z80-documentation'
+import type { Z80InstructionVariant } from '#lib/languages/Z80/Z80-documentation.ts'
 
 /**
  * Drops the forms that print identically. The assembler accepts `xor a,b` as well as `xor b`, and

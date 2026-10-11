@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBuildInput } from '$lib/projectFiles'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { analyzeX86Project, x86DiagnosticToLanguageDiagnostic } from './x86Adapter'
 
 describe('x86 Project analysis adapter', () => {

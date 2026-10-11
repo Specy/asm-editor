@@ -5,8 +5,8 @@ import {
     MIN_MARS_CHUNK,
     nextMarsChunk,
     type MarsChunkOutcome
-} from '$lib/languages/mars/marsSlice'
-import { COMPUTE_SLICE_MS, type ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
+} from '#lib/languages/mars/marsSlice.ts'
+import { COMPUTE_SLICE_MS, type ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 
 /**
  * The chunking of a MIPS or RISC-V slice, on a fake Core: what a chunk costs is scripted, so the

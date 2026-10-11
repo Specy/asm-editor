@@ -7,15 +7,15 @@
      */
     import { untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
-    import Splitter from '$cmp/shared/layout/Splitter.svelte'
-    import { LAYOUT_LIMITS, workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
+    import Splitter from '#cmp/shared/layout/Splitter.svelte'
+    import { LAYOUT_LIMITS, workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import IconRail from './IconRail.svelte'
     import SidePanel from './SidePanel.svelte'
     import EditorArea from './EditorArea.svelte'
     import BottomPanel from './BottomPanel.svelte'
     import DebugColumn from './DebugColumn.svelte'
     import { useWorkbench } from './workbenchContext'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
     /** Below this, the editor beside an open panel and the debug column is too narrow to use. */
     const EDITOR_MIN_WIDTH = 360

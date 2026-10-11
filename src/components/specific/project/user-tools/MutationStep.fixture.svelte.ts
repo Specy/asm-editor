@@ -1,5 +1,5 @@
-import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { ExecutionStep } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * Reactive props for a mounted History row, so that a test can hand it the next step the way a

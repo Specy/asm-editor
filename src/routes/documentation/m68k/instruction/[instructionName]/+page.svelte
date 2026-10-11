@@ -1,8 +1,8 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '$lib/seo'
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '#lib/seo.ts'
+    import Page from '#cmp/shared/layout/Page.svelte'
     import { onMount } from 'svelte'
     import {
         fromSizesToString,
@@ -10,12 +10,12 @@
         getAddressingModeNames,
         AffectedFlagKind,
         M68KFlag
-    } from '$lib/languages/M68K/M68K-documentation'
-    import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import InstructionPreview from '$cmp/documentation/site/InstructionPreview.svelte'
+    } from '#lib/languages/M68K/M68K-documentation.ts'
+    import DocsOperand from '#cmp/documentation/DocsOperand.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import InstructionPreview from '#cmp/documentation/site/InstructionPreview.svelte'
     interface Props {
         data: PageData
     }
@@ -23,10 +23,10 @@
     let { data }: Props = $props()
     let ins = $derived(data.props.instruction)
 
-    let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
+    let component: typeof import('#cmp/documentation/site/ClientOnly.svelte').default | undefined =
         $state.raw()
     onMount(async () => {
-        component = (await import('$cmp/documentation/site/ClientOnly.svelte')).default
+        component = (await import('#cmp/documentation/site/ClientOnly.svelte')).default
     })
     let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
 

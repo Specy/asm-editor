@@ -6,12 +6,12 @@
      * of its own and lines up with the registers under it, and the Register files reach the card's
      * edges, square and with nothing around them; only the flags are inset.
      */
-    import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-    import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
-    import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
-    import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { MEMORY_SIZE } from '$lib/Config'
-    import { clampBigInt } from '$lib/utils'
+    import RegistersRenderer from '#cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
+    import StatusCodesVisualiser from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
+    import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { MEMORY_SIZE } from '#lib/Config.ts'
+    import { clampBigInt } from '#lib/utils.ts'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {

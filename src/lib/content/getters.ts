@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises'
 
 export async function getAllCourses() {
-    const content = await import.meta.glob('$content/*/meta.json', { eager: true })
+    const content = await import.meta.glob('#content/*/meta.json', { eager: true })
     return Object.entries(content)
         .map(([path, course]) => {
             const c = course as Omit<Course, 'slug'>
@@ -65,7 +65,7 @@ export async function getCourse(slug: string) {
         throw new Error(`Course with slug ${slug} not found`)
     }
     const lectures = Object.entries(
-        await import.meta.glob(`$content/*/*/*/meta.json`, { eager: true })
+        await import.meta.glob(`#content/*/*/*/meta.json`, { eager: true })
     )
         .filter(([path]) => {
             return path.startsWith('/src/content/' + course.slug)
@@ -85,7 +85,7 @@ export async function getCourse(slug: string) {
         })
 
     const modules = Object.entries(
-        await import.meta.glob(`$content/*/*/meta.json`, { eager: true })
+        await import.meta.glob(`#content/*/*/meta.json`, { eager: true })
     )
         .filter(([path]) => {
             return path.startsWith('/src/content/' + course.slug)
@@ -191,7 +191,7 @@ type LectureEntry = {
 
 /** Every Lecture of every Course, flat, which is what a Topic has to be looked up across. */
 async function getAllLectures(): Promise<LectureEntry[]> {
-    const content = await import.meta.glob(`$content/*/*/*/meta.json`, { eager: true })
+    const content = await import.meta.glob(`#content/*/*/*/meta.json`, { eager: true })
     return Object.entries(content).map(([path, lecture]) => {
         const l = lecture as { topic?: string }
         const parts = path.split('/')

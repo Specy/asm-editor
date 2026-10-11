@@ -1,5 +1,5 @@
-import type { AvailableLanguages, MemoryValue, Testcase } from '$lib/Project.svelte'
-import { isValidFilePath } from '$lib/projectFiles'
+import type { AvailableLanguages, MemoryValue, Testcase } from '#lib/Project.svelte.ts'
+import { isValidFilePath } from '#lib/projectFiles.ts'
 import { cleanPlaygroundProgram, type PlaygroundProgram } from './playgroundProgram'
 
 /**

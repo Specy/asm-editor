@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { makeProject, normalizeProjectData } from '$lib/Project.svelte'
-import { makeProjectFromArchive, projectToArchive } from '$lib/projectArchive'
+import { makeProject, normalizeProjectData } from '#lib/Project.svelte.ts'
+import { makeProjectFromArchive, projectToArchive } from '#lib/projectArchive.ts'
 import {
     normalizeBuildInput,
     updateEntryText,
     buildAssemblerProfile,
     type BuildSources
-} from '$lib/projectFiles'
-import { cleanProjectSettings, resolveProjectSettings } from '$lib/projectSettings'
+} from '#lib/projectFiles.ts'
+import { cleanProjectSettings, resolveProjectSettings } from '#lib/projectSettings.ts'
 import { resolveAssemblyProfile, resolveX86Start } from './assemblyProfile'
 import { cleanCompilationRecords, fileFingerprint, type CompilationRecord } from './records'
-import { analyzeMarsProject } from '$lib/languages/service/adapters/marsAdapter'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
+import { analyzeMarsProject } from '#lib/languages/service/adapters/marsAdapter.ts'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 
 const text = (content: string) => ({ encoding: 'plain' as const, content })
 const sources: BuildSources = {

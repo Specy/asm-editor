@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushSync, mount, unmount } from 'svelte'
 import TerminalConsole from './TerminalConsole.svelte'
-import { Terminal, type TerminalOptions } from '$lib/languages/peripherals/Terminal.svelte'
-import { ExecutionController } from '$lib/languages/ExecutionController'
+import { Terminal, type TerminalOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 
 /**
  * The console a program's reads are typed in (ADR 0036): it draws the Terminal's transcript, hands

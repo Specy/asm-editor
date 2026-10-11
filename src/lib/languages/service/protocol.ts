@@ -1,4 +1,4 @@
-import type { BuildConfiguration, ProjectFile, ProjectFiles } from '$lib/projectFiles'
+import type { BuildConfiguration, ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
 import type { LanguageDiagnostic, SourceLocation, SymbolKind } from './sourceModel'
 
 export type ProjectAnalysisTarget = 'M68K' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86' | 'Z80'

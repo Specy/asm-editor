@@ -5,7 +5,7 @@
      * not a number stays in the cell, outlined in red and not kept, until it is fixed or Escape puts
      * the value back. Emptying the cell removes the value.
      */
-    import { formatHex, parseNumber } from '$lib/testcases'
+    import { formatHex, parseNumber } from '#lib/testcases.ts'
 
     interface Props {
         value: bigint | undefined

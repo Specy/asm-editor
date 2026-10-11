@@ -1,4 +1,4 @@
-import type { ProjectModelIdentity } from '$lib/languages/service/uri'
+import type { ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 
 /**
  * Which model the editor shows and what it should hold, as one value.

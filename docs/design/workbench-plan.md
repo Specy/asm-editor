@@ -11,7 +11,7 @@ Companion to [workbench.md](./workbench.md), whose decisions and [ADR 0024](../a
 - **Keep the design system.** Theme tokens, `Button`, `Card`, `SegmentedControl`, `DraggableContainer` and the unplugin-icons sets. No new dependency is needed: the splitter is our own.
 - **Test at two levels.**
     - Pure logic is plain TypeScript tested under node (`*.test.ts`).
-    - Components with behaviour worth pinning get jsdom tests (`*.dom.test.ts`, with the `$lib/storage/db` mock the existing DOM tests use).
+    - Components with behaviour worth pinning get jsdom tests (`*.dom.test.ts`, with the `#lib/storage/db.ts` mock the existing DOM tests use).
     - The whole Workbench is checked in the browser, driven headless as in the earlier plans.
 
 ## Target structure

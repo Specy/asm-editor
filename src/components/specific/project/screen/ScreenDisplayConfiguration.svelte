@@ -1,7 +1,7 @@
 <script lang="ts">
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaSlidersH from '~icons/fa-solid/sliders-h'
-    import type { MarsDisplayOrigin, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+    import type { MarsDisplayOrigin, ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
     import DisplayConfigurationForm from './DisplayConfigurationForm.svelte'
 
     /**

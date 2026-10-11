@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
-import { Mouse } from '$lib/languages/peripherals/Mouse'
-import { BLACK, WHITE } from '$lib/languages/peripherals/screen/color'
-import { SCREEN_CELL_8X8 } from '$lib/languages/peripherals/screen/bitmapFont'
-import { Screen } from '$lib/languages/peripherals/screen/Screen'
+import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
+import { Mouse } from '#lib/languages/peripherals/Mouse.ts'
+import { BLACK, WHITE } from '#lib/languages/peripherals/screen/color.ts'
+import { SCREEN_CELL_8X8 } from '#lib/languages/peripherals/screen/bitmapFont.ts'
+import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import {
     Z80_COLORS,
     Z80_MOUSE_FLAGS,
@@ -13,7 +13,7 @@ import {
     Z80_PORTS,
     Z80_SCREEN_COMMANDS,
     type Z80PortName
-} from '$lib/languages/Z80/Z80-model'
+} from '#lib/languages/Z80/Z80-model.ts'
 import {
     expandColor,
     INVALID_HEX_NUMBER_ERROR,
@@ -21,7 +21,7 @@ import {
     packColor,
     Z80_UNCONNECTED_PORT_VALUE,
     Z80Device
-} from '$lib/languages/Z80/Z80Device'
+} from '#lib/languages/Z80/Z80Device.ts'
 
 /**
  * The whole port device against the real peripherals it drives: `Screen`, `Keyboard` and `Mouse` are

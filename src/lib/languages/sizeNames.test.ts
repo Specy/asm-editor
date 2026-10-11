@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { REGISTER_SIZES, sizeName, sizeNames } from '$lib/languages/sizeNames'
-import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
-import { AVAILABLE_LANGUAGES } from '$lib/Project.svelte'
+import { REGISTER_SIZES, sizeName, sizeNames } from '#lib/languages/sizeNames.ts'
+import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { AVAILABLE_LANGUAGES } from '#lib/Project.svelte.ts'
 
 /**
  * The names each Target gives the widths the editor groups by. These are facts about the

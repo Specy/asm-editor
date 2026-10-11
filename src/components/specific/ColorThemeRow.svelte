@@ -1,16 +1,16 @@
 <script lang="ts">
-    import { ThemeStore, type ThemeProp } from '$stores/themeStore.svelte'
+    import { ThemeStore, type ThemeProp } from '#stores/themeStore.svelte.ts'
     import { TinyColor } from '@ctrl/tinycolor'
     import FaUndo from '~icons/fa-solid/undo'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { browser } from '$app/environment'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { browser } from '$app/env'
+
     interface Props {
         color: ThemeProp
     }
 
     let { color = $bindable() }: Props = $props()
-
     let parsed = $derived(new TinyColor(color.color))
 </script>
 

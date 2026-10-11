@@ -1,4 +1,4 @@
-import type { InstructionExampleExpectation } from '$lib/documentation/instructions/expectations'
+import type { InstructionExampleExpectation } from '#lib/documentation/instructions/expectations.ts'
 
 /** Expected observable results for the authored RISC-V instruction programs. */
 export const riscvExampleExpectations: Record<string, InstructionExampleExpectation> = {

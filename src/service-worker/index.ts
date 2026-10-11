@@ -1,9 +1,6 @@
-/// <reference types="@sveltejs/kit" />
-/// <reference lib="webworker" />
-
-import { base, version } from '$service-worker'
-
-const sw = self as unknown as ServiceWorkerGlobalScope
+import { dev, version } from '$app/env'
+import { resolve } from '$app/paths'
+import { self as sw } from '$app/service-worker'
 
 const IMMUTABLE_PREFIX_CACHE = 'asm-editor-immutable-'
 const RUNTIME_PREFIX_CACHE = 'asm-editor-runtime-'
@@ -22,11 +19,11 @@ const KEEP_IMMUTABLE_GENERATIONS = 2
 
 // Matched by prefix rather than the `build` manifest: that manifest omits the Vite
 // worker chunks (Monaco's editor/json/html/css/ts workers, ~9MB).
-const IMMUTABLE_PREFIX = `${base}/_app/immutable/`
+const IMMUTABLE_PREFIX = `${resolve('/')}_app/immutable/`
 
 // Only the shell is precached; the build is ~137MB. Everything else is cached as
 // it is used, which is what makes previously-visited pages work offline.
-const SHELL = `${base}/404.html`
+const SHELL = `${resolve('/')}404.html`
 
 function isCacheable(request: Request, response: Response) {
     return (
@@ -120,7 +117,7 @@ sw.addEventListener('activate', (event) => {
             const keep = new Set([IMMUTABLE_CACHE, RUNTIME_CACHE])
 
             // `version` is a Date.now() timestamp by default, so a plain sort is
-            // chronological. A customised kit.version.name just makes the retained
+            // chronological. A customised version.name just makes the retained
             // set arbitrary rather than newest-first — still bounded either way.
             keys.filter((key) => key.startsWith(IMMUTABLE_PREFIX_CACHE) && key !== IMMUTABLE_CACHE)
                 .sort()
@@ -140,9 +137,7 @@ sw.addEventListener('activate', (event) => {
 })
 
 sw.addEventListener('fetch', (event) => {
-    // Must stay import.meta.env.DEV — `dev` from $app/environment is not importable
-    // in a service worker and fails with "__SVELTEKIT_APP_VERSION__ is not defined".
-    if (import.meta.env.DEV) return
+    if (dev) return
 
     const { request } = event
     if (request.method !== 'GET') return

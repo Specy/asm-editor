@@ -1,16 +1,17 @@
 <script lang="ts">
     import { afterNavigate, beforeNavigate } from '$app/navigation'
-    import RgbLine from '$cmp/shared/misc/RgbLine.svelte'
-    import type { Timer } from '$lib/utils'
+    import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
+    import type { Timer } from '#lib/utils.ts'
+
     interface Props {
         refresh?: string
     }
 
     let { refresh = '' }: Props = $props()
-
     let status = $state('')
     let timeout: Timer
     let timeout2: Timer
+
     function handleProgress(s: string) {
         if (s === 'started') {
             status = 'progress-70'
@@ -29,9 +30,14 @@
     }
 
     beforeNavigate((_navigation) => {
+        if (_navigation.shallow && _navigation.type === 'goto') return
+
         handleProgress('started')
     })
-    afterNavigate(() => {
+
+    afterNavigate(({ shallow, type }) => {
+        if (shallow && type === 'goto') return
+
         handleProgress('ended')
     })
 </script>

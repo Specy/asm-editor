@@ -1,6 +1,6 @@
 import type { Component, Snippet } from 'svelte'
-import type { Project } from '$lib/Project.svelte'
-import type { Emulator } from '$lib/languages/Emulator'
+import type { Project } from '#lib/Project.svelte.ts'
+import type { Emulator } from '#lib/languages/Emulator.ts'
 
 /**
  * What a page hosting the **Workbench** can give it and ask of it

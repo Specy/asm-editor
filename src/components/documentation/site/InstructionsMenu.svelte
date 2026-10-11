@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Column from '$cmp/shared/layout/Column.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
     interface Props {
         currentInstructionName?: string
         instructions: string[]

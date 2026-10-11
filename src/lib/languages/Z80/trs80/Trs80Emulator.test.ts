@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
-import type { Screen } from '$lib/languages/peripherals/screen/Screen'
-import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
-import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
+import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import { Z80Emulator } from '#lib/languages/Z80/Z80Emulator.svelte.ts'
+import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 
 /**
  * The memory-mapped TRS-80 display end to end, against the real Core under node

@@ -1,32 +1,32 @@
 <script lang="ts">
-    import Navbar from '$cmp/shared/layout/Navbar.svelte'
-    import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
+    import Navbar from '#cmp/shared/layout/Navbar.svelte'
+    import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
     import FaBars from '~icons/fa-solid/bars'
     import FaDonate from '~icons/fa-solid/heart'
     import FaStar from '~icons/fa-solid/star'
 
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import MaskedScroll from '$cmp/shared/layout/MaskedScroll.svelte'
-    import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
+    import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import type { PageData } from './$types'
-    import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
+    import LecturesMenu from '#cmp/content/LecturesMenu.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import { page } from '$app/state'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { ProjectStore } from '$stores/projectsStore.svelte'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
-    import { courseTheme } from '$lib/languages/languageColors'
-    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
+    import { courseTheme } from '#lib/languages/languageColors.ts'
+    import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import { lectureAgent } from './lectureAgent.svelte'
     import { onMount } from 'svelte'
-    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '$cmp/search/SearchPalette.svelte'
-    import { COURSES_SCOPE, courseLanguage, languageScope } from '$lib/search/scope'
-    import { searchClient } from '$lib/search/searchClient.svelte'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import { COURSES_SCOPE, courseLanguage, languageScope } from '#lib/search/scope.ts'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -60,15 +60,13 @@
 <ThemeScope theme={courseTheme(data.course.slug)}>
     <Navbar style="border-bottom-left-radius: 0;">
         <Row gap="0.6rem" align="center">
-            <a class="icon" href={resolve('/', {})} title="Go to the home">
+            <a class="icon" href={resolve('/')} title="Go to the home">
                 <img src="/favicon.png" alt="logo" />
             </a>
-            <a class="icon" href={resolve('/projects', {})} title="Go to your projects">
-                Projects
-            </a>
-            <a class="icon" href={resolve('/documentation', {})} title="Go to the docs"> Docs </a>
-            <a class="icon" href={resolve('/learn/courses', {})} title="Learn assembly"> Learn </a>
-            <a class="icon desktop-only" href={resolve('/embed', {})} title="Embed the website">
+            <a class="icon" href={resolve('/projects')} title="Go to your projects"> Projects </a>
+            <a class="icon" href={resolve('/documentation')} title="Go to the docs"> Docs </a>
+            <a class="icon" href={resolve('/learn/courses')} title="Learn assembly"> Learn </a>
+            <a class="icon desktop-only" href={resolve('/embed')} title="Embed the website">
                 Embed
             </a>
         </Row>
@@ -107,7 +105,7 @@
                     {lectureAgent.open ? 'Close' : 'Ask AI'}
                 </button>
             {:else}
-                <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
+                <a class="icon ai" href={resolve('/chat')} title="AI Chat">
                     <div class="hidden-very-small">
                         <SparklesIcon />
                     </div>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { x86SyscallArgs, X86_SYSCALLS, type X86Syscall } from '$lib/languages/X86/X86-documentation'
+import {
+    x86SyscallArgs,
+    X86_SYSCALLS,
+    type X86Syscall
+} from '#lib/languages/X86/X86-documentation.ts'
 import {
     x86SimBinding,
     x86SimHeaderData,

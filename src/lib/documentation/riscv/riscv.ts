@@ -4,8 +4,8 @@ import {
     riscvInstructionEntries,
     riscvRegisterFiles,
     riscvSyscall
-} from '$lib/languages/RISC-V/RISC-V-documentation'
-import { capitalize } from '$lib/utils'
+} from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+import { capitalize } from '#lib/utils.ts'
 import {
     names,
     proseEntries,
@@ -19,9 +19,9 @@ import { documented, syscallFields, syscallSummary } from '../mars/syscalls'
 import directivesIntro from './directives.md?raw'
 import runtimeIntro from './runtime-library.md?raw'
 import usingCIntro from './using-c.md?raw'
-import runtimeFunctions from '$lib/sourceRuntime/generated/v1/functions.json'
-import { riscvCallingConvention } from '$lib/sourceRuntime/runtimeLanguage'
-import type { RuntimeFunctionList } from '$lib/sourceRuntime/runtimeLibrary'
+import runtimeFunctions from '#lib/sourceRuntime/generated/v1/functions.json'
+import { riscvCallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
+import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import registersIntro from './registers.md?raw'
 import syscallsIntro from './syscalls.md?raw'
 import { riscvInstructionContent } from './instructionContent'

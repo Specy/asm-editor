@@ -1,4 +1,4 @@
-import { isValidFilePath } from '$lib/projectFiles'
+import { isValidFilePath } from '#lib/projectFiles.ts'
 
 export const EDITOR_FILE_DRAG_TYPE = 'application/x-asm-editor-file'
 export type EditorFileDrag = { sessionId: string; path: string; groupId?: string }

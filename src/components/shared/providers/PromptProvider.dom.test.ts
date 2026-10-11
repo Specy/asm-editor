@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import PromptProvider from './PromptProvider.svelte'
-import { Prompt } from '$stores/promptStore.svelte'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 
 /**
  * Who has the keyboard while a dialog asks for text. A program that opens two input dialogs in a

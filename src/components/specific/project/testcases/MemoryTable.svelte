@@ -10,14 +10,14 @@
         Testcase,
         TestcaseResult,
         TestcaseValidationError
-    } from '$lib/Project.svelte'
+    } from '#lib/Project.svelte.ts'
     import {
         escapeText,
         firstByteDifference,
         formatHex,
         hexPrefix,
         memoryValueLength
-    } from '$lib/testcases'
+    } from '#lib/testcases.ts'
     import MemoryValueForm from './MemoryValueForm.svelte'
     import WhenLabel, { type When } from './WhenLabel.svelte'
 

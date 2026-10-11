@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { MonacoType } from '$lib/monaco/Monaco'
-import { normalizeBuildInput } from '$lib/projectFiles'
-import { analyzeZ80Project } from '$lib/languages/service/adapters/z80Adapter'
-import { registerLanguageSession } from '$lib/languages/service/sessionRegistry'
-import { projectSourceUri } from '$lib/languages/service/uri'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { analyzeZ80Project } from '#lib/languages/service/adapters/z80Adapter.ts'
+import { registerLanguageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { projectSourceUri } from '#lib/languages/service/uri.ts'
 import {
     createZ80ProjectDocumentSymbolProvider,
     createZ80ProjectDefinitionProvider,

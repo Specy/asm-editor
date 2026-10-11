@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { defaultLayout, LAYOUT_LIMITS, readStoredLayout } from '$stores/workbenchLayoutStore.svelte'
+import {
+    defaultLayout,
+    LAYOUT_LIMITS,
+    readStoredLayout
+} from '#stores/workbenchLayoutStore.svelte.ts'
 
 describe('readStoredLayout', () => {
     it('loads what it stores', () => {

@@ -1,12 +1,12 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '$lib/seo'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import InstructionExample from '$cmp/documentation/site/InstructionExample.svelte'
-    import { formatAggregatedArgs } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '#lib/seo.ts'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Column from '#cmp/shared/layout/Column.svelte'
+    import InstructionExample from '#cmp/documentation/site/InstructionExample.svelte'
+    import { formatAggregatedArgs } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
     interface Props {
         data: PageData
     }

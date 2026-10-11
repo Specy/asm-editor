@@ -42,7 +42,7 @@
      * whose clicks between the two ends reach what is under it. With `fill`, the compact layouts',
      * one tray spans the bar and the buttons share its width.
      */
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'

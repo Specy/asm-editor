@@ -1,6 +1,6 @@
 import type { X86Project } from '@specy/x86'
-import { fileBytes, fileText, resolveFilePath, type BuildSources } from '$lib/projectFiles'
-import { splitAssemblyComment } from '$lib/languages/service/assemblyText'
+import { fileBytes, fileText, resolveFilePath, type BuildSources } from '#lib/projectFiles.ts'
+import { splitAssemblyComment } from '#lib/languages/service/assemblyText.ts'
 
 /** Converts persisted Project Files into the x86 Core's virtual-Project representation. */
 export function toX86Project(sources: BuildSources): X86Project {

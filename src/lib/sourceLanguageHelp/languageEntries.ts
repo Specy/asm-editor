@@ -1,5 +1,5 @@
 import type { HelpLanguage } from './context'
-import type { CompilationTarget } from '$lib/sourceCompilation/records'
+import type { CompilationTarget } from '#lib/sourceCompilation/records.ts'
 
 export type LanguageEntry = {
     name: string

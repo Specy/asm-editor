@@ -18,7 +18,7 @@ import {
     x86InstructionMap,
     type X86Instruction,
     type X86InstructionForm
-} from '$lib/languages/X86/X86-documentation'
+} from '#lib/languages/X86/X86-documentation.ts'
 
 /** Registers the generic path fills operands with, widest name first. */
 const OPERAND_REGISTERS = [

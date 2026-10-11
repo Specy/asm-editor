@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Select from '$cmp/shared/input/Select.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
     /**
      * MARS's and RARS's five bitmap display parameters, with their choice lists: the form of the
      * Screen header's Display popover and of the Workbench's Display section. `disabled` makes it a
@@ -14,7 +14,7 @@
         type MarsDisplayOrigin,
         normalizeMarsDisplay,
         type ProjectDisplay
-    } from '$lib/languages/mars/marsDisplay'
+    } from '#lib/languages/mars/marsDisplay.ts'
 
     interface Props {
         display: ProjectDisplay

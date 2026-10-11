@@ -26,17 +26,17 @@ import { marsHelpCatalog, x86HelpCatalog } from './helpCatalog.mjs'
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /**
- * The data modules are the editor's TypeScript, which Node runs by stripping its types; what Node
- * does not do is resolve `$lib/` and extensionless relative imports the way Vite does.
+ * The data modules are the editor's TypeScript, which Node runs by stripping its types, and their
+ * `#lib/` imports resolve through package.json; what Node does not do is resolve extensionless
+ * relative imports the way Vite does.
  */
 registerHooks({
     resolve(specifier, context, nextResolve) {
         const parent = context.parentURL ? fileURLToPath(context.parentURL) : repository
-        const base = specifier.startsWith('$lib/')
-            ? join(repository, 'src', 'lib', specifier.slice('$lib/'.length))
-            : /^\.\.?\//.test(specifier) && !/\.[cm]?[jt]s$/.test(specifier)
-              ? join(dirname(parent), specifier)
-              : undefined
+        const base =
+            /^\.\.?\//.test(specifier) && !/\.[cm]?[jt]s$/.test(specifier)
+                ? join(dirname(parent), specifier)
+                : undefined
         if (base !== undefined)
             for (const candidate of [base, `${base}.ts`, `${base}.js`, join(base, 'index.ts')])
                 if (existsSync(candidate) && /\.[cm]?[jt]s$/.test(candidate))

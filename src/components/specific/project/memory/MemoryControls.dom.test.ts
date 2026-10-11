@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import MemoryControls from './MemoryControls.svelte'
-import type { Emulator } from '$lib/languages/Emulator'
-import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { Emulator } from '#lib/languages/Emulator.ts'
+import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
-vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 beforeAll(() => {
     HTMLElement.prototype.showPopover = () => {}
     HTMLElement.prototype.animate = (() => ({

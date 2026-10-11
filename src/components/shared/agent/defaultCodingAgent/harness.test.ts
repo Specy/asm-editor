@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AssemblyCodingHarness } from './harness'
-import type { Emulator } from '$lib/languages/Emulator'
+import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
     InterpreterStatus,
     makeRegister,
@@ -8,7 +8,7 @@ import {
     resolveRegisterFileLayout,
     type RegisterFile,
     type RegisterFileDescriptor
-} from '$lib/languages/commonLanguageFeatures.svelte'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { FormattedRegisterFile } from './formatting'
 
 interface ToolExecutionResult {

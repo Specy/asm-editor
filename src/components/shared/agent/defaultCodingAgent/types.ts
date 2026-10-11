@@ -1,6 +1,6 @@
-import type { Emulator } from '$lib/languages/Emulator'
-import type { Project } from '$lib/Project.svelte'
-import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
+import type { Emulator } from '#lib/languages/Emulator.ts'
+import type { Project } from '#lib/Project.svelte.ts'
+import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 
 export const SUPPORTED_LANGUAGES = ['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64', 'Z80'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]

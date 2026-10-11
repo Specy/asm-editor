@@ -5,8 +5,8 @@ import {
     mipsRegisterFiles,
     mipsRegisters,
     mipsSyscall
-} from '$lib/languages/MIPS/MIPS-documentation'
-import { capitalize } from '$lib/utils'
+} from '#lib/languages/MIPS/MIPS-documentation.ts'
+import { capitalize } from '#lib/utils.ts'
 import {
     names,
     proseEntries,
@@ -21,9 +21,9 @@ import directivesIntro from './directives.md?raw'
 import registersIntro from './registers.md?raw'
 import runtimeIntro from './runtime-library.md?raw'
 import usingCIntro from './using-c.md?raw'
-import runtimeFunctions from '$lib/sourceRuntime/generated/v1/functions.json'
-import { mipsCallingConvention } from '$lib/sourceRuntime/runtimeLanguage'
-import type { RuntimeFunctionList } from '$lib/sourceRuntime/runtimeLibrary'
+import runtimeFunctions from '#lib/sourceRuntime/generated/v1/functions.json'
+import { mipsCallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
+import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import syscallsIntro from './syscalls.md?raw'
 import { mipsInstructionContent } from './instructionContent'
 import { withInstructionContent } from '../instructions/resolve'

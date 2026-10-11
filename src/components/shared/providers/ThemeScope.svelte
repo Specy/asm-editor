@@ -5,7 +5,7 @@
         ScopedTheme,
         ThemeStore,
         themeCssVariables
-    } from '$stores/themeStore.svelte'
+    } from '#stores/themeStore.svelte.ts'
 
     interface Props {
         /** The id of the built-in theme this subtree shows, e.g. `LANGUAGE_THEMES.MIPS`. */

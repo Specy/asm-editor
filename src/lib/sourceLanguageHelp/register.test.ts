@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type monaco from 'monaco-editor'
-import type { MonacoType } from '$lib/monaco/Monaco'
-import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
-import { normalizeBuildInput } from '$lib/projectFiles'
-import { compilerCapabilities } from '$lib/sourceCompilation/capabilities'
+import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { compilerCapabilities } from '#lib/sourceCompilation/capabilities.ts'
 import { setSourceHelpLanguage } from './context'
 import * as catalog from './catalog'
 import { languageEntries } from './languageEntries'
 import { registerSourceLanguageHelp, SOURCE_HELP_SCAN_LIMIT } from './register'
 
-vi.mock('$lib/languages/service/LanguageWorkerManager', () => ({
+vi.mock('#lib/languages/service/LanguageWorkerManager.ts', () => ({
     languageWorkerManager: { acquire: () => undefined }
 }))
 let nextSession = 0

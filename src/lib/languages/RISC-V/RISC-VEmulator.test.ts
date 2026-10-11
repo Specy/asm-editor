@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
-import { Prompt, PromptType } from '$stores/promptStore.svelte'
+import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
+import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
     MARS_READY_BIT,
@@ -9,19 +9,19 @@ import {
     MARS_RECEIVER_DATA,
     MARS_TRANSMITTER_CONTROL,
     MARS_TRANSMITTER_DATA
-} from '$lib/languages/mars/MarsDevices'
-import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
-import type { Testcase } from '$lib/Project.svelte'
-import { Keyboard } from '$lib/languages/peripherals/Keyboard'
-import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
+} from '#lib/languages/mars/MarsDevices.ts'
+import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
+import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import {
     InterpreterStatus,
     type RegisterFile,
     RegisterSize
-} from '$lib/languages/commonLanguageFeatures.svelte'
-import { FileSystem } from '$lib/languages/peripherals/FileSystem'
-import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
-import { RISCVCsrRegisterNames } from '$lib/languages/RISC-V/RISC-V-registers'
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
+import { RISCVCsrRegisterNames } from '#lib/languages/RISC-V/RISC-V-registers.ts'
 
 /**
  * RARS's bitmap display and keyboard-and-display registers against the real Core under node, the

@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { toast, ToastType } from '$stores/toastStore'
-    import { ScopedTheme } from '$stores/themeStore.svelte'
+    import { toast, ToastType } from '#stores/toastStore.ts'
+    import { ScopedTheme } from '#stores/themeStore.svelte.ts'
     import { fly } from 'svelte/transition'
     import FaTimes from '~icons/fa-solid/times'
     interface Props {

@@ -6,8 +6,8 @@
      * until its × removes it. A register the Core cannot set before the run (MIPS's `pc`, `hi` and
      * `lo`) can only be expected.
      */
-    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
-    import { canonicalRegister, formatHex, hexPrefix, sortRegisters } from '$lib/testcases'
+    import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+    import { canonicalRegister, formatHex, hexPrefix, sortRegisters } from '#lib/testcases.ts'
     import NumberCell from './NumberCell.svelte'
     import WhenLabel from './WhenLabel.svelte'
     import FaTimes from '~icons/fa-solid/times'

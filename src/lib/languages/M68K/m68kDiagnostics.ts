@@ -1,7 +1,7 @@
 import type { Diagnostic as S68kDiagnostic, Location } from '@specy/s68k'
-import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { LanguageDiagnostic, SourceLocation } from '$lib/languages/service/sourceModel'
-import { fileText, type BuildSources } from '$lib/projectFiles'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { LanguageDiagnostic, SourceLocation } from '#lib/languages/service/sourceModel.ts'
+import { fileText, type BuildSources } from '#lib/projectFiles.ts'
 
 /** Converts S68K's Unicode-scalar column to Monaco's UTF-16 code-unit column. */
 export function s68kColumnToUtf16(line: string, column: number): number {

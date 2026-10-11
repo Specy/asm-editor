@@ -3,11 +3,11 @@
         AnyProjectSettingDeclaration,
         ProjectSettingId,
         ProjectSettingValues
-    } from '$lib/projectSettings'
+    } from '#lib/projectSettings.ts'
     import FaUndo from '~icons/fa-solid/undo'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import Switch from '$cmp/shared/input/Switch.svelte'
-    import Select from '$cmp/shared/input/Select.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Switch from '#cmp/shared/input/Switch.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
 
     /**
      * One Setting of the open Project: a switch or a number, the value the Project runs with, and

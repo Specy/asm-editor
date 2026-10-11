@@ -1,4 +1,4 @@
-import type { Project } from '$lib/Project.svelte'
+import type { Project } from '#lib/Project.svelte.ts'
 import {
     cleanCompilationRecords,
     fileFingerprint,

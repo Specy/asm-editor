@@ -1,29 +1,29 @@
 <script lang="ts">
-    import { ProjectStore } from '$stores/projectsStore.svelte'
-    import ProjectCard from '$cmp/specific/project/ProjectCard.svelte'
+    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
     import { onMount } from 'svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaPlus from '~icons/fa-solid/plus'
-    import Title from '$cmp/shared/layout/Header.svelte'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import Title from '#cmp/shared/layout/Header.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
-    import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
-    import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
+    import FileImporter from '#cmp/shared/fileImporter/FileImporter.svelte'
+    import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import FaUpload from '~icons/fa-solid/upload'
-    import { toast } from '$stores/toastStore'
+    import { toast } from '#stores/toastStore.ts'
     import {
         makeProjectFromExternal,
         projectContentEquals,
         type ExternalImport
-    } from '$lib/Project.svelte'
-    import { Prompt } from '$stores/promptStore.svelte'
+    } from '#lib/Project.svelte.ts'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
     import { goto } from '$app/navigation'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import Row from '#cmp/shared/layout/Row.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
-    import { looksLikeZip, makeProjectFromArchive, projectDownload } from '$lib/projectArchive'
+    import { looksLikeZip, makeProjectFromArchive, projectDownload } from '#lib/projectArchive.ts'
 
     let hasFileHandleSupport = false
 

@@ -5,10 +5,13 @@
      */
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { fly } from 'svelte/transition'
-    import TerminalConsole from '$cmp/shared/terminal/TerminalConsole.svelte'
+    import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'
     import ProblemsList from './ProblemsList.svelte'
-    import type { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
-    import { type Diagnostic, formatDiagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+    import {
+        type Diagnostic,
+        formatDiagnostic
+    } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     interface Props {
         terminal: Terminal
         /** The Emulator's runtime errors, shown before what the program wrote. */

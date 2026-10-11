@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaCircle from '~icons/fa-solid/circle'
     interface Props {
         href: string

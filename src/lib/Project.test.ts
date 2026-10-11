@@ -8,8 +8,8 @@ import {
     projectContentEquals,
     ProjectFormatError,
     type Testcase
-} from '$lib/Project.svelte'
-import { BASE_CODE, LANGUAGE_EXTENSIONS } from '$lib/Config'
+} from '#lib/Project.svelte.ts'
+import { BASE_CODE, LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
 
 /**
  * `cleanTestcases` runs on every project loaded from storage and on every embed URL, because a
@@ -162,6 +162,34 @@ describe('normalizeProjectData', () => {
         })
         expect(project.settings).toEqual({ fileSystemHistoryBudgetMb: 30 })
     })
+
+    it('keeps tab metadata optional for older Projects', () => {
+        const project = normalizeProjectData({ language: 'MIPS', code: 'nop' })
+        expect(project).not.toHaveProperty('openTabs')
+        expect(project).not.toHaveProperty('activeTab')
+    })
+
+    it('cleans saved tab paths and selection, including a missing Entry', () => {
+        const project = normalizeProjectData({
+            entry: 'missing.s',
+            files: { 'a.s': { encoding: 'plain', content: 'nop' } },
+            openTabs: ['a.s', '../a.s', 'gone.s', 'a.s', null, 'missing.s', '@runtime/v1/lib.s'],
+            activeTab: 'missing.s'
+        })
+        expect(project.openTabs).toEqual(['a.s'])
+        expect(project.activeTab).toBeUndefined()
+    })
+
+    it('ignores malformed metadata and an active path outside the saved tabs', () => {
+        for (const openTabs of [null, false, 'main.m68k', {}]) {
+            const project = normalizeProjectData({ openTabs, activeTab: 42 })
+            expect(project).not.toHaveProperty('openTabs')
+            expect(project).not.toHaveProperty('activeTab')
+        }
+        const empty = normalizeProjectData({ openTabs: [], activeTab: 'main.m68k' })
+        expect(empty.openTabs).toEqual([])
+        expect(empty.activeTab).toBeUndefined()
+    })
 })
 
 describe('isValidFilePath', () => {
@@ -185,6 +213,16 @@ describe('isValidFilePath', () => {
 })
 
 describe('makeProject', () => {
+    it('snapshots tab metadata independently and clears stale active paths on a merge', () => {
+        const project = makeProject({ openTabs: ['main.m68k'], activeTab: 'main.m68k' })
+        const snapshot = project.toObject()
+        snapshot.openTabs!.push('other.s')
+        expect(project.openTabs).toEqual(['main.m68k'])
+        project.set({ openTabs: [] })
+        expect(project.activeTab).toBeUndefined()
+        expect(project.toObject().openTabs).toEqual([])
+    })
+
     it('reads and writes the Entry file through code', () => {
         const project = makeProject({ language: 'Z80', code: 'halt' })
         expect(project.code).toBe('halt')
@@ -232,6 +270,8 @@ describe('the exported file', () => {
             language: 'MIPS',
             code: 'li $v0, 10\nsyscall',
             settings: { fileSystemHistoryBudgetMb: 12 },
+            openTabs: ['main.mips'],
+            activeTab: 'main.mips',
             testcases: [testcaseWith({ expectedRegisters: { v0: 10n } })]
         })
         const text = project.toExternal()
@@ -244,6 +284,8 @@ describe('the exported file', () => {
         expect(imported.code).toBe('li $v0, 10\nsyscall')
         expect(imported.entry).toBe('main.mips')
         expect(imported.settings).toEqual({ fileSystemHistoryBudgetMb: 12 })
+        expect(imported.openTabs).toEqual(['main.mips'])
+        expect(imported.activeTab).toBe('main.mips')
         expect(imported.testcases[0]?.expectedRegisters.v0).toBe(10n)
     })
 
@@ -302,5 +344,7 @@ describe('projectContentEquals', () => {
         expect(projectContentEquals(a, b)).toBe(true)
         expect(projectContentEquals(a, { ...b, settings: { undoEnabled: false } })).toBe(false)
         expect(projectContentEquals(a, { ...b, description: 'changed' })).toBe(false)
+        expect(projectContentEquals(a, { ...b, openTabs: [] })).toBe(false)
+        expect(projectContentEquals(a, { ...b, activeTab: 'main.z80' })).toBe(false)
     })
 })

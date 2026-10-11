@@ -1,7 +1,7 @@
 /**
  * The shape of the MARS and RARS services as data: what the Documentation shows of each, and how
  * the Environment library, `<sim.h>`, calls it from C. This module and the two that hold the data
- * (`mipsSyscalls.ts`, `riscvSyscalls.ts`) import nothing at run time, neither a Core nor a `$lib`
+ * (`mipsSyscalls.ts`, `riscvSyscalls.ts`) import nothing at run time, neither a Core nor a `#lib`
  * path, so a build script reads them with plain Node.
  */
 

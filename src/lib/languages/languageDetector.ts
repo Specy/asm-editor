@@ -1,4 +1,4 @@
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { M68kInstructions } from './M68K/M68K-documentation'
 import { mipsInstructionNames } from './MIPS/MIPS-documentation'
 import { riscvInstructionMap } from './RISC-V/RISC-V-documentation'
