@@ -30,7 +30,7 @@ A picker in `MemoryControls` that jumps the memory view to a **Memory region** o
 
 ## Implementation notes (2026-10-08)
 
-The shared model and merge helpers are in `src/lib/languages/memoryRegions.ts`.
+The shared model and merge helpers are in `packages/asm-editor/src/lib/languages/memoryRegions.ts`.
 The layout is captured once per Build; moving bounds and device geometry refresh
 with Core views. Stop, a new Build and the end of a Testcase clear the layout.
 All memory controls and render sites, including both Playground layouts and the

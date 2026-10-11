@@ -27,7 +27,7 @@ The Runtime library is our own, not picolibc ([ADR 0029](../adr/0029-hosted-prog
 4. `<math.h>`, including `sin` and `pow`.
 5. C++ support for global constructors, `new`/`delete` and virtual destructors.
 
-Hard algorithms are taken from musl's MIT-licensed sources. Behaviour is tested against host glibc output. The code written for the library is under the repository's AGPL-3.0 with a linking exception ([runtime/LICENSE-EXCEPTION.md](../../runtime/LICENSE-EXCEPTION.md)), since its members are linked into every program that uses it.
+Hard algorithms are taken from musl's MIT-licensed sources. Behaviour is tested against host glibc output. The code written for the library is under the repository's AGPL-3.0 with a linking exception ([packages/runtime/LICENSE-EXCEPTION.md](../../packages/runtime/LICENSE-EXCEPTION.md)), since its members are linked into every program that uses it.
 
 ### Member resolution
 

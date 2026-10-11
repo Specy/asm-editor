@@ -48,7 +48,7 @@ scratch now that all of them are written.
 10. Playgrounds get a `screen` flag (off by default) so the Screen peripheral can be shown inline.
 11. Work happens in a git worktree at `/home/dev/code/asm-editor-courses` on branch `feat/courses`
     cut from `feat/screen-peripherals`; it becomes a pull request after PR #71 merges. Content under
-    `src/content` may also be edited in the main checkout; code only in the worktree until the freeze
+    `packages/asm-editor/src/content` may also be edited in the main checkout; code only in the worktree until the freeze
     lifts. The one exception, agreed the same day: the `screen` playground flag, done in the main
     checkout.
 
@@ -269,7 +269,7 @@ Playground fence, today: ` ```<lang>|playground|<flags> ` where `<lang>` is `m68
 `riscv64`, `z80`, `x86` and the flags are `memory`, `console`, `tests`, `pc`, `no-registers`,
 `no-flags`, `large`, `tall`, `allow-open`. Added by this plan: `screen` (shows the Screen panel, off
 unless present) and `open-screen` (the same panel, already unfolded instead of behind its "Show
-screen" bar; it implies `screen`). Every page in `src/content` that draws uses `open-screen`, decided
+screen" bar; it implies `screen`). Every page in `packages/asm-editor/src/content` that draws uses `open-screen`, decided
 on 2026-09-11: a reader whose program draws wants the drawing in front of them, and the bar is still
 there to fold it away. Added by the Register files work (2026-09-14): `fpu`, `cp0`, `csr`, `sse` and
 `x87` open the register panel on that Register file instead of on the CPU one, for the languages that
@@ -305,7 +305,7 @@ Exercise, to be supported by the renderer and the verification test:
 ````
 
 Rules: a `testcase` fence directly after a Playground attaches to it (register values as JSON numbers
-or hex strings, memory entries in the Testcase shape of `src/lib/Project.svelte.ts`); a Playground
+or hex strings, memory entries in the Testcase shape of `packages/asm-editor/src/lib/Project.svelte.ts`); a Playground
 with `exercise` must be followed by a `testcase` and by a `solution` Playground in a `<details>`
 block; a plain Playground may carry a `testcase` fence only to supply `input` or `runFor` (the
 instruction budget for a program that never ends) to the verification test.
@@ -316,7 +316,7 @@ in any base JavaScript's `BigInt` reads (`0x`, `0o`, `0b`, decimal, with a leadi
 `runFor` sits inside the same JSON and is stripped before the Testcase reaches the embed; every
 `testcase` fence is removed from the rendered page, attached or not, and the test fails a page with
 a stray one; malformed JSON logs an error and renders the Playground without testcases, and fails the
-test. The parser shared by the renderer and the test is `src/lib/content/playgrounds.ts`. Until item
+test. The parser shared by the renderer and the test is `packages/asm-editor/src/lib/content/playgrounds.ts`. Until item
 I below is fixed, Exercises check registers, output, `string-chunk` or `number-chunk` memory, never
 a `number` memory entry. Since 2026-10-01 a `name` string names the Testcase in the Testcases panel
 and the Log.
@@ -325,22 +325,22 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
 
 ## Implementation list (code)
 
-| #   | change                                                                                                                                                                                                                                                                                                                                              | where                                                   | when                                                                                    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A   | `screen` fence flag, `showScreen` embed parameter and checkbox, `showScreen` prop passed explicitly (false by default)                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `routes/embed/+page.svelte`  | done 2026-09-06, main checkout (uncommitted) and `feat/courses` d64940f                 |
-| B   | `loading="lazy"` on the playground iframe (check DOMPurify keeps the attribute)                                                                                                                                                                                                                                                                     | `MarkdownRenderer.svelte`                               | done 2026-09-06, 8f19554                                                                |
-| C   | `topic` key read by the getters; lecture page renders "Go deeper", "The overview is in", "The same topic in", "The same program in" from it                                                                                                                                                                                                         | `lib/content/getters.ts`, lecture page                  | done 2026-09-06, 31506cf (`getTopicLinks` in the getters, rendered by the lecture page) |
-| D   | Retire `src/content/examples`; redirect `/learn/courses/examples` and its three lectures to the new pages (in the `[courseId]` layout load)                                                                                                                                                                                                         | routes                                                  | done 2026-09-07: redirects in `src/lib/content/redirects.ts`, most specific rule first  |
-| E   | `testcase` fence attached to the preceding Playground; `exercise` and `solution` flags                                                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `lib/content/playgrounds.ts` | done 2026-09-06, e95aaaf                                                                |
-| F   | Verification test: walk `src/content`, build and run every Playground with its Core, apply the exercise rules, respect `runFor`                                                                                                                                                                                                                     | `src/lib/content/content.test.ts`                       | done 2026-09-06, 13bf2be (`npx vitest run src/lib/content`)                             |
-| H   | `getters.ts` reads `authors`, the course files write `author`; align on `authors`                                                                                                                                                                                                                                                                   | `getters.ts`, course `meta.json`                        | done 2026-09-06, 3f3d01c                                                                |
-| I   | Pre-existing bug found in batch 0: `cleanTestcases` sets `expected: BigInt(memory.address)` instead of `BigInt(memory.expected)` for `number` memory entries, in both starting and expected memory. It runs on every project loaded from storage and on every embed URL, so a `number` memory expectation is checked against its address in the app | `src/lib/Project.svelte.ts`                             | done 2026-09-06, c3fc00a, with `src/lib/Project.test.ts`                                |
-| J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                   | done 2026-09-06, b48f09b                                                                |
-| K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `src/content/assembly-basics`                           | done 2026-09-06, 9387c72                                                                |
-| L   | Custom components for lectures (a stack or memory diagram a markdown table cannot show), allowed by Specy on 2026-09-06; add renderer support in the worktree when a page needs one and record it here                                                                                                                                              | `MarkdownRenderer.svelte`                               | when needed                                                                             |
-| M   | The x86 console showed blink's `$ /program` launch line as if the program had printed it, which every Testcase would otherwise have had to declare as `expectedOutput`. Output is now discarded from the start of a Build until the first run                                                                                                       | `X86Emulator.svelte.ts`                                 | done 2026-09-15                                                                         |
-| N   | x86 fences were skipped by the verification test (`UNRUNNABLE`); the entry is gone and the map is empty                                                                                                                                                                                                                                             | `src/lib/content/content.test.ts`                       | done 2026-09-15                                                                         |
-| O   | `src/lib/content/x86Templates.ts` deleted: the four x86 templates are now Examples with a `template` key, like every other language's                                                                                                                                                                                                               | `templates.ts`, `src/content/x86/examples`              | done 2026-09-15                                                                         |
+| #   | change                                                                                                                                                                                                                                                                                                                                              | where                                                          | when                                                                                                       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A   | `screen` fence flag, `showScreen` embed parameter and checkbox, `showScreen` prop passed explicitly (false by default)                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `routes/embed/+page.svelte`         | done 2026-09-06, main checkout (uncommitted) and `feat/courses` d64940f                                    |
+| B   | `loading="lazy"` on the playground iframe (check DOMPurify keeps the attribute)                                                                                                                                                                                                                                                                     | `MarkdownRenderer.svelte`                                      | done 2026-09-06, 8f19554                                                                                   |
+| C   | `topic` key read by the getters; lecture page renders "Go deeper", "The overview is in", "The same topic in", "The same program in" from it                                                                                                                                                                                                         | `lib/content/getters.ts`, lecture page                         | done 2026-09-06, 31506cf (`getTopicLinks` in the getters, rendered by the lecture page)                    |
+| D   | Retire `src/content/examples`; redirect `/learn/courses/examples` and its three lectures to the new pages (in the `[courseId]` layout load)                                                                                                                                                                                                         | routes                                                         | done 2026-09-07: redirects in `packages/asm-editor/src/lib/content/redirects.ts`, most specific rule first |
+| E   | `testcase` fence attached to the preceding Playground; `exercise` and `solution` flags                                                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `lib/content/playgrounds.ts`        | done 2026-09-06, e95aaaf                                                                                   |
+| F   | Verification test: walk `packages/asm-editor/src/content`, build and run every Playground with its Core, apply the exercise rules, respect `runFor`                                                                                                                                                                                                 | `packages/asm-editor/src/lib/content/content.test.ts`          | done 2026-09-06, 13bf2be (`npx vitest run packages/asm-editor/src/lib/content`)                            |
+| H   | `getters.ts` reads `authors`, the course files write `author`; align on `authors`                                                                                                                                                                                                                                                                   | `getters.ts`, course `meta.json`                               | done 2026-09-06, 3f3d01c                                                                                   |
+| I   | Pre-existing bug found in batch 0: `cleanTestcases` sets `expected: BigInt(memory.address)` instead of `BigInt(memory.expected)` for `number` memory entries, in both starting and expected memory. It runs on every project loaded from storage and on every embed URL, so a `number` memory expectation is checked against its address in the app | `packages/asm-editor/src/lib/Project.svelte.ts`                | done 2026-09-06, c3fc00a, with `packages/asm-editor/src/lib/Project.test.ts`                               |
+| J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                          | done 2026-09-06, b48f09b                                                                                   |
+| K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `packages/asm-editor/src/content/assembly-basics`              | done 2026-09-06, 9387c72                                                                                   |
+| L   | Custom components for lectures (a stack or memory diagram a markdown table cannot show), allowed by Specy on 2026-09-06; add renderer support in the worktree when a page needs one and record it here                                                                                                                                              | `MarkdownRenderer.svelte`                                      | when needed                                                                                                |
+| M   | The x86 console showed blink's `$ /program` launch line as if the program had printed it, which every Testcase would otherwise have had to declare as `expectedOutput`. Output is now discarded from the start of a Build until the first run                                                                                                       | `X86Emulator.svelte.ts`                                        | done 2026-09-15                                                                                            |
+| N   | x86 fences were skipped by the verification test (`UNRUNNABLE`); the entry is gone and the map is empty                                                                                                                                                                                                                                             | `packages/asm-editor/src/lib/content/content.test.ts`          | done 2026-09-15                                                                                            |
+| O   | `src/lib/content/x86Templates.ts` deleted: the four x86 templates are now Examples with a `template` key, like every other language's                                                                                                                                                                                                               | `templates.ts`, `packages/asm-editor/src/content/x86/examples` | done 2026-09-15                                                                                            |
 
 ## Verification
 
@@ -350,7 +350,7 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
   with none declared fails the test.
 - Every Exercise: the solution passes the testcase, the skeleton fails it.
 
-`npx vitest run src/lib/content` is the whole of it.
+`npx vitest run packages/asm-editor/src/lib/content` is the whole of it.
 
 ## Facts established by running
 
@@ -458,19 +458,19 @@ RARS is a port of MARS, so the RISC-V course re-checked these rather than assumi
 
 ## Where the writers find the facts
 
-- M68K: `src/lib/languages/M68K/M68K-documentation.ts` (instructions, addressing modes, directives,
-  condition codes), `M68K-traps.ts` (trap 15 tasks, the rejected ones with reasons), `examples/m68k/`
+- M68K: `packages/asm-editor/src/lib/languages/M68K/M68K-documentation.ts` (instructions, addressing modes, directives,
+  condition codes), `M68K-traps.ts` (trap 15 tasks, the rejected ones with reasons), `packages/asm-editor/examples/m68k/`
   (the screen, keyboard and mouse programs and EASy68K's originals), `/documentation/m68k` pages.
-- MIPS: `src/lib/languages/MIPS/MIPS-documentation.ts` (instructions, directives, syscalls,
-  registers), `examples/mips/` (bitmap display, keyboard registers at `0xffff0000`, the `@screen`
+- MIPS: `packages/asm-editor/src/lib/languages/MIPS/MIPS-documentation.ts` (instructions, directives, syscalls,
+  registers), `packages/asm-editor/examples/mips/` (bitmap display, keyboard registers at `0xffff0000`, the `@screen`
   line), `/documentation/mips` pages including `screen`.
-- RISC-V: `src/lib/languages/RISC-V/RISC-V-documentation.ts`, `examples/risc-v/`,
+- RISC-V: `packages/asm-editor/src/lib/languages/RISC-V/RISC-V-documentation.ts`, `packages/asm-editor/examples/risc-v/`,
   `/documentation/risc-v` pages including `screen`.
-- Z80: `src/lib/languages/Z80/Z80-model.ts` (registers, flags, the port map, org `0x8000`, stack
-  top `0xFFFF`), `Z80-documentation.ts`, `examples/z80/`, `/documentation/z80` pages including `io`,
+- Z80: `packages/asm-editor/src/lib/languages/Z80/Z80-model.ts` (registers, flags, the port map, org `0x8000`, stack
+  top `0xFFFF`), `Z80-documentation.ts`, `packages/asm-editor/examples/z80/`, `/documentation/z80` pages including `io`,
   ADR 0002 and ADR 0011.
 - Peripherals for every language: `docs/design/screen-peripherals.md` and ADRs 0003 to 0011.
-- What the General course already says, so a Language course can take it as read: `src/content/assembly-basics`.
+- What the General course already says, so a Language course can take it as read: `packages/asm-editor/src/content/assembly-basics`.
 
 ## Risks and known gaps that shape the content
 

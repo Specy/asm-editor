@@ -8,13 +8,13 @@ nobody has to verify it again.
 
 - **Breaking changes are allowed.** The owner said so on 2026-10-08: the recent work has barely been used. `runtime/`
   is not on `main` at all, and neither is x86 archive linking (`start.asm` and ADR 0033 exist only on this branch). So
-  **Runtime ABI v1 is redefined in place**: don't add a v2, regenerate `runtime/abi/v1.json` **once**, after every
+  **Runtime ABI v1 is redefined in place**: don't add a v2, regenerate `packages/runtime/abi/v1.json` **once**, after every
   runtime change below has landed, and treat it as frozen from then on.
 - The owner edits all five Cores, so make changes in a Core rather than working around them in the editor.
   Releases follow the tag-triggered CD recipe. `git push` to the public repos is blocked in auto mode, so commit,
   tag locally, and hand the owner the push commands.
 - Don't commit unless asked. The owner strips `Co-Authored-By` trailers from commits.
-- The working tree already has uncommitted documentation edits under `src/lib/documentation/**`. Merge into them
+- The working tree already has uncommitted documentation edits under `packages/asm-editor/src/lib/documentation/**`. Merge into them
   rather than overwriting them.
 - Record decisions taken while implementing in the "Implementation notes" section at the end of this file.
 
@@ -37,9 +37,9 @@ Each one has a recommendation. Implement the recommendation unless the owner ans
 
 **Evidence.**
 
-- [malloc_impl.h:13](../../runtime/src/malloc/malloc_impl.h) sets `ALIGN` to `2 * sizeof(size_t)`, which is 8 on
+- [malloc_impl.h:13](../../packages/runtime/src/malloc/malloc_impl.h) sets `ALIGN` to `2 * sizeof(size_t)`, which is 8 on
   RV32/MIPS and 16 on RV64.
-- [stddef.h:11](../../runtime/include/stddef.h) defines `max_align_t` without `long double`, so its alignment is 8
+- [stddef.h:11](../../packages/runtime/include/stddef.h) defines `max_align_t` without `long double`, so its alignment is 8
   everywhere, and `abi/v1.json` freezes `_Alignof(max_align_t)` at 8.
 - The RISC-V psABI makes `long double` 16 bytes with 16-byte alignment on RV32 and RV64 alike. GCC therefore
   assumes 16-byte alignment from `malloc` and from plain `operator new` (`__STDCPP_DEFAULT_NEW_ALIGNMENT__` is 16),
@@ -67,7 +67,7 @@ target-independent text so it matches glibc's output.
 
 - ADR 0033 makes every non-Entry File an archive member, and the editor's library units (`start.asm`,
   `support.asm`, via `X86Project.library` in
-  [x86StartUnit.ts:60](../../src/lib/languages/X86/x86StartUnit.ts)) come **first** in that archive.
+  [x86StartUnit.ts:60](../../packages/asm-editor/src/lib/languages/X86/x86StartUnit.ts)) come **first** in that archive.
 - As a result, a user's strong `memcpy` in a secondary File silently loses to `support.asm`'s weak one unless
   something else pulls that File in. Real `ld` lets the program's objects beat libc.
 - Two Files defining the same symbol no longer produce an error: the first archive member wins.
@@ -95,7 +95,7 @@ editor's `X86Project` shape in `x86StartUnit.ts` and `X86Emulator`. Expect separ
 planned an x86 major); don't release twice.
 
 **Docs.** Write a new ADR that amends 0033 (order, duplicates, Hint) and add a superseded-in-part note to 0033.
-Update `src/lib/documentation/x86/using-c.md`.
+Update `packages/asm-editor/src/lib/documentation/x86/using-c.md`.
 
 **Tests.** Core tests for each case:
 
@@ -109,15 +109,15 @@ Update `src/lib/documentation/x86/using-c.md`.
 
 **Evidence.**
 
-- [ProgramClock.now()](../../src/lib/languages/peripherals/ProgramClock.ts) returns milliseconds since the run
+- [ProgramClock.now()](../../packages/asm-editor/src/lib/languages/peripherals/ProgramClock.ts) returns milliseconds since the run
   started.
-- [marsHandlers.ts:223](../../src/lib/languages/mars/marsHandlers.ts) feeds it to service 30 and to the RISC-V
-  `time` CSR, and [time.c](../../runtime/src/time/time.c) reads it as milliseconds since 1970, so `time()`,
+- [marsHandlers.ts:223](../../packages/asm-editor/src/lib/languages/mars/marsHandlers.ts) feeds it to service 30 and to the RISC-V
+  `time` CSR, and [time.c](../../packages/runtime/src/time/time.c) reads it as milliseconds since 1970, so `time()`,
   `localtime()` and `ctime()` all report January 1970. MARS and RARS define service 30 as Unix-epoch time, and
   ADR 0035 says services match their Reference environment.
 - x86: Blink passes the guest clock id to `environment.now(clock)` (`blink-runtime.ts:682`), but
   `X86Emulator.svelte.ts:170` ignores the id, so `CLOCK_REALTIME` is elapsed time too.
-- [clock.c](../../runtime/src/time/clock.c) returns wall time since the first call, which includes sleeps.
+- [clock.c](../../packages/runtime/src/time/clock.c) returns wall time since the first call, which includes sleeps.
 - M68K task 8 (`nowHundredths`, `M68KEmulator.svelte.ts:1089`) and Z80 `timeHundredths` (`Z80Emulator.svelte.ts:257`)
   also use elapsed time. EASy68K's task 8 is hundredths of a second **since midnight**; confirm it in `CODE9.CPP`
   (grep with `-a`).
@@ -133,7 +133,7 @@ Update `src/lib/documentation/x86/using-c.md`.
 **Changes.**
 
 1. `ProgramClock`: add `calendarNow()` (ms since epoch) beside `now()`. Keep `now()` as the elapsed clock.
-2. `marsHandlers.ts`: service 30 uses `calendarNow()`. Check in the RARS source (`emulators/risc-v/rars`) what the
+2. `marsHandlers.ts`: service 30 uses `calendarNow()`. Check in the RARS source (`packages/risc-v/rars`) what the
    `time`/`timeh` CSRs report in the Reference. If it differs from service 30, split the shared `time` handler into
    two Core callbacks; that's a MARS/RARS Core change.
 3. `X86Emulator`: map clock ids (Linux: 0 REALTIME, 1 MONOTONIC, 2 PROCESS_CPUTIME, 3 THREAD_CPUTIME,
@@ -148,7 +148,7 @@ Update `src/lib/documentation/x86/using-c.md`.
     - x86 (future runtime): `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)`.
     - Convert to `CLOCKS_PER_SEC` with the nominal period. Keep the `(clock_t)-1` overflow return.
 6. Fix the comments in `time.c`/`clock.c` and the docs: `{mips,riscv,x86}/syscalls.md`, `runtime-library.md`,
-   `m68k/traps.md`, `z80/io.md`, `runtime/PLATFORM.md`, `runtime/FUNCTIONS.md`.
+   `m68k/traps.md`, `z80/io.md`, `packages/runtime/PLATFORM.md`, `packages/runtime/FUNCTIONS.md`.
 
 **Tests.**
 
@@ -161,7 +161,7 @@ Update `src/lib/documentation/x86/using-c.md`.
 
 **Evidence.**
 
-- `checkAbi` in [build.mjs](../../scripts/runtime/build.mjs) checks only that baseline names weren't removed and
+- `checkAbi` in [build.mjs](../../packages/runtime/scripts/build.mjs) checks only that baseline names weren't removed and
   that `layout.c` values are unchanged.
 - `exported` is the documented function names plus `stdin/stdout/stderr/errno/bcmp`: 175 names, of which only
   `_Exit` and `__assert_fail` start with `_`.
@@ -189,7 +189,7 @@ Update `src/lib/documentation/x86/using-c.md`.
 3. **Layouts.** Keep `layout.c` and make sure it covers every public struct and typedef: `max_align_t`,
    `struct tm`, `div_t`/`ldiv_t`/`lldiv_t`, `jmp_buf` if present, `time_t`/`clock_t` sizes, `FILE` stays opaque,
    `CLOCKS_PER_SEC`, `EOF`, `BUFSIZ`, the `errno` values, and the `_IO*` constants.
-4. **Binary-compatibility test.** Commit fixtures under `runtime/abi/v1-fixtures/<target>/`: the generated
+4. **Binary-compatibility test.** Commit fixtures under `packages/runtime/abi/v1-fixtures/<target>/`: the generated
    assembly and expected output of about 10 corpus programs covering stdio, scanf, malloc/free, C++
    new/delete/atexit/virtuals, 64-bit division, time and exit codes. `test-cores.mjs` (or a new
    `test-abi.mjs`) links those **frozen** `.s` files against the **current** library on each Core and compares the
@@ -200,7 +200,7 @@ Update `src/lib/documentation/x86/using-c.md`.
 
 ### W5a. `fopen` update modes
 
-**Evidence.** [__fmodeflags.c](../../runtime/src/stdio/__fmodeflags.c) turns `r+` into read-only, `w+` into
+**Evidence.** [__fmodeflags.c](../../packages/runtime/src/stdio/__fmodeflags.c) turns `r+` into read-only, `w+` into
 write-only and `a+` into append-only, because the Cores' open service knows only 0 (read), 1 (write, create or
 truncate) and 9 (append).
 
@@ -223,7 +223,7 @@ truncate) and 9 (append).
 
 ### W5b. `setvbuf`
 
-**Evidence.** [setvbuf.c](../../runtime/src/stdio/setvbuf.c) reports success and changes nothing.
+**Evidence.** [setvbuf.c](../../packages/runtime/src/stdio/setvbuf.c) reports success and changes nothing.
 
 **Change (recommended): honour it.** Default streams stay unbuffered and write through. C allows that, and it was
 the source-runtime decision for teaching. Bring back musl's buffered write path for streams whose program asked for
@@ -237,7 +237,7 @@ can't be honoured. Either way, record the policy in `FUNCTIONS.md`.
 **Evidence.**
 
 - `malloc` handles a failed `__aed_sbrk` correctly (`ENOMEM`, returns NULL; see
-  [malloc.c](../../runtime/src/malloc/malloc.c)).
+  [malloc.c](../../packages/runtime/src/malloc/malloc.c)).
 - But RARS's `SyscallSbrk` (and MARS's) throws `ExitingException` when the heap is exhausted, so the program dies
   before `malloc` sees a failure.
 - Nothrow `new` already forwards `malloc`'s NULL.
@@ -254,8 +254,8 @@ exiting with 134: no exceptions means `std::terminate` semantics.
 
 ## W6. A valid hosted `argv` (P2)
 
-**Evidence.** All crt0s call `main(0, NULL)`: [riscv32/crt0.s:20](../../runtime/arch/riscv32/crt0.s),
-riscv64, mips, host-i386, host-x86_64, and [X86/start.asm:29](../../src/lib/languages/X86/start.asm).
+**Evidence.** All crt0s call `main(0, NULL)`: [riscv32/crt0.s:20](../../packages/runtime/arch/riscv32/crt0.s),
+riscv64, mips, host-i386, host-x86_64, and [X86/start.asm:29](../../packages/asm-editor/src/lib/languages/X86/start.asm).
 
 **Changes.**
 
@@ -273,7 +273,7 @@ prints only that check.
 
 ## W7. Ctrl+D with typed text pending (P3)
 
-**Evidence.** In [Terminal.svelte.ts:627](../../src/lib/languages/peripherals/Terminal.svelte.ts), `readLine`
+**Evidence.** In [Terminal.svelte.ts:627](../../packages/asm-editor/src/lib/languages/peripherals/Terminal.svelte.ts), `readLine`
 ignores EOT when the line isn't empty. A canonical Linux tty instead delivers the pending bytes at once, without a
 newline, and EOT on an empty line delivers zero bytes (end of input).
 
@@ -291,7 +291,7 @@ read keeps ignoring EOT.
 The review's closing point is worth recording in one ADR: the Runtime ABI protects compiled calls and layouts
 (W4), and a library operation either has its standard meaning or **fails** (W5). Deliberate simulator choices,
 such as unbuffered default streams, `argc == 0`, instruction-based CPU time and the Testcase epoch, are listed
-in one place (`runtime/FUNCTIONS.md` § Deviations).
+in one place (`packages/runtime/FUNCTIONS.md` § Deviations).
 
 ## Order of work
 
@@ -311,7 +311,7 @@ in one place (`runtime/FUNCTIONS.md` § Deviations).
 
 ## Verification before handing back
 
-- `node scripts/runtime/test-cores.mjs` and `--compiler clang`: the whole corpus, plus the new programs, plus the
+- `node packages/runtime/scripts/test-cores.mjs` and `--compiler clang`: the whole corpus, plus the new programs, plus the
   ABI fixtures.
 - Each changed Core's own test suite; the editor's `vitest` and `svelte-check`.
 - Browser checks:

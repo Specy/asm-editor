@@ -1,13 +1,84 @@
-import { mdsvex } from 'mdsvex'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import adapter from '@sveltejs/adapter-static'
-import { sveltekit } from '@sveltejs/kit/vite'
-import wasm from 'vite-plugin-wasm'
-import Icons from 'unplugin-icons/vite'
 import { defineConfig } from 'vite-plus'
-import { searchModelPlugin } from './scripts/search-model-plugin.ts'
+
+/**
+ * The Cores are submodules with their own repositories, formatting and lint rules; nothing here
+ * formats or lints them.
+ */
+const CORES = [
+    '/packages/mips/',
+    '/packages/risc-v/',
+    '/packages/m68k/',
+    '/packages/x86/',
+    '/packages/z80/'
+]
+
+/**
+ * A Core's full build, from its native sources to the `dist` the editor imports. Each runs in the
+ * Core's npm package with the build script the Core's own CD runs; the input globs leave out
+ * what the build writes (`dist`, Maven's `target/`, the TeaVM and wasm-pack output under `src/`),
+ * so a repeated build with unchanged sources is a cache hit that restores only `dist`.
+ * `mise.toml` is an input, since it pins the JDK, Rust and wasm-pack. The shared `pnpm-lock.yaml`
+ * is not, or every change to the app's dependencies would rebuild every Core; a Core's own
+ * `package.json` is.
+ */
+function coreBuild(cwd: string, command: string, input: string[], output: string[]) {
+    return {
+        command,
+        cwd,
+        cache: {
+            input: ['mise.toml', ...input, '!**/node_modules/**', '!**/target/**', '!**/dist/**'],
+            output,
+            // The toolchains the Core builds call find their installs through these, and mise
+            // picks the Rust toolchain with RUSTUP_TOOLCHAIN. Their versions are in mise.toml.
+            untrackedEnv: ['JAVA_HOME', 'MAVEN_*', 'M2_HOME', 'CARGO_*', 'RUSTUP_*']
+        }
+    }
+}
 
 export default defineConfig({
+    // `vp dev`, `vp build` and `vp preview` at the root are the editor's.
+    defaultPackage: './packages/asm-editor',
+    run: {
+        tasks: {
+            'build:mips': coreBuild(
+                'packages/mips/marsjs/ts',
+                'pnpm run build:all',
+                ['packages/mips/**', '!packages/mips/marsjs/ts/src/generated/**'],
+                ['packages/mips/marsjs/ts/dist/**']
+            ),
+            'build:risc-v': coreBuild(
+                'packages/risc-v/rarsjs/ts',
+                'pnpm run build:all',
+                ['packages/risc-v/**', '!packages/risc-v/rarsjs/ts/src/generated/**'],
+                ['packages/risc-v/rarsjs/ts/dist/**']
+            ),
+            'build:m68k': coreBuild(
+                'packages/m68k/ts-lib',
+                'pnpm run build-all',
+                ['packages/m68k/**', '!packages/m68k/ts-lib/src/pkg/**', '!packages/m68k/pkg/**'],
+                ['packages/m68k/ts-lib/dist/**']
+            ),
+            'build:x86': coreBuild(
+                'packages/x86/blink-js',
+                'pnpm run build',
+                ['packages/x86/blink-js/**'],
+                ['packages/x86/blink-js/dist/**']
+            ),
+            // trs80 is an npm workspace of its own (see pnpm-workspace.yaml): it installs from its
+            // lockfile and builds @specy/z80 with the packages it bundles, as its CD does.
+            'build:z80': coreBuild(
+                'packages/z80',
+                'npm ci && npm run build -- --scope @specy/z80 --include-dependencies',
+                ['packages/z80/**'],
+                ['packages/z80/packages/z80-machine/dist/**']
+            ),
+            'build:cores': {
+                command: 'node -e ""',
+                cache: false,
+                dependsOn: ['build:mips', 'build:risc-v', 'build:m68k', 'build:x86', 'build:z80']
+            }
+        }
+    },
     fmt: {
         singleQuote: true,
         tabWidth: 4,
@@ -19,27 +90,35 @@ export default defineConfig({
         svelte: {},
         sortPackageJson: false,
         ignorePatterns: [
-            'build/',
+            '/build/',
             '.svelte-kit/',
             'package/',
-            'package-lock.json',
-            'static/native-apps/',
-            '/examples/',
-            '/emulators/',
+            'pnpm-lock.yaml',
+            ...CORES,
+            '/packages/asm-editor/static/native-apps/',
+            '/packages/asm-editor/examples/',
             // Generated instruction tables: 1.2 MB of one-line records that the formatter would
             // explode into hundreds of thousands of lines. `scripts/x86-docs-generate.mjs`
             // writes them formatted.
-            'src/lib/languages/X86/generated/',
-            // The Runtime library's generated members, index and headers: megabytes of assembly
-            // text that `scripts/runtime/build.mjs` writes; formatting them would only churn the
-            // diff.
-            'src/lib/sourceRuntime/generated/',
-            // The Runtime library's C sources and headers, which follow their own (musl's) style.
-            '/runtime/',
+            '/packages/asm-editor/src/lib/languages/X86/generated/',
+            // The Environment library's generated headers, which `scripts/sim-header` writes.
+            '/packages/asm-editor/src/lib/sourceRuntime/generated/',
             // Compact, deterministic source-help catalogs; their generators own formatting.
-            'src/lib/sourceLanguageHelp/generated/',
+            '/packages/asm-editor/src/lib/sourceLanguageHelp/generated/',
             // Generated libc++abi demangler; scripts/demangle/build.sh owns this module.
-            'src/lib/languages/demangle/module.js'
+            '/packages/asm-editor/src/lib/languages/demangle/module.js',
+            // The Runtime library's C sources and headers follow their own (musl's) style, and its
+            // generated members, index and headers are megabytes of assembly text that
+            // `scripts/build.mjs` writes; formatting them would only churn the diff. Its scripts
+            // and modules are formatted like everything else.
+            '/packages/runtime/*',
+            '!/packages/runtime/lib/',
+            '!/packages/runtime/scripts/',
+            '!/packages/runtime/package.json',
+            '!/packages/runtime/vite.config.ts',
+            // The native harnesses, written in the library's own compact style.
+            '/packages/runtime/scripts/check-targets.mjs',
+            '/packages/runtime/scripts/test-native.mjs'
         ]
     },
     // Oxlint lints everything except the Svelte files, which stay on ESLint (`eslint.config.js`)
@@ -47,16 +126,16 @@ export default defineConfig({
     // the project had, plus the options it set on them.
     lint: {
         ignorePatterns: [
-            'build/',
+            '/build/',
             '.svelte-kit/',
             'package/',
             'node_modules/',
-            'emulators/',
-            'examples/',
-            'static/',
+            ...CORES,
+            '/packages/asm-editor/examples/',
+            '/packages/asm-editor/static/',
             '*.cjs',
             // Generated libc++abi demangler; scripts/demangle/build.sh owns this module.
-            'src/lib/languages/demangle/module.js',
+            '/packages/asm-editor/src/lib/languages/demangle/module.js',
             '**/*.svelte',
             '**/*.svelte.ts',
             '**/*.svelte.js'
@@ -180,78 +259,8 @@ export default defineConfig({
             },
             {
                 // The service worker runs off-main-thread and has its own global scope.
-                files: ['src/service-worker/**/*.ts'],
+                files: ['packages/asm-editor/src/service-worker/**/*.ts'],
                 env: { serviceworker: true }
-            }
-        ]
-    },
-    server: {
-        port: 4173,
-        fs: {
-            // `npm run emulators:local` points the `@specy/*` packages at their submodule
-            // checkouts, so Vite resolves a linked Core's assets to their real path under
-            // `emulators/` instead of `node_modules/`. Without this the `.wasm` files fall
-            // outside the serving allow list and the 403 page itself reaches
-            // `WebAssembly.instantiate`, which reports a bad magic word.
-            allow: ['emulators']
-        },
-        watch: {
-            // The search model and the vectors the index build caches; nothing imports them.
-            ignored: ['**/.cache/**']
-        }
-    },
-    optimizeDeps: {
-        exclude: ['@specy/s68k', '@specy/x86']
-    },
-    build: {
-        sourcemap: true
-    },
-    plugins: [
-        sveltekit({
-            preprocess: [vitePreprocess(), mdsvex()],
-            extensions: ['.svelte', '.svx'],
-            adapter: adapter({ fallback: '404.html' })
-        }),
-
-        Icons({
-            compiler: 'svelte',
-            // `scale: 0` drops the em-based width/height attributes
-            scale: 0,
-            defaultClass: 'unplugin-icon'
-        }),
-        wasm(),
-        searchModelPlugin()
-    ],
-    worker: {
-        format: 'es',
-        plugins: () => [wasm()]
-    },
-    // The tests run on the app's own Vite config so a test resolves package subpath imports
-    // exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
-    // module a test reaches. Peripheral logic itself stays plain TypeScript, which is why the
-    // default environment is node.
-    //
-    // `*.dom.test.ts` is the exception. Mounting a component needs a DOM and Svelte's browser
-    // build, so those files run in their own project.
-    test: {
-        projects: [
-            {
-                extends: true,
-                test: {
-                    name: 'node',
-                    environment: 'node',
-                    include: ['src/**/*.test.ts'],
-                    exclude: ['src/**/*.dom.test.ts']
-                }
-            },
-            {
-                extends: true,
-                resolve: { conditions: ['browser'] },
-                test: {
-                    name: 'dom',
-                    environment: 'jsdom',
-                    include: ['src/**/*.dom.test.ts']
-                }
             }
         ]
     }

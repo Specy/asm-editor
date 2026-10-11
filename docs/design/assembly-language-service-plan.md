@@ -330,7 +330,7 @@ disagree, Hover shows the alternatives or omits the value rather than choosing o
 Names can change during implementation, but responsibilities should remain separated:
 
 ```text
-src/lib/languages/service/
+packages/asm-editor/src/lib/languages/service/
   protocol.ts                 worker request/response types
   sourceModel.ts              neutral diagnostics, ranges, symbols and analysis types
   uri.ts                      Monaco URI construction and parsing

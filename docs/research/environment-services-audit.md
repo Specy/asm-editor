@@ -56,7 +56,7 @@ Classes: **(a)** deliberate and documented, **(b)** a necessary browser adaptati
 
 ### 6. Missing or broken services
 
-- x86: about 70 Documented system calls are compiled out of Blink (`DISABLE_NONPOSIX`, `config.h:4-21`) and return ENOSYS, including `brk`, `pipe`, `kill`, `getrandom`; the docs generator ignores the `#ifdef` (`scripts/x86-docs/sources.mjs:270`) and the generated file claims "a call listed here is a call that works". `time` (201) works but is undocumented. `ioctl(TCGETS)` on 0–2 gives ENOTTY, so `isatty` is false.
+- x86: about 70 Documented system calls are compiled out of Blink (`DISABLE_NONPOSIX`, `config.h:4-21`) and return ENOSYS, including `brk`, `pipe`, `kill`, `getrandom`; the docs generator ignores the `#ifdef` (`packages/asm-editor/scripts/x86-docs/sources.mjs:270`) and the generated file claims "a call listed here is a call that works". `time` (201) works but is undocumented. `ioctl(TCGETS)` on 0–2 gives ENOTTY, so `isatty` is false.
 - x86 files: Project Files are invisible to programs (the FileSystem peripheral is not wired to x86); Emscripten MEMFS files survive across Builds and Testcases with no Undo; `/program`, `/linker`, `/program.o` are visible and writable.
 - RISC-V syscall 17 (GetCWD) crashes every call under TeaVM (`user.dir` is null).
 - M68K files (50–59), sound (70–77), serial (40–43) and network (100–107) are rejected with the generic message, without the reason the other rejected tasks carry; the FileSystem peripheral that serves MIPS/RISC-V could serve 50–59. Task 12 (echo off), common in EASy68K games, ends the program.

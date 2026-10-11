@@ -20,7 +20,7 @@ _Avoid_: view, representation, interpretation, display mode
 
 ## Size name
 
-What a **Target** calls one of the widths the editor reads values at: the same four bytes are a `Long` to the 68000, a `Word` to MIPS and RISC-V and a `Dword` to x86, and the same two are a `Word` to the 68000 and a `Halfword` to MIPS. The width itself is the same everywhere — `RegisterSize` is a count of bytes, spelled the way the 68000 spells it because M68K was the first language here — and only the name shown changes, in `src/lib/languages/sizeNames.ts`. Used by the width grouping strip of the **Register file** panel and by anything that writes a width out.
+What a **Target** calls one of the widths the editor reads values at: the same four bytes are a `Long` to the 68000, a `Word` to MIPS and RISC-V and a `Dword` to x86, and the same two are a `Word` to the 68000 and a `Halfword` to MIPS. The width itself is the same everywhere — `RegisterSize` is a count of bytes, spelled the way the 68000 spells it because M68K was the first language here — and only the name shown changes, in `packages/asm-editor/src/lib/languages/sizeNames.ts`. Used by the width grouping strip of the **Register file** panel and by anything that writes a width out.
 _Avoid_: size alias, operand size, B/W/L
 
 ## Status flag
@@ -112,7 +112,7 @@ The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port n
 
 ## Console port
 
-The **Port map**'s group for the **Terminal**. A Z80 has no system calls: programs talk to the outside world with `in`/`out` on one of 256 I/O ports, so the Emulator maps a fixed handful of them (`Z80_PORTS` in `src/lib/languages/Z80/Z80-model.ts`) onto the Terminal, one port per output format (character, unsigned, signed, hexadecimal, 16 bit) instead of one syscall number per operation. A write formats the byte and appends it to the Terminal's output; a read with no buffered input pauses the machine — the Core stops with `WAITING_FOR_INPUT` and the adapter re-executes the `in` once the Terminal's **Input Source** has answered — so a port read raises an **Interrupt** like any other input request. See `docs/adr/0002-z80-console-ports.md`.
+The **Port map**'s group for the **Terminal**. A Z80 has no system calls: programs talk to the outside world with `in`/`out` on one of 256 I/O ports, so the Emulator maps a fixed handful of them (`Z80_PORTS` in `packages/asm-editor/src/lib/languages/Z80/Z80-model.ts`) onto the Terminal, one port per output format (character, unsigned, signed, hexadecimal, 16 bit) instead of one syscall number per operation. A write formats the byte and appends it to the Terminal's output; a read with no buffered input pauses the machine — the Core stops with `WAITING_FOR_INPUT` and the adapter re-executes the `in` once the Terminal's **Input Source** has answered — so a port read raises an **Interrupt** like any other input request. See `docs/adr/0002-z80-console-ports.md`.
 
 ## Project
 

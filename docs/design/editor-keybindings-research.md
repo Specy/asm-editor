@@ -78,9 +78,9 @@ Two things have changed since that answer, which was given in October 2025.
 
 **The settings store became the Preferences store** ([ADR 0014](../adr/0014-settings-split-by-effect.md), [project-format.md](./project-format.md)).
 
-- The issue's advice to bump the settings version no longer applies. [preferencesStore.svelte.ts](../../src/stores/preferencesStore.svelte.ts) has no version.
+- The issue's advice to bump the settings version no longer applies. [preferencesStore.svelte.ts](../../packages/asm-editor/src/stores/preferencesStore.svelte.ts) has no version.
 - It keeps a stored value only while that value is still valid, and gives a missing key its default, so a new Preference needs no migration.
-- A `choice` Preference already renders as a segmented control in Settings › Preferences ([Setting.svelte](../../src/components/specific/project/settings/Setting.svelte)).
+- A `choice` Preference already renders as a segmented control in Settings › Preferences ([Setting.svelte](../../packages/asm-editor/src/components/specific/project/settings/Setting.svelte)).
 
 **The project page became the Workbench** ([workbench.md](./workbench.md), [ADR 0024](../adr/0024-workbench-is-a-host-agnostic-shell.md)).
 
@@ -332,7 +332,7 @@ Vim changes only how the editor behaves for one person, which is the definition 
 
 The spike showed that `dispose()` hands the keys back immediately, so no reload is needed. After disposing, the editor's own cursor options have to be applied again.
 
-The Vim state is global to the page, so everything defined once belongs in one module next to [Monaco.ts](../../src/lib/monaco/Monaco.ts):
+The Vim state is global to the page, so everything defined once belongs in one module next to [Monaco.ts](../../packages/asm-editor/src/lib/monaco/Monaco.ts):
 
 - the lazy import;
 - the ex commands and actions;
@@ -345,20 +345,20 @@ An ex command that depends on the host, such as `:w`, receives the adapter, and 
 
 Vim is barely usable without the mode, the pending keys and an input for `:` and `/`. The adapter draws them into a node it is given, or into a status bar class supplied in place of its own. Where they go is a design decision:
 
-- **A strip under the code, inside `Editor.svelte`**, works for every host at once. Compiler Explorer puts its strip above the code instead. But on the desktop Workbench the execution controls float along the editor's bottom edge ([EditorArea.svelte](../../src/components/specific/workbench/EditorArea.svelte)). Also, `Editor.svelte` has no wrapping element today: its two root elements sit in the host's flex row, so it would need one.
-- **The mode in the file tab row, with an overlay for `:` and `/`.** The mode goes at the row's right end, beside "Live file" ([FileTabs.svelte](../../src/components/specific/workbench/FileTabs.svelte)). The `:` and `/` input becomes an overlay over the code, the way Monaco's find widget appears. That fits the Workbench, but the compact layouts hide the tab row and the Interactive editor has none.
+- **A strip under the code, inside `Editor.svelte`**, works for every host at once. Compiler Explorer puts its strip above the code instead. But on the desktop Workbench the execution controls float along the editor's bottom edge ([EditorArea.svelte](../../packages/asm-editor/src/components/specific/workbench/EditorArea.svelte)). Also, `Editor.svelte` has no wrapping element today: its two root elements sit in the host's flex row, so it would need one.
+- **The mode in the file tab row, with an overlay for `:` and `/`.** The mode goes at the row's right end, beside "Live file" ([FileTabs.svelte](../../packages/asm-editor/src/components/specific/workbench/FileTabs.svelte)). The `:` and `/` input becomes an overlay over the code, the way Monaco's find widget appears. That fits the Workbench, but the compact layouts hide the tab row and the Interactive editor has none.
 - **A Monaco overlay widget in a corner of the code** is the same in every host and stays out of the floating controls' way.
 
 The adapter's status bar has no ARIA roles. Ours should announce the mode through a live region.
 
 ### Escape and the Workbench's shortcuts
 
-[WorkbenchSession.svelte.ts](../../src/lib/workbench/WorkbenchSession.svelte.ts) (`handleKeyDown`, line 936) ignores keys typed into the editor, except that Escape blurs it (line 949).
+[WorkbenchSession.svelte.ts](../../packages/asm-editor/src/lib/workbench/WorkbenchSession.svelte.ts) (`handleKeyDown`, line 936) ignores keys typed into the editor, except that Escape blurs it (line 949).
 
 - Vim consumes the Escape that leaves insert or visual mode, so that one never gets there.
 - An Escape in normal mode with nothing pending is not Vim's, and it reaches the Workbench.
 
-Vim users press Escape out of habit, often more than once. The keys they type next then reach the Workbench's single-key shortcuts ([shortcutsStore.ts](../../src/stores/shortcutsStore.ts)), which are Shift+letter:
+Vim users press Escape out of habit, often more than once. The keys they type next then reach the Workbench's single-key shortcuts ([shortcutsStore.ts](../../packages/asm-editor/src/stores/shortcutsStore.ts)), which are Shift+letter:
 
 | Key | Workbench action      |
 | --- | --------------------- |
@@ -422,7 +422,7 @@ These three gaps are in the adapter, so they need fixing under either engine:
 
 ### Exams
 
-The Exam asks for fullscreen and locks Escape with `navigator.keyboard.lock` ([exam session page](../../src/routes/exam/session/+page.svelte), line 445). In Chromium a short Escape then reaches the page, and only a long press leaves fullscreen.
+The Exam asks for fullscreen and locks Escape with `navigator.keyboard.lock` ([exam session page](../../packages/asm-editor/src/routes/exam/session/+page.svelte), line 445). In Chromium a short Escape then reaches the page, and only a long press leaves fullscreen.
 
 That API is Chromium's alone. Firefox 151 (May 2026) added its own equivalent: the `keyboardLock` option of `requestFullscreen()` ([release notes](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/151)). The Exam does not pass it, so in Firefox Escape leaves fullscreen. The Exam counts that against the student and disables itself.
 
@@ -446,7 +446,7 @@ Vim's own `gd` and `K` mean "go to the declaration" and "look up the word". The 
 ### 1. Vim on a vendored adapter and replit's engine, as a Preference (recommended)
 
 - **The Preference:** a `choice` Preference, standard or Vim, in Settings › Preferences, off by default.
-- **The adapter, brought into the repository.** Copy `monaco-vim`'s `cm_adapter.ts`, about 1,300 lines, MIT, with its copyright notice, into `src/lib/monaco/`. Fix there:
+- **The adapter, brought into the repository.** Copy `monaco-vim`'s `cm_adapter.ts`, about 1,300 lines, MIT, with its copyright notice, into `packages/asm-editor/src/lib/monaco/`. Fix there:
     - `>>` and `<<` through Monaco's indent actions;
     - marks per File;
     - one undo step per insert;

@@ -24,7 +24,7 @@ backend choice.
 
 ## Existing foundations
 
-The current [backend contract](../../src/lib/languages/BaseEmulator.svelte.ts) already covers:
+The current [backend contract](../../packages/asm-editor/src/lib/languages/BaseEmulator.svelte.ts) already covers:
 
 - Compilation and diagnostics through `_compile`, `_checkCode`, and `_getCompiledCode`.
 - Stepping and bounded execution through `_step` and `_runSlice`.
@@ -32,10 +32,10 @@ The current [backend contract](../../src/lib/languages/BaseEmulator.svelte.ts) a
 - Undo, history inspection, and transactions for Pokes.
 - Testcase execution and lifecycle management.
 
-[`GenericEmulator`](../../src/lib/languages/GenericEmulator.svelte.ts) supplies execution controls,
+[`GenericEmulator`](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts) supplies execution controls,
 command serialization, scheduling, host yielding, peripheral ownership, and much of the Testcase
 machinery. The WASM adapter should preserve the
-[existing scheduling contract](../../src/lib/languages/ExecutionSlice.ts): return at instruction
+[existing scheduling contract](../../packages/asm-editor/src/lib/languages/ExecutionSlice.ts): return at instruction
 boundaries with a stop reason and instruction count, so Run, Pause, Stop, breakpoints, and limits
 remain consistent with the other Targets. See
 [ADR 0007](../adr/0007-generic-emulator-run-scheduling.md).
@@ -147,11 +147,11 @@ binding effort, source mapping, and reversible execution are the main uncertaint
 - [WebAssembly Core runtime structure](https://webassembly.github.io/spec/core/exec/runtime.html).
 - [WABT JavaScript package and API](https://github.com/AssemblyScript/wabt.js).
 - [WABT interpreter interface](https://github.com/WebAssembly/wabt/blob/main/include/wabt/interp/interp.h).
-- [Backend contract](../../src/lib/languages/BaseEmulator.svelte.ts),
-  [GenericEmulator](../../src/lib/languages/GenericEmulator.svelte.ts), and
-  [execution-slice contract](../../src/lib/languages/ExecutionSlice.ts).
-- [Target declarations](../../src/lib/Project.svelte.ts),
-  [Target defaults](../../src/lib/Config.ts),
-  [Emulator loader](../../src/lib/languages/Emulator.ts),
-  [Monaco registration](../../src/lib/monaco/assemblyLanguageRegistry.ts), and
-  [language analysis workers](../../src/lib/languages/service/LanguageWorkerManager.ts).
+- [Backend contract](../../packages/asm-editor/src/lib/languages/BaseEmulator.svelte.ts),
+  [GenericEmulator](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts), and
+  [execution-slice contract](../../packages/asm-editor/src/lib/languages/ExecutionSlice.ts).
+- [Target declarations](../../packages/asm-editor/src/lib/Project.svelte.ts),
+  [Target defaults](../../packages/asm-editor/src/lib/Config.ts),
+  [Emulator loader](../../packages/asm-editor/src/lib/languages/Emulator.ts),
+  [Monaco registration](../../packages/asm-editor/src/lib/monaco/assemblyLanguageRegistry.ts), and
+  [language analysis workers](../../packages/asm-editor/src/lib/languages/service/LanguageWorkerManager.ts).

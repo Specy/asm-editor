@@ -1,0 +1,36 @@
+{
+    "name": "@asm-editor/runtime",
+    "description": "The C standard library that compiled and hand-written programs link against",
+    "license": "AGPL-3.0",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test:native": "node scripts/test-native.mjs",
+        "check:targets": "node scripts/check-targets.mjs"
+    },
+    "exports": {
+        "./compiler-contract": {
+            "types": "./lib/compilerContract.d.mts",
+            "default": "./lib/compilerContract.mjs"
+        },
+        "./x86": {
+            "types": "./lib/x86Runtime.d.mts",
+            "default": "./lib/x86Runtime.mjs"
+        },
+        "./paths": {
+            "types": "./lib/paths.d.mts",
+            "default": "./lib/paths.mjs"
+        },
+        "./generated/*": "./generated/*",
+        "./package.json": "./package.json"
+    },
+    "dependencies": {
+        "@specy/x86": "workspace:*"
+    },
+    "devDependencies": {
+        "@specy/mips": "workspace:*",
+        "@specy/risc-v": "workspace:*",
+        "vite-plus": "catalog:"
+    }
+}
