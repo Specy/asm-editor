@@ -46,7 +46,7 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 
 ## Breakpoint
 
-A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
 
 ## Poke
@@ -73,6 +73,16 @@ The Peripheral representing pointing input for a program interacting with the **
 ## Terminal
 
 The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+
+## Command line
+
+The **Terminal**'s first line, `$ ./crackme hunter2`: the name an x86 program is started under followed by its **Arguments**, editable outside a **Debug session** and locked during one to what that run started with. It says how Build and Run start the program; it is not a shell and runs no commands.
+_Avoid_: prompt, shell, run line
+
+## Arguments
+
+The words an x86 program receives after its own name in `argv`, a **Setting** of the **Project** edited on the **Command line**. A **Testcase** can bring its own.
+_Avoid_: args, parameters, command-line options
 
 ## Line discipline
 
@@ -214,12 +224,22 @@ The **Project**'s configured path from which a Build begins, `main.<ext>` by def
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
+The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing.
 _Avoid_: main file, active file, selected file, open file
+
+## Executable
+
+A **File** holding a program already built for the **Project**'s **Target** by a compiler and linker outside the editor, which a Build loads as it is instead of assembling. Today only an x86-64 Linux ELF in an x86 Project; its own symbols may have been stripped. See [the binary import design](./docs/design/binary-import.md).
+_Avoid_: binary (any File that is not text is binary), imported binary, compiled program, ELF (as a noun)
+
+## Listing
+
+The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it.
+_Avoid_: disassembly (the decoding that produces it), dump, decompilation, listing file
 
 ## Displayed file
 
-The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation.
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. An **Executable** is displayed as its **Listing**.
 
 ## Build snapshot
 
@@ -256,7 +276,7 @@ _Avoid_: output, build output, console
 
 ## Settings
 
-Per-Project configuration that changes what the **Emulator** or the program does: the undo history size and the separate **Screen** and **FileSystem** undo budgets. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86 program's **Arguments**. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
 _Avoid_: preferences, options, config, global settings
 
 ## Preferences
@@ -275,7 +295,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a program: starting registers/memory/input (and, on x86, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 
