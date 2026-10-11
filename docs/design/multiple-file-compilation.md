@@ -37,7 +37,7 @@ Implementation update on 2026-09-11: the application now uses the common Files/E
 | Runtime file access      | MIPS and RISC-V adapters have `openFile`, `readFile`, `writeFile`, and `closeFile` callbacks wired to unimplemented handlers. Assembly input support and runtime file access are separate capabilities.                                                                                                                                                         |
 | Peripheral lifecycle     | Peripherals can be supplied at the Emulator boundary. Screen Undo restores effects alongside CPU instructions; this does not yet decide FileSystem Undo or persistence.                                                                                                                                                                                         |
 
-Evidence: [Project model](../../src/lib/Project.svelte.ts), [base contract](../../src/lib/languages/BaseEmulator.svelte.ts), [generic emulator](../../src/lib/languages/GenericEmulator.svelte.ts), [project component](../../src/routes/projects/[project]/Project.svelte), [peripheral injection](../../src/lib/languages/peripherals/peripheralSet.ts), [Z80 adapter](../../src/lib/languages/Z80/Z80Emulator.svelte.ts), [MIPS adapter](../../src/lib/languages/MIPS/MIPSEmulator.svelte.ts), [RISC-V adapter](../../src/lib/languages/RISC-V/RISC-VEmulator.svelte.ts), and the installed `@specy/z80/dist/index.d.ts`.
+Evidence: [Project model](../../packages/asm-editor/src/lib/Project.svelte.ts), [base contract](../../packages/asm-editor/src/lib/languages/BaseEmulator.svelte.ts), [generic emulator](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts), [project component](../../src/routes/projects/[project]/Project.svelte), [peripheral injection](../../packages/asm-editor/src/lib/languages/peripherals/peripheralSet.ts), [Z80 adapter](../../packages/asm-editor/src/lib/languages/Z80/Z80Emulator.svelte.ts), [MIPS adapter](../../packages/asm-editor/src/lib/languages/MIPS/MIPSEmulator.svelte.ts), [RISC-V adapter](../../packages/asm-editor/src/lib/languages/RISC-V/RISC-VEmulator.svelte.ts), and the installed `@specy/z80/dist/index.d.ts`.
 
 ## Accepted: source changes during execution
 
@@ -266,7 +266,7 @@ The journal must not retain a complete prior File or Project snapshot for every 
 
 Apply the budget to retained inverse data and bookkeeping, including backing allocations kept alive by retained references, not merely the visible length of a small buffer view. This budget is for Undo history, not a limit on live Files or the Build snapshot. Use a separate configurable Project Setting with the 64 MiB initial default recorded in the accepted resource profile below; validate accounting with representative workloads during implementation.
 
-Evidence: [Project Settings](../../src/lib/projectSettings.ts), [Screen history](../../src/lib/languages/peripherals/screen/ScreenHistory.ts), [instruction preflight](../../src/lib/languages/peripherals/screen/ScreenInstructionHistory.ts), and each adapter's `_canUndo` implementation.
+Evidence: [Project Settings](../../packages/asm-editor/src/lib/projectSettings.ts), [Screen history](../../packages/asm-editor/src/lib/languages/peripherals/screen/ScreenHistory.ts), [instruction preflight](../../packages/asm-editor/src/lib/languages/peripherals/screen/ScreenInstructionHistory.ts), and each adapter's `_canUndo` implementation.
 
 ## Accepted: exceeding the FileSystem Undo budget
 
@@ -282,7 +282,7 @@ This preserves the program's file behavior at the cost of a shorter reversible e
 
 Accepted by the owner on 2026-09-08: keep the editor read-only until Stop and allow instruction Undo after exit wherever the Core supports it and retained history permits it.
 
-Current evidence: a successful Build makes the editor read-only before execution begins. Natural termination can unlock it again, while the main Undo control and History panel disagree about whether Undo is available. Stop already remains available after termination and explicitly clears the run. See the [project component](../../src/routes/projects/[project]/Project.svelte), [main controls](../../src/components/specific/project/Controls.svelte), [History panel](../../src/components/specific/project/user-tools/MutationsRenderer.svelte), [history entry controls](../../src/components/specific/project/user-tools/MutationStep.svelte), and [generic Undo](../../src/lib/languages/GenericEmulator.svelte.ts).
+Current evidence: a successful Build makes the editor read-only before execution begins. Natural termination can unlock it again, while the main Undo control and History panel disagree about whether Undo is available. Stop already remains available after termination and explicitly clears the run. See the [project component](../../src/routes/projects/[project]/Project.svelte), [main controls](../../src/components/specific/project/Controls.svelte), [History panel](../../packages/asm-editor/src/components/specific/project/user-tools/MutationsRenderer.svelte), [history entry controls](../../packages/asm-editor/src/components/specific/project/user-tools/MutationStep.svelte), and [generic Undo](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts).
 
 Scenario: a program writes its final output and exits. Releasing host write access while permitting instruction Undo would let the old execution history overwrite subsequent user edits. Discarding Undo immediately on exit avoids that conflict but loses the opportunity to reverse the final instructions.
 
@@ -318,7 +318,7 @@ This requires separating a handle's target from pathname lookup, rather than eit
 
 Accepted by the owner on 2026-09-08.
 
-Current evidence: the MIPS/RISC-V adapters read the display configuration from a single source string. The parser uses its first `@screen` comment and warns on subsequent directives. A `base=<label>` is resolved by assembling a throwaway source with a probe appended. The display controls rewrite the directive in the editor's bound `code`, which is currently also the Entry file. See [directive parsing and rewriting](../../src/lib/languages/mars/screenDirective.ts), the MIPS/RISC-V adapters, and the project component's `applyDisplay`.
+Current evidence: the MIPS/RISC-V adapters read the display configuration from a single source string. The parser uses its first `@screen` comment and warns on subsequent directives. A `base=<label>` is resolved by assembling a throwaway source with a probe appended. The display controls rewrite the directive in the editor's bound `code`, which is currently also the Entry file. See [directive parsing and rewriting](../../packages/asm-editor/src/lib/languages/mars/screenDirective.ts), the MIPS/RISC-V adapters, and the project component's `applyDisplay`.
 
 Scenario: `main.mips` includes `graphics.mips`, and both contain `@screen` comments with different dimensions. The Build needs one predictable display configuration independent of which File is displayed.
 
@@ -338,7 +338,7 @@ For interoperability with other educational editors, a Project whose sole File i
 
 This separates an editor Project from a source file usable directly by an external assembler, while retaining individual-file downloads for the latter purpose. The archive's separation of Files from versioned project metadata and the migration rule for existing linked local sources are accepted below. The current File System Access save path calls `toExternal()` directly, so the implementation must not silently overwrite an existing assembly file with a different format.
 
-Evidence: [Project serialization](../../src/lib/Project.svelte.ts), [project import and download UI](../../src/routes/projects/+page.svelte), [linked-file saves](../../src/stores/projectsStore.svelte.ts), [share payload](../../src/lib/utils.ts), and [serializer](../../src/lib/json.ts).
+Evidence: [Project serialization](../../packages/asm-editor/src/lib/Project.svelte.ts), [project import and download UI](../../packages/asm-editor/src/routes/projects/+page.svelte), [linked-file saves](../../packages/asm-editor/src/stores/projectsStore.svelte.ts), [share payload](../../packages/asm-editor/src/lib/utils.ts), and [serializer](../../packages/asm-editor/src/lib/json.ts).
 
 ## Accepted: Project archive extension
 
@@ -348,7 +348,7 @@ Export `<project-name>.asmproj`, using an ordinary ZIP container, and accept the
 
 Current integration evidence: the PWA manifest declares only text/source file associations, and both the ordinary project import and linked-file import currently read text. The shared FileImporter already supports ArrayBuffer input, so ZIP imports can use its byte-reading mode. Project-format detection, the PWA declaration, and linked binary reads/writes must be adapted consistently once the archive contract is settled.
 
-Evidence: [PWA manifest](../../static/manifest.json), [FileImporter](../../src/components/shared/fileImporter/FileImporter.svelte), and the project import and linked-file save paths above.
+Evidence: [PWA manifest](../../packages/asm-editor/static/manifest.json), [FileImporter](../../packages/asm-editor/src/components/shared/fileImporter/FileImporter.svelte), and the project import and linked-file save paths above.
 
 ## Accepted: Project archive layout
 
@@ -383,7 +383,7 @@ Restricting legacy write-back to a single text File is the chosen compatibility 
 
 Integration requirement: use a fixed Project snapshot for each save, serialize writes to the same linked destination, and report linked-file failures instead of implying that the disk copy is current. Browser saving and archive generation must not race so that an older write replaces a newer Project state; rapid runtime changes may be coalesced as already accepted.
 
-Evidence: [Project store saves](../../src/stores/projectsStore.svelte.ts), [native picker and PWA launch imports](../../src/routes/projects/+page.svelte), and the existing legacy serializer in [Project](../../src/lib/Project.svelte.ts).
+Evidence: [Project store saves](../../packages/asm-editor/src/stores/projectsStore.svelte.ts), [native picker and PWA launch imports](../../packages/asm-editor/src/routes/projects/+page.svelte), and the existing legacy serializer in [Project](../../packages/asm-editor/src/lib/Project.svelte.ts).
 
 ## Accepted: guest-requested compilation and program launch are deferred
 
@@ -409,7 +409,7 @@ In this implementation, the existing target assembler builds from the Entry path
 
 This clarifies the current project-level architecture choice rather than adding a target-switching UI, C compiler, or multi-target build system.
 
-Evidence: [Project language types](../../src/lib/Project.svelte.ts), [Emulator selection](../../src/lib/languages/Emulator.ts), and [Editor syntax language](../../src/components/specific/project/Editor.svelte).
+Evidence: [Project language types](../../packages/asm-editor/src/lib/Project.svelte.ts), [Emulator selection](../../packages/asm-editor/src/lib/languages/Emulator.ts), and [Editor syntax language](../../packages/asm-editor/src/components/specific/project/Editor.svelte).
 
 ## Accepted: FileSystem resource limits
 
@@ -460,7 +460,7 @@ Retain the existing optional inline expansion view, keyed by File path and sourc
 
 This adds no new permanent generated-code panel and does not decide breakpoint stop granularity. Keep the source-to-instructions relationship one-to-many under the hood regardless of whether inline expansion display is enabled. Core-supplied source identity and expansion/include details must not be discarded merely to fit the current presentation.
 
-Evidence: [MIPS compiled-code decorations](../../src/lib/languages/MIPS/MIPSEmulator.svelte.ts), [RISC-V compiled-code decorations](../../src/lib/languages/RISC-V/RISC-VEmulator.svelte.ts), [Project editor view zones](../../src/routes/projects/[project]/Project.svelte), and the root [MIPS/RISC-V handoff](../../risc-v_mips-handoff.md#source-location-statement-lookup).
+Evidence: [MIPS compiled-code decorations](../../packages/asm-editor/src/lib/languages/MIPS/MIPSEmulator.svelte.ts), [RISC-V compiled-code decorations](../../packages/asm-editor/src/lib/languages/RISC-V/RISC-VEmulator.svelte.ts), [Project editor view zones](../../src/routes/projects/[project]/Project.svelte), and the root [MIPS/RISC-V handoff](../../risc-v_mips-handoff.md#source-location-statement-lookup).
 
 ## Integration checks discovered during the interview
 

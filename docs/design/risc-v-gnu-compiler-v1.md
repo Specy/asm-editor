@@ -30,7 +30,7 @@ The C/C++ startup aligns SP to 16 bytes before calling the generated entry. Educ
 
 ## Evidence and local artifact
 
-The [package suite](../../emulators/risc-v/rarsjs/ts/test/gnu-compiler.mjs) contains 16 GCC 14.2/Clang 21.1 C/C++ fixtures and four rustc r1990 helper-free fixtures, spanning both widths and O0/O2, plus two Rust helper-dependent negatives. Fixtures store source, compiler ID/flags and raw response. Every positive checks independent GNU Binutils 2.46 bytes and symbol addresses, execution, aligned/restored SP and nonzero callee-saved register preservation. Additional tests cover layout, escaped bytes, fixup failures, profiles, source identities, NOP padding and instruction Undo.
+The [package suite](../../packages/risc-v/rarsjs/ts/test/gnu-compiler.mjs) contains 16 GCC 14.2/Clang 21.1 C/C++ fixtures and four rustc r1990 helper-free fixtures, spanning both widths and O0/O2, plus two Rust helper-dependent negatives. Fixtures store source, compiler ID/flags and raw response. Every positive checks independent GNU Binutils 2.46 bytes and symbol addresses, execution, aligned/restored SP and nonzero callee-saved register preservation. Additional tests cover layout, escaped bytes, fixup failures, profiles, source identities, NOP padding and instruction Undo.
 
 Reference preparation uses the same startup and section ordering, no compression/relaxation, and removes file/loc/CFI metadata. GNU requires architecture attributes before instructions, so reference preparation hoists them before startup. Stored linker scripts match Core bases; objcopy clears merge flags to prevent reference deduplication. Each oracle records these transformations, tool version, arguments and section bytes. CI tests consume stored fixtures without network access. The separate layout fixture also stores the reference section and symbol tables.
 
@@ -43,8 +43,8 @@ The verified `rarsjs/ts/dist/index.mjs` artifact has SHA-256 `46843342645a004d1d
 ```sh
 npm run emulators:build:risc-v
 node scripts/local-emulators.mjs link risc-v
-npm --prefix emulators/risc-v/rarsjs/ts test
-npm test -- src/lib/sourceCompilation src/lib/languages/service src/lib/languages/RISC-V
+npm --prefix packages/risc-v/rarsjs/ts test
+npm test -- packages/asm-editor/src/lib/sourceCompilation packages/asm-editor/src/lib/languages/service packages/asm-editor/src/lib/languages/RISC-V
 npm run check
 npm run build
 ```

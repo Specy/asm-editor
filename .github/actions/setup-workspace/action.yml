@@ -1,0 +1,25 @@
+name: Set up the workspace
+description: The toolchains of mise.toml, the pnpm install, and Vite Task's cache.
+runs:
+    using: composite
+    steps:
+        # Node, pnpm, the JDK and Maven, Rust with its wasm target and wasm-pack, at the versions
+        # mise.toml pins, as `mise install` sets them up locally.
+        - uses: jdx/mise-action@v4
+        - id: pnpm-store
+          shell: bash
+          run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+        - uses: actions/cache@v4
+          with:
+              path: ${{ steps.pnpm-store.outputs.path }}
+              key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+              restore-keys: pnpm-store-${{ runner.os }}-
+        - shell: bash
+          run: pnpm install --frozen-lockfile
+        # Vite Task fingerprints every task itself, so the key only needs to be unique per run;
+        # a Core whose sources did not change restores its `dist` instead of building again.
+        - uses: actions/cache@v4
+          with:
+              path: node_modules/.vite/task-cache
+              key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+              restore-keys: vite-task-${{ runner.os }}-${{ runner.arch }}-

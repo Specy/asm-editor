@@ -1,0 +1,542 @@
+import { describe, expect, it, vi } from 'vite-plus/test'
+import { Z80Emulator } from '#lib/languages/Z80/Z80Emulator.svelte.ts'
+import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
+
+/**
+ * The slice contract against a real Core. `@specy/z80` is plain TypeScript, so it is the one adapter
+ * that can be driven end to end under node, which makes it the guard for the scheduler of
+ * [ADR 0007](../../../../../../docs/adr/0007-generic-emulator-run-scheduling.md): a program still runs to
+ * its end across slices, an unbounded run yields often enough for Stop to be answered, and the
+ * overall instruction limit survives being split up.
+ */
+
+const INFINITE_LOOP = ['    org $8000', 'loop:', '    jp loop'].join('\n')
+
+/**
+ * Clears and presents the whole Screen as fast as it can. Three `out`s and two `ld`s a frame, each
+ * clear a hundred thousand pixels and a journal record of the image it overwrote: the case where an
+ * instruction budget says nothing about how long the host will be held.
+ */
+const DRAWING_LOOP = [
+    'P_FILL  equ 0x21',
+    'P_CMD   equ 0x27',
+    '        org $8000',
+    'start:  ld a, 11',
+    '        out (P_CMD), a      ; draw off screen',
+    'loop:   ld a, 0x03',
+    '        out (P_FILL), a',
+    '        ld a, 9',
+    '        out (P_CMD), a      ; clear',
+    '        ld a, 13',
+    '        out (P_CMD), a      ; present',
+    '        jp loop'
+].join('\n')
+
+/**
+ * Draws a pixel, waits a tenth of a second of program time, prints the elapsed hundredths and echoes
+ * a character read from the console port. It is the matrix's "testcase over a drawing program"
+ * (row Z8): scripted input answers the character port, the wait completes at once on the virtual
+ * clock and the elapsed-time port starts at zero for the run (ADR 0002, ADR 0010).
+ */
+const DRAWING_TESTCASE_PROGRAM = [
+    '        org $8000',
+    '        ld a, 0xFF',
+    '        out (0x20), a       ; white pen',
+    '        ld a, 100',
+    '        out (0x23), a',
+    '        out (0x24), a',
+    '        ld a, 0',
+    '        out (0x27), a       ; draw the pixel at (100, 100), clear of the text cursor',
+    '        ld c, 0x50',
+    '        ld b, 10',
+    '        in a, (c)           ; a tenth of a second of program time',
+    '        ld c, 0x52',
+    '        ld b, 0',
+    '        in a, (c)           ; the lowest byte of the elapsed hundredths',
+    '        out (0x11), a       ; printed as an unsigned number',
+    '        in a, (0x10)        ; a character of the testcase input',
+    '        out (0x10), a       ; echoed back',
+    '        halt'
+].join('\n')
+
+/**
+ * Draws a pixel, which is what moves the Terminal's reads to the Screen's Keyboard, and then reads a
+ * decimal number: a line read, whose echo draws one glyph per typed character while a single `in` is
+ * suspended. Four Core steps touch the Screen and the journal has to hold four records
+ * ([ADR 0005](../../../../../../docs/adr/0005-restore-screen-state-on-undo.md), ADR 0009).
+ */
+const READ_LINE_PROGRAM = [
+    '        org $8000',
+    '        ld a, 0xFF',
+    '        out (0x20), a       ; white pen',
+    '        ld a, 50',
+    '        out (0x23), a',
+    '        out (0x24), a',
+    '        ld a, 0',
+    '        out (0x27), a       ; the pixel at (50, 50)',
+    '        in a, (0x11)        ; a decimal number, typed and echoed at the text cursor',
+    '        out (0x11), a       ; printed back',
+    '        halt'
+].join('\n')
+
+describe('Z80 source set', () => {
+    it('assembles included Files and retains their source identity', async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': { encoding: 'plain' as const, content: '#include "lib.asm"\n' },
+                'lib.asm': {
+                    encoding: 'plain' as const,
+                    content: '    org $8000\n    ld a, 7\n    halt\n'
+                }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(7n)
+        expect(emulator.currentFile).toBe('lib.asm')
+        expect(emulator.buildArtifacts).toEqual([
+            {
+                file: 'lib.asm',
+                line: 1,
+                address: 0x8000n,
+                opcode: '3e 07'
+            },
+            {
+                file: 'lib.asm',
+                line: 2,
+                address: 0x8002n,
+                opcode: '76'
+            }
+        ])
+    })
+
+    it('embeds binary Files without transcoding their bytes', async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain' as const,
+                    content:
+                        '    org $8000\n    jp start\ndata:\n    #insert "blob.bin"\nstart:\n    ld a, (data)\n    halt\n'
+                },
+                'blob.bin': { encoding: 'base64' as const, content: '/w==' }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(255n)
+    })
+})
+
+describe('Z80 Screen journal', () => {
+    it('journals one record per Core step, echo of a whole typed line included', async () => {
+        const code = READ_LINE_PROGRAM
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        //queued before the run: the read suspends until the Keyboard has a line to give it
+        emulator.peripherals.keyboard.typeText('42\n')
+        await emulator.run(100_000)
+        const screen = emulator.peripherals.screen
+        expect(emulator.stdOut).toBe('42\n42')
+        //the pen `out`, the drawing `out`, the one `in` whose echo drew three glyphs, and the
+        //`out` that printed the number back at the text cursor: four steps, four records
+        expect(screen.history.sequence).toBe(4)
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+
+        //and walking the whole program back empties the journal with it, rather than leaving
+        //records the Core has no steps left to pop
+        emulator.undo(100)
+        expect(screen.history.sequence).toBe(0)
+        expect(colorAt(screen, 50, 50)).toBe(0)
+    })
+})
+
+/**
+ * The character port reads through the Terminal's Line discipline
+ * ([ADR 0036](../../../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)): a line typed
+ * in the Terminal and echoed, handed out a byte at a time in Latin-1 and ending with 0x0A, or a
+ * single keystroke from the Screen keyboard once the program is graphical (ADR 0009).
+ */
+describe('Z80 console input typed in the Terminal', () => {
+    function registerValue(emulator: ReturnType<typeof Z80Emulator>, name: string): bigint {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register ${name}`)
+        return register.value
+    }
+
+    it('reads a typed line a byte at a time, which the key port sees waiting', async () => {
+        const code = [
+            '        org $8000',
+            '        in a, (0x10)        ; the first byte of the line',
+            '        ld h, a',
+            '        in a, (0x30)        ; is more of it waiting?',
+            '        ld l, a',
+            '        in a, (0x10)',
+            '        ld d, a',
+            '        in a, (0x10)',
+            '        ld e, a',
+            '        halt'
+        ].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(0, code)
+        const terminal = emulator.peripherals.terminal
+        terminal.attachConsole()
+        terminal.insertText('é☃\n')
+        await emulator.run(100_000)
+        expect(emulator.errors).toEqual([])
+        //Latin-1, one byte a character, and a question mark for one outside it
+        expect(registerValue(emulator, 'hl')).toBe(0xe901n)
+        expect(registerValue(emulator, 'de')).toBe(0x3f0an)
+        expect(emulator.stdOut).toBe('é☃\n')
+    })
+
+    it('reads one keystroke at a time once the program is graphical, Enter being 0x0A', async () => {
+        const code = [
+            '        org $8000',
+            '        ld a, 0xFF',
+            '        out (0x20), a       ; a pen color: the program is graphical',
+            '        in a, (0x10)',
+            '        ld d, a',
+            '        in a, (0x10)',
+            '        ld e, a',
+            '        halt'
+        ].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.keyboard.typeText('x\n')
+        await emulator.run(100_000)
+        expect(emulator.errors).toEqual([])
+        expect(registerValue(emulator, 'de')).toBe(0x780an)
+        expect(emulator.stdOut).toBe('x\n')
+    })
+})
+
+describe('Z80 reset and testcases', () => {
+    it('leaves a blank Screen and no input state after a rebuild', async () => {
+        const code = DRAWING_TESTCASE_PROGRAM
+        const emulator = Z80Emulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.terminal.useScriptedInput(['a'])
+        await emulator.run(100_000)
+        const screen = emulator.peripherals.screen
+        expect(colorAt(screen, 100, 100)).toBe(0xffffff)
+        emulator.peripherals.keyboard.typeText('hello')
+        emulator.peripherals.mouse.buttonDown('left', 10, 10)
+        //a Build resets every peripheral on the Terminal's own clear path (the design record)
+        await emulator.compile(0, code)
+        expect(colorAt(emulator.peripherals.screen, 100, 100)).toBe(0)
+        expect(emulator.peripherals.keyboard.hasTypedInput()).toBe(false)
+        expect(emulator.peripherals.mouse.lastDown().event).toBe(0)
+        expect(emulator.stdOut).toBe('')
+    })
+
+    it('runs a testcase over a drawing program on a virtual clock', async () => {
+        const code = DRAWING_TESTCASE_PROGRAM
+        const emulator = Z80Emulator(code)
+        await emulator.compile(0, code)
+        const started = Date.now()
+        const [result] = await emulator.test(
+            code,
+            [
+                {
+                    input: ['q'],
+                    expectedOutput: '10q',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            100_000
+        )
+        //the elapsed time is the ten hundredths the program waited, on a clock that started at zero,
+        //and the wait itself cost no wall clock at all
+        expect(result.passed).toBe(true)
+        expect(Date.now() - started).toBeLessThan(1_000)
+        //the drawing happened too, on a Screen the testcase reset before it started
+        expect(colorAt(emulator.peripherals.screen, 100, 100)).toBe(0xffffff)
+    })
+})
+
+describe('Z80 termination', () => {
+    async function ended(lines: string[]) {
+        const code = ['    org $8000', ...lines].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        return emulator
+    }
+
+    it('says `halt` and a top-level `ret` are the program stopping itself', async () => {
+        for (const stop of [['    halt'], ['    ret'], ['    ei', '    halt']]) {
+            const emulator = await ended(['    ld a, 1', ...stop])
+            expect(emulator.terminated).toBe(true)
+            //a Z80 program has no exit status
+            expect(emulator.termination).toEqual({ kind: 'exit' })
+        }
+    })
+
+    it('says a program that runs past its code ended there', async () => {
+        const emulator = await ended(['    ld a, 1', '    ld b, 2'])
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'end' })
+    })
+
+    it('forgets how the program ended when Undo takes the `halt` back', async () => {
+        const emulator = await ended(['    ld a, 1', '    halt'])
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
+        await emulator.step()
+        expect(emulator.termination).toEqual({ kind: 'exit' })
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../../../docs/design/pokes.md),
+ * [ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)): a poked value is one step of
+ * the same history the instructions use, named as the panel names it (`af'`, not the machine's
+ * `afPrime`), and undone like any other.
+ */
+describe('Z80 Pokes', () => {
+    const LOADS = [
+        '        org $8000',
+        '        ld a, 1',
+        '        ld hl, 0x1234',
+        '        ld a, 2',
+        '        halt'
+    ].join('\n')
+
+    /** Built with a history and stopped between two instructions, which is when a Poke is possible. */
+    async function stepped(code: string, steps: number) {
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    function registerOf(emulator: ReturnType<typeof Z80Emulator>, name: string): bigint {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register ${name}`)
+        return register.value
+    }
+
+    it('records a poked register as a step of its own, and undoes it', async () => {
+        const emulator = await stepped(LOADS, 2)
+        expect(registerOf(emulator, 'hl')).toBe(0x1234n)
+        expect(emulator.canPoke).toBe(true)
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0xbeefn }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'hl')).toBe(0xbeefn)
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //no instruction ran, so the row has no line to go to
+        expect(step.line).toBe(-1)
+        expect(step.writes).toEqual([{ type: 'register', name: 'hl', old: 0x1234n, new: 0xbeefn }])
+        expect(emulator.canUndo).toBe(true)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'hl')).toBe(0x1234n)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('names a shadow register the way the panel does', async () => {
+        const emulator = await stepped(LOADS, 2)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: "af'", value: 0x7fffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, "af'")).toBe(0x7fffn)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: "af'", old: 0n, new: 0x7fffn }
+        ])
+    })
+
+    it("keeps the last executed instruction and the flags out of a Poke's way", async () => {
+        const emulator = await stepped(LOADS, 2)
+        const line = emulator.line
+        const flags = emulator.statusRegisters.map((flag) => ({ ...flag }))
+
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x1n }])
+        //a Poke moves neither the current line nor the flags: the instruction that ran last is
+        //still the one before it, and a poked value highlights nothing in the Status flags
+        expect(emulator.line).toBe(line)
+        expect(emulator.statusRegisters).toEqual(flags)
+
+        //and the next instruction is still the one the PC is on
+        await emulator.step()
+        expect(registerOf(emulator, 'a')).toBe(2n)
+    })
+
+    it('keeps Poke Undo inspection bounded and preserves the last executed instruction', async () => {
+        const emulator = await stepped(LOADS, 2)
+        const machine = (
+            emulator as unknown as { machine: { getHistory(max?: number): unknown[] } }
+        ).machine
+        const history = vi.spyOn(machine, 'getHistory')
+        const instruction = emulator._getLastInstruction()
+        try {
+            for (let i = 1; i <= 60; i++)
+                emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: BigInt(i) }])
+            emulator.undo(1)
+            expect(emulator._getLastInstruction()).toEqual(instruction)
+            await emulator.step()
+            emulator.undo(1)
+            expect(emulator._getLastInstruction()).toEqual(instruction)
+            expect(history.mock.calls.every(([max]) => max !== undefined && max <= 20)).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
+    it('records poked memory as one step, however many bytes it spans', async () => {
+        const emulator = await stepped(LOADS, 2)
+        const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
+
+        expect(emulator.pokeMemory(0x9000n, bytes)).toBe(true)
+        expect([...emulator.readMemoryBytes(0x9000n, 4)]).toEqual([...bytes])
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        expect(step.writes).toEqual([
+            { type: 'memory', address: 0x9000n, old: [0, 0, 0, 0], new: [...bytes] }
+        ])
+
+        emulator.undo(1)
+        expect([...emulator.readMemoryBytes(0x9000n, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('puts back the value the program found when the instruction after a Poke is undone too', async () => {
+        const emulator = await stepped(LOADS, 2)
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'a', value: 0x55n }])
+        //the third load overwrites the poked value, so undoing both has to walk back through it
+        await emulator.step()
+        expect(registerOf(emulator, 'a')).toBe(2n)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'a')).toBe(0x55n)
+        emulator.undo(1)
+        expect(registerOf(emulator, 'a')).toBe(1n)
+    })
+
+    it('leaves the Screen journal where it is when a Poke is undone', async () => {
+        const code = [
+            '        org $8000',
+            '        ld a, 0xFF',
+            '        out (0x20), a       ; white pen',
+            '        ld a, 50',
+            '        out (0x23), a',
+            '        out (0x24), a',
+            '        ld a, 0',
+            '        out (0x27), a       ; the pixel at (50, 50)',
+            '        halt'
+        ].join('\n')
+        const emulator = await stepped(code, 7)
+        const screen = emulator.peripherals.screen
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+        const journaled = screen.history.sequence
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x99n }])
+        ).toBe(true)
+        expect(screen.history.sequence).toBe(journaled)
+
+        //a Poke drew nothing, so undoing it must not pop the record of the `out` that did
+        emulator.undo(1)
+        expect(screen.history.sequence).toBe(journaled)
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+    })
+})
+
+describe('Z80 emulator slices', () => {
+    it('runs a program to its end across slices', async () => {
+        //port 1 is the unsigned decimal console port, so three 'x' come out as three 120s
+        const code = [
+            '    org $8000',
+            '    ld b, 3',
+            'loop:',
+            "    ld a, 'x'",
+            '    out ($11), a',
+            '    djnz loop',
+            '    halt'
+        ].join('\n')
+        const emulator = Z80Emulator(code)
+        await emulator.compile(10, code)
+        await emulator.run(2_000_000)
+        expect(emulator.stdOut).toBe('120120120')
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('answers Stop during an unbounded run', async () => {
+        const emulator = Z80Emulator(INFINITE_LOOP)
+        await emulator.compile(0, INFINITE_LOOP)
+        //0 means "no limit": the whole point of slicing is that this still yields to the host
+        const run = emulator.run(0)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        const stoppedAt = Date.now()
+        emulator.clear()
+        await run
+        //ADR 0007's target is a tenth of a second; the run stops between two slices
+        expect(Date.now() - stoppedAt).toBeLessThan(100)
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('ends a slice on its deadline when its instructions are screens of work', async () => {
+        const emulator = Z80Emulator(DRAWING_LOOP)
+        await emulator.compile(0, DRAWING_LOOP)
+        //the adapter's own throughput estimate would let ten thousand instructions into a 1 ms
+        //slice; a clear and a present each cost a hundred thousand pixels, so the slice has to come
+        //back on the clock long before that (phase 8)
+        const slice = await (
+            emulator as unknown as {
+                _runSlice: (request: {
+                    instructionBudget: number
+                    timeBudgetMs: number
+                    breakpoints: number[]
+                    skipBreakpointAtPc: boolean
+                    runInstructionLimit: number
+                    speedCorrection: number
+                }) => Promise<{ reason: string; instructions: number }>
+            }
+        )._runSlice({
+            instructionBudget: 1_000_000,
+            timeBudgetMs: 1,
+            breakpoints: [],
+            skipBreakpointAtPc: true,
+            runInstructionLimit: 1_000_000,
+            speedCorrection: 1
+        })
+        expect(slice.reason).toBe('budget')
+        expect(slice.instructions).toBeGreaterThan(0)
+        expect(slice.instructions).toBeLessThan(10_000)
+    })
+
+    it('ends a run at the instruction limit instead of restarting it every slice', async () => {
+        const emulator = Z80Emulator(INFINITE_LOOP)
+        await emulator.compile(0, INFINITE_LOOP)
+        const start = Date.now()
+        await emulator.run(500_000)
+        //an unbroken loop reaches the limit, which is not an error on this Core, and stops there
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.errors).toEqual([])
+        expect(Date.now() - start).toBeLessThan(5_000)
+    })
+})
+
+/** The 24 bit color the renderer would paint at a point of the visible image. */
+function colorAt(
+    screen: { visiblePixels: Uint8ClampedArray; width: number },
+    x: number,
+    y: number
+): number {
+    const offset = (y * screen.width + x) * 4
+    const pixels = screen.visiblePixels
+    return (pixels[offset] << 16) | (pixels[offset + 1] << 8) | pixels[offset + 2]
+}

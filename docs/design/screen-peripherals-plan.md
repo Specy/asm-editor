@@ -25,7 +25,7 @@ Z80 first, M68K second, MIPS and RISC-V last:
 
 ## Phase 1: Screen model, journal and renderer
 
-New directory `src/lib/languages/peripherals/screen/`.
+New directory `packages/asm-editor/src/lib/languages/peripherals/screen/`.
 
 - `Screen.ts`: logical size, visible and drawing images (RGBA byte arrays), buffering mode, pen and fill colors, pen width, drawing position, text cursor and cell font, and the operations of the M68K table: pixel, line, line-to, move-to, filled and unfilled rectangle and ellipse, flood fill, clear, resize, present, text at a pixel position, text at the cursor with wrapping and scrolling, get pixel, get size. A framebuffer mode that maps a word array onto the image for MIPS and RISC-V.
 - `ScreenHistory.ts`: one inverse record per operation, a copy of the dirty rectangle before drawing and a full image for clear, present and resize, under a byte budget ([ADR 0005](../adr/0005-restore-screen-state-on-undo.md)); `undo()` and `canUndo()`; eviction of the oldest records when the budget is exceeded. Framebuffer mode journals nothing and re-syncs from memory.
@@ -45,7 +45,7 @@ Same directory, one module each.
 
 ## Phase 3: GenericEmulator integration
 
-Files: `src/lib/languages/GenericEmulator.svelte.ts`, `BaseEmulator.svelte.ts`, `ExecutionController.ts`, `commonLanguageFeatures.svelte.ts`, `Emulator.ts`, `src/components/shared/providers/EmulatorLoader.svelte`, `src/stores/settingsStore.svelte.ts`, `src/lib/Project.svelte.ts`.
+Files: `packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts`, `BaseEmulator.svelte.ts`, `ExecutionController.ts`, `commonLanguageFeatures.svelte.ts`, `Emulator.ts`, `packages/asm-editor/src/components/shared/providers/EmulatorLoader.svelte`, `src/stores/settingsStore.svelte.ts`, `packages/asm-editor/src/lib/Project.svelte.ts`.
 
 - Injection ([ADR 0004](../adr/0004-inject-screens-at-emulator-boundary.md)): `EmulatorSettings` gains an optional peripheral set (Screen, Keyboard, Mouse, clock); `EmulatorLoader.svelte` creates it and passes it in; `GenericEmulator` falls back to defaults so existing callers and tests keep working.
 - Scheduling ([ADR 0007](../adr/0007-generic-emulator-run-scheduling.md)): the adapter contract changes from `_run(limit, breakpoints)` to a slice call that receives an instruction budget, a time hint and breakpoints, and returns a reason (budget, breakpoint, terminated, limit, wait) with the instruction count. `GenericEmulator` loops over slices, yields to the host between them, keeps the overall instruction limit across slices, and awaits program-requested waits through the clock and the execution generation so Stop still cancels them. Time hints: a short budget while a Screen is visible and dirty, a long one for compute-only runs; the values come from phase 8.
@@ -56,17 +56,17 @@ Files: `src/lib/languages/GenericEmulator.svelte.ts`, `BaseEmulator.svelte.ts`, 
 
 ## Phase 4: Screen panel
 
-- `src/components/specific/project/screen/ScreenRenderer.svelte`: canvas, integer zoom to fit, focus ring, DOM bindings for the Keyboard (focus, shortcut suppression, blur release) and the Mouse (pointer capture for drags, context-menu and middle-click suppression, window blur release), and the configuration popover for MIPS and RISC-V that re-syncs from memory on change.
-- Hosting: the right column of `src/routes/projects/[project]/Project.svelte` next to memory, behind the new setting; `src/components/shared/InteractiveInstructionEditor.svelte` as a panel in the fullscreen layout and a toggle in the small layout, which covers lectures, the exam page, embeds and chat.
+- `packages/asm-editor/src/components/specific/project/screen/ScreenRenderer.svelte`: canvas, integer zoom to fit, focus ring, DOM bindings for the Keyboard (focus, shortcut suppression, blur release) and the Mouse (pointer capture for drags, context-menu and middle-click suppression, window blur release), and the configuration popover for MIPS and RISC-V that re-syncs from memory on change.
+- Hosting: the right column of `packages/asm-editor/src/routes/projects/[project]/Project.svelte` next to memory, behind the new setting; `packages/asm-editor/src/components/shared/InteractiveInstructionEditor.svelte` as a panel in the fullscreen layout and a toggle in the small layout, which covers lectures, the exam page, embeds and chat.
 
 ## Phase 5: Z80
 
-Files: `src/lib/languages/Z80/Z80-model.ts`, `Z80Console.ts`, `Z80Emulator.svelte.ts`, `Z80-documentation.ts`, `src/components/documentation/z80/Z80IoDocumentation.svelte`, `src/components/shared/agent/defaultCodingAgent/prompts.ts`.
+Files: `packages/asm-editor/src/lib/languages/Z80/Z80-model.ts`, `Z80Console.ts`, `Z80Emulator.svelte.ts`, `Z80-documentation.ts`, `src/components/documentation/z80/Z80IoDocumentation.svelte`, `packages/asm-editor/src/components/shared/agent/defaultCodingAgent/prompts.ts`.
 
 - Extend the port table in `Z80-model.ts` with the four groups of ADR 0011 and their documentation entries; the documentation page, hover and agent prompt pick them up.
 - Grow `Z80Console` into the whole port device: Screen commands with byte coordinates and 3-3-2 colors, console output mirrored to the text cursor, keyboard and mouse views with B as the read parameter, wait and frame-sync reads that return no data and are resumed by the clock, time reads.
 - The adapter's input loop distinguishes the pending port: console input goes to the Terminal, wait and frame-sync go to the clock, and the slice contract reports them as waits.
-- Tests against the device under node; three example programs (animation with double buffering, keyboard-driven movement, mouse painting) in `examples/z80/` and matrix rows.
+- Tests against the device under node; three example programs (animation with double buffering, keyboard-driven movement, mouse painting) in `packages/asm-editor/examples/z80/` and matrix rows.
 
 ## Phase 6: M68K
 
@@ -75,10 +75,10 @@ Core, in the s68k repository (`src/instructions.rs` interrupt enums near line 20
 - New interrupts: check keyboard input (7), get key state (19, both forms), read mouse (61, modes 0 to 2), set drawing mode (92, modes 2, 4, 16, 17; others error), repaint (94), get pen position (96), display in field (20), the compositions 17 and 18, and a no-op for 24. The commented-out variants for 92, 94 and 96 already in `answer_interrupt` show where they go.
 - Fix task 33 to EASy68K's packed D1 with the get-size, windowed and full-screen requests, and task 11 to clear only on $FF00 and otherwise set or get the cursor. Task 8 keeps returning through the adapter, which supplies hundredths.
 
-Editor, in `src/lib/languages/M68K/M68KEmulator.svelte.ts` and a new trap task documentation page under `src/routes/documentation/m68k/`:
+Editor, in `packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts` and a new trap task documentation page under `packages/asm-editor/src/routes/documentation/m68k/`:
 
 - Every graphics interrupt to the Screen; text output to the Terminal and the Screen's text cursor; keyboard and mouse interrupts to the peripherals; delay through the clock's wait; time through the clock in hundredths.
-- Examples from EASy68K checked in under `examples/m68k/` with license notes, matrix rows for each, and the deviations of ADR 0003 stated on the documentation page.
+- Examples from EASy68K checked in under `packages/asm-editor/examples/m68k/` with license notes, matrix rows for each, and the deviations of ADR 0003 stated on the documentation page.
 
 ## Phase 7: MIPS and RISC-V
 
@@ -87,10 +87,10 @@ Core, in `/home/dev/code/mars` (`mars/src/main/java/app/specy/mars/mips/io/MIPSI
 - A `time()` method on the IO abstraction, used by the time syscall instead of the Java clock, so the adapter can answer with host or virtual time.
 - Memory observers exposed by the wrapper on top of the existing `Memory.addObserver(observer, start, end)`: a write observer over a range for the framebuffer and read and write observers on single words for the four registers. Observers are synchronous handlers. Confirm whether backstep restores notify observers; if not, the adapter re-syncs after undo, which ADR 0005 requires anyway.
 
-Editor, in `src/lib/languages/MIPS/MIPSEmulator.svelte.ts` and `src/lib/languages/RISC-V/RISC-VEmulator.svelte.ts`:
+Editor, in `packages/asm-editor/src/lib/languages/MIPS/MIPSEmulator.svelte.ts` and `packages/asm-editor/src/lib/languages/RISC-V/RISC-VEmulator.svelte.ts`:
 
 - `sleep` on the clock's wait; the framebuffer observer marks words dirty and the Screen re-reads the range at the end of each slice, measured against per-word updates in phase 8; the receiver registers backed by the Keyboard queue with the Ready bit kept in memory; the transmitter to the Terminal with form feed clearing it; interrupt-enable writes stop with an error.
-- Documentation pages for the bitmap display and the registers, MARS and RARS samples under `examples/mips/` and `examples/risc-v/`, matrix rows.
+- Documentation pages for the bitmap display and the registers, MARS and RARS samples under `packages/asm-editor/examples/mips/` and `packages/asm-editor/examples/risc-v/`, matrix rows.
 
 ## Phase 8: validation and tuning
 

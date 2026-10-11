@@ -1,20 +1,20 @@
-[submodule "emulators/mips"]
-	path = emulators/mips
+[submodule "packages/mips"]
+	path = packages/mips
 	url = https://github.com/Specy/mars.git
 	branch = main
-[submodule "emulators/risc-v"]
-	path = emulators/risc-v
+[submodule "packages/risc-v"]
+	path = packages/risc-v
 	url = https://github.com/Specy/rars.git
 	branch = master
-[submodule "emulators/m68k"]
-	path = emulators/m68k
+[submodule "packages/m68k"]
+	path = packages/m68k
 	url = https://github.com/Specy/s68k.git
 	branch = main
-[submodule "emulators/x86"]
-	path = emulators/x86
+[submodule "packages/x86"]
+	path = packages/x86
 	url = https://github.com/Specy/x86-js.git
 	branch = main
-[submodule "emulators/z80"]
-	path = emulators/z80
+[submodule "packages/z80"]
+	path = packages/z80
 	url = https://github.com/Specy/trs80.git
 	branch = master

@@ -1,6 +1,6 @@
 # x86 GCC Intel translation v1
 
-Implemented on 2026-10-04 under the [translation plan](./x86-compiler-assembly-translation-plan.md): the translator, corpus and packaging of milestones 0–2, in the x86 Core's package ([blink-js](../../emulators/x86/blink-js/)). [ADR 0032](../adr/0032-x86-translates-compiler-output-to-nasm-in-the-core-package.md) records the NASM decision. The work is committed as the x86 Core's 3.0.0 release, and tag-triggered CD has published it. Milestone 3, x86 **Source compilation** in the editor, waits for the **Runtime library**'s x86 phase in the [runtime plan](./source-runtime-plan.md); its interim version, milestone 3a, decided on 2026-10-05, is implemented and recorded under [Interim editor Compile](#interim-editor-compile). The Compiler driver interface is already extracted in the editor.
+Implemented on 2026-10-04 under the [translation plan](./x86-compiler-assembly-translation-plan.md): the translator, corpus and packaging of milestones 0–2, in the x86 Core's package ([blink-js](../../packages/x86/blink-js/)). [ADR 0032](../adr/0032-x86-translates-compiler-output-to-nasm-in-the-core-package.md) records the NASM decision. The work is committed as the x86 Core's 3.0.0 release, and tag-triggered CD has published it. Milestone 3, x86 **Source compilation** in the editor, waits for the **Runtime library**'s x86 phase in the [runtime plan](./source-runtime-plan.md); its interim version, milestone 3a, decided on 2026-10-05, is implemented and recorded under [Interim editor Compile](#interim-editor-compile). The Compiler driver interface is already extracted in the editor.
 
 ## Package surface
 
@@ -54,7 +54,7 @@ Every deliberate mutation tried fails at least one oracle. The mutations include
 
 ## Blink x87 register forms
 
-[fpu.c](../../emulators/x86/libblink/blink/fpu.c) had four bugs, now fixed:
+[fpu.c](../../packages/x86/libblink/blink/fpu.c) had four bugs, now fixed:
 
 - `FDIV` and `FDIVR` with an `ST(i)` destination (`DC F8+i`, `DC F0+i`) were swapped.
 - `FSUBP ST(i), ST(0)` always wrote `ST(1)`.
@@ -135,7 +135,7 @@ The debugger and flag fixes found along the way are included in the local packag
 
 **History rows decoded with the wrong layout.** In the editor, `MutationStep.svelte` decoded every Target's recorded flags with s68k's CCR layout, so x86 and Z80 rows lit the wrong flags.
 
-- Each Target now has its own bit table in `src/lib/languages/statusFlagBits.ts`, with tests. The M68K entry is checked against s68k's decoder for every value.
+- Each Target now has its own bit table in `packages/asm-editor/src/lib/languages/statusFlagBits.ts`, with tests. The M68K entry is checked against s68k's decoder for every value.
 
 ## Native history and execution recovery
 
@@ -198,7 +198,7 @@ On 2026-10-05 the owner chose to ship x86 Compile before the Runtime library's x
 ### Editor
 
 - Compilation: `'X86'` Compilation records with no `assemblerProfile` or `runtimeAbi`; a GCC 14.2-only Compiler Explorer request under the corpus's flags with the Runtime library's freestanding headers; the translator, loaded in a chunk of its own only by an x86 compile; the Source map from the translation's locations; translation Diagnostics on their C lines, with plain wording for inline assembly; a Hint for a standard header x86 does not have; four stored compilations, C and C++ at `-O0` and `-O2`, built and run through the real Core.
-- Build: the Start unit, `src/lib/languages/X86/start.asm` (`_start`) and `support.asm` (the rest), handed to the Core as library units by Build, live checking and the language worker when an x86 record's Generated assembly is in the Project, so the linker takes `start.asm` only for a program without a `_start` of its own; an x86 record naming a Runtime ABI blocks the Build with a Recompile notice; the start code run up to `main` before a Debug session opens, outside the Undo history on a Core that can pause it and otherwise behind a floor of GenericEmulator's Undo ledger that Undo never crosses; a Step through start-unit code listed and undone as one History row; a Run slice counting the instructions it ran from the Core's recorded-entry count.
+- Build: the Start unit, `packages/asm-editor/src/lib/languages/X86/start.asm` (`_start`) and `support.asm` (the rest), handed to the Core as library units by Build, live checking and the language worker when an x86 record's Generated assembly is in the Project, so the linker takes `start.asm` only for a program without a `_start` of its own; an x86 record naming a Runtime ABI blocks the Build with a Recompile notice; the start code run up to `main` before a Debug session opens, outside the Undo history on a Core that can pause it and otherwise behind a floor of GenericEmulator's Undo ledger that Undo never crosses; a Step through start-unit code listed and undone as one History row; a Run slice counting the instructions it ran from the Core's recorded-entry count.
 - Diagnostics: the linker's duplicate `_start` and `main`, which now arise only when a File defining one is linked for another symbol, with Hints; a failed Build's own diagnostics kept in Problems, for every Target, until the Files change, since x86 live checking does not link. The live warning on a `_start` beside compiled code, added first, went with ADR 0033.
 
 ### Verification

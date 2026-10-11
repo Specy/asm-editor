@@ -24,7 +24,7 @@ agent and shortcut plumbing. Terms are the glossary's: **Documentation**, **Docu
       `languageDetector`, the agent prompts and their tests all read them, and none of these change.
     - The entry layer imports the data modules, never the other way round.
     - Nothing in `Project.svelte.ts`'s import graph imports the entry layer.
-- **The search core knows nothing about the UI.** `src/lib/search` is plain TypeScript with no
+- **The search core knows nothing about the UI.** `packages/asm-editor/src/lib/search` is plain TypeScript with no
   component imports, tested under node. It takes the embedding function as a parameter, so a test runs
   either the real model, when `.cache/` holds it, or a fake.
 - **No transformers.js.** Use ONNX Runtime and `@huggingface/tokenizers` directly
@@ -39,18 +39,18 @@ agent and shortcut plumbing. Terms are the glossary's: **Documentation**, **Docu
 ## Target structure
 
 ```
-scripts/search-model.mjs           pinned download of the model files, sha256-checked, into .cache/
-scripts/search-model-plugin.ts     Vite plugin: virtual:search-model, the files as hashed assets
-src/lib/documentation/
+packages/asm-editor/scripts/search-model.mjs           pinned download of the model files, sha256-checked, into .cache/
+packages/asm-editor/scripts/search-model-plugin.ts     Vite plugin: virtual:search-model, the files as hashed assets
+packages/asm-editor/src/lib/documentation/
   entries.ts                       DocumentationEntry, Chapter, EntryKind, DocumentationLanguage
   documentation.ts                 documentationFor(language): the Chapters, imported lazily
   m68k/ mips/ riscv/ x86/ z80/     adapters over the data modules, and the prose as markdown
   mars/screen.md                   the MARS and RARS Screen prose, with variant placeholders
   links.ts                         a /documentation href to the entry it names
-src/lib/content/
+packages/asm-editor/src/lib/content/
   headings.ts                      headingSlug: one slug for the rendered ids and the index
   lectureSections.ts               splitLecture: a Lecture's markdown to its Lecture sections
-src/lib/search/
+packages/asm-editor/src/lib/search/
   scope.ts                         SearchScope, its shards, and the scope of an agent's place
   model.ts                         revision, file list and hashes, shared with the script and plugin
   embedding.ts                     query prompt, tokens, first 256 dimensions, normalising, int8
@@ -61,13 +61,13 @@ src/lib/search/
   searchWorker.ts                  Web Worker: onnxruntime-web (CPU), tokenizer, engine
   searchClient.svelte.ts           main thread: preload, search, status
   golden/<scope>.json, golden.test.ts
-src/routes/search/[shard].json/+server.ts     the prerendered shard payloads
-src/components/documentation/
+packages/asm-editor/src/routes/search/[shard].json/+server.ts     the prerendered shard payloads
+packages/asm-editor/src/components/documentation/
   browser/DocumentationBrowser.svelte  the panel and /all: Chapter chips, pinned Chapters, rows, results
   browser/EntryRow.svelte, LectureSectionCard.svelte
   entries/                         one renderer per entry kind, and the widgets
   ChapterView.svelte               a Chapter page on the site
-src/components/search/
+packages/asm-editor/src/components/search/
   SearchPalette.svelte, SearchLauncher.svelte, searchHotkey.ts
 ```
 
@@ -96,7 +96,7 @@ A Search scope loads the shards it needs, and the browser keeps each one cached 
 - **`model.ts`** pins `MongoDB/mdbr-leaf-ir` to one Hugging Face commit. It lists
   `onnx/model_quantized.onnx`, `onnx/model_quantized.onnx_data`, `tokenizer.json` and
   `tokenizer_config.json`, each with its sha256.
-- **`scripts/search-model.mjs`** downloads into `.cache/search-model/<revision>/`.
+- **`packages/asm-editor/scripts/search-model.mjs`** downloads into `.cache/search-model/<revision>/`.
     - It fetches a file only when it is missing or its hash is wrong, writes it to a temporary name and
       renames it, and fails on a hash mismatch.
     - Run it as `npm run search:model`. The `predev`, `prebuild` and `pretest` hooks also call it.
@@ -179,7 +179,7 @@ A Search scope loads the shards it needs, and the browser keeps each one cached 
     - **Exercise solutions** (`<details>`, 242 blocks) are left out of the prose and the code but kept
       in the markdown.
     - **Course and module `index.md`** files are not Lectures and are not split.
-- **Tests over every lecture in `src/content`.**
+- **Tests over every lecture in `packages/asm-editor/src/content`.**
     - The 946 sections.
     - Slugs are unique within each lecture.
     - Every id survives DOMPurify.
@@ -251,7 +251,7 @@ interface Chapter {
 
 ### 2b. The prose Chapters as markdown
 
-- **Where the prose moves.** It goes to `src/lib/documentation/<language>/*.md`, outside `src/content`,
+- **Where the prose moves.** It goes to `packages/asm-editor/src/lib/documentation/<language>/*.md`, outside `packages/asm-editor/src/content`,
   so neither the Course loader nor `content.test.ts` reads it; Prettier still formats it. Each file is
   split at `##`, and each section becomes a `prose` entry.
     - **M68K:** Exceptions, the condition-code explanation, Shift directions, Assembler features, and
@@ -280,7 +280,7 @@ interface Chapter {
     - A test compares the generated set with today's 954 names.
 - **Shared pieces leave the M68K folder.** `InstructionsMenu`, `MenuLink`, `ClientOnly` and
   `style.scss` live under the M68K routes but are imported by every language. They move to
-  `src/components/documentation/`.
+  `packages/asm-editor/src/components/documentation/`.
 - **Fixed during the move:**
     - The PreIndirect chip is labelled "Post increment".
     - 16 M68K instruction pages open an empty editor, because `makeIns` always sets `{ code: '' }`, so
@@ -299,7 +299,7 @@ interface Chapter {
       with its code's comments joined in. It is embedded as `Course › Lecture › Section` followed by
       that text.
     - Prose goes into the full-text fields, and code goes into a separate field with a lower weight.
-- **`src/routes/search/[shard].json/+server.ts`** has `prerender = true` and an `entries()` listing the
+- **`packages/asm-editor/src/routes/search/[shard].json/+server.ts`** has `prerender = true` and an `entries()` listing the
   eleven shards.
     - It builds the shard's units and embeds the missing ones. It imports `onnxruntime-node` lazily,
       inside the handler.
@@ -307,7 +307,7 @@ interface Chapter {
     - It returns the payload.
     - SvelteKit prerenders one page at a time, so embedding runs sequentially. A cold build embeds about
       3,500 units; the spike measured about 16 long sections per second.
-- **Golden queries.** `src/lib/search/golden/<scope>.json` holds 8–10 queries for each language and for
+- **Golden queries.** `packages/asm-editor/src/lib/search/golden/<scope>.json` holds 8–10 queries for each language and for
   the Courses. For example:
     - **M68K:**
         - `move`: the MOVE entry first.
@@ -518,7 +518,7 @@ All eight phases implemented on `feat/workbench` on 2026-10-01, the M68K, x86 an
 entries by three agents in parallel following the MIPS and RISC-V adapters. Browser rows S1 to S10
 in [manual-verification.md](../manual-verification.md).
 
-**Tuned in phase 3** (`RANKING` and the functions beside it in `src/lib/search/engine.ts`), against
+**Tuned in phase 3** (`RANKING` and the functions beside it in `packages/asm-editor/src/lib/search/engine.ts`), against
 the golden queries of every Search scope:
 
 - **The vector threshold is 0.15.** Right answers measured 0.30 to 0.48 in the spike.
@@ -541,8 +541,8 @@ the golden queries of every Search scope:
 
 **What changed from the plan:**
 
-- **File names.** The Vite plugin is `scripts/search-model-plugin.ts`, and the model
-  manifest is `src/lib/search/searchModel.json`, which the plain-node fetch script can read.
+- **File names.** The Vite plugin is `packages/asm-editor/scripts/search-model-plugin.ts`, and the model
+  manifest is `packages/asm-editor/src/lib/search/searchModel.json`, which the plain-node fetch script can read.
 - **Instruction pages still read their data modules.** They show more than an entry holds (the flags
   grid, the forms and variants tables, the runnable example), so only their `entries()` comes from
   the entries.

@@ -21,7 +21,7 @@ ROM, cassette, floppy, printer, sound and timer interrupts are out of scope; see
 
 ## Reference: what the convention is
 
-Sources are the fork's own submodule, `emulators/z80` (a fork of
+Sources are the fork's own submodule, `packages/z80` (a fork of
 [lkesteloot/trs80](https://github.com/lkesteloot/trs80), MIT, compatible with this repository's
 AGPL). Upstream is not a custom design: it carries real ROM dumps, real character-generator glyph
 dumps (`GLYPH_CG1`, `GLYPH_CG2`, `GLYPH_CG4`) and real media formats, so the layout below is
@@ -51,14 +51,14 @@ guest memory"**, whose consequences are the rest of this document.
 - **Cell mode is memory-backed, so it journals nothing** — the existing rule of
   [ADR 0005](../adr/0005-restore-screen-state-on-undo.md), already carrying the MARS bitmap display.
 - **No Core change is needed, again.** `Z80MachineConfig` already offers `onMemoryWrite`,
-  `onMemoryRead` and `onDebugRead` (`emulators/z80/packages/z80-machine/src/Z80MachineTypes.ts:190`),
+  `onMemoryRead` and `onDebugRead` (`packages/z80/packages/z80-machine/src/Z80MachineTypes.ts:190`),
   which is the same seam upstream decodes its devices on.
 - **The Screen stays injected at the Emulator boundary** ([ADR 0004](../adr/0004-inject-screens-at-emulator-boundary.md)):
   the new device is plain TypeScript driving the editor's own `Screen`, not upstream's `CanvasScreen`,
   whose CRT renderer and DOM dependency are not wanted here.
 - **Glyph data is copied, not imported.** `Fonts.ts` lives in `trs80-emulator-web`, which pulls in the
   DOM; the spec takes the `GLYPH_CG4` array and the procedural block-graphics rule into a plain-data
-  module, the pattern `Z80-model.ts` and `src/lib/languages/mars/` already set.
+  module, the pattern `Z80-model.ts` and `packages/asm-editor/src/lib/languages/mars/` already set.
 
 ## The display
 
@@ -78,7 +78,7 @@ Two doors, one piece of state, following what MIPS and RISC-V already do for the
 1. **A `; @screen trs80` comment directive**, read at compile time, so the Screen is right before the
    first instruction and during a Testcase run. It is a comment, so a source file that also assembles
    in `trs80-asm` or zasm is unaffected — and adding one comment line is the whole ceremony for a
-   program brought in from outside. This generalizes `src/lib/languages/mars/screenDirective.ts`,
+   program brought in from outside. This generalizes `packages/asm-editor/src/lib/languages/mars/screenDirective.ts`,
    whose parser is already Core-free and reusable.
 2. **Two new screen commands on the existing command port** (`0x27`):
    `MODE_CELLS = 14` and `MODE_DRAWING = 15`, for programs written in this editor that want to switch
@@ -123,7 +123,7 @@ present, and is atomic as far as the display is concerned because the flush happ
 - `onMemoryWrite(address, value)` widens a dirty cell range when `0x3C00 <= address < 0x4000`, then
   **returns `false`** so RAM takes the write. The return value is load-bearing: returning `true` tells
   the Core the device handled it, and the write is then neither stored nor journaled
-  (`Z80Machine.writeMemory`, `emulators/z80/packages/z80-machine/src/Z80Machine.ts:197`).
+  (`Z80Machine.writeMemory`, `packages/z80/packages/z80-machine/src/Z80Machine.ts:197`).
 - The dirty range is flushed at the end of each execution slice, where `MarsDevices.flush` already
   flushes, and repaints only the cells that changed.
 - All 256 glyphs are rasterized once, on entering the mode, into a mask; a cell repaint is then a copy
@@ -136,8 +136,8 @@ Cell mode inherits the framebuffer rule exactly:
 
 - The Screen journals nothing while the mode is on.
 - `Z80Emulator._resyncScreenFromMemory()` — the optional hook declared at
-  [BaseEmulator.svelte.ts:160](src/lib/languages/BaseEmulator.svelte.ts:160) and called after a
-  rollback at [GenericEmulator.svelte.ts:1231](src/lib/languages/GenericEmulator.svelte.ts:1231) —
+  [BaseEmulator.svelte.ts:160](packages/asm-editor/src/lib/languages/BaseEmulator.svelte.ts:160) and called after a
+  rollback at [GenericEmulator.svelte.ts:1231](packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts:1231) —
   re-reads the whole kilobyte and repaints every cell.
 - Video RAM itself is restored by the Core: `ExecutionRecord.memoryWrites` records the before-value of
   every write and `undo()` reverses them newest first (`Z80Machine.ts:525`).
@@ -183,21 +183,21 @@ set bit `i` OR in row `i`. Each row is a bitmask of eight keys; the table mappin
   the documentation rather than half-implementing it.
 - Cassette, floppy, printer, sound, the expanded/alternate character latch at `0x37E8`, and the timer
   interrupt. The Z80 environment raises no interrupts at all today
-  ([Z80Emulator.svelte.ts:314](src/lib/languages/Z80/Z80Emulator.svelte.ts:314)); programs written
+  ([Z80Emulator.svelte.ts:314](packages/asm-editor/src/lib/languages/Z80/Z80Emulator.svelte.ts:314)); programs written
   here pace themselves with `TIME_FRAME`.
 
 ## Implementation plan
 
-| Step | Work                                                                                                                                                                                            |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `src/lib/languages/Z80/trs80/trs80Display.ts`: plain data — the memory map constants, the glyph table copied from `GLYPH_CG4` with its provenance note, the block-graphics rule, the rasterizer |
-| 2    | `Screen`: `useCells(columns, rows, cell)` and `syncCells(bytes, from, to)` beside `useFramebuffer`/`syncFramebuffer`; the journaling guards become "any memory-backed mode"                     |
-| 3    | `src/lib/languages/Z80/trs80/Trs80Devices.ts`: dirty tracking, flush, resync and the keyboard matrix, modeled on `src/lib/languages/mars/MarsDevices.ts`, plain TypeScript                      |
-| 4    | `Z80-model.ts`: the two new commands and their documentation rows; `Z80Device.ts`: reject the drawing ports in cell mode and stop echoing console output to the Screen                          |
-| 5    | `Z80Emulator.svelte.ts`: the three memory hooks, `_resyncScreenFromMemory`, the per-slice flush, the reset fill                                                                                 |
-| 6    | The `; @screen trs80` directive, generalizing `mars/screenDirective.ts`                                                                                                                         |
-| 7    | Documentation: the Z80 I/O page gains the mode and the memory map; `docs/manual-verification.md` gains its rows; ADR 0020 is written                                                            |
-| 8    | Examples under `examples/z80/`: a text-and-block-graphics program and a game loop that `ldir`s a back buffer                                                                                    |
+| Step | Work                                                                                                                                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `packages/asm-editor/src/lib/languages/Z80/trs80/trs80Display.ts`: plain data — the memory map constants, the glyph table copied from `GLYPH_CG4` with its provenance note, the block-graphics rule, the rasterizer |
+| 2    | `Screen`: `useCells(columns, rows, cell)` and `syncCells(bytes, from, to)` beside `useFramebuffer`/`syncFramebuffer`; the journaling guards become "any memory-backed mode"                                         |
+| 3    | `packages/asm-editor/src/lib/languages/Z80/trs80/Trs80Devices.ts`: dirty tracking, flush, resync and the keyboard matrix, modeled on `packages/asm-editor/src/lib/languages/mars/MarsDevices.ts`, plain TypeScript  |
+| 4    | `Z80-model.ts`: the two new commands and their documentation rows; `Z80Device.ts`: reject the drawing ports in cell mode and stop echoing console output to the Screen                                              |
+| 5    | `Z80Emulator.svelte.ts`: the three memory hooks, `_resyncScreenFromMemory`, the per-slice flush, the reset fill                                                                                                     |
+| 6    | The `; @screen trs80` directive, generalizing `mars/screenDirective.ts`                                                                                                                                             |
+| 7    | Documentation: the Z80 I/O page gains the mode and the memory map; `docs/manual-verification.md` gains its rows; ADR 0020 is written                                                                                |
+| 8    | Examples under `packages/asm-editor/examples/z80/`: a text-and-block-graphics program and a game loop that `ldir`s a back buffer                                                                                    |
 
 ## Validation
 
@@ -205,7 +205,7 @@ set bit `i` OR in row `i`. Each row is a bitmask of eight keys; the table mappin
   rasterization, a device test for dirty tracking, the matrix decode and resync, and an example test
   that runs the new programs headlessly and looks at the pixels.
 - **A real compatibility check is available and should be taken.** `wolf` and `breakdwn` are checked
-  into the submodule as assembly source (`emulators/z80/packages/trs80-ide/src/`) and call no ROM, so
+  into the submodule as assembly source (`packages/z80/packages/trs80-ide/src/`) and call no ROM, so
   a test can assemble one of them against the real Core under node and assert that it paints. That is
   the first time anything in this repository has run a Z80 program written for another environment —
   which is the whole point of the mode. The sources stay in the submodule and are not copied into this
@@ -229,14 +229,14 @@ Implemented on 2026-09-11, as [ADR 0020](../adr/0020-mirror-the-trs80-display-in
 
 | Piece            | Where                                                                                                                                                          |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The machine data | `src/lib/languages/Z80/trs80/trs80Display.ts`: the memory map, the `GLYPH_CG4` dump, the block rule, the key matrix, doc rows                                  |
+| The machine data | `packages/asm-editor/src/lib/languages/Z80/trs80/trs80Display.ts`: the memory map, the `GLYPH_CG4` dump, the block rule, the key matrix, doc rows              |
 | The Screen mode  | `Screen.useCells` / `syncCells` / `cells` / `memoryBacked`, beside the framebuffer pair                                                                        |
-| The device       | `src/lib/languages/Z80/trs80/Trs80Devices.ts`: dirty tracking, flush, resync, the matrix decode                                                                |
-| The directive    | `src/lib/languages/Z80/trs80/z80ScreenDirective.ts`                                                                                                            |
+| The device       | `packages/asm-editor/src/lib/languages/Z80/trs80/Trs80Devices.ts`: dirty tracking, flush, resync, the matrix decode                                            |
+| The directive    | `packages/asm-editor/src/lib/languages/Z80/trs80/z80ScreenDirective.ts`                                                                                        |
 | The port device  | `Z80Device`: the two mode commands, the rejections, console output kept off the display                                                                        |
 | The adapter      | `Z80Emulator`: the three memory hooks, `_resyncScreenFromMemory`, the per-slice flush, the directive read at compile time                                      |
 | Documentation    | The Z80 I/O page's "The TRS-80 display" card, the coding agent's prompt, `docs/manual-verification.md` rows Z11 to Z15                                         |
-| Examples         | `examples/z80/trs80-text.z80`, `examples/z80/trs80-bounce.z80`                                                                                                 |
+| Examples         | `packages/asm-editor/examples/z80/trs80-text.z80`, `packages/asm-editor/examples/z80/trs80-bounce.z80`                                                         |
 | Tests            | 41 across `trs80Display.test.ts`, `Trs80Devices.test.ts`, `z80ScreenDirective.test.ts`, `Trs80Emulator.test.ts`, and two example rows in `Z80Examples.test.ts` |
 
 Four things came out differently from the plan above:

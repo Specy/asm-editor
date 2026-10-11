@@ -1,0 +1,711 @@
+import { numberToByteSlice } from '#cmp/specific/project/memory/memoryTabUtils.ts'
+import type { MarsDisplayConfiguration, ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
+import type { InjectedPeripheralOptions } from '#lib/languages/peripherals/peripheralSet.ts'
+import type { Termination } from '#lib/languages/termination.ts'
+import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
+import { unsignedBigIntToSigned } from '#lib/utils.ts'
+import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
+
+export type StatusRegister = {
+    name: string
+    value: number
+    prev: number
+}
+export type DiagnosticSeverity = 'error' | 'warning' | 'suggestion'
+export type SourceBreakpoint = { file: string; line: number }
+
+type DiagnosticBase = {
+    file?: string
+    lineIndex: number
+    /** One-based UTF-16 column, matching Monaco. */
+    column: number
+    /** One-based, exclusive UTF-16 column. */
+    endColumn?: number
+    source?: string
+    code?: string
+    related?: {
+        file: string
+        lineIndex: number
+        column: number
+        endColumn: number
+        message: string
+    }[]
+    line: {
+        line: string
+        line_index: number
+    }
+    message: string
+    /** Actionable help supplied by the Core, shown directly after the message when present. */
+    hint?: string
+    formatted: string
+}
+
+/**
+ * A compile/check-time finding. Only `error` severity blocks compilation, the other severities are
+ * reported but let the program build and run.
+ */
+export type Diagnostic =
+    | (DiagnosticBase & { severity: 'error' })
+    | (DiagnosticBase & { severity: 'warning' })
+    | (DiagnosticBase & { severity: 'suggestion' })
+
+export type StackFrame = {
+    name: string
+    address: bigint
+    destination: bigint
+    sp: bigint
+    line: number
+    file?: string
+    color: string
+}
+
+export type MemoryTab = {
+    id: number
+    name: string
+    address: bigint
+    rowSize: number
+    pageSize: number
+    endianess: 'big' | 'little'
+    data: DiffedMemory
+    /**
+     * Whether the user moved this view to an address of their own. Such a view keeps its address
+     * across Stop and Build, where an untouched one is placed again by the language (the Stack
+     * tab onto SP, for example).
+     */
+    userPlaced: boolean
+}
+
+export type DiffedMemory = {
+    current: Uint8Array
+    prevState: Uint8Array
+    /**
+     * The bytes of the page the Core could not read, which the view marks instead of showing a
+     * value. Null, or absent, when the whole page was read.
+     */
+    unreadable?: UnreadableBytes | null
+}
+
+/** What a memory view found it could not read at `address`, one mask entry per byte of the page. */
+export type UnreadableBytes = {
+    address: bigint
+    /** 1 for each byte that could not be read. */
+    mask: Uint8Array
+    /** Why the lowest of those bytes could not be read, as the Core put it. */
+    reason: string
+}
+
+export type RegisterHex = [hi: string, lo: string]
+
+export enum RegisterSize {
+    Byte = 1,
+    Word = 2,
+    Long = 4,
+    Double = 8,
+    /** 128 bits, the width of an x86 SSE register. */
+    Quad = 16
+}
+
+export type RegisterChunk = {
+    hex: string
+    value: bigint
+    valueSigned: bigint
+    groupSize: bigint
+    prev: {
+        hex: string
+        value: bigint
+    }
+}
+
+export function numbersOfSizeToSlice(
+    numbers: bigint[],
+    bytes: number,
+    endianess: 'big' | 'little' = 'big'
+) {
+    return numbers.flatMap((v) => numberToByteSlice(v, bytes, endianess))
+}
+
+export function makeGenericDiagnostic(error: string): Diagnostic {
+    return {
+        severity: 'error',
+        lineIndex: 0,
+        column: 0,
+        line: {
+            line: '',
+            line_index: 0
+        },
+        message: error,
+        formatted: error
+    }
+}
+const DIAGNOSTIC_PREFIXES = {
+    error: '',
+    warning: 'Warning: ',
+    suggestion: 'Suggestion: '
+} satisfies Record<DiagnosticSeverity, string>
+
+/**
+ * Renders a diagnostic as a line of text. Errors stay bare, which is what the panels have always
+ * shown, the other severities are announced unless the core already spelled the severity out.
+ */
+export function formatDiagnostic(diagnostic: Diagnostic): string {
+    const prefix = DIAGNOSTIC_PREFIXES[diagnostic.severity]
+    if (!prefix) return diagnostic.formatted
+    if (diagnostic.formatted.toLowerCase().startsWith(diagnostic.severity)) {
+        return diagnostic.formatted
+    }
+    return `${prefix}${diagnostic.formatted}`
+}
+
+export function toHexString(_value: bigint | number, _size: bigint | number): string {
+    const value = BigInt(_value)
+    const size = BigInt(_size)
+    const bits = size * 8n
+    const mask = (1n << bits) - 1n
+    const hexDigits = Number(size * 2n)
+    return (value & mask).toString(16).padStart(hexDigits, '0')
+}
+
+export function makeRegister(name: string, v: bigint | number, _size: RegisterSize) {
+    let value = $state(BigInt(v))
+    let prev = $state(BigInt(v))
+    let size = $state(BigInt(_size))
+
+    function setValue(v: number | bigint) {
+        prev = value
+        value = BigInt(v)
+    }
+
+    function toHex() {
+        return toHexString(value, size)
+    }
+
+    function setSize(newSize: RegisterSize) {
+        size = BigInt(newSize)
+    }
+
+    function toSizedGroups(groupSize: RegisterSize): RegisterChunk[] {
+        //a register narrower than the grouping is one group of its own width, so the signed reading
+        //has to be taken over the width the group really has: Z80's byte wide `a` holding 0xff is
+        //-1 and not the 255 a word would read. `hexChunks` in registerFormats.ts is the same
+        //grouping for a Register file's rows and clamps the same way; the two have to agree,
+        //because the panels show them side by side.
+        const groupBytes = Math.max(1, Math.min(Number(groupSize), Number(size)))
+        const groupLength = BigInt(groupBytes) * 2n
+        const hex = toHex()
+        const prevHex = toHexString(prev, size)
+        const chunks: RegisterChunk[] = []
+        for (let i = 0n; i < hex.length; i += groupLength) {
+            const index = Number(i)
+            const offset = Number(i + groupLength)
+            const groupValue = BigInt(`0x${hex.slice(index, offset)}`)
+            chunks.push({
+                hex: hex.slice(index, offset),
+                value: groupValue,
+                valueSigned: unsignedBigIntToSigned(groupValue, groupBytes),
+                groupSize: groupLength,
+                prev: {
+                    hex: prevHex.slice(index, offset),
+                    value: BigInt(`0x${prevHex.slice(index, offset)}`)
+                }
+            })
+        }
+        return chunks
+    }
+
+    return {
+        name,
+        get value() {
+            return value
+        },
+        get prev() {
+            return prev
+        },
+        //the renderers need the width a register ended up with, which is not always the one its
+        //Register file declares: the Z80 adapter narrows `a` to a byte after the file is built
+        get size() {
+            return size
+        },
+        setSize,
+        setValue,
+        toHex,
+        toSizedGroups
+    }
+}
+
+/**
+ * One entry of a Core's Undo history: either an instruction the program ran, or a Poke a person or
+ * the coding agent made between two instructions
+ * ([the design record](../../../../../docs/design/pokes.md)). A poke step carries no source location,
+ * since no instruction ran, and the panels read `kind` to tell the two apart.
+ */
+export type ExecutionStep = {
+    kind: 'instruction' | 'poke'
+    /** False for a visible native History barrier whose effects are not journaled. */
+    undoable?: boolean
+    mutations: MutationOperation[]
+    pc: number
+    old_ccr: {
+        bits: number
+    }
+    new_ccr: {
+        bits: number
+    }
+    line: number
+    file?: string
+    /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
+    writes?: PokeWrite[]
+    /**
+     * Set on the instruction that started a Step through Runtime library code: the library function
+     * it entered and every instruction the Step ran, which one Undo takes back together.
+     */
+    stretch?: { library: string; instructions: number }
+}
+
+/**
+ * One value a Poke changed, as the panels show it: unsigned bit patterns, and register names in the
+ * editor's own spelling for that language, which is what the Register files list.
+ */
+export type PokeWrite =
+    | { type: 'register'; name: string; old: bigint; new: bigint }
+    | { type: 'memory'; address: bigint; old: number[]; new: number[] }
+
+/** One register write of a Poke; several of them in one call are one step of the Undo history. */
+export type RegisterPoke = { register: string; value: bigint }
+
+/**
+ * One thing an instruction did, as its Core's history reports it. A write carries what it replaced
+ * when the Core keeps it, which is what undo puts back, and what it wrote when the Core reports
+ * that too; neither is reconstructed here, so a value a Core cannot hand over is simply absent
+ * (RARS hands a 64 bit register's old value over as a 32 bit int, so RV64 has none).
+ */
+export type MutationOperation =
+    | {
+          type: 'WriteRegister'
+          value: {
+              register: string
+              old?: bigint
+              new?: bigint
+              size: RegisterSize
+          }
+      }
+    | {
+          type: 'WriteMemory'
+          value: {
+              address: bigint
+              old?: bigint
+              new?: bigint
+              size: RegisterSize
+          }
+      }
+    | {
+          type: 'WriteMemoryBytes'
+          value: {
+              address: bigint
+              old: number[]
+              new?: number[]
+          }
+      }
+    | {
+          type: 'PopCallStack'
+          value: {
+              to: bigint
+              from: bigint
+          }
+      }
+    | {
+          type: 'PushCallStack'
+          value: {
+              to: bigint
+              from: bigint
+          }
+      }
+    | {
+          type: 'Other'
+          value: string
+      }
+
+export type Register = ReturnType<typeof makeRegister>
+
+/**
+ * How a Register file's values are read for display. `hex` shows the bit pattern grouped by size,
+ * the two float Formats decode the bits as IEEE 754. A file offers the Formats that make sense for
+ * its registers and the first one it offers is its default.
+ */
+export type RegisterFormat = 'hex' | 'single' | 'double'
+
+/**
+ * One register of a Register file. Both fields are overrides for files that are not uniform:
+ * `size` defaults to the file's size (x86's SSE file is 128 bits wide but `mxcsr` is 32), and
+ * `kind` defaults to `float` when the file offers a float Format and to `integer` otherwise, so an
+ * integer control register keeps its hexadecimal rendering inside a floating-point file.
+ */
+export type RegisterFileRegister = {
+    name: string
+    size?: RegisterSize
+    kind?: 'integer' | 'float'
+}
+
+/** A `RegisterFileRegister` with the file's defaults filled in: what the renderers read. */
+export type ResolvedRegisterFileRegister = Required<RegisterFileRegister>
+
+/**
+ * What an adapter declares about a Register file it can read out of its Core
+ * ([the design record](../../../../../docs/design/register-files.md)): a named, ordered set of registers
+ * that share a width and a way of being read, optionally with a row of Status flags of its own.
+ */
+export type RegisterFileDescriptor = {
+    id: string
+    label: string
+    size: RegisterSize
+    /** The Formats this file offers, the first of which is its default. */
+    formats: readonly RegisterFormat[]
+    registers: readonly RegisterFileRegister[]
+    /**
+     * MIPS: a double is read from the even/odd register pair, low word in the even register, so
+     * only the even rows show a value and the odd ones show nothing, as MARS's Double column does.
+     */
+    pairedDoubles?: boolean
+    /**
+     * RISC-V: a 64 bit register holds a single only when its high word is all ones, and anything
+     * else reads as NaN in the single Format, as RARS shows it.
+     */
+    nanBoxedSingles?: boolean
+    /** The file's own Status flags, shown above its registers. MIPS's FPU has eight, named 0..7. */
+    flagNames?: readonly string[]
+    hiddenRegisters?: readonly string[]
+}
+
+/**
+ * A Register file as the panels and the coding agent see it: the descriptor, its registers read
+ * back out of the Core with the previous value each keeps for change highlighting, and its own
+ * Status flags. `layout` is the descriptor's register list with every default filled in, kept
+ * beside the values because a `Register` carries no kind.
+ */
+export type RegisterFile = Omit<RegisterFileDescriptor, 'registers'> & {
+    layout: readonly ResolvedRegisterFileRegister[]
+    registers: Register[]
+    flags: StatusRegister[]
+    /**
+     * One entry per register, true for a row that holds no value at this refresh and is shown
+     * blank, the way gdb prints Empty for an x87 stack slot the tag word marks empty. The
+     * register keeps the stale bits underneath, a hover away. Empty when a file never blanks.
+     */
+    blanks: boolean[]
+}
+
+/**
+ * A file that offers any float Format holds floating-point registers, unless one of them says
+ * otherwise.
+ */
+export function defaultRegisterKind(formats: readonly RegisterFormat[]): 'integer' | 'float' {
+    return formats.some((format) => format !== 'hex') ? 'float' : 'integer'
+}
+
+export function resolveRegisterFileLayout(
+    file: Pick<RegisterFileDescriptor, 'size' | 'formats' | 'registers'>
+): ResolvedRegisterFileRegister[] {
+    const kind = defaultRegisterKind(file.formats)
+    return file.registers.map((register) => ({
+        name: register.name,
+        size: register.size ?? file.size,
+        kind: register.kind ?? kind
+    }))
+}
+
+/** Core layout facts; all ranges are half-open and addresses stay lossless. */
+export type MemoryRunKind = 'code' | 'data' | 'reserved'
+export type MemoryLayoutItem = {
+    start: bigint
+    length: bigint
+    kind: MemoryRunKind
+    section: string
+    alignment?: bigint
+}
+export type DataLabel = {
+    /** The assembly unit that defines this symbol, when the Core reports it. */
+    file?: string
+    name: string
+    address: bigint
+    section?: string
+    fromLibrary: boolean
+    displayName?: string
+    preview?: string
+}
+export type MemoryLayout = {
+    sections: { name: string; runs: Omit<MemoryLayoutItem, 'section' | 'alignment'>[] }[]
+    dataLabels: DataLabel[]
+    /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
+    readOnly?: ReadOnlyMemory[]
+}
+/** A half-open range of memory that takes no Pokes, and why, which the memory view shows. */
+export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
+export type HeapBounds = { start: bigint; end: bigint }
+export type DeviceRegion = { name: string; start: bigint; end: bigint }
+export type MemoryRegion = DeviceRegion & {
+    id: string
+    kind: MemoryRunKind | 'heap' | 'stack' | 'device'
+    section?: string
+    /** The live stack jumps to SP, including when its extent is empty. */
+    destination?: bigint
+}
+
+export type EmulatorDecoration = {
+    type: 'below-line'
+    note?: string
+    belowLine: number
+    file?: string
+    md: string
+    /** Generated instructions shown below one original source line, in assembly-address order. */
+    instructions?: { address: bigint; code: string }[]
+}
+
+export type BuildArtifact = {
+    file: string
+    /** Zero-based source line. */
+    line: number
+    address: bigint
+    /** Emitted instruction bytes or machine word, written in hexadecimal, when the Core exposes it. */
+    opcode?: string
+}
+
+export type EmulatorInterrupt = {
+    type: string
+    message?: string
+}
+
+export type BaseEmulatorState = {
+    code: string
+    systemSize: RegisterSize
+    compiledCode?: string
+    registers: Register[]
+    /**
+     * Every Register file the Emulator exposes. The CPU file is always element 0 and its
+     * `registers` is the very array `registers` above is, so a caller that only knows about the
+     * general registers keeps reading them where it always did.
+     */
+    registerFiles: RegisterFile[]
+    startingRegisterNames: string[]
+    hiddenRegisters: string[]
+    decorations: EmulatorDecoration[]
+    buildArtifacts: BuildArtifact[]
+    statusRegisters: StatusRegister[]
+    errors: string[]
+    compilerDiagnostics: Diagnostic[]
+    terminated: boolean
+    /**
+     * How the program ended, while `terminated` is true: an exit with its status, an end past the
+     * last instruction, a signal or a runtime error. Undefined while it runs, and after an Undo
+     * that takes the end back.
+     */
+    termination?: Termination
+    latestSteps: ExecutionStep[]
+    callStack: StackFrame[]
+    line: number
+    currentFile: string
+    executionTime: number
+    sp: bigint
+    pc: bigint
+    stdOut: string
+    canExecute: boolean
+    canUndo: boolean
+    /**
+     * Whether the last Run returned because Pause was requested. The Core is idle and available
+     * for Step, Undo or another Run, as after a breakpoint.
+     */
+    paused: boolean
+    breakpoints: SourceBreakpoint[]
+    interrupt?: EmulatorInterrupt
+    memory: {
+        global: MemoryTab
+        tabs: MemoryTab[]
+    }
+}
+
+/**
+ * Values `GenericEmulator` derives from `BaseEmulatorState` instead of storing: `compilerErrors` is
+ * the error-severity subset of `compilerDiagnostics`, so anything gating on "the code does not
+ * compile" stays correct without having to filter by severity itself.
+ */
+export type BaseEmulatorDerivedState = {
+    resolveMemoryLabel(name: string): bigint | undefined
+    readonly compilerErrors: Diagnostic[]
+    readonly memoryRegions: readonly MemoryRegion[]
+    readonly dataLabels: readonly DataLabel[]
+    readonly readOnlyMemory: readonly ReadOnlyMemory[]
+    /** Immutable Files and Entry used by the current executable, retained until Stop. */
+    readonly buildSources?: BuildSources
+    /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
+    readonly buildLibraryFiles?: import('#lib/projectFiles.ts').ProjectFiles
+}
+
+export enum InterpreterStatus {
+    Running = 0,
+    Interrupt = 1,
+    Terminated = 2,
+    TerminatedWithException = 3
+}
+
+let currentTabId = 0
+
+export function createMemoryTab(
+    pageSize: number,
+    name: string,
+    address: bigint,
+    rowSize: number,
+    initialValue: number,
+    endianess: 'big' | 'little'
+): MemoryTab {
+    return {
+        name,
+        address,
+        id: currentTabId++,
+        rowSize,
+        pageSize,
+        endianess,
+        userPlaced: false,
+        data: {
+            current: new Uint8Array(pageSize).fill(initialValue),
+            prevState: new Uint8Array(pageSize).fill(initialValue),
+            unreadable: null
+        }
+    }
+}
+
+/**
+ * The same view with its contents back to the initial value. It keeps its id, so the window
+ * showing it is not remounted (and collapsed) by a Stop, and it keeps its address.
+ */
+export function resetMemoryTab(tab: MemoryTab, initialValue: number): MemoryTab {
+    return {
+        ...tab,
+        data: {
+            current: new Uint8Array(tab.pageSize).fill(initialValue),
+            prevState: new Uint8Array(tab.pageSize).fill(initialValue),
+            unreadable: null
+        }
+    }
+}
+
+export function makeLabelColor(index: number, _address: number) {
+    return `hsl(${(index * 137) % 360}, 40%, 60%)`
+}
+
+export function makeColorizedLabels(labels: StackFrame[]): ColorizedLabel[] {
+    //same address and index should always be the same color
+    return labels.map((address) => ({
+        address: address.address,
+        sp: address.sp,
+        color: address.color
+    }))
+}
+
+export type ColorizedLabel = {
+    address: bigint
+    sp: bigint
+    color: string
+}
+
+export type EmulatorSettings = {
+    language?: AvailableLanguages
+    /** False when a Project-scoped Worker owns live diagnostics for this Emulator. */
+    automaticChecking?: boolean
+    globalPageSize?: number
+    globalPageElementsPerRow?: number
+    baseAddress?: bigint
+    stackAddress?: bigint
+    initialMemoryValue?: number
+    /**
+     * The Screen, Keyboard, Mouse, clock and Random source the Emulator runs on
+     * ([ADR 0004](../../../../../docs/adr/0004-inject-screens-at-emulator-boundary.md)). The GUI creates
+     * them so it can bind its widgets to the very instances the Core uses; anything left out is
+     * built from the language defaults, which is what every caller that does not care gets.
+     */
+    peripherals?: InjectedPeripheralOptions
+    /**
+     * MIPS and RISC-V only: MARS's and RARS's five bitmap-display parameters, from the project the
+     * Emulator was opened for. Every other language configures its Screen from the program itself,
+     * and an Emulator that is given none starts from MARS's defaults.
+     */
+    display?: ProjectDisplay
+    /**
+     * The Screen undo journal's budget in megabytes, a Setting of the Project the Emulator was
+     * opened for ([ADR 0014](../../../../../docs/adr/0014-settings-split-by-effect.md)); the language's
+     * default when left out. Changed later with `setScreenHistoryBudgetMb`.
+     */
+    screenHistoryBudgetMb?: number
+    /** FileSystem inverse-history budget in megabytes, applied at Build. */
+    fileSystemHistoryBudgetMb?: number
+}
+
+export type BaseEmulatorActions = {
+    compile: (historySize: number, sourceOverride?: BuildInput) => Promise<void>
+    step: () => Promise<boolean>
+    run: (haltLimit: number) => Promise<InterpreterStatus>
+    setGlobalMemoryAddress: (address: bigint) => void
+    setGlobalMemorySize: (pageSize: number, rowSize: number) => void
+    setCode: (code: string) => void
+    setSources: (sources: BuildInput) => void
+    check: () => Promise<Diagnostic[]>
+    clear: () => void
+    setTabMemoryAddress: (address: bigint, tabId: number) => void
+    toggleBreakpoint: (line: number, file?: string) => void
+    /** Translates Breakpoints on Files the Core never sees into the ones it runs with. */
+    setBreakpointResolver: (
+        resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
+    ) => void
+    /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
+    undo: (amount?: number) => number
+    /**
+     * Whether a Poke is possible right now, which is exactly when Step is
+     * ([the design record](../../../../../docs/design/pokes.md)): after a Build, with no Interrupt
+     * pending, the program not terminated and no Run, Step or input handler owning the Core. The
+     * panels bind to it, so it is reactive.
+     */
+    readonly canPoke: boolean
+    /** Whether that one register of that Register file may be poked; the PC never may. */
+    canPokeRegister: (fileId: string, register: string) => boolean
+    /**
+     * Pokes one or more registers of one Register file as a single step of the Undo history. False
+     * when the Poke was refused or changed nothing; throws when a value does not fit its register.
+     */
+    pokeRegisters: (fileId: string, writes: RegisterPoke[]) => boolean
+    /** The same for a run of memory bytes, which is one step however many bytes it holds. */
+    pokeMemory: (address: bigint, bytes: Uint8Array) => boolean
+    /**
+     * Ends the current Run at its next slice boundary, preserving the program and undo history.
+     * Does nothing when no run is in flight.
+     */
+    pause: () => void
+    resetSelectedLine: () => void
+    dispose: () => void
+    test: (
+        sources: BuildInput,
+        testcases: Testcase[],
+        haltLimit: number,
+        historySize?: number
+    ) => Promise<TestcaseResult[]>
+    getLineFromAddress: (address: bigint) => number
+    getSourceLocationFromAddress: (address: bigint) => { file: string; line: number } | null
+    readMemoryBytes: (address: bigint, length: number) => Uint8Array
+    /**
+     * A new Screen undo budget, applied on the next clear, which is what a Build starts with: a
+     * Setting takes effect at the next Build and never resizes anything under a running program.
+     */
+    /** The Entry path of the sources currently set. */
+    entry: string
+    setScreenHistoryBudgetMb: (megabytes: number) => void
+    /** The same for the FileSystem's Undo budget, likewise read by the next Build's session. */
+    setFileSystemHistoryBudgetMb: (megabytes: number) => void
+    /**
+     * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
+     * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the
+     * program's to configure.
+     */
+    setDisplay?: (display: ProjectDisplay) => void
+    /**
+     * MIPS and RISC-V only: the display the Screen is configured with right now, and whether the
+     * last Build read it out of the program's own `@screen` comment directive rather than from the
+     * user. The GUI pulls it after a Build so the popover shows what the source asked for.
+     */
+    getDisplay?: () => MarsDisplayConfiguration
+}

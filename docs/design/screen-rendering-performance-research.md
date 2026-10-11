@@ -6,7 +6,7 @@ The research pass expected the wins to be an opaque Canvas2D context and dirty-r
 
 ## What is already efficient
 
-[ScreenRenderer.svelte](../../src/components/specific/project/screen/ScreenRenderer.svelte), particularly `paint()` around lines 86–120, already:
+[ScreenRenderer.svelte](../../packages/asm-editor/src/components/specific/project/screen/ScreenRenderer.svelte), particularly `paint()` around lines 86–120, already:
 
 - Paints at most once per animation callback and skips unchanged `screen.version` values.
 - Keeps the Canvas2D context and an `ImageData` wrapper, rebuilding the wrapper only for a changed array or dimensions.
@@ -21,7 +21,7 @@ Canvas bitmap dimensions and CSS display dimensions are separate. Resizing the b
 
 > **Measured and rejected.** An opaque context was 0.240 ms a whole-image submission against 0.259 ms for the default, which is inside the clock's own resolution; see [Canvas submission is not the cost](#canvas-submission-is-not-the-cost).
 
-The current call is `canvas.getContext('2d')`. Benchmark creating that context with `{ alpha: false }`. The Screen represents 24-bit RGB, and its initialized pixels have alpha 255; `fillImage()` preserves that convention. An opaque context therefore matches the intended content. [Screen.ts](../../src/lib/languages/peripherals/screen/Screen.ts)
+The current call is `canvas.getContext('2d')`. Benchmark creating that context with `{ alpha: false }`. The Screen represents 24-bit RGB, and its initialized pixels have alpha 255; `fillImage()` preserves that convention. An opaque context therefore matches the intended content. [Screen.ts](../../packages/asm-editor/src/lib/languages/peripherals/screen/Screen.ts)
 
 Mozilla recommends this flag when a canvas does not require transparency because the browser can optimize rendering. This is a credible low-effort candidate, not a guarantee of improvement on every device. [Mozilla canvas optimization guidance](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas#turn_off_transparency)
 
@@ -53,11 +53,11 @@ Proposed damage design, based on this repository:
 - Force a complete paint on initial mount, buffer/dimension replacement, reset, context restoration, and any undo operation whose damage is not known precisely. Acknowledging damage must not discard changes belonging to a newer version.
 - Start with one bounding rectangle, then measure it against row spans or dirty tiles for dispersed updates. Two distant changed cells can make a union cover almost the entire display. Coalesce neighboring spans/tiles and fall back to one full upload for dense damage; avoid one browser call per pixel or primitive. Choose thresholds from measurements of area **and** call count.
 
-These are implementation proposals, not existing behavior or measured results. Relevant local boundaries are `markDrawn()`, `markVisible()`, `present()`, `syncFramebuffer()`, and `journalPatch()` in [Screen.ts](../../src/lib/languages/peripherals/screen/Screen.ts). The current changed-cell Bad Apple workload is particularly useful for comparing union rectangles with multiple coalesced regions; changing that program to draw only changed cells is already underway and is not a new recommendation here.
+These are implementation proposals, not existing behavior or measured results. Relevant local boundaries are `markDrawn()`, `markVisible()`, `present()`, `syncFramebuffer()`, and `journalPatch()` in [Screen.ts](../../packages/asm-editor/src/lib/languages/peripherals/screen/Screen.ts). The current changed-cell Bad Apple workload is particularly useful for comparing union rectangles with multiple coalesced regions; changing that program to draw only changed cells is already underway and is not a new recommendation here.
 
 For scale, a 640 × 480 RGBA8 frame contains 1,228,800 bytes. At 60 full paints per second, that is 73.7 MB/s of logical source pixel payload before other copies or compositing. A 30 × 30 patch contains 3,600 bytes. These are arithmetic counts, not measured memory traffic, latency, or an expected speedup.
 
-Read-only analysis of the current [`examples/m68k/bad-apple.x68`](../../examples/m68k/bad-apple.x68) parsed its 6,526 frames of 256 bytes and compared each frame with the preceding cell image, initially black. There are 5,638 changed frames, averaging 8.013 changed cells over all frames, or 9.275 per changed frame. Its 30 × 30 cells yield the following ideal source pixel areas:
+Read-only analysis of the current [`packages/asm-editor/examples/m68k/bad-apple.x68`](../../packages/asm-editor/examples/m68k/bad-apple.x68) parsed its 6,526 frames of 256 bytes and compared each frame with the preceding cell image, initially black. There are 5,638 changed frames, averaging 8.013 changed cells over all frames, or 9.275 per changed frame. Its 30 × 30 cells yield the following ideal source pixel areas:
 
 | Submission strategy                         | Average pixel bytes per changed guest frame |
 | ------------------------------------------- | ------------------------------------------: |
@@ -106,11 +106,11 @@ These findings come from the local implementation inspected on 2026-09-06. The w
 
 ### The existing animation measurements exclude canvas painting
 
-[`animation.measure.ts`](../../src/lib/languages/measurements/animation.measure.ts) measures intervals between program waits and counts presentations. [`startFakeRenderer`](../../src/lib/languages/measurements/harness.ts) uses a timer to call `markPainted()`; it neither creates a canvas nor calls `putImageData`. The [recorded frame pacing](./screen-peripherals.md#frame-pacing) is useful producer-side evidence, but it is not measured browser FPS. A browser trace must distinguish CPU production, time waiting to paint, canvas submission, raster/compositor work, and actual frame delivery. Chrome's [Performance reference](https://developer.chrome.com/docs/devtools/performance/reference) documents the Frames track and Bottom-up aggregation used for this diagnosis.
+[`animation.measure.ts`](../../packages/asm-editor/src/lib/languages/measurements/animation.measure.ts) measures intervals between program waits and counts presentations. [`startFakeRenderer`](../../packages/asm-editor/src/lib/languages/measurements/harness.ts) uses a timer to call `markPainted()`; it neither creates a canvas nor calls `putImageData`. The [recorded frame pacing](./screen-peripherals.md#frame-pacing) is useful producer-side evidence, but it is not measured browser FPS. A browser trace must distinguish CPU production, time waiting to paint, canvas submission, raster/compositor work, and actual frame delivery. Chrome's [Performance reference](https://developer.chrome.com/docs/devtools/performance/reference) documents the Frames track and Bottom-up aggregation used for this diagnosis.
 
 ### Undo snapshots are a concrete allocation target
 
-[`Screen.journalPatch`, `copyRegion`, `clear`, and `present`](../../src/lib/languages/peripherals/screen/Screen.ts) copy the previous pixels for every drawing operation. Whole-image snapshots still run through a row loop, creating one temporary `subarray` view per row. Those views do not copy the row data themselves; the subsequent `set` copies it into the allocated snapshot.
+[`Screen.journalPatch`, `copyRegion`, `clear`, and `present`](../../packages/asm-editor/src/lib/languages/peripherals/screen/Screen.ts) copy the previous pixels for every drawing operation. Whole-image snapshots still run through a row loop, creating one temporary `subarray` view per row. Those views do not copy the row data themselves; the subsequent `set` copies it into the allocated snapshot.
 
 A separate Node v24.18.1 process imported the existing Screen source without modifying it and wrapped `copyRegion` only in that process to count copied bytes and row iterations. At 640 × 480, with double buffering and a repeated clear → 20 × 20 ellipse → present sequence, the probe observed:
 
@@ -130,13 +130,13 @@ Recommended experiments, preserving Undo:
 - ~~Give `copyRegion` a contiguous full-width/full-image path instead of copying 480 rows separately.~~ **Measured and rejected:** the row loop is 0.320 ms for a whole 640 × 480 image and one `slice()` of the same bytes is 0.346 ms, so the row views cost nothing worth removing. `pasteRegion` can use the equivalent path during Undo. This removes temporary row views and repeated calls, while keeping the same snapshot bytes.
 - When history is explicitly disabled, avoid pixel snapshot allocation before it happens. Setting the budget to zero currently allocates and then evicts. Preserve the journal's sequence/counting contract, compound boundaries, and the rule that unavailable history blocks Undo; simply returning early from every journal method is not a complete design. Likewise, Core history disabled and Screen history disabled are currently separate settings.
 - For enabled history, consider pooled snapshot buffers and/or patches for changed regions at `present`, if profiling shows allocation or copying dominates. Do not recycle any buffer retained by a live record or currently used by the Screen after Undo.
-- Profile [`ScreenHistory.evict`](../../src/lib/languages/peripherals/screen/ScreenHistory.ts) after the history fills, especially with many tiny pixel/color records. It calls `shift()` on two arrays. A deque or indexed head can make eviction predictable; release removed references. Do not assume every engine always performs a linear move: [V8's implementation](https://github.com/v8/v8/blob/main/src/builtins/array-shift.tq) has both element-moving and runtime paths.
+- Profile [`ScreenHistory.evict`](../../packages/asm-editor/src/lib/languages/peripherals/screen/ScreenHistory.ts) after the history fills, especially with many tiny pixel/color records. It calls `shift()` on two arrays. A deque or indexed head can make eviction predictable; release removed references. Do not assume every engine always performs a linear move: [V8's implementation](https://github.com/v8/v8/blob/main/src/builtins/array-shift.tq) has both element-moving and runtime paths.
 
 A plain drawing/visible pointer swap is not a drop-in optimization for `present`: current presentation leaves the drawing image containing the newly presented pixels, so subsequent partial drawings build on them. A swap without maintaining that invariant changes program-visible output. See [ADR 0006](../adr/0006-screen-double-buffering.md).
 
 ### Bulk pixel writes can reduce CPU rasterization work
 
-[`fillImage`, `rectangle`, `ellipse`, and `paint`](../../src/lib/languages/peripherals/screen/Screen.ts) use scalar JavaScript pixel loops. Rectangle filling calls `paint` for every pixel, repeating clipping, offset calculation, and RGB extraction. Rectangle/ellipse loops also traverse off-screen coordinates and rely on `paint` to discard them.
+[`fillImage`, `rectangle`, `ellipse`, and `paint`](../../packages/asm-editor/src/lib/languages/peripherals/screen/Screen.ts) use scalar JavaScript pixel loops. Rectangle filling calls `paint` for every pixel, repeating clipping, offset calculation, and RGB extraction. Rectangle/ellipse loops also traverse off-screen coordinates and rely on `paint` to discard them.
 
 Proposed experiments:
 
@@ -148,7 +148,7 @@ For the current Bad Apple example, these are supporting improvements: it already
 
 ### Keep animation responsiveness separate from the instantaneous dirty flag
 
-[`GenericEmulator.runSlices` and `sliceTimeBudgetMs`](../../src/lib/languages/GenericEmulator.svelte.ts) choose the budget at slice entry. [`ExecutionSlice.ts`](../../src/lib/languages/ExecutionSlice.ts) defines 16 ms for a watched dirty Screen and 50 ms otherwise. After the renderer clears dirty, a program can receive the 50 ms budget and start drawing again inside that slice; double-buffered drawing also stays invisible until presentation. This is a plausible source of uneven frames for drawing loops without guest waits, not proof of the current user's bottleneck.
+[`GenericEmulator.runSlices` and `sliceTimeBudgetMs`](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts) choose the budget at slice entry. [`ExecutionSlice.ts`](../../packages/asm-editor/src/lib/languages/ExecutionSlice.ts) defines 16 ms for a watched dirty Screen and 50 ms otherwise. After the renderer clears dirty, a program can receive the 50 ms budget and start drawing again inside that slice; double-buffered drawing also stays invisible until presentation. This is a plausible source of uneven frames for drawing loops without guest waits, not proof of the current user's bottleneck.
 
 A 60 Hz refresh interval is only about 16.7 ms for the entire browser pipeline. The browser also needs time outside JavaScript; Google's [rendering guidance](https://web.dev/articles/rendering-performance) recommends leaving headroom. Thus a 16 ms uninterrupted compute slice does not itself ensure smooth 60 Hz output, and 120 Hz leaves about 8.3 ms total.
 
@@ -156,7 +156,7 @@ A 60 Hz refresh interval is only about 16.7 ms for the entire browser pipeline. 
 
 ### Preserve sparse changes across the MIPS/RISC-V memory bridge
 
-[`MarsDevices.observeFramebuffer`, `flush`, and `readInto`](../../src/lib/languages/mars/MarsDevices.ts) accumulate a single minimum/maximum dirty word interval, re-read that interval from the Core, assemble colors, then call `Screen.syncFramebuffer`. Two widely separated writes can cause most of the intervening image to be read and converted. Drawing dirty rectangles only at the canvas cannot recover this upstream work.
+[`MarsDevices.observeFramebuffer`, `flush`, and `readInto`](../../packages/asm-editor/src/lib/languages/mars/MarsDevices.ts) accumulate a single minimum/maximum dirty word interval, re-read that interval from the Core, assemble colors, then call `Screen.syncFramebuffer`. Two widely separated writes can cause most of the intervening image to be read and converted. Drawing dirty rectangles only at the canvas cannot recover this upstream work.
 
 For sparse large framebuffers, benchmark dirty row spans, tiles, or a small merged range list across the entire path: observer → Core memory reads → RGBA conversion → canvas. Bound the number of Core calls and switch to larger merged/full ranges for dense changes. Keep flush-before-sleep and full resynchronization on Undo/configuration. This is most relevant to MIPS/RISC-V; Bad Apple uses M68K drawing traps.
 
@@ -190,16 +190,16 @@ Limits worth stating plainly. This is one machine, one browser, and a headless s
 
 The workloads:
 
-| Workload                          | What it exercises                                                                                                                                                                                                                         |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `examples/m68k/bouncing-ball.x68` | double-buffered clear, filled ellipse, present at 640 × 480, paced by a 20 ms guest wait                                                                                                                                                  |
-| `examples/z80/bouncing-ball.z80`  | the same shape at 256 × 192, paced by the host's frame                                                                                                                                                                                    |
-| `examples/mips/bouncing-ball.asm` | the memory-backed framebuffer, 128 × 128 words, 16 ms sleep                                                                                                                                                                               |
-| m68k drawing loop, no wait        | the bouncing ball with its delay trap deleted: a program that draws as fast as the host lets it. Written for the measurement                                                                                                              |
-| m68k sparse cells                 | nine scattered 30 × 30 filled rectangles a frame at 640 × 480, 30 frames a second — Bad Apple's drawing shape without its 3.4 MB of video data, so the measurement does not depend on an uncommitted example. Written for the measurement |
-| mips sparse framebuffer           | two words a frame at opposite ends of a 256 × 256 word grid: the worst case for the single dirty interval `MarsDevices` keeps. Written for the measurement                                                                                |
+| Workload                                              | What it exercises                                                                                                                                                                                                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/asm-editor/examples/m68k/bouncing-ball.x68` | double-buffered clear, filled ellipse, present at 640 × 480, paced by a 20 ms guest wait                                                                                                                                                  |
+| `packages/asm-editor/examples/z80/bouncing-ball.z80`  | the same shape at 256 × 192, paced by the host's frame                                                                                                                                                                                    |
+| `packages/asm-editor/examples/mips/bouncing-ball.asm` | the memory-backed framebuffer, 128 × 128 words, 16 ms sleep                                                                                                                                                                               |
+| m68k drawing loop, no wait                            | the bouncing ball with its delay trap deleted: a program that draws as fast as the host lets it. Written for the measurement                                                                                                              |
+| m68k sparse cells                                     | nine scattered 30 × 30 filled rectangles a frame at 640 × 480, 30 frames a second — Bad Apple's drawing shape without its 3.4 MB of video data, so the measurement does not depend on an uncommitted example. Written for the measurement |
+| mips sparse framebuffer                               | two words a frame at opposite ends of a 256 × 256 word grid: the worst case for the single dirty interval `MarsDevices` keeps. Written for the measurement                                                                                |
 
-`examples/m68k/bad-apple.x68` was **not** measured. It exists only in the working tree, and its 3.4 MB source never finished loading into the editor in the headless shell within five minutes; the sparse-cells program stands in for its drawing shape. Nothing in this section depends on it.
+`packages/asm-editor/examples/m68k/bad-apple.x68` was **not** measured. It exists only in the working tree, and its 3.4 MB source never finished loading into the editor in the headless shell within five minutes; the sparse-cells program stands in for its drawing shape. Nothing in this section depends on it.
 
 ## Canvas submission is not the cost
 
@@ -378,7 +378,7 @@ change.
 
 ## Where the journal was spending it
 
-Three things, all in [`Screen.ts`](../../src/lib/languages/peripherals/screen/Screen.ts):
+Three things, all in [`Screen.ts`](../../packages/asm-editor/src/lib/languages/peripherals/screen/Screen.ts):
 
 - **`clear` and `present` copied a whole image to record it.** A 640 × 480 double-buffered frame
   allocated and copied 2.4 MB before it drew anything, on top of the 1.2 MB fill and the 1.2 MB

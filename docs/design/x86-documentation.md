@@ -3,7 +3,7 @@
 Sourcing study written on 2026-09-12 and implemented the same day; the implementation is recorded at
 the end. It answers one question: what can an x86 instruction reference, a directive page, a register
 page and a syscall page be built out of, given that the editor is AGPL-3.0 and Intel's manual is not
-ours to ship. Every number below is produced by [`scripts/x86-docs-coverage.mjs`](../../scripts/x86-docs-coverage.mjs),
+ours to ship. Every number below is produced by [`packages/asm-editor/scripts/x86-docs-coverage.mjs`](../../packages/asm-editor/scripts/x86-docs-coverage.mjs),
 which parses the sources and joins them; re-run it with `--fetch` on a clean checkout.
 
 ## Why x86 cannot follow the other languages
@@ -32,13 +32,13 @@ The other assemblers get a link.
 
 ### Already vendored, and true for the toolchain we assemble with
 
-| File                                                          | What it gives                                                                                                                                                                                                               | Licence |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `emulators/x86/wasm_nasm/nasm/x86/insnsn.c`                   | Every mnemonic NASM 3.00 accepts, condition forms (`jz`, `setnbe`, `cmovg`) already expanded. 2642 of them once the pseudo-ops are dropped.                                                                                 | BSD-2   |
-| `emulators/x86/wasm_nasm/nasm/x86/insns.xda`                  | The macro-expanded instruction table: operand forms, encodings, CPU level and feature flags, under the 112 `;#` section headings NASM builds its own manual from. 8588 forms after templates are expanded onto their names. | BSD-2   |
-| `emulators/x86/wasm_nasm/nasm/asm/tokens.dat`                 | 53 prefixes and specifiers in 38 groups: `lock`, `rep`, `o64`, `byte`/`qword`, `abs`/`far`/`near`.                                                                                                                          | BSD-2   |
-| `emulators/x86/wasm_nasm/nasm/doc/*.src`                      | The NASM manual: `directiv.src`, `preproc.src`, `macropkg.src`, `syntax.src`, `64bit.src`. The directive and assembler-feature pages come from here.                                                                        | BSD-2   |
-| `emulators/x86/libblink/blink/syscall.c` and `blink/strace.h` | 179 syscalls with number, name, arity and per-argument types (`FD`, `I_BUF`, `BUFSZ`).                                                                                                                                      | ISC     |
+| File                                                         | What it gives                                                                                                                                                                                                               | Licence |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `packages/x86/wasm_nasm/nasm/x86/insnsn.c`                   | Every mnemonic NASM 3.00 accepts, condition forms (`jz`, `setnbe`, `cmovg`) already expanded. 2642 of them once the pseudo-ops are dropped.                                                                                 | BSD-2   |
+| `packages/x86/wasm_nasm/nasm/x86/insns.xda`                  | The macro-expanded instruction table: operand forms, encodings, CPU level and feature flags, under the 112 `;#` section headings NASM builds its own manual from. 8588 forms after templates are expanded onto their names. | BSD-2   |
+| `packages/x86/wasm_nasm/nasm/asm/tokens.dat`                 | 53 prefixes and specifiers in 38 groups: `lock`, `rep`, `o64`, `byte`/`qword`, `abs`/`far`/`near`.                                                                                                                          | BSD-2   |
+| `packages/x86/wasm_nasm/nasm/doc/*.src`                      | The NASM manual: `directiv.src`, `preproc.src`, `macropkg.src`, `syntax.src`, `64bit.src`. The directive and assembler-feature pages come from here.                                                                        | BSD-2   |
+| `packages/x86/libblink/blink/syscall.c` and `blink/strace.h` | 179 syscalls with number, name, arity and per-argument types (`FD`, `I_BUF`, `BUFSZ`).                                                                                                                                      | ISC     |
 
 The first two matter more than their size suggests: they are the only sources that are true by
 construction. A form listed in `insns.xda` is a form this editor accepts, because it is the table the
@@ -74,7 +74,7 @@ calls something unimplemented.
 ## Measured coverage
 
 ```
-node scripts/x86-docs-coverage.mjs
+node packages/asm-editor/scripts/x86-docs-coverage.mjs
 ```
 
 |                                      | mnemonics   |
@@ -107,7 +107,7 @@ by hand either. Per section, for the sections a course reaches into:
 | No operation                          | 2         | 1     | 1       |
 
 Against what the editor already highlights, `X86Instructions` in
-[`X86-grammar.ts`](../../src/lib/languages/X86/X86-grammar.ts): 383 names listed, 323 of the 369 that
+[`X86-grammar.ts`](../../packages/asm-editor/src/lib/languages/X86/X86-grammar.ts): 383 names listed, 323 of the 369 that
 NASM accepts have prose (87.5%).
 
 The grammar list is also wrong in both directions, which the join makes visible:
@@ -149,7 +149,7 @@ A merged record today looks like this (`--sample jnz`, abridged): NASM 3.00 form
 ## Proposed decisions
 
 1. **Generate, then commit.** A script reads the five in-repo tables plus the two cached files and
-   writes `src/lib/languages/X86/X86-documentation.ts`, which is committed. Not derived at import
+   writes `packages/asm-editor/src/lib/languages/X86/X86-documentation.ts`, which is committed. Not derived at import
    time like the Z80, because two of the inputs are not npm packages, and not hand-written like the
    M68K, because 8588 forms are not worth typing.
 2. **Forms from NASM 3.00, always.** Prose never contributes a form.
@@ -194,9 +194,9 @@ A merged record today looks like this (`--sample jnz`, abridged): NASM 3.00 form
 ## What was built, 2026-09-12
 
 Every proposed decision above was taken as written. The parsers live in
-[`scripts/x86-docs/sources.mjs`](../../scripts/x86-docs/sources.mjs), shared by the coverage script
-and by [`scripts/x86-docs-generate.mjs`](../../scripts/x86-docs-generate.mjs), which writes five
-committed modules under `src/lib/languages/X86/generated/`:
+[`packages/asm-editor/scripts/x86-docs/sources.mjs`](../../packages/asm-editor/scripts/x86-docs/sources.mjs), shared by the coverage script
+and by [`packages/asm-editor/scripts/x86-docs-generate.mjs`](../../packages/asm-editor/scripts/x86-docs-generate.mjs), which writes five
+committed modules under `packages/asm-editor/src/lib/languages/X86/generated/`:
 
 | Module               | Holds                                                                                                              | From                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
@@ -206,7 +206,7 @@ committed modules under `src/lib/languages/X86/generated/`:
 | `x86Syscalls.ts`     | 138 syscalls with canonical numbers, names and arities exported by the built Core                                  | `getImplementedSyscalls()`, `syscall.c`, `strace.h`                                |
 | `x86Tokens.ts`       | directives, standard macros, preprocessor directives, prefixes, size specifiers, 344 register names, flag meanings | `directiv.dat`, `standard.mac`, `pptok.dat`, `tokens.dat`, `regs.dat`, `iflags.ph` |
 
-[`X86-documentation.ts`](../../src/lib/languages/X86/X86-documentation.ts) is the curated layer on
+[`X86-documentation.ts`](../../packages/asm-editor/src/lib/languages/X86/X86-documentation.ts) is the curated layer on
 top: the documented set, the written descriptions that outrank the generated ones, the registers,
 the flags, the condition code table, the directive and syscall prose, and the accessors the pages
 and the editor use.

@@ -17,7 +17,7 @@ Companion to [workbench.md](./workbench.md), whose decisions and [ADR 0024](../a
 ## Target structure
 
 ```
-src/components/specific/workbench/
+packages/asm-editor/src/components/specific/workbench/
   Workbench.svelte            public component: host API, EmulatorLoader, session, layout choice
   WorkbenchDesktop.svelte     rail, side panel, editor area, bottom panel, debug column, splitters
   WorkbenchCompact.svelte     tablet and phone: drawer, controls bar, stacked sections
@@ -34,14 +34,14 @@ src/components/specific/workbench/
   DebugToolsFloating.svelte   the Debug tools' DraggableContainer windows
   panels/                     ExplorerPanel, TestcasesPanel, DocumentationPanel, AgentPanel,
                               SettingsPanel and its sections
-src/lib/workbench/
+packages/asm-editor/src/lib/workbench/
   WorkbenchSession.svelte.ts  state and actions moved out of Project.svelte
   fileTabs.ts                 the tab list rules
   workbenchLog.ts             Log entries
   deviceClass.ts              phone | tablet | desktop, and whether Floating is possible
   hostApi.ts                  the host API types
-src/stores/workbenchLayoutStore.svelte.ts   sizes, collapsed sections, floating windows
-src/components/shared/layout/Splitter.svelte
+packages/asm-editor/src/stores/workbenchLayoutStore.svelte.ts   sizes, collapsed sections, floating windows
+packages/asm-editor/src/components/shared/layout/Splitter.svelte
 ```
 
 The host API (`hostApi.ts`), refined during phase 4:
@@ -132,7 +132,7 @@ Still on the old editor, so that every host of `ProjectEditor` passes Files befo
 
 ## Phase 3: WorkbenchSession
 
-Move the script of `Project.svelte` into `src/lib/workbench/WorkbenchSession.svelte.ts`. It is created in a component's initialisation with `(project, emulator, host)`, so its effects have an owner. `Project.svelte` then renders from the session and keeps its current layout.
+Move the script of `Project.svelte` into `packages/asm-editor/src/lib/workbench/WorkbenchSession.svelte.ts`. It is created in a component's initialisation with `(project, emulator, host)`, so its effects have an owner. `Project.svelte` then renders from the session and keeps its current layout.
 
 - **What moves:**
     - the source selection and the tab list;
@@ -256,8 +256,8 @@ Move the script of `Project.svelte` into `src/lib/workbench/WorkbenchSession.sve
     - `settings/Settings.svelte`, `settings/ShortcutEditor.svelte`;
     - the `showMemory` and `showScreen` Preferences, whose stored keys the tolerant reader already drops;
     - `DraggableContainer`'s collapsed (eye) mode, if no caller uses it once the pills are separate from the windows.
-- **Rewrite** "The full editor" part of the "Using the editor" Lecture (`src/content/assembly-basics/introduction/using-the-editor/index.md`) for the Workbench.
-- **Changelog** entry in `src/routes/changelog/versions.ts`: the new layout, the Settings sections, the two Preferences, and themes moved into Settings.
+- **Rewrite** "The full editor" part of the "Using the editor" Lecture (`packages/asm-editor/src/content/assembly-basics/introduction/using-the-editor/index.md`) for the Workbench.
+- **Changelog** entry in `packages/asm-editor/src/routes/changelog/versions.ts`: the new layout, the Settings sections, the two Preferences, and themes moved into Settings.
 - **Records:** a "Workbench" section in `manual-verification.md` holding the rows of phases 4 to 6, and the status of this plan.
 - **Recheck** that the Interactive editor is unchanged on a Playground, a documentation instruction page, the exam builder and `/chat`.
 

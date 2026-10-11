@@ -1,0 +1,31 @@
+packages:
+    - packages/asm-editor
+    - packages/runtime
+    # The Cores are submodules; their npm packages sit inside each repository.
+    - packages/mips/marsjs/ts
+    - packages/risc-v/rarsjs/ts
+    - packages/m68k/ts-lib
+    - packages/x86/blink-js
+    # packages/z80 is not listed: trs80 is an npm workspace of its own whose packages rely on its
+    # root's hoisting, so it installs and builds itself and the editor links its @specy/z80.
+
+# One Vite+ and one TypeScript for every package that runs `vp`. pnpm keys an install by its peers,
+# and the root's `vp` runs the editor's tests, so a second instance would hand SvelteKit a second Vite.
+catalog:
+    typescript: ^6.0.3
+    vite-plus: 1.1.0
+
+overrides:
+    vite@*: npm:@voidzero-dev/vite-plus-core@1.1.0
+
+allowBuilds:
+    # Checks that the platform binary package was installed.
+    esbuild: true
+    # wrangler's runtime, which checks for its platform binary the same way.
+    workerd: true
+    # Fallbacks for prebuilt binaries the platform packages already provide.
+    '@parcel/watcher': false
+    # Downloads the CUDA execution providers; the search index builds on the CPU.
+    onnxruntime-node: false
+    # Only prints a compatibility note for its CLI.
+    protobufjs: false

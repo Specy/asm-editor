@@ -31,13 +31,13 @@ programs.
 
 Relevant sources:
 
-- `src/lib/languages/MIPS/MIPS-documentation.ts`
-- `src/lib/languages/RISC-V/RISC-V-documentation.ts`
-- `src/lib/documentation/entries.ts`
-- `src/lib/documentation/mips/mips.ts`
-- `src/lib/documentation/riscv/riscv.ts`
-- `src/routes/documentation/{mips,risc-v}/instruction/[instructionName]/+page.svelte`
-- `src/components/documentation/site/ClientOnly.svelte`
+- `packages/asm-editor/src/lib/languages/MIPS/MIPS-documentation.ts`
+- `packages/asm-editor/src/lib/languages/RISC-V/RISC-V-documentation.ts`
+- `packages/asm-editor/src/lib/documentation/entries.ts`
+- `packages/asm-editor/src/lib/documentation/mips/mips.ts`
+- `packages/asm-editor/src/lib/documentation/riscv/riscv.ts`
+- `packages/asm-editor/src/routes/documentation/{mips,risc-v}/instruction/[instructionName]/+page.svelte`
+- `packages/asm-editor/src/components/documentation/site/ClientOnly.svelte`
 - [ADR 0025](../adr/0025-documentation-is-a-list-of-entries.md)
 
 ## Authoring model
@@ -78,12 +78,12 @@ unless their demonstration requires RV64 behavior.
 
 Store programs as ordinary assembly files under each language's documentation directory, with
 a typed registry for their Target and presentation. For example,
-`src/lib/documentation/mips/instructions/add.asm` is registered by mnemonic in the MIPS
+`packages/asm-editor/src/lib/documentation/mips/instructions/add.asm` is registered by mnemonic in the MIPS
 instruction-content module. Import the files as text through the existing Vite raw-import
 mechanism. This keeps code editable and copyable without hiding it in a generator. Future
 Markdown can be imported alongside it without changing the example format.
 
-The shared types and resolution rules belong under `src/lib/documentation/instructions/`.
+The shared types and resolution rules belong under `packages/asm-editor/src/lib/documentation/instructions/`.
 Architecture modules register their own content; the shared resolver does not import all Cores
 or encode their instruction semantics. Adding another architecture later means providing its
 content registry and connecting it to its instruction entries.

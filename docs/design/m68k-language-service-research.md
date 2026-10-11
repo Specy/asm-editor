@@ -28,7 +28,7 @@ return a WASM-backed `Program` that must be disposed inside the Worker.
 ## What the current provider now does
 
 The M68K registration installs a Monarch tokenizer, language configuration, completion, hover, and
-document formatting ([`Monaco.ts`](../../src/lib/monaco/Monaco.ts#L46)). This is already one feature
+document formatting ([`Monaco.ts`](../../packages/asm-editor/src/lib/monaco/Monaco.ts#L46)). This is already one feature
 ahead of the other legacy providers because formatting is registered as a first-class Monaco
 provider.
 
@@ -37,9 +37,9 @@ provider.
 The revised Monarch grammar is case-insensitive, distinguishes implemented and deliberately
 refused operations, recognizes the M68K register families and special registers, and gives labels
 precedence over mnemonic-looking names when a colon is present
-([`M68K-grammar.ts`](../../src/lib/languages/M68K/M68K-grammar.ts#L16)). The language configuration
+([`M68K-grammar.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-grammar.ts#L16)). The language configuration
 adds semicolon comments, parentheses, and quote pairs
-([`M68K-grammar.ts`](../../src/lib/languages/M68K/M68K-grammar.ts#L84)).
+([`M68K-grammar.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-grammar.ts#L84)).
 
 This remains a lexical approximation. In particular:
 
@@ -60,10 +60,10 @@ Core grammar.
 Completion now parses the source prefix with `S68k.parseLine`. It finds the operation field after
 colon and bare Labels, suppresses operation completion in Comments, preserves the user's operation
 case, completes legal size suffixes, and selects operand templates from the documented addressing
-modes ([`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L40),
-[`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L164)). Tests cover uppercase
+modes ([`M68K-language.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.ts#L40),
+[`M68K-language.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.ts#L164)). Tests cover uppercase
 operations, operations after Labels, branch `.s`, PC-relative modes, status registers, and register
-lists ([`M68K-language.test.ts`](../../src/lib/languages/M68K/M68K-language.test.ts#L194)).
+lists ([`M68K-language.test.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.test.ts#L194)).
 
 The remaining gaps are structural:
 
@@ -74,7 +74,7 @@ The remaining gaps are structural:
 - Instruction alternatives are aggregated into one documentation record. Completion and future
   signature help cannot select a concrete overload from the operands already written.
 - Every resolved item is marked `preselect`, and most documentation is computed eagerly in the
-  initial response ([`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L286)).
+  initial response ([`M68K-language.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.ts#L286)).
 - The exported factory still spells the API `Completition`; the service migration is a suitable
   compatibility boundary for correcting it.
 
@@ -82,13 +82,13 @@ The remaining gaps are structural:
 
 Hover uses `parseLine` to ensure the cursor is on the operation and presents operand mode groups,
 sizes, default size, flags, description, and examples
-([`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L305)). It currently returns a
+([`M68K-language.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.ts#L305)). It currently returns a
 range covering columns 1 through 1000 and answers an empty Hover rather than `null` when nothing is
 known. It has no register, number, operand, symbol, address, value, or definition Hover.
 
 Formatting parses each line and inserts only structural separator spacing and an operation-leading
 tab, preserving separators inside strings and Comments
-([`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L88)). This is a useful
+([`M68K-language.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.ts#L88)). This is a useful
 conservative base, but it always returns a whole-document replacement, normalizes CRLF to LF, has
 no range formatting, and does not yet prove idempotence or byte-equivalence across a broad corpus.
 
@@ -96,10 +96,10 @@ no range formatting, and does not yet prove idempotence or byte-equivalence acro
 
 The Emulator already sends the complete M68K source map and Entry path to `S68k.assemble` for both
 checking and Build compilation
-([`M68KEmulator.svelte.ts`](../../src/lib/languages/M68K/M68KEmulator.svelte.ts#L181)). Before doing
+([`M68KEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts#L181)). Before doing
 so it converts the editor File representation and rewrites resolved `incbin` operands to private
 byte aliases so binary and UTF-8-backed Files preserve their exact bytes
-([`M68KEmulator.svelte.ts`](../../src/lib/languages/M68K/M68KEmulator.svelte.ts#L976)). This conversion
+([`M68KEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts#L976)). This conversion
 must be extracted to a plain shared adapter module; a language Worker must not import a Svelte
 Emulator or implement subtly different include semantics.
 
@@ -107,9 +107,9 @@ The Core diagnostic has almost exactly the desired LSP-shaped information: sever
 message, optional Hint, exact File and half-open range, and related locations
 ([installed `Diagnostic`](../../node_modules/@specy/s68k/dist/pkg/s68k.d.ts#L326)). The current adapter
 retains severity, File, start position, message, and Hint but drops `code`, `endColumn`, and
-`related` ([`M68KEmulator.svelte.ts`](../../src/lib/languages/M68K/M68KEmulator.svelte.ts#L963)). The
+`related` ([`M68KEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts#L963)). The
 generic editor then ends every marker at column 100
-([`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L318)). The shared diagnostic
+([`Editor.svelte`](../../packages/asm-editor/src/components/specific/project/Editor.svelte#L318)). The shared diagnostic
 publisher can improve M68K immediately without a Core change.
 
 ## Reported multi-File and Debug-view failures
@@ -118,8 +118,8 @@ The three reported failures have related UI state, but not one common Monaco-pro
 current page tracks only `displayedPath` plus a `live`/`snapshot` flag. A successful Build starts a
 FileSystem session, which locks live Files until Stop, and retains the immutable sources that the
 Core is executing
-([`GenericEmulator.svelte.ts`](../../src/lib/languages/GenericEmulator.svelte.ts#L548),
-[`FileSystem.ts`](../../src/lib/languages/peripherals/FileSystem.ts#L38)). The page then has two
+([`GenericEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts#L548),
+[`FileSystem.ts`](../../packages/asm-editor/src/lib/languages/peripherals/FileSystem.ts#L38)). The page then has two
 different documents with the same path, but the File sidebar exposes only the path
 ([`FileSidebar.svelte`](../../src/components/specific/project/FileSidebar.svelte#L32)).
 
@@ -130,8 +130,8 @@ The blanket report needs splitting into three observable cases:
 - Static operation completion, operation Hover, and formatting are registered for the `m68k`
   language ID, not for the Entry model. Every non-C/H Project File is assigned the Project language,
   and every newly selected File gets a Monaco model with that language
-  ([`Monaco.ts`](../../src/lib/monaco/Monaco.ts#L46),
-  [`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L166),
+  ([`Monaco.ts`](../../packages/asm-editor/src/lib/monaco/Monaco.ts#L46),
+  [`Editor.svelte`](../../packages/asm-editor/src/components/specific/project/Editor.svelte#L166),
   [`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L131)). A plain non-Entry
   M68K model should therefore still offer the current instruction/size/addressing-template
   completion. If it does not in the browser, that is a separate model-language lifecycle regression
@@ -139,7 +139,7 @@ The blanket report needs splitting into three observable cases:
 - Project Symbol completion, definitions, references, document Symbols, links, and signature help
   are not registered by the current provider for the Entry or non-Entry model. What can look like an
   Entry-only completion failure is often the provider's present operation-only completion surface
-  ([`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L158)).
+  ([`M68K-language.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.ts#L158)).
 - Core diagnostics really are Entry-rooted. The page sends the whole File map, but `S68k.assemble`
   reads the Entry and only Files reached through `include`/`incbin`; an unrelated File is deliberately
   not assembled ([installed API](../../node_modules/@specy/s68k/dist/index.d.ts#L13),
@@ -153,7 +153,7 @@ the visible diagnostic list with `[]` while the FileSystem is locked
 ([`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L151)). At the same time,
 `GenericEmulator.setSources` skips `semanticCheck` whenever any built FileSystem session exists,
 although the comment's Core-global hazard applies specifically to MARS/RARS
-([`GenericEmulator.svelte.ts`](../../src/lib/languages/GenericEmulator.svelte.ts#L877)). For M68K,
+([`GenericEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts#L877)). For M68K,
 the proposed independent language Worker should keep live analysis running while the execution Core
 retains a Build. Build diagnostics remain on Build URIs; live diagnostics stay on live URIs.
 
@@ -182,12 +182,12 @@ transition is:
 The editor does recreate its decoration collection for the active model and reapplies
 `highlightedLine` and breakpoints, so source inspection points to source-kind routing rather than a
 lost Monaco collection
-([`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L207)). There is also an
+([`Editor.svelte`](../../packages/asm-editor/src/components/specific/project/Editor.svelte#L207)). There is also an
 independent reveal bug: the decoration converts the zero-based execution line to Monaco's one-based
 line correctly, but the reveal effect excludes source line 0 and passes every other zero-based line
 directly to `revealLineInCenter`
-([`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L272),
-[`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L313)). It should test `>= 0`
+([`Editor.svelte`](../../packages/asm-editor/src/components/specific/project/Editor.svelte#L272),
+[`Editor.svelte`](../../packages/asm-editor/src/components/specific/project/Editor.svelte#L313)). It should test `>= 0`
 and reveal `highlightedLine + 1`.
 
 The navigation fix should preserve the current source kind when choosing another File: while
@@ -202,16 +202,16 @@ This is the same forced-live transition plus an inconsistent interaction contrac
 view the Project passes no breakpoint decorations at all, yet its gutter event still toggles a
 `{file, line}` breakpoint. `Editor` dispatches that event even when text is read-only
 ([`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L808),
-[`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L127)). The result is a hidden
+[`Editor.svelte`](../../packages/asm-editor/src/components/specific/project/Editor.svelte#L127)). The result is a hidden
 mutation: a click can change the breakpoint, but the glyph disappears as soon as hover ends because
 the Project continues to pass `[]` for the locked live view.
 
 This is not an S68K execution limitation. Breakpoints are File-aware in both the app and Core, and
 the generic scheduler reads the current breakpoint array for every execution slice
-([`commonLanguageFeatures.svelte.ts`](../../src/lib/languages/commonLanguageFeatures.svelte.ts#L14),
-[`GenericEmulator.svelte.ts`](../../src/lib/languages/GenericEmulator.svelte.ts#L684)). M68K passes
+([`commonLanguageFeatures.svelte.ts`](../../packages/asm-editor/src/lib/languages/commonLanguageFeatures.svelte.ts#L14),
+[`GenericEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts#L684)). M68K passes
 that slice's array directly to `Interpreter.runWithBreakpoints`
-([`M68KEmulator.svelte.ts`](../../src/lib/languages/M68K/M68KEmulator.svelte.ts#L386)). A breakpoint
+([`M68KEmulator.svelte.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts#L386)). A breakpoint
 changed by the UI can therefore affect the next slice; it cannot interrupt the synchronous WASM call
 already in progress.
 
@@ -406,9 +406,9 @@ The Rust implementation already has most of the semantic machinery required by t
 
 The app currently mirrors the instruction table in its large documentation module. Its addressing
 mode group comment explicitly says it follows the Core table
-([`M68K-documentation.ts`](../../src/lib/languages/M68K/M68K-documentation.ts#L109)), while its tests
+([`M68K-documentation.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-documentation.ts#L109)), while its tests
 compare that module against another hand-written operation list
-([`M68K-language.test.ts`](../../src/lib/languages/M68K/M68K-language.test.ts#L50)). This catches
+([`M68K-language.test.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-language.test.ts#L50)). This catches
 accidental app changes, not drift from a new Core release.
 
 The preferred upstream additions are:
@@ -458,7 +458,7 @@ stale results afterward. Hard cancellation requires terminating the Worker.
 The package statically imports its `.wasm` module and starts it at module evaluation
 ([installed WASM entry](../../node_modules/@specy/s68k/dist/pkg/s68k.js#L1)). The app configures
 `vite-plugin-wasm` only in the main Vite plugin list
-([`vite.config.ts`](../../vite.config.ts#L17)), while that plugin's own Web Worker instructions say
+([`vite.config.ts`](../../packages/asm-editor/vite.config.ts#L17)), while that plugin's own Web Worker instructions say
 to configure it under `worker.plugins` too
 ([plugin README](../../node_modules/vite-plugin-wasm/README.md#L47)). Add that build configuration
 before introducing the Worker and verify development, production preview, SSR, and Firefox in a
@@ -605,4 +605,4 @@ In addition to the analysis and metadata APIs above:
   ([s68k README](../../../s68k/README.md#L35)).
 - Keep adapters capability-gated for macros: the current dialect recognizes and deliberately
   refuses macro, conditional-assembly, and structured-control directives
-  ([`M68K-documentation.ts`](../../src/lib/languages/M68K/M68K-documentation.ts#L1843)).
+  ([`M68K-documentation.ts`](../../packages/asm-editor/src/lib/languages/M68K/M68K-documentation.ts#L1843)).

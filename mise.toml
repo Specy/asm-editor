@@ -1,3 +1,14 @@
+# Every toolchain the workspace builds with: `mise install`, then `pnpm install`. CI installs the
+# same versions from this file. The Core builds read it as an input, so a toolchain change here
+# rebuilds them.
 [tools]
+# The engines floor of the root package.json.
+node = "24.11.0"
+# Keep in step with `packageManager` in package.json.
+pnpm = "12.7.0"
+# MARS and RARS compile to JavaScript with TeaVM through Maven.
 java = "temurin-21"
 maven = "3.9"
+# s68k compiles to WebAssembly with wasm-pack, at the version its own CD uses.
+rust = { version = "1.98.1", targets = "wasm32-unknown-unknown", profile = "minimal" }
+"github:wasm-bindgen/wasm-pack" = "0.15.0"
