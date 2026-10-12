@@ -1,3 +1,5 @@
+import { executableKind } from '#lib/executables.ts'
+import { fileBytes } from '#lib/projectFiles.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     EmulatorStatus,
@@ -173,8 +175,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             {
                 ...options,
                 language: options.language ?? 'X86',
-                stackAddress: options.stackAddress ?? 0x4ffffffffff0n,
-                baseAddress: options.baseAddress ?? 0x4ffffffffff0n,
+                stackAddress: options.stackAddress ?? 0x7fffffffeff0n,
+                baseAddress: options.baseAddress ?? 0x7fffffffeff0n,
                 initialMemoryValue: options.initialMemoryValue ?? 0x0
             }
         )
@@ -314,6 +316,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
+        const kind = executableKind(sources.files[sources.entry])
+        if (kind === 'supported') return []
+        if (kind !== 'none') return [executableDiagnostic(sources.entry, kind.unsupported)]
         if (!this.core && !this.diagnosticCore) return []
         //what stops the Build stops the check too, and `semanticCheck` reports it the same way
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
@@ -332,6 +337,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * undefined `printf` in a Build that does not link it.
      */
     async _prepareBuild(sources: BuildSources): Promise<void> {
+        if (executableKind(sources.files[sources.entry]) !== 'none') return
         if (sources.runtimeAbi === undefined) await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
         else await prepareX86Runtime(sources)
     }
@@ -355,6 +361,28 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const core = this.requireCore()
+        const kind = executableKind(sources.files[sources.entry])
+        if (kind !== 'none') {
+            if (kind !== 'supported')
+                return {
+                    ok: false,
+                    report: kind.unsupported,
+                    diagnostics: [executableDiagnostic(sources.entry, kind.unsupported)]
+                }
+            const info = await core.loadExecutable(fileBytes(sources.files[sources.entry]))
+            core.setProtectedPath('/project/' + sources.entry)
+            this._buildLibraryFiles = undefined
+            return {
+                ok: true,
+                diagnostics: info.missing.map((name) =>
+                    executableDiagnostic(
+                        sources.entry,
+                        `${name} is not one of the bundled libraries`,
+                        'warning'
+                    )
+                )
+            }
+        }
         const linked = linksX86StartUnit(sources)
         const result = await core.compileProject(x86CoreProject(sources))
         // Carried on both outcomes: a build that succeeded with warnings is the
@@ -1105,4 +1133,20 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
 function alignDown(value: bigint, size: bigint): bigint {
     if (size <= 0n) return value
     return value - (value % size)
+}
+
+function executableDiagnostic(
+    file: string,
+    message: string,
+    severity: 'error' | 'warning' = 'error'
+): Diagnostic {
+    return {
+        severity,
+        file,
+        lineIndex: 0,
+        column: 1,
+        line: { line: '', line_index: 0 },
+        message,
+        formatted: message
+    }
 }

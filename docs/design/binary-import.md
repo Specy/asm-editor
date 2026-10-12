@@ -1,6 +1,6 @@
 # Binary import
 
-Status: grilled 2026-10-11 and 2026-10-12; decided, not implemented. The spike (2026-10-12, [Spike results](#spike-results)) confirmed decision 3's precondition and revised decision 6; the [implementation plan](./binary-import-plan.md) is written. Terms are in [CONTEXT.md](../../CONTEXT.md) (**Executable**, **Listing**, **Command line**, **Arguments**); the model decision is [ADR 0044](../adr/0044-an-executable-is-a-project-file-a-build-loads.md) and the naming one [ADR 0045](../adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
+Status: implementation in progress on feat/binary-import; Core M1-M5 and editor recognition/import/loading in M6 are implemented locally. The spike (2026-10-12, [Spike results](#spike-results)) confirmed decision 3's precondition and revised decision 6; the [implementation plan](./binary-import-plan.md) is written. Terms are in [CONTEXT.md](../../CONTEXT.md) (**Executable**, **Listing**, **Command line**, **Arguments**); the model decision is [ADR 0044](../adr/0044-an-executable-is-a-project-file-a-build-loads.md) and the naming one [ADR 0045](../adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
 
 ## What it is
 
@@ -67,3 +67,31 @@ The x86 Core's work is in [the implementation plan](./binary-import-plan.md), mi
 ## Open for planning
 
 Settled by default in [the implementation plan](./binary-import-plan.md)'s **Decisions taken while planning**, for the owner to overturn: where the libraries live, the disassembler module, the Listing worker, addresses in the gutter, one Linux layout for every x86 program, `IsShadow`, the fixed environment, argument limits, the word lists' shape and derivation, library Listing paths and patching through a prompt. Not addressed by this design: teaching material (a reverse-engineering Module or Exercises), Executables in Exams and Playgrounds.
+
+## Implementation notes
+
+- M1 fixtures were built with the available GCC/G++ 15.2.0 rather than the handoff's stated GCC 16. The installed glibc (2.43-2ubuntu2.4), libstdc++6 and libgcc-s1 (16-20260322-1ubuntu1) match the planned builds. No Go toolchain was available.
+- M1 stages the five pinned runtime binaries as assets early so glibc regression tests do not depend on the CI host's libraries. M3 adds their pinned download script, manifest, licences and public resolution API.
+- The overflow fixture ends an unterminated buffer at a guard page rather than overflowing a stack buffer; this makes its fault inside strlen reproducible.
+- The C++ baseline aborted during its second library mapping after heap growth from 17,039,360 to 105,906,176 bytes (88,866,816 bytes). This is the heap at the abort, not the footprint of a completed baseline run.
+- The unchanged editor baseline check passed (0 errors, 0 warnings). Its full test run had 3,635 passes, one skipped test and two 5-second timeouts in lectureSections.test.ts; these were recorded before feature implementation.
+- M1 also enables Blink's existing futex wait/wake handler in the wasm syscall dispatch. The C++ exception fixture called FUTEX_WAKE and aborted in glibc when it received ENOSYS, even though it creates no threads.
+- M1 completed with 3,146 Core tests passing and two pre-existing skips; type-check, build and dist smoke passed. The C++ fixture's completed run kept the initial 17,039,360-byte heap (zero growth), versus the baseline abort's 88,866,816-byte growth.
+- The monorepo formatter deliberately excludes Core submodules, including stdin paths within them. A Core integration follow-up applies vp fmt with a neutral stdin path to the touched TypeScript and Markdown files, retaining third-party source and lockfile formatting.
+- M2 preserves getStackTop's existing meaning: the tracked stack extent begins at the initial stack pointer after argv/auxv, while the mapped stack ceiling is 0x7ffffffff000. Tests verify the ceiling through mapped/unmapped byte reads, and preserve the explicit-rsp-change Undo test.
+- One editor rerun overlapped a Core dist rebuild, producing missing-asset failures; that run is invalid as feature validation. Subsequent editor checks run against stable Core artifacts.
+- M2 completed with 3,149 Core tests passing (two existing skips), plus type-check, build and dist smoke. The editor's default stack inspection address and the course's pinned first-mmap example have also been updated for the new layout.
+- M3 completed with 3,158 Core tests passing (two existing skips), plus type-check, build and dist smoke including a dynamic C++ load from dist assets. The loader creates /project before mounting a capability when an Executable was loaded without first assembling anything.
+- The ELF analyser follows the stated nonzero-entry rule: libc.so.6 itself has a valid executable entry point and is supported as a program; libm.so.6 has no entry point and is refused as a library. Both still yield analysis for library Listings.
+- M4 distinguishes CET's two PLT tables: the callable .plt.sec stubs keep name@plt; the lazy .plt stubs use name@plt_resolver. The .plt.got label names the stub's start, including its endbr64 prefix. This prevents duplicate definitions and makes calls and navigation agree on the callable address.
+- The crackme fixture places the Correct arm first, producing the jne branch required by the planned jne-to-je patch scenario; output and input semantics are unchanged. Its rebuilt variants and hashes are committed.
+- NASM chooses a near encoding for absolute numeric branch targets even with -Ox. assembleInstruction explicitly selects short for a direct numeric branch when the two-byte displacement fits, so a Listing's short conditional jump remains patchable.
+- Zydis is vendored as its pinned amalgamation plus the pinned Zycore source files needed by formatter hooks, rather than the full checkout and test corpus. Both MIT licences and regeneration instructions ship with it.
+- M5 prepared 7.0.0 locally (d68c3d1); all Core checks pass and both rebuilds reproduce M4's wasm hashes. The editor uses workspace:*; no publication, tag or push occurred.
+- M6 prevents the native file-picker path from attaching an Executable's original File handle for automatic Project saves, which would otherwise overwrite the ELF with Project metadata. Import stores the bytes in the Project.
+- M6 regenerates the syscall table, Environment library header and C/C++ help because the five newly dispatched syscalls change the editor's existing Core-authority checks. A second stack-layout test in memoryRegions.integration.test.ts also needed its explicit rsp updated; the plan's search omitted that occurrence.
+- Editor checks use the existing vp task with --maxWorkers=2. This limits CPU contention without changing any assertions or timeouts; the baseline lecture tests passed with that scheduling.
+- M6 validation found two additional stack exercises using uppercase old-layout addresses. Their prose, exact-memory expectations and preserved-stack-pointer assertions now use the observed fixed-environment stack addresses.
+- The four x86 linux-calls Compiler Explorer fixtures were recaptured from the provider after the new syscall wrappers shifted sim.h line numbers. Their runtime and source-map assertions remain unchanged.
+- Integration exposed Zydis's JNZ/JZ alias preference. A Core follow-up makes the shared disassembler API display JNE/JE consistently so the planned patch scenario uses its stated spelling; branch targets and semantics are unchanged.
+- M6 final editor check passes with zero errors and warnings; the full suite passes 3,643 tests with one existing skip. The upload component checks cover Entry selection and the unsupported-ELF toast. The generated Listing display is completed in M8, as M6.6 depends on that milestone.

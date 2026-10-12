@@ -46,8 +46,8 @@ describe('memory regions', () => {
         )
         const regions = mergeMemoryRegions(
             layout,
-            { start: 0x88000000n, end: 0x88000000n },
-            { start: 0x4ffffffffed0n, end: 0x4ffffffffed0n },
+            { start: 0x404000n, end: 0x404000n },
+            { start: 0x7fffffffed00n, end: 0x7fffffffed00n },
             [{ name: 'Bitmap', start: 0x500000000000n, end: 0x500000000010n }]
         )
         expect(regionsAt(regions, 0x500000000003n).map((region) => region.kind)).toEqual([
@@ -57,8 +57,8 @@ describe('memory regions', () => {
         expect(memoryHover(regions, layout.dataLabels, 0x500000000003n)).toBe(
             'Bitmap · .data · Game::score+3 (_ZN4Game5scoreE) (library)'
         )
-        expect(regions.find((region) => region.kind === 'stack')?.destination).toBe(0x4ffffffffed0n)
-        expect(regionsAt(regions, 0x88000000n)).toEqual([])
+        expect(regions.find((region) => region.kind === 'stack')?.destination).toBe(0x7fffffffed00n)
+        expect(regionsAt(regions, 0x404000n)).toEqual([])
     })
     it('resolves labels, decimal and hex offsets, and reports missing Builds and names', () => {
         const lookup = (name: string) => (name === 'buffer' ? 0x1000n : undefined)

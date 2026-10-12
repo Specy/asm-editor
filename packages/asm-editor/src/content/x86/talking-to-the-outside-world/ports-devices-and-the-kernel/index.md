@@ -174,7 +174,7 @@ munmap_failed:
 On the successful path, `r13` becomes `0x1234` and `r14` becomes 0. `munmap` removes the mapping, so
 the program does not access that address again.
 
-This playground currently chooses `0x80000000` for this first anonymous mapping. That deterministic
+With randomization off, this playground chooses `0x7ffff7ffe000` for this first anonymous mapping. That deterministic
 address is a playground guarantee used by the exercise test. Normal Linux may choose a different
 address each time; programs must use the address returned in `rax`.
 
@@ -210,7 +210,7 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r12": "0x80000000", "r13": "0xAA", "r14": 0 }
+    "expectedRegisters": { "r12": "0x7ffff7ffe000", "r13": "0xAA", "r14": 0 }
 }
 ```
 

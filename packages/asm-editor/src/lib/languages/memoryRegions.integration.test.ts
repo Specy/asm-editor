@@ -34,8 +34,8 @@ const cases = [
     [
         'X86',
         X86Emulator,
-        'global _start\nsection .text\n_start:\n mov rsp,0x4fffffff0000\n push rax\n mov eax,60\n xor edi,edi\n syscall\nsection .data\nbuffer: db 1,2,3\nsection .bss\nroom: resb 32',
-        0x4fffffff0000n
+        'global _start\nsection .text\n_start:\n mov rsp,0x7ffffffff000\n push rax\n mov eax,60\n xor edi,edi\n syscall\nsection .data\nbuffer: db 1,2,3\nsection .bss\nroom: resb 32',
+        0x7ffffffff000n
     ]
 ] as const
 for (const [name, factory, source, top] of cases)

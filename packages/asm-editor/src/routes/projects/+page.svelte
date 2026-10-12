@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { makeProjectFromExecutable } from '#lib/executableImport.ts'
+    import { executableKind } from '#lib/executables.ts'
+    import { bytesFile } from '#lib/projectFiles.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
     import { onMount } from 'svelte'
@@ -67,9 +70,10 @@
             const bytes = new Uint8Array(data)
             const archiveName = /\.(?:asmproj|zip)$/i.test(fileName)
             const imported =
-                looksLikeZip(bytes) || archiveName
+                makeProjectFromExecutable(bytes, fileName) ??
+                (looksLikeZip(bytes) || archiveName
                     ? makeProjectFromArchive(bytes)
-                    : makeProjectFromExternal(new TextDecoder().decode(bytes))
+                    : makeProjectFromExternal(new TextDecoder().decode(bytes)))
             return await importProject(imported)
         } catch (e) {
             console.error(e)
@@ -87,6 +91,7 @@
             const importedProject = await importFromData(data, blob.name)
             if (!importedProject) continue
             const id = importedProject.id
+            if (executableKind(bytesFile(new Uint8Array(data))) !== 'none') continue
             ProjectStore.setFileHandle(
                 id,
                 fileHandle,
@@ -115,6 +120,8 @@
                                 const importedProject = await importFromData(data, blob.name)
                                 if (!importedProject) continue
                                 lastId = importedProject.id
+                                if (executableKind(bytesFile(new Uint8Array(data))) !== 'none')
+                                    continue
                                 ProjectStore.setFileHandle(
                                     lastId,
                                     file,
@@ -195,7 +202,7 @@
                                 }
                             }}
                             as="buffer"
-                            accept=".asmproj,.zip,text/*,.s68k,.asm,.x68,.mips,.riscv,.z80"
+                            accept=""
                         >
                             <Button cssVar="secondary">
                                 <Icon style="margin-right: 0.4rem" size={1}>

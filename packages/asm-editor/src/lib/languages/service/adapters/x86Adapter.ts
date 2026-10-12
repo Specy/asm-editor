@@ -1,3 +1,4 @@
+import { executableKind } from '#lib/executables.ts'
 import { createX86Emulator, type MonacoError } from '@specy/x86'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
@@ -40,6 +41,25 @@ export async function analyzeX86Project(
     sessionId: string,
     revision: number
 ): Promise<ProjectAnalysisSnapshot> {
+    const kind = executableKind(sources.files[sources.entry])
+    if (kind !== 'none') {
+        if (kind !== 'supported')
+            return unresolvedSnapshot(sources, kind.unsupported, sessionId, revision)
+        return {
+            sessionId,
+            revision,
+            target: 'X86',
+            diagnostics: [],
+            symbols: [],
+            occurrences: [],
+            fileStatus: Object.fromEntries(
+                Object.entries(sources.files).map(([path, file]) => [
+                    path,
+                    file.encoding === 'base64' ? 'binary' : 'unknown'
+                ])
+            )
+        }
+    }
     //sources the Build refuses are not checked either: why they cannot be built is the one error
     if (sources.assemblyError)
         return unresolvedSnapshot(sources, sources.assemblyError, sessionId, revision)
