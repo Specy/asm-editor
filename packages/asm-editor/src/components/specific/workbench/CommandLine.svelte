@@ -82,8 +82,7 @@
         flex: none;
         overflow-x: auto;
         overflow-y: hidden;
-        padding: var(--wb-output-padding, 0.5rem 0.8rem);
-        padding-bottom: 0.45rem;
+        padding: 0.2rem 0.8rem;
         border-bottom: 1px solid var(--wb-line, color-mix(in srgb, var(--hint) 30%, transparent));
         font-family: monospace;
         scrollbar-width: thin;
