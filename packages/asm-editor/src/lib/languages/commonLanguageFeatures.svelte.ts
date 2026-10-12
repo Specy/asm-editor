@@ -275,8 +275,9 @@ export type ExecutionStep = {
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
     /**
-     * Set on the instruction that started a Step through Runtime library code: the library function
-     * it entered and every instruction the Step ran, which one Undo takes back together.
+     * Set on the instruction that started a Step through library code: the library function it
+     * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
+     * takes back together.
      */
     stretch?: { library: string; instructions: number }
 }

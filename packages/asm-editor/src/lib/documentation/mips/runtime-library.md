@@ -45,6 +45,6 @@ The **Explorer** is the file list for the current Build. It includes linked libr
 
 ## Stepping {#stepping}
 
-By default, **Step** over `jal printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into Runtime library code** in **Preferences**. With this enabled, stepping begins in startup code at `_start`.
+By default, **Step** over `jal printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. With this enabled, stepping begins in startup code at `_start`.
 
 `main` receives `argc == 0` and a valid `argv` array containing one null pointer. `malloc` follows the compiler's `max_align_t` alignment and returns NULL with ENOMEM on exhaustion. `clock()` counts executed instructions at nominal 100 MHz and excludes waiting time; Undo rewinds that counter. `time()` reports calendar time, with 2000-01-01 UTC as the fixed Testcase epoch. Library calendar conversions use UTC. Input buffering requests fail; default input remains unbuffered.

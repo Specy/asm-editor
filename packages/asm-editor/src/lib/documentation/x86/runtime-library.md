@@ -49,7 +49,7 @@ The **Explorer** is the file list for the current Build. It includes linked libr
 
 ## Stepping {#stepping}
 
-By default, **Step** over `call printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into Runtime library code** in **Preferences**. With this enabled, stepping begins in startup code at `_start`.
+By default, **Step** over `call printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. With this enabled, stepping begins in startup code at `_start`. The same Preference applies to the shared libraries a loaded Executable uses, such as `libc.so.6`: with it on, a Step enters them and shows their Listing.
 
 Consuming standard input or changing Files is an Undo barrier, as it is for the system calls themselves, including inside a grouped library call: Undo stops before that call. Printed output stays in the Terminal after Undo.
 

@@ -78,8 +78,10 @@ export function defaultPreferences(): PreferenceValues {
         autoSave: createValue('Auto save', true),
         showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
         sourceAnnotations: createValue('Include source annotations when compiling', true),
-        //off: a Step runs through Runtime library code back to the program's own ("Just My Code")
-        stepIntoRuntimeLibrary: createValue('Step into Runtime library code', false),
+        //off: a Step runs through library code back to the program's own ("Just My Code"): the
+        //Runtime library and the libraries an Executable loads. The key predates the libraries and
+        //stays, so saved Preferences keep it
+        stepIntoRuntimeLibrary: createValue('Step into library code', false),
         showDrawingBuffer: createValue(
             'Show the drawing buffer of a double buffered screen',
             false

@@ -67,6 +67,41 @@ describe('the x86 runtime in the editor', () => {
         30_000
     )
 
+    it('shows a read waiting inside the library at the call that reached it', async () => {
+        const path = join(runtimeRoot, 'abi', 'v1-fixtures', 'x86_64', 'scanf_int')
+        const code = readFileSync(`${path}.s`, 'utf8')
+        const sources: BuildSources = {
+            entry: 'main.asm',
+            entrySymbol: '_start',
+            runtimeAbi: 'v1',
+            files: { 'main.asm': plain(code) }
+        }
+        const firstScanf = code.split('\n').findIndex((line) => line.trim() === 'call scanf')
+        for (const into of [false, true]) {
+            preferencesStore.values.stepIntoRuntimeLibrary.value = into
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                await emulator.compile(1000, sources)
+                const run = emulator.run(0)
+                for (let i = 0; i < 2000 && emulator.interrupt === undefined; i++)
+                    await new Promise((resolve) => setTimeout(resolve, 2))
+                expect(emulator.interrupt).toBeDefined()
+                // Steps run through the library, so the wait is shown at the program's own call;
+                // with Step into library code on, in the library member where it waits
+                if (into) expect(emulator.currentFile.startsWith('@runtime/')).toBe(true)
+                else
+                    expect({ file: emulator.currentFile, line: emulator.line }).toEqual({
+                        file: 'main.asm',
+                        line: firstScanf
+                    })
+                emulator.clear()
+                await run
+            } finally {
+                emulator.dispose()
+            }
+        }
+    })
+
     it('steps over fwrite and keeps its filesystem effect behind an Undo barrier', async () => {
         preferencesStore.values.stepIntoRuntimeLibrary.value = false
         const assembly = `default rel

@@ -67,7 +67,9 @@ it('keeps live checking free of NASM diagnostics and builds the crackme on the C
     try {
         await emulator.compile(100, sources)
         expect(emulator.errors).toEqual([])
-        expect(emulator.pc).toBeGreaterThan(0x7ffff0000000n)
+        // the Build ran the dynamic linker and stopped at main, in the program at gdb's PIE base
+        expect(emulator.pc).toBe(0x5555555551e9n)
+        expect(emulator.currentFile).toBe('crackme')
         expect(emulator.canExecute).toBe(true)
     } finally {
         emulator.dispose()

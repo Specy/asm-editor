@@ -234,7 +234,7 @@
                 <div class="stretch">Undo stops here: effects are not recorded.</div>
             {/if}
             {#if step.stretch}
-                <!-- a Step that ran through the Runtime library: one Undo takes all of it back -->
+                <!-- a Step that ran through library code: one Undo takes all of it back -->
                 <div
                     class="stretch"
                     title={step.undoable === false

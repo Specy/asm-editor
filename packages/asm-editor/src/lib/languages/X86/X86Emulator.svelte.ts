@@ -1,4 +1,4 @@
-import { executableKind } from '#lib/executables.ts'
+import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
@@ -8,7 +8,7 @@ import {
 } from '#lib/listing/listing.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
-import { libraryListingPath } from '#lib/listing/listingPaths.ts'
+import { LIBRARY_LISTING_NAMESPACE, libraryListingPath } from '#lib/listing/listingPaths.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     EmulatorStatus,
@@ -29,7 +29,7 @@ import {
     type SourceBreakpoint,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
+import { GenericEmulator, isLibraryCodeFile } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -189,6 +189,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * Step through library code repeats thousands of times, does not read it again.
      */
     private loadedObjects: X86LoadedObject[] | undefined
+    /**
+     * The running Executable's PLT, as link-time ranges: stubs that only jump into a library, so
+     * a Step runs through them as through the library ([binary-import.md](../../../../../../docs/design/binary-import.md),
+     * decision 11): a Step on `call puts@plt` stops at the instruction after it.
+     */
+    private trampolines: [start: number, end: number][] = []
+    /** Whether the Core records the Undo history now, which `_setUndoRecording` pauses. */
+    private undoRecording = true
 
     constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
@@ -250,6 +258,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             if (this.core === core) {
                 core.setUndoEnabled(recording)
                 this.recordingRandom = recording
+                this.undoRecording = recording
             }
         }
         this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
@@ -298,6 +307,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.executable = undefined
         this.loadingExecutable = undefined
         this.loadedObjects = undefined
+        this.trampolines = []
         this._listings?.session.clear()
         if (this.compiling) {
             // compileProject detached the old capability before its first awaited tool call.
@@ -313,8 +323,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.requireCore().mountProjectFileSystem(this.fileSystemSession)
         this.executable = this.loadingExecutable
         this.loadingExecutable = undefined
-        if (this.executable)
+        if (this.executable) {
             this._listings?.session.set(this.executable.path, this.executable.document)
+            this.trampolines = pltRanges(this.executable.file)
+        }
         const library = this.buildSources?.runtimeAbi
             ? loadedRuntimeLibrary(this.buildSources.runtimeAbi, 'X86')
             : undefined
@@ -467,6 +479,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.undoSize = Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
         core.initialize(this.undoSize)
         this.recordingRandom = true
+        this.undoRecording = true
     }
 
     _dispose(): void {
@@ -484,19 +497,25 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.diagnosticCore = null
     }
 
+    /**
+     * The Core's Call stack, each frame on its Listing line. A frame in a library whose Listing
+     * has not been made keeps the Core's name and no line: going to it makes the Listing then.
+     */
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
             this.core?.getCallStack().map((frame) => {
-                const located = this.locate(frame.address)
+                const located = this.locate(frame.target, false)
                 if (!located) return { ...frame, file: frame.file || entry }
-                //a frame is a function: named, and gone to, as its Listing labels it
+                //a frame is a function: named, and gone to, as its Listing labels it, at where its
+                //call went, which no symbol may start (a PLT stub after `_init`)
                 const { listing, base } = located
                 const start = listing && located.line >= 0 && functionAtLine(listing, located.line)
-                const named = start && start.address + base === Number(frame.address)
+                const named = start && start.address + base === Number(frame.target)
                 return {
                     ...frame,
-                    name: named ? start.name : frame.name,
+                    name: named ? start.name : frameName(frame),
+                    address: frame.target,
                     file: located.file || undefined,
                     line: named ? start.line : located.line
                 }
@@ -545,6 +564,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getNextInstruction(): Instruction | null {
+        //a loaded Executable that ended runs nothing next: its program counter rests in libc's
+        //`_exit`, whose Listing would otherwise be made at every end
+        if (this.executable && this.core?.hasTerminated()) return null
         const instruction = this.core?.getNextInstruction()
         return instruction ? this.withLocation(instruction) : null
     }
@@ -570,17 +592,23 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * Listing inside it, the line of a library's Listing under `@lib/` inside one (generated the
      * first time the run is there, with line -1 until it is ready, when the current line is read
      * again), and no File anywhere else, such as code on the stack. Undefined for an assembled
-     * program, whose lines the Core knows.
+     * program, whose lines the Core knows. With `generate` false a library's Listing that has not
+     * been made is not: the address is in its `@lib/` File with line -1, which the Call stack and
+     * the History show until the person goes there.
      */
-    private locate(address: bigint): ListingLocation | undefined {
+    private locate(address: bigint, generate = true): ListingLocation | undefined {
         const executable = this.executable
         if (!executable) return undefined
         const object = this.objectAt(address)
         const located = object
             ? object.main
                 ? this.programListing(executable, object)
-                : this.libraryListing(object)
+                : generate
+                  ? this.libraryListing(object)
+                  : this.madeLibraryListing(object)
             : undefined
+        if (!located && object && !object.main)
+            return { file: libraryListingPath(object), line: -1, base: Number(object.base) }
         if (!located) return { file: '', line: -1, base: 0 }
         const { path, document } = located
         const listing = document.listing
@@ -643,6 +671,113 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { path, document }
     }
 
+    /** A library's Listing if this run has made it already. */
+    private madeLibraryListing(object: X86LoadedObject) {
+        const path = libraryListingPath(object)
+        const document = this._listings?.session.get(path)
+        return document?.base === Number(object.base) ? { path, document } : undefined
+    }
+
+    /**
+     * Whether an address is library code a Step runs through: in a library the program loaded, or
+     * in its own PLT, whose stubs only jump into one; code the program put anywhere else, such as
+     * on the stack, is its own. For an assembled program, an address the Core places in a File
+     * under `@runtime/`.
+     */
+    private isLibraryAddress(address: bigint): boolean {
+        if (!this.executable) return isLibraryCodeFile(this.core?.getInstructionAt(address)?.file)
+        const object = this.objectAt(address)
+        if (!object) return false
+        if (!object.main) return true
+        const offset = Number(address - object.base)
+        return this.trampolines.some(([start, end]) => offset >= start && offset < end)
+    }
+
+    /**
+     * Answered from the objects the program mapped, which a Step through library code reads once
+     * rather than once per instruction, and which never makes a library's Listing.
+     */
+    _nextInLibraryCode(): boolean | undefined {
+        if (!this.executable || !this.core) return undefined
+        return this.isLibraryAddress(this.core.getPc())
+    }
+
+    /** `main` from the Listing (a symbol or the `_start` pattern), else the entry point. */
+    _programStart(): { breakpoint: SourceBreakpoint; name: string } | undefined {
+        const executable = this.executable
+        if (!executable) return undefined
+        const listing = executable.document.listing
+        const main = listing?.main
+        const address = main ?? listing?.entry ?? Number(executableAnalysis(executable.file).entry)
+        return {
+            breakpoint: { file: executable.path, address },
+            name: main === undefined ? 'its entry point' : 'main'
+        }
+    }
+
+    /**
+     * The call instruction of the innermost Call stack frame whose return address is program
+     * code: where the program called into the library code it is stopped in, the PLT call in
+     * `main` for a read waiting inside libc's `fgets`. None for a stop in the Executable's own
+     * bytes, its PLT included, where a Breakpoint may be: that is shown where it is.
+     */
+    _libraryCallSite(): Instruction | null {
+        const core = this.core
+        if (!core) return null
+        if (this.executable && this.objectAt(core.getPc())?.main) return null
+        const frames = core.getCallStack()
+        for (let i = frames.length - 1; i >= 0; i--) {
+            const returnAddress = frames[i].destination
+            if (this.isLibraryAddress(returnAddress)) continue
+            return this.callBefore(returnAddress)
+        }
+        return null
+    }
+
+    /** The instruction that ends where a return address begins, the call that pushed it. */
+    private callBefore(returnAddress: bigint): Instruction | null {
+        const located = this.locate(returnAddress - 1n)
+        if (!located) {
+            //an assembled program: the line DWARF gives the call's last byte
+            const call = this._getInstructionAt(returnAddress - 1n)
+            return call && call.lineNumber >= 0 ? call : null
+        }
+        const start = located.listing && instructionAddressAt(located.listing, located.line)
+        if (start === undefined) return null
+        return this._getInstructionAt(BigInt(start + located.base))
+    }
+
+    /**
+     * A Step's stretch of library code, named in the History after what it called: the function
+     * a PLT stub of the Executable jumps to and the library its GOT slot leads to now the call
+     * has bound it (`puts in libc.so.6`), or for a call straight into a library the symbol it
+     * entered.
+     */
+    _libraryStretchName(entered: ExecutionStep): string | undefined {
+        const core = this.core
+        const executable = this.executable
+        if (!core || !executable) return undefined
+        const pc = BigInt(entered.pc)
+        const object = this.objectAt(pc)
+        if (!object) return undefined
+        if (!object.main) return libraryFunctionName(core, pc, object)
+        const offset = pc - object.base
+        const stub = executableAnalysis(executable.file).plt.find(
+            (candidate) => candidate.address === offset
+        )
+        if (!stub) return undefined
+        const name = stub.name.replace(/@plt(_resolver)?$/, '')
+        try {
+            const slot = core.readMemoryBytes(stub.got + object.base, 8n)
+            const target = new DataView(slot.buffer, slot.byteOffset, 8).getBigUint64(0, true)
+            const library = this.objectAt(target)
+            if (library && !library.main) return `${name} in ${libraryName(library)}`
+        } catch {
+            //an unreadable slot names the function alone
+        }
+        return name
+    }
+
     /** A running program's Listing, which once ready says where the program is. */
     private listingOpened(path: string, document: ListingDocument): void {
         this._listings?.session.set(path, document)
@@ -694,6 +829,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * is left to the caller's own fallback — the instruction about to run — as it was before Pokes.
      */
     _getLastInstruction(): Instruction | null {
+        //a crash is shown where it happened, which the Core records as the newest instruction; in
+        //a loaded library's code too, whose Listing is made for it (decision 18), as the History's
+        //rows, which the caller would read otherwise, do not make one
+        const reason = this.core?.stopReason
+        if (reason?.kind === 'signal' && reason.address !== undefined)
+            return this._getInstructionAt(reason.address)
         if (this.core?.getUndoHistory(1)[0]?.kind !== 'poke') return null
         const history = this.core.getUndoHistoryRange(1, LAST_INSTRUCTION_LOOKBACK - 1)
         const executed = history.find((step) => step.kind === 'instruction')
@@ -807,7 +948,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 //one off the pc the machine is parked on, and the History row draws no PC line for
                 //it ([the design record](../../../../../../docs/design/pokes.md))
                 if (mapped.kind === 'poke') return { ...mapped, line: -1, file: undefined }
-                const located = this.locate(BigInt(step.pc))
+                //a row in a library whose Listing has not been made has no line until it is gone to
+                const located = this.locate(BigInt(step.pc), false)
                 if (located)
                     return { ...mapped, file: located.file || undefined, line: located.line }
                 return { ...mapped, file: step.file || entry }
@@ -849,7 +991,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /** Completed guest-instruction deltas exclude tool execution and work with history disabled. */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const budget = Math.min(
-            this.undoSize > 0
+            this.undoSize > 0 && this.undoRecording
                 ? X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO
                 : X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO,
             sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
@@ -1056,6 +1198,48 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 }
 
 type LoadedExecutable = { path: string; file: ProjectFile; document: ListingDocument }
+
+/** The sections a linker puts PLT stubs in: lazy `.plt`, `.plt.sec` with CET, `.plt.got`, `.iplt`. */
+const PLT_SECTIONS = new Set(['.plt', '.plt.sec', '.plt.got', '.iplt'])
+/** How long a PLT stub is, for an Executable whose section headers are gone. */
+const PLT_STUB_SIZE = 16
+
+/**
+ * An Executable's PLT as link-time ranges: its PLT sections, or without section headers the stubs
+ * the analyser found in its code.
+ */
+function pltRanges(file: ProjectFile): [start: number, end: number][] {
+    const info = executableAnalysis(file)
+    const sections = info.sections
+        .filter((section) => PLT_SECTIONS.has(section.name) && section.size > 0)
+        .map((section): [number, number] => [
+            Number(section.address),
+            Number(section.address) + section.size
+        ])
+    if (sections.length > 0 || info.sections.length > 0) return sections
+    return info.plt.map((stub): [number, number] => [
+        Number(stub.address),
+        Number(stub.address) + PLT_STUB_SIZE
+    ])
+}
+
+/** A frame's name without a Listing: its symbol, and how far into it the call went. */
+function frameName(frame: { name: string; address: bigint; target: bigint }): string {
+    if (!frame.name || frame.target === frame.address) return frame.name
+    return `${frame.name}+0x${(frame.target - frame.address).toString(16)}`
+}
+
+/** What a loaded library is called: its soname, as its Listing's path says it. */
+function libraryName(object: X86LoadedObject): string {
+    return libraryListingPath(object).slice(LIBRARY_LISTING_NAMESPACE.length)
+}
+
+/** The function a call into a library entered, by the symbol starting there, and its library. */
+function libraryFunctionName(core: CoreX86Emulator, pc: bigint, object: X86LoadedObject): string {
+    const symbol = core.runtime.resolveSymbol(pc)
+    const library = libraryName(object)
+    return symbol && symbol.address === pc && symbol.name ? `${symbol.name} in ${library}` : library
+}
 
 /** Where an address is shown, with the Listing it was found in and that Listing's load base. */
 type ListingLocation = { file: string; line: number; listing?: Listing; base: number }

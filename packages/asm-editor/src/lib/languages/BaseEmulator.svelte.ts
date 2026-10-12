@@ -4,6 +4,7 @@ import {
     type ExecutionStep,
     type RegisterFileDescriptor,
     RegisterSize,
+    type SourceBreakpoint,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
@@ -172,6 +173,38 @@ export abstract class BaseEmulator<R extends string> {
     abstract _getNextInstruction(): Instruction | null
 
     _getLastInstruction?(): Instruction | null
+
+    /**
+     * Whether the instruction about to run is library code, which a Step runs through: answered
+     * from what the adapter knows without reading the instruction, such as the objects a loaded
+     * Executable's run has mapped, so that a Step through thousands of library instructions never
+     * makes the library's Listing. Undefined leaves it to the instruction's File (`@runtime/`,
+     * `@lib/`).
+     */
+    _nextInLibraryCode?(): boolean | undefined
+
+    /**
+     * Where the program's own code begins, for a Build and a Testcase to run to with the Undo
+     * history paused before they start ([binary-import.md](../../../../../docs/design/binary-import.md),
+     * decision 11): a loaded Executable's `main`, or its entry point when the Listing knows no
+     * `main`, as a temporary Breakpoint and the name a message gives it. Undefined for a program
+     * whose start is stepped through instead (`@runtime/` start code) or that starts in its own
+     * code.
+     */
+    _programStart?(): { breakpoint: SourceBreakpoint; name: string } | undefined
+
+    /**
+     * The program's own call into the library code it is stopped in: the call instruction of the
+     * innermost Call stack frame that returns to program code. What a stop inside library code
+     * shows when Steps do not enter it; null when no frame returns to program code.
+     */
+    _libraryCallSite?(): Instruction | null
+
+    /**
+     * What the History calls a Step's stretch of library code, from the first library instruction
+     * it ran (`puts in libc.so.6`); undefined to name it after that instruction's File.
+     */
+    _libraryStretchName?(entered: ExecutionStep): string | undefined
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
 
