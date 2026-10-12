@@ -22,9 +22,9 @@ FUN_bronze_barracuda:
 section .plt
 
 FUN_winged_scarab:
-    push [rel DAT_misty_tanager]
-    jmp [rel DAT_epic_cicada]
-    nop [rax], eax
+    push qword [rel DAT_misty_tanager]
+    jmp qword [rel DAT_epic_cicada]
+    nop dword [rax]
 
 puts@plt_resolver:
     endbr64
@@ -66,40 +66,40 @@ section .plt.got
 
 __cxa_finalize@plt:
     endbr64
-    jmp [rel __cxa_finalize@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel __cxa_finalize@got]
+    nop word [rax+rax*1]
 
 section .plt.sec
 
 puts@plt:
     endbr64
-    jmp [rel puts@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel puts@got]
+    nop word [rax+rax*1]
 
 __stack_chk_fail@plt:
     endbr64
-    jmp [rel __stack_chk_fail@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel __stack_chk_fail@got]
+    nop word [rax+rax*1]
 
 printf@plt:
     endbr64
-    jmp [rel printf@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel printf@got]
+    nop word [rax+rax*1]
 
 strcspn@plt:
     endbr64
-    jmp [rel strcspn@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel strcspn@got]
+    nop word [rax+rax*1]
 
 fgets@plt:
     endbr64
-    jmp [rel fgets@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel fgets@got]
+    nop word [rax+rax*1]
 
 strcmp@plt:
     endbr64
-    jmp [rel strcmp@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel strcmp@got]
+    nop word [rax+rax*1]
 
 section .text
 
@@ -115,9 +115,9 @@ _start:
     xor r8d, r8d
     xor ecx, ecx
     lea rdi, [rel main]
-    call [rel __libc_start_main@got]
+    call qword [rel __libc_start_main@got]
     hlt
-    nop [rax+rax*1], ax
+    nop word cs:[rax+rax*1]
 
 FUN_moonlit_vole:
     lea rdi, [rel stdin]
@@ -128,10 +128,10 @@ FUN_moonlit_vole:
     test rax, rax
     je .LAB_1
     jmp rax
-    nop [rax], eax
+    nop dword [rax]
 .LAB_1:
     ret
-    nop [rax], eax
+    nop dword [rax]
 .LAB_2:
     lea rdi, [rel stdin]
     lea rsi, [rel stdin]
@@ -146,10 +146,10 @@ FUN_moonlit_vole:
     test rax, rax
     je .LAB_3
     jmp rax
-    nop [rax+rax*1], ax
+    nop word [rax+rax*1]
 .LAB_3:
     ret
-    nop [rax], eax
+    nop dword [rax]
 
 FUN_peachy_anteater:
     endbr64
@@ -166,10 +166,10 @@ FUN_peachy_anteater:
     mov byte [rel DAT_perky_tapir], 0x01
     pop rbp
     ret
-    nop [rax], eax
+    nop dword [rax]
 .LAB_2:
     ret
-    nop [rax], eax
+    nop dword [rax]
 
 FUN_sunny_moth:
     endbr64

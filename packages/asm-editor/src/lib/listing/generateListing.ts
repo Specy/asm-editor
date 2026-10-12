@@ -2,7 +2,6 @@ import type { DecodedInstruction, ListingDecoder } from './decoder'
 import {
     findRegion,
     readElfModel,
-    readPointer,
     R_X86_64_GLOB_DAT,
     R_X86_64_IRELATIVE,
     R_X86_64_JUMP_SLOT,
@@ -19,7 +18,7 @@ import {
     type ListingNameOrigin,
     type ListingNameVersion
 } from './listing'
-import { inventName, numberedName, stringLabelBase } from './names'
+import { inventName, numberedName, printableSymbolName, stringLabelBase } from './names'
 
 export type ListingInput = {
     /** The ELF: an Executable's bytes, or a shared library's. */
@@ -254,7 +253,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     indexStarts()
     const isStart = (address: number) => starts[floorIndex(starts, address)] === address
 
-    // GOT slots and PLT stubs, named after the relocation of the slot each stub jumps through.
+    // GOT slots, named after their relocation's symbol (an IRELATIVE one after the ifunc it calls).
     const slotName = (address: number): string | undefined => {
         const relocation = model.relocations.get(address)
         if (!relocation) return undefined
@@ -263,9 +262,14 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         if (relocation.type === R_X86_64_IRELATIVE) return symbolNamesAt(relocation.addend)[0]
         return undefined
     }
+    // PLT stubs, which the Core names after the slot each one jumps through: `name@plt`, and
+    // `name@plt_resolver` for the lazy stubs `.plt` holds beside `.plt.sec`. Without section
+    // headers it finds them by their shape in the executable segments.
     const stubs = new Map<number, string>()
-    const isPlt = (region: Region) =>
-        region.name === '.plt' || region.name.startsWith('.plt.') || region.name === '.iplt'
+    for (const stub of analysis.plt) {
+        const address = Number(stub.address)
+        if (isStart(address)) stubs.set(address, printableSymbolName(stub.name))
+    }
     const instructionsFrom = (address: number, count: number): DecodedInstruction[] => {
         const region = findRegion(codeRegions, address)
         const list = region && entries.get(region)
@@ -284,53 +288,6 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             if (Number(item.address) >= address) out.push(item)
         }
         return out
-    }
-    const jumpSlot = (instruction: DecodedInstruction) =>
-        instruction.isJump && !instruction.isConditional
-            ? instruction.operands.find((operand) => operand.memoryTarget !== undefined)
-                  ?.memoryTarget
-            : undefined
-    if (!model.fromSegments) {
-        for (const region of codeRegions.filter(isPlt)) {
-            const stride = region.entrySize === 8 ? 8 : 16
-            for (const item of entries.get(region)!) {
-                if ('data' in item) continue
-                const slot = jumpSlot(item)
-                const name = slot !== undefined ? slotName(Number(slot)) : undefined
-                if (!name) continue
-                const address = Number(item.address)
-                const entryStart =
-                    region.address + Math.floor((address - region.address) / stride) * stride
-                stubs.set(isStart(entryStart) ? entryStart : address, `${name}@plt`)
-            }
-        }
-        // With `.plt.sec`, `.plt` holds the lazy stubs a slot first points at.
-        const lazy = codeRegions.find((region) => region.name === '.plt')
-        if (lazy && codeRegions.some((region) => region.name === '.plt.sec'))
-            for (const relocation of model.relocations.values()) {
-                const name = slotName(relocation.address)
-                if (relocation.type === R_X86_64_GLOB_DAT || !name) continue
-                const target = readPointer(model, relocation.address)
-                if (
-                    target !== undefined &&
-                    target >= lazy.address &&
-                    target < lazy.address + lazy.fileSize &&
-                    isStart(target) &&
-                    !stubs.has(target)
-                )
-                    stubs.set(target, `${name}@plt_resolver`)
-            }
-    } else {
-        // Without sections, the analyser's stubs are checked against the slot each jumps through.
-        for (const stub of analysis.plt) {
-            const address = Number(stub.address)
-            const slot = instructionsFrom(address, 3)
-                .map(jumpSlot)
-                .find((s) => s !== undefined)
-            const name = slot !== undefined ? slotName(Number(slot)) : undefined
-            if (name) stubs.set(address, `${name}@plt`)
-            else if (!model.relocations.size || slot === undefined) stubs.set(address, stub.name)
-        }
     }
     for (const address of [...stubs.keys()].sort((a, b) => a - b))
         if (!namesAt.has(address)) claim(address, stubs.get(address)!, 'plt')

@@ -171,6 +171,29 @@ function zydisWords(): Set<string> {
     return words
 }
 
+/**
+ * Every word the Core's decoder prints in place of Zydis's: NASM's mnemonics for its aliases
+ * (`je`, `retfq`, `pushfw`, `iretw`), size keywords, segments, `rel`, `to`, `{vex}` and `db`,
+ * read from the string literals of its formatter hooks.
+ */
+function decoderWords(): Set<string> {
+    const source = readFileSync(
+        new URL('../../../../x86/blink-js/src/disassembler/wrapper.c', import.meta.url),
+        'latin1'
+    )
+    const words = new Set<string>()
+    for (const line of source.split('\n')) {
+        if (/^\s*(?:#include|_Static_assert)\b/.test(line)) continue
+        for (const [, text] of line.matchAll(/"([^"]*)"/g))
+            for (const word of text
+                .replace(/%\w+/g, ' ')
+                .toLowerCase()
+                .split(/[^a-z]+/))
+                if (word) words.add(word)
+    }
+    return words
+}
+
 describe('the v1 word lists', () => {
     const lists = { adjectives: ADJECTIVES_V1, animals: ANIMALS_V1 }
 
@@ -187,9 +210,12 @@ describe('the v1 word lists', () => {
 
     it('hold nothing that reads as a finding, an instruction, a register or a NASM keyword', () => {
         const zydis = zydisWords()
+        const decoder = decoderWords()
         // A broken path would make every check below pass.
         expect(zydis.has('vpbroadcastb')).toBe(true)
         expect(zydis.has('rax')).toBe(true)
+        for (const word of ['to', 'retfq', 'retfw', 'pushfw', 'popfw', 'iretw', 'vex', 'rel'])
+            expect(decoder.has(word), word).toBe(true)
         const nasm = new Set(
             [
                 ...X86_MNEMONICS,
@@ -202,6 +228,7 @@ describe('the v1 word lists', () => {
         for (const word of [...ADJECTIVES_V1, ...ANIMALS_V1]) {
             expect(FINDINGS, word).not.toContain(word)
             expect(zydis.has(word), `${word} is something Zydis prints`).toBe(false)
+            expect(decoder.has(word), `${word} is something the decoder prints`).toBe(false)
             expect(nasm.has(word), `${word} is an x86 word NASM knows`).toBe(false)
             for (const finding of CONTAINED) expect(word, word).not.toContain(finding)
         }

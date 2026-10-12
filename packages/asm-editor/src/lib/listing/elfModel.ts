@@ -9,12 +9,10 @@ import { printableSymbolName } from './names'
  */
 
 const SHT_PROGBITS = 1
-const SHT_RELA = 4
 const SHT_NOBITS = 8
 const SHT_INIT_ARRAY = 14
 const SHT_FINI_ARRAY = 15
 const SHT_PREINIT_ARRAY = 16
-const SHT_RELR = 19
 const SHF_ALLOC = 2n
 const SHF_EXECINSTR = 4n
 const SHF_TLS = 0x400n
@@ -188,26 +186,6 @@ function compareRanks(a: SymbolName, b: SymbolName): number {
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
 }
 
-/** RELR packs relative relocations as addresses and bitmaps of the 63 words after one. */
-function readRelr(view: DataView, offset: number, size: number, into: number[]) {
-    let where = 0
-    for (let at = offset; at + 8 <= offset + size; at += 8) {
-        const low = view.getUint32(at, true)
-        const high = view.getUint32(at + 4, true)
-        if (!(low & 1)) {
-            where = high * 0x100000000 + low
-            into.push(where)
-            where += 8
-            continue
-        }
-        for (let bit = 1; bit < 64; ++bit) {
-            const set = bit < 32 ? (low >>> bit) & 1 : (high >>> (bit - 32)) & 1
-            if (set) into.push(where + (bit - 1) * 8)
-        }
-        where += 63 * 8
-    }
-}
-
 /** Reads what the Listing needs from an ELF the Core's analyser has parsed. */
 export function readElfModel(
     analysis: ElfAnalysis,
@@ -254,54 +232,19 @@ export function readElfModel(
     for (const symbol of analysis.dynamicSymbols) addSymbol(symbol, 'dynamic')
     for (const names of symbolNames.values()) names.sort(compareRanks)
 
+    // Every table the loader applies, `.dynsym`'s and the static `.rela.plt` of a static binary
+    // (its ifunc slots) alike, and RELR-packed relative relocations with the value the file holds
+    // as their addend; read through the dynamic section when the section headers are unusable.
     const relocations = new Map<number, Relocation>()
-    const addRelocation = (relocation: Relocation) => {
-        if (!relocations.has(relocation.address)) relocations.set(relocation.address, relocation)
-    }
-    for (const relocation of analysis.relocations)
-        addRelocation({
-            address: toNumber(relocation.address),
-            type: relocation.type,
-            symbol: relocation.symbol,
-            addend: toNumber(BigInt.asUintN(64, relocation.addend))
-        })
-    // The analyser reads only the relocation tables tied to `.dynsym`: a static binary's
-    // `.rela.plt` (its ifunc slots) and RELR-packed relative relocations are read here.
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-    const dynsym = analysis.sections.find((section) => section.type === 11)
-    for (const section of analysis.sections) {
-        if (section.offset + section.size > bytes.length) continue
-        if (
-            section.type === SHT_RELA &&
-            section.entrySize === 24 &&
-            section.link !== dynsym?.index
-        ) {
-            const names = analysis.sections[section.link]?.type === 2 ? analysis.symbols : []
-            for (let at = section.offset; at + 24 <= section.offset + section.size; at += 24) {
-                const index = view.getUint32(at + 12, true)
-                addRelocation({
-                    address: toNumber(view.getBigUint64(at, true)),
-                    type: view.getUint32(at + 8, true),
-                    symbol: names[index]?.name ?? '',
-                    addend: toNumber(view.getBigUint64(at + 16, true))
-                })
-            }
-        }
-        if (section.type === SHT_RELR && section.entrySize === 8) {
-            const slots: number[] = []
-            readRelr(view, section.offset, section.size, slots)
-            for (const address of slots) {
-                const region = regionOf(address)
-                if (!region || address + 8 > region.address + region.fileSize) continue
-                const value = view.getBigUint64(region.offset + address - region.address, true)
-                addRelocation({
-                    address,
-                    type: R_X86_64_RELATIVE,
-                    symbol: '',
-                    addend: toNumber(value)
-                })
-            }
-        }
+    for (const relocation of analysis.relocations) {
+        const address = toNumber(relocation.address)
+        if (!relocations.has(address))
+            relocations.set(address, {
+                address,
+                type: relocation.type,
+                symbol: relocation.symbol,
+                addend: toNumber(BigInt.asUintN(64, relocation.addend))
+            })
     }
     return { analysis, bytes, regions, fromSegments, symbolNames, relocations }
 }

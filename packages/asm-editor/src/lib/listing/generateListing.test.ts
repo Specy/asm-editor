@@ -301,7 +301,7 @@ describe('Listings of dynamically linked programs', () => {
         expect(text).toMatch(/\n {4}call strcmp@plt\n/)
         expect(text).toMatch(/\n {4}lea rax, \[rel s_Enter_password\] +; "Enter password: "\n/)
         expect(text).toContain('\ns_Enter_password: db "Enter password: ", 0\n')
-        expect(text).toMatch(/\n {4}call \[rel __libc_start_main@got\]\n/)
+        expect(text).toMatch(/\n {4}call qword \[rel __libc_start_main@got\]\n/)
         // Every function the call targets and function pointers reveal has an invented name.
         expect(listing.functions.map((f) => f.name).filter((n) => n.startsWith('FUN_'))).toEqual([
             'FUN_bronze_barracuda',
@@ -339,19 +339,18 @@ describe('Listings of dynamically linked programs', () => {
     })
 
     it('names the bundled libc.so.6 PLT stubs after the slot each jumps through', () => {
-        // The analyser counts only JUMP_SLOT relocations when it numbers PLT stubs, but libc's
-        // `.rela.plt` also holds IRELATIVE ones, so its names are shifted; the Listing reads the
-        // stubs' own jumps instead.
+        // libc's `.rela.plt` holds IRELATIVE relocations among its JUMP_SLOT ones, so a stub's
+        // name cannot come from its position: each stub's name must agree with its own jump.
         const listing = listingOf(libc(), 'libc.so.6', 0x7ffff7c00000)
         const lines = linesOf(listing)
         let stubs = 0
         lines.forEach((line, i) => {
             const stub = /^(\S+)@plt:$/.exec(line)
             if (!stub) return
-            const jump = lines.slice(i + 1, i + 4).find((next) => next.includes('jmp ['))
+            const jump = lines.slice(i + 1, i + 4).find((next) => /\bjmp \w* ?\[/.test(next))
             if (!jump) return
             ++stubs
-            expect(jump.trim()).toBe(`jmp [rel ${stub[1]}@got]`)
+            expect(jump.trim()).toBe(`jmp qword [rel ${stub[1]}@got]`)
         })
         expect(stubs).toBeGreaterThan(30)
         expect(listing.text).toContain('\n_IO_puts:\nputs:\n')
@@ -447,6 +446,10 @@ describe('Listings of unusual files', () => {
         expect(text).toContain('\n_start:\n')
         expect(text).toContain('\nmain:\n')
         expect(text).toMatch(/lea rax, \[rel s_Enter_password\] +; "Enter password: "/)
+        // The Core reads the dynamic symbols, relocations and PLT stubs through PT_DYNAMIC.
+        expect(text).toContain('\nstrcmp@plt:\n')
+        expect(text).toContain('\n    call strcmp@plt\n')
+        expect(text).toContain('\n    call qword [rel __libc_start_main@got]\n')
     })
 
     it('refuses what is not an x86-64 ELF', () => {

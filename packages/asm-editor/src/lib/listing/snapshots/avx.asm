@@ -21,9 +21,9 @@ _init:
 section .plt
 
 FUN_winged_scarab:
-    push [rel DAT_hearty_parrot]
-    jmp [rel DAT_grand_lark]
-    nop [rax], eax
+    push qword [rel DAT_hearty_parrot]
+    jmp qword [rel DAT_grand_lark]
+    nop dword [rax]
 
 __printf_chk@plt_resolver:
     endbr64
@@ -35,15 +35,15 @@ section .plt.got
 
 __cxa_finalize@plt:
     endbr64
-    jmp [rel __cxa_finalize@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel __cxa_finalize@got]
+    nop word [rax+rax*1]
 
 section .plt.sec
 
 __printf_chk@plt:
     endbr64
-    jmp [rel __printf_chk@got]
-    nop [rax+rax*1], ax
+    jmp qword [rel __printf_chk@got]
+    nop word [rax+rax*1]
 
 section .text
 
@@ -52,7 +52,7 @@ main:
     sub rsp, 0x08
     mov edx, edi
     cmp edi, 0x05
-    jnle .LAB_2
+    jg .LAB_2
 .LAB_1:
     lea rsi, [rel s_value_d]            ; "value=%d\n"
     mov edi, 0x02
@@ -65,8 +65,8 @@ main:
     call vector_sum
     mov edx, eax
     jmp .LAB_1
-    nop [rax+rax*1], ax
-    nop [rax], eax
+    nop word cs:[rax+rax*1]
+    nop dword [rax]
 
 _start:
     endbr64
@@ -80,9 +80,9 @@ _start:
     xor r8d, r8d
     xor ecx, ecx
     lea rdi, [rel main]
-    call [rel __libc_start_main@got]
+    call qword [rel __libc_start_main@got]
     hlt
-    nop [rax+rax*1], ax
+    nop word cs:[rax+rax*1]
 
 deregister_tm_clones:
     lea rdi, [rel completed.0]
@@ -93,10 +93,10 @@ deregister_tm_clones:
     test rax, rax
     je .LAB_1
     jmp rax
-    nop [rax], eax
+    nop dword [rax]
 .LAB_1:
     ret
-    nop [rax], eax
+    nop dword [rax]
 
 register_tm_clones:
     lea rdi, [rel completed.0]
@@ -112,10 +112,10 @@ register_tm_clones:
     test rax, rax
     je .LAB_1
     jmp rax
-    nop [rax+rax*1], ax
+    nop word [rax+rax*1]
 .LAB_1:
     ret
-    nop [rax], eax
+    nop dword [rax]
 
 __do_global_dtors_aux:
     endbr64
@@ -132,15 +132,15 @@ __do_global_dtors_aux:
     mov byte [rel completed.0], 0x01
     pop rbp
     ret
-    nop [rax], eax
+    nop dword [rax]
 .LAB_2:
     ret
-    nop [rax], eax
+    nop dword [rax]
 
 frame_dummy:
     endbr64
     jmp register_tm_clones
-    nop [rax], eax
+    nop dword [rax]
 
 vector_sum:
     endbr64

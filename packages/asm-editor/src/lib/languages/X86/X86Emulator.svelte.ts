@@ -357,10 +357,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     private async compileSources(sources: BuildSources): Promise<CompileResult> {
-        //sources that could not be resolved, such as Generated assembly that needs a Runtime
-        //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
-        if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const core = this.requireCore()
+        //an Executable Entry is loaded, not assembled, so nothing about assembly can stop it:
+        //this is the order `_checkCode` takes too, so the live check and the Build agree
         const kind = executableKind(sources.files[sources.entry])
         if (kind !== 'none') {
             if (kind !== 'supported')
@@ -369,8 +368,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     report: kind.unsupported,
                     diagnostics: [executableDiagnostic(sources.entry, kind.unsupported)]
                 }
-            const info = await core.loadExecutable(fileBytes(sources.files[sources.entry]))
-            core.setProtectedPath('/project/' + sources.entry)
+            //the Executable's own File can be read but not written, deleted or renamed while it runs
+            const info = await core.loadExecutable(fileBytes(sources.files[sources.entry]), {
+                protectedPath: '/project/' + sources.entry
+            })
             this._buildLibraryFiles = undefined
             return {
                 ok: true,
@@ -383,6 +384,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 )
             }
         }
+        //sources that could not be resolved, such as Generated assembly that needs a Runtime
+        //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
+        if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const linked = linksX86StartUnit(sources)
         const result = await core.compileProject(x86CoreProject(sources))
         // Carried on both outcomes: a build that succeeded with warnings is the

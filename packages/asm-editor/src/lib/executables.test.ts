@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vite-plus/test'
 import { bytesFile } from './projectFiles'
-import { executableKind } from './executables'
-import { makeProjectFromExecutable } from './executableImport'
+import { executableKind, startsWithElfMagic } from './executables'
+import { importFile, makeProjectFromExecutable } from './executableImport'
 import { X86Emulator } from './languages/X86/X86Emulator.svelte'
 import { analyzeX86Project } from './languages/service/adapters/x86Adapter'
 
@@ -27,6 +27,7 @@ it('recognises every executable fixture regardless of file name', () => {
         'self-write',
         'crackme-argv',
         'overflow',
+        'timedwait',
         'avx'
     ])
         expect(executableKind(bytesFile(fixture(name))), name).toBe('supported')
@@ -85,6 +86,71 @@ it('reports the same unsupported reason during live checking and Build', async (
     try {
         await expect(emulator.compile(100, sources)).rejects.toThrow(/truncated/)
         expect(emulator.compilerErrors[0].message).toContain('truncated')
+    } finally {
+        emulator.dispose()
+    }
+})
+
+it('recognises an ELF from its first bytes, whatever the encoding, and only then analyses it', () => {
+    const crackme = fixture('crackme')
+    expect(startsWithElfMagic(crackme)).toBe(true)
+    expect(startsWithElfMagic(bytesFile(crackme))).toBe(true)
+    // A File that happens to be text, starting with the magic, is still read by its bytes.
+    expect(startsWithElfMagic({ encoding: 'plain', content: '\x7fELF' })).toBe(true)
+    expect(executableKind({ encoding: 'plain', content: '\x7fELF' })).toMatchObject({
+        unsupported: expect.stringContaining('truncated')
+    })
+    expect(startsWithElfMagic(bytesFile(new TextEncoder().encode('mov eax, 1')))).toBe(false)
+    expect(startsWithElfMagic({ encoding: 'base64', content: 'f0VM' })).toBe(false)
+    expect(executableKind(crackme)).toBe('supported')
+    // The same content in a new File object, as a snapshot makes, is the same answer.
+    const file = bytesFile(crackme)
+    expect(executableKind({ ...file })).toBe(executableKind(file))
+})
+
+it('reads an import as an Executable before a Project archive or text, by its bytes', () => {
+    const crackme = importFile(fixture('crackme'), 'chall.zip')
+    expect(crackme).toMatchObject({ executable: true, archive: false })
+    expect(crackme.imported.project.entry).toBe('chall.zip')
+    const text = importFile(new TextEncoder().encode('mov eax, 1'), 'main.asm')
+    expect(text).toMatchObject({ executable: false, archive: false })
+    expect(() => importFile(fixture('crackme').subarray(0, 25), 'broken')).toThrow(/truncated/)
+})
+
+it('builds an Executable Entry even when assembly sources could not be resolved', async () => {
+    const sources = {
+        entry: 'crackme',
+        files: { crackme: bytesFile(fixture('crackme')) },
+        assemblyError: 'Generated assembly needs a Runtime library x86 does not have'
+    }
+    const snapshot = await analyzeX86Project(sources, 'test', 1)
+    expect(snapshot.diagnostics).toEqual([])
+    const emulator = await X86Emulator(sources, { automaticChecking: false })
+    try {
+        await emulator.compile(100, sources)
+        expect(emulator.compilerErrors).toEqual([])
+        expect(emulator.canExecute).toBe(true)
+    } finally {
+        emulator.dispose()
+    }
+})
+
+it('warns about each library the Executable needs that is not bundled', async () => {
+    const bytes = fixture('crackme').slice()
+    const name = new TextEncoder().encode('libc.so.6')
+    const at = bytes.findIndex((_, i) => name.every((byte, j) => bytes[i + j] === byte))
+    bytes.set(new TextEncoder().encode('libx.so.6'), at)
+    const sources = { entry: 'chall', files: { chall: bytesFile(bytes) } }
+    const emulator = await X86Emulator(sources, { automaticChecking: false })
+    try {
+        await emulator.compile(100, sources)
+        expect(emulator.compilerErrors).toEqual([])
+        expect(emulator.compilerDiagnostics).toEqual([
+            expect.objectContaining({
+                severity: 'warning',
+                message: 'libx.so.6 is not one of the bundled libraries'
+            })
+        ])
     } finally {
         emulator.dispose()
     }

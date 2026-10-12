@@ -1,4 +1,4 @@
-; Excerpt of the Listing of hello-atexit-static, whose whole text has SHA-256 ea7520809c74877b82daf30673832c7b61a1c137c917de7c8a1f2dbd2ca79088
+; Excerpt of the Listing of hello-atexit-static, whose whole text has SHA-256 d1417821b33f3112261a53ce4359bf4892a30fd77cc0efc8cf1df01e9e947b68
 ; hello-atexit-static
 ; ELF64 x86-64 executable at fixed addresses (not PIE)
 ; Statically linked: no dynamic linker, no shared libraries
@@ -40,7 +40,7 @@ _start:
     mov rdi, 0x4018bf                   ; main
     call __libc_start_main
     hlt
-    nop [rax+rax*1], ax
+    nop word cs:[rax+rax*1]
 main:
     endbr64
     push rbp
@@ -62,9 +62,9 @@ main:
     mov eax, 0x03
     leave
     ret
-    nop [rax+rax*1], ax
-    nop [rax+rax*1], ax
-    nop [rax], eax
+    nop word cs:[rax+rax*1]
+    nop word cs:[rax+rax*1]
+    nop dword [rax]
 farewell:
     endbr64
     push rbp

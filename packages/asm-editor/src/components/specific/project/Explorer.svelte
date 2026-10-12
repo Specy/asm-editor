@@ -425,10 +425,12 @@
                     const replace = await Prompt.confirm(`${path} already exists. Replace it?`)
                     if (!replace) continue
                 }
-                const data = await file.arrayBuffer()
-                fileSystem.writeBytes(path, new Uint8Array(data), true)
+                const bytes = new Uint8Array(await file.arrayBuffer())
+                fileSystem.writeBytes(path, bytes, true)
                 last = path
-                const kind = executableKind(fileSystem.files[path])
+                //only an x86 Project runs ELFs: elsewhere an ELF is just a File
+                if (language !== 'X86') continue
+                const kind = executableKind(bytes)
                 if (kind === 'supported') executable = path
                 else if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
             } catch (error) {
@@ -439,7 +441,8 @@
         expandParents(last)
         onSelect(last)
         if (language === 'X86' && executable && executableKind(files[entry]) !== 'supported') {
-            if (await Prompt.confirm(`Make ${executable} the Entry file?`))
+            //a Debug session may have started while the question was open
+            if ((await Prompt.confirm(`Make ${executable} the Entry file?`)) && !locked)
                 onEntryChange(executable)
         }
     }
