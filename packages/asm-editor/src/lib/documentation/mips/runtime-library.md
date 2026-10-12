@@ -1,8 +1,24 @@
-The Runtime library provides the C functions used by compiled MIPS C and C++ programs. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
+The Runtime library provides C functions for MIPS C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
 
 ## Compiled programs {#compiled-programs}
 
-Compiling a C or C++ file links the Runtime library automatically. Startup aligns the stack, runs global constructors, calls `main`, and passes its result to `exit`. Build completes startup before execution begins in your code: the first instruction is in `main`, or in a C++ global constructor that runs before `main`. Undo can reverse steps from that point onward; it does not reverse startup. Streams are unbuffered by default, so stepping over `printf` shows its text at once. Requested output buffering delays output until a flush, a full buffer, or a newline for line buffering.
+Compiling a C or C++ file links the Runtime library automatically. Startup aligns the stack, runs global constructors, calls `main`, and passes its result to `exit`. By default, Build completes Runtime startup before execution begins in your code: the first instruction is in `main`, or in a C++ global constructor that runs before `main`. Undo can reverse steps from that point onward; it does not reverse startup. Streams are unbuffered by default, so stepping over `printf` shows its text at once. Requested output buffering delays output until a flush, a full buffer, or a newline for line buffering.
+
+### Program arguments
+
+Use `int main(int argc, char *argv[])` to receive startup arguments in C or C++. `argc` counts the strings, including the program name. `argv` is an array of pointers to NUL-terminated strings, with a null pointer at `argv[argc]`. `argv[0]` is `./` plus the source File's path without its final extension: `main.c` gives `./main`. The project's **Arguments** follow it. For Arguments `hello "two words"`:
+
+| Value     | Contents       |
+| --------- | -------------- |
+| `argc`    | `3`            |
+| `argv[0]` | `./main`       |
+| `argv[1]` | `hello`        |
+| `argv[2]` | `two words`    |
+| `argv[3]` | A null pointer |
+
+Check `argc > 1` before using `argv[1]`. For example, `if (argc > 1) printf("%s\n", argv[1]);` prints the first user argument when `<stdio.h>` is included. With no Arguments, `argc` is 1. Enter Arguments on the Terminal's **Command line** or in **Settings**, then Build again to apply them. These strings are separate from input read later by `scanf` or `fgets`. See [Program arguments](/documentation/mips/syscall#arguments) for quoting, limits, Testcase inheritance, and assembly access.
+
+Programs have no environment variables; `getenv` always returns NULL.
 
 ## From hand-written assembly {#from-assembly}
 
@@ -45,6 +61,6 @@ The **Explorer** is the file list for the current Build. It includes linked libr
 
 ## Stepping {#stepping}
 
-By default, **Step** over `jal printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. With this enabled, stepping begins in startup code at `_start`.
+By default, **Step** over `jal printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. For programs compiled in the editor, enabling this Preference begins execution in Runtime startup at `_start`, so you can step through startup too.
 
-`main` receives `argc` and `argv` from the Command line: `argv[0]` is the C or C++ File's path without its extension (`./main` for `main.c`), followed by the Arguments (see [Program arguments](/documentation/mips/syscall#arguments)). Its environment is empty. `malloc` follows the compiler's `max_align_t` alignment and returns NULL with ENOMEM on exhaustion. `clock()` counts executed instructions at nominal 100 MHz and excludes waiting time; Undo rewinds that counter. `time()` reports calendar time, with 2000-01-01 UTC as the fixed Testcase epoch. Library calendar conversions use UTC. Input buffering requests fail; default input remains unbuffered.
+`malloc` follows the compiler's `max_align_t` alignment and returns NULL with ENOMEM on exhaustion. `clock()` counts executed instructions at nominal 100 MHz and excludes waiting time; Undo rewinds that counter. `time()` reports calendar time, with 2000-01-01 UTC as the fixed Testcase epoch. Library calendar conversions use UTC. Input buffering requests fail; default input remains unbuffered.

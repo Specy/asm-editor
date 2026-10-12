@@ -1,71 +1,123 @@
-An **Executable** is a program compiled and linked outside the editor, which a Build loads and runs as it is instead of assembling it. It lets you read and debug a program you have no source for, such as a CTF reverse-engineering challenge. **Import** an ELF file on the Projects page to get a new x86 project with it as the Entry file, or upload one in an x86 project's **Explorer** and accept the offer to make it the Entry file. A file is recognised by its first bytes, not its name, so `crackme` or `chall` without an extension works.
+An **Executable** is a program compiled and linked outside the editor. Build loads its machine code directly, so you can inspect and debug it even when you do not have its source. The supported file format is **ELF**, the format Linux uses for executable programs and libraries.
+
+Use **Import** on the Projects page to create an x86 project with the ELF file as its **Entry** file. In an existing x86 project, upload it in the **Explorer** and accept the offer to make it the Entry file. The editor recognises the file from its first bytes, so names such as `crackme` or `chall` work without an extension.
 
 ## What runs {#what-runs}
 
-x86-64 Linux ELF programs, statically or dynamically linked, position-independent (PIE) or not. Anything else is refused when it arrives, with the reason: a 32-bit x86 program, a program for another machine such as ARM, an object file or a shared library. Uploaded into a project, a refused file stays there as an ordinary File.
+The editor accepts x86-64 Linux ELF executables with these forms of linking and loading:
 
-The program runs as a Linux process on a terminal, as an assembled program does, at the addresses gdb shows with address randomization off: a PIE at `0x555555554000`, any other program where its headers say (usually `0x400000`), shared libraries just below `0x7ffff7fff000` and the stack below `0x7ffffffff000`. Its working directory is `/project`, which holds the project's Files, so a `flag.txt` beside it opens by name. It can read its own File but not write it (`ETXTBSY`, as on Linux), nor delete or rename it (`EBUSY`, where Linux allows both, so a program cannot remove itself from the project). Its environment is fixed: `PATH`, `HOME=/project`, `PWD=/project`, `LANG=C.UTF-8`, `TERM=xterm-256color`, `SHELL=/bin/sh`, `USER` and `LOGNAME`. It has one thread and no network: creating threads, sockets and `fork` fail.
+- **Statically linked:** the executable carries the library code it needs.
+- **Dynamically linked:** the executable loads code from separate shared-library files, subject to the [bundled library list](#libraries).
+- **Position-independent (PIE)** or non-PIE: a PIE can be loaded at a different base address; a non-PIE normally specifies its addresses in the file.
+
+A 32-bit x86 program, a program for another processor such as ARM, an **object file** (code that still needs to be linked into a program), or a **shared library** (code another program loads) is refused as an Executable. The editor reports the reason. If uploaded into an existing project, the refused file remains as an ordinary File.
+
+Programs run with a Linux-style terminal and predictable load addresses: a PIE starts at `0x555555554000`; a non-PIE uses the addresses in its ELF headers, usually `0x400000`. Shared libraries are placed just below `0x7ffff7fff000`, and the stack is below `0x7ffffffff000`.
+
+The working directory is `/project`, which contains the project's Files: a program can open a neighbouring `flag.txt` by that name. It can read its own Executable File, but writing it fails with `ETXTBSY`, as on Linux. Deleting or renaming that File fails with `EBUSY`; Linux allows those operations, but the simulator keeps the Entry file in the project. The program receives the [fixed x86 environment](/documentation/x86/syscall#arguments). It has one thread and no network; attempts to create threads, sockets, or a child process with `fork` fail.
 
 ## Shared libraries {#libraries}
 
-A dynamically linked program loads its libraries from five bundled ones, taken from Ubuntu 26.04 and fetched only when a program needs them: the dynamic linker `ld-linux-x86-64.so.2`, `libc.so.6` and `libm.so.6` from glibc 2.43, and `libstdc++.so.6` and `libgcc_s.so.1` from GCC 16, which C++ programs need. A program that needs any other library, such as `libcrypto.so.3`, does not start: the **Log** names the missing library and the Terminal shows the dynamic linker's error. A program built against a newer glibc stops the same way, with `version 'GLIBC_2.xx' not found`. These libraries are unrelated to the [Runtime library](/documentation/x86/runtime-library), which only programs compiled in the editor use. A static program carries its library code inside itself.
+Dynamically linked programs use five bundled libraries from Ubuntu 26.04. The editor downloads a library only when a program needs it:
+
+| Library                | Version    | Purpose                                                                         |
+| ---------------------- | ---------- | ------------------------------------------------------------------------------- |
+| `ld-linux-x86-64.so.2` | glibc 2.43 | The dynamic linker, which loads libraries and connects calls to their functions |
+| `libc.so.6`            | glibc 2.43 | The C library                                                                   |
+| `libm.so.6`            | glibc 2.43 | Mathematical functions                                                          |
+| `libstdc++.so.6`       | GCC 16     | The C++ standard library                                                        |
+| `libgcc_s.so.1`        | GCC 16     | Compiler support used by C++ programs                                           |
+
+A program that needs another library, such as `libcrypto.so.3`, does not start. The **Log** names the missing library, and the Terminal shows the dynamic linker's error. A program requiring a newer glibc version also stops, with an error such as `version 'GLIBC_2.xx' not found`.
+
+These Linux libraries are separate from the editor's [Runtime library](/documentation/x86/runtime-library). That reference describes programs compiled in the editor and assembly programs that explicitly link the Runtime library; its function list and C++ restrictions do not describe the libraries used by an imported Executable. Conversely, compiling in the editor does not give a program the bundled glibc or C++ standard library. A statically linked Executable uses the library code already inside its file.
 
 ## The Listing {#listing}
 
-Opening an Executable shows its **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. It is generated each time it is shown and never saved; it is read-only and nothing builds from it. The gutter shows each line's address instead of a line number. Hover over an instruction for its address, its bytes and the Documentation of its mnemonic, and over a label for its address and where its name comes from. **Go to Definition** on a label goes to it, and **Go to References** lists every line that names it.
+Opening an Executable shows its **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. The Listing is generated when shown and is never saved. It is read-only; Build uses the Executable File's bytes. The gutter shows an address for each line. Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name. **Go to Definition** on a label opens its location; **Go to References** lists the lines that name it.
 
-The data sections follow the code: strings as `s_Enter_password: db "Enter password: ", 0`, other bytes as `db` or `dq`, and uninitialized space as `resb`. An instruction that reads data through `[rel …]` names it, with the string as a comment, so searching the Listing for a message the program prints finds the code that uses it.
+Data sections follow the code: strings appear as `s_Enter_password: db "Enter password: ", 0`, other bytes as `db` or `dq`, and uninitialized space as `resb`. An instruction that reads data through `[rel …]` names the data, with the string as a comment. Searching for a printed message can therefore help you find instructions that use it.
 
-When execution is inside a shared library, after a crash, a Pause or a Step with **Step into library code** on, the editor shows that library's Listing, read-only, as `@lib/libc.so.6`. It is generated the first time it is needed, which takes about a second for libc. Listings as large as libc's and libstdc++'s are shown without syntax highlighting.
+If execution stops inside a shared library after a crash, a **Pause**, or a **Step** with **Step into library code** enabled, the editor opens that library's read-only Listing, such as `@lib/libc.so.6`. It is generated on first use, which takes about a second for libc. Large Listings, including libc's and libstdc++'s, are shown without syntax highlighting.
 
 ## Names in the Listing {#names}
 
-The Listing uses the names the program carries and invents the rest:
+A **symbol** is a saved name for a function or data address. **Stripping** a program removes many of these names, usually to reduce the file size. The Listing uses available names and assigns names where they are missing:
 
-- Symbols, from the symbol table or from the dynamic symbols a stripped program keeps: `main`, `_start`, `completed.0`. A symbol of an older version of a library's interface reads `stdin@GLIBC_2.2.5`.
-- `name@plt`, the stub a call into a library goes through (`call strcmp@plt`), and `name@got`, the slot holding the library function's address.
-- `main` in a stripped program, found from the address `_start` passes to `__libc_start_main`.
-- `FUN_` and two words for any other function a `call` reaches (`FUN_brave_otter`), and `DAT_` and two words for other data the code uses.
-- `.LAB_1`, `.LAB_2`… for the jump targets inside a function, numbered in address order, so a jump to a smaller number goes backwards, as a loop does. From another function the label reads `FUN_brave_otter.LAB_3`.
-- `s_` and the text for a string: `s_Enter_password`.
+- Saved symbols from the program's symbol table or its dynamic symbols, which identify names needed for dynamic linking even in a stripped program: `main`, `_start`, `completed.0`. A versioned library symbol can appear as `stdin@GLIBC_2.2.5`.
+- `name@plt` for the short sequence that forwards a call to a library function, as in `call strcmp@plt`; `name@got` for the memory slot holding that function's address.
+- An inferred `main` when startup code reveals its address even though the saved name was stripped. The hover identifies this as an inferred name.
+- `FUN_` followed by two words for other function addresses reached by `call`, such as `FUN_brave_otter`; `DAT_` followed by two words for other data used by the code.
+- `.LAB_1`, `.LAB_2`, … for jump targets inside a function, numbered in address order. A jump to a smaller number goes backwards, as a loop does. From another function, the name includes its function: `FUN_brave_otter.LAB_3`.
+- `s_` followed by text for a string, such as `s_Enter_password`.
 
-The invented words say nothing about the code. They come from the address in the file, so a program gets the same names on every open and for everyone reading it, and notes that mention them stay right.
+The invented words do not describe what the code does. They depend on its address in the file, so the same program gets the same names on every open and for every reader. You can use those names in shared notes.
 
 ## Building and stepping {#stepping}
 
-**Build** loads the program and runs its start, the dynamic linker included, up to `main`, or to the entry point when the Listing found no `main`. The Undo history starts there. A program that reads input or ends before `main` stops there, as a Run would.
+**Build** loads the Executable and runs its startup code, including the dynamic linker, toward the first instruction of detected `main`. When no `main` is found, the target is the executable entry point: the address recorded in the ELF file where program execution starts. This startup advance happens even when **Step into library code** is enabled.
 
-**Step** over a call into a library, such as `call printf@plt`, runs the whole call and stops at the next instruction of the program, or earlier if the library calls back into the program (`qsort` calling its comparison function). The History shows the call as one row, "Called printf in libc.so.6". While the program waits for input inside a library, the editor shows the call that led there, such as `call fgets@plt`. To step through a library's instructions one at a time, turn on **Step into library code** in **Preferences**. In a static program the C library is part of the Executable, so Step enters its functions like the program's own.
+Startup can stop earlier at one of your Breakpoints or when you press **Pause**. If the program asks for Terminal input, type an answer and press **Enter**; startup continues toward the target after receiving it. If the program exits or encounters an error first, the editor shows where it stopped. After 50,000,000 startup instructions without reaching the target, execution pauses at the current instruction and the **Log** shows a warning. The loaded program remains available for inspection; use **Run** or **Step** to continue.
 
-A crash inside a library, such as overflowed data reaching `strlen`, is shown on the library's line, with the program's own frames in the **Call stack**; choosing a frame shows its line.
+Instructions executed during Build's startup advance are outside Undo history. New steps are recorded from the point where Build stops.
+
+By default, **Step** over a shared-library call such as `call printf@plt` runs the call and stops at the next program instruction. It stops earlier if the library calls back into your program, as when `qsort` calls your comparison function. History groups the library call into one row, such as "Called printf in libc.so.6". While it waits for input, the editor shows the call that led there, such as `call fgets@plt`.
+
+To step through shared-library instructions, enable **Step into library code** in **Preferences**. For a statically linked Executable, the library code is already part of the Executable, so Step enters those functions like other program functions. Programs [compiled in the editor](/documentation/x86/runtime-library#stepping) use different startup handling: enabling this Preference begins their execution at `_start`.
+
+A crash inside a library, such as invalid data reaching `strlen`, is shown on that library's instruction. The **Call stack** includes the program's own frames; choose a frame to see its line.
 
 ## Breakpoints {#breakpoints}
 
-Click beside an instruction of the Listing to place a Breakpoint; a Run stops before that instruction. The Breakpoint holds the instruction's address, so it stays on the instruction when the Listing's lines move. Breakpoints go on the Executable's instructions only, not on a label, data or a library's Listing. To stop at a library call, place it on the `call` line, where the arguments are already in `rdi`, `rsi`, `rdx`, `rcx`, `r8` and `r9`: on `call strcmp@plt`, `rdi` and `rsi` hold the addresses of the two strings it compares.
+Click beside a Listing instruction to place a Breakpoint. **Run** stops before that instruction. A Breakpoint holds its address, so it stays on the instruction if the Listing's lines move. You can set Breakpoints on the Executable's instructions, but not on labels, data, or a library's Listing.
+
+To inspect the inputs to a library function, stop on its `call` instruction. Integer and pointer arguments in the x86-64 function calling convention use `rdi`, `rsi`, `rdx`, `rcx`, `r8`, and `r9`. For example, at `call strcmp@plt`, `rdi` and `rsi` hold the addresses of the strings to compare.
 
 ## The Command line and Arguments {#arguments}
 
-The Terminal's first line is the **Command line**, `$ ./crackme` followed by the program's **Arguments**, typed as in a shell: spaces separate words, quotes keep them together (`"two words"`) and a backslash escapes the next character. Nothing is expanded and no command runs. The program receives `argv[0]`, the Executable's path (`./crackme`), then the Arguments. They are a Setting of the project, also in the **Settings** panel, and take effect at the next Build: during a Debug session the line shows what that run started with. Assembled x86 programs receive them too, with `argv[0]` the Entry path without its extension (`./main` for `main.asm`), and compiled ones with the C or C++ File's path without its extension (`./main` for `main.c`). As on Linux, `argv` and the environment are copied to the top of the stack, so `argv[0]` and the Arguments decide where the stack starts: an assembled program's `rsp` starts at `0x7fffffffee10` when `argv[0]` has 3 to 10 characters, as `./main` does, 16 bytes lower from 11 characters and 32 lower from 27, with no Arguments. The memory view shows that block as the **Arguments and environment** region, above the stack, and names its parts: `argc`, the arrays `argv`, `envp` and `auxv`, each string (`argv[1]`, `envp[0]`) and what `AT_EXECFN` and `AT_RANDOM` point at.
+Supply **Arguments** on the Terminal's first line, the **Command line**, or in the project's **Settings** panel. They take effect at the next Build and are separate from text a running program reads from the Terminal. During a Debug session, the Command line shows the arguments used by that run. Stop the session to edit it.
+
+The program receives `argc`, a count, and `argv`, an array of pointers to argument strings. `argv[0]` is the program's name; the Arguments you entered begin at `argv[1]`. The [x86 Program arguments reference](/documentation/x86/syscall#arguments) gives quoting rules, limits, the assembly entry-point layout, and the C/C++ `main` signature. The program name depends on the Entry file:
+
+| Program             | Source of `argv[0]`                                   | Example                 |
+| ------------------- | ----------------------------------------------------- | ----------------------- |
+| Imported Executable | `./` plus the Executable's Entry path                 | `crackme` → `./crackme` |
+| Assembled x86       | `./` plus the Entry path without its final extension  | `main.asm` → `./main`   |
+| Compiled C or C++   | `./` plus the source path without its final extension | `main.c` → `./main`     |
+
+Arguments and other startup data occupy the upper part of the stack. Their sizes affect the initial `rsp`, so use its actual starting value rather than assuming a universal stack address. For an assembled program with no Arguments, these are the initial values for the following UTF-8 byte lengths of `argv[0]`, excluding its terminating NUL:
+
+| `argv[0]` byte length          | Initial `rsp`    |
+| ------------------------------ | ---------------- |
+| 3–10 bytes, including `./main` | `0x7fffffffee10` |
+| 11–26 bytes                    | `0x7fffffffee00` |
+| 27–42 bytes                    | `0x7fffffffedf0` |
+
+The memory view labels the startup block **Arguments and environment**. `argc` is the count; `argv` is the argument-pointer array; `envp` is the pointer array for environment strings such as `HOME=/project`. Each pointer array ends in a null pointer. `auxv`, the **auxiliary vector**, holds loader-supplied pairs of a type and a value. Its `AT_EXECFN` entry points to a copy of the executable path, and `AT_RANDOM` points to 16 random bytes used by library startup. The view also labels individual strings such as `argv[1]` and `envp[0]`.
 
 ## Testcases {#testcases}
 
-A Testcase checks a solution without typing it, from its standard input (`hunter2`) and expected output (`Correct!`). In an x86 project it also has an **Arguments** field, read like the Command line, for a program that takes its input from `argv`. A Testcase whose field is empty runs with the project's Arguments, so it cannot ask for no Arguments while the project has some. A Testcase of an Executable starts at `main`, as a Build does: its starting registers and memory are set there, and its instruction limit counts from there.
+A Testcase supplies standard input, such as `hunter2`, and checks expected output, such as `Correct!`. Its **Arguments** field supplies startup arguments with the same quoting rules as the Command line. An empty or whitespace-only field inherits the project's Arguments; it cannot request an empty argument list while project Arguments are set.
+
+For an Executable, startup advances to detected `main`, or to the executable entry point if no `main` is found. The Testcase's starting registers and memory are applied there, and its configured instruction limit counts from that point. Startup has its own 50,000,000-instruction budget; a Testcase that exceeds it fails.
 
 ## Patching an instruction {#patching}
 
-While a Debug session is paused, you can replace an instruction of the Executable's Listing: put the cursor on its line and press **Space**, or choose **Patch instruction…** in the context menu (a long press on a touch screen). Type the new instruction with the Listing's names, such as `je .LAB_2`. The preview shows its bytes and how they decode before anything is written; **Enter** or **Patch** writes them. A shorter instruction is padded with `nop`s, and a longer one is refused because it would overwrite the next instruction. The patched line is marked and shows what memory now holds, and the History shows "Patched jne → je".
+While a Debug session is paused, you can replace an instruction in the Executable's Listing. Put the cursor on its line and press **Space**, or choose **Patch instruction…** in its context menu (a long press on a touch screen). Enter the replacement using the Listing's names, such as `je .LAB_2`. The preview shows its bytes and decoded instructions before writing anything; **Enter** or **Patch** applies it. A shorter replacement is padded with `nop`s. A longer replacement is refused because it would overwrite the next instruction. The patched line is marked and shows the current memory contents; History shows a row such as "Patched jne → je".
 
-A patch changes memory only, like a value edited in the memory view: the Executable's File never changes, and the next Build starts from the original program. **Undo** takes a patch back like any other step, but Undo cannot go back past a step whose effects are not recorded, such as reading standard input or growing the heap. A patch made at `main` and followed by a Run that reads a password therefore stays until the next Build. To try a patch and take it back, make it after the program has read its input, for example at a Breakpoint on `call strcmp@plt`.
+A patch changes memory only. The Executable File keeps its original bytes, and the next Build reloads them. **Undo** can reverse a patch, but cannot cross a step with effects that are not recorded, such as consuming standard input or growing the heap. If you patch at `main` and then Run until the program reads a password, Undo cannot reach that patch; it remains until the next Build. To try a patch that you can undo, apply it after the program reads input, for example at a Breakpoint on `call strcmp@plt`.
 
 ## Log notes {#log-notes}
 
-The **Log** notes what a program met that the emulator does not provide, each once per run:
+The **Log** reports unsupported operations once per run:
 
-- A system call the emulator does not implement: "`getcpu` (syscall 309) is not implemented; the call returned ENOSYS". The program receives `ENOSYS`, as Linux answers an unknown call.
-- An instruction the emulator cannot run, usually AVX or a later extension: "The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support". The program ends there with `SIGILL`; the Listing shows the instruction correctly.
+- An unimplemented system call: "`getcpu` (syscall 309) is not implemented; the call returned ENOSYS". The program receives `ENOSYS`, Linux's error for an unavailable call.
+- An unsupported instruction, often AVX or a later extension: "The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support". Execution ends with `SIGILL`, the illegal-instruction signal. The Listing still decodes the instruction.
 - A library that is not bundled: "libcrypto.so.3 is not one of the bundled libraries".
-- A Build whose program does not reach `main` within 50,000,000 instructions.
+- Startup that reaches the 50,000,000-instruction budget. Execution pauses and remains inspectable, as described under [Building and stepping](#stepping).
 
 ## Safety {#safety}
 
-The program runs in an emulator inside the browser's sandbox, with no network and no files but the project's and the bundled libraries, so a challenge binary cannot reach your computer. It is a place to learn reverse engineering, not a malware lab: most malware targets Windows, needs the network and checks for emulation. A program cannot tell it is being debugged: Breakpoints are not written into its memory, and `ptrace(PTRACE_TRACEME)` succeeds as it does with no debugger attached. A timing check still sees real time, so stepping through one can trip it. A share link holds the project in its URL, which most Executables are too large for; download the project as an archive from the Projects page instead.
+The program runs in an emulator inside the browser's sandbox. Its file access is limited to project Files and bundled libraries, and it has no network access. Breakpoints do not modify program bytes, and `ptrace(PTRACE_TRACEME)` succeeds as it does when no debugger is attached. Timing checks still see real time, so pausing or stepping can change their results.
+
+A share link stores the project in its URL, which most Executables are too large for. Download the project as an archive from the Projects page to share it instead.

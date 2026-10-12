@@ -174,9 +174,9 @@ munmap_failed:
 On the successful path, `r13` becomes `0x1234` and `r14` becomes 0. `munmap` removes the mapping, so
 the program does not access that address again.
 
-With randomization off, this playground chooses `0x7ffff7ffe000` for this first anonymous mapping. That deterministic
-address is a playground guarantee used by the exercise test. Normal Linux may choose a different
-address each time; programs must use the address returned in `rax`.
+This playground uses the fixed address `0x7ffff7ffe000` for its first anonymous mapping. The
+exercise test uses that address. Normal Linux may choose a different address each time; programs
+must use the address returned in `rax`.
 
 Anonymous mappings are one source from which a memory allocator can obtain pages. The allocator can
 then divide a large mapping into smaller pieces for the rest of the program.

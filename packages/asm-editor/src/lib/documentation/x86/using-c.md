@@ -47,9 +47,17 @@ int main(void) {
 
 After changing the source or a local header, **Compile** again, then **Build** to run the updated program.
 
+### Program arguments
+
+To receive startup arguments, use `int main(int argc, char *argv[])`. `argc` is the number of argument strings, including the program name; `argv` is an array of pointers to those strings. `argv[0]` is `./` plus your source path without its final extension (`./main` for `main.c`), and the Arguments you enter start at `argv[1]`. For `hello "two words"`, `argc` is 3, `argv[1]` is `hello`, and `argv[2]` is `two words`.
+
+Check `argc > 1` before reading the first user argument. For example, `if (argc > 1) printf("%s\n", argv[1]);` prints it when `<stdio.h>` is included. With no Arguments, `argc` is 1.
+
+Enter **Arguments** on the Terminal's **Command line** or in the project's **Settings**, then **Build** to apply them. They are separate from text read later through `scanf` or `sim_read`. See [Program arguments](/documentation/x86/syscall#arguments) for quoting rules, limits, and Testcase inheritance.
+
 ## Libraries and simulator services {#libraries}
 
-Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` use the project's files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/x86/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging.
+Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` use the project's files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/x86/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging. These functions belong to the editor Runtime; the bundled Linux libraries used by imported [Executables](/documentation/x86/executables#libraries) are separate.
 
 C uses C17 and C++ uses C++17. C++ supports constructors, `new` and `delete`, and the provided compatibility headers `<cassert>`, `<cctype>`, `<cerrno>`, `<cfloat>`, `<cinttypes>`, `<climits>`, `<cmath>`, `<cstdarg>`, `<cstddef>`, `<cstdint>`, `<cstdio>`, `<cstdlib>`, `<cstring>`, `<ctime>` and `<new>`. For example, include `<cstdio>` and use `std::printf("Hello from x86\n");`. The full C++ standard library is not provided: `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI.
 
@@ -99,4 +107,10 @@ Compile again after reopening a saved project to restore source highlights and b
 
 ## Linking project Files {#linking-project-files}
 
-Build links the generated Entry and its startup object, then searches other assembly Files for referenced symbols, then searches the Runtime library. Your secondary File can replace a support function. Duplicate strong globals are errors on both Files, even if a File would otherwise stay unused. A Problems Hint identifies each File that was not linked; constructor-only Files also need a referenced symbol to join the program. Startup passes the Command line to `main`: `argv[0]` is `./main` for `main.c`, followed by the **Arguments** typed on the Terminal's first line.
+Only the selected C or C++ source is compiled automatically. Other assembly Files can provide functions or data that the generated program uses. Build includes a File when it supplies a referenced **symbol**: an exported name for a function or data. In NASM, `global add_one` exports the name `add_one`, and the label `add_one:` defines its address.
+
+For example, a C declaration `extern int add_one(int value);` lets a call such as `add_one(41)` use an assembly function exported as `add_one`. In C++, declare it as `extern "C" int add_one(int value);` so the compiler uses that exact name. The assembly function must follow the [x86-64 function calling convention](/documentation/x86/runtime-library#from-assembly), including preserving the required registers and returning the result in `rax`.
+
+Project assembly definitions are considered before Runtime library functions. A File can therefore replace a Runtime support function by exporting its name. Two ordinary exported definitions of the same name cause errors on both Files, even if one File would otherwise be unused.
+
+The **Problems** panel gives a Hint for each assembly File that was not linked. A File containing only global constructors is not included automatically: it must also supply a name referenced by the program. Other C or C++ Files are not compiled or linked automatically.

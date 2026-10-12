@@ -46,8 +46,10 @@ _start:
     syscall
 ```
 
-In this playground, `rsp` begins at `0x7FFFFFFFEE10`. Before either push, the nearby qwords look
-like this (the green marker shows `rsp`):
+In this playground, `rsp` begins at `0x7FFFFFFFEE10`. The initial qword there is 1: the
+argument count, including the program name. Other program names or Arguments can change the initial
+stack address; see [Program arguments](/documentation/x86/syscall#arguments). Before either push,
+the nearby qwords look like this (the green marker shows `rsp`):
 
 |          address |         value         |
 | ---------------: | :-------------------: |
