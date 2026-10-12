@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
+    argvArgumentsArea,
     memoryLayoutFromItems,
+    memoryRegionColor,
     mergeMemoryRegions,
     memoryHover,
     readOnlyMemoryAt,
     regionChunkStart,
     regionsAt,
     resolveMemoryAddress,
-    textSegmentsReadOnly
+    textSegmentsReadOnly,
+    withArgumentsArea
 } from './memoryRegions'
 
 describe('memory regions', () => {
@@ -126,5 +129,146 @@ describe('region chunks', () => {
             end: 0x4000n
         }
         expect(regionChunkStart(heap, layout.dataLabels, 0x3800n)).toBe(0x3000n)
+    })
+})
+
+describe('the Arguments region', () => {
+    //MARS's layout of ./main hello "two words": the array, a zero byte, then the three strings
+    const memory = new Uint8Array(0x28)
+    const base = 0x7fffffd4n
+    new TextEncoder().encodeInto('./main\0hello\0two words\0', memory.subarray(0x11))
+    const read = (address: bigint, length: bigint) => {
+        const offset = Number(address - base)
+        if (offset < 0 || offset + Number(length) > memory.length) throw new Error('unmapped')
+        return memory.slice(offset, offset + Number(length))
+    }
+    const facts = Int32Array.of(
+        0x7fffffd4,
+        0x7ffffffc,
+        3,
+        0x7fffffd4,
+        0x7fffffe5,
+        0x7fffffec,
+        0x7ffffff2
+    )
+    const data = memoryLayoutFromItems(
+        [{ start: 0x10010000n, length: 8n, kind: 'data', section: '.data' }],
+        [{ name: 'buffer', address: 0x10010000n, fromLibrary: false }]
+    )
+
+    it('reads a MARS or RARS argv layout, and nothing when none was stored', () => {
+        expect(argvArgumentsArea(facts)).toEqual({
+            name: 'Arguments',
+            start: 0x7fffffd4n,
+            end: 0x7ffffffcn,
+            parts: [
+                { name: 'argv', address: 0x7fffffd4n },
+                { name: 'argv[0]', address: 0x7fffffe5n, text: true },
+                { name: 'argv[1]', address: 0x7fffffecn, text: true },
+                { name: 'argv[2]', address: 0x7ffffff2n, text: true }
+            ]
+        })
+        expect(argvArgumentsArea(new Int32Array(0))).toBeUndefined()
+        expect(argvArgumentsArea(undefined)).toBeUndefined()
+        //unsigned, as the Cores give every address
+        expect(
+            argvArgumentsArea(
+                Int32Array.of(0x80000000 | 0, 0x80000010 | 0, 1, 0x80000000 | 0, 0x80000008 | 0)
+            )?.end
+        ).toBe(0x80000010n)
+    })
+
+    it('labels each part in its own region, with previews of the strings, among the data labels', () => {
+        const layout = withArgumentsArea(data, argvArgumentsArea(facts)!, read)
+        expect(layout.arguments).toEqual({
+            name: 'Arguments',
+            start: 0x7fffffd4n,
+            end: 0x7ffffffcn
+        })
+        expect(
+            layout.dataLabels.map((label) => [label.name, label.section, label.preview])
+        ).toEqual([
+            ['buffer', '.data', undefined],
+            ['argv', 'Arguments', undefined],
+            ['argv[0]', 'Arguments', './main'],
+            ['argv[1]', 'Arguments', 'hello'],
+            ['argv[2]', 'Arguments', 'two words']
+        ])
+        expect(layout.dataLabels.every((label) => !label.fromLibrary)).toBe(true)
+        expect(data.arguments, 'the layout it was given is left alone').toBeUndefined()
+    })
+
+    it('leaves out parts outside the range and previews of what cannot be read', () => {
+        const layout = withArgumentsArea(
+            data,
+            {
+                name: 'Arguments',
+                start: 0x7fffffd4n,
+                end: 0x7ffffffcn,
+                parts: [
+                    { name: 'argv[0]', address: 0x7fffffe5n, text: true },
+                    { name: 'outside', address: 0x7ffffffcn },
+                    { name: 'unreadable', address: 0x7ffffff8n, text: true }
+                ]
+            },
+            (address, length) => {
+                if (address === 0x7ffffff8n) throw new Error('unmapped')
+                return read(address, length)
+            }
+        )
+        expect(layout.dataLabels.map((label) => [label.name, label.preview])).toEqual([
+            ['buffer', undefined],
+            ['argv[0]', './main'],
+            ['unreadable', undefined]
+        ])
+    })
+
+    it('is a region above the stack, chunked by its labels and named in the hover', () => {
+        const layout = withArgumentsArea(data, argvArgumentsArea(facts)!, read)
+        const regions = mergeMemoryRegions(
+            layout,
+            undefined,
+            { start: 0x7fffeff0n, end: 0x7fffeffcn },
+            []
+        )
+        const region = regions.find((region) => region.kind === 'arguments')!
+        expect(region).toEqual({
+            id: 'arguments',
+            name: 'Arguments',
+            section: 'Arguments',
+            kind: 'arguments',
+            start: 0x7fffffd4n,
+            end: 0x7ffffffcn
+        })
+        expect(regions.map((region) => region.kind)).toEqual(['data', 'stack', 'arguments'])
+        expect(memoryHover(regions, layout.dataLabels, 0x7fffffeen)).toBe('Arguments · argv[1]+2')
+        expect(memoryHover(regions, layout.dataLabels, 0x7fffffe4n)).toBe('Arguments · argv+16')
+        expect(memoryHover(regions, layout.dataLabels, 0x7fffeffcn)).toBe('')
+        expect(
+            [0x7fffffd4n, 0x7fffffe4n, 0x7fffffe5n, 0x7fffffebn, 0x7ffffffbn].map((address) =>
+                regionChunkStart(region, layout.dataLabels, address)
+            )
+        ).toEqual([0x7fffffd4n, 0x7fffffd4n, 0x7fffffe5n, 0x7fffffe5n, 0x7ffffff2n])
+        //a program popping past its start raises the stack's top into them: the stack is on top
+        const raised = mergeMemoryRegions(
+            layout,
+            undefined,
+            { start: 0x7fffffd8n, end: 0x7fffffe0n },
+            []
+        )
+        expect(regionsAt(raised, 0x7fffffdcn).map((region) => region.kind)).toEqual([
+            'stack',
+            'arguments'
+        ])
+        expect(memoryHover(raised, layout.dataLabels, 0x7fffffdcn)).toBe(
+            'Stack · Arguments · argv+8'
+        )
+    })
+
+    it('has a colour of its own', () => {
+        const kinds = ['code', 'data', 'reserved', 'heap', 'stack', 'device'] as const
+        const colour = memoryRegionColor('arguments')
+        expect(kinds.map(memoryRegionColor)).not.toContain(colour)
+        expect(colour).toMatch(/^color-mix\(in srgb, #[0-9a-f]{6} 85%, var\(--secondary-text\)\)$/)
     })
 })

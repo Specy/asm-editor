@@ -1,6 +1,6 @@
 import { buildSourcesEqual } from '#lib/projectFiles.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
-import { mergeMemoryRegions, readOnlyMemoryAt } from './memoryRegions'
+import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
     BaseEmulator,
     CompilationFailedError,
@@ -435,6 +435,20 @@ export abstract class GenericEmulator<T, R extends string>
                 (address, length) => this._readMemoryBytes(address, length)
             )
         }
+    }
+
+    /**
+     * Adds where the Core stored the program's Arguments to the Build's layout, once: they are
+     * written at the program's start and stay where they are, whatever the program does to them.
+     * MIPS and RISC-V store them when the Core is initialized, x86 only when the program starts.
+     */
+    private captureArguments() {
+        if (!this.memoryLayout || this.memoryLayout.arguments) return
+        const area = this._getArgumentsArea?.()
+        if (!area) return
+        this.memoryLayout = withArgumentsArea(this.memoryLayout, area, (address, length) =>
+            this._readMemoryBytes(address, length)
+        )
     }
 
     protected addError(error: string) {
@@ -882,6 +896,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.callStack = this._getCallStack()
         this.heapBounds = this._getHeapBounds?.()
         this.stackTop = this._getStackTop?.()
+        this.captureArguments()
         this.deviceRegions = this._getDeviceRegions?.() ?? []
         this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
     }

@@ -23,6 +23,7 @@ import {
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
+    type ArgumentsArea,
     type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
@@ -1082,6 +1083,36 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
     _getStackTop() {
         return this.core?.getStackTop() ?? 0n
+    }
+    /**
+     * The Linux process-start block the Core read back at the program's start, above its stack:
+     * `argc`, the `argv`, `envp` and `auxv` vectors, and the strings and bytes they point at.
+     */
+    _getArgumentsArea(): ArgumentsArea | undefined {
+        const start = this.core?.getProcessStart()
+        if (!start) return undefined
+        const strings = (prefix: string, parts: readonly { address: bigint }[]) =>
+            parts.map((part, i) => ({ name: `${prefix}[${i}]`, address: part.address, text: true }))
+        return {
+            name: 'Arguments and environment',
+            start: start.start,
+            end: start.end,
+            parts: [
+                { name: 'argc', address: start.start },
+                { name: 'argv', address: start.argv },
+                { name: 'envp', address: start.envp },
+                { name: 'auxv', address: start.auxv },
+                ...strings('argv', start.arguments),
+                ...strings('envp', start.environment),
+                ...(start.execfn
+                    ? [{ name: 'AT_EXECFN', address: start.execfn.address, text: true }]
+                    : []),
+                ...(start.random ? [{ name: 'AT_RANDOM', address: start.random.address }] : []),
+                ...(start.path
+                    ? [{ name: 'filename', address: start.path.address, text: true }]
+                    : [])
+            ]
+        }
     }
     _resolveMemoryLabel(name: string) {
         return this.core?.resolveMemoryLabel(name)

@@ -1,4 +1,5 @@
 import type {
+    ArgumentsArea,
     DataLabel,
     DeviceRegion,
     HeapBounds,
@@ -7,6 +8,7 @@ import type {
     MemoryRegion,
     ReadOnlyMemory
 } from './commonLanguageFeatures.svelte'
+import { PREVIEW_BYTES, textPreview } from './compiledMemoryNames'
 
 /**
  * The read only memory of a MARS or RARS Core, from its `getTextSegments` start and end pairs: a
@@ -74,6 +76,70 @@ export function memoryLayoutFromItems(
     return { sections, dataLabels }
 }
 
+/**
+ * Where a MARS or RARS Core stored the program's argv, from its `getProgramArgumentsLayout`: the
+ * range, argc, the array's address and each string's, as unsigned 32-bit values. Nothing when the
+ * Core stored none.
+ */
+export function argvArgumentsArea(
+    layout: ArrayLike<number> | undefined
+): ArgumentsArea | undefined {
+    if (!layout || layout.length < 4) return undefined
+    const address = (index: number) => BigInt(layout[index] >>> 0)
+    const strings = Array.from({ length: layout.length - 4 }, (_, i) => ({
+        name: `argv[${i}]`,
+        address: address(4 + i),
+        text: true
+    }))
+    return {
+        name: 'Arguments',
+        start: address(0),
+        end: address(1),
+        parts: [{ name: 'argv', address: address(3) }, ...strings]
+    }
+}
+
+/**
+ * The layout with a program's Arguments added: their region, and each part as a data label of it,
+ * a string's with the start of its text as its preview, read from memory as it is now, which is
+ * as the Core stored it when this is read at the program's start.
+ */
+export function withArgumentsArea(
+    layout: MemoryLayout,
+    area: ArgumentsArea,
+    read: (address: bigint, length: bigint) => Uint8Array
+): MemoryLayout {
+    const parts = area.parts
+        .filter((part) => part.address >= area.start && part.address < area.end)
+        .sort((a, b) => (a.address < b.address ? -1 : a.address > b.address ? 1 : 0))
+    const labels: DataLabel[] = parts.map((part, index) => {
+        const label: DataLabel = {
+            name: part.name,
+            address: part.address,
+            section: area.name,
+            fromLibrary: false
+        }
+        if (part.text) {
+            const end = parts[index + 1]?.address ?? area.end
+            const length =
+                end - part.address < PREVIEW_BYTES ? end - part.address : BigInt(PREVIEW_BYTES)
+            try {
+                label.preview = textPreview(read(part.address, length))
+            } catch {
+                /* unreadable text has no preview; its name still says what it is */
+            }
+        }
+        return label
+    })
+    return {
+        ...layout,
+        arguments: { name: area.name, start: area.start, end: area.end },
+        dataLabels: [...layout.dataLabels, ...labels].sort((a, b) =>
+            a.address < b.address ? -1 : a.address > b.address ? 1 : a.name.localeCompare(b.name)
+        )
+    }
+}
+
 export function mergeMemoryRegions(
     layout: MemoryLayout,
     heap: HeapBounds | undefined,
@@ -99,6 +165,14 @@ export function mergeMemoryRegions(
             id: 'stack',
             name: 'Stack',
             kind: 'stack'
+        })
+    // after the stack, which takes the outline where a program popping past its start meets them
+    if (layout.arguments)
+        regions.push({
+            ...layout.arguments,
+            id: 'arguments',
+            section: layout.arguments.name,
+            kind: 'arguments'
         })
     regions.push(
         ...devices.map((device, index) => ({
@@ -129,14 +203,15 @@ export function regionLabels(region: MemoryRegion, labels: readonly DataLabel[])
  * Where the chunk holding `address` starts: the nearest data label at or below it inside the
  * region, or the region's own start before its first label. A chunk is the part of a region one
  * label names, so the memory view can draw each variable's bytes apart. Only the program's data
- * and reserved runs have labels, so every other region is one chunk.
+ * and reserved runs and its Arguments have labels, so every other region is one chunk.
  */
 export function regionChunkStart(
     region: MemoryRegion,
     labels: readonly DataLabel[],
     address: bigint
 ): bigint {
-    if (region.kind !== 'data' && region.kind !== 'reserved') return region.start
+    if (region.kind !== 'data' && region.kind !== 'reserved' && region.kind !== 'arguments')
+        return region.start
     let start = region.start
     for (const label of regionLabels(region, labels))
         if (label.address <= address && label.address > start) start = label.address
@@ -170,6 +245,7 @@ const regionColors = {
     reserved: '#d99b30',
     heap: '#ab78e6',
     stack: '#30b4bd',
+    arguments: '#d462b6',
     device: '#e75b75'
 } as const
 export function memoryRegionColor(kind: MemoryRegion['kind']): string {

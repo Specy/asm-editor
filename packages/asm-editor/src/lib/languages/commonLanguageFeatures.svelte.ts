@@ -462,6 +462,21 @@ export type MemoryLayout = {
     dataLabels: DataLabel[]
     /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
     readOnly?: ReadOnlyMemory[]
+    /** Where the program's Arguments are, once the Core has stored them (`withArgumentsArea`). */
+    arguments?: { name: string; start: bigint; end: bigint }
+}
+/**
+ * What a program starts with above its stack, as the Core wrote it at the program's start: the
+ * `argv` array and its strings, and on x86 the rest of the Linux process-start block. Its parts
+ * become data labels of its region, so the memory view names them as it names variables.
+ */
+export type ArgumentsArea = {
+    /** The region's name: "Arguments", or "Arguments and environment" on x86. */
+    name: string
+    start: bigint
+    end: bigint
+    /** Each part where it starts; `text` for a NUL-terminated string, which the picker previews. */
+    parts: { name: string; address: bigint; text?: boolean }[]
 }
 /** A half-open range of memory that takes no Pokes, and why, which the memory view shows. */
 export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
@@ -469,7 +484,7 @@ export type HeapBounds = { start: bigint; end: bigint }
 export type DeviceRegion = { name: string; start: bigint; end: bigint }
 export type MemoryRegion = DeviceRegion & {
     id: string
-    kind: MemoryRunKind | 'heap' | 'stack' | 'device'
+    kind: MemoryRunKind | 'heap' | 'stack' | 'arguments' | 'device'
     section?: string
     /** The live stack jumps to SP, including when its extent is empty. */
     destination?: bigint

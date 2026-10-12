@@ -239,6 +239,11 @@ export abstract class BaseEmulator<R extends string> {
     _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
     _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
     _getStackTop?(): bigint
+    /**
+     * Where the Core stored the program's Arguments at its start, read until it answers once per
+     * Build: an x86 program starts only when it first runs or is asked where it is.
+     */
+    _getArgumentsArea?(): import('./commonLanguageFeatures.svelte').ArgumentsArea | undefined
     _getDeviceRegions?(): import('./commonLanguageFeatures.svelte').DeviceRegion[]
     _resolveMemoryLabel?(name: string): bigint | undefined
 

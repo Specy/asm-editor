@@ -2,7 +2,12 @@ import { afterEach, beforeAll, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import MemoryControls from './MemoryControls.svelte'
 import type { Emulator } from '#lib/languages/Emulator.ts'
-import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    RegisterSize,
+    type DataLabel,
+    type MemoryRegion
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
 
 vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
 beforeAll(() => {
@@ -22,7 +27,11 @@ beforeAll(() => {
 })
 let dispose = () => {}
 afterEach(() => dispose())
-function render(built = true, showRegions = true) {
+function render(
+    built = true,
+    showRegions = true,
+    extra: { regions: MemoryRegion[]; labels: DataLabel[] } = { regions: [], labels: [] }
+) {
     const target = document.createElement('div')
     document.body.append(target)
     const change = vi.fn()
@@ -36,11 +45,13 @@ function render(built = true, showRegions = true) {
                 kind: 'data',
                 start: 0x1000n,
                 end: 0x1020n
-            }
+            },
+            ...extra.regions
         ],
         dataLabels: [
             { name: 'buffer', section: '.data', address: 0x1003n, fromLibrary: false },
-            { name: 'errno', section: '.data', address: 0x1010n, fromLibrary: true }
+            { name: 'errno', section: '.data', address: 0x1010n, fromLibrary: true },
+            ...extra.labels
         ],
         resolveMemoryLabel: (name: string) =>
             name === 'buffer' ? 0x1003n : name === 'main' ? 0x2000n : undefined
@@ -150,4 +161,68 @@ it('leaves the region picker out when the regions are hidden, the page buttons s
     expect(ui.target.querySelector('.region-picker')).toBeNull()
     expect(ui.target.querySelector('[title="Previous page"]')).not.toBeNull()
     expect(ui.target.querySelector('[title="Next page"]')).not.toBeNull()
+})
+
+it('lists the Arguments as a region of their own, with their parts under it', async () => {
+    const ui = render(true, true, {
+        regions: [
+            {
+                id: 'arguments',
+                name: 'Arguments',
+                section: 'Arguments',
+                kind: 'arguments',
+                start: 0x7fffffd4n,
+                end: 0x7ffffffcn
+            }
+        ],
+        labels: [
+            { name: 'argv', section: 'Arguments', address: 0x7fffffd4n, fromLibrary: false },
+            {
+                name: 'argv[0]',
+                section: 'Arguments',
+                address: 0x7fffffe5n,
+                fromLibrary: false,
+                preview: './main'
+            },
+            {
+                name: 'argv[1]',
+                section: 'Arguments',
+                address: 0x7fffffecn,
+                fromLibrary: false,
+                preview: 'hello'
+            }
+        ]
+    })
+    ui.target.querySelector<HTMLButtonElement>('[aria-label="Memory regions"]')!.click()
+    flushSync()
+    await tick()
+    flushSync()
+    await tick()
+    const options = [...ui.target.querySelectorAll<HTMLElement>('[role="option"]')]
+    const region = options.find(
+        (row) => !row.querySelector('.data-label') && row.textContent?.includes('Arguments')
+    )!
+    expect(region.textContent).toContain('Arguments · argv')
+    expect(region.textContent).toMatch(/0x7fffffd4\s*·\s*40 B/)
+    expect(region.querySelector<HTMLElement>('.swatch')?.style.background).toBe(
+        memoryRegionColor('arguments')
+    )
+    const parts = options
+        .filter((row) => row.querySelector('.data-label'))
+        .map((row) => row.querySelector('.data-label > span')?.textContent)
+    expect(parts).toEqual(['buffer', 'argv', 'argv[0] "./main"', 'argv[1] "hello"'])
+    const filter = ui.target.querySelector<HTMLInputElement>(
+        '[aria-label="Filter memory regions"]'
+    )!
+    filter.value = 'hello'
+    filter.dispatchEvent(new Event('input', { bubbles: true }))
+    flushSync()
+    const filtered = [...ui.target.querySelectorAll<HTMLElement>('[role="option"]')]
+    expect(filtered.map((row) => row.textContent)).toEqual([
+        expect.stringContaining('Arguments'),
+        expect.stringContaining('argv[1] "hello"')
+    ])
+    filtered[1].click()
+    flushSync()
+    expect(ui.change).toHaveBeenLastCalledWith(0x7fffffe8n)
 })

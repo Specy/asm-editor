@@ -1,4 +1,4 @@
-import { memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
+import { argvArgumentsArea, memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
 import { makeMipsCore, type MipsLink } from './MIPS-core'
 import {
     coreLibrary,
@@ -682,6 +682,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
     _getStackTop() {
         return BigInt((this.mips?.getStackTop() ?? 0) >>> 0)
+    }
+    /** The argv the Core stored above the stack at its last initialize ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)). */
+    _getArgumentsArea() {
+        return argvArgumentsArea(this.mips?.getProgramArgumentsLayout())
     }
     _getDeviceRegions() {
         return this.devices.regions()
