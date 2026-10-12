@@ -218,6 +218,14 @@ Settled by default in [the implementation plan](./binary-import-plan.md)'s **Dec
 - Browser verification (own dev server on port 4395, HMR off, own cache directory; Chrome 153 headless shell through Playwright; scripts `m13-lib.mjs`, `m13-crackme.mjs`, `m13-others.mjs`, `m13-jkm.mjs`, `m13-touch.mjs`, `m13-docs.mjs` and `m13-measure.mjs` in the session scratchpad; logs and screenshots in `.cache/binary-import/logs/m13/`, `final-run.log` for the last pass over every scenario on the final code). The scenarios and what each showed are in the Implementation report.
 - M13 final checks: Core (after `479aa4c`) type-check, `npm test` 3,241 passed with the two existing skips (56 files), build and `test:dist`; editor `pnpm check` 0 errors and 0 warnings, `pnpm lint` clean, `pnpm exec vp run asm-editor#test --maxWorkers=2` 3,858 passed with the existing skip across 178 files (the Core's dist rebuilt from the committed sources as the task's dependency).
 
+- Final review fixes (Core `38e2a97`), from the whole-change review's findings K1 to K5:
+- K1: `assembleInstruction` now computes any constant branch or `[rel ...]` target (NASM's number notations, `$`, `$$`, `+ - * / ~`, parentheses) and rewrites it as `$$±delta`, so NASM range-checks it. Before, only `N`, `N+M` and `N-M` were rewritten, and `jmp 0x90000000+0x1+0x1`, `jmp (0x90000002)`, `je 0x90000000+1+1` and `call 0x48000000*2` from `0x401000` encoded jumps to `0xffffffff9000000x`. Prefixes (`o64`, `a32`, `ds`, `rep`) and keywords (`strict`, `qword`) around a branch are read too (`a32 loop 0x90000002` encoded `loop 0x401002`). Text it cannot compute (`'ab'`, `>>`) is refused; a register, memory operand, name or far pointer is left to NASM. A displacement beside a 64-bit register is computed the same way, with the registers as 0, so `[rax + 2*0x7fffffff + 1]` (NASM: `[rax-0x01]`), `[rax + 1_0000_0000h]` and `[rax+$]` are refused with their value. Unlike the finding's suggestion, the expression is evaluated here rather than passed as `$$+((expr)-address)`: the error can then name the target, and `$` inside it stays correct. The disassembler round trip's figures are unchanged.
+- K2: a build checks after each await (the wasm assembler, the deferred link start and the link's end; both waits in Blink) that no later load or build replaced its program, and otherwise throws "This build was superseded: another program was loaded or built before it finished", leaving the newer program. The link a finished in-Blink assembler schedules does not start once superseded.
+- K3: a load bumps the replacement count only after `analyze`, the Arguments and the protected path pass, still before its first await.
+- K4: a native exit in Blink's loader is a `load-fail` stop with exit code 127 and "The emulator could not load the program: <the loader's stderr without its log prefix> (native exit 127)"; that stderr still reaches the stderr listener as before. `analyze` now refuses what loader.c exits for: non-empty PT_LOADs whose page-rounded ends decrease (Blink's actual test, which ascending `p_vaddr` order satisfies), `p_vaddr` and `p_offset` at different places in a 4 KiB page (the wasm build's page size), an ET_EXEC program whose lowest PT_LOAD is in page 0 (`ChooseAslr`'s null base), and an interpreter path whose last byte is not NUL (Linux's rule too). Not mirrored: failures to map a segment, which depend on the address space at run time. The offset and size checks were already `analyze`'s truncation check.
+- K5: TCSETS2, TCSETSW2 and TCSETSF2 are Undo boundaries, as TCSETS and its W/F forms are; the three new barrier tests fail on the previous wasm. `blinkenlib.wasm` is now 320,704 bytes (`a5e0ced3…`); `blinkenlib.js` is unchanged.
+- The Core's CHANGELOG 7.0.0 entry and README describe the new behaviour. Checks: Core type-check, `npm test` 3,253 passed with the two existing skips (55 files, one skipped), build and `test:dist`; editor, after `pnpm --filter @specy/x86 build`, `pnpm check` 0 errors and 0 warnings (1,555 files) and `pnpm exec vp run asm-editor#test --maxWorkers=2` 3,858 passed with the existing skip (178 files).
+
 ## Implementation report
 
 Final report, written at the end of M13 (2026-10-12). Milestones M1 to M13 are implemented and committed on `feat/binary-import` in both repositories, the monorepo and the x86 Core submodule (`packages/x86`, repository `Specy/x86-js`). Nothing was pushed, tagged or published, and no commit has a Co-Authored-By trailer. The editor uses the Core through `workspace:*` at its local version 7.0.0, which is not released.
@@ -242,6 +250,7 @@ The design and handoff are in monorepo commit `4712faae`, the M6 checkpoint reco
 | M11: patching from the Listing                                      | Done                                                                                                                                                                                     | Monorepo `bd576fd8`, record `5e7e674f`                                               |
 | M12: Log notes                                                      | Done                                                                                                                                                                                     | Monorepo `985f524a`, record `e2d0d5b0`                                               |
 | M13: documentation and verification                                 | Done: glossary, the x86 Executables Chapter, the touch check, every browser scenario, two bugs fixed (the Call stack after a caught C++ exception, the memory view's start), this report | Core `479aa4c`; monorepo `81955c47`, `51c1a2c2`, `8f1274b5`, `9ac621e4` and this one |
+| Final review fixes (Core)                                           | Done: K1 to K5 (constant branch targets and displacements, superseded builds, a refused load superseding nothing, loader exits and `analyze`, termios2 Undo boundaries)                  | Core `38e2a97`; monorepo pointer bump and this record in one commit                  |
 
 ### Final checks
 
@@ -289,11 +298,11 @@ The committed wasm:
 
 | Artifact        |   Bytes | SHA-256                                                            |
 | --------------- | ------: | ------------------------------------------------------------------ |
-| blinkenlib.wasm | 320,687 | `9fdb314c7a521102cc06662a1ca36ba54df98f90c6839b7e14916f6992502e63` |
+| blinkenlib.wasm | 320,704 | `a5e0ced38815f9c477221d53ce451b27487cb3609829ad7f2415db61d9b3699b` |
 | blinkenlib.js   | 105,912 | `5fb2a12188c6673c5af4f86248184f6cd808ca40e7baea3c82d17fa9b882390f` |
 | zydis.wasm      | 405,054 | `6c6f8f58ee197e8f77fda5ec4fe4a81a7eb9f29c9895bbe1ea27b714dc3ce713` |
 
-Earlier `blinkenlib.wasm` builds: 353,147 bytes at M5 (`3bdc2104…`), 320,087 after the review fixes (`b54bf7b3…`), 320,658 after M9's termios2 (`dde11291…`). `zydis.wasm` was 402,546 bytes at M5 (`ca08bbf2…`).
+Earlier `blinkenlib.wasm` builds: 353,147 bytes at M5 (`3bdc2104…`), 320,087 after the review fixes (`b54bf7b3…`), 320,658 after M9's termios2 (`dde11291…`), 320,687 at M13 (`9fdb314c…`); the one above is after the final review fixes. `zydis.wasm` was 402,546 bytes at M5 (`ca08bbf2…`).
 
 ### Deviations
 
