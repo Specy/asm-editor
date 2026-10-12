@@ -226,6 +226,8 @@ export function testcaseContentKey(testcase: Testcase): string {
     return JSON.stringify(
         [
             testcase.input,
+            //a Testcase with no Arguments of its own and one with an empty field run alike
+            testcase.arguments?.trim() ? testcase.arguments : '',
             testcase.expectedOutput,
             sortedEntries(testcase.startingRegisters),
             sortedEntries(testcase.expectedRegisters),

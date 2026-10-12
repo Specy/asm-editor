@@ -36,7 +36,12 @@ afterEach(() => {
     document.body.innerHTML = ''
 })
 
-function render(testcases: Testcase[], results: TestcaseResult[] = [], editable = true) {
+function render(
+    testcases: Testcase[],
+    results: TestcaseResult[] = [],
+    editable = true,
+    language: 'M68K' | 'X86' = 'M68K'
+) {
     const props = $state({ testcases, testcasesResult: results })
     const target = document.createElement('div')
     document.body.appendChild(target)
@@ -56,7 +61,7 @@ function render(testcases: Testcase[], results: TestcaseResult[] = [], editable 
                 registerNames: ['D0', 'D1', 'A0'],
                 startingRegisterNames: ['D0', 'D1', 'A0'],
                 systemSize: RegisterSize.Long,
-                language: 'M68K',
+                language,
                 editable
             }
         })
@@ -311,6 +316,31 @@ describe('TestcasesList', () => {
             'Sum two inputs (copy)',
             undefined
         ])
+    })
+
+    it('gives an x86 Testcase Arguments of its own, an empty field being none', () => {
+        const { target, props } = render([testcaseWith({})], [], true, 'X86')
+        const field = target.querySelector<HTMLInputElement>('input.arguments')!
+        expect(field.placeholder).toBe("the Project's Arguments")
+        type(field, 'hunter2 "two words"')
+        expect(props.testcases[0].arguments).toBe('hunter2 "two words"')
+        expect(target.querySelector('.problem')).toBeNull()
+        type(field, "'open")
+        expect(target.querySelector('.problem')?.textContent).toBe(
+            "The single quote (') at column 1 is never closed"
+        )
+        type(field, '')
+        expect('arguments' in props.testcases[0]).toBe(false)
+        //other Targets' programs take no Arguments
+        const m68k = render([testcaseWith({})])
+        expect(m68k.target.querySelector('input.arguments')).toBeNull()
+    })
+
+    it('shows the Arguments of a read-only x86 Testcase that has some', () => {
+        const { target } = render([testcaseWith({ arguments: 'hunter2' })], [], false, 'X86')
+        expect(target.querySelector('pre.arguments')?.textContent).toBe('hunter2')
+        const none = render([testcaseWith({})], [], false, 'X86')
+        expect(none.target.querySelector('.arguments')).toBeNull()
     })
 
     it('shows a read-only Testcase without anything to edit', () => {

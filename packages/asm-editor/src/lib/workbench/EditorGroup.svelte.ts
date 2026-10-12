@@ -1,4 +1,5 @@
 import type monaco from 'monaco-editor'
+import { ARGUMENTS_DIAGNOSTIC_SOURCE } from '#lib/commandLine.ts'
 import type { WorkbenchSession } from './WorkbenchSession.svelte'
 import { initialTabs, type FileTabs } from './fileTabs'
 import {
@@ -209,7 +210,13 @@ export class EditorGroup {
         const s = this.session
         const diagnostics =
             this.sourceView === 'live' ? s.liveViewDiagnostics : s.emulator.compilerDiagnostics
-        return diagnostics.filter((item) => !item.file || item.file === this.displayedPath)
+        //a Diagnostic of no File belongs to whichever File is shown, except the Arguments', which
+        //belong to the Command line
+        return diagnostics.filter(
+            (item) =>
+                (!item.file && item.source !== ARGUMENTS_DIAGNOSTIC_SOURCE) ||
+                item.file === this.displayedPath
+        )
     }
     get breakpointsEditable() {
         const s = this.session

@@ -661,6 +661,11 @@ export type EmulatorSettings = {
     screenHistoryBudgetMb?: number
     /** FileSystem inverse-history budget in megabytes, applied at Build. */
     fileSystemHistoryBudgetMb?: number
+    /**
+     * x86 only: the Project's **Arguments** as typed on the Command line, passed at every start;
+     * none when left out. Changed later with `setProgramArguments`.
+     */
+    programArguments?: string
 }
 
 export type BaseEmulatorActions = {
@@ -721,6 +726,11 @@ export type BaseEmulatorActions = {
      */
     /** The Entry path of the sources currently set. */
     entry: string
+    /**
+     * The Arguments every later start passes the program, as typed on the Command line; a Testcase
+     * with Arguments of its own passes those instead. Only x86 programs take them.
+     */
+    setProgramArguments: (text: string) => void
     setScreenHistoryBudgetMb: (megabytes: number) => void
     /** The same for the FileSystem's Undo budget, likewise read by the next Build's session. */
     setFileSystemHistoryBudgetMb: (megabytes: number) => void

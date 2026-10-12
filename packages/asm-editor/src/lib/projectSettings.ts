@@ -7,6 +7,7 @@ import {
 } from './runtimeAbi'
 import { ProjectFormatError } from './projectFiles'
 import { languageHasScreen } from './languages/peripherals/peripheralSet'
+import { parseCommandLine } from './commandLine'
 
 /**
  * The Settings of a Project: the configuration that changes what the Emulator or the program does,
@@ -42,6 +43,13 @@ export type ProjectSettingValues = {
     screenHistoryBudgetMb: number
     /** Bytes retained to reverse FileSystem effects, in megabytes. */
     fileSystemHistoryBudgetMb: number
+    /**
+     * x86 only: the program's **Arguments**, the words after its name in `argv`, as typed on the
+     * Command line and read by `parseCommandLine`
+     * ([binary-import.md](../../../../docs/design/binary-import.md), decision 12). Kept as the text
+     * typed, so what is shown again is what was written.
+     */
+    programArguments: string
 }
 
 export type ProjectSettingId = keyof ProjectSettingValues
@@ -67,8 +75,13 @@ export type ProjectSettingDeclaration<T> = {
     id: ProjectSettingId
     /** The label the panel shows. */
     name: string
-    type: T extends number ? 'number' : T extends boolean ? 'boolean' : 'enum'
+    /** How the panel edits it: a switch, a number, a choice among `options`, or a line of text. */
+    type: T extends number ? 'number' : T extends boolean ? 'boolean' : 'enum' | 'text'
     options?: readonly { value: T; label: string }[]
+    /** What the panel says beside the field when the value cannot be used as it is. */
+    problem?: (value: T) => string | undefined
+    /** What an empty text field shows. */
+    placeholder?: string
     /** The app's default, which may depend on the language. */
     defaultFor: (language: AvailableLanguages) => T
     appliesTo: (language: AvailableLanguages) => boolean
@@ -81,12 +94,22 @@ const wholeNumber = (value: unknown): value is number =>
 
 const onOrOff = (value: unknown): value is boolean => typeof value === 'boolean'
 
+/**
+ * A text Setting's value: any string, up to a length no Setting needs, so a corrupted or crafted
+ * Project cannot carry megabytes in one. The Core's own limit on Arguments, 128 KiB of UTF-8, is
+ * reported by the Build that passes them.
+ */
+const MAX_TEXT_SETTING_LENGTH = 256 * 1024
+const text = (value: unknown): value is string =>
+    typeof value === 'string' && value.length <= MAX_TEXT_SETTING_LENGTH
+
 /** Any one Setting's declaration, whatever its type. */
 export type AnyProjectSettingDeclaration =
     | ProjectSettingDeclaration<number>
     | ProjectSettingDeclaration<boolean>
     | ProjectSettingDeclaration<import('./assemblerProfiles').AssemblerProfile>
     | ProjectSettingDeclaration<RuntimeLibrarySetting>
+    | ProjectSettingDeclaration<string>
 
 export const PROJECT_SETTINGS: {
     [K in ProjectSettingId]: ProjectSettingDeclaration<ProjectSettingValues[K]>
@@ -139,6 +162,19 @@ export const PROJECT_SETTINGS: {
         defaultFor: () => 64,
         appliesTo: () => true,
         accepts: wholeNumber
+    },
+    programArguments: {
+        id: 'programArguments',
+        name: 'Arguments',
+        type: 'text',
+        defaultFor: () => '',
+        appliesTo: (language) => language === 'X86',
+        accepts: text,
+        placeholder: 'none',
+        problem: (value) => {
+            const parsed = parseCommandLine(value)
+            return 'error' in parsed ? parsed.error : undefined
+        }
     }
 }
 

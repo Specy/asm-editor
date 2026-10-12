@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
+import { makeProject } from '#lib/Project.svelte.ts'
 import {
     cleanProjectSettings,
+    PROJECT_SETTINGS,
     projectSettingsFor,
     resolveProjectSettings,
     UNDO_HISTORY_SIZE,
@@ -20,7 +22,8 @@ describe('resolveProjectSettings', () => {
             linkRuntimeLibrary: 'off',
             undoEnabled: true,
             screenHistoryBudgetMb: 64,
-            fileSystemHistoryBudgetMb: 64
+            fileSystemHistoryBudgetMb: 64,
+            programArguments: ''
         })
         expect(resolveProjectSettings('Z80', undefined).undoEnabled).toBe(true)
     })
@@ -61,7 +64,8 @@ describe('projectSettingsFor', () => {
         expect(projectSettingsFor('X86').map((setting) => setting.id)).toEqual([
             'linkRuntimeLibrary',
             'undoEnabled',
-            'fileSystemHistoryBudgetMb'
+            'fileSystemHistoryBudgetMb',
+            'programArguments'
         ])
         expect(projectSettingsFor('M68K').map((setting) => setting.id)).toEqual([
             'undoEnabled',
@@ -95,5 +99,49 @@ describe('cleanProjectSettings', () => {
         expect(cleanProjectSettings(undefined)).toEqual({})
         expect(cleanProjectSettings(null)).toEqual({})
         expect(cleanProjectSettings('{}')).toEqual({})
+    })
+})
+
+describe('the Arguments Setting', () => {
+    const declaration = PROJECT_SETTINGS.programArguments
+
+    it('is a line of text, named Arguments, of x86 Projects only, empty by default', () => {
+        expect(declaration).toMatchObject({ name: 'Arguments', type: 'text' })
+        expect(declaration.defaultFor('X86')).toBe('')
+        for (const language of ['M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'Z80'] as const)
+            expect(projectSettingsFor(language).map((setting) => setting.id)).not.toContain(
+                'programArguments'
+            )
+    })
+
+    it('keeps the text as typed, quotes and spaces included', () => {
+        const typed = `hunter2  "two words" 'it''s' a\\ b `
+        expect(resolveProjectSettings('X86', { programArguments: typed }).programArguments).toBe(
+            typed
+        )
+    })
+
+    it('says what is wrong with text that does not parse', () => {
+        expect(declaration.problem?.('hunter2')).toBeUndefined()
+        expect(declaration.problem?.('"unterminated')).toBe(
+            'The double quote (") at column 1 is never closed'
+        )
+    })
+
+    it('loads back from a saved Project, and drops what is not text', () => {
+        expect(cleanProjectSettings({ programArguments: 'a "b c"' })).toEqual({
+            programArguments: 'a "b c"'
+        })
+        expect(cleanProjectSettings({ programArguments: ['a', 'b'] })).toEqual({})
+        expect(cleanProjectSettings({ programArguments: 3 })).toEqual({})
+        expect(cleanProjectSettings({ programArguments: 'x'.repeat(256 * 1024 + 1) })).toEqual({})
+    })
+
+    it('survives a round trip through a stored Project', () => {
+        const project = makeProject({ language: 'X86', settings: { programArguments: 'hunter2' } })
+        const stored = JSON.parse(JSON.stringify(project.toObject()))
+        const reloaded = makeProject(stored)
+        expect(reloaded.settings).toEqual({ programArguments: 'hunter2' })
+        expect(resolveProjectSettings('X86', reloaded.settings).programArguments).toBe('hunter2')
     })
 })

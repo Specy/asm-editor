@@ -89,6 +89,9 @@
             visible={open && session.bottomTab === 'terminal'}
             {interactive}
             escapes={session.project.language === 'X86'}
+            commandLine={session.commandLine}
+            onCommandLineChange={(text) => session.setProgramArguments(text)}
+            commandLineFocus={session.commandLineFocus}
         />
     </div>
     <div class="tab-body" class:hidden={!open || session.bottomTab !== 'log'} role="tabpanel">

@@ -13,6 +13,7 @@ import {
     type BuildArtifact,
     createMemoryTab,
     resetMemoryTab,
+    type Diagnostic,
     type EmulatorSettings,
     type ExecutionStep,
     InterpreterStatus,
@@ -58,6 +59,7 @@ import { createDebouncer } from '#lib/utils.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import { projectSettingDefault } from '#lib/projectSettings.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
+import { ARGUMENTS_DIAGNOSTIC_SOURCE, parseCommandLine } from '#lib/commandLine.ts'
 import {
     byteSliceToNum,
     isMemoryChunkEqual,
@@ -144,6 +146,28 @@ const STEP_THROUGH_YIELD = 2_000
  */
 export function isLibraryCodeFile(file: string | undefined): boolean {
     return !!file && (file.startsWith(RUNTIME_NAMESPACE) || isLibraryListingPath(file))
+}
+
+/** A Build stopped by its Arguments: they do not parse, or the Core refuses them. */
+function argumentsDiagnostic(problem: string): Diagnostic {
+    const message = `Arguments: ${problem}`
+    return {
+        severity: 'error',
+        source: ARGUMENTS_DIAGNOSTIC_SOURCE,
+        lineIndex: 0,
+        column: 0,
+        line: { line: '', line_index: 0 },
+        message,
+        formatted: message
+    }
+}
+
+/** The Arguments problem a failed Build reports, or undefined for any other failure. */
+function argumentsProblem(error: CompilationFailedError): string | undefined {
+    const [diagnostic] = error.diagnostics
+    return error.diagnostics.length === 1 && diagnostic.source === ARGUMENTS_DIAGNOSTIC_SOURCE
+        ? diagnostic.message
+        : undefined
 }
 
 /**
@@ -294,7 +318,8 @@ export abstract class GenericEmulator<T, R extends string>
                 projectSettingDefault(
                     'fileSystemHistoryBudgetMb',
                     emulatorOptions.language ?? 'M68K'
-                )
+                ),
+            programArguments: emulatorOptions.programArguments ?? ''
         }
         this._sources = $state(normalizeBuildInput(source))
         this._peripherals = {
@@ -957,6 +982,34 @@ export abstract class GenericEmulator<T, R extends string>
         this._emulatorOptions.fileSystemHistoryBudgetMb = megabytes
     }
 
+    setProgramArguments(text: string): void {
+        this._emulatorOptions.programArguments = text
+    }
+
+    /**
+     * Gives the program its Arguments for the start being built, `text` read as the Command line
+     * reads it ([binary-import.md](../../../../../docs/design/binary-import.md), decision 12). Text
+     * that does not parse, or Arguments the Core refuses, stop the Build with an error Diagnostic
+     * that belongs to no File, as any Build failure is reported.
+     */
+    private passProgramArguments(sources: BuildSources, text: string): void {
+        if (!this._setProgramArguments) return
+        const parsed = parseCommandLine(text)
+        let problem = 'error' in parsed ? parsed.error : undefined
+        if (!('error' in parsed)) {
+            try {
+                this._setProgramArguments(sources, parsed.args)
+            } catch (e) {
+                problem = this._stringifyError(e)
+            }
+        }
+        if (problem === undefined) return
+        const diagnostic = argumentsDiagnostic(problem)
+        this.state.compilerDiagnostics = [diagnostic]
+        this.state.canExecute = false
+        throw new CompilationFailedError(diagnostic.message, [diagnostic])
+    }
+
     /**
      * The adapter knows which peripheral effects belong to the next CPU undo record and preflights
      * them against the Screen's byte budget. Unrelated CPU instructions remain undoable even if an
@@ -1194,7 +1247,8 @@ export abstract class GenericEmulator<T, R extends string>
         sourceOverride: BuildInput | undefined,
         fileSystem: FileSystem,
         stopInUserCode = false,
-        scriptedInput?: string[]
+        scriptedInput?: string[],
+        programArguments = this._emulatorOptions.programArguments
     ): Promise<void> {
         this.clear()
         if (scriptedInput !== undefined) this.useScriptedRun(scriptedInput)
@@ -1215,6 +1269,7 @@ export abstract class GenericEmulator<T, R extends string>
             await prepareMemoryNames(sources)
             await this._prepareBuild?.(sources)
             this.executionController.ensureCurrent(execution)
+            this.passProgramArguments(sources, programArguments)
             const result = await this._compile(sources, historySize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
@@ -1887,7 +1942,8 @@ export abstract class GenericEmulator<T, R extends string>
                     sources,
                     new FileSystem(sources.files),
                     false,
-                    testcase.input
+                    testcase.input,
+                    this.testcaseArguments(testcase)
                 )
                 return await this.runTestcaseInternal(testcase, haltLimit)
             } finally {
@@ -1973,6 +2029,15 @@ export abstract class GenericEmulator<T, R extends string>
         await this._runTestcase(testcase, haltLimit)
     }
 
+    /**
+     * The Arguments a Testcase runs with: its own, or the Project's when it has none (an empty
+     * field is none) ([binary-import.md](../../../../../docs/design/binary-import.md), decision 12).
+     */
+    private testcaseArguments(testcase: Testcase): string {
+        const own = testcase.arguments
+        return own !== undefined && own.trim() !== '' ? own : this._emulatorOptions.programArguments
+    }
+
     async test(sources: BuildInput, testcases: Testcase[], haltLimit: number, historySize = 0) {
         //held across the whole loop: `validateTestcase` reads registers and memory back out of the
         //core between two runs, which a semantic check must not be able to slip into either
@@ -1995,13 +2060,28 @@ export abstract class GenericEmulator<T, R extends string>
             try {
                 //The whole testcase loop already owns the Core operation lock.
                 const isolatedFileSystem = new FileSystem(snapshot.files)
-                await this.compileInternal(
-                    historySize,
-                    snapshot,
-                    isolatedFileSystem,
-                    false,
-                    testcase.input
-                )
+                try {
+                    await this.compileInternal(
+                        historySize,
+                        snapshot,
+                        isolatedFileSystem,
+                        false,
+                        testcase.input,
+                        this.testcaseArguments(testcase)
+                    )
+                } catch (e) {
+                    //Arguments that cannot be passed, its own or the Project's, fail this
+                    //Testcase alone, and the next one runs
+                    const problem =
+                        e instanceof CompilationFailedError ? argumentsProblem(e) : undefined
+                    if (problem === undefined) throw e
+                    results.push({
+                        errors: [{ type: 'runtime-error', message: problem }],
+                        passed: false,
+                        testcase
+                    })
+                    continue
+                }
                 await this.runTestcaseInternal(testcase, haltLimit)
                 const errors = await this.validateTestcase(testcase)
                 results.push({

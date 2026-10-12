@@ -150,6 +150,14 @@ export abstract class BaseEmulator<R extends string> {
     /** Runs after the fresh FileSystem session exists, before any guest inspection or presets. */
     _beginExecutionSession?(): void
 
+    /**
+     * Gives the program these Arguments at the start `_compile` prepares, after `argv[0]`, its name
+     * as a shell would start it ([binary-import.md](../../../../../docs/design/binary-import.md),
+     * decision 12). Only a Target whose programs take Arguments has it; it throws when its Core
+     * refuses them, too many or too long, with a message for the person.
+     */
+    _setProgramArguments?(sources: BuildSources, args: string[]): void
+
     /** Detaches native execution before the host ends its FileSystem capability. */
     _clearExecution?(): void
 

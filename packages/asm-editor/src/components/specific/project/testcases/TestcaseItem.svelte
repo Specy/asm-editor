@@ -1,8 +1,8 @@
 <script lang="ts">
     /**
      * One Testcase in the list: a row with its outcome in the last test run, unfolding into its
-     * name, registers, memory, input and expected output, all edited in place when the list is
-     * editable. Once unfolded its body stays built and is only hidden, so a row added to a table or
+     * name, an x86 program's Arguments, registers, memory, input and expected output, all edited in
+     * place when the list is editable. Once unfolded its body stays built and is only hidden, so a row added to a table or
      * a memory value half written survives folding it.
      */
     import { onMount, untrack } from 'svelte'
@@ -13,6 +13,7 @@
         firstTextDifference,
         testcaseLabel
     } from '#lib/testcases.ts'
+    import { parseCommandLine } from '#lib/commandLine.ts'
     import FaCaretRight from '~icons/fa-solid/caret-right'
     import Header from '#cmp/shared/layout/Header.svelte'
     import RegistersTable from './RegistersTable.svelte'
@@ -95,6 +96,12 @@
             0
     )
     const hasMemory = $derived(testcase.startingMemory.length + testcase.expectedMemory.length > 0)
+    //x86 programs take Arguments; a Testcase without its own runs with the Project's
+    const takesArguments = $derived(language === 'X86')
+    const argumentsProblem = $derived.by(() => {
+        const parsed = parseCommandLine(testcase.arguments ?? '')
+        return 'error' in parsed ? parsed.error : undefined
+    })
     const outputError = $derived.by(() => {
         const error = result?.errors.find((candidate) => candidate.type === 'wrong-output')
         return error?.type === 'wrong-output' ? error : undefined
@@ -146,6 +153,40 @@
                                 spellcheck="false"
                                 autocomplete="off"
                             />
+                        </div>
+                    {/if}
+                    {#if takesArguments && (editable || testcase.arguments?.trim())}
+                        <div class="section">
+                            <div class="title-row">
+                                <Header type="h3" noMargin id="{id}-arguments">Arguments</Header>
+                                <span class="caption"
+                                    >after the program's name, as typed in a shell</span
+                                >
+                            </div>
+                            {#if editable}
+                                <input
+                                    aria-labelledby="{id}-arguments"
+                                    class="field arguments"
+                                    class:invalid={argumentsProblem}
+                                    value={testcase.arguments ?? ''}
+                                    oninput={(event) => {
+                                        const text = event.currentTarget.value
+                                        //an empty field is no Arguments of its own
+                                        if (text === '') delete testcase.arguments
+                                        else testcase.arguments = text
+                                    }}
+                                    placeholder="the Project's Arguments"
+                                    spellcheck="false"
+                                    autocomplete="off"
+                                    autocapitalize="off"
+                                    aria-invalid={argumentsProblem ? 'true' : undefined}
+                                />
+                            {:else}
+                                <pre class="field arguments">{testcase.arguments}</pre>
+                            {/if}
+                            {#if argumentsProblem}
+                                <p class="difference problem">{argumentsProblem}</p>
+                            {/if}
                         </div>
                     {/if}
                     {#if editable || hasRegisters}
@@ -392,6 +433,20 @@
 
     .field {
         @include field;
+    }
+
+    .arguments {
+        @include mono;
+        margin: 0;
+        font-size: 0.85rem;
+
+        &.invalid {
+            border-color: var(--tc-fail);
+        }
+    }
+
+    .problem {
+        color: var(--tc-fail);
     }
 
     .output {

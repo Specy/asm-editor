@@ -31,6 +31,17 @@ function testcaseWith(part: Partial<Testcase>): Testcase {
 }
 
 describe('cleanTestcases', () => {
+    it('keeps the Arguments of a Testcase as text, and adds none to one without', () => {
+        const [withArguments, without, broken] = cleanTestcases([
+            testcaseWith({ arguments: 'hunter2 "two words"' }),
+            testcaseWith({}),
+            testcaseWith({ arguments: ['hunter2'] as unknown as string })
+        ])
+        expect(withArguments.arguments).toBe('hunter2 "two words"')
+        expect('arguments' in without).toBe(false)
+        expect('arguments' in broken).toBe(false)
+    })
+
     it('keeps the expected value of a number memory entry, in both starting and expected memory', () => {
         const entry = { type: 'number' as const, address: 0x1000n, bytes: 4, expected: 42n }
         const [cleaned] = cleanTestcases([

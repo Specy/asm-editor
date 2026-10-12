@@ -1,4 +1,5 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
+import { programArgv0 } from '#lib/commandLine.ts'
 import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
@@ -268,6 +269,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /** Streaming decoding belongs to the Terminal; native callbacks already exclude tool output. */
     appendOutput(bytes: Uint8Array): void {
         this._peripherals.terminal.writeBytes(bytes)
+    }
+
+    /**
+     * `argv[0]` as a shell would start the program, `./crackme` or `./main` for `main.asm`, and the
+     * Arguments after it ([binary-import.md](../../../../../../docs/design/binary-import.md),
+     * decision 12); the Core keeps them for every later start until they are set again.
+     */
+    _setProgramArguments(sources: BuildSources, args: string[]): void {
+        const executable = executableKind(sources.files[sources.entry]) === 'supported'
+        this.requireCore().setProgramArguments(programArgv0(sources.entry, executable), args)
     }
 
     protected getInstance(): CoreX86Emulator | null {

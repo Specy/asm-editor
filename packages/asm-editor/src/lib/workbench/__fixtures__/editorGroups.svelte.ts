@@ -42,6 +42,13 @@ export function editorGroupsFixture(
         errors: [],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
+        /** The Arguments the last Build or test run was given, as `setProgramArguments` passes them. */
+        programArguments: '',
+        setProgramArguments(text: string) {
+            this.programArguments = text
+        },
+        setScreenHistoryBudgetMb: (_megabytes: number) => {},
+        setFileSystemHistoryBudgetMb: (_megabytes: number) => {},
         toggleBreakpoint(line: number, file: string) {
             this.toggleSourceBreakpoint({ file, line })
         },

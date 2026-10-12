@@ -99,6 +99,13 @@ import {
     type SourceLocation
 } from '#lib/sourceCompilation/records.ts'
 import { serializer } from '#lib/json.ts'
+import {
+    ARGUMENTS_DIAGNOSTIC_SOURCE,
+    commandLineProgram,
+    parseCommandLine,
+    type CommandLineParse
+} from '#lib/commandLine.ts'
+import { executableKind } from '#lib/executables.ts'
 import { createDebouncer } from '#lib/utils.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
 import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
@@ -123,6 +130,21 @@ import {
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
+
+/**
+ * The **Command line** the Terminal shows, `$ ./crackme hunter2`
+ * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 12): the name the
+ * program starts under and its Arguments, as typed and as read. Locked during a Debug session, to
+ * what that run started with.
+ */
+export type CommandLineState = {
+    /** The program's name after `./`: an Executable's Entry path, else without its extension. */
+    program: string
+    /** The Arguments as typed. */
+    text: string
+    parsed: CommandLineParse
+    locked: boolean
+}
 
 /**
  * What a host passes the session, as getters so that it stays reactive to the host's props
@@ -315,6 +337,10 @@ export class WorkbenchSession {
 
     log = $state.raw<LogEntry[]>([])
     private logId = 0
+    /** The Command line the Debug session's program started with, see `commandLine`. */
+    private startedCommandLine = $state.raw<{ program: string; text: string }>()
+    /** Counts requests for the Command line to take the keyboard, as a Problem about it makes. */
+    commandLineFocus = $state(0)
     bottomTab = $state<BottomTab>('terminal')
 
     readonly pc
@@ -358,6 +384,20 @@ export class WorkbenchSession {
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
+        this.commandLine = $derived.by<CommandLineState | undefined>(() => {
+            if (this.project.language !== 'X86') return undefined
+            const started = this.debugSession ? this.startedCommandLine : undefined
+            if (started) return { ...started, parsed: parseCommandLine(started.text), locked: true }
+            const entry = this.project.entry
+            const executable = executableKind(this.project.files[entry]) === 'supported'
+            const text = this.effectiveSettings.programArguments
+            return {
+                program: commandLineProgram(entry, executable),
+                text,
+                parsed: parseCommandLine(text),
+                locked: this.host.readonly || this.debugSession || this.building || this.running
+            }
+        })
         this.mappingPair = $derived(
             resolveMappingPair(
                 this.groups,
@@ -658,6 +698,8 @@ export class WorkbenchSession {
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
     declare readonly debugSession: boolean
+    /** An x86 Project's Command line; undefined for the other languages. */
+    declare readonly commandLine: CommandLineState | undefined
     declare readonly mappingColors: SourceMapColoring | undefined
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
     declare readonly executionSourceLocation: SourceLocation | undefined
@@ -807,11 +849,33 @@ export class WorkbenchSession {
 
     /** A decision or a reset from the panel; it takes effect at the next Build. */
     applySettings(next: ProjectSettingsDecisions) {
+        const argumentsChanged = next.programArguments !== this.project.settings?.programArguments
         this.project.settings = next
         const resolved = resolveProjectSettings(this.project.language, next)
         this.emulator.setScreenHistoryBudgetMb(resolved.screenHistoryBudgetMb)
         this.emulator.setFileSystemHistoryBudgetMb(resolved.fileSystemHistoryBudgetMb)
+        this.emulator.setProgramArguments(resolved.programArguments)
+        //a Build the Arguments stopped says nothing about Arguments typed since
+        if (
+            argumentsChanged &&
+            this.failedBuild?.diagnostics.every(
+                (diagnostic) => diagnostic.source === ARGUMENTS_DIAGNOSTIC_SOURCE
+            )
+        )
+            this.failedBuild = undefined
         this.changed()
+    }
+
+    /**
+     * The Arguments typed on the Command line, saved as the Project's Setting: empty is none, which
+     * is the default, so nothing is recorded for it. Refused while the line is locked.
+     */
+    setProgramArguments(text: string) {
+        if (this.commandLine?.locked !== false) return
+        const next = { ...this.project.settings }
+        if (text === '') delete next.programArguments
+        else next.programArguments = text
+        this.applySettings(next)
     }
 
     /** Whether the Display configuration can change now: never during a Debug session. */
@@ -1152,6 +1216,12 @@ export class WorkbenchSession {
     }
 
     async revealDiagnostic(diagnostic: Diagnostic) {
+        //the Arguments are typed on the Command line, at the top of the Terminal
+        if (diagnostic.source === ARGUMENTS_DIAGNOSTIC_SOURCE) {
+            this.bottomTab = 'terminal'
+            this.commandLineFocus++
+            return
+        }
         const path =
             diagnostic.file ??
             this.emulator.buildSources?.entry ??
@@ -1423,6 +1493,13 @@ export class WorkbenchSession {
         const sources = this.sourceInput
         this.failedBuild = undefined
         let failure: Diagnostic[] | undefined
+        //what the Debug session's Command line shows, locked, for as long as it lasts
+        const commandLine = this.commandLine
+        this.startedCommandLine = commandLine && {
+            program: commandLine.program,
+            text: commandLine.text
+        }
+        this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
             this.running = false
             this.building = true
@@ -1540,6 +1617,7 @@ export class WorkbenchSession {
         await new Promise((resolve) => setTimeout(resolve, 50))
         const started = performance.now()
         this.testing = true
+        this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
             this.testcasesResult = await this.emulator.test(
                 this.sourceInput,
