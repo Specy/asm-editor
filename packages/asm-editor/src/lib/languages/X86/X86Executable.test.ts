@@ -205,6 +205,14 @@ describe('the start of an Executable', () => {
         expect(emulator.canUndo).toBe(false)
     })
 
+    it('opens the memory view on the stack page at main, as an assembled program does', async () => {
+        const { emulator } = await built(executableSources())
+        const global = emulator.memory.global
+        const rsp = emulator.registers.find((register) => register.name === 'rsp')!.value
+        expect(rsp).toBeGreaterThan(0x7fff00000000n)
+        expect(global.address).toBe(rsp - (rsp % BigInt(global.pageSize)))
+    })
+
     it('stops a Build earlier at a Breakpoint on `_start`', async () => {
         const sources = executableSources()
         const emulator = await emulatorFor(sources)
