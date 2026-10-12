@@ -53,6 +53,9 @@
         <NavigationLinkButton href="/documentation/x86/using-c">
             <div>Using C and C++</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/x86/executables">
+            <div>Executables</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/x86/all">
             <div>Complete Documentation</div>
         </NavigationLinkButton>

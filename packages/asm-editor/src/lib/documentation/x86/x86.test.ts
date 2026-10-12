@@ -46,7 +46,7 @@ function markdownOf(entry: DocumentationEntry): string {
 }
 
 describe('the x86 Documentation', () => {
-    it('has its seven Chapters at their pages', () => {
+    it('has its eight Chapters at their pages', () => {
         expect(chapters().map((chapter) => [chapter.id, chapter.href])).toEqual([
             ['instructions', '/documentation/x86/instruction'],
             ['extensions', '/documentation/x86/extensions'],
@@ -54,9 +54,57 @@ describe('the x86 Documentation', () => {
             ['registers-and-flags', '/documentation/x86/registers'],
             ['syscalls', '/documentation/x86/syscall'],
             ['using-c', '/documentation/x86/using-c'],
-            ['runtime-library', '/documentation/x86/runtime-library']
+            ['runtime-library', '/documentation/x86/runtime-library'],
+            ['executables', '/documentation/x86/executables']
         ])
         expect(documentationProblems(chapters())).toEqual([])
+    })
+
+    it('explains running an Executable, one entry per heading', () => {
+        const entries = chapter('executables').entries
+        expect(entries.map((entry) => entry.anchor)).toEqual([
+            'overview',
+            'what-runs',
+            'libraries',
+            'listing',
+            'names',
+            'stepping',
+            'breakpoints',
+            'arguments',
+            'testcases',
+            'patching',
+            'log-notes',
+            'safety'
+        ])
+        expect(entries[0]).toMatchObject({
+            id: 'x86/executables/overview',
+            title: 'Running an Executable',
+            href: '/documentation/x86/executables#overview'
+        })
+        const text = (anchor: string) =>
+            markdownOf(entries.find((entry) => entry.anchor === anchor)!)
+        // the five bundled libraries, and the names a Listing uses
+        for (const library of [
+            'ld-linux-x86-64.so.2',
+            'libc.so.6',
+            'libm.so.6',
+            'libstdc++.so.6',
+            'libgcc_s.so.1'
+        ])
+            expect(text('libraries')).toContain(library)
+        for (const name of [
+            'FUN_',
+            'DAT_',
+            '.LAB_1',
+            's_Enter_password',
+            '@plt',
+            '@got',
+            '@GLIBC_'
+        ])
+            expect(text('names')).toContain(name)
+        expect(text('patching')).toContain('**Space**')
+        expect(text('patching')).toContain('long press')
+        expect(text('stepping')).toContain('**Step into library code**')
     })
 
     it('has an instruction entry for every instruction page, alphabetically', () => {

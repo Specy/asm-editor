@@ -52,7 +52,12 @@ _Avoid_: break, stop point, halt point
 ## Poke
 
 A change a person or the coding agent makes to one register or memory value of a **Debug session** between two instructions, kept in the same Undo history as the instructions as a step of its own. Distinct from a mutation, which is a write the program made, and from a **Testcase**'s starting values, which are preset before the run and never undone.
-_Avoid_: edit, value edit, override, patch, set value, host write, manual write
+_Avoid_: edit, value edit, override, set value, host write, manual write; patch, except for the **Patch** of an instruction
+
+## Patch
+
+A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes.
+_Avoid_: edit, binary patch, hot patch, modification
 
 ## Peripheral
 
@@ -237,6 +242,21 @@ _Avoid_: binary (any File that is not text is binary), imported binary, compiled
 The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it.
 _Avoid_: disassembly (the decoding that produces it), dump, decompilation, listing file
 
+## Invented name
+
+A name the **Listing** gives an address its **Executable** names nowhere: `FUN_<adjective>_<animal>` for a function, `DAT_<adjective>_<animal>` for data. It is derived from the address in the file, so it is the same on every open and for everyone, from word lists that are never edited once released. Distinct from the names the bytes give (symbols, `name@plt`, an `s_` string's text) and from the numbered `.LAB_n` of a jump target. See [ADR 0045](./docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
+_Avoid_: random name, generated name, placeholder name
+
+## Bundled library
+
+One of the five Linux shared libraries the x86 **Core** ships for the **Executables** that need them, from one Ubuntu release: glibc's dynamic linker, `libc.so.6` and `libm.so.6`, and GCC's `libstdc++.so.6` and `libgcc_s.so.1`. An Executable that needs any other library does not start. Unrelated to the **Runtime library**: an Executable was linked against glibc elsewhere and cannot use the editor's library.
+_Avoid_: system libraries, libc (when all five are meant), runtime
+
+## Library code
+
+The code a Step runs through in one go rather than entering, unless the _Step into library code_ **Preference** is on: a **Runtime library**'s **Library members** and the **Start unit**, shown read-only under `@runtime/`, and the shared libraries an **Executable** loads, each shown as its **Listing** under `@lib/<soname>` (`@lib/libc.so.6`). Neither path is a **File** of the **Project**, and a library's Listing takes no **Breakpoint**. An Executable's own PLT stubs are stepped through as library code too.
+_Avoid_: system code, external code, foreign code
+
 ## Displayed file
 
 The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. An **Executable** is displayed as its **Listing**.
@@ -271,7 +291,7 @@ _Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zon
 
 ## Log
 
-The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it). Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it), followed by notes on what the program met that the **Emulator** lacks, such as a system call it does not implement or an instruction it cannot run. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
 _Avoid_: output, build output, console
 
 ## Settings

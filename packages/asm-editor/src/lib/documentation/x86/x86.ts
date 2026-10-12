@@ -43,6 +43,7 @@ import extensionsProse from './extensions.md?raw'
 import registersProse from './registers.md?raw'
 import syscallsProse from './syscalls.md?raw'
 import usingCProse from './using-c.md?raw'
+import executablesProse from './executables.md?raw'
 import runtimeProse from './runtime-library.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
@@ -617,6 +618,29 @@ function usingC(): Chapter {
     }
 }
 
+/**
+ * Running a program built outside the editor: an **Executable**, shown as its **Listing**
+ * ([binary-import.md](../../../../../../docs/design/binary-import.md)).
+ */
+function executables(): Chapter {
+    const href = `${BASE}/executables`
+    return {
+        id: 'executables',
+        language: 'x86',
+        title: 'Executables',
+        href,
+        description:
+            'Run and debug a compiled x86-64 Linux program: its Listing, Arguments, Breakpoints and patches.',
+        entries: proseEntries({
+            language: 'x86',
+            chapter: 'executables',
+            chapterHref: href,
+            markdown: executablesProse,
+            openingTitle: 'Running an Executable'
+        })
+    }
+}
+
 /** The C library a Build links when the Project or its Compilation asks for it. */
 function runtimeLibrary(): Chapter {
     const href = `${BASE}/runtime-library`
@@ -676,7 +700,8 @@ export function chapters(): Chapter[] {
         registersAndFlags(),
         syscalls(),
         usingC(),
-        runtimeLibrary()
+        runtimeLibrary(),
+        executables()
     ]
     return cached
 }

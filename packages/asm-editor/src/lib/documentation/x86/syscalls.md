@@ -6,7 +6,7 @@ A C or C++ program makes the same calls through `<sim.h>`. Each syscall entry na
 
 ## Everything this emulator implements {#all}
 
-Every call the emulator implements is listed here. A call missing from this page usually fails with `-ENOSYS` (-38), the Linux error for an unavailable syscall.
+Every call the emulator implements is listed here. A call missing from this page usually fails with `-ENOSYS` (-38), the Linux error for an unavailable syscall, and the Workbench's **Log** names it the first time a run makes it.
 
 ## Differences from Linux {#differences}
 
@@ -16,7 +16,7 @@ Calendar clocks (REALTIME, REALTIME_COARSE and TAI) report Unix epoch time: host
 
 Wait requests retain nanosecond precision. At very large elapsed times, a requested wait smaller than the clock's next representable increment fails with a precision error.
 
-The working directory `/project` exposes the Project's Files. A program starts with the current Project Files; each Testcase gets an independent copy, and changes made by a program remain in the Project Files after Stop. Directories are implicit path prefixes. Empty directories, moving directories, links, and persistent permissions, ownership, or timestamps are not represented. Metadata is synthetic: mode `0777`, uid and gid zero, and epoch timestamps. A directory disappears when its last file is removed, and replacing a destination with `rename` returns `EEXIST`. File-backed `mmap` returns `ENODEV`; anonymous mappings work. With `readv` (reading into several buffers), an error in a later buffer can be returned after earlier buffers have already changed; Linux may instead return the earlier partial byte count. `writev` and `pwritev` gather their buffers into one payload, so a capacity refusal writes none of it.
+The working directory `/project` exposes the Project's Files. A program starts with the current Project Files; each Testcase gets an independent copy, and changes made by a program remain in the Project Files after Stop. Directories are implicit path prefixes. Empty directories, moving directories, links, and persistent permissions, ownership, or timestamps are not represented. Metadata is synthetic: mode `0777`, uid and gid zero, and epoch timestamps. A directory disappears when its last file is removed, and replacing a destination with `rename` returns `EEXIST`. A private `mmap` of a File (`MAP_PRIVATE`) is a copy of its bytes, whose writes stay in memory; a shared one (`MAP_SHARED`) returns `ENODEV`. Anonymous mappings work. With `readv` (reading into several buffers), an error in a later buffer can be returned after earlier buffers have already changed; Linux may instead return the earlier partial byte count. `writev` and `pwritev` gather their buffers into one payload, so a capacity refusal writes none of it.
 
 Standard streams are a terminal with line-based input and UTF-8 bytes. Enter submits a line. Ctrl+D on an empty line submits one end-of-input token. Duplicated descriptors and `readv` share the same input queue. Programs cannot switch the Terminal to raw mode. SGR color changes and clear-screen sequences are displayed, but full cursor positioning and a fixed character grid are unavailable. When a timer signal interrupts a read, the handler preserves queued bytes and a partially typed line. The call follows Linux's `EINTR` rule (return an interrupted-call error) and `SA_RESTART` option (automatically resume selected calls).
 

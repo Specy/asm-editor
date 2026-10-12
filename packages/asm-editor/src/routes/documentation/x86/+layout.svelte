@@ -118,6 +118,11 @@
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
+                    href="/documentation/x86/executables"
+                    title="Executables"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
                     href="/documentation/x86/all"
                     title="Complete documentation"
                     onClick={() => (menuOpen = false)}
