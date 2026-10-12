@@ -8,7 +8,14 @@ import {
     type ListingLabel
 } from './listing'
 import { ListingIndex } from './listingNavigation'
-import { instructionLineText, quotedString } from './listingText'
+import {
+    type AddressNaming,
+    holderAt,
+    nameAddress,
+    NO_HOLDERS,
+    stringComment as sharedStringComment
+} from './addressNames'
+import { instructionLineText } from './listingText'
 import { withoutComment } from './patchResolver'
 
 /**
@@ -74,11 +81,34 @@ function functionAt(listing: Listing, address: number): ListingFunction | undefi
 
 const hex = (value: bigint) => `0x${value.toString(16)}`
 
+/** How a Listing names addresses, for {@link nameAddress}, from a 0-based line. */
+function listingNaming(listing: Listing, hints: NameHints): AddressNaming<number> {
+    const base = BigInt(listing.base)
+    return {
+        label: (address) => {
+            const named = labelsAt(listing, address).filter((label) => label.kind !== 'block')
+            return named.length ? named[named.length - 1].fullName : undefined
+        },
+        block: (address, line) => {
+            const block = labelsAt(listing, address).find((label) => label.kind === 'block')
+            if (!block) return undefined
+            const owner = functionAtLine(listing, line)
+            return owner && owner === functionAtLine(listing, block.line)
+                ? block.name
+                : block.fullName
+        },
+        hint: (address) => hints.get(BigInt(address) + base),
+        holder: (address) => holderAt(listing.holders ?? NO_HOLDERS, address),
+        owner: (address) => functionAt(listing, address)?.address
+    }
+}
+
 /**
- * The name a run-time address has, written from a 0-based line, as the generator would write it:
- * a label at exactly that address (the name operands use; a block as `.LAB_n` inside the line's
- * own function and `FUN_x.LAB_n` from outside it), else a name the line was written with, else an
- * address inside a function as `function+0xN`. Undefined when none applies: the address is shown.
+ * The name a run-time address has, written from a 0-based line, as the generator writes it
+ * (`nameAddress`): a label at exactly that address (the name operands use; a block as `.LAB_n`
+ * inside the line's own function and `FUN_x.LAB_n` from outside it), else a name the line was
+ * written with, else `name+0xN` inside a named object or string, else inside a function.
+ * Undefined when none applies: the address is shown.
  */
 export function addressName(
     listing: Listing,
@@ -88,18 +118,7 @@ export function addressName(
 ): string | undefined {
     const address = Number(target - BigInt(listing.base))
     if (!Number.isSafeInteger(address) || address < 0) return hints.get(target)
-    const labels = labelsAt(listing, address)
-    const named = labels.filter((label) => label.kind !== 'block')
-    if (named.length) return named[named.length - 1].fullName
-    const block = labels.find((label) => label.kind === 'block')
-    if (block) {
-        const owner = functionAtLine(listing, line)
-        return owner && owner === functionAtLine(listing, block.line) ? block.name : block.fullName
-    }
-    const hinted = hints.get(target)
-    if (hinted !== undefined) return hinted
-    const owner = functionAt(listing, address)
-    return owner ? `${owner.name}+0x${(address - owner.address).toString(16)}` : undefined
+    return nameAddress(listingNaming(listing, hints), address, line)
 }
 
 /** A decoded instruction's text with its branch and RIP-relative targets named. */
@@ -136,29 +155,24 @@ export function labelledText(
 }
 
 /**
- * The text of the string a RIP-relative operand reaches, quoted as the Listing's comments quote
- * one, when a string label of the Listing starts exactly there.
+ * The text of the string a RIP-relative operand reaches, from there to its end, quoted as the
+ * generator's comments quote one.
  */
 function stringComment(
     listing: Listing,
     bytes: Uint8Array,
     decoded: DecodedInstruction
 ): string | undefined {
+    const offsetOf = (address: number) => {
+        const line = lineOfAddress(listing, address)
+        const offset = line < 0 ? -1 : listing.lines.offsets[line]
+        return offset < 0 ? -1 : offset + address - listing.lines.addresses[line]
+    }
     for (const operand of decoded.operands) {
         if (operand.memoryTarget === undefined) continue
         const address = Number(operand.memoryTarget - BigInt(listing.base))
-        if (!labelsAt(listing, address).some((label) => label.kind === 'string')) continue
-        const line = lineOfAddress(listing, address)
-        const offset = line < 0 ? -1 : listing.lines.offsets[line]
-        if (offset < 0) continue
-        let text = ''
-        for (
-            let at = offset + address - listing.lines.addresses[line];
-            at < bytes.length && bytes[at] !== 0 && text.length <= 64;
-            at++
-        )
-            text += String.fromCharCode(bytes[at])
-        return quotedString(text)
+        const comment = sharedStringComment(listing.holders ?? NO_HOLDERS, bytes, address, offsetOf)
+        if (comment) return comment
     }
     return undefined
 }

@@ -22,7 +22,7 @@
         controls = false,
         fill = false
     }: { group: EditorGroup; share?: number; controls?: boolean; fill?: boolean } = $props()
-    const { session } = useWorkbench()
+    const { session, ui } = useWorkbench()
     const emulator = session.emulator
     let dragDepth = $state(0)
     /**
@@ -50,7 +50,9 @@
                   listing,
                   bytes: document.bytes,
                   library: group.displayedLibraryListing,
-                  patches: group.displayedPatches?.lines
+                  patches: group.displayedPatches?.lines,
+                  //a phone's editor is narrow: the gutter prints the low digits of addresses
+                  shortAddresses: ui.deviceClass === 'phone'
               }
             : undefined
     })
@@ -133,6 +135,7 @@
                 session.emulator.patcher !== undefined &&
                 group.sourceView === 'snapshot' &&
                 session.debugSession}
+            touch={!ui.viewport.canHover}
         />
     {:else if group.displayedLibraryMember && group.displayedFile}
         <LibraryMemberNotice
@@ -161,8 +164,9 @@
                           key: group.modelKey,
                           value: group.displayedCode,
                           identity: group.modelIdentity,
-                          //a Listing changes only where a Debug session patches a line
-                          changesInPlace: group.displayedListing !== undefined
+                          //a Listing changes only where a Debug session patches a line; a
+                          //new document is new text, with a model of its own
+                          generatedFrom: group.displayedListing
                       }
                     : undefined}
                 modelKey={group.modelKey}
@@ -203,6 +207,7 @@
                 listing={listingModel}
                 canBreakAt={listingBreakable}
                 {patchedLines}
+                lineNote={group.runningWithin}
                 lineActions={listingModel && !listingModel.library ? listingActions : undefined}
                 bind:editor={group.editor}
                 code={group.displayedCode}
@@ -225,6 +230,7 @@
                 available={session.pokeable}
                 onapply={() => session.applyPatch(group)}
                 onclose={() => session.closePatchPrompt(group)}
+                onrelease={() => group.editor?.focus()}
             />
         {/if}
         {#if !group.displayedPath}

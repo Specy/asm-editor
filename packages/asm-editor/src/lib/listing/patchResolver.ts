@@ -199,8 +199,11 @@ export function resolveListingNames(
         }
         if (/^\d/.test(word.text) || /^\$+$/.test(word.text) || /^\$\d/.test(word.text)) continue
         let name = word.text
-        if (name.startsWith('$')) name = name.slice(1)
-        else {
+        if (name.startsWith('$')) {
+            //a label whose own name starts with `$`, as Go's constants do (`$f64.3ff0…`), is
+            //looked up as written; otherwise `$` marks the word as a name, as NASM reads it
+            if (index.label(name, line) === undefined) name = name.slice(1)
+        } else {
             const lower = name.toLowerCase()
             const reserved = REGISTER.test(name) || KEYWORDS.has(lower)
             //a branch's target alone may be a name that is also one of NASM's words: `call abs`

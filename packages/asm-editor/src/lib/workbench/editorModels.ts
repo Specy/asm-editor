@@ -14,6 +14,8 @@ export class EditorModels {
      * spares reading a whole model back out, which for a library's Listing is megabytes.
      */
     private values = new Map<string, string>()
+    /** What each generated model's text is a version of, see `EditorSource.generatedFrom`. */
+    private origins = new Map<string, object>()
     private listeners = new Map<string, monaco.IDisposable>()
     private artifactDisposers = new Map<string, () => void>()
     private applyingExternalValue = false
@@ -22,7 +24,10 @@ export class EditorModels {
 
     resolve(currentMonaco: MonacoType, source: EditorSource, language: string) {
         let model = this.models.get(source.key)
-        if (model?.isDisposed()) {
+        if (
+            model?.isDisposed() ||
+            (model && source.generatedFrom !== this.origins.get(source.key))
+        ) {
             this.remove(source.key)
             model = undefined
         }
@@ -35,6 +40,7 @@ export class EditorModels {
             model.setEOL(0)
             this.models.set(source.key, model)
             this.values.set(source.key, source.value)
+            if (source.generatedFrom) this.origins.set(source.key, source.generatedFrom)
             const owned = model
             const key = source.key
             this.listeners.set(
@@ -54,7 +60,7 @@ export class EditorModels {
             this.applyingExternalValue = true
             try {
                 const previous = this.values.get(source.key)
-                if (source.changesInPlace && previous !== undefined)
+                if (source.generatedFrom && previous !== undefined)
                     replaceChangedText(model, previous, source.value)
                 else model.setValue(source.value)
                 this.values.set(source.key, source.value)
@@ -101,6 +107,7 @@ export class EditorModels {
         this.artifactDisposers.get(key)?.()
         this.models.get(key)?.dispose()
         this.values.delete(key)
+        this.origins.delete(key)
         this.listeners.delete(key)
         this.artifactDisposers.delete(key)
         this.models.delete(key)

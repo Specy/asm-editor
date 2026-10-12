@@ -1020,7 +1020,7 @@ export class WorkbenchSession {
         const site = this.patchSite(group, line)
         if (!patcher || !site) return false
         group.patchPrompt?.dispose()
-        const prompt = new PatchPrompt(site, patcher)
+        const prompt = new PatchPrompt(site, patcher, this.buildGeneration)
         group.patchPrompt = prompt
         void prompt.update()
         return true
@@ -1719,6 +1719,12 @@ export class WorkbenchSession {
     clearExecution() {
         this.executionClears += 1
         this.startedCommandLine = undefined
+        //a prompt belongs to the session it was opened in: the next Build of the same Executable
+        //must not show it again, let alone write its patch
+        for (const group of this.groups) {
+            group.patchPrompt?.dispose()
+            group.patchPrompt = undefined
+        }
         this.emulator.clear()
         this.emulator.setSources(this.sourceInput)
         this.returnToLiveFiles()

@@ -327,3 +327,4 @@ __TMC_END__:
 __bss_start:
 completed.0: resb 1
     resb 7
+_end:

@@ -1,6 +1,15 @@
 import ListingWorker from './listing.worker?worker'
-import type { Listing, ListingNameVersion } from './listing'
+import { ListingError, type Listing, type ListingNameVersion } from './listing'
 import type { ListingRequest, ListingResponse } from './protocol'
+
+/**
+ * How long a worker with requests in hand may say nothing (no progress, no answer) before it is
+ * taken for dead: a worker killed for memory may never send its error. libc's Listing, the
+ * longest, reports progress every few hundred milliseconds.
+ */
+export const LISTING_WORKER_SILENCE_MS = 30_000
+/** How long a worker with nothing to do is kept before it is ended, freeing its memory. */
+export const LISTING_WORKER_IDLE_MS = 30_000
 
 export type ListingOrder = {
     bytes: Uint8Array
@@ -22,9 +31,11 @@ type Pending = {
 type WorkerConstructor = new () => Worker
 
 /**
- * The editor's side of the Listing worker: one worker for the session, started on the first
- * request and kept, since it holds the Listings it has made. Where there is no `Worker` (tests,
- * prerendering) the Listing is generated on the calling thread instead.
+ * The editor's side of the Listing worker: one worker, started on the first request and ended
+ * once it has had nothing to do for a while, since the editor keeps the Listings it shows
+ * (`ListingDocuments`) and the worker keeps none. A worker that errors, or that falls silent with
+ * requests in hand, fails them and is replaced at the next request. Where there is no `Worker`
+ * (tests, prerendering) the Listing is generated on the calling thread instead.
  */
 type WorkerState = {
     worker: Worker
@@ -33,12 +44,24 @@ type WorkerState = {
     held: [ListingRequest, Transferable[]][]
 }
 
+type ClientOptions = { silenceMs?: number; idleMs?: number }
+
 export class ListingClient {
     private state?: WorkerState
     private pending = new Map<number, Pending>()
     private nextId = 1
+    private watchdog: ReturnType<typeof setTimeout> | undefined
+    private idle: ReturnType<typeof setTimeout> | undefined
+    private readonly silenceMs: number
+    private readonly idleMs: number
 
-    constructor(private readonly WorkerClass: WorkerConstructor | undefined = ListingWorker) {}
+    constructor(
+        private readonly WorkerClass: WorkerConstructor | undefined = ListingWorker,
+        options: ClientOptions = {}
+    ) {
+        this.silenceMs = options.silenceMs ?? LISTING_WORKER_SILENCE_MS
+        this.idleMs = options.idleMs ?? LISTING_WORKER_IDLE_MS
+    }
 
     generate(order: ListingOrder): Promise<Listing> {
         const version = order.version ?? 'v1'
@@ -56,7 +79,62 @@ export class ListingClient {
         return new Promise<Listing>((resolve, reject) => {
             this.pending.set(request.id, { resolve, reject, onProgress: order.onProgress })
             this.post(request, [bytes.buffer])
+            this.heard()
         })
+    }
+
+    /**
+     * The worker said something, or was given something to do: it has until the watchdog fires
+     * to say more while requests wait, and is ended once none do for a while.
+     */
+    private heard() {
+        clearTimeout(this.watchdog)
+        clearTimeout(this.idle)
+        const state = this.state
+        if (!state) return
+        if (this.pending.size)
+            this.watchdog = setTimeout(
+                () =>
+                    this.fail(
+                        state,
+                        'The Listing could not be generated: its worker stopped answering'
+                    ),
+                this.silenceMs
+            )
+        else this.idle = setTimeout(() => this.end(state), this.idleMs)
+    }
+
+    private answer(
+        id: number,
+        pending: Pending,
+        response: Exclude<ListingResponse, { type: 'ready' }>
+    ) {
+        if (response.type === 'progress') return pending.onProgress?.(response.fraction)
+        this.pending.delete(id)
+        if (response.type === 'listing') pending.resolve(response.listing)
+        //bytes that cannot be listed fail for good; anything else may not happen again
+        else
+            pending.reject(
+                response.listing ? new ListingError(response.message) : new Error(response.message)
+            )
+    }
+
+    /** Ends a worker, so the next request starts a fresh one. */
+    private end(state: WorkerState) {
+        if (this.state !== state) return
+        clearTimeout(this.watchdog)
+        clearTimeout(this.idle)
+        state.worker.terminate()
+        this.state = undefined
+    }
+
+    /** Fails every request waiting on a worker that died or fell silent, and ends it. */
+    private fail(state: WorkerState, message: string) {
+        if (this.state !== state) return
+        this.end(state)
+        const waiting = [...this.pending.values()]
+        this.pending.clear()
+        for (const pending of waiting) pending.reject(new Error(message))
     }
 
     private async generateHere(order: ListingOrder, version: ListingNameVersion) {
@@ -84,32 +162,26 @@ export class ListingClient {
                 state.ready = true
                 for (const [request, transfer] of state.held.splice(0))
                     worker.postMessage(request, transfer)
+                this.heard()
                 return
             }
             const pending = this.pending.get(response.id)
-            if (!pending) return
-            if (response.type === 'progress') return pending.onProgress?.(response.fraction)
-            this.pending.delete(response.id)
-            if (response.type === 'listing') pending.resolve(response.listing)
-            else pending.reject(new Error(response.message))
+            if (pending) this.answer(response.id, pending, response)
+            this.heard()
         })
         // A worker that fails to load or dies answers nothing: fail what waits on it, and let the
         // next request start a fresh one.
-        const fail = (message: string) => {
-            if (this.state !== state) return
-            worker.terminate()
-            this.state = undefined
-            const waiting = [...this.pending.values()]
-            this.pending.clear()
-            for (const pending of waiting) pending.reject(new Error(message))
-        }
         worker.addEventListener('error', (event) =>
-            fail(
+            this.fail(
+                state,
                 `The Listing could not be generated: ${event.message || 'its worker failed to start'}`
             )
         )
         worker.addEventListener('messageerror', () =>
-            fail('The Listing could not be generated: its worker sent an unreadable message')
+            this.fail(
+                state,
+                'The Listing could not be generated: its worker sent an unreadable message'
+            )
         )
         return state
     }

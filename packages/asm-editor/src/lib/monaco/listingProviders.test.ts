@@ -14,6 +14,7 @@ import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import {
     listingLineNumbers,
     listingLineNumberWidth,
+    sharedAddressDigits,
     modelListing,
     setModelListing
 } from './listingModels'
@@ -216,6 +217,24 @@ describe('the Listing in the editor', () => {
         expect(numbers(1)).toBe('')
         expect(numbers(lines.length)).toBe('')
         expect(listingLineNumberWidth(listing)).toBe(12)
+    })
+
+    it('prints the low eight digits on a phone, which every address of the Listing shares the rest of', () => {
+        const short = listingLineNumbers(listing, true)
+        const call = lineOf('call strcmp@plt', lineOf('main:'))
+        const full = (listing.lines.addresses[call] + PIE_LOAD_BASE).toString(16)
+        expect(sharedAddressDigits(listing)).toBe(4)
+        expect(short(call + 1)).toBe(full.slice(4))
+        expect(short(1)).toBe('')
+        expect(listingLineNumberWidth(listing, true)).toBe(8)
+        //addresses that fit in eight digits, or that differ in the high ones, stay whole
+        const fixed = { ...listing, base: 0 }
+        expect(sharedAddressDigits(fixed)).toBe(0)
+        expect(listingLineNumbers(fixed, true)(call + 1)).toBe(
+            listing.lines.addresses[call].toString(16)
+        )
+        const spread = { ...listing, base: 0xfffff000 }
+        expect(sharedAddressDigits(spread)).toBe(0)
     })
 
     it('outlines functions and folds functions and sections', () => {

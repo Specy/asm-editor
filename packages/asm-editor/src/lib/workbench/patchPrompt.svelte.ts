@@ -29,7 +29,9 @@ export class PatchPrompt {
 
     constructor(
         readonly site: PatchSite,
-        private readonly patcher: PatchPromptPatcher
+        private readonly patcher: PatchPromptPatcher,
+        /** The Build whose Debug session it was opened in: it belongs to no other. */
+        readonly buildGeneration = 0
     ) {
         this.text = site.text
     }

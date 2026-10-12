@@ -1,3 +1,5 @@
+import type { ListingHolders } from './addressNames'
+
 /**
  * What the Listing generator produces, and the lookups the editor needs on it. A Listing is
  * derived from an Executable's (or a library's) bytes whenever it is shown and never saved
@@ -103,10 +105,23 @@ export type Listing = {
     labels: ListingLabel[]
     /** In address order. */
     functions: ListingFunction[]
+    /**
+     * The named objects and strings, which name an address inside one `name+0xN` and give an
+     * operand reaching into a string its comment. Absent from a Listing made by hand.
+     */
+    holders?: ListingHolders
     /** Link-time entry point, 0 for a library without one. */
     entry: number
     /** Link-time address of `main`, from a symbol or the `__libc_start_main` pattern, if known. */
     main?: number
+}
+
+/**
+ * Bytes the generator cannot make a Listing of, with the reason a person can read: the same bytes
+ * would fail again. Any other failure, such as the Listing worker dying, may not.
+ */
+export class ListingError extends Error {
+    override name = 'ListingError'
 }
 
 /** The line holding the byte at a link-time address, or -1 when no line covers it. */

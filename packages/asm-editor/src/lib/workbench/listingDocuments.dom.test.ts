@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import { editorFileKind } from './editorFileRouting'
-import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import { LINE_KIND, ListingError, type Listing } from '#lib/listing/listing.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { ListingOrder } from '#lib/listing/listingClient.ts'
 import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
@@ -297,6 +297,77 @@ describe("a library's Listing", () => {
         flushSync()
         expect(group.displayedListing?.status).toBe('ready')
         expect(group.instructionLine).toBe(8)
+    })
+})
+
+describe('a program running from inside a Listing line', () => {
+    it('notes on the line how far in it runs and what the Core decodes there', async () => {
+        const fixture = setup()
+        const { session, emulator, project, listings } = fixture
+        const files: typeof project.files = JSON.parse(JSON.stringify(project.files))
+        emulator.buildSources = { entry: 'crackme', files }
+        emulator.canExecute = true
+        const program = emulator.listings!.openExecutable('crackme', files.crackme)!
+        emulator.listings!.setSession('crackme', program)
+        listings.orders.forEach((order) => order.finish())
+        await settle(program)
+        const fake = emulator as typeof emulator & {
+            instructionCodeAt: (address: bigint) => string | undefined
+        }
+        fake.instructionCodeAt = (address) =>
+            address === BigInt(PIE_LOAD_BASE + 0x1006) ? 'add al, ch' : undefined
+        //`call puts@plt` is 5 bytes at 0x1004, on line 6
+        emulator.currentFile = 'crackme'
+        emulator.line = 6
+        emulator.pc = BigInt(PIE_LOAD_BASE + 0x1004)
+        await session.revealSourceLocation('crackme', 6)
+        flushSync()
+        const group = session.groups[0]
+        expect(group.instructionLine).toBe(6)
+        expect(group.runningWithin).toBeUndefined()
+        emulator.pc = BigInt(PIE_LOAD_BASE + 0x1006)
+        flushSync()
+        expect(group.runningWithin).toEqual({
+            line: 6,
+            text: 'running from inside this instruction, at +2: add al, ch'
+        })
+        //and nothing once the program ended
+        emulator.terminated = true
+        flushSync()
+        expect(group.runningWithin).toBeUndefined()
+    })
+})
+
+describe('a Listing that failed', () => {
+    it('is made again unless its bytes cannot be listed', async () => {
+        const failures: Error[] = [
+            new Error('its worker stopped answering'),
+            new ListingError('not an ELF file')
+        ]
+        let generated = 0
+        const listings = new ListingDocuments(() => {
+            generated++
+            return Promise.reject(failures.shift()!)
+        })
+        const order = {
+            name: 'crackme',
+            base: PIE_LOAD_BASE,
+            content: 'crackme',
+            bytes: () => new Uint8Array()
+        }
+        const first = listings.open(order)
+        await settle(first)
+        expect(first.status).toBe('failed')
+        expect(first.lasting).toBe(false)
+        //the worker's failure, not the bytes': asked for again, it is generated again
+        const second = listings.open(order)
+        expect(second).not.toBe(first)
+        await settle(second)
+        expect(second.lasting).toBe(true)
+        expect(second.error).toBe('not an ELF file')
+        //bytes that cannot be listed would fail again
+        expect(listings.open(order)).toBe(second)
+        expect(generated).toBe(2)
     })
 })
 

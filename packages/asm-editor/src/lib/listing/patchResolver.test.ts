@@ -273,6 +273,15 @@ describe('a name NASM also reserves', () => {
         }
     }
 
+    it('reads a label whose own name starts with $ as written, then without the $', () => {
+        //Go names its floating-point constants `$f64.<bits>`
+        const listing = listingWith(['$f64.3ff0000000000000', 'main'])
+        expect(resolved(listing, 'movsd xmm0, [rel $f64.3ff0000000000000]', 1).text).toBe(
+            'movsd xmm0, [rel 0x401000]'
+        )
+        expect(resolved(listing, 'call $main', 1).text).toBe('call 0x401010')
+    })
+
     it('is a branch target when it is all the operand is', () => {
         const listing = listingWith(['abs', 'to'])
         expect(resolved(listing, 'call abs', 0).text).toBe('call 0x401000')

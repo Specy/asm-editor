@@ -22,4 +22,8 @@ export type ListingResponse =
     /** Sent only for a Listing that takes long enough for a person to wait on it. */
     | { type: 'progress'; id: number; fraction: number }
     | { type: 'listing'; id: number; listing: Listing }
-    | { type: 'failure'; id: number; message: string }
+    /**
+     * `listing` when the bytes cannot be listed (a `ListingError`), which the same bytes would
+     * meet again; anything else may not happen next time.
+     */
+    | { type: 'failure'; id: number; message: string; listing: boolean }

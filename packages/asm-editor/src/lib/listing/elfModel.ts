@@ -66,7 +66,10 @@ export type ElfModel = {
     regions: Region[]
     /** Whether {@link regions} come from load segments because the section headers are unusable. */
     fromSegments: boolean
-    /** Every name the symbol tables give an address in a region, best first. */
+    /**
+     * Every name the symbol tables give an address in a region, or just past one, before the next
+     * (`__TMC_END__` at the end of `.data`, ahead of an alignment gap), best first.
+     */
     symbolNames: Map<number, SymbolName[]>
     /** By the address they patch; the first relocation of an address wins. */
     relocations: Map<number, Relocation>
@@ -219,6 +222,15 @@ export function readElfModel(
         }
         return undefined
     }
+    //a symbol at a region's end, or in the gap alignment leaves before the next region, names the
+    //end of what the region holds; after the last region only its very end does
+    const afterRegion = (address: number) => {
+        const index = regionBefore(regions, address)
+        if (index < 0) return false
+        const end = regions[index].address + regions[index].size
+        const next = regions[index + 1]
+        return next ? address >= end && address < next.address : address === end
+    }
 
     const symbolNames = new Map<number, SymbolName[]>()
     const addSymbol = (symbol: ElfAnalysisSymbol, origin: ListingNameOrigin) => {
@@ -227,7 +239,7 @@ export function readElfModel(
         // Undefined, absolute and common symbols name no address of the file.
         if (symbol.sectionIndex === 0 || symbol.sectionIndex >= 0xff00) return
         const address = toNumber(symbol.value)
-        if (!regionOf(address)) return
+        if (!regionOf(address) && !afterRegion(address)) return
         const name = printableSymbolName(versionedName(symbol))
         const names = symbolNames.get(address) ?? []
         if (names.some((existing) => existing.name === name)) return
@@ -259,6 +271,21 @@ export function readElfModel(
             })
     }
     return { analysis, bytes, regions, fromSegments, symbolNames, relocations }
+}
+
+/** The index of the last region that starts at or below a link-time address, or -1. */
+export function regionBefore(regions: Region[], address: number): number {
+    let low = 0
+    let high = regions.length - 1
+    let found = -1
+    while (low <= high) {
+        const middle = (low + high) >> 1
+        if (regions[middle].address <= address) {
+            found = middle
+            low = middle + 1
+        } else high = middle - 1
+    }
+    return found
 }
 
 /** The region holding a link-time address, by binary search over the sorted regions. */

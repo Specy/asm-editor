@@ -14,6 +14,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vite-plus/test'
 import { loadDecoder, type ListingDecoder } from './decoder'
 import { generateListing, ListingError } from './generateListing'
+import { findProgramStart } from './programStart'
 import { functionAtLine, LINE_KIND, lineOfAddress, type Listing } from './listing'
 
 const UPDATE = !!process.env.UPDATE_LISTING_SNAPSHOTS
@@ -289,6 +290,20 @@ describe('Listings of dynamically linked programs', () => {
         expect(listing.entry).toBe(0x1100)
     })
 
+    it('names an address just past a section, which alignment separates from the next', () => {
+        //cpp's .data ends at 0x6020, where __TMC_END__ and _edata are, and .bss starts at 0x6040
+        const bytes = fixture('cpp')
+        const listing = listingOf(bytes, 'cpp')
+        expectConsistent(listing, bytes)
+        const lines = linesOf(listing)
+        const end = lines.indexOf('__TMC_END__:')
+        expect(lines.slice(end, end + 4)).toEqual(['__TMC_END__:', '_edata:', '', 'section .bss'])
+        expect(listing.lines.addresses[end]).toBe(0x6020)
+        expect(lines.filter((line) => line.trim() === 'lea rdi, [rel _edata]')).toHaveLength(2)
+        expect(listing.text).not.toContain('0x55555555a020')
+        expect(lines.at(-2)).toBe('_end:')
+    })
+
     it('names what strip removed: functions, main, library calls and strings', () => {
         const bytes = fixture('crackme-stripped')
         const listing = listingOf(bytes, 'crackme-stripped')
@@ -490,6 +505,46 @@ describe('every fixture', () => {
             expectConsistent(listing, bytes)
             expect(listing.main, name).toBeDefined()
         }
+    })
+})
+
+describe("a Build's quick look for main", () => {
+    it('finds the entry point and main the Listing names, from _start alone', () => {
+        // prettier-ignore
+        const passedInEdi = buildElf([
+            0xbf, 0x90, 0x00, 0x40, 0x00, 0xe8, 0x01, 0x00, 0x00, 0x00, 0xf4, 0xc3,
+            0x90, 0x90, 0x90, 0x90, 0x31, 0xc0, 0xc3
+        ], [])
+        const cases: [string, Uint8Array][] = [
+            ...[
+                'argv-env',
+                'avx',
+                'cpp',
+                'crackme',
+                'crackme-argv',
+                'crackme-static',
+                'crackme-static-pie',
+                'crackme-stripped',
+                'hello-atexit',
+                'hello-atexit-static',
+                'hello-atexit-static-pie',
+                'math',
+                'overflow'
+            ].map((name): [string, Uint8Array] => [name, fixture(name)]),
+            ['stripped static', withoutSymbolTable(fixture('hello-atexit-static'))],
+            ['no section headers', withoutSectionHeaders(fixture('crackme'))],
+            ['main in edi', passedInEdi],
+            ['hand-built', handBuiltElf()],
+            ['libc', libc()]
+        ]
+        for (const [name, bytes] of cases) {
+            const listing = listingOf(bytes, name)
+            expect(findProgramStart(decoder, bytes), name).toEqual({
+                entry: listing.entry,
+                main: listing.main
+            })
+        }
+        expect(findProgramStart(decoder, new TextEncoder().encode('not an ELF'))).toBeUndefined()
     })
 })
 

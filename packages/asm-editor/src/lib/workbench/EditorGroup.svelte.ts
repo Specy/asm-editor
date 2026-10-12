@@ -10,7 +10,7 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { lineOfAddress, type Listing } from '#lib/listing/listing.ts'
+import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
@@ -128,7 +128,8 @@ export class EditorGroup {
             prompt.site.document === this.displayedListing &&
             prompt.site.path === this.displayedPath &&
             selection.sourceKind === 'build' &&
-            selection.buildGeneration === this.session.buildGeneration
+            selection.buildGeneration === this.session.buildGeneration &&
+            prompt.buildGeneration === this.session.buildGeneration
             ? prompt
             : undefined
     }
@@ -323,6 +324,28 @@ export class EditorGroup {
         )
             ? s.emulator.line
             : -1
+    }
+    /**
+     * A note on the current line of a Listing when the program runs from inside the instruction
+     * the line shows, not at its first byte: a jump into the middle of an instruction, or data
+     * decoded as code, as CTF binaries do on purpose. What runs is not the line's text, so the note
+     * says how far in and what the Core decodes there.
+     */
+    get runningWithin(): { line: number; text: string } | undefined {
+        const s = this.session
+        const document = this.displayedListing
+        const listing = this.displayedListingView
+        const line = this.instructionLine
+        if (!document || !listing || line < 0 || !s.debugSession || s.emulator.terminated)
+            return undefined
+        if (listing.lines.kinds[line] !== LINE_KIND.instruction) return undefined
+        const offset = Number(s.emulator.pc) - (listing.lines.addresses[line] + document.base)
+        if (offset <= 0 || offset >= listing.lines.sizes[line]) return undefined
+        const code = s.emulator.instructionCodeAt?.(s.emulator.pc)
+        return {
+            line,
+            text: `running from inside this instruction, at +${offset}${code ? `: ${code}` : ''}`
+        }
     }
     get highlightedLine() {
         const pair = this.session.mappingPair

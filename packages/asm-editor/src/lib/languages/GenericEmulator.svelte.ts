@@ -1450,6 +1450,15 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    instructionCodeAt(address: bigint): string | undefined {
+        if (!this.getInstance()) return undefined
+        try {
+            return this._getInstructionAt(address)?.code || undefined
+        } catch {
+            return undefined
+        }
+    }
+
     getLineFromAddress(address: bigint): number {
         return this.getSourceLocationFromAddress(address)?.line ?? -1
     }

@@ -7,9 +7,10 @@
  */
 import { readFileSync } from 'node:fs'
 import { analyze } from '@specy/x86/elf'
-import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { instructionAddressAt, LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import { listingClient } from '#lib/listing/listingClient.ts'
 import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
@@ -72,7 +73,9 @@ async function built(sources: BuildSources) {
     await emulator.compile(100_000, sources)
     expect(emulator.errors).toEqual([])
     expect(emulator.canExecute).toBe(true)
+    //the Build does not wait for the Listing, which fills the lines in when it is ready
     const document = emulator.listings!.session.get(sources.entry)!
+    await document.ready
     expect(document.status).toBe('ready')
     return { emulator, listing: document.listing! }
 }
@@ -186,6 +189,35 @@ describe('a Debug session of an Executable', () => {
 })
 
 describe('the start of an Executable', () => {
+    it('stops at main without waiting for the Listing, whose lines come when it is ready', async () => {
+        //a Listing that takes as long as the test says, as a large static binary's does
+        let finish!: () => void
+        const held = new Promise<void>((resolve) => (finish = resolve))
+        const generate = listingClient.generate.bind(listingClient)
+        const spy = vi.spyOn(listingClient, 'generate').mockImplementation(async (order) => {
+            await held
+            return generate(order)
+        })
+        try {
+            const sources = executableSources()
+            const emulator = await emulatorFor(sources)
+            await emulator.compile(100_000, sources)
+            expect(emulator.canExecute).toBe(true)
+            const document = emulator.listings!.session.get('crackme')!
+            expect(document.status).toBe('generating')
+            //at main, found from _start by the Listing's own rules
+            expect(emulator.pc).toBe(BigInt(PIE_LOAD_BASE + 0x11e9))
+            expect(emulator.currentFile).toBe('crackme')
+            expect(emulator.line).toBe(-1)
+            finish()
+            await document.ready
+            await new Promise((resolve) => setTimeout(resolve))
+            expect(emulator.line).toBe(lineOf(document.listing!, 'main:') + 1)
+        } finally {
+            spy.mockRestore()
+        }
+    })
+
     it("stops a Build at main's first instruction, before which nothing can be undone", async () => {
         const { emulator, listing } = await built(executableSources())
         expect(listing.main).toBeDefined()
@@ -203,6 +235,22 @@ describe('the start of an Executable', () => {
         expect(emulator.undo(5)).toBe(2)
         expect(emulator.pc).toBe(BigInt(listing.main! + PIE_LOAD_BASE))
         expect(emulator.canUndo).toBe(false)
+    })
+
+    it('reads the loaded objects once for code outside them, until the program runs again', async () => {
+        const { emulator } = await built(executableSources())
+        const core = (emulator as unknown as { core: { getLoadedObjects(): unknown[] } }).core
+        const read = vi.spyOn(core, 'getLoadedObjects')
+        //the stack, where a pwn challenge's shellcode runs: in no loaded object
+        const stack = emulator.sp
+        for (let i = 0; i < 5; i++) emulator.getSourceLocationFromAddress(stack)
+        expect(read).toHaveBeenCalledTimes(1)
+        //a Step may map memory, so the next question reads the list again, once
+        await emulator.step()
+        read.mockClear()
+        for (let i = 0; i < 5; i++) emulator.getSourceLocationFromAddress(stack)
+        expect(read).toHaveBeenCalledTimes(1)
+        read.mockRestore()
     })
 
     it('opens the memory view on the stack page at main, as an assembled program does', async () => {

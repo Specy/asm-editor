@@ -9,7 +9,8 @@
     let {
         document,
         library = false,
-        patchable = false
+        patchable = false,
+        touch = false
     }: {
         document: ListingDocument
         /** A shared library's Listing, under `@lib/`, rather than the Executable's own. */
@@ -19,6 +20,8 @@
          * (decision 13): the notice says how.
          */
         patchable?: boolean
+        /** A screen without a pointer that hovers, where a long press opens the context menu. */
+        touch?: boolean
     } = $props()
 </script>
 
@@ -27,6 +30,9 @@
         The Listing of {document.name} could not be generated.
     {:else if library}
         Generated Listing of {document.name}, a library the program loaded: read-only.
+    {:else if patchable && touch}
+        Generated Listing of {document.name}: read-only. While the program is paused, a long press
+        on a line offers to patch its instruction, in memory only.
     {:else if patchable}
         Generated Listing of {document.name}: read-only. While the program is paused, Space or the
         context menu patches the instruction on a line, in memory only.

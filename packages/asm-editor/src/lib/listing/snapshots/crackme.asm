@@ -428,3 +428,4 @@ __bss_start:
 stdin@GLIBC_2.2.5: resb 8
 completed.0: resb 1
     resb 7
+_end:

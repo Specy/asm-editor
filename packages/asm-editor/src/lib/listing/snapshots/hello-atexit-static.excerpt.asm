@@ -1,4 +1,4 @@
-; Excerpt of the Listing of hello-atexit-static, whose whole text has SHA-256 d1417821b33f3112261a53ce4359bf4892a30fd77cc0efc8cf1df01e9e947b68
+; Excerpt of the Listing of hello-atexit-static, whose whole text has SHA-256 df247c3e3ecef15e61c3b24d751d3bee80f256307bf9ca133248b0748d7d8016
 ; hello-atexit-static
 ; ELF64 x86-64 executable at fixed addresses (not PIE)
 ; Statically linked: no dynamic linker, no shared libraries

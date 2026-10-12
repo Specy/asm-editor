@@ -18,6 +18,7 @@ import { ListingPatcher } from '#lib/listing/listingPatcher.svelte.ts'
 import { withoutComment } from '#lib/listing/patchResolver.ts'
 import PatchPromptView from '#cmp/specific/workbench/PatchPrompt.svelte'
 import ListingNotice from '#cmp/specific/workbench/ListingNotice.svelte'
+import { PatchPrompt } from './patchPrompt.svelte'
 import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
@@ -324,6 +325,69 @@ describe('the Patch instruction prompt', () => {
         expect(group.openPatchPrompt).toBeUndefined()
     })
 
+    it('is a modal dialog named by its title, which Escape closes from any of its controls', async () => {
+        const { host, button, closed } = await opened()
+        const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!
+        expect(dialog.getAttribute('aria-modal')).toBe('true')
+        const title = document.getElementById(dialog.getAttribute('aria-labelledby')!)
+        expect(title?.textContent).toMatch(/^Patch the instruction at 0x[\da-f]+$/)
+        const cancel = button('Cancel')
+        cancel.focus()
+        cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+        flushSync()
+        expect(closed).toEqual(['close'])
+    })
+
+    it('keeps Tab among its own controls', async () => {
+        const { input, button, type } = await opened()
+        await type('je .LAB_2')
+        const patch = button('Patch')
+        expect(patch.disabled).toBe(false)
+        patch.focus()
+        const tab = (shiftKey: boolean) => {
+            const event = new KeyboardEvent('keydown', {
+                key: 'Tab',
+                shiftKey,
+                bubbles: true,
+                cancelable: true
+            })
+            document.activeElement!.dispatchEvent(event)
+            return event.defaultPrevented
+        }
+        //past the last control, back to the first, and the other way round
+        expect(tab(false)).toBe(true)
+        expect(document.activeElement).toBe(input)
+        expect(tab(true)).toBe(true)
+        expect(document.activeElement).toBe(patch)
+        //between its controls, the browser's own Tab
+        button('Cancel').focus()
+        expect(tab(false)).toBe(false)
+    })
+
+    it('gives the keyboard back when it goes away holding it', async () => {
+        const fixture = await setup()
+        const shown = await fixture.startSession()
+        fixture.session.openPatchPrompt(shown.group, shown.check)
+        const host = document.createElement('div')
+        document.body.append(host)
+        const released: string[] = []
+        const view = mount(PatchPromptView, {
+            target: host,
+            props: {
+                prompt: shown.group.openPatchPrompt!,
+                available: true,
+                onapply: () => undefined,
+                onclose: () => undefined,
+                onrelease: () => released.push('release')
+            }
+        })
+        flushSync()
+        host.querySelector('input')!.focus()
+        unmount(view)
+        host.remove()
+        expect(released).toEqual(['release'])
+    })
+
     it('closes when the Debug session it was opened in ends', async () => {
         const { session, emulator, group } = await opened()
         expect(group.openPatchPrompt).toBeDefined()
@@ -332,6 +396,33 @@ describe('the Patch instruction prompt', () => {
         session.clearExecution()
         flushSync()
         expect(group.openPatchPrompt).toBeUndefined()
+    })
+
+    it('does not come back with the next Build of the same Executable', async () => {
+        const { session, emulator, group, type, startSession, pokes } = await opened()
+        await type('je .LAB_2')
+        //Stop with the prompt open, then Build again: the same Listing, a new Debug session
+        emulator.listings!.clearSession()
+        emulator.canExecute = false
+        session.clearExecution()
+        flushSync()
+        const again = await startSession()
+        expect(again.group).toBe(group)
+        expect(group.patchPrompt).toBeUndefined()
+        expect(group.openPatchPrompt).toBeUndefined()
+        expect(session.applyPatch(group)).toBe(false)
+        expect(pokes).toEqual([])
+    })
+
+    it('belongs to the Build it was opened in', async () => {
+        const { session, group, check, patcher } = await opened()
+        const prompt = group.openPatchPrompt!
+        expect(prompt.buildGeneration).toBe(session.buildGeneration)
+        //a prompt of an earlier Build, left on the group, is never the open one
+        group.patchPrompt = new PatchPrompt(prompt.site, patcher, session.buildGeneration - 1)
+        expect(group.openPatchPrompt).toBeUndefined()
+        expect(session.openPatchPrompt(group, check)).toBe(true)
+        expect(group.openPatchPrompt?.buildGeneration).toBe(session.buildGeneration)
     })
 
     it('Cancel leaves memory as it is', async () => {
@@ -366,5 +457,15 @@ describe('the Listing notice during a Debug session', () => {
             'Generated Listing of crackme: read-only. While the program is paused, Space or the context menu patches the instruction on a line, in memory only.'
         )
         unmount(notice)
+        //a touch screen has no Space, and its context menu opens on a long press
+        const touch = mount(ListingNotice, {
+            target: host,
+            props: { document: listing, patchable: true, touch: true }
+        })
+        flushSync()
+        expect(host.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+            'Generated Listing of crackme: read-only. While the program is paused, a long press on a line offers to patch its instruction, in memory only.'
+        )
+        unmount(touch)
     })
 })

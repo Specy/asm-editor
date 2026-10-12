@@ -38,7 +38,11 @@
         type ListingModel
     } from '#lib/monaco/listingModels.ts'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
-    import { lineActionContextKey, type EditorLineAction } from '#lib/monaco/editorLineActions.ts'
+    import {
+        lineActionContextKey,
+        lineActionDescriptor,
+        type EditorLineAction
+    } from '#lib/monaco/editorLineActions.ts'
 
     interface Props {
         disabled?: boolean
@@ -92,6 +96,8 @@
         canBreakAt?: (line: number) => boolean
         /** 0-based lines a Debug session patched, marked beside their line numbers. */
         patchedLines?: readonly number[]
+        /** A note written after a line's text, such as running from inside its instruction. */
+        lineNote?: { line: number; text: string }
         /**
          * Commands on the cursor's line, in the context menu and on their keys, offered on the
          * lines where they are available: "Patch instruction…" on a Listing.
@@ -123,6 +129,7 @@
         listing,
         canBreakAt,
         patchedLines = [],
+        lineNote,
         lineActions
     }: Props = $props()
     /**
@@ -417,6 +424,25 @@
         selectModel(activeSource)
     })
 
+    /** `lineNote`, written after the end of its line's text. */
+    function lineNoteDecorations(
+        currentEditor: monaco.editor.IStandaloneCodeEditor,
+        currentMonaco: MonacoType
+    ): monaco.editor.IModelDeltaDecoration[] {
+        const model = currentEditor.getModel()
+        if (!lineNote || !model || lineNote.line >= model.getLineCount()) return []
+        const line = lineNote.line + 1
+        const end = model.getLineMaxColumn(line)
+        return [
+            {
+                range: new currentMonaco.Range(line, end, line, end),
+                options: {
+                    after: { content: `  ⟵ ${lineNote.text}`, inlineClassName: 'line-note' }
+                }
+            }
+        ]
+    }
+
     function lineActionKey(action: EditorLineAction) {
         let key = lineActionKeys.get(action.id)
         if (!key && editor) {
@@ -443,18 +469,12 @@
         const registered = untrack(() =>
             actions.map((action) => {
                 lineActionKey(action)
-                return currentEditor.addAction({
-                    id: action.id,
-                    label: action.label,
-                    keybindings: action.keybindings?.(currentMonaco),
-                    precondition: lineActionContextKey(action),
-                    contextMenuGroupId: '1_modification',
-                    contextMenuOrder: 0,
-                    run: (target) => {
+                return currentEditor.addAction(
+                    lineActionDescriptor(action, currentMonaco, (target) => {
                         const line = (target.getPosition()?.lineNumber ?? 0) - 1
                         if (line >= 0 && action.available(line)) action.run(line)
-                    }
-                })
+                    })
+                )
             })
         )
         return () => {
@@ -496,8 +516,8 @@
         if (!activeModelKey || !editor) return
         if (listing) {
             editor.updateOptions({
-                lineNumbers: listingLineNumbers(listing.listing),
-                lineNumbersMinChars: listingLineNumberWidth(listing.listing)
+                lineNumbers: listingLineNumbers(listing.listing, listing.shortAddresses),
+                lineNumbersMinChars: listingLineNumberWidth(listing.listing, listing.shortAddresses)
             })
             addressGutter = true
         } else if (addressGutter) {
@@ -761,6 +781,7 @@
                           }
                       ]
                     : []),
+                ...lineNoteDecorations(currentEditor, currentMonaco),
                 ...patchedLines.map((line) => ({
                     range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
                     options: {
@@ -1076,6 +1097,12 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    //what runs when it is not what the line shows, after the line's text
+    :global(.line-note) {
+        color: var(--warning, #d49a30);
+        font-style: italic;
     }
 
     //a line whose instruction a Debug session patched: a bar beside its address, and a tint

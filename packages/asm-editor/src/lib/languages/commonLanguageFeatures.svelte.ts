@@ -713,6 +713,12 @@ export type BaseEmulatorActions = {
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
     /**
+     * The Core's own decoding of the instruction at an address, whatever line shows it: what runs
+     * there when the program jumps into the middle of a Listing's instruction. Undefined when the
+     * Core cannot read one there.
+     */
+    instructionCodeAt?: (address: bigint) => string | undefined
+    /**
      * Whether a Poke is possible right now, which is exactly when Step is
      * ([the design record](../../../../../docs/design/pokes.md)): after a Build, with no Interrupt
      * pending, the program not terminated and no Run, Step or input handler owning the Core. The

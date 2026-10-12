@@ -1,7 +1,7 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
-import type { Listing } from './listing'
+import { ListingError, type Listing } from './listing'
 import type { ListingOrder } from './listingClient'
 import { plannedLoadBase } from './listingPaths'
 
@@ -23,6 +23,11 @@ export class ListingDocument {
     progress = $state<number | undefined>()
     listing = $state.raw<Listing | undefined>()
     error = $state<string | undefined>()
+    /**
+     * Whether it failed for good: its bytes cannot be listed (a `ListingError`). Any other failure,
+     * such as the Listing worker dying, is tried again the next time the Listing is asked for.
+     */
+    lasting = false
     /** Settles when the Listing is ready; rejects when it cannot be generated. */
     readonly ready: Promise<Listing>
 
@@ -49,6 +54,7 @@ export class ListingDocument {
             },
             (error: unknown) => {
                 this.error = error instanceof Error ? error.message : String(error)
+                this.lasting = error instanceof ListingError
                 this.status = 'failed'
                 throw error
             }
@@ -119,14 +125,16 @@ export class ListingDocuments {
     }
 
     /**
-     * The document of these bytes at this base, the one made before when there is one. A failed
-     * Listing stays failed: the same bytes would fail again.
+     * The document of these bytes at this base, the one made before when there is one. A Listing
+     * whose bytes cannot be listed stays failed, since they would fail again; one that failed for
+     * any other reason (its worker died) is generated again.
      */
     open(order: ListingDocumentOrder): ListingDocument {
         const key = `${order.base}\0${order.name}\0${this.contentId(order.content)}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
-        else document = new ListingDocument(order.name, order.base, order.bytes(), this.generate)
+        if (!document || (document.status === 'failed' && !document.lasting))
+            document = new ListingDocument(order.name, order.base, order.bytes(), this.generate)
         this.documents.set(key, document)
         if (this.documents.size > KEPT_DOCUMENTS)
             this.documents.delete(this.documents.keys().next().value!)

@@ -125,7 +125,8 @@ describe('shared Project editor models', () => {
     it('changes a Listing in place: only the lines that differ, with no edit reported', () => {
         const h = harness()
         const before = '; header\nmain:\n    jne .LAB_2\n    ret\n'
-        const build = { ...h.source('crackme', before, 1), changesInPlace: true }
+        const document = {}
+        const build = { ...h.source('crackme', before, 1), generatedFrom: document }
         const model = h.open(build)
         h.open({ ...build, value: before.replace('jne', 'je') })
         expect(model.getValue()).toBe(before.replace('jne', 'je'))
@@ -146,6 +147,26 @@ describe('shared Project editor models', () => {
         expect(file.setValue).toHaveBeenCalledTimes(1)
         expect(file.applyEdits).not.toHaveBeenCalled()
     })
+    it('makes a new model for another Listing under the same key, with its whole text', () => {
+        const h = harness()
+        const first = { ...h.source('crackme', 'old listing\n', 0), generatedFrom: {} }
+        const model = h.open(first)
+        //the Executable's File replaced by other bytes: the same path, another document
+        const replaced = { ...first, value: 'new listing\n', generatedFrom: {} }
+        const next = h.open(replaced)
+        expect(next).not.toBe(model)
+        expect(model.isDisposed()).toBe(true)
+        expect(h.created).toHaveLength(2)
+        expect(next.getValue()).toBe('new listing\n')
+        expect(next.setValue).not.toHaveBeenCalled()
+        expect(next.applyEdits).not.toHaveBeenCalled()
+        //and the same document again keeps it
+        expect(h.open({ ...replaced })).toBe(next)
+        //a File's model that was a Listing's becomes a File's own
+        const file = h.open({ ...h.source('crackme', 'text', 0) })
+        expect(file).not.toBe(next)
+    })
+
     it('retains models through tab closure and separates immutable build generations', () => {
         const h = harness(),
             live = h.source('main.c', 'live'),

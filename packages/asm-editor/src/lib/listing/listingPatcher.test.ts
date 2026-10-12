@@ -127,11 +127,14 @@ describe('naming a patched line’s targets', () => {
         expect(addressName(listing, labelAddress('strcmp@plt'), line)).toBe('strcmp@plt')
         expect(addressName(listing, labelAddress('s_Correct'), line)).toBe('s_Correct')
         expect(addressName(listing, labelAddress('main') + 4n, line)).toBe('main+0x4')
+        //inside a string or an object, as the generator names it: `name+0xN`
         const inside = labelAddress('s_hunter2') + 2n
-        expect(addressName(listing, inside, line)).toBeUndefined()
-        expect(addressName(listing, inside, line, new Map([[inside, 's_hunter2+0x2']]))).toBe(
-            's_hunter2+0x2'
+        expect(addressName(listing, inside, line)).toBe('s_hunter2+0x2')
+        expect(addressName(listing, labelAddress('stdin@GLIBC_2.2.5') + 4n, line)).toBe(
+            'stdin@GLIBC_2.2.5+0x4'
         )
+        //a name the line was written with comes before that
+        expect(addressName(listing, inside, line, new Map([[inside, 'DAT_x']]))).toBe('DAT_x')
         //a label at exactly the address wins over a name it was written with
         expect(
             addressName(listing, labelAddress('main'), line, new Map([[labelAddress('main'), 'x']]))
@@ -175,6 +178,13 @@ describe('naming a patched line’s targets', () => {
             lea
         )
         expect(original.text).toBe(listing.text.split('\n')[lea])
+        //and one that reaches into a string, from there, named inside it
+        const into = bytes.slice(listing.lines.offsets[lea], listing.lines.offsets[lea] + 7)
+        const view = new DataView(into.buffer)
+        view.setInt32(3, view.getInt32(3, true) + 2, true)
+        const inside = describeLine(decoder.disassemble(into, runTime(lea)), listing, bytes, lea)
+        expect(inside.instruction).toBe('lea rax, [rel s_Wrong+0x2]')
+        expect(inside.comments).toEqual(['"ong!"'])
     })
 
     it('titles a patch by its mnemonics when only they changed', () => {

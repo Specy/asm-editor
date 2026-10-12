@@ -210,6 +210,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     private loadedObjects: X86LoadedObject[] | undefined
     /**
+     * Addresses no loaded object held when the Core's list was last read for them: code on the
+     * stack or the heap, which every History row and Call stack frame there would otherwise read
+     * the list again for, at every refresh. Forgotten whenever the program runs (a Run's slice, a
+     * Step, an Undo), any of which may map memory.
+     */
+    private readonly objectMisses = new Set<bigint>()
+    /**
      * The running Executable's PLT, as link-time ranges: stubs that only jump into a library, so
      * a Step runs through them as through the library ([binary-import.md](../../../../../../docs/design/binary-import.md),
      * decision 11): a Step on `call puts@plt` stops at the instruction after it.
@@ -414,6 +421,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.executable = undefined
         this.loadingExecutable = undefined
         this.loadedObjects = undefined
+        this.mappingsMayChange()
         this.trampolines = []
         this._listings?.clearSession()
         this.patcher?.clear()
@@ -432,7 +440,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.executable = this.loadingExecutable
         this.loadingExecutable = undefined
         if (this.executable) {
-            this._listings?.setSession(this.executable.path, this.executable.document)
+            //once ready, it says where the program is: the Build does not wait for it
+            this.listingOpened(this.executable.path, this.executable.document)
             this.trampolines = pltRanges(this.executable.file)
         }
         const library = this.buildSources?.runtimeAbi
@@ -527,20 +536,21 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     diagnostics: [executableDiagnostic(sources.entry, kind.unsupported)]
                 }
             const file = sources.files[sources.entry]
+            //the Listing is generated meanwhile, and the debugger shows the program's lines once
+            //it is ready (`listingOpened`): the Build does not wait for it, since a large static
+            //binary's takes seconds, and finds `main` by the Listing's own rules from `_start`
             const document = this._listings!.openExecutable(sources.entry, file)!
-            const [info] = await Promise.all([
+            const bytes = fileBytes(file)
+            const [info, start] = await Promise.all([
                 //the Executable's own File can be read but not written, deleted or renamed while
                 //it runs
-                core.loadExecutable(fileBytes(file), {
+                core.loadExecutable(bytes, {
                     protectedPath: '/project/' + sources.entry
                 }),
-                //the debugger shows the Listing and maps every address of the program to it, so
-                //the Build waits for it; one that cannot be generated leaves the program running
-                //without lines, and its document says why
-                document.ready.catch(() => undefined)
+                this.programStartOf(bytes)
             ])
             this._buildLibraryFiles = undefined
-            this.loadingExecutable = { path: sources.entry, file, document }
+            this.loadingExecutable = { path: sources.entry, file, document, start }
             //the dynamic linker will fail to load the program with its own message, on stderr
             for (const name of info.missing)
                 this.addNote({
@@ -739,11 +749,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const holding = (objects: X86LoadedObject[] | undefined) =>
             objects?.find((object) => address >= object.base && address < object.end)
         let object = holding(this.loadedObjects)
-        if (!object && this.core) {
+        if (!object && this.core && !this.objectMisses.has(address)) {
             this.loadedObjects = this.core.getLoadedObjects()
             object = holding(this.loadedObjects)
+            if (!object) this.objectMisses.add(address)
         }
         return object
+    }
+
+    /** The program ran, or ran back: what it has mapped may have changed. */
+    private mappingsMayChange(): void {
+        this.objectMisses?.clear()
     }
 
     /**
@@ -831,16 +847,31 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.isLibraryAddress(this.core.getPc())
     }
 
-    /** `main` from the Listing (a symbol or the `_start` pattern), else the entry point. */
+    /**
+     * `main` by the Listing's rules (a symbol or the `_start` pattern, `programStart.ts`), else
+     * the entry point, found at Build without waiting for the Listing.
+     */
     _programStart(): { breakpoint: SourceBreakpoint; name: string } | undefined {
         const executable = this.executable
         if (!executable) return undefined
-        const listing = executable.document.listing
-        const main = listing?.main
-        const address = main ?? listing?.entry ?? Number(executableAnalysis(executable.file).entry)
+        const main = executable.start?.main
+        const address =
+            main ?? executable.start?.entry ?? Number(executableAnalysis(executable.file).entry)
         return {
             breakpoint: { file: executable.path, address },
             name: main === undefined ? 'its entry point' : 'main'
+        }
+    }
+
+    /** Where an Executable's own code starts, without its Listing; undefined without Zydis. */
+    private async programStartOf(bytes: Uint8Array) {
+        try {
+            this.decoder ??= await loadDecoder()
+            const { findProgramStart } = await import('#lib/listing/programStart.ts')
+            return findProgramStart(this.decoder, bytes)
+        } catch (e) {
+            console.error(e)
+            return undefined
         }
     }
 
@@ -1137,6 +1168,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const before = core.getInstructionsExecuted()
         const breakpoints = this.coreBreakpoints(request.breakpoints)
         this.loadedObjects = undefined
+        this.mappingsMayChange()
         const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
         const instructions = Number(core.getInstructionsExecuted() - before)
         if (status === CoreEmulatorStatus.Running)
@@ -1148,6 +1180,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+        this.loadedObjects = undefined
+        this.mappingsMayChange()
         await this.runWithInput(haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit, [])
     }
 
@@ -1174,6 +1208,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     async _step(): Promise<{ terminated: boolean }> {
         const core = this.requireCore()
+        this.mappingsMayChange()
         const execution = this.executionController.capture()
         await this.executionController.waitFor(execution, () => core.step())
         await this.finishBlockedInstruction(execution)
@@ -1187,6 +1222,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _undo(): void {
         const core = this.requireCore()
+        this.mappingsMayChange()
         const step = core.getUndoHistory(1)[0]
         core.undo() // Native preflight runs before either CPU or Random source changes.
         const position = step && this.randomPositions.get(step.serial)
@@ -1354,7 +1390,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 }
 
-type LoadedExecutable = { path: string; file: ProjectFile; document: ListingDocument }
+type LoadedExecutable = {
+    path: string
+    file: ProjectFile
+    document: ListingDocument
+    /** Its entry point and `main`, link-time, found at Build (`findProgramStart`). */
+    start: { entry: number; main?: number } | undefined
+}
 
 /** The sections a linker puts PLT stubs in: lazy `.plt`, `.plt.sec` with CET, `.plt.got`, `.iplt`. */
 const PLT_SECTIONS = new Set(['.plt', '.plt.sec', '.plt.got', '.iplt'])

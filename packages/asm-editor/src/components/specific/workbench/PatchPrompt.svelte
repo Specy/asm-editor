@@ -13,15 +13,24 @@
         prompt,
         available,
         onapply,
-        onclose
+        onclose,
+        onrelease
     }: {
         prompt: PatchPrompt
         /** Whether a Poke is possible now: the program paused, not waiting for input, not ended. */
         available: boolean
         onapply: () => void
         onclose: () => void
+        /**
+         * Gives the keyboard back, to the editor, when the prompt goes away while it holds it
+         * without being closed: the Debug session it was opened in ended.
+         */
+        onrelease?: () => void
     } = $props()
 
+    const uid = $props.id()
+    const titleId = `patch-prompt-title-${uid}`
+    let dialog = $state<HTMLElement>()
     let input = $state<HTMLInputElement>()
     //the keyboard goes to the instruction, selected, each time a prompt opens
     $effect(() => {
@@ -31,6 +40,18 @@
             input?.select()
         })
     })
+    /**
+     * Whether the keyboard is inside: set as focus enters, cleared only when it moves to something
+     * else, since the browser may say nothing, or that focus went nowhere, as the prompt is removed.
+     */
+    let holding = false
+    $effect(() => () => {
+        if (holding) onrelease?.()
+    })
+    function focusout(event: FocusEvent) {
+        const next = event.relatedTarget
+        if (next instanceof Node && !dialog?.contains(next)) holding = false
+    }
 
     const hex = (bytes: Uint8Array) =>
         Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(' ')
@@ -46,65 +67,95 @@
         else if (!prompt.current) void prompt.update()
     }
 
+    /**
+     * Escape closes it from anywhere inside, and Tab goes round its own controls: it is a modal
+     * dialog over the editor until it is closed.
+     */
     function keydown(event: KeyboardEvent) {
-        if (event.key !== 'Escape') return
-        event.preventDefault()
-        event.stopPropagation()
-        onclose()
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            onclose()
+            return
+        }
+        if (event.key !== 'Tab' || !dialog) return
+        const focusable = [...dialog.querySelectorAll<HTMLElement>('input, button:not(:disabled)')]
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (!first) return
+        const active = document.activeElement
+        if (event.shiftKey ? active === first || !dialog.contains(active) : active === last) {
+            event.preventDefault()
+            ;(event.shiftKey ? last : first).focus()
+        }
     }
 </script>
 
-<form class="patch-prompt" aria-label="Patch instruction" onsubmit={submit}>
-    <div class="patch-title">
-        <span>Patch the instruction at <code>0x{prompt.site.address.toString(16)}</code></span>
-        <span class="patch-size">{plural(prompt.site.length, 'byte')}</span>
-    </div>
-    <input
-        bind:this={input}
-        class="patch-input"
-        value={prompt.text}
-        oninput={(event) => prompt.input(event.currentTarget.value)}
-        onkeydown={keydown}
-        spellcheck="false"
-        autocomplete="off"
-        autocapitalize="off"
-        aria-label="Instruction"
-    />
-    <div class="patch-preview" class:stale aria-live="polite">
-        {#if !available}
-            <p class="patch-note">
-                Patching needs the program paused: not running, not waiting for input and not ended.
-            </p>
-        {:else if prompt.failure}
-            <p class="patch-error" role="alert">{prompt.failure}</p>
-        {:else if shown?.ok}
-            <div class="patch-decoded">
-                Decodes as <code
-                    >{shown.line.instruction}{shown.line.comments.length
-                        ? ` ; ${shown.line.comments.join(', ')}`
-                        : ''}</code
-                >
-            </div>
-            <div class="patch-bytes">
-                Bytes <code>{hex(shown.bytes)}</code>
-                <span class="patch-was">(was <code>{hex(shown.was)}</code>)</span>
-            </div>
-            {#if shown.unchanged}
-                <p class="patch-note">Memory already holds these bytes.</p>
+<div
+    bind:this={dialog}
+    class="patch-prompt"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby={titleId}
+    tabindex="-1"
+    onkeydown={keydown}
+    onfocusin={() => (holding = true)}
+    onfocusout={focusout}
+>
+    <form class="patch-form" onsubmit={submit}>
+        <div class="patch-title">
+            <span id={titleId}
+                >Patch the instruction at <code>0x{prompt.site.address.toString(16)}</code></span
+            >
+            <span class="patch-size">{plural(prompt.site.length, 'byte')}</span>
+        </div>
+        <input
+            bind:this={input}
+            class="patch-input"
+            value={prompt.text}
+            oninput={(event) => prompt.input(event.currentTarget.value)}
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            aria-label="Instruction"
+        />
+        <div class="patch-preview" class:stale aria-live="polite">
+            {#if !available}
+                <p class="patch-note">
+                    Patching needs the program paused: not running, not waiting for input and not
+                    ended.
+                </p>
+            {:else if prompt.failure}
+                <p class="patch-error" role="alert">{prompt.failure}</p>
+            {:else if shown?.ok}
+                <div class="patch-decoded">
+                    Decodes as <code
+                        >{shown.line.instruction}{shown.line.comments.length
+                            ? ` ; ${shown.line.comments.join(', ')}`
+                            : ''}</code
+                    >
+                </div>
+                <div class="patch-bytes">
+                    Bytes <code>{hex(shown.bytes)}</code>
+                    <span class="patch-was">(was <code>{hex(shown.was)}</code>)</span>
+                </div>
+                {#if shown.unchanged}
+                    <p class="patch-note">Memory already holds these bytes.</p>
+                {/if}
+            {:else if shown}
+                <p class="patch-error" role="alert">{shown.error}</p>
+            {:else}
+                <p class="patch-note">Assembling…</p>
             {/if}
-        {:else if shown}
-            <p class="patch-error" role="alert">{shown.error}</p>
-        {:else}
-            <p class="patch-note">Assembling…</p>
-        {/if}
-    </div>
-    <div class="patch-row">
-        <button type="button" class="tool" onclick={onclose}>Cancel</button>
-        <button type="submit" class="tool primary" disabled={!available || !prompt.applicable}
-            >Patch</button
-        >
-    </div>
-</form>
+        </div>
+        <div class="patch-row">
+            <button type="button" class="tool" onclick={onclose}>Cancel</button>
+            <button type="submit" class="tool primary" disabled={!available || !prompt.applicable}
+                >Patch</button
+            >
+        </div>
+    </form>
+</div>
 
 <style lang="scss">
     /* drawn as the Workbench's prompt tray, over the top of the editor it patches */
@@ -129,6 +180,10 @@
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         font-family: Rubik;
         font-size: 0.9rem;
+    }
+
+    .patch-form {
+        display: contents;
     }
 
     code,

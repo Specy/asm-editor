@@ -2,15 +2,15 @@ import type { DecodedInstruction, ListingDecoder } from './decoder'
 import {
     findRegion,
     readElfModel,
-    R_X86_64_GLOB_DAT,
+    regionBefore,
     R_X86_64_IRELATIVE,
-    R_X86_64_JUMP_SLOT,
     R_X86_64_RELATIVE,
     slotValue,
     type Region
 } from './elfModel'
 import {
     LINE_KIND,
+    ListingError,
     type Listing,
     type ListingFunction,
     type ListingLabel,
@@ -18,7 +18,22 @@ import {
     type ListingNameOrigin,
     type ListingNameVersion
 } from './listing'
-import { instructionLineText, quotedString } from './listingText'
+import {
+    type AddressNaming,
+    holderAt,
+    holderRanges,
+    type ListingHolders,
+    nameAddress,
+    stringComment as sharedStringComment
+} from './addressNames'
+import { instructionLineText } from './listingText'
+import {
+    calledNames,
+    mainFromStart,
+    mainSymbol,
+    slotName as sharedSlotName,
+    START_INSTRUCTIONS
+} from './programStart'
 import { inventName, numberedName, printableSymbolName, stringLabelBase } from './names'
 
 export type ListingInput = {
@@ -37,8 +52,7 @@ export type ListingInput = {
     onProgress?: (fraction: number) => void
 }
 
-/** An input the generator cannot make a Listing of, with the reason a person can read. */
-export class ListingError extends Error {}
+export { ListingError }
 
 /** A run of bytes inside code that is listed as data: an object symbol, or bytes no instruction covers. */
 type CodeData = { data: true; address: number; size: number }
@@ -47,10 +61,6 @@ type CodeEntry = DecodedInstruction | CodeData
 type CodePiece = { data: false; address: number; size: number }
 
 type Name = { name: string; origin: ListingNameOrigin }
-
-/** An instruction that sets `rdi` to an address, the way `_start` passes `main`. */
-const SETS_RDI = /^(?:lea|mov) (?:rdi|edi),/
-const WRITES_RDI = /^(?!cmp |test |bt |push )\S+ (?:rdi|edi|di|dil)\b/
 
 const PRINTABLE = new Uint8Array(256)
 for (let byte = 0x20; byte < 0x7f; ++byte) PRINTABLE[byte] = 1
@@ -116,8 +126,6 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     for (const address of [...model.symbolNames.keys()].sort((a, b) => a - b))
         for (const symbol of model.symbolNames.get(address)!)
             claim(address, symbol.name, symbol.origin)
-    const symbolNamesAt = (address: number) =>
-        (model.symbolNames.get(address) ?? []).map((symbol) => symbol.name)
 
     // Object symbols inside code are data, not instructions.
     const codeData = new Map<Region, CodeData[]>()
@@ -240,14 +248,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     const isStart = (address: number) => starts[floorIndex(starts, address)] === address
 
     // GOT slots, named after their relocation's symbol (an IRELATIVE one after the ifunc it calls).
-    const slotName = (address: number): string | undefined => {
-        const relocation = model.relocations.get(address)
-        if (!relocation) return undefined
-        if (relocation.type === R_X86_64_GLOB_DAT || relocation.type === R_X86_64_JUMP_SLOT)
-            return relocation.symbol || undefined
-        if (relocation.type === R_X86_64_IRELATIVE) return symbolNamesAt(relocation.addend)[0]
-        return undefined
-    }
+    const slotName = (address: number) => sharedSlotName(model, address)
     // PLT stubs, which the Core names after the slot each one jumps through: `name@plt`, and
     // `name@plt_resolver` for the lazy stubs `.plt` holds beside `.plt.sec`. Without section
     // headers it finds them by their shape in the executable segments.
@@ -285,57 +286,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     for (const [address, name] of gotSlots)
         if (findRegion(regions, address)) claim(address, `${name}@got`, 'got')
 
-    // `main`: the address `_start` passes to `__libc_start_main` in `rdi`.
-    const calledName = (instruction: DecodedInstruction): string[] => {
-        for (const operand of instruction.operands) {
-            if (operand.branchTarget !== undefined) {
-                const target = Number(operand.branchTarget)
-                return [
-                    ...symbolNamesAt(target),
-                    ...(stubs.has(target) ? [stubs.get(target)!] : [])
-                ]
-            }
-            if (operand.memoryTarget !== undefined) {
-                const name = slotName(Number(operand.memoryTarget))
-                return name ? [name] : []
-            }
-        }
-        return []
-    }
-    let main: number | undefined = [...model.symbolNames].find(([, names]) =>
-        names.some((symbol) => symbol.name === 'main')
-    )?.[0]
+    // `main`: the address `_start` passes to `__libc_start_main` in `rdi` (`programStart.ts`,
+    // which a Build reads it by too).
+    let main: number | undefined = mainSymbol(model)
     if (main === undefined && entry && isStart(entry)) {
-        const start = instructionsFrom(entry, 64)
-        let candidate: number | undefined
-        for (let i = 0; i < start.length; ++i) {
-            const instruction = start[i]
-            if (instruction.isCall) {
-                const names = calledName(instruction)
-                const startMain = names.some(
-                    (name) => name.replace(/@plt$/, '') === '__libc_start_main'
-                )
-                // A stripped static binary names nothing; glibc's `_start` is still the one
-                // call that never returns, so `hlt` follows it.
-                const halts = !names.length && start[i + 1]?.mnemonic === 'hlt'
-                if ((startMain || halts) && candidate !== undefined) main = candidate
-                break
-            }
-            if (instruction.isReturn || (instruction.isJump && !instruction.isConditional)) break
-            if (SETS_RDI.test(instruction.text)) {
-                const memory = instruction.operands.find((o) => o.memoryTarget !== undefined)
-                const immediate = instruction.operands.find((o) => o.immediate !== undefined)
-                if (instruction.text.startsWith('lea') && memory)
-                    candidate = Number(memory.memoryTarget)
-                else if (
-                    instruction.text.startsWith('mov') &&
-                    immediate &&
-                    !instruction.text.includes('[')
-                )
-                    candidate = Number(immediate.immediate)
-                else candidate = undefined
-            } else if (WRITES_RDI.test(instruction.text)) candidate = undefined
-        }
+        main = mainFromStart(instructionsFrom(entry, START_INSTRUCTIONS), (instruction) =>
+            calledNames(model, stubs, instruction)
+        )
         if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
     }
     if (main !== undefined && !isStart(main)) {
@@ -537,33 +494,35 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             claim(address, inventName('DAT_', address, taken, version), 'invented')
     progress(0.6)
 
-    // How an operand names an address, from inside a given function.
+    // How an operand names an address, from inside a given function: the rules a patched line
+    // follows too (`addressNames.ts`), over the named objects and strings the Listing carries.
+    const holders: ListingHolders = {
+        objects: holderRanges([...objectAt].filter(([address]) => namesAt.has(address))),
+        strings: holderRanges([...strings].filter(([address]) => namesAt.has(address)))
+    }
     const blockName = (target: number, from: number) => {
         const owner = functionAt(target)
         const local = `.LAB_${blockNumber.get(target)}`
         return owner === from ? local : `${primary(sortedStarts[owner])}${local}`
     }
-    const offsetName = (name: string, offset: number) =>
-        offset ? `${name}+0x${offset.toString(16)}` : name
-    const addressName = (target: number, from: number): string | undefined => {
-        if (namesAt.has(target)) return primary(target)
-        if (blockNumber.has(target)) return blockName(target, from)
-        const object = containingObject(target)
-        if (object !== undefined && namesAt.has(object))
-            return offsetName(primary(object), target - object)
-        const string = containingString(target)
-        if (string !== undefined && namesAt.has(string))
-            return offsetName(primary(string), target - string)
-        const owner = findRegion(codeRegions, target) ? functionAt(target) : -1
-        if (owner >= 0)
-            return offsetName(primary(sortedStarts[owner]), target - sortedStarts[owner])
-        return undefined
+    const naming: AddressNaming<number> = {
+        label: (address) => (namesAt.has(address) ? primary(address) : undefined),
+        block: (address, from) => (blockNumber.has(address) ? blockName(address, from) : undefined),
+        holder: (address) => holderAt(holders, address),
+        owner: (address) => {
+            const owner = findRegion(codeRegions, address) ? functionAt(address) : -1
+            return owner >= 0 ? sortedStarts[owner] : undefined
+        }
     }
-    const stringComment = (target: number) => {
-        const string = containingString(target)
-        if (string === undefined) return undefined
-        return quotedString(stringText(string).slice(target - string))
+    const addressName = (target: number, from: number) => nameAddress(naming, target, from)
+    const fileOffset = (address: number) => {
+        const region = findRegion(regions, address)
+        return region && address < region.address + region.fileSize
+            ? region.offset + address - region.address
+            : -1
     }
+    const stringComment = (target: number) =>
+        sharedStringComment(holders, bytes, target, fileOffset)
     const absolute = !analysis.pie
     const relocatable = analysis.type === 3
     const instructionLine = (instruction: DecodedInstruction, from: number) => {
@@ -648,6 +607,26 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         emit(LINE_KIND.blank, '')
         emit(LINE_KIND.section, region.title, region.address)
     }
+    // Names of addresses just past a region, before the next (`__TMC_END__` at the end of `.data`,
+    // ahead of an alignment gap): label lines after the region's last line, closing it.
+    const namesAfter = new Map<Region, number[]>()
+    for (const address of Float64Array.from(namesAt.keys()).sort()) {
+        if (findRegion(regions, address)) continue
+        const region = regions[regionBefore(regions, address)]
+        if (!region) continue
+        const list = namesAfter.get(region) ?? []
+        list.push(address)
+        namesAfter.set(region, list)
+    }
+    const regionEnd = (region: Region) => {
+        for (const address of namesAfter.get(region) ?? []) {
+            const [first, ...aliases] = namesAt.get(address)!
+            for (const { name, origin } of [...aliases, first]) {
+                label(name, name, 'data', origin, address)
+                emit(LINE_KIND.label, `${name}:`, address)
+            }
+        }
+    }
     let emitted = 0
     const totalEntries = [...entries.values()].reduce((sum, list) => sum + list.length, 0) || 1
     for (const region of codeRegions) {
@@ -699,12 +678,14 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         if (region.fileSize < region.size)
             emitData(region, region.address + region.fileSize, region.address + region.size, false)
         if (open) open.endLine = text.length
+        regionEnd(region)
         regionLines.push([region, first, text.length])
     }
     for (const region of dataRegions) {
         regionTitle(region)
         const first = text.length
         emitData(region, region.address, region.address + region.size, true)
+        regionEnd(region)
         regionLines.push([region, first, text.length])
     }
 
@@ -893,6 +874,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         },
         labels,
         functions,
+        holders,
         entry,
         main
     }
