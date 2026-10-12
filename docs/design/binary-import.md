@@ -1,6 +1,6 @@
 # Binary import
 
-Status: implementation in progress on feat/binary-import; Core M1-M5 and editor recognition/import/loading in M6 are implemented locally. The spike (2026-10-12, [Spike results](#spike-results)) confirmed decision 3's precondition and revised decision 6; the [implementation plan](./binary-import-plan.md) is written. Terms are in [CONTEXT.md](../../CONTEXT.md) (**Executable**, **Listing**, **Command line**, **Arguments**); the model decision is [ADR 0044](../adr/0044-an-executable-is-a-project-file-a-build-loads.md) and the naming one [ADR 0045](../adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
+Status: paused at the M6 checkpoint on the owner's request. Core M1-M5 and editor recognition/import/loading in M6 are implemented locally on feat/binary-import; M6's Listing display awaits M8, and M7-M13 remain. The spike (2026-10-12, [Spike results](#spike-results)) confirmed decision 3's precondition and revised decision 6; the [implementation plan](./binary-import-plan.md) is written. Terms are in [CONTEXT.md](../../CONTEXT.md) (**Executable**, **Listing**, **Command line**, **Arguments**); the model decision is [ADR 0044](../adr/0044-an-executable-is-a-project-file-a-build-loads.md) and the naming one [ADR 0045](../adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
 
 ## What it is
 
@@ -95,3 +95,85 @@ Settled by default in [the implementation plan](./binary-import-plan.md)'s **Dec
 - The four x86 linux-calls Compiler Explorer fixtures were recaptured from the provider after the new syscall wrappers shifted sim.h line numbers. Their runtime and source-map assertions remain unchanged.
 - Integration exposed Zydis's JNZ/JZ alias preference. A Core follow-up makes the shared disassembler API display JNE/JE consistently so the planned patch scenario uses its stated spelling; branch targets and semantics are unchanged.
 - M6 final editor check passes with zero errors and warnings; the full suite passes 3,643 tests with one existing skip. The upload component checks cover Entry selection and the unsupported-ELF toast. The generated Listing display is completed in M8, as M6.6 depends on that milestone.
+
+## Implementation report
+
+Checkpoint report: paused at M6 on the owner's request. This records the current partial implementation, not completion of the end-to-end feature. Both repositories are on `feat/binary-import`. No push, tag or publication occurred, and no commit has a Co-Authored-By trailer.
+
+### Milestones and commits
+
+The initial design and handoff are committed separately in monorepo commit `4712faae`.
+
+| Milestone                                                           | Status at pause                                                                                                 | Commit                                        |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| M1: run glibc programs correctly                                    | Done, except the Go probe could not run without a Go toolchain                                                  | Core `cab3770`                                |
+| M2: gdb's layout                                                    | Done                                                                                                            | Core `94a096f`                                |
+| M3: libraries, Arguments, environment and protected Executable File | Done                                                                                                            | Core `479a454`                                |
+| M4: disassembler, Breakpoints, objects and events                   | Done                                                                                                            | Core `671bc6c`                                |
+| M5: Core release                                                    | Local version 7.0.0 and changelog done; workspace build consumed by the editor                                  | Core `d68c3d1`                                |
+| M6: recognising and loading an Executable                           | Recognition, import, Explorer upload, Entry selection and Build loading done; Listing display in M6.6 awaits M8 | Monorepo `bd09cb35`, recording Core `80e0fb9` |
+| M7: Listing generator                                               | Not implemented                                                                                                 | None                                          |
+| M8: Listing in the Workbench                                        | Not implemented                                                                                                 | None                                          |
+| M9: start and library stepping                                      | Not implemented                                                                                                 | None                                          |
+| M10: Arguments and Command line                                     | Not implemented                                                                                                 | None                                          |
+| M11: patching from the Listing                                      | Not implemented                                                                                                 | None                                          |
+| M12: Log notes                                                      | Not implemented                                                                                                 | None                                          |
+| M13: documentation and verification                                 | Not completed; implementation notes and this checkpoint report exist                                            | None                                          |
+
+Core integration follow-up `80e0fb9` normalises JNE/JE spelling and formats the touched Core files with the monorepo formatter using neutral stdin paths. The editor still shows its existing binary-file notice for an Executable. Build loads it through the Core, but the Listing, automatic stop at main, editor Arguments and patch UI are pending.
+
+### Checks at the checkpoint
+
+All four required Core checks passed on the final Core commit:
+
+- `npm run type-check`: passed.
+- `npm test`: 3,165 passed, two existing skips; 51 test files passed and one skipped.
+- `npm run build`: passed.
+- `npm run test:dist`: passed, including a dynamically linked C++ Executable loaded entirely from dist assets, the independent disassembler import and a short address branch assembled through the public API.
+
+Both wasm rebuild scripts passed at M5 and reproduced M4's committed bytes. `pnpm --filter @specy/x86 build` passed. Final editor checks, against stable Core artifacts, passed:
+
+- `pnpm check`: zero errors and zero warnings.
+- `pnpm exec vp run asm-editor#test --maxWorkers=2`: 3,643 passed, one existing skip, across 160 test files. The other root task dependencies completed or used their valid task cache.
+- Touched files were formatted with `vp fmt`; whitespace checks passed before the milestone commits.
+
+The initial editor baseline had two lecture test timeouts at the existing five-second limit. They pass with the final worker limit without changing assertions or timeouts. A separate rerun overlapped a Core rebuild and failed on missing assets; it is excluded from validation. Logs remain locally as `.binary-import-*.log` files in the monorepo and Core repository.
+
+No M13.3 browser scenario has been verified. The status of each is explicit below; Core or component tests do not establish the browser result.
+
+| Browser scenario                                                                     | Status / evidence so far                                                                            |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Import crackme from Projects; Listing contains main, strcmp@plt and s_Enter_password | Pending; import has unit coverage, Listing is unimplemented                                         |
+| Build stops at main                                                                  | Pending M9                                                                                          |
+| Breakpoint on call strcmp@plt; password visible at rsi                               | Browser pending; Core address-Breakpoint test stops before strcmp and checks its argument registers |
+| Step over printf                                                                     | Pending M9 and browser verification                                                                 |
+| Arguments on the Command line                                                        | Pending M10; Core argv and environment tests pass                                                   |
+| Patch jne to je and obtain Correct!                                                  | Pending M11; Core assembles a short address branch                                                  |
+| Undo the patch                                                                       | Pending M11                                                                                         |
+| Stripped binary's invented names                                                     | Pending M7-M8                                                                                       |
+| C++ program output                                                                   | Browser pending; Core fixture outputs hello, C++ and caught exception, then exits zero              |
+| Crash inside strlen shows @lib/libc.so.6                                             | Pending M8-M9; deterministic guard-page fixture exists                                              |
+| Testcases with Arguments                                                             | Pending M10                                                                                         |
+| Phone width                                                                          | Pending M8 and browser verification                                                                 |
+
+### Measurements
+
+The C++ fixture before M1.3 grew Blink's wasm heap from 17,039,360 to 105,906,176 bytes, a growth of 88,866,816 bytes, before aborting during a library mapping. This is an incomplete baseline run. After M1.3 it completed with exit zero and the expected output, keeping the initial 17,039,360-byte Blink heap with zero growth. This measurement predates the separate Zydis wasm module and does not measure combined editor memory.
+
+Listing generation times for crackme, a static binary and libc are not available: the Listing generator has not been implemented. The committed decoder's focused libc measurement was 381.8 ms for 392,385 instructions; this measures decoding only, not Listing generation or Monaco rendering.
+
+| Artifact        |   Bytes | SHA-256                                                            |
+| --------------- | ------: | ------------------------------------------------------------------ |
+| blinkenlib.wasm | 353,147 | `3bdc2104409a12c8bd5bc2afa60586e7c93806b3ec44e27215bad63b36af3cee` |
+| zydis.wasm      | 402,546 | `ca08bbf29e29d8ff933c2a682da680dcaaa0d7e3cbb65a768b86f7d5d56d1e30` |
+| blinkenlib.js   | 111,649 | `c29a7b3eb1827e75e6996033e937e1b985d729c26f3820ee8b559533b20a618c` |
+
+### Deviations and outstanding work
+
+Every observed deviation and its reason is recorded in [Implementation notes](#implementation-notes). They cover the available GCC 15 toolchain and absent Go toolchain, early staging of pinned runtime assets, deterministic guard-page overflow fixture, futex dispatch needed by C++ exception handling, preserved getStackTop semantics, ELF entry handling, CET PLT labels, crackme branch shape, NASM's numeric short-branch encoding, Zydis amalgamation vendoring, formatter exclusions, native File-handle protection, regenerated syscall/header/help assets and Compiler Explorer fixtures, extra old-layout tests and course addresses, JNE/JE aliases and test scheduling. M5's local-only version bump follows the handoff's explicit override of the original release checkpoint.
+
+Resume with M7. M7-M13 and M6.6 remain, including generated Listings and deterministic labels, the Workbench address gutter and library navigation, start-at-main and stepping policy, Settings and Testcase Arguments, Command line, patching with Poke and Undo, Log notes, user Documentation, all browser scenarios, the whole-change review and final performance measurements. No end-to-end browser behavior is claimed at this checkpoint.
+
+Review risks still include libc's large Monaco model, combined wasm and Listing memory, irreversible effects after main, unsupported libraries and newer glibc versions, and threads, sockets and fork in the browser build. The Go runtime's progress remains unmeasured. The fixture and Core tests establish the supported tested paths, not arbitrary ELF compatibility. No additional known failing test remains in the final runs, beyond the existing skips; baseline timeout sensitivity is recorded above.
+
+The intended frozen word-list location is `packages/asm-editor/src/lib/listing/words-v1.ts`; it does not exist yet. A preliminary candidate list is in the ignored `.cache/binary-import/words.json`, but it is not implemented, frozen or reviewed. The owner must review the production lists before release. Local logs, scratch dependencies and that draft remain untracked or ignored; feature code is committed.
