@@ -1,7 +1,12 @@
 import { makeProject, type AvailableLanguages, type StoredProject } from '#lib/Project.svelte.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
-import type { Diagnostic, SourceBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    sameBreakpoint,
+    type Diagnostic,
+    type SourceBreakpoint
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
 import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
@@ -36,11 +41,16 @@ export function editorGroupsFixture(
         compilerDiagnostics: [] as Diagnostic[],
         errors: [],
         breakpoints: [] as SourceBreakpoint[],
+        listings: undefined as ListingDocuments | undefined,
         toggleBreakpoint(line: number, file: string) {
-            const index = this.breakpoints.findIndex(
-                (item) => item.line === line && item.file === file
-            )
-            if (index === -1) this.breakpoints.push({ file, line })
+            this.toggleSourceBreakpoint({ file, line })
+        },
+        toggleAddressBreakpoint(address: number, file: string) {
+            this.toggleSourceBreakpoint({ file, address })
+        },
+        toggleSourceBreakpoint(breakpoint: SourceBreakpoint) {
+            const index = this.breakpoints.findIndex((item) => sameBreakpoint(item, breakpoint))
+            if (index === -1) this.breakpoints.push(breakpoint)
             else this.breakpoints.splice(index, 1)
         },
         setSources: (_sources: BuildSources) => {},

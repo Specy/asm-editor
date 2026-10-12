@@ -36,6 +36,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    isLineBreakpoint,
     makeLabelColor,
     type MutationOperation,
     type PokeWrite,
@@ -963,7 +964,7 @@ function toNumericRegisterName(register: MIPSRegisterName): RegisterName {
  * Only the first address of the expansion is a breakpoint: it is where the line is entered.
  */
 function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): number[] {
-    return breakpoints.flatMap((breakpoint) => {
+    return breakpoints.filter(isLineBreakpoint).flatMap((breakpoint) => {
         const statements = mips.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
         const entry = statements.reduce<number | undefined>(
             (lowest, statement) =>

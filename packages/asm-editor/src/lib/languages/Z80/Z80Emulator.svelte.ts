@@ -22,6 +22,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    isLineBreakpoint,
     makeLabelColor,
     type MutationOperation,
     type PokeWrite,
@@ -444,7 +445,10 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const machine = this.requireMachine()
         const budget = sliceInstructionBudget(request, Z80_INSTRUCTIONS_PER_MS)
         const execution = this.executionController.capture()
-        const stops = [...this.toBreakpointAddresses(request.breakpoints), ...this.cliffBreakpoints]
+        const stops = [
+            ...this.toBreakpointAddresses(request.breakpoints.filter(isLineBreakpoint)),
+            ...this.cliffBreakpoints
+        ]
         let instructions = 0
         //the budget is spent in chunks so the wall clock can be looked at between them: a Z80
         //instruction is a fraction of a microsecond, but one `out` can clear the whole Screen and

@@ -139,3 +139,10 @@ export function functionAtLine(listing: Listing, line: number): ListingFunction 
     }
     return undefined
 }
+
+/** The link-time address of the instruction on a 0-based line, or undefined for any other line. */
+export function instructionAddressAt(listing: Listing, line: number): number | undefined {
+    return listing.lines.kinds[line] === LINE_KIND.instruction
+        ? listing.lines.addresses[line]
+        : undefined
+}

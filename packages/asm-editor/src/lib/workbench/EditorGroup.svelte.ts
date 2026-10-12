@@ -8,6 +8,10 @@ import {
     type ProjectSourceSelection
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
+import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { lineOfAddress } from '#lib/listing/listing.ts'
+import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
@@ -34,6 +38,12 @@ export class EditorGroup {
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
     declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
+    /**
+     * The Listing the displayed File is shown as: an Executable's, or that of a library the running
+     * program loaded, under `@lib/` ([binary-import.md](../../../../../docs/design/binary-import.md),
+     * decisions 5 and 18). It is read-only and is no File of the Project.
+     */
+    declare readonly displayedListing: ListingDocument | undefined
 
     constructor(
         readonly session: WorkbenchSession,
@@ -49,6 +59,7 @@ export class EditorGroup {
         this.displayedLanguage = $derived(
             editorFileLanguage(this.displayedPath, this.session.project.language)
         )
+        this.displayedListing = $derived(this.session.listingFor(this.sourceSelection))
         this.resetCompilationOptions()
     }
 
@@ -81,14 +92,22 @@ export class EditorGroup {
         const map = this.session.runtimeSourceMap(this.displayedPath)
         return !!map && !this.session.groups.some((group) => group.displayedPath === map.sourcePath)
     }
+    /** Whether the displayed Listing is a library's, which takes no Breakpoints (decision 11). */
+    get displayedLibraryListing() {
+        return isLibraryListingPath(this.displayedPath)
+    }
     get displayedFile() {
         //a member of the Runtime library the Build linked: read-only, and outside the Project
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
+        //a library's Listing is no File at all
+        if (this.displayedLibraryListing) return undefined
         return this.sourceView === 'snapshot'
             ? this.session.emulator.buildSources?.files[this.displayedPath]
             : this.session.project.files[this.displayedPath]
     }
     get displayedCode() {
+        const listing = this.displayedListing
+        if (listing) return listing.listing?.text ?? ''
         return this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
     }
     get displayedCompilation() {
@@ -178,6 +197,9 @@ export class EditorGroup {
     }
     get modelIdentity(): ProjectModelIdentity | undefined {
         if (!this.displayedPath) return undefined
+        //a Listing's model is made once its text exists, never filled in afterwards: Monaco decides
+        //at a model's creation whether it is too large to highlight
+        if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
         return { sessionId: this.session.languageSessionId, ...this.sourceSelection }
     }
     get modelKey() {
@@ -194,6 +216,19 @@ export class EditorGroup {
         //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
         //during a Debug session
         if (this.displayedEnvironmentHeader) return !s.host.readonly && !s.building
+        //an Executable's Listing takes them on its instructions, a library's none: a Breakpoint
+        //is only ever in the Executable (decision 11)
+        const listing = this.displayedListing
+        if (listing)
+            return (
+                !this.displayedLibraryListing &&
+                listing.status === 'ready' &&
+                canEditProjectBreakpoints(this.sourceSelection, {
+                    readonly: s.host.readonly,
+                    building: s.building,
+                    fileSystemLocked: s.fileSystemLocked
+                })
+            )
         return (
             //a C or C++ File's Breakpoints stop on its Generated assembly; the library's C source
             //is not the user's code, and Step does not stop in it
@@ -208,13 +243,19 @@ export class EditorGroup {
     }
     get displayedBreakpoints() {
         const s = this.session
+        //a Listing's Breakpoints are addresses, drawn on the line that holds them now
+        const listing = this.displayedListing?.listing
         return (
             this.sourceView === 'snapshot' || !s.fileSystemLocked || this.displayedEnvironmentHeader
                 ? s.emulator.breakpoints
                 : []
         )
             .filter((item) => item.file === this.displayedPath)
-            .map((item) => item.line)
+            .flatMap((item) => {
+                if (isLineBreakpoint(item)) return [item.line]
+                const line = listing ? lineOfAddress(listing, item.address) : -1
+                return line >= 0 ? [line] : []
+            })
     }
     /** Lines of this assembly where a Breakpoint set on its C or C++ source stops. */
     get displayedMappedBreakpoints() {
@@ -272,6 +313,7 @@ export class EditorGroup {
             s.building ||
             this.sourceView === 'snapshot' ||
             this.displayedLibraryMember ||
+            this.displayedListing !== undefined ||
             this.displayedFile?.encoding !== 'plain' ||
             s.fileSystemLocked ||
             (s.emulator.canExecute && !s.emulator.terminated)

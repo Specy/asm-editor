@@ -28,9 +28,11 @@ import {
     type RegisterPoke,
     type RegisterSize,
     resolveRegisterFileLayout,
+    sameBreakpoint,
     type SourceBreakpoint,
     type UnreadableBytes
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
 import { type MemoryPage, readMemoryPage } from '#lib/languages/memoryPage.ts'
 import { Terminal, type TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { terminalTextConventions } from '#lib/languages/peripherals/terminalText.ts'
@@ -217,6 +219,8 @@ export abstract class GenericEmulator<T, R extends string>
      * for the debugger to open. They are never part of the Project or its FileSystem.
      */
     protected _buildLibraryFiles: ProjectFiles | undefined = $state.raw()
+    /** The Listings of an adapter whose Builds can load Executables, see `listings`. */
+    protected _listings: ListingDocuments | undefined
     /** What Undo takes back next, newest last; see `UndoSegment`. */
     private undoLedger: UndoSegment[] = []
     /**
@@ -1164,6 +1168,25 @@ export abstract class GenericEmulator<T, R extends string>
         this._dispose()
     }
 
+    /**
+     * Reads again where the program is, for an adapter that has just learned where its instructions
+     * are: a Listing that was still being generated when the program stopped in its code. The
+     * current line, the History and the Call stack are read again; while a Run or Step owns the
+     * Core it reads them itself when it ends, unless it is waiting on input, which shows the
+     * instruction waiting.
+     */
+    protected relocateInstructions(): void {
+        if (!this.getInstance() || !this.state.canExecute) return
+        if (this.coreBusy && !this.state.interrupt) return
+        try {
+            if (this.state.terminated) this.selectLastExecuted(this.state.line)
+            else this.selectInstruction(this._getNextInstruction())
+            this.updateData()
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
     getLineFromAddress(address: bigint): number {
         return this.getSourceLocationFromAddress(address)?.line ?? -1
     }
@@ -1870,10 +1893,18 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
-        const index = this.state.breakpoints.findIndex(
-            (breakpoint) => breakpoint.line === line && breakpoint.file === file
+        this.toggleSourceBreakpoint({ file, line })
+    }
+
+    toggleAddressBreakpoint(address: number, file: string): void {
+        this.toggleSourceBreakpoint({ file, address })
+    }
+
+    private toggleSourceBreakpoint(breakpoint: SourceBreakpoint): void {
+        const index = this.state.breakpoints.findIndex((candidate) =>
+            sameBreakpoint(candidate, breakpoint)
         )
-        if (index === -1) this.state.breakpoints.push({ file, line })
+        if (index === -1) this.state.breakpoints.push(breakpoint)
         else this.state.breakpoints.splice(index, 1)
     }
 
@@ -2150,6 +2181,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildLibraryFiles() {
         return this._buildLibraryFiles
+    }
+
+    get listings() {
+        return this._listings
     }
 
     /** The Entry path of the sources currently set, which a single-source host never names itself. */

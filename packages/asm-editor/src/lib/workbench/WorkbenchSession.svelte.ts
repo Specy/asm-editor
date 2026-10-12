@@ -22,11 +22,17 @@ import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
+    isLineBreakpoint,
     makeRegister,
+    sameBreakpoint,
     type Diagnostic,
+    type LineBreakpoint,
     type RegisterPoke,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { instructionAddressAt } from '#lib/listing/listing.ts'
+import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
@@ -223,6 +229,33 @@ export class WorkbenchSession {
         this.show(liveSource(map.sourcePath), other)
     }
 
+    /**
+     * The Listing a version of a File is shown as
+     * ([binary-import.md](../../../../../docs/design/binary-import.md), decisions 5 and 18): in the
+     * current Build, the running program's own, at the address it was loaded at, or a library's it
+     * loaded, under `@lib/`; otherwise an Executable File's, at the address it will be loaded at.
+     * Undefined for any other File.
+     */
+    listingFor(selection: ProjectSourceSelection): ListingDocument | undefined {
+        const listings = this.emulator.listings
+        const path = selection.path
+        if (!listings || !path) return undefined
+        if (
+            selection.sourceKind === 'build' &&
+            selection.buildGeneration === this.buildGeneration
+        ) {
+            const running = listings.session.get(path)
+            if (running) return running
+        }
+        if (isLibraryListingPath(path)) return undefined
+        return listings.openExecutable(
+            path,
+            selection.sourceKind === 'build'
+                ? this.emulator.buildSources?.files[path]
+                : this.project.files[path]
+        )
+    }
+
     groupForFile(path: string) {
         return editorGroupForFile(path, this.groups)
     }
@@ -347,7 +380,11 @@ export class WorkbenchSession {
                     path
                 })
             )
-            const buildKeys = Object.keys(this.emulator.buildSources?.files ?? {}).map((path) =>
+            const buildKeys = [
+                ...Object.keys(this.emulator.buildSources?.files ?? {}),
+                //the libraries' Listings, kept while the session lasts so a tab comes back as left
+                ...[...(this.emulator.listings?.session.keys() ?? [])].filter(isLibraryListingPath)
+            ].map((path) =>
                 projectSourceModelKey({
                     sessionId: this.languageSessionId,
                     sourceKind: 'build',
@@ -628,7 +665,7 @@ export class WorkbenchSession {
      * The assembly lines that Breakpoints on C and C++ Files stand for: the first instruction of
      * each block of Generated assembly mapped to the line. The Core stops on these.
      */
-    declare readonly mappedBreakpoints: SourceBreakpoint[]
+    declare readonly mappedBreakpoints: LineBreakpoint[]
     /** Palette indices of the selected or executing source lines, which the others dim around. */
     declare readonly activeMappingColors: ReadonlySet<number> | undefined
     declare readonly retainedModelKeys: string[]
@@ -994,11 +1031,15 @@ export class WorkbenchSession {
         if (this.executionGroupId === group.id) this.executionGroupId = this.groups[0].id
     }
 
-    /** Whether the Build has this File: its own, or a Runtime library member it linked. */
+    /**
+     * Whether the Build has this File: its own, a Runtime library member it linked, or the Listing
+     * of a library the running program loaded.
+     */
     private existsInBuild(path: string) {
         return (
             this.emulator.buildSources?.files[path] !== undefined ||
-            this.emulator.buildLibraryFiles?.[path] !== undefined
+            this.emulator.buildLibraryFiles?.[path] !== undefined ||
+            (this.emulator.listings?.session.has(path) ?? false)
         )
     }
 
@@ -1045,8 +1086,17 @@ export class WorkbenchSession {
     }
 
     async revealSourceLocation(file: string, line: number, column = 1) {
+        const group = this.showBuildFile(file)
+        if (!group) return
+        await tick()
+        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        this.followExecutionSource()
+    }
+
+    /** Shows the Build's version of a File in the pane execution is followed in. */
+    private showBuildFile(file: string): EditorGroup | undefined {
         const buildSources = this.emulator.buildSources
-        if (!buildSources || !this.existsInBuild(file)) return
+        if (!buildSources || !this.existsInBuild(file)) return undefined
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
@@ -1063,9 +1113,25 @@ export class WorkbenchSession {
                 }
             }
         }
-        await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
-        this.followExecutionSource()
+        return group
+    }
+
+    /**
+     * Shows an address of the running program, from the Call stack or the History: its line, or,
+     * in a Listing still being generated, that Listing with its progress and then the line.
+     */
+    async revealAddress(address: bigint) {
+        let location = this.emulator.getSourceLocationFromAddress(address)
+        if (location && location.line < 0) {
+            const pending = this.emulator.listings?.session.get(location.file)
+            if (pending?.status !== 'generating') return
+            this.showBuildFile(location.file)
+            await pending.ready.catch(() => undefined)
+            await tick()
+            location = this.emulator.getSourceLocationFromAddress(address)
+        }
+        if (location && location.line >= 0)
+            await this.revealSourceLocation(location.file, location.line)
     }
 
     /**
@@ -1102,8 +1168,23 @@ export class WorkbenchSession {
     }
 
     revealCurrentInstruction() {
-        if (this.emulator.line < 0) return
-        void this.revealSourceLocation(this.emulator.currentFile, this.emulator.line)
+        const file = this.emulator.currentFile
+        if (this.emulator.line >= 0) {
+            void this.revealSourceLocation(file, this.emulator.line)
+            return
+        }
+        //in a library whose Listing is still being generated: shown with its progress at once,
+        //and at the current line once the Emulator has read it from the finished Listing
+        const pending = this.emulator.listings?.session.get(file)
+        if (pending?.status === 'generating') void this.revealWhenListed(file, pending)
+    }
+
+    private async revealWhenListed(file: string, document: ListingDocument) {
+        this.showBuildFile(file)
+        await document.ready.catch(() => undefined)
+        await tick()
+        if (this.emulator.currentFile === file && this.emulator.line >= 0)
+            await this.revealSourceLocation(file, this.emulator.line)
     }
 
     /** After Stop: every tab shows the live File again, and tabs of Files that are gone close. */
@@ -1122,17 +1203,19 @@ export class WorkbenchSession {
 
     private moveFileBreakpoints(from: string, to?: string) {
         const moved = this.emulator.breakpoints.filter((breakpoint) => breakpoint.file === from)
-        for (const breakpoint of moved) this.emulator.toggleBreakpoint(breakpoint.line, from)
+        for (const breakpoint of moved) this.toggleEmulatorBreakpoint(breakpoint)
         if (!to) return
         for (const breakpoint of moved) {
-            if (
-                !this.emulator.breakpoints.some(
-                    (candidate) => candidate.file === to && candidate.line === breakpoint.line
-                )
-            ) {
-                this.emulator.toggleBreakpoint(breakpoint.line, to)
-            }
+            const renamed = { ...breakpoint, file: to }
+            if (!this.emulator.breakpoints.some((candidate) => sameBreakpoint(candidate, renamed)))
+                this.toggleEmulatorBreakpoint(renamed)
         }
+    }
+
+    private toggleEmulatorBreakpoint(breakpoint: SourceBreakpoint) {
+        if (isLineBreakpoint(breakpoint))
+            this.emulator.toggleBreakpoint(breakpoint.line, breakpoint.file)
+        else this.emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
     }
 
     fileRenamed(from: string, to: string) {
@@ -1191,7 +1274,17 @@ export class WorkbenchSession {
     }
 
     toggleBreakpoint(line: number, group = this.groups[0]) {
-        this.emulator.toggleBreakpoint(line, group.displayedPath)
+        const listing = group.displayedListing
+        if (!listing) {
+            this.emulator.toggleBreakpoint(line, group.displayedPath)
+            return
+        }
+        //a Listing's Breakpoint is the address of the instruction on the line, in its Executable
+        //(decision 5); a line without an instruction takes none, nor does a library (decision 11)
+        if (!listing.listing || group.displayedLibraryListing) return
+        const address = instructionAddressAt(listing.listing, line)
+        if (address !== undefined)
+            this.emulator.toggleAddressBreakpoint(address, group.displayedPath)
     }
 
     // ---- execution -----------------------------------------------------------------------------

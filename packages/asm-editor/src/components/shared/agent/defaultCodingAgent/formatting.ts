@@ -9,6 +9,7 @@ import {
     toHexString
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { renderRegister } from '#lib/languages/registerFormats.ts'
+import { breakpointLine } from '#lib/listing/listingBreakpoints.ts'
 import { sizeName } from '#lib/languages/sizeNames.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -414,7 +415,10 @@ export function formatEmulatorState(
         stdOut: formattedStdout,
         breakpoints: emulator.breakpoints
             .filter((breakpoint) => !breakpoint.file || breakpoint.file === currentFile)
-            .map((breakpoint) => breakpoint.line + 1),
+            .flatMap((breakpoint) => {
+                const line = breakpointLine(breakpoint, emulator.listings)
+                return line >= 0 ? [line + 1] : []
+            }),
         canExecute: emulator.canExecute,
         canUndo: emulator.canUndo,
         callStack: emulator.callStack.map((frame) => ({

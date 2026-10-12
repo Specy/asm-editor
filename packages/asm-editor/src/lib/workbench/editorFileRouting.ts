@@ -1,4 +1,5 @@
 import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
+import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 
 export type EditorFileKind = 'source' | 'assembly'
 
@@ -7,6 +8,8 @@ const assemblyExtensions = new Set<string>([...Object.values(LANGUAGE_EXTENSIONS
 /** Identify assembly positively so new higher-level source languages use source-file routing. */
 export function editorFileKind(path: string): EditorFileKind | undefined {
     if (!path) return undefined
+    //a library's Listing, `@lib/libc.so.6`, is assembly whatever its soname ends in
+    if (isLibraryListingPath(path)) return 'assembly'
     const name = path.split('/').pop()!
     const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
     return !extension || assemblyExtensions.has(extension) ? 'assembly' : 'source'

@@ -12,7 +12,27 @@ export type StatusRegister = {
     prev: number
 }
 export type DiagnosticSeverity = 'error' | 'warning' | 'suggestion'
-export type SourceBreakpoint = { file: string; line: number }
+/** A Breakpoint on a line of a File: an assembly File's, or a C or C++ File's through its Source map. */
+export type LineBreakpoint = { file: string; line: number }
+/**
+ * A Breakpoint on a **Listing**, held as the link-time address of the instruction in its Executable
+ * rather than as a line, so it survives a Listing whose lines move
+ * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 5).
+ */
+export type AddressBreakpoint = { file: string; address: number }
+export type SourceBreakpoint = LineBreakpoint | AddressBreakpoint
+
+export function isLineBreakpoint(breakpoint: SourceBreakpoint): breakpoint is LineBreakpoint {
+    return 'line' in breakpoint
+}
+
+/** The same Breakpoint: on the same File, at the same line or the same address. */
+export function sameBreakpoint(a: SourceBreakpoint, b: SourceBreakpoint): boolean {
+    if (a.file !== b.file) return false
+    return isLineBreakpoint(a)
+        ? isLineBreakpoint(b) && a.line === b.line
+        : !isLineBreakpoint(b) && a.address === b.address
+}
 
 type DiagnosticBase = {
     file?: string
@@ -536,6 +556,11 @@ export type BaseEmulatorDerivedState = {
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
     readonly buildLibraryFiles?: import('#lib/projectFiles.ts').ProjectFiles
+    /**
+     * x86 only: the Listings of Executables this Emulator generates, and in `session` those of the
+     * running program and the libraries it loaded, under `@lib/`.
+     */
+    readonly listings?: import('#lib/listing/listingDocuments.svelte.ts').ListingDocuments
 }
 
 export enum InterpreterStatus {
@@ -649,6 +674,8 @@ export type BaseEmulatorActions = {
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number, file?: string) => void
+    /** A Breakpoint on a Listing: the link-time address of an instruction of that Executable. */
+    toggleAddressBreakpoint: (address: number, file: string) => void
     /** Translates Breakpoints on Files the Core never sees into the ones it runs with. */
     setBreakpointResolver: (
         resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined

@@ -30,6 +30,12 @@
     import { selectedLines } from '#lib/monaco/selectedLines.ts'
     import { setSourceHelpLanguage } from '#lib/sourceLanguageHelp/context.ts'
     import type { EditorModels } from '#lib/workbench/editorModels.ts'
+    import {
+        listingLineNumbers,
+        listingLineNumberWidth,
+        setModelListing,
+        type ListingModel
+    } from '#lib/monaco/listingModels.ts'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
 
     interface Props {
@@ -75,6 +81,13 @@
             props: ViewZoneProps
         }[]
         buildArtifacts?: BuildArtifact[]
+        /**
+         * The Listing the model holds, when it is one: its gutter prints each line's address
+         * instead of its number, and the Listing providers read it.
+         */
+        listing?: ListingModel
+        /** Whether a 0-based line can take a Breakpoint; every line by default. */
+        canBreakAt?: (line: number) => boolean
     }
 
     let {
@@ -97,7 +110,9 @@
         breakpointsEditable = true,
         editor = $bindable(),
         viewZones = [],
-        buildArtifacts = []
+        buildArtifacts = [],
+        listing,
+        canBreakAt
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -251,7 +266,8 @@
             mountedEditor.onMouseDown((e) => {
                 if (
                     breakpointsEditable &&
-                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+                    (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
                 ) {
                     dispatcher('breakpointPress', e.target.position.lineNumber)
                 }
@@ -262,7 +278,8 @@
             mountedEditor.onMouseMove((e) => {
                 if (
                     breakpointsEditable &&
-                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+                    (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
                 ) {
                     hoveredGliphen = e.target.position.lineNumber
                 } else {
@@ -387,6 +404,30 @@
             return
         }
         return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
+    })
+
+    //a Listing's model is read by the Listing providers, and its gutter prints addresses; declared
+    //after the model is selected, so the two change together
+    $effect(() => {
+        if (!activeModelKey || !listing) return
+        const model = editor?.getModel()
+        if (!model || model.isDisposed()) return
+        return setModelListing(model.uri.toString(), listing)
+    })
+    /** Whether the gutter prints a Listing's addresses, so leaving one restores line numbers. */
+    let addressGutter = false
+    $effect(() => {
+        if (!activeModelKey || !editor) return
+        if (listing) {
+            editor.updateOptions({
+                lineNumbers: listingLineNumbers(listing.listing),
+                lineNumbersMinChars: listingLineNumberWidth(listing.listing)
+            })
+            addressGutter = true
+        } else if (addressGutter) {
+            editor.updateOptions({ lineNumbers: 'on', lineNumbersMinChars: 2 })
+            addressGutter = false
+        }
     })
 
     $effect(() => {

@@ -6,6 +6,9 @@
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import FileTabs from './FileTabs.svelte'
     import LibraryMemberNotice from './LibraryMemberNotice.svelte'
+    import ListingNotice from './ListingNotice.svelte'
+    import { LINE_KIND } from '#lib/listing/listing.ts'
+    import type { ListingModel } from '#lib/monaco/listingModels.ts'
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
@@ -32,6 +35,20 @@
         }
     })
     const SPLIT_ZONE = 1 / 3
+
+    /** The displayed Listing, once generated, as the editor and the Listing providers read it. */
+    const listingModel = $derived.by<ListingModel | undefined>(() => {
+        const document = group.displayedListing
+        const listing = document?.listing
+        return listing
+            ? { listing, bytes: document.bytes, library: group.displayedLibraryListing }
+            : undefined
+    })
+    /** A Listing's Breakpoints go on its instructions, no other line. */
+    const listingBreakable = $derived.by(() => {
+        const kinds = listingModel?.listing.lines.kinds
+        return kinds ? (line: number) => kinds[line] === LINE_KIND.instruction : undefined
+    })
 
     function overSplitZone(event: DragEvent) {
         if (!session.canSplitWithDrop()) return false
@@ -82,7 +99,9 @@
     onfocusin={() => session.focusEditorGroup(group)}
 >
     <FileTabs {group} />
-    {#if group.displayedLibraryMember && group.displayedFile}
+    {#if group.displayedListing}
+        <ListingNotice document={group.displayedListing} library={group.displayedLibraryListing} />
+    {:else if group.displayedLibraryMember && group.displayedFile}
         <LibraryMemberNotice
             path={group.displayedPath}
             onShowSource={group.libraryMemberSourceAvailable
@@ -146,6 +165,8 @@
                           })
                     : []}
                 on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1, group)}
+                listing={listingModel}
+                canBreakAt={listingBreakable}
                 bind:editor={group.editor}
                 code={group.displayedCode}
                 breakpoints={group.displayedBreakpoints}
@@ -163,6 +184,27 @@
         {/if}
         {#if !group.displayedPath}
             <EmptyEditor {group} compact={session.groups.length > 1} />
+        {:else if group.displayedListing?.status === 'generating'}
+            {@const progress = group.displayedListing.progress}
+            <div class="file-notice">
+                <h2>Generating the Listing…</h2>
+                <p>
+                    Disassembling {group.displayedListing.name}{progress === undefined
+                        ? ''
+                        : `: ${Math.round(progress * 100)}%`}
+                </p>
+                <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
+            </div>
+        {:else if group.displayedListing?.status === 'failed'}
+            <div class="file-notice">
+                <h2>No Listing</h2>
+                <p>
+                    The Listing of {group.displayedListing.name} could not be generated: {group
+                        .displayedListing.error}
+                </p>
+            </div>
+        {:else if group.displayedListing}
+            <!-- an Executable is shown as its Listing, not as the bytes it is -->
         {:else if group.displayedFile?.encoding === 'base64'}
             <div class="file-notice">
                 <h2>Binary file</h2>
@@ -241,6 +283,10 @@
     .file-notice p {
         max-width: 30rem;
         opacity: 0.72;
+    }
+    .file-notice progress {
+        width: min(16rem, 80%);
+        accent-color: var(--accent);
     }
     .floating-controls {
         position: absolute;

@@ -1,5 +1,14 @@
 import { executableKind } from '#lib/executables.ts'
-import { fileBytes } from '#lib/projectFiles.ts'
+import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import {
+    functionAtLine,
+    instructionAddressAt,
+    lineOfAddress,
+    type Listing
+} from '#lib/listing/listing.ts'
+import { listingClient } from '#lib/listing/listingClient.ts'
+import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import { libraryListingPath } from '#lib/listing/listingPaths.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     EmulatorStatus,
@@ -12,10 +21,12 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    isLineBreakpoint,
     type MutationOperation,
     type PokeWrite,
     type RegisterFileDescriptor,
     RegisterSize,
+    type SourceBreakpoint,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
@@ -41,9 +52,11 @@ import {
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
     type PokeWrite as CorePokeWrite,
+    type X86Breakpoint,
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
     type X86FpuState,
+    type X86LoadedObject,
     type X86WaitRequest,
     type X86RegisterName
 } from '@specy/x86'
@@ -162,6 +175,20 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private inputRead: { execution: ExecutionGeneration; promise: Promise<Uint8Array> } | null =
         null
     private waitError: unknown
+    /**
+     * The Executable this Debug session runs and its Listing, which every address inside it maps
+     * to ([binary-import.md](../../../../../../docs/design/binary-import.md), decision 5). Set when
+     * the session begins; `loadingExecutable` holds it from the Build's load until then.
+     */
+    private executable: LoadedExecutable | undefined
+    private loadingExecutable: LoadedExecutable | undefined
+    /**
+     * What the running program has mapped from files, as the Core last listed it: read again when
+     * an address falls outside every one of them, which is how a library a Step enters is found,
+     * and forgotten when a Run starts, since a Run can map and unmap anything. A Step, which a
+     * Step through library code repeats thousands of times, does not read it again.
+     */
+    private loadedObjects: X86LoadedObject[] | undefined
 
     constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
@@ -181,6 +208,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         )
         this.core = core
+        this._listings = new ListingDocuments((order) => listingClient.generate(order))
         core.setEnvironment({
             now: (id) => {
                 const clock = this._peripherals.clock
@@ -265,6 +293,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.inputRead = null
         this.waitError = undefined
         this.randomPositions?.clear()
+        //the running program's Listings go with it: `@lib/` tabs close, the Executable's own File
+        //is shown again at the address it will be loaded at
+        this.executable = undefined
+        this.loadingExecutable = undefined
+        this.loadedObjects = undefined
+        this._listings?.session.clear()
         if (this.compiling) {
             // compileProject detached the old capability before its first awaited tool call.
             // Native cleanup is guarded during Build; finish it before the next queued Build.
@@ -277,6 +311,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _beginExecutionSession(): void {
         if (!this.fileSystemSession) throw new Error('Missing x86 FileSystem session')
         this.requireCore().mountProjectFileSystem(this.fileSystemSession)
+        this.executable = this.loadingExecutable
+        this.loadingExecutable = undefined
+        if (this.executable)
+            this._listings?.session.set(this.executable.path, this.executable.document)
         const library = this.buildSources?.runtimeAbi
             ? loadedRuntimeLibrary(this.buildSources.runtimeAbi, 'X86')
             : undefined
@@ -368,11 +406,21 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     report: kind.unsupported,
                     diagnostics: [executableDiagnostic(sources.entry, kind.unsupported)]
                 }
-            //the Executable's own File can be read but not written, deleted or renamed while it runs
-            const info = await core.loadExecutable(fileBytes(sources.files[sources.entry]), {
-                protectedPath: '/project/' + sources.entry
-            })
+            const file = sources.files[sources.entry]
+            const document = this._listings!.openExecutable(sources.entry, file)!
+            const [info] = await Promise.all([
+                //the Executable's own File can be read but not written, deleted or renamed while
+                //it runs
+                core.loadExecutable(fileBytes(file), {
+                    protectedPath: '/project/' + sources.entry
+                }),
+                //the debugger shows the Listing and maps every address of the program to it, so
+                //the Build waits for it; one that cannot be generated leaves the program running
+                //without lines, and its document says why
+                document.ready.catch(() => undefined)
+            ])
             this._buildLibraryFiles = undefined
+            this.loadingExecutable = { path: sources.entry, file, document }
             return {
                 ok: true,
                 diagnostics: info.missing.map((name) =>
@@ -439,8 +487,20 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
-            this.core?.getCallStack().map((frame) => ({ ...frame, file: frame.file || entry })) ??
-            []
+            this.core?.getCallStack().map((frame) => {
+                const located = this.locate(frame.address)
+                if (!located) return { ...frame, file: frame.file || entry }
+                //a frame is a function: named, and gone to, as its Listing labels it
+                const { listing, base } = located
+                const start = listing && located.line >= 0 && functionAtLine(listing, located.line)
+                const named = start && start.address + base === Number(frame.address)
+                return {
+                    ...frame,
+                    name: named ? start.name : frame.name,
+                    file: located.file || undefined,
+                    line: named ? start.line : located.line
+                }
+            }) ?? []
         )
     }
 
@@ -481,20 +541,149 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _getInstructionAt(address: bigint): Instruction | null {
         const instruction = this.core?.getInstructionAt(address)
-        if (!instruction) return null
+        return instruction ? this.withLocation(instruction) : null
+    }
+
+    _getNextInstruction(): Instruction | null {
+        const instruction = this.core?.getNextInstruction()
+        return instruction ? this.withLocation(instruction) : null
+    }
+
+    /**
+     * An instruction's File and line: for a loaded Executable, the Listing line of its address
+     * (`locate`); for an assembled program, the line the Core read from DWARF, in the Entry when
+     * the Core names no File.
+     */
+    private withLocation<T extends { address: bigint; file?: string; lineNumber: number }>(
+        instruction: T
+    ): T & { file: string } {
+        const located = this.locate(instruction.address)
+        if (located) return { ...instruction, file: located.file, lineNumber: located.line }
         return {
             ...instruction,
             file: instruction.file || this.buildSources?.entry || this._sources.entry
         }
     }
 
-    _getNextInstruction(): Instruction | null {
-        const instruction = this.core?.getNextInstruction()
-        if (!instruction) return null
+    /**
+     * Where an address of a loaded Executable's run is shown: the line of the Executable's
+     * Listing inside it, the line of a library's Listing under `@lib/` inside one (generated the
+     * first time the run is there, with line -1 until it is ready, when the current line is read
+     * again), and no File anywhere else, such as code on the stack. Undefined for an assembled
+     * program, whose lines the Core knows.
+     */
+    private locate(address: bigint): ListingLocation | undefined {
+        const executable = this.executable
+        if (!executable) return undefined
+        const object = this.objectAt(address)
+        const located = object
+            ? object.main
+                ? this.programListing(executable, object)
+                : this.libraryListing(object)
+            : undefined
+        if (!located) return { file: '', line: -1, base: 0 }
+        const { path, document } = located
+        const listing = document.listing
         return {
-            ...instruction,
-            file: instruction.file || this.buildSources?.entry || this._sources.entry
+            file: path,
+            line: listing ? lineOfAddress(listing, Number(address) - document.base) : -1,
+            listing,
+            base: document.base
         }
+    }
+
+    /** The loaded object holding an address, reading the Core's list again when none does. */
+    private objectAt(address: bigint): X86LoadedObject | undefined {
+        const holding = (objects: X86LoadedObject[] | undefined) =>
+            objects?.find((object) => address >= object.base && address < object.end)
+        let object = holding(this.loadedObjects)
+        if (!object && this.core) {
+            this.loadedObjects = this.core.getLoadedObjects()
+            object = holding(this.loadedObjects)
+        }
+        return object
+    }
+
+    /**
+     * The Executable's Listing, generated again at the address the program was really loaded at
+     * when that is not the planned one.
+     */
+    private programListing(executable: LoadedExecutable, object: X86LoadedObject) {
+        const base = Number(object.base)
+        if (executable.document.base !== base && this._listings) {
+            executable.document = this._listings.open({
+                name: executable.document.name,
+                base,
+                content: executable.file.content,
+                bytes: () => fileBytes(executable.file)
+            })
+            this.listingOpened(executable.path, executable.document)
+        }
+        return { path: executable.path, document: executable.document }
+    }
+
+    /** A library's Listing, under `@lib/<soname>`, generated the first time the run is in it. */
+    private libraryListing(object: X86LoadedObject) {
+        const listings = this._listings
+        const core = this.core
+        if (!listings || !core) return undefined
+        const path = libraryListingPath(object)
+        const base = Number(object.base)
+        let document = listings.session.get(path)
+        if (document?.base !== base) {
+            document = listings.open({
+                name: path.slice(path.lastIndexOf('/') + 1),
+                base,
+                //the Core bundles one build of each library, so its path names its bytes
+                content: object.path,
+                bytes: () => core.getLoadedObjectBytes(object.path) ?? new Uint8Array()
+            })
+            this.listingOpened(path, document)
+        }
+        return { path, document }
+    }
+
+    /** A running program's Listing, which once ready says where the program is. */
+    private listingOpened(path: string, document: ListingDocument): void {
+        this._listings?.session.set(path, document)
+        if (document.status === 'generating')
+            document.ready.then(
+                () => {
+                    if (this._listings?.session.get(path) === document) this.relocateInstructions()
+                },
+                () => undefined
+            )
+    }
+
+    /** The address a loaded Executable runs at: where the Core mapped it, or else the planned one. */
+    private programBase(executable: LoadedExecutable): bigint {
+        const main =
+            this.loadedObjects?.find((object) => object.main) ??
+            this.core?.getLoadedObjects().find((object) => object.main)
+        return main?.base ?? BigInt(executable.document.base)
+    }
+
+    /**
+     * The Breakpoints the Core stops on. A loaded Executable's are addresses of its Listing,
+     * relocated to where it runs; a line of its Listing, which the coding agent may set, stands for
+     * the instruction on it. An assembled program's lines go to the Core, which maps them through
+     * DWARF.
+     */
+    private coreBreakpoints(breakpoints: readonly SourceBreakpoint[]): X86Breakpoint[] {
+        const executable = this.executable
+        if (!executable)
+            return breakpoints
+                .filter(isLineBreakpoint)
+                .map(({ file, line }) => ({ path: file, line }))
+        const listing = executable.document.listing
+        const base = this.programBase(executable)
+        return breakpoints.flatMap((breakpoint) => {
+            if (breakpoint.file !== executable.path) return []
+            const address = isLineBreakpoint(breakpoint)
+                ? listing && instructionAddressAt(listing, breakpoint.line)
+                : breakpoint.address
+            return address === undefined ? [] : [{ address: BigInt(address) + base }]
+        })
     }
 
     /**
@@ -618,6 +807,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 //one off the pc the machine is parked on, and the History row draws no PC line for
                 //it ([the design record](../../../../../../docs/design/pokes.md))
                 if (mapped.kind === 'poke') return { ...mapped, line: -1, file: undefined }
+                const located = this.locate(BigInt(step.pc))
+                if (located)
+                    return { ...mapped, file: located.file || undefined, line: located.line }
                 return { ...mapped, file: step.file || entry }
             }) ?? []
         )
@@ -664,7 +856,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         )
         const core = this.requireCore()
         const before = core.getInstructionsExecuted()
-        const breakpoints = request.breakpoints.map(({ file, line }) => ({ path: file, line }))
+        const breakpoints = this.coreBreakpoints(request.breakpoints)
+        this.loadedObjects = undefined
         const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
         const instructions = Number(core.getInstructionsExecuted() - before)
         if (status === CoreEmulatorStatus.Running)
@@ -728,7 +921,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     private async runWithInput(
         limit: number,
-        breakpoints: Array<{ path: string; line: number }>,
+        breakpoints: X86Breakpoint[],
         skipBreakpointAtPc = false
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
@@ -861,6 +1054,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 }
+
+type LoadedExecutable = { path: string; file: ProjectFile; document: ListingDocument }
+
+/** Where an address is shown, with the Listing it was found in and that Listing's load base. */
+type ListingLocation = { file: string; line: number; listing?: Listing; base: number }
 
 function normalizeRegisterName(register: string): X86RegisterName {
     const normalized = register.toLowerCase()

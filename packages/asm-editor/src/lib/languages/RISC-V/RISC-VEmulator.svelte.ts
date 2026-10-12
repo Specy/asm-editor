@@ -39,6 +39,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    isLineBreakpoint,
     makeLabelColor,
     type MutationOperation,
     type PokeWrite,
@@ -1208,7 +1209,7 @@ function toCoreRegisterName(register: RISCVRegisterName): RegisterName {
  * Only the first address of the expansion is a breakpoint: it is where the line is entered.
  */
 function calculateBreakpoints(riscv: JsRiscV, breakpoints: SourceBreakpoint[]): number[] {
-    return breakpoints.flatMap((breakpoint) => {
+    return breakpoints.filter(isLineBreakpoint).flatMap((breakpoint) => {
         const statements = riscv.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
         const entry = statements.reduce<number | undefined>(
             (lowest, statement) =>

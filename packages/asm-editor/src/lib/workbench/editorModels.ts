@@ -9,6 +9,11 @@ import type { ProjectFiles } from '#lib/projectFiles.ts'
 /** Session ownership lets multiple editor widgets attach to one canonical file model. */
 export class EditorModels {
     private models = new Map<string, monaco.editor.ITextModel>()
+    /**
+     * The text each model was last given, while nothing has edited it since: comparing with it
+     * spares reading a whole model back out, which for a library's Listing is megabytes.
+     */
+    private values = new Map<string, string>()
     private listeners = new Map<string, monaco.IDisposable>()
     private artifactDisposers = new Map<string, () => void>()
     private applyingExternalValue = false
@@ -29,19 +34,27 @@ export class EditorModels {
             )
             model.setEOL(0)
             this.models.set(source.key, model)
+            this.values.set(source.key, source.value)
             const owned = model
+            const key = source.key
             this.listeners.set(
                 source.key,
                 model.onDidChangeContent(() => {
+                    if (this.applyingExternalValue) return
+                    this.values.delete(key)
                     const identity = parseProjectSourceUri(owned.uri)
-                    if (!this.applyingExternalValue && identity?.sourceKind === 'live')
+                    if (identity?.sourceKind === 'live')
                         this.edited(identity.path, owned.getValue())
                 })
             )
-        } else if (model.getValue() !== source.value) {
+        } else if (
+            this.values.get(source.key) !== source.value &&
+            model.getValue() !== source.value
+        ) {
             this.applyingExternalValue = true
             try {
                 model.setValue(source.value)
+                this.values.set(source.key, source.value)
             } finally {
                 this.applyingExternalValue = false
             }
@@ -67,11 +80,13 @@ export class EditorModels {
     synchronize(files: ProjectFiles) {
         this.applyingExternalValue = true
         try {
-            for (const model of this.models.values()) {
+            for (const [key, model] of this.models) {
                 const identity = parseProjectSourceUri(model.uri)
                 const file = identity?.sourceKind === 'live' ? files[identity.path] : undefined
-                if (file?.encoding === 'plain' && model.getValue() !== file.content)
+                if (file?.encoding === 'plain' && model.getValue() !== file.content) {
                     model.setValue(file.content)
+                    this.values.delete(key)
+                }
             }
         } finally {
             this.applyingExternalValue = false
@@ -82,6 +97,7 @@ export class EditorModels {
         this.listeners.get(key)?.dispose()
         this.artifactDisposers.get(key)?.()
         this.models.get(key)?.dispose()
+        this.values.delete(key)
         this.listeners.delete(key)
         this.artifactDisposers.delete(key)
         this.models.delete(key)

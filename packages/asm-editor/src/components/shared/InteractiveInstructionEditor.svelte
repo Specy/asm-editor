@@ -40,6 +40,7 @@
     import type monaco from 'monaco-editor'
     import Card from '#cmp/shared/layout/Card.svelte'
     import {
+        isLineBreakpoint,
         makeColorizedLabels,
         makeRegister,
         type RegisterPoke,
@@ -538,6 +539,7 @@
                 codeOverride={session ? undefined : emulator.compiledCode}
                 breakpointsEditable={!selectedIsSource}
                 breakpoints={emulator.breakpoints
+                    .filter(isLineBreakpoint)
                     .filter(
                         (breakpoint) =>
                             breakpoint.file ===
