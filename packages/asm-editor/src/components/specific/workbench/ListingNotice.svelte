@@ -8,11 +8,17 @@
      */
     let {
         document,
-        library = false
+        library = false,
+        patchable = false
     }: {
         document: ListingDocument
         /** A shared library's Listing, under `@lib/`, rather than the Executable's own. */
         library?: boolean
+        /**
+         * The running Executable's own Listing in a Debug session, whose instructions take patches
+         * (decision 13): the notice says how.
+         */
+        patchable?: boolean
     } = $props()
 </script>
 
@@ -21,6 +27,9 @@
         The Listing of {document.name} could not be generated.
     {:else if library}
         Generated Listing of {document.name}, a library the program loaded: read-only.
+    {:else if patchable}
+        Generated Listing of {document.name}: read-only. While the program is paused, Space or the
+        context menu patches the instruction on a line, in memory only.
     {:else}
         Generated Listing of {document.name}: read-only.
     {/if}

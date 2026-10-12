@@ -71,7 +71,12 @@ export function createListingProviders(monacoInstance: MonacoType) {
             const found = target(model, position)
             if (found?.label)
                 contents.push({ value: labelHoverMarkdown(registered.listing, found.label) })
-            const bytes = lineHoverMarkdown(registered.listing, registered.bytes, line)
+            const bytes = lineHoverMarkdown(
+                registered.listing,
+                registered.bytes,
+                line,
+                registered.patches?.get(line)
+            )
             if (bytes) contents.push({ value: bytes })
             if (!contents.length) return null
             return {

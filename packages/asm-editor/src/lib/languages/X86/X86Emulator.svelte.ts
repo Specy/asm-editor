@@ -10,6 +10,7 @@ import {
 } from '#lib/listing/listing.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import { ListingPatcher } from '#lib/listing/listingPatcher.svelte.ts'
 import { LIBRARY_LISTING_NAMESPACE, libraryListingPath } from '#lib/listing/listingPaths.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
@@ -41,6 +42,7 @@ import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import {
     END_OF_INPUT,
+    assembleInstruction,
     createX86Emulator,
     decodeFpuState,
     locateDiagnosticSpan,
@@ -214,7 +216,26 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /** The system calls this program's run has already been told in the Log are missing. */
     private notedSyscalls = new Set<number>()
     /** Zydis, for naming an instruction the Core could not run. */
-    private readonly decoder: ListingDecoder | undefined
+    private decoder: ListingDecoder | undefined
+    /**
+     * Patches of the running Executable's code from its Listing, written as Pokes
+     * ([binary-import.md](../../../../../../docs/design/binary-import.md), decision 13), and the
+     * Listing lines they changed, read again at every refresh.
+     */
+    readonly patcher: ListingPatcher = new ListingPatcher({
+        executable: () => this.executable,
+        readMemory: (address, length) => {
+            try {
+                return this.core?.readMemoryBytes(address, BigInt(length))
+            } catch {
+                return undefined
+            }
+        },
+        poke: (address, bytes) => this.pokeMemory(address, bytes),
+        decoder: () => this.decoder,
+        loadDecoder: async () => (this.decoder ??= await loadDecoder()),
+        assemble: (text, address) => assembleInstruction(text, address)
+    })
 
     constructor(
         source: BuildInput,
@@ -388,6 +409,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.loadedObjects = undefined
         this.trampolines = []
         this._listings?.session.clear()
+        this.patcher?.clear()
         if (this.compiling) {
             // compileProject detached the old capability before its first awaited tool call.
             // Native cleanup is guarded during Build; finish it before the next queued Build.
@@ -1032,7 +1054,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 //a Poke ran no instruction, so it has no line of its own even though the Core reads
                 //one off the pc the machine is parked on, and the History row draws no PC line for
                 //it ([the design record](../../../../../../docs/design/pokes.md))
-                if (mapped.kind === 'poke') return { ...mapped, line: -1, file: undefined }
+                if (mapped.kind === 'poke') {
+                    //a Poke that rewrote one instruction of the Executable reads as the patch it is
+                    const [write, ...others] = mapped.writes ?? []
+                    const title =
+                        write?.type === 'memory' && !others.length
+                            ? this.patcher.title(write)
+                            : undefined
+                    return { ...mapped, line: -1, file: undefined, ...(title ? { title } : {}) }
+                }
                 //a row in a library whose Listing has not been made has no line until it is gone to
                 const located = this.locate(BigInt(step.pc), false)
                 if (located)
@@ -1144,6 +1174,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
         this.requireCore().writeMemoryBytes(address, data)
+        //a Poke into the Executable's code shows on its Listing line
+        this.patcher.touched(address, data.length)
+    }
+
+    /** Also reads the patched lines of the running Executable's Listing again. */
+    protected updateData(): void {
+        super.updateData()
+        this.patcher?.refresh()
     }
 
     private async runWithInput(

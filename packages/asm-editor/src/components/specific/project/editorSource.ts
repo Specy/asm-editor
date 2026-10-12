@@ -14,6 +14,12 @@ export type EditorSource = {
     value: string
     /** Gives the model a stable URI that language providers route back to the Project session. */
     identity?: ProjectModelIdentity
+    /**
+     * Text nobody edits by hand whose changes are a few lines at a time, a Listing whose lines a
+     * Debug session patched: a new value replaces only the part that changed, so the cursor, the
+     * scroll position and the rest of the model's state stay as they were.
+     */
+    changesInPlace?: boolean
 }
 
 /** The model bookkeeping `resolveEditorModel` drives, so the rule itself holds no Monaco types. */

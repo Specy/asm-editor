@@ -27,6 +27,37 @@ function harness() {
             this.language = language
         }
         setEOL() {}
+        /** Offsets to 1-based positions, as Monaco counts them. */
+        getPositionAt(offset: number) {
+            const before = this.value.slice(0, offset).split('\n')
+            return { lineNumber: before.length, column: before[before.length - 1].length + 1 }
+        }
+        private offsetAt(lineNumber: number, column: number) {
+            const lines = this.value.split('\n')
+            let offset = 0
+            for (let line = 1; line < lineNumber; line++) offset += lines[line - 1].length + 1
+            return offset + column - 1
+        }
+        applyEdits = vi.fn(
+            (
+                edits: {
+                    range: {
+                        startLineNumber: number
+                        startColumn: number
+                        endLineNumber: number
+                        endColumn: number
+                    }
+                    text: string
+                }[]
+            ) => {
+                for (const { range, text } of edits) {
+                    const from = this.offsetAt(range.startLineNumber, range.startColumn)
+                    const to = this.offsetAt(range.endLineNumber, range.endColumn)
+                    this.value = this.value.slice(0, from) + text + this.value.slice(to)
+                }
+                this.listeners.forEach((listener) => listener())
+            }
+        )
         onDidChangeContent(listener: () => void) {
             this.listeners.add(listener)
             return { dispose: () => this.listeners.delete(listener) }
@@ -90,6 +121,30 @@ describe('shared Project editor models', () => {
         expect(h.edited).not.toHaveBeenCalled()
         h.registry.synchronize({ 'main.c': { encoding: 'plain', content: 'external' } })
         expect(first.setValue).toHaveBeenCalledTimes(1)
+    })
+    it('changes a Listing in place: only the lines that differ, with no edit reported', () => {
+        const h = harness()
+        const before = '; header\nmain:\n    jne .LAB_2\n    ret\n'
+        const build = { ...h.source('crackme', before, 1), changesInPlace: true }
+        const model = h.open(build)
+        h.open({ ...build, value: before.replace('jne', 'je') })
+        expect(model.getValue()).toBe(before.replace('jne', 'je'))
+        expect(model.setValue).not.toHaveBeenCalled()
+        expect(model.applyEdits).toHaveBeenCalledTimes(1)
+        expect(model.applyEdits.mock.calls[0][0]).toEqual([
+            {
+                range: { startLineNumber: 3, startColumn: 6, endLineNumber: 3, endColumn: 7 },
+                text: ''
+            }
+        ])
+        h.open({ ...build, value: before })
+        expect(model.getValue()).toBe(before)
+        expect(h.edited).not.toHaveBeenCalled()
+        //anything else is set whole, as before
+        const file = h.open(h.source('main.c', 'one'))
+        h.open(h.source('main.c', 'two'))
+        expect(file.setValue).toHaveBeenCalledTimes(1)
+        expect(file.applyEdits).not.toHaveBeenCalled()
     })
     it('retains models through tab closure and separates immutable build generations', () => {
         const h = harness(),

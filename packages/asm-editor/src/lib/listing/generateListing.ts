@@ -18,6 +18,7 @@ import {
     type ListingNameOrigin,
     type ListingNameVersion
 } from './listing'
+import { instructionLineText, quotedString } from './listingText'
 import { inventName, numberedName, printableSymbolName, stringLabelBase } from './names'
 
 export type ListingInput = {
@@ -58,8 +59,6 @@ PRINTABLE[9] = PRINTABLE[10] = 1
 const MIN_STRING = 4
 const STRING_LINE = 64
 const ZERO_RUN = 64
-const COMMENT_COLUMN = 40
-const COMMENT_STRING = 40
 
 /** The index of the last value at or below `value` in an ascending array, or -1. */
 function floorIndex(sorted: Float64Array, value: number): number {
@@ -78,19 +77,6 @@ function floorIndex(sorted: Float64Array, value: number): number {
 
 function hexByte(byte: number) {
     return `0x${byte < 16 ? '0' : ''}${byte.toString(16)}`
-}
-
-function cEscape(text: string): string {
-    let out = ''
-    for (const char of text) {
-        const code = char.charCodeAt(0)
-        if (char === '\n') out += '\\n'
-        else if (char === '\t') out += '\\t'
-        else if (char === '"' || char === '\\') out += `\\${char}`
-        else if (code < 0x20 || code > 0x7e) out += `\\x${code.toString(16).padStart(2, '0')}`
-        else out += char
-    }
-    return out
 }
 
 /**
@@ -576,9 +562,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     const stringComment = (target: number) => {
         const string = containingString(target)
         if (string === undefined) return undefined
-        const text = stringText(string).slice(target - string)
-        const shown = text.length > COMMENT_STRING ? `${text.slice(0, COMMENT_STRING)}...` : text
-        return `"${cEscape(shown)}"`
+        return quotedString(stringText(string).slice(target - string))
     }
     const absolute = !analysis.pie
     const relocatable = analysis.type === 3
@@ -623,9 +607,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             const value = match ? parseInt(match[1], 16) : Number.NaN
             if (namesAt.has(value) && !blockNumber.has(value)) comments.push(primary(value))
         }
-        text = `    ${text}`
-        if (comments.length) text = `${text.padEnd(COMMENT_COLUMN - 1)} ; ${comments.join(', ')}`
-        return text
+        return instructionLineText(text, comments)
     }
 
     // The text and its line table.

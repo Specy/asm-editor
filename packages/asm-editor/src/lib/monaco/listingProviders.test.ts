@@ -169,6 +169,38 @@ describe('hovers in a Listing', () => {
         expect(providers().hover.provideHover(model(), at(0, 'crackme'), token)).toBeNull()
     })
 
+    it('says when a line was patched, and what the Executable has there', () => {
+        const check = lineOf('jne .LAB_2', lineOf('call strcmp@plt'))
+        const patchedUri = 'asm-editor://session/build-2/crackme'
+        const offset = listing.lines.offsets[check]
+        const original = crackme.slice(offset, offset + 2)
+        const dispose = setModelListing(patchedUri, {
+            listing,
+            bytes: crackme,
+            library: false,
+            patches: new Map([
+                [
+                    check,
+                    {
+                        text: '    je .LAB_2',
+                        instruction: 'je .LAB_2',
+                        bytes: Uint8Array.of(0x74, original[1]),
+                        original,
+                        originalText: 'jne .LAB_2'
+                    }
+                ]
+            ])
+        })
+        const hover = providers().hover.provideHover(model(patchedUri), at(check, 'jne'), token)
+        const text = (hover as monaco.languages.Hover).contents.map((part) => part.value).join('\n')
+        const hex = (byte: number) => byte.toString(16).padStart(2, '0')
+        expect(text).toContain(`Bytes \`74 ${hex(original[1])}\``)
+        expect(text).toContain(
+            `Patched in this Debug session. The Executable has \`75 ${hex(original[1])}\` here, \`jne .LAB_2\`; Undo takes the patch back.`
+        )
+        dispose()
+    })
+
     it('answers nothing for a model that is no Listing', () => {
         const other = model('asm-editor://session/live/main.asm')
         expect(providers().hover.provideHover(other, at(0, 'crackme'), token)).toBeNull()

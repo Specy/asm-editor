@@ -33,6 +33,7 @@ import {
 import { instructionAddressAt } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
+import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
@@ -119,6 +120,7 @@ import {
     type LogEntry
 } from './workbenchLog'
 import { EditorGroup } from './EditorGroup.svelte'
+import { PatchPrompt } from './patchPrompt.svelte'
 import { EditorModels } from './editorModels'
 import { resolveMappingPair } from './mappingPair'
 import { editorGroupForFile, editorFileKind } from './editorFileRouting'
@@ -955,6 +957,67 @@ export class WorkbenchSession {
         } catch (e) {
             toast.error(getM68kErrorMessage(e))
         }
+    }
+
+    // ---- patching from a Listing ---------------------------------------------------------------
+
+    /**
+     * The Listing line of a pane that "Patch instruction…" may rewrite now
+     * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): an
+     * instruction of the running Executable's own Listing, shown in the current Build, while a
+     * Poke is possible (paused, not waiting for input, not ended, and the Project not read-only).
+     * A library's Listing and any other line take none.
+     */
+    patchSite(group: EditorGroup, line: number): PatchSite | undefined {
+        const patcher = this.emulator.patcher
+        const selection = group.sourceSelection
+        if (
+            !patcher ||
+            !this.pokeable ||
+            group.displayedLibraryListing ||
+            selection.sourceKind !== 'build' ||
+            selection.buildGeneration !== this.buildGeneration
+        )
+            return undefined
+        const site = patcher.site(line)
+        return site?.path === group.displayedPath && site.document === group.displayedListing
+            ? site
+            : undefined
+    }
+
+    /** Opens the prompt over a line that takes a patch, with its instruction to retype. */
+    openPatchPrompt(group: EditorGroup, line: number): boolean {
+        const patcher = this.emulator.patcher
+        const site = this.patchSite(group, line)
+        if (!patcher || !site) return false
+        group.patchPrompt?.dispose()
+        const prompt = new PatchPrompt(site, patcher)
+        group.patchPrompt = prompt
+        void prompt.update()
+        return true
+    }
+
+    closePatchPrompt(group: EditorGroup) {
+        group.patchPrompt?.dispose()
+        group.patchPrompt = undefined
+        group.editor?.focus()
+    }
+
+    /** Writes the prompt's previewed patch as one Poke, and closes it once written. */
+    applyPatch(group: EditorGroup): boolean {
+        const prompt = group.openPatchPrompt
+        if (!prompt || !this.pokeable) return false
+        try {
+            if (!prompt.apply()) {
+                prompt.failure = 'The patch could not be written'
+                return false
+            }
+        } catch (e) {
+            prompt.failure = getM68kErrorMessage(e)
+            return false
+        }
+        this.closePatchPrompt(group)
+        return true
     }
 
     // ---- which File is shown -------------------------------------------------------------------

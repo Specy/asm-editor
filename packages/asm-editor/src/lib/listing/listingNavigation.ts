@@ -140,7 +140,8 @@ export class ListingIndex {
         return this.lineStarts
     }
 
-    private offsetOfLine(line: number): number {
+    /** Where a 0-based line starts in the text; the text's length past the last line. */
+    offsetOfLine(line: number): number {
         const starts = this.starts()
         return line < starts.length ? starts[line] : this.listing.text.length
     }
@@ -201,7 +202,8 @@ export function labelHoverMarkdown(listing: Listing, label: ListingLabel): strin
 export function lineHoverMarkdown(
     listing: Listing,
     bytes: Uint8Array,
-    line: number
+    line: number,
+    patched?: { bytes: Uint8Array; original: Uint8Array; originalText: string }
 ): string | undefined {
     const { kinds, addresses, sizes, offsets } = listing.lines
     const kind = kinds[line]
@@ -210,9 +212,16 @@ export function lineHoverMarkdown(
     const size = sizes[line]
     const offset = offsets[line]
     if (offset < 0) return `${address} · ${size} bytes reserved, zero when the program starts`
-    const shown = Array.from(bytes.subarray(offset, offset + Math.min(size, HOVER_BYTES)), (byte) =>
-        byte.toString(16).padStart(2, '0')
-    ).join(' ')
+    const shown = (from: Uint8Array) =>
+        Array.from(from.subarray(0, HOVER_BYTES), (byte) =>
+            byte.toString(16).padStart(2, '0')
+        ).join(' ')
     const more = size > HOVER_BYTES ? ` and ${size - HOVER_BYTES} more` : ''
-    return `${address} · Bytes \`${shown}\`${more}`
+    if (patched)
+        return [
+            `${address} · Bytes \`${shown(patched.bytes)}\`${more}`,
+            '',
+            `Patched in this Debug session. The Executable has \`${shown(patched.original)}\` here, \`${patched.originalText}\`; Undo takes the patch back.`
+        ].join('\n')
+    return `${address} · Bytes \`${shown(bytes.subarray(offset, offset + size))}\`${more}`
 }

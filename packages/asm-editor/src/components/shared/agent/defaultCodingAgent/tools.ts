@@ -244,14 +244,20 @@ export function getFile(
 
 /**
  * A File's text as the breakpoint tools read it, or the running program's Listing at its path,
- * which is what the editor shows for an Executable and, under `@lib/`, for a library.
+ * which is what the editor shows for an Executable, with any line the session patched as memory
+ * holds it, and, under `@lib/`, for a library.
  */
 function fileOf(
     context: DefaultCodingAgentToolContext,
     emulator: Emulator,
     path: string
 ): { path: string; content: string } | null {
-    const listing = emulator.listings?.session.get(path)?.listing
+    const document = emulator.listings?.session.get(path)
+    const patched = emulator.patcher?.patched
+    const listing =
+        patched?.document === document && patched?.path === path
+            ? patched.listing
+            : document?.listing
     return listing ? { path, content: listing.text } : getFile(context, path)
 }
 

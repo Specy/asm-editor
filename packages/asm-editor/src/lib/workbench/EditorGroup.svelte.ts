@@ -10,8 +10,10 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { lineOfAddress } from '#lib/listing/listing.ts'
+import { lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
+import type { PatchPrompt } from './patchPrompt.svelte'
 import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
@@ -45,6 +47,15 @@ export class EditorGroup {
      * decisions 5 and 18). It is read-only and is no File of the Project.
      */
     declare readonly displayedListing: ListingDocument | undefined
+    /**
+     * The running Executable's patched lines, when this group shows its Listing in the current
+     * Build ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13).
+     */
+    declare readonly displayedPatches: PatchedListing | undefined
+    /** The displayed Listing as shown: with its patched lines, if any, in place. */
+    declare readonly displayedListingView: Listing | undefined
+    /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
+    patchPrompt = $state.raw<PatchPrompt | undefined>()
 
     constructor(
         readonly session: WorkbenchSession,
@@ -61,6 +72,20 @@ export class EditorGroup {
             editorFileLanguage(this.displayedPath, this.session.project.language)
         )
         this.displayedListing = $derived(this.session.listingFor(this.sourceSelection))
+        this.displayedPatches = $derived.by(() => {
+            const patched = this.session.emulator.patcher?.patched
+            const selection = this.sourceSelection
+            return patched &&
+                patched.document === this.displayedListing &&
+                patched.path === this.displayedPath &&
+                selection.sourceKind === 'build' &&
+                selection.buildGeneration === this.session.buildGeneration
+                ? patched
+                : undefined
+        })
+        this.displayedListingView = $derived(
+            this.displayedPatches?.listing ?? this.displayedListing?.listing
+        )
         this.resetCompilationOptions()
     }
 
@@ -93,6 +118,21 @@ export class EditorGroup {
         const map = this.session.runtimeSourceMap(this.displayedPath)
         return !!map && !this.session.groups.some((group) => group.displayedPath === map.sourcePath)
     }
+    /**
+     * The open "Patch instruction…" prompt, while the Listing line it patches is still shown in
+     * the Debug session it was opened in.
+     */
+    get openPatchPrompt(): PatchPrompt | undefined {
+        const prompt = this.patchPrompt
+        const selection = this.sourceSelection
+        return prompt &&
+            prompt.site.document === this.displayedListing &&
+            prompt.site.path === this.displayedPath &&
+            selection.sourceKind === 'build' &&
+            selection.buildGeneration === this.session.buildGeneration
+            ? prompt
+            : undefined
+    }
     /** Whether the displayed Listing is a library's, which takes no Breakpoints (decision 11). */
     get displayedLibraryListing() {
         return isLibraryListingPath(this.displayedPath)
@@ -107,8 +147,7 @@ export class EditorGroup {
             : this.session.project.files[this.displayedPath]
     }
     get displayedCode() {
-        const listing = this.displayedListing
-        if (listing) return listing.listing?.text ?? ''
+        if (this.displayedListing) return this.displayedListingView?.text ?? ''
         return this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
     }
     get displayedCompilation() {

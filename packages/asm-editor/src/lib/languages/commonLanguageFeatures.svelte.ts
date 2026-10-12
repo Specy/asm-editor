@@ -275,6 +275,11 @@ export type ExecutionStep = {
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
     /**
+     * What a Poke did, in words, when it is more than the values it wrote: a patch of an
+     * Executable's instruction from its Listing reads `Patched jne → je at 0x5555555551f8`.
+     */
+    title?: string
+    /**
      * Set on the instruction that started a Step through library code: the library function it
      * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
      * takes back together.
@@ -564,6 +569,11 @@ export type BaseEmulatorDerivedState = {
      * running program and the libraries it loaded, under `@lib/`.
      */
     readonly listings?: import('#lib/listing/listingDocuments.svelte.ts').ListingDocuments
+    /**
+     * x86 only: patches of the running Executable's instructions from its Listing, written as
+     * Pokes, and the Listing lines they changed.
+     */
+    readonly patcher?: import('#lib/listing/listingPatcher.svelte.ts').ListingPatcher
 }
 
 export enum InterpreterStatus {

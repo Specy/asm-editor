@@ -152,6 +152,7 @@ function formatPokeStep(step: ExecutionStep) {
     return {
         kind: 'poke' as const,
         ...(step.undoable === undefined ? {} : { undoable: step.undoable }),
+        ...(step.title === undefined ? {} : { title: step.title }),
         writes: (step.writes ?? []).map((write) =>
             write.type === 'register'
                 ? {

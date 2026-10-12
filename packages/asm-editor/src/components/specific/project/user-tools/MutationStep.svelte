@@ -200,6 +200,10 @@
                 would have the row drawing every one of them as clear
             -->
             <div class="column pokes">
+                {#if step.title}
+                    <!-- what the Poke was for, such as a patched instruction, above the bytes it wrote -->
+                    <div class="poke-title">{step.title}</div>
+                {/if}
                 {#each pokes as write, i (i)}
                     <!--
                         one sentence, in the words the instruction rows below use, so the two
@@ -395,6 +399,12 @@
 
     .poke-write {
         font-size: 0.9rem;
+        overflow-wrap: anywhere;
+    }
+
+    .poke-title {
+        font-size: 0.9rem;
+        font-weight: 500;
         overflow-wrap: anywhere;
     }
 

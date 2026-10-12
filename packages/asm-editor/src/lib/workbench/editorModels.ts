@@ -53,7 +53,10 @@ export class EditorModels {
         ) {
             this.applyingExternalValue = true
             try {
-                model.setValue(source.value)
+                const previous = this.values.get(source.key)
+                if (source.changesInPlace && previous !== undefined)
+                    replaceChangedText(model, previous, source.value)
+                else model.setValue(source.value)
                 this.values.set(source.key, source.value)
             } finally {
                 this.applyingExternalValue = false
@@ -106,4 +109,34 @@ export class EditorModels {
     dispose() {
         for (const key of this.models.keys()) this.remove(key)
     }
+}
+
+/**
+ * Replaces the part of a model's text between the first and the last character that differ from
+ * the new text, which the model holds as `previous`: one edit, outside the undo stack, that leaves
+ * the cursor and the scroll position alone where `setValue` would reset them.
+ */
+function replaceChangedText(model: monaco.editor.ITextModel, previous: string, next: string) {
+    const shorter = Math.min(previous.length, next.length)
+    let start = 0
+    while (start < shorter && previous.charCodeAt(start) === next.charCodeAt(start)) start++
+    let end = 0
+    while (
+        end < shorter - start &&
+        previous.charCodeAt(previous.length - 1 - end) === next.charCodeAt(next.length - 1 - end)
+    )
+        end++
+    const from = model.getPositionAt(start)
+    const to = model.getPositionAt(previous.length - end)
+    model.applyEdits([
+        {
+            range: {
+                startLineNumber: from.lineNumber,
+                startColumn: from.column,
+                endLineNumber: to.lineNumber,
+                endColumn: to.column
+            },
+            text: next.slice(start, next.length - end)
+        }
+    ])
 }

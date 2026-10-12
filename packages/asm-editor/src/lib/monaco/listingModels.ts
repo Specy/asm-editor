@@ -1,4 +1,5 @@
 import type { Listing } from '#lib/listing/listing.ts'
+import type { PatchedLine } from '#lib/listing/listingPatcher.svelte.ts'
 import { ListingIndex } from '#lib/listing/listingNavigation.ts'
 
 /**
@@ -12,6 +13,8 @@ export type ListingModel = {
     bytes: Uint8Array
     /** A library's Listing, which takes no Breakpoints. */
     library: boolean
+    /** The lines a Debug session patched, by 0-based line, as memory holds them now. */
+    patches?: ReadonlyMap<number, PatchedLine>
 }
 
 type Registered = ListingModel & { index: ListingIndex }

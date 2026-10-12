@@ -9,6 +9,8 @@
     import ListingNotice from './ListingNotice.svelte'
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
+    import type { EditorLineAction } from '#lib/monaco/editorLineActions.ts'
+    import PatchPromptView from './PatchPrompt.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
@@ -36,14 +38,38 @@
     })
     const SPLIT_ZONE = 1 / 3
 
-    /** The displayed Listing, once generated, as the editor and the Listing providers read it. */
+    /**
+     * The displayed Listing, once generated, as the editor and the Listing providers read it: with
+     * the lines a Debug session patched as memory holds them.
+     */
     const listingModel = $derived.by<ListingModel | undefined>(() => {
         const document = group.displayedListing
-        const listing = document?.listing
-        return listing
-            ? { listing, bytes: document.bytes, library: group.displayedLibraryListing }
+        const listing = group.displayedListingView
+        return document && listing
+            ? {
+                  listing,
+                  bytes: document.bytes,
+                  library: group.displayedLibraryListing,
+                  patches: group.displayedPatches?.lines
+              }
             : undefined
     })
+    const patchedLines = $derived([...(group.displayedPatches?.lines.keys() ?? [])])
+    /**
+     * "Patch instruction…" on an instruction of the running Executable's Listing
+     * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
+     * menu, and on Space, as x64dbg's disassembly assembles; the Listing is read-only, so Space
+     * types nothing there.
+     */
+    const listingActions: EditorLineAction[] = [
+        {
+            id: 'asm-editor.patchInstruction',
+            label: 'Patch instruction…',
+            keybindings: (monaco) => [monaco.KeyCode.Space],
+            available: (line) => session.patchSite(group, line) !== undefined,
+            run: (line) => void session.openPatchPrompt(group, line)
+        }
+    ]
     /** A Listing's Breakpoints go on its instructions, no other line. */
     const listingBreakable = $derived.by(() => {
         const kinds = listingModel?.listing.lines.kinds
@@ -100,7 +126,14 @@
 >
     <FileTabs {group} />
     {#if group.displayedListing}
-        <ListingNotice document={group.displayedListing} library={group.displayedLibraryListing} />
+        <ListingNotice
+            document={group.displayedListing}
+            library={group.displayedLibraryListing}
+            patchable={!group.displayedLibraryListing &&
+                session.emulator.patcher !== undefined &&
+                group.sourceView === 'snapshot' &&
+                session.debugSession}
+        />
     {:else if group.displayedLibraryMember && group.displayedFile}
         <LibraryMemberNotice
             path={group.displayedPath}
@@ -127,7 +160,9 @@
                     ? {
                           key: group.modelKey,
                           value: group.displayedCode,
-                          identity: group.modelIdentity
+                          identity: group.modelIdentity,
+                          //a Listing changes only where a Debug session patches a line
+                          changesInPlace: group.displayedListing !== undefined
                       }
                     : undefined}
                 modelKey={group.modelKey}
@@ -167,6 +202,8 @@
                 on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1, group)}
                 listing={listingModel}
                 canBreakAt={listingBreakable}
+                {patchedLines}
+                lineActions={listingModel && !listingModel.library ? listingActions : undefined}
                 bind:editor={group.editor}
                 code={group.displayedCode}
                 breakpoints={group.displayedBreakpoints}
@@ -180,6 +217,14 @@
                 on:linesSelect={(event) => session.selectMappedLines(group, event.detail)}
                 disabled={group.editorDisabled}
                 hasError={emulator.errors.length > 0}
+            />
+        {/if}
+        {#if group.openPatchPrompt}
+            <PatchPromptView
+                prompt={group.openPatchPrompt}
+                available={session.pokeable}
+                onapply={() => session.applyPatch(group)}
+                onclose={() => session.closePatchPrompt(group)}
             />
         {/if}
         {#if !group.displayedPath}

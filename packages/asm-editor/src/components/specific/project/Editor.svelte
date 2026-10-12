@@ -5,7 +5,8 @@
         mount,
         onDestroy,
         onMount,
-        unmount
+        unmount,
+        untrack
     } from 'svelte'
     import type monaco from 'monaco-editor'
     import type {
@@ -37,6 +38,7 @@
         type ListingModel
     } from '#lib/monaco/listingModels.ts'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
+    import { lineActionContextKey, type EditorLineAction } from '#lib/monaco/editorLineActions.ts'
 
     interface Props {
         disabled?: boolean
@@ -88,6 +90,13 @@
         listing?: ListingModel
         /** Whether a 0-based line can take a Breakpoint; every line by default. */
         canBreakAt?: (line: number) => boolean
+        /** 0-based lines a Debug session patched, marked beside their line numbers. */
+        patchedLines?: readonly number[]
+        /**
+         * Commands on the cursor's line, in the context menu and on their keys, offered on the
+         * lines where they are available: "Patch instruction…" on a Listing.
+         */
+        lineActions?: readonly EditorLineAction[]
     }
 
     let {
@@ -112,7 +121,9 @@
         viewZones = [],
         buildArtifacts = [],
         listing,
-        canBreakAt
+        canBreakAt,
+        patchedLines = [],
+        lineActions
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -140,6 +151,10 @@
      */
     let viewStateKey = ''
     let hoveredGliphen: number | null = $state(null)
+    /** The 0-based line the cursor is on, which the line actions are offered for. */
+    let cursorLine = $state(-1)
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Monaco handles; nothing renders from them.
+    const lineActionKeys = new Map<string, monaco.editor.IContextKey<boolean>>()
     let destroyed = false
     /**
      * The editor this component created. `editor` is bound out to the host, and a host that swaps
@@ -258,6 +273,12 @@
         }
 
         toDispose.push(
+            mountedEditor.onDidChangeCursorPosition((event) => {
+                cursorLine = event.position.lineNumber - 1
+                //at once, not in an effect: a right click moves the cursor and opens the context
+                //menu in the same event, and the menu reads the keys as they are then
+                updateLineActionKeys(cursorLine)
+            }),
             mountedEditor.onDidChangeCursorSelection((event) => {
                 //Model switches and debugger navigation are not a new user source selection.
                 if (applyingExternalValue || event.source === 'api') return
@@ -389,10 +410,65 @@
         }
         viewStateKey = next.key
         activeModelKey = next.key
+        cursorLine = (currentEditor.getPosition()?.lineNumber ?? 0) - 1
     }
 
     $effect(() => {
         selectModel(activeSource)
+    })
+
+    function lineActionKey(action: EditorLineAction) {
+        let key = lineActionKeys.get(action.id)
+        if (!key && editor) {
+            key = editor.createContextKey(lineActionContextKey(action), false)
+            lineActionKeys.set(action.id, key)
+        }
+        return key
+    }
+
+    function updateLineActionKeys(line: number) {
+        untrack(() => {
+            for (const action of lineActions ?? [])
+                lineActionKey(action)?.set(line >= 0 && action.available(line))
+        })
+    }
+
+    //each line action is a Monaco action while the host offers it, shown in the context menu and
+    //bound to its keys only where its context key says it is available
+    $effect(() => {
+        const currentEditor = editor
+        const currentMonaco = monacoInstance
+        const actions = lineActions
+        if (!currentEditor || !currentMonaco || !actions?.length) return
+        const registered = untrack(() =>
+            actions.map((action) => {
+                lineActionKey(action)
+                return currentEditor.addAction({
+                    id: action.id,
+                    label: action.label,
+                    keybindings: action.keybindings?.(currentMonaco),
+                    precondition: lineActionContextKey(action),
+                    contextMenuGroupId: '1_modification',
+                    contextMenuOrder: 0,
+                    run: (target) => {
+                        const line = (target.getPosition()?.lineNumber ?? 0) - 1
+                        if (line >= 0 && action.available(line)) action.run(line)
+                    }
+                })
+            })
+        )
+        return () => {
+            for (const action of registered) action.dispose()
+            for (const action of actions) lineActionKeys.get(action.id)?.set(false)
+        }
+    })
+    //and again whenever what decides it changes: a Run starting or ending, another model
+    $effect(() => {
+        const actions = lineActions
+        void activeModelKey
+        if (!editor || !actions?.length) return
+        for (const action of actions)
+            lineActionKey(action)?.set(cursorLine >= 0 && action.available(cursorLine))
     })
 
     $effect(() => {
@@ -685,6 +761,15 @@
                           }
                       ]
                     : []),
+                ...patchedLines.map((line) => ({
+                    range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: 'patched-line',
+                        linesDecorationsClassName: 'patched-line-marker',
+                        zIndex: 1
+                    }
+                })),
                 ...breakpoints.map((e) => ({
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
@@ -991,6 +1076,16 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    //a line whose instruction a Debug session patched: a bar beside its address, and a tint
+    :global(.patched-line-marker) {
+        width: 3px !important;
+        margin-left: 3px;
+        background-color: var(--warning, #d49a30);
+    }
+    :global(.patched-line) {
+        background-color: color-mix(in srgb, var(--warning, #d49a30) 12%, transparent);
     }
 
     :global(.selected-line-number) {
