@@ -2,7 +2,7 @@ An **Executable** is a program compiled and linked outside the editor, which a B
 
 ## What runs {#what-runs}
 
-x86-64 Linux ELF programs, statically or dynamically linked, position-independent (PIE) or not. Anything else is refused when it arrives, with the reason: a 32-bit x86 program, a program for another machine such as ARM, an object file or a shared library. A refused file stays in the project as an ordinary File.
+x86-64 Linux ELF programs, statically or dynamically linked, position-independent (PIE) or not. Anything else is refused when it arrives, with the reason: a 32-bit x86 program, a program for another machine such as ARM, an object file or a shared library. Uploaded into a project, a refused file stays there as an ordinary File.
 
 The program runs as a Linux process on a terminal, as an assembled program does, at the addresses gdb shows with address randomization off: a PIE at `0x555555554000`, any other program where its headers say (usually `0x400000`), shared libraries just below `0x7ffff7fff000` and the stack below `0x7ffffffff000`. Its working directory is `/project`, which holds the project's Files, so a `flag.txt` beside it opens by name. It can read its own File but not write it (`ETXTBSY`, as on Linux), nor delete or rename it (`EBUSY`, where Linux allows both, so a program cannot remove itself from the project). Its environment is fixed: `PATH`, `HOME=/project`, `PWD=/project`, `LANG=C.UTF-8`, `TERM=xterm-256color`, `SHELL=/bin/sh`, `USER` and `LOGNAME`. It has one thread and no network: creating threads, sockets and `fork` fail.
 
