@@ -139,6 +139,8 @@
      * `_getCompiledCode` for a program with nothing to expand, so a successful Build would
      * otherwise replace the program with an empty model.
      */
+    /** How much smaller than the code a Listing's gutter prints its addresses, in rem. */
+    const ADDRESS_GUTTER_SHRINK_REM = 0.2
     const activeSource = $derived<EditorSource>(
         source ?? { key: modelKey, value: codeOverride || code, identity: modelIdentity }
     )
@@ -512,19 +514,50 @@
     })
     /** Whether the gutter prints a Listing's addresses, so leaving one restores line numbers. */
     let addressGutter = false
+    /** The same, for the editor's class, which prints the addresses smaller. */
+    let addressGutterShown = $state(false)
     $effect(() => {
         if (!activeModelKey || !editor) return
         if (listing) {
-            editor.updateOptions({
-                lineNumbers: listingLineNumbers(listing.listing, listing.shortAddresses),
-                lineNumbersMinChars: listingLineNumberWidth(listing.listing, listing.shortAddresses)
-            })
+            const { listing: shown, shortAddresses } = listing
+            const currentEditor = editor
+            const fit = () =>
+                currentEditor.updateOptions({
+                    lineNumbers: listingLineNumbers(shown, shortAddresses),
+                    lineNumbersMinChars: addressGutterChars(
+                        listingLineNumberWidth(shown, shortAddresses)
+                    )
+                })
+            fit()
             addressGutter = true
+            addressGutterShown = true
+            //the gutter's width is counted in the editor font's digits, so a new font size refits it
+            const fontOption = monacoInstance?.editor.EditorOption.fontInfo
+            const listener = currentEditor.onDidChangeConfiguration((event) => {
+                if (fontOption !== undefined && event.hasChanged(fontOption)) fit()
+            })
+            return () => listener.dispose()
         } else if (addressGutter) {
             editor.updateOptions({ lineNumbers: 'on', lineNumbersMinChars: 2 })
             addressGutter = false
+            addressGutterShown = false
         }
     })
+
+    /**
+     * How many of the editor font's digits a Listing's address gutter needs for `chars` characters
+     * printed 0.2rem smaller (see `.address-gutter`): 64-bit addresses are long, so the smaller
+     * font gives the code more of the width.
+     */
+    function addressGutterChars(chars: number): number {
+        const fontSize = monacoInstance
+            ? editor?.getOption(monacoInstance.editor.EditorOption.fontSize)
+            : undefined
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+        if (!fontSize || !(rem > 0)) return chars
+        const scale = Math.max(0.5, (fontSize - ADDRESS_GUTTER_SHRINK_REM * rem) / fontSize)
+        return Math.max(2, Math.ceil(chars * scale))
+    }
 
     $effect(() => {
         if (!retainedModelKeys) return
@@ -907,6 +940,7 @@
 <div
     bind:this={el}
     class="editor"
+    class:address-gutter={addressGutterShown}
     style:--compiled-section-border-width="{Math.max(0, SOURCE_MAP_SECTION_BORDER.width)}px"
 ></div>
 
@@ -1082,6 +1116,17 @@
     //a gap as wide as the circle's left margin that does not depend on the digits.
     .editor :global(.margin-view-overlays .line-numbers) {
         margin-left: 0.2rem;
+    }
+
+    //a Listing's gutter prints 64-bit addresses, 0.2rem smaller than the code
+    //(ADDRESS_GUTTER_SHRINK_REM) so they take less of the width, centred on the line's height
+    //rather than sitting on the code's baseline
+    .editor.address-gutter :global(.margin-view-overlays .line-numbers) {
+        font-size: calc(1em - 0.2rem);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        height: 100%;
     }
 
     :global(.breakpoint-glyph),
