@@ -557,6 +557,8 @@ export type BaseEmulatorDerivedState = {
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
     readonly buildLibraryFiles?: import('#lib/projectFiles.ts').ProjectFiles
+    /** What the Log should say about the current program's run, oldest first; see `EmulatorNote`. */
+    readonly notes: readonly EmulatorNote[]
     /**
      * x86 only: the Listings of Executables this Emulator generates, and in `session` those of the
      * running program and the libraries it loaded, under `@lib/`.
@@ -666,6 +668,18 @@ export type EmulatorSettings = {
      * none when left out. Changed later with `setProgramArguments`.
      */
     programArguments?: string
+}
+
+/**
+ * Something the **Log** should say about a program's run that neither its output nor its exit
+ * says: a system call the Core does not implement, an instruction it cannot run, a library it
+ * does not bundle ([binary-import.md](../../../../../docs/design/binary-import.md), decision 17).
+ * `id` grows across the Emulator's life, so a reader that has seen up to one knows which are new.
+ */
+export type EmulatorNote = {
+    id: number
+    tone: 'info' | 'warning' | 'error'
+    text: string
 }
 
 export type BaseEmulatorActions = {

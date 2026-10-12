@@ -1,5 +1,6 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
+import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
@@ -142,16 +143,28 @@ export const DEFAULT_X86_FLAGS = [
     { name: 'OF', value: 0 }
 ]
 
+/** Linux's signal for an instruction the processor cannot run. */
+const SIGILL = 4
+
+/** Instructions whose only purpose is to raise SIGILL, which a real processor raises too. */
+const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
+
 export async function X86Emulator(source: BuildInput, options: EmulatorSettings = {}) {
     let wrapper: AsmEditorX86Emulator | null = null
-    const core = await createX86Emulator({
-        mode: 'NASM_trunk',
-        callbacks: {
-            stdout: (bytes) => wrapper?.appendOutput(bytes),
-            stderr: (bytes) => wrapper?.appendOutput(bytes)
-        }
-    })
-    wrapper = new AsmEditorX86Emulator(source, options, core)
+    const [core, decoder] = await Promise.all([
+        createX86Emulator({
+            mode: 'NASM_trunk',
+            callbacks: {
+                stdout: (bytes) => wrapper?.appendOutput(bytes),
+                stderr: (bytes) => wrapper?.appendOutput(bytes),
+                unimplementedSyscall: (event) => wrapper?.noteUnimplementedSyscall(event)
+            }
+        }),
+        //the Core has loaded the same Zydis module already; without it, an instruction the Core
+        //cannot run is not named in the Log, and nothing else changes
+        loadDecoder().catch(() => undefined)
+    ])
+    wrapper = new AsmEditorX86Emulator(source, options, core, decoder)
     return wrapper
 }
 
@@ -198,8 +211,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private trampolines: [start: number, end: number][] = []
     /** Whether the Core records the Undo history now, which `_setUndoRecording` pauses. */
     private undoRecording = true
+    /** The system calls this program's run has already been told in the Log are missing. */
+    private notedSyscalls = new Set<number>()
+    /** Zydis, for naming an instruction the Core could not run. */
+    private readonly decoder: ListingDecoder | undefined
 
-    constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
+    constructor(
+        source: BuildInput,
+        options: EmulatorSettings,
+        core: CoreX86Emulator,
+        decoder?: ListingDecoder
+    ) {
         super(
             source,
             {
@@ -217,6 +239,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         )
         this.core = core
+        this.decoder = decoder
         this._listings = new ListingDocuments((order) => listingClient.generate(order))
         core.setEnvironment({
             now: (id) => {
@@ -272,6 +295,49 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     /**
+     * The first call of each system call the Core does not implement in this run, named in the Log
+     * ([binary-import.md](../../../../../../docs/design/binary-import.md), decision 17). The program
+     * sees `ENOSYS`, as Linux answers a call it does not have, and goes on.
+     */
+    noteUnimplementedSyscall({ number, name }: { number: number; name: string }): void {
+        if (this.notedSyscalls.has(number)) return
+        this.notedSyscalls.add(number)
+        this.addNote({
+            tone: 'warning',
+            text: `\`${name}\` (syscall ${number}) is not implemented; the call returned ENOSYS`
+        })
+    }
+
+    /**
+     * A program that ended on an instruction the Core cannot run, which a real processor would
+     * (AVX and later, most often): SIGILL at an address whose bytes decode as an instruction. An
+     * undefined instruction (`ud2`) raises SIGILL on any processor, and bytes that are no
+     * instruction at all are the program's own fault; the Log says nothing more about either.
+     */
+    _terminationNotes(): { tone: 'warning'; text: string }[] {
+        const core = this.core
+        const reason = core?.stopReason
+        if (
+            !core ||
+            !this.decoder ||
+            reason?.kind !== 'signal' ||
+            reason.signal?.number !== SIGILL ||
+            reason.address === undefined
+        )
+            return []
+        const read = core.getInstructionAt(reason.address)
+        if (!read?.bytes) return []
+        const [decoded] = this.decoder.disassemble(read.bytes, reason.address)
+        if (!decoded || decoded.isInvalid || UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
+        return [
+            {
+                tone: 'warning',
+                text: `The program ran \`${decoded.text}\` at \`0x${reason.address.toString(16)}\`, which the emulator does not support`
+            }
+        ]
+    }
+
+    /**
      * `argv[0]` as a shell would start the program, `./crackme` or `./main` for `main.asm`, and the
      * Arguments after it ([binary-import.md](../../../../../../docs/design/binary-import.md),
      * decision 12); the Core keeps them for every later start until they are set again.
@@ -310,6 +376,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _clearExecution(): void {
+        //also called by the base class's constructor, before this class's fields exist
+        this.notedSyscalls?.clear()
         this.inputRead = null
         this.waitError = undefined
         this.randomPositions?.clear()
@@ -444,6 +512,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             ])
             this._buildLibraryFiles = undefined
             this.loadingExecutable = { path: sources.entry, file, document }
+            //the dynamic linker will fail to load the program with its own message, on stderr
+            for (const name of info.missing)
+                this.addNote({
+                    tone: 'warning',
+                    text: `${name} is not one of the bundled libraries`
+                })
             return {
                 ok: true,
                 diagnostics: info.missing.map((name) =>

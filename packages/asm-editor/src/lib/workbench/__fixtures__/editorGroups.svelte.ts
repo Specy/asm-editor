@@ -4,6 +4,7 @@ import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
     sameBreakpoint,
     type Diagnostic,
+    type EmulatorNote,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
@@ -42,6 +43,7 @@ export function editorGroupsFixture(
         errors: [],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
+        notes: [] as EmulatorNote[],
         /** The Arguments the last Build or test run was given, as `setProgramArguments` passes them. */
         programArguments: '',
         setProgramArguments(text: string) {

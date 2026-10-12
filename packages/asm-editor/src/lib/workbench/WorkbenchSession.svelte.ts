@@ -113,6 +113,7 @@ import {
     appendLog,
     buildEntry,
     exitEntry,
+    noteEntry,
     testRunEntry,
     type LogDraft,
     type LogEntry
@@ -670,20 +671,30 @@ export class WorkbenchSession {
         })
 
         //each exit of the program goes in the Log with its running time and how it ended, whether
-        //a Run, a Step or a runtime error ended it
+        //a Run, a Step or a runtime error ended it, followed by what the Emulator noted about the
+        //run (a missing system call, an instruction it cannot run). A Build's own entry goes
+        //first: what the program did while the Build ran it to `main` follows it. A test run's
+        //entry says how each Testcase went, so what its runs met is not repeated
         let wasTerminated = untrack(() => this.emulator.terminated)
+        let lastNote = untrack(() => this.emulator.notes.at(-1)?.id ?? 0)
         $effect(() => {
             const terminated = this.emulator.terminated && this.emulator.canExecute
-            if (terminated && !wasTerminated && !this.testing) {
-                untrack(() =>
-                    this.appendLog(
-                        exitEntry({
-                            executionTimeMs: this.emulator.executionTime,
-                            termination: this.emulator.termination
-                        })
-                    )
-                )
-            }
+            const notes = this.emulator.notes
+            if (this.building) return
+            untrack(() => {
+                if (!this.testing) {
+                    if (terminated && !wasTerminated)
+                        this.appendLog(
+                            exitEntry({
+                                executionTimeMs: this.emulator.executionTime,
+                                termination: this.emulator.termination
+                            })
+                        )
+                    for (const note of notes)
+                        if (note.id > lastNote) this.appendLog(noteEntry(note))
+                }
+                lastNote = Math.max(lastNote, notes.at(-1)?.id ?? 0)
+            })
             wasTerminated = terminated
         })
     }

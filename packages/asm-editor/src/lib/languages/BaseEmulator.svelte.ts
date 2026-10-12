@@ -1,6 +1,7 @@
 import {
     type Diagnostic,
     type EmulatorDecoration,
+    type EmulatorNote,
     type ExecutionStep,
     type RegisterFileDescriptor,
     RegisterSize,
@@ -157,6 +158,12 @@ export abstract class BaseEmulator<R extends string> {
      * refuses them, too many or too long, with a message for the person.
      */
     _setProgramArguments?(sources: BuildSources, args: string[]): void
+
+    /**
+     * What the Log should add about how the program just ended, read once when it ends: an
+     * instruction the Core cannot run, say, which only the end's reason and its bytes tell.
+     */
+    _terminationNotes?(): Omit<EmulatorNote, 'id'>[]
 
     /** Detaches native execution before the host ends its FileSystem capability. */
     _clearExecution?(): void

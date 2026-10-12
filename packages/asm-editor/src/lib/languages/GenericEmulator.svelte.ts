@@ -14,6 +14,7 @@ import {
     createMemoryTab,
     resetMemoryTab,
     type Diagnostic,
+    type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
     InterpreterStatus,
@@ -148,6 +149,11 @@ export function isLibraryCodeFile(file: string | undefined): boolean {
     return !!file && (file.startsWith(RUNTIME_NAMESPACE) || isLibraryListingPath(file))
 }
 
+/** Why a Build or a Testcase stopped before the program's own code: it ran out of instructions. */
+function programStartLimitMessage(name: string, limit: number): string {
+    return `The program did not reach ${name} within ${limit.toLocaleString('en-US')} instructions`
+}
+
 /** A Build stopped by its Arguments: they do not parse, or the Core refuses them. */
 function argumentsDiagnostic(problem: string): Diagnostic {
     const message = `Arguments: ${problem}`
@@ -274,6 +280,9 @@ export abstract class GenericEmulator<T, R extends string>
     private undoLedger: UndoSegment[] = []
     /** How far a Build or a Testcase runs to reach an Executable's `main`; tests lower it. */
     private programStartLimit = PROGRAM_START_INSTRUCTION_LIMIT
+    /** What the Log should say about the current program's run, see `notes`. */
+    private noteList = $state.raw<EmulatorNote[]>([])
+    private lastNoteId = 0
     /**
      * Whether Step stops in library code like any other, the Preference _Step into library code_
      * (its key predates the libraries an Executable loads). Off by default: a Step that lands in a
@@ -878,11 +887,20 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private readTermination(): void {
         if (this.state.termination?.kind === 'error') return
+        const wasTerminated = this.state.terminated
         const terminated = this._hasTerminated()
         this.state.terminated = terminated
         this.state.termination = terminated
             ? (this._getTermination() ?? { kind: 'end' })
             : undefined
+        //read once per end: an Undo that takes the end back and a run that ends again say it again
+        if (terminated && !wasTerminated) {
+            try {
+                for (const note of this._terminationNotes?.() ?? []) this.addNote(note)
+            } catch (e) {
+                console.error(e)
+            }
+        }
     }
 
     /** Ends the program on a runtime error, which `readTermination` then leaves standing. */
@@ -984,6 +1002,11 @@ export abstract class GenericEmulator<T, R extends string>
 
     setProgramArguments(text: string): void {
         this._emulatorOptions.programArguments = text
+    }
+
+    /** One more thing the Log should say about this program's run, see `EmulatorNote`. */
+    protected addNote(note: Omit<EmulatorNote, 'id'>): void {
+        this.noteList = [...this.noteList, { ...note, id: ++this.lastNoteId }]
     }
 
     /**
@@ -1183,6 +1206,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.deviceRegions = []
         this._buildLibraryFiles = undefined
         this.undoLedger = []
+        this.noteList = []
         this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
@@ -1297,13 +1321,20 @@ export abstract class GenericEmulator<T, R extends string>
                 try {
                     const start = this._programStart?.()
                     if (start) {
-                        await this.runToProgramStart(
+                        const end = await this.runToProgramStart(
                             start.breakpoint,
                             execution,
                             this.breakpointResolver?.(this.state.breakpoints) ??
                                 this.state.breakpoints
                         )
                         endedBeforeStart = this._hasTerminated()
+                        //stopped part way through its start, which would read as a Build that
+                        //stopped for no reason
+                        if (end === 'limit')
+                            this.addNote({
+                                tone: 'warning',
+                                text: programStartLimitMessage(start.name, this.programStartLimit)
+                            })
                     } else await this.runStartCode(execution)
                 } catch (e) {
                     if (!this.executionController.isCurrent(execution)) throw e
@@ -1974,7 +2005,7 @@ export abstract class GenericEmulator<T, R extends string>
                 this.executionController.ensureCurrent(execution)
                 if (end === 'limit')
                     throw new Error(
-                        `The program did not reach ${programStart.name} within ${this.programStartLimit.toLocaleString('en-US')} instructions`
+                        programStartLimitMessage(programStart.name, this.programStartLimit)
                     )
             }
             if (!this._hasTerminated()) await this.runTestcaseFromStart(testcase, haltLimit)
@@ -2429,6 +2460,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get listings() {
         return this._listings
+    }
+
+    get notes(): readonly EmulatorNote[] {
+        return this.noteList
     }
 
     /** The Entry path of the sources currently set, which a single-source host never names itself. */
