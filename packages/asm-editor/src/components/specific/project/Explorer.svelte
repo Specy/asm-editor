@@ -8,7 +8,9 @@
      * tree away only when `collapsible`. A right click on a row, or on the empty space, opens its
      * controls as a menu; only touch screens, which have no right click, also show them as buttons
      * on the rows. Files dragged in from the computer are uploaded into the folder they are dropped
-     * on.
+     * on. With `hints`, a dismissible card under the tree offers to create a C file where the
+     * language compiles C, to upload an ELF on x86, and links one tip about the language (two
+     * where there is no action to offer), picked at every page load.
      */
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -19,7 +21,12 @@
     import { toast } from '#stores/toastStore.ts'
     import { untrack } from 'svelte'
     import { SvelteSet } from 'svelte/reactivity'
-    import { sourceLanguage, sourceTemplate } from '#lib/sourceCompilation/records.ts'
+    import {
+        isCompilationTarget,
+        sourceLanguage,
+        sourceTemplate
+    } from '#lib/sourceCompilation/records.ts'
+    import { explorerTips, hintsDismissed } from '#lib/workbench/explorerTips.svelte.ts'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaDownload from '~icons/fa-solid/download'
     import FaFlag from '~icons/fa-solid/flag'
@@ -28,6 +35,7 @@
     import FaFileAlt from '~icons/fa-solid/file-alt'
     import FaPen from '~icons/fa-solid/pen'
     import FaPlus from '~icons/fa-solid/plus'
+    import FaTimes from '~icons/fa-solid/times'
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import SourceFileIcon from './SourceFileIcon.svelte'
@@ -63,6 +71,8 @@
          * Project's Files: they are not the Project's, and the running program cannot see them.
          */
         libraryFiles?: readonly string[]
+        /** Whether to show the hints card under the tree. */
+        hints?: boolean
     }
 
     let {
@@ -82,7 +92,8 @@
         onDeleted,
         onFileDragStart,
         onFileDragEnd,
-        libraryFiles = []
+        libraryFiles = [],
+        hints = false
     }: Props = $props()
 
     const collapsedDirectories = new SvelteSet<string>()
@@ -197,14 +208,14 @@
         return parent ? `${parent}/${child}` : child
     }
 
-    function startCreate(parent = '') {
+    function startCreate(parent = '', initialName = '') {
         if (locked) return
         if (parent) {
             expandParents(parent)
             collapsedDirectories.delete(parent)
         }
         if (collapsible) projectExpanded = true
-        draftName = ''
+        draftName = initialName
         editing = { mode: 'create', parent }
     }
 
@@ -463,7 +474,19 @@
         void uploadFiles(chosen, uploadFolder)
     }
 
-    /** The menu a right click opened, and what it was opened on. */
+    const canWriteC = $derived(isCompilationTarget(language))
+    //a language with no action to offer gets two tips instead of one
+    const tips = $derived(explorerTips(language, canWriteC || language === 'X86' ? 1 : 2))
+    const showHints = $derived(hints && !hintsDismissed.value)
+
+    /** A C file name not taken in the root: main.c, else main1.c, main2.c... */
+    function freeCName(): string {
+        for (let index = 0; ; index++) {
+            const path = `main${index || ''}.c`
+            if (!files[path]) return path
+        }
+    }
+
     /** The File row the menu was opened on, kept lit while it is open. */
     let menuPath = $state<string | null>(null)
     let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
@@ -806,6 +829,40 @@
             </div>
         {/if}
     {/if}
+    {#if showHints}
+        <aside class="hints" aria-label="Hints">
+            <div class="hints-heading">
+                <span class="hints-title">Hints</span>
+                <button
+                    class="hints-close"
+                    title="Hide the hints until the next reload"
+                    aria-label="Hide the hints"
+                    onclick={() => (hintsDismissed.value = true)}
+                >
+                    <FaTimes />
+                </button>
+            </div>
+            {#if canWriteC}
+                <button class="hint" disabled={locked} onclick={() => startCreate('', freeCName())}>
+                    You can write C/C++. Create a .c or .cpp file
+                </button>
+            {/if}
+            {#if language === 'X86'}
+                <button class="hint" disabled={locked} onclick={() => pickUploads()}>
+                    You can run Linux binaries. Upload an ELF file to disassemble
+                </button>
+            {/if}
+            {#each tips as tip (tip.text)}
+                {#if tip.href}
+                    <a class="hint" href={tip.href} target="_blank" rel="noopener">
+                        {tip.text}
+                    </a>
+                {:else}
+                    <p class="hint">{tip.text}</p>
+                {/if}
+            {/each}
+        </aside>
+    {/if}
     {#if contextMenu}
         <ContextMenu
             x={contextMenu.x}
@@ -844,6 +901,94 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         opacity: 0.7;
+    }
+
+    /* a panel of its own under the tree, its hints parted by lines that fade out toward the sides */
+    .hints {
+        position: relative;
+        flex: none;
+        padding: 0.2rem 0;
+        border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        font-size: 0.7rem;
+        line-height: 1.35;
+    }
+
+    .hint {
+        display: block;
+        position: relative;
+        width: 100%;
+        margin: 0;
+        padding: 0.4rem 0.8rem;
+        border: 0;
+        color: inherit;
+        background: transparent;
+        font: inherit;
+        text-align: left;
+        text-decoration: none;
+        opacity: 0.8;
+
+        & + .hint::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent)),
+                transparent
+            );
+        }
+    }
+
+    button.hint,
+    a.hint {
+        cursor: pointer;
+
+        &:hover:not(:disabled) {
+            opacity: 1;
+            background: var(--tertiary);
+        }
+
+        &:disabled {
+            cursor: not-allowed;
+            opacity: 0.4;
+        }
+    }
+
+    .hints-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.1rem 0.35rem 0 0.8rem;
+    }
+
+    .hints-title {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+    }
+
+    .hints-close {
+        display: grid;
+        place-items: center;
+        width: 1.1rem;
+        height: 1.1rem;
+        padding: 0.25rem;
+        border: 0;
+        border-radius: 0.2rem;
+        color: inherit;
+        background: transparent;
+        opacity: 0.6;
+        cursor: pointer;
+
+        &:hover {
+            opacity: 1;
+            background: var(--tertiary);
+        }
     }
 
     .icon-action,

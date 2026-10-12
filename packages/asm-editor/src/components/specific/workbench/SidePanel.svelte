@@ -149,6 +149,7 @@
                         onRenamed={(from, to) => session.fileRenamed(from, to)}
                         onDeleted={(path) => session.fileDeleted(path)}
                         libraryFiles={Object.keys(emulator.buildLibraryFiles ?? {})}
+                        hints={context.documentationLinks}
                     />
                 {:else if entry.id === 'testcases'}
                     <TestcasesList

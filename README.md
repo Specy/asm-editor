@@ -83,7 +83,7 @@ If ASM Editor supports your course or your research, please cite the paper:
 
 # Local setup
 
-[mise](https://mise.jdx.dev/) installs every toolchain the repository builds with, at the versions `mise.toml` pins: Node.js, pnpm, Java and Maven for MARS and RARS, and Rust with its WebAssembly target and wasm-pack for s68k.
+Install [mise](https://mise.jdx.dev/), it is to setup the repository tools with: Node.js, pnpm, Java, Maven, Rust and wasm-pack.
 
 ```bash
 git clone --recurse-submodules https://github.com/Specy/asm-editor.git
@@ -94,7 +94,7 @@ pnpm dev # builds the emulators, then runs the dev server
 # pnpm build # builds the emulators, then the app into build/
 ```
 
-The first run builds every emulator from source, which takes a few minutes. Later runs replay [Vite+'s task cache](https://viteplus.dev/guide/cache) and rebuild only an emulator whose sources changed.
+The first run builds the emulators from source, which takes a few minutes, they are cached for next builds unless the emulator source is changed.
 
 ## Repository layout
 
@@ -103,14 +103,14 @@ The repository is a pnpm workspace:
 | Path                  | Contents                                                                                  |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `packages/asm-editor` | The SvelteKit app                                                                         |
-| `packages/runtime`    | The C standard library compiled programs link against, and the tools that build it        |
+| `packages/runtime`    | The C standard library that programs link |
 | `packages/m68k`       | [s68k](https://github.com/Specy/s68k), the M68K emulator (Git submodule)                  |
 | `packages/mips`       | [MARS](https://github.com/Specy/mars), the MIPS emulator (Git submodule)                  |
 | `packages/risc-v`     | [RARS](https://github.com/Specy/rars), the RISC-V emulator (Git submodule)                |
 | `packages/x86`        | [x86-js](https://github.com/Specy/x86-js), the X86 assembler and emulator (Git submodule) |
 | `packages/z80`        | [trs80](https://github.com/Specy/trs80), the Z80 assembler and machine (Git submodule)    |
 
-The app uses the emulators checked out in `packages/`, so a change to one reaches the app without publishing it first. `pnpm cores:build` builds all of them on their own.
+The app uses the emulators checked out in `packages/`. To rebuild them manually run `pnpm cores:build`.
 
 # Contributing
 

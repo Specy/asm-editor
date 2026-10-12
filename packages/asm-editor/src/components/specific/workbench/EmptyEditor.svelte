@@ -1,12 +1,16 @@
 <script lang="ts">
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
-    import { sourceLanguage, sourceTemplate } from '#lib/sourceCompilation/records.ts'
+    import { executableKind } from '#lib/executables.ts'
+    import {
+        isCompilationTarget,
+        sourceLanguage,
+        sourceTemplate
+    } from '#lib/sourceCompilation/records.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import FaFileMedical from '~icons/fa-solid/file-medical'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaBook from '~icons/fa-solid/book'
-    import FaCog from '~icons/fa-solid/cog'
     import FaFileAlt from '~icons/fa-solid/file-alt'
     import { useWorkbench } from './workbenchContext'
 
@@ -18,7 +22,6 @@
 
     const explorer = $derived(context.rail.find((entry) => entry.id === 'explorer'))
     const hasDocumentation = $derived(context.rail.some((entry) => entry.id === 'documentation'))
-    const hasSettings = $derived(context.rail.some((entry) => entry.id === 'settings'))
     const canCreate = $derived(
         explorer !== undefined && explorer.access !== 'readonly' && !session.fileSystemLocked
     )
@@ -31,10 +34,8 @@
             .slice(0, compact ? 4 : 6)
     )
 
-    async function createFile() {
-        const path = (
-            await Prompt.askText('Path for the new text file', true, 'src/new.asm')
-        )?.trim()
+    async function createFile(suggested = 'src/new.asm') {
+        const path = (await Prompt.askText('Path for the new text file', true, suggested))?.trim()
         if (!path) return
         try {
             const fileLanguage = sourceLanguage(path)
@@ -44,6 +45,46 @@
                 false
             )
             session.selectFile(path, group)
+        } catch (error) {
+            console.error(error)
+            toast.error(error instanceof Error ? error.message : 'File operation failed')
+        }
+    }
+
+    /** A C file name not taken in the root: main.c, else main1.c, main2.c... */
+    function freeCName(): string {
+        for (let index = 0; ; index++) {
+            const path = `main${index || ''}.c`
+            if (!project.files[path]) return path
+        }
+    }
+
+    let elfInput = $state<HTMLInputElement>()
+
+    /** Writes the chosen ELF into the root and shows it, offering it as the Entry file. */
+    async function uploadElf() {
+        const file = elfInput?.files?.[0]
+        if (elfInput) elfInput.value = ''
+        if (!file || !canCreate) return
+        try {
+            const path = file.name
+            if (
+                project.files[path] &&
+                !(await Prompt.confirm(`${path} already exists. Replace it?`))
+            )
+                return
+            const bytes = new Uint8Array(await file.arrayBuffer())
+            project.fileSystem.writeBytes(path, bytes, true)
+            session.selectFile(path, group)
+            const kind = executableKind(bytes)
+            if (kind !== 'supported') {
+                if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
+                return
+            }
+            if (executableKind(project.files[project.entry]) === 'supported') return
+            //a Debug session may have started while the question was open
+            if ((await Prompt.confirm(`Make ${path} the Entry file?`)) && !session.fileSystemLocked)
+                session.setEntry(path)
         } catch (error) {
             console.error(error)
             toast.error(error instanceof Error ? error.message : 'File operation failed')
@@ -82,7 +123,7 @@
                 <ul>
                     {#if canCreate}
                         <li>
-                            <button class="link" onclick={createFile}>
+                            <button class="link" onclick={() => createFile()}>
                                 <FaFileMedical /> New file…
                             </button>
                         </li>
@@ -99,13 +140,6 @@
                             <button class="link" onclick={() => ui.searchDocumentation()}>
                                 <FaBook /> Search documentation
                                 <kbd>Ctrl K</kbd>
-                            </button>
-                        </li>
-                    {/if}
-                    {#if hasSettings && !compact}
-                        <li>
-                            <button class="link" onclick={() => ui.open('settings')}>
-                                <FaCog /> Project settings
                             </button>
                         </li>
                     {/if}
@@ -138,6 +172,21 @@
             <section class="hints">
                 <h2>Tips</h2>
                 <ul>
+                    {#if canCreate && isCompilationTarget(project.language)}
+                        <li>
+                            <button class="hint-action" onclick={() => createFile(freeCName())}>
+                                You can write C/C++. Create a .c or .cpp file
+                            </button>
+                        </li>
+                    {/if}
+                    {#if canCreate && project.language === 'X86'}
+                        <li>
+                            <button class="hint-action" onclick={() => elfInput?.click()}>
+                                You can run Linux binaries. Upload an ELF file to disassemble
+                            </button>
+                            <input type="file" hidden bind:this={elfInput} onchange={uploadElf} />
+                        </li>
+                    {/if}
                     <li>Drag a file from the Explorer onto an editor to open it there.</li>
                     <li>Drag a tab to the side of the editor to view two files at once.</li>
                     <li>Click the gutter beside a line number to set a breakpoint.</li>
@@ -162,7 +211,7 @@
         margin: auto;
         display: flex;
         flex-direction: column;
-        gap: 1.5rem;
+        gap: 1rem;
         width: 100%;
         max-width: 44rem;
     }
@@ -260,6 +309,25 @@
         gap: 0.35rem;
         opacity: 0.7;
         font-size: 0.95rem;
+    }
+    .hint-action {
+        padding: 0;
+        border: none;
+        color: inherit;
+        background: none;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+
+        &:hover {
+            text-decoration: underline;
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+            border-radius: 0.2rem;
+        }
     }
     .hints li::before {
         content: '›';
