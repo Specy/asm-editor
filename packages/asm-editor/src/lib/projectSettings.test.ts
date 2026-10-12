@@ -105,10 +105,15 @@ describe('cleanProjectSettings', () => {
 describe('the Arguments Setting', () => {
     const declaration = PROJECT_SETTINGS.programArguments
 
-    it('is a line of text, named Arguments, of x86 Projects only, empty by default', () => {
+    it('is a line of text, named Arguments, of x86, MIPS and RISC-V Projects, empty by default', () => {
         expect(declaration).toMatchObject({ name: 'Arguments', type: 'text' })
-        expect(declaration.defaultFor('X86')).toBe('')
-        for (const language of ['M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'Z80'] as const)
+        for (const language of ['X86', 'MIPS', 'RISC-V', 'RISC-V-64'] as const) {
+            expect(declaration.defaultFor(language)).toBe('')
+            expect(projectSettingsFor(language).map((setting) => setting.id)).toContain(
+                'programArguments'
+            )
+        }
+        for (const language of ['M68K', 'Z80'] as const)
             expect(projectSettingsFor(language).map((setting) => setting.id)).not.toContain(
                 'programArguments'
             )

@@ -54,6 +54,7 @@ import { type ExecutionSlice, type ExecutionSliceRequest } from '#lib/languages/
 import { MarsSlicePacer } from '#lib/languages/mars/marsSlice.ts'
 import { canUndoMarsHistoryRange } from '#lib/languages/mars/marsUndo.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
+import { programArgv0 } from '#lib/commandLine.ts'
 import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
 import {
     exitStepText,
@@ -167,6 +168,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
+    /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
+    private programArgv: string[] = []
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         const systemSize =
@@ -301,6 +304,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
+     * `argv[0]` as a shell would start the program, `./main` for `main.s` or `main.c`, and the
+     * Arguments after it, which the Core stores above the stack at every start, with argc in `a0`
+     * and argv in `a1`, pointers as wide as the Target's
+     * ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
+     * Checked here at this Emulator's width, which needs no switch of the Core's global one, so the
+     * Core's refusal (too many, too long) stops the Build as an Arguments problem; the Core
+     * `_compile` creates gets them.
+     */
+    _setProgramArguments(sources: BuildSources, args: string[]): void {
+        const argv = [programArgv0(sources.entry, false, sources.entrySource), ...args]
+        RISCV.checkProgramArguments(argv, this.is64Bit)
+        this.programArgv = argv
+    }
+
+    /**
      * Loads the Runtime library a Build links, and the list of library functions that explains an
      * undefined `printf` in a Build that does not link it, before any Core is created.
      */
@@ -391,6 +409,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
         riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //stored by every `initialize`, a Testcase's included, before its starting registers
+        riscv.setProgramArguments(this.programArgv)
         const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)

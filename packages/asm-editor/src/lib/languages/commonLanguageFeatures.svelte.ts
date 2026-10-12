@@ -674,8 +674,8 @@ export type EmulatorSettings = {
     /** FileSystem inverse-history budget in megabytes, applied at Build. */
     fileSystemHistoryBudgetMb?: number
     /**
-     * x86 only: the Project's **Arguments** as typed on the Command line, passed at every start;
-     * none when left out. Changed later with `setProgramArguments`.
+     * x86, MIPS and RISC-V: the Project's **Arguments** as typed on the Command line, passed at
+     * every start; none when left out. Changed later with `setProgramArguments`.
      */
     programArguments?: string
 }

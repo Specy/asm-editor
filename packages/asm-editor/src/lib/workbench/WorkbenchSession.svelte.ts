@@ -103,6 +103,7 @@ import {
     ARGUMENTS_DIAGNOSTIC_SOURCE,
     commandLineProgram,
     compiledEntrySource,
+    languageTakesArguments,
     parseCommandLine,
     type CommandLineParse
 } from '#lib/commandLine.ts'
@@ -397,7 +398,7 @@ export class WorkbenchSession {
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
         this.commandLine = $derived.by<CommandLineState | undefined>(() => {
-            if (this.project.language !== 'X86') return undefined
+            if (!languageTakesArguments(this.project.language)) return undefined
             const recorded = this.startedCommandLine
             //during the Build that recorded it (its run to `main` included), then while the
             //session it made lasts
@@ -740,7 +741,7 @@ export class WorkbenchSession {
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
     declare readonly debugSession: boolean
-    /** An x86 Project's Command line; undefined for the other languages. */
+    /** The Command line of a Project whose programs take Arguments; undefined for the others. */
     declare readonly commandLine: CommandLineState | undefined
     declare readonly mappingColors: SourceMapColoring | undefined
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>

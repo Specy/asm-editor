@@ -170,7 +170,7 @@ export type BuildConfiguration = Readonly<{
     >
     /**
      * The source File the Entry was compiled from when the Entry is Generated assembly, which
-     * names the program on x86's Command line and in its `argv[0]`: `main.c` runs as `./main`.
+     * names the program on the Command line and in its `argv[0]`: `main.c` runs as `./main`.
      */
     entrySource?: string
 }>

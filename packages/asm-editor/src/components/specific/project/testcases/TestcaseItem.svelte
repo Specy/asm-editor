@@ -13,7 +13,7 @@
         firstTextDifference,
         testcaseLabel
     } from '#lib/testcases.ts'
-    import { parseCommandLine } from '#lib/commandLine.ts'
+    import { languageTakesArguments, parseCommandLine } from '#lib/commandLine.ts'
     import FaCaretRight from '~icons/fa-solid/caret-right'
     import Header from '#cmp/shared/layout/Header.svelte'
     import RegistersTable from './RegistersTable.svelte'
@@ -96,8 +96,8 @@
             0
     )
     const hasMemory = $derived(testcase.startingMemory.length + testcase.expectedMemory.length > 0)
-    //x86 programs take Arguments; a Testcase without its own runs with the Project's
-    const takesArguments = $derived(language === 'X86')
+    //x86, MIPS and RISC-V programs take Arguments; a Testcase without its own runs with the Project's
+    const takesArguments = $derived(languageTakesArguments(language))
     const argumentsProblem = $derived.by(() => {
         const parsed = parseCommandLine(testcase.arguments ?? '')
         return 'error' in parsed ? parsed.error : undefined

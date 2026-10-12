@@ -7,7 +7,7 @@ import {
 } from './runtimeAbi'
 import { ProjectFormatError } from './projectFiles'
 import { languageHasScreen } from './languages/peripherals/peripheralSet'
-import { parseCommandLine } from './commandLine'
+import { languageTakesArguments, parseCommandLine } from './commandLine'
 
 /**
  * The Settings of a Project: the configuration that changes what the Emulator or the program does,
@@ -44,8 +44,8 @@ export type ProjectSettingValues = {
     /** Bytes retained to reverse FileSystem effects, in megabytes. */
     fileSystemHistoryBudgetMb: number
     /**
-     * x86 only: the program's **Arguments**, the words after its name in `argv`, as typed on the
-     * Command line and read by `parseCommandLine`
+     * x86, MIPS and RISC-V: the program's **Arguments**, the words after its name in `argv`, as
+     * typed on the Command line and read by `parseCommandLine`
      * ([binary-import.md](../../../../docs/design/binary-import.md), decision 12). Kept as the text
      * typed, so what is shown again is what was written.
      */
@@ -168,7 +168,7 @@ export const PROJECT_SETTINGS: {
         name: 'Arguments',
         type: 'text',
         defaultFor: () => '',
-        appliesTo: (language) => language === 'X86',
+        appliesTo: languageTakesArguments,
         accepts: text,
         placeholder: 'none',
         problem: (value) => {

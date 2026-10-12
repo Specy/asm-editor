@@ -1,9 +1,25 @@
 /**
- * The **Command line** ([CONTEXT.md](../../../../CONTEXT.md)): the name an x86 program is started
- * under and its **Arguments**, typed as in a shell
+ * The **Command line** ([CONTEXT.md](../../../../CONTEXT.md)): the name a program is started under
+ * and its **Arguments**, typed as in a shell
  * ([binary-import.md](../../../../docs/design/binary-import.md), decision 12). It is not a shell:
  * the text is split into words and nothing else happens to it.
  */
+
+import type { AvailableLanguages } from './Project.svelte'
+
+/**
+ * Whether a language's programs take Arguments: x86's, a Linux process's `argv`, and MIPS's and
+ * RISC-V's, which their Cores store above the stack with `argc` and `argv` in `a0` and `a1`
+ * ([ADR 0046](../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
+ */
+export function languageTakesArguments(language: AvailableLanguages): boolean {
+    return (
+        language === 'X86' ||
+        language === 'MIPS' ||
+        language === 'RISC-V' ||
+        language === 'RISC-V-64'
+    )
+}
 
 export type CommandLineParse = { args: string[] } | { error: string; column: number }
 

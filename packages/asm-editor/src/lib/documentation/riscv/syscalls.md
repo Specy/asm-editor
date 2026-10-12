@@ -32,3 +32,11 @@ The same service numbers and register conventions work in RV32 and RV64. Interac
 - Input dialog double (53) reads its message from `a0` and returns the value in `fa0`.
 
 Open supports read-write extensions: flag 2 opens an existing File (`r+`), 3 creates or truncates (`w+`), and 10 creates and appends writes (`a+`). All three allow reading and writing with one shared position. Original flags 0, 1 and 9 retain their reference behavior. Runtime-only service 1100 returns -1 for heap exhaustion; service 9 still stops with a runtime error.
+
+## Program arguments {#arguments}
+
+The Terminal's first line is the **Command line**, `$ ./main` followed by the program's **Arguments**, typed as in a shell: spaces separate words, quotes keep them together (`"two words"`) and a backslash escapes the next character. Nothing is expanded and no command runs. The Arguments are a Setting of the project, also in the **Settings** panel, and take effect at the next Build; during a Debug session the line shows what that run started with. A Testcase can bring its own in its **Arguments** field; one whose field is empty runs with the project's.
+
+The program starts with `a0` = `argc`, the number of words, and `a1` = `argv`, the address of an array of pointers to them that ends with a null pointer. Pointers are 4 bytes in RV32 and 8 in RV64. `argv[0]` is the program's name, the Entry path without its extension (`./main` for `main.s`; for a compiled program its C or C++ File's, `./main` for `main.c`), so `argc` is at least 1, and the Arguments follow it. The strings and the array sit above the stack, between `sp` and `0x7FFFFFFC`, and `sp` starts at `0x7FFFEFFC` as always. With the Arguments `hello "two words"`, `a0` is 3, `a1` is `0x7FFFFFD4` (`0x7FFFFFC0` in RV64), and `argv[1]` points to `hello` at `0x7FFFFFEC`. Undo back to the start keeps them, and a Testcase's starting registers are set after them.
+
+The program name, the Arguments and the array take at most 4,080 bytes together: each word takes its UTF-8 bytes and a terminating NUL, plus a pointer. A Build whose Arguments do not fit, or have more than 1,024 words, stops with an Arguments problem. This departs from RARS, whose program arguments start `argv` at the first argument, with no program name, put `argc` and the pointers below the stack, lowering `sp`, and use 4-byte pointers in RV64 too.

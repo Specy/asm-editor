@@ -99,10 +99,26 @@ describe('the Command line', () => {
         expect(session.commandLine?.text).toBe('swordfish')
     })
 
-    it('is only for x86 Projects', () => {
-        const fixture = editorGroupsFixture('RISC-V')
-        disposers.push(fixture.dispose)
-        expect(fixture.session.commandLine).toBeUndefined()
+    it('is for x86, MIPS and RISC-V Projects, whose programs take Arguments', () => {
+        for (const language of ['MIPS', 'RISC-V', 'RISC-V-64'] as const) {
+            const fixture = editorGroupsFixture(language, {
+                entry: 'src/main.s',
+                files: { 'src/main.s': { encoding: 'plain', content: 'nop' } },
+                settings: { programArguments: 'hello "two words"' }
+            })
+            disposers.push(fixture.dispose)
+            expect(fixture.session.commandLine, language).toMatchObject({
+                program: 'src/main',
+                text: 'hello "two words"',
+                parsed: { args: ['hello', 'two words'] },
+                locked: false
+            })
+        }
+        for (const language of ['M68K', 'Z80'] as const) {
+            const fixture = editorGroupsFixture(language)
+            disposers.push(fixture.dispose)
+            expect(fixture.session.commandLine, language).toBeUndefined()
+        }
     })
 
     it("saves what is typed as the Project's Arguments, empty being none", () => {

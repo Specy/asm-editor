@@ -1,8 +1,8 @@
 <script lang="ts">
     /**
-     * The Terminal tab: an x86 program's Command line, then the Emulator's runtime errors and the
-     * program's output, with a caret where a read waits for what is typed. It follows the end as the
-     * program writes. The Command line stays above the transcript rather than scrolling with it,
+     * The Terminal tab: the Command line of a program that takes Arguments (x86, MIPS, RISC-V), then
+     * the Emulator's runtime errors and the program's output, with a caret where a read waits for
+     * what is typed. It follows the end as the program writes. The Command line stays above the transcript rather than scrolling with it,
      * and the transcript does not repeat it.
      */
     import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'

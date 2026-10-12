@@ -81,12 +81,12 @@ The Peripheral owning program output (stdout) and user input requests. Cores rea
 
 ## Command line
 
-The **Terminal**'s first line, `$ ./crackme hunter2`: the name an x86 program is started under followed by its **Arguments**, editable outside a **Debug session** and locked during one to what that run started with. It says how Build and Run start the program; it is not a shell and runs no commands.
+The **Terminal**'s first line, `$ ./crackme hunter2`: the name an x86, MIPS or RISC-V program is started under followed by its **Arguments**, editable outside a **Debug session** and locked during one to what that run started with. It says how Build and Run start the program; it is not a shell and runs no commands.
 _Avoid_: prompt, shell, run line
 
 ## Arguments
 
-The words an x86 program receives after its own name in `argv`, a **Setting** of the **Project** edited on the **Command line**. A **Testcase** can bring its own.
+The words an x86, MIPS or RISC-V program receives after its own name in `argv`, a **Setting** of the **Project** edited on the **Command line**. A **Testcase** can bring its own. MIPS and RISC-V programs find `argc` and `argv` in `a0` and `a1`, stored above the stack ([ADR 0046](./docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
 _Avoid_: args, parameters, command-line options
 
 ## Line discipline
@@ -296,7 +296,7 @@ _Avoid_: output, build output, console
 
 ## Settings
 
-Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86 program's **Arguments**. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86, MIPS or RISC-V program's **Arguments**. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
 _Avoid_: preferences, options, config, global settings
 
 ## Preferences
@@ -315,7 +315,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input (and, on x86, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a program: starting registers/memory/input (and, on x86, MIPS and RISC-V, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 

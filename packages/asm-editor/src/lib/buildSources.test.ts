@@ -55,6 +55,37 @@ describe('shared build contract', () => {
         )
     })
 
+    it.each(['MIPS', 'RISC-V', 'RISC-V-64'] as const)(
+        'names the source File a %s Entry of Generated assembly was compiled from, for argv[0]',
+        (language) => {
+            const fingerprint = 'a'.repeat(32)
+            const project = makeProject({
+                language,
+                files: {
+                    'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' },
+                    'main.c.s': { encoding: 'plain', content: 'nop' }
+                },
+                entry: 'main.c.s',
+                compilations: [
+                    {
+                        sourcePath: 'main.c',
+                        outputPath: 'main.c.s',
+                        target: language,
+                        language: 'c',
+                        compilerId: 'cmipsg1420',
+                        optimization: '0',
+                        inputs: { 'main.c': fingerprint },
+                        outputFingerprint: fingerprint,
+                        runtimeAbi: 'v1'
+                    }
+                ]
+            })
+            expect(projectBuildSources(project).entrySource).toBe('main.c')
+            project.entry = 'main.c'
+            expect(projectBuildSources(project).entrySource).toBeUndefined()
+        }
+    )
+
     it('preserves every configuration field and compares source languages independent of key order', () => {
         const original = normalizeBuildInput({
             files,

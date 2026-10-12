@@ -40,7 +40,7 @@ function render(
     testcases: Testcase[],
     results: TestcaseResult[] = [],
     editable = true,
-    language: 'M68K' | 'X86' = 'M68K'
+    language: 'M68K' | 'X86' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'Z80' = 'M68K'
 ) {
     const props = $state({ testcases, testcasesResult: results })
     const target = document.createElement('div')
@@ -318,7 +318,7 @@ describe('TestcasesList', () => {
         ])
     })
 
-    it('gives an x86 Testcase Arguments of its own, an empty field being none', () => {
+    it('gives an x86, MIPS or RISC-V Testcase Arguments of its own, an empty field being none', () => {
         const { target, props } = render([testcaseWith({})], [], true, 'X86')
         const field = target.querySelector<HTMLInputElement>('input.arguments')!
         expect(field.placeholder).toBe("the Project's Arguments")
@@ -331,9 +331,21 @@ describe('TestcasesList', () => {
         )
         type(field, '')
         expect('arguments' in props.testcases[0]).toBe(false)
-        //other Targets' programs take no Arguments
-        const m68k = render([testcaseWith({})])
-        expect(m68k.target.querySelector('input.arguments')).toBeNull()
+        //MIPS and RISC-V programs take them too, M68K and Z80 programs none
+        for (const language of ['MIPS', 'RISC-V', 'RISC-V-64'] as const)
+            expect(
+                render([testcaseWith({})], [], true, language).target.querySelector(
+                    'input.arguments'
+                ),
+                language
+            ).not.toBeNull()
+        for (const language of ['M68K', 'Z80'] as const)
+            expect(
+                render([testcaseWith({})], [], true, language).target.querySelector(
+                    'input.arguments'
+                ),
+                language
+            ).toBeNull()
     })
 
     it('shows the Arguments of a read-only x86 Testcase that has some', () => {
