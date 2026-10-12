@@ -1,6 +1,7 @@
 import { resolve } from '$app/paths'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { documentationLanguageOf, type DocumentationLanguage } from '#lib/search/scope.ts'
+import { SvelteMap } from 'svelte/reactivity'
 
 /** A line of the Explorer's hints card: what is worth knowing, and where to read about it. */
 export type ExplorerTip = { text: string; href?: string }
@@ -88,7 +89,7 @@ const TIPS: Record<DocumentationLanguage, ExplorerTip[]> = {
 export const hintsDismissed = $state({ value: false })
 
 /** Shuffled once per page load, so a reload shows other tips and a remount the same ones. */
-const shuffled = new Map<DocumentationLanguage, ExplorerTip[]>()
+const shuffled = new SvelteMap<DocumentationLanguage, ExplorerTip[]>()
 
 /** `count` different tips about the language, fewer if it has not as many. */
 export function explorerTips(language: AvailableLanguages, count: number): ExplorerTip[] {
