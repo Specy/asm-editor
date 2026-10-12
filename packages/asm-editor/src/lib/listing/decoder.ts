@@ -1,6 +1,7 @@
 import type { DecodedInstruction, DecodedOperand } from '@specy/x86/disassembler'
 import type {
     ElfAnalysis,
+    ElfAnalysisSymbol,
     ElfProgramHeader,
     ElfRelocation,
     ElfSectionHeader,
@@ -17,6 +18,7 @@ export type {
     DecodedInstruction,
     DecodedOperand,
     ElfAnalysis,
+    ElfAnalysisSymbol,
     ElfProgramHeader,
     ElfRelocation,
     ElfSectionHeader,

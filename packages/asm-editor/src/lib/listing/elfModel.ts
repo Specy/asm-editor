@@ -1,4 +1,4 @@
-import type { ElfAnalysis, ElfSymbol } from './decoder'
+import type { ElfAnalysis, ElfAnalysisSymbol, ElfSymbol } from './decoder'
 import type { ListingNameOrigin } from './listing'
 import { printableSymbolName } from './names'
 
@@ -186,6 +186,18 @@ function compareRanks(a: SymbolName, b: SymbolName): number {
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
 }
 
+/**
+ * A symbol's name with its version, as objdump writes it: the default version of a definition
+ * (`memcpy@@GLIBC_2.14`) is the plain name, `memcpy`, which is what a program linked today calls;
+ * any other version keeps it, `memcpy@GLIBC_2.2.5`, so two versions of one function read apart
+ * instead of as `memcpy` and `memcpy_2`. A name without a version is the name.
+ */
+export function versionedName(symbol: ElfAnalysisSymbol): string {
+    return symbol.version && symbol.defaultVersion === false
+        ? `${symbol.name}@${symbol.version}`
+        : symbol.name
+}
+
 /** Reads what the Listing needs from an ELF the Core's analyser has parsed. */
 export function readElfModel(
     analysis: ElfAnalysis,
@@ -209,14 +221,14 @@ export function readElfModel(
     }
 
     const symbolNames = new Map<number, SymbolName[]>()
-    const addSymbol = (symbol: ElfSymbol, origin: ListingNameOrigin) => {
+    const addSymbol = (symbol: ElfAnalysisSymbol, origin: ListingNameOrigin) => {
         if (!symbol.name || symbol.name.startsWith('.L')) return
         if (!['function', 'ifunc', 'object', 'notype'].includes(symbol.type)) return
         // Undefined, absolute and common symbols name no address of the file.
         if (symbol.sectionIndex === 0 || symbol.sectionIndex >= 0xff00) return
         const address = toNumber(symbol.value)
         if (!regionOf(address)) return
-        const name = printableSymbolName(symbol.name)
+        const name = printableSymbolName(versionedName(symbol))
         const names = symbolNames.get(address) ?? []
         if (names.some((existing) => existing.name === name)) return
         names.push({

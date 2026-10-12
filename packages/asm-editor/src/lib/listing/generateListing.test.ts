@@ -355,6 +355,17 @@ describe('Listings of dynamically linked programs', () => {
         expect(stubs).toBeGreaterThan(30)
         expect(listing.text).toContain('\n_IO_puts:\nputs:\n')
         expect(listing.main).toBeUndefined()
+
+        // Two versions of one function read as objdump writes them: the default version by its
+        // plain name, the other with its version, and neither as a numbered duplicate.
+        const names = new Map(listing.labels.map((label) => [label.name, label.address]))
+        expect(names.get('memcpy')).toBe(0xb8c80)
+        expect(names.get('memcpy@GLIBC_2.2.5')).toBe(0xc22f0)
+        expect(names.get('realpath')).toBe(0x47200)
+        expect(names.get('realpath@GLIBC_2.2.5')).toBe(0x1942d0)
+        expect([...names.keys()].filter((name) => /^(?:memcpy|realpath)_\d+$/.test(name))).toEqual(
+            []
+        )
     })
 })
 

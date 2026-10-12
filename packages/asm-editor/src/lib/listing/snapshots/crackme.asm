@@ -119,8 +119,8 @@ _start:
     nop word cs:[rax+rax*1]
 
 deregister_tm_clones:
-    lea rdi, [rel stdin]
-    lea rax, [rel stdin]
+    lea rdi, [rel stdin@GLIBC_2.2.5]
+    lea rax, [rel stdin@GLIBC_2.2.5]
     cmp rax, rdi
     je .LAB_1
     mov rax, [rel _ITM_deregisterTMCloneTable@got]
@@ -133,8 +133,8 @@ deregister_tm_clones:
     nop dword [rax]
 
 register_tm_clones:
-    lea rdi, [rel stdin]
-    lea rsi, [rel stdin]
+    lea rdi, [rel stdin@GLIBC_2.2.5]
+    lea rsi, [rel stdin@GLIBC_2.2.5]
     sub rsi, rdi
     mov rax, rsi
     shr rsi, 0x3f
@@ -187,7 +187,7 @@ main:
     mov rdi, rax
     mov eax, 0x00
     call printf@plt
-    mov rdx, [rel stdin]
+    mov rdx, [rel stdin@GLIBC_2.2.5]
     lea rax, [rbp-0x90]
     mov esi, 0x80
     mov rdi, rax
@@ -425,6 +425,6 @@ section .bss
 _edata:
 __TMC_END__:
 __bss_start:
-stdin: resb 8
+stdin@GLIBC_2.2.5: resb 8
 completed.0: resb 1
     resb 7

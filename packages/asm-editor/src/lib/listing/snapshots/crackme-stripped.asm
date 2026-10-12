@@ -120,8 +120,8 @@ _start:
     nop word cs:[rax+rax*1]
 
 FUN_moonlit_vole:
-    lea rdi, [rel stdin]
-    lea rax, [rel stdin]
+    lea rdi, [rel stdin@GLIBC_2.2.5]
+    lea rax, [rel stdin@GLIBC_2.2.5]
     cmp rax, rdi
     je .LAB_1
     mov rax, [rel _ITM_deregisterTMCloneTable@got]
@@ -133,8 +133,8 @@ FUN_moonlit_vole:
     ret
     nop dword [rax]
 .LAB_2:
-    lea rdi, [rel stdin]
-    lea rsi, [rel stdin]
+    lea rdi, [rel stdin@GLIBC_2.2.5]
+    lea rsi, [rel stdin@GLIBC_2.2.5]
     sub rsi, rdi
     mov rax, rsi
     shr rsi, 0x3f
@@ -187,7 +187,7 @@ main:
     mov rdi, rax
     mov eax, 0x00
     call printf@plt
-    mov rdx, [rel stdin]
+    mov rdx, [rel stdin@GLIBC_2.2.5]
     lea rax, [rbp-0x90]
     mov esi, 0x80
     mov rdi, rax
@@ -421,5 +421,5 @@ section .data
 DAT_blooming_spoonbill: dq DAT_blooming_spoonbill
 
 section .bss
-stdin: resb 8
+stdin@GLIBC_2.2.5: resb 8
 DAT_perky_tapir: resb 8
