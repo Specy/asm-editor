@@ -41,6 +41,41 @@ function setup() {
 const kinds = (log: readonly { kind: string; text: string }[]) =>
     log.map((entry) => `${entry.kind}: ${entry.text}`)
 
+describe('a Build that Stop ends part way', () => {
+    it('logs nothing and leaves the bottom panel, while its run to main owns the Core', async () => {
+        const { session, emulator } = setup()
+        let release!: () => void
+        let stepped = 0
+        emulator.compile = () =>
+            new Promise<void>((resolve) => {
+                //the run to main: the program exists, but the Build still owns it
+                emulator.canExecute = true
+                release = resolve
+            })
+        ;(emulator as unknown as { step: () => Promise<boolean> }).step = async () => {
+            stepped++
+            return false
+        }
+        emulator.clear = () => {
+            emulator.canExecute = false
+        }
+        session.bottomTab = 'log'
+        const build = session.build()
+        flushSync()
+        expect(session.building).toBe(true)
+        //Step waits for the Build, from the dock as from the shortcut
+        await session.step()
+        expect(stepped).toBe(0)
+        session.stop()
+        release()
+        await build
+        flushSync()
+        expect(session.log).toEqual([])
+        expect(session.bottomTab).toBe('log')
+        expect(session.building).toBe(false)
+    })
+})
+
 describe('notes in the Log', () => {
     it("follow the Build's own entry, whatever the Build ran into", async () => {
         const { session, emulator } = setup()

@@ -1,6 +1,12 @@
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vite-plus/test'
-import { commandLineProgram, describeArgv, parseCommandLine, programArgv0 } from './commandLine'
+import {
+    commandLineProgram,
+    compiledEntrySource,
+    describeArgv,
+    parseCommandLine,
+    programArgv0
+} from './commandLine'
 
 /**
  * The Command line's Arguments are split by a POSIX shell's quoting rules and nothing else
@@ -140,6 +146,20 @@ describe('the program a Command line names', () => {
         expect(commandLineProgram('.hidden', false)).toBe('.hidden')
         expect(commandLineProgram('dir.d/main', false)).toBe('dir.d/main')
         expect(programArgv0('main.asm', false)).toBe('./main')
+    })
+
+    it('is a compiled program by the source File it was compiled from', () => {
+        expect(commandLineProgram('main.c.asm', false, 'main.c')).toBe('main')
+        expect(commandLineProgram('out/renamed.asm', false, 'src/game.cpp')).toBe('src/game')
+        expect(programArgv0('main.c.asm', false, 'main.c')).toBe('./main')
+        const records = [
+            { sourcePath: 'old.c', outputPath: 'main.c.asm' },
+            { sourcePath: 'main.c', outputPath: 'main.c.asm' },
+            { sourcePath: 'other.c', outputPath: 'other.c.asm' }
+        ]
+        expect(compiledEntrySource('main.c.asm', records)).toBe('main.c')
+        expect(compiledEntrySource('main.asm', records)).toBeUndefined()
+        expect(compiledEntrySource('main.c.asm', undefined)).toBeUndefined()
     })
 
     it('lists argv one entry a line for the tooltip', () => {

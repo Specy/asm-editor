@@ -22,6 +22,39 @@ describe('shared build contract', () => {
             expect(playgroundBuildSources(project)).toEqual(projectBuildSources(project))
         }
     )
+    it('names the source File an x86 Entry of Generated assembly was compiled from', () => {
+        const fingerprint = 'a'.repeat(32)
+        const project = makeProject({
+            language: 'X86',
+            files: {
+                'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' },
+                'main.c.asm': { encoding: 'plain', content: 'nop' }
+            },
+            entry: 'main.c.asm',
+            compilations: [
+                {
+                    sourcePath: 'main.c',
+                    outputPath: 'main.c.asm',
+                    target: 'X86',
+                    language: 'c',
+                    compilerId: 'cg152',
+                    optimization: '0',
+                    inputs: { 'main.c': fingerprint },
+                    outputFingerprint: fingerprint
+                }
+            ]
+        })
+        expect(projectBuildSources(project).entrySource).toBe('main.c')
+        project.entry = 'main.c'
+        expect(projectBuildSources(project).entrySource).toBeUndefined()
+        const sources = normalizeBuildInput({ files, entry: 'main.s', entrySource: 'main.c' })
+        expect(sources.entrySource).toBe('main.c')
+        expect(buildSourcesEqual(sources, { ...sources, entrySource: 'other.c' })).toBe(false)
+        expect(() => normalizeBuildInput({ files, entry: 'main.s', entrySource: '../x' })).toThrow(
+            /Entry source/
+        )
+    })
+
     it('preserves every configuration field and compares source languages independent of key order', () => {
         const original = normalizeBuildInput({
             files,

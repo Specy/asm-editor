@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity'
+import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import type { Listing } from './listing'
@@ -91,8 +91,32 @@ export class ListingDocuments {
      * each library's it has executed code of. Cleared when the Debug session ends.
      */
     readonly session = new SvelteMap<string, ListingDocument>()
+    /** The paths in `session` that are libraries' Listings, `@lib/<soname>`, see `isLibrary`. */
+    private readonly libraries = new SvelteSet<string>()
 
     constructor(private readonly generate: Generate) {}
+
+    /** A Listing of the running program: its Executable's, or with `library` one a library's. */
+    setSession(path: string, document: ListingDocument, library = false): void {
+        this.session.set(path, document)
+        if (library) this.libraries.add(path)
+        else this.libraries.delete(path)
+    }
+
+    /** Forgets the running program's Listings, when its Debug session ends. */
+    clearSession(): void {
+        this.session.clear()
+        this.libraries.clear()
+    }
+
+    /**
+     * Whether a path shows the Listing of a library the running program loaded, which takes no
+     * Breakpoints and is no File: not a Project File under `@lib/`, which shows and edits as any
+     * File does.
+     */
+    isLibrary(path: string): boolean {
+        return this.libraries.has(path)
+    }
 
     /**
      * The document of these bytes at this base, the one made before when there is one. A failed

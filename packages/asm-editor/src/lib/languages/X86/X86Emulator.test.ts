@@ -1228,6 +1228,43 @@ describe('x86 start unit', () => {
         }
     })
 
+    it("steps into a Project File under @lib/, which is the program's own code", async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain' as const,
+                    content: [
+                        'global _start',
+                        'extern helper',
+                        'section .text',
+                        '_start:',
+                        '    call helper',
+                        '    mov eax, 60',
+                        '    xor edi, edi',
+                        '    syscall'
+                    ].join('\n')
+                },
+                '@lib/helper.asm': {
+                    encoding: 'plain' as const,
+                    content: ['global helper', 'section .text', 'helper:', '    ret'].join('\n')
+                }
+            }
+        }
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            expect(emulator.compilerErrors).toEqual([])
+            await emulator.step()
+            expect({ file: emulator.currentFile, line: emulator.line }).toEqual({
+                file: '@lib/helper.asm',
+                line: 3
+            })
+        } finally {
+            emulator.dispose()
+        }
+    })
+
     it('lists a Step through the start unit as the one History row that one Undo takes back', async () => {
         const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
         const emulator = await X86Emulator(sources, { automaticChecking: false })

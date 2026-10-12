@@ -119,6 +119,25 @@ it('reads an import as an Executable before a Project archive or text, by its by
     expect(() => importFile(fixture('crackme').subarray(0, 25), 'broken')).toThrow(/truncated/)
 })
 
+it('refuses an import that is no text, Project archive or Executable', () => {
+    //a PNG's signature and header: not UTF-8, and no ELF or zip
+    const png = Uint8Array.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52
+    ])
+    expect(() => importFile(png, 'picture.png')).toThrow(
+        'picture.png is not a Project: it is neither text, a Project archive nor an x86-64 Linux executable'
+    )
+    //valid UTF-8 that holds NUL characters is no text either
+    expect(() => importFile(new Uint8Array([0x6d, 0, 0, 0x6f]), 'data.bin')).toThrow(
+        /not a Project/
+    )
+    //text that is not ASCII still imports
+    const text = importFile(new TextEncoder().encode('; héllo\nmov eax, 1'), 'main.asm')
+    expect(text.imported.project.files[text.imported.project.entry]).toMatchObject({
+        encoding: 'plain'
+    })
+})
+
 it('builds an Executable Entry even when assembly sources could not be resolved', async () => {
     const sources = {
         entry: 'crackme',

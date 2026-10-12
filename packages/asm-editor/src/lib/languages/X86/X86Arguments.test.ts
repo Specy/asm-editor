@@ -110,6 +110,38 @@ describe('argv[0]', () => {
     })
 })
 
+describe('argv[0] of a compiled program', () => {
+    it('is ./ and the source File it was compiled from, without its extension', async () => {
+        //main's argv[0], read where the Build stops: argv is in rsi
+        const main = [
+            '    global main',
+            '    section .text',
+            'main:',
+            '    xor eax, eax',
+            '    ret'
+        ]
+        for (const [source, entry] of [
+            ['main.c', 'main.c.asm'],
+            ['src/game.cpp', 'src/game.cpp.asm']
+        ]) {
+            const sources: BuildSources = {
+                entry,
+                entrySymbol: '_start',
+                entrySource: source,
+                files: { [entry]: { encoding: 'plain', content: main.join('\n') } }
+            }
+            const emulator = await emulatorFor(sources)
+            await emulator.compile(0, sources)
+            expect(emulator.errors).toEqual([])
+            const cpu = emulator.registerFiles.find((file) => file.id === 'cpu')!
+            const rsi = cpu.registers.find((register) => register.name === 'rsi')!.value
+            expect(cString(emulator, qword(emulator, rsi))).toBe(
+                `./${source.replace(/\.[^./]*$/, '')}`
+            )
+        }
+    })
+})
+
 describe('the Project Arguments', () => {
     it('reach an Executable after argv[0], split as a shell splits them', async () => {
         const sources = executableSources('argv-env')

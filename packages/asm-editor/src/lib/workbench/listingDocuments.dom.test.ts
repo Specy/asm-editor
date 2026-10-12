@@ -168,6 +168,41 @@ describe('an Executable shown as its Listing', () => {
     })
 })
 
+describe('a Project File under @lib/', () => {
+    it('shows and edits as any File, in a session or out of one', async () => {
+        const fixture = editorGroupsFixture('X86', {
+            entry: 'crackme',
+            files: {
+                crackme: { encoding: 'base64', content: crackme },
+                '@lib/helper.asm': { encoding: 'plain', content: 'helper:\n    ret' },
+                '@lib/util.c': { encoding: 'plain', content: 'int f(void) { return 1; }' }
+            }
+        })
+        disposers.push(fixture.dispose)
+        const { session, emulator } = fixture
+        const listings = generator()
+        emulator.listings = new ListingDocuments(listings.generate)
+        flushSync()
+        session.selectFile('@lib/helper.asm')
+        flushSync()
+        const group = session.groups[0]
+        expect(group.displayedLibraryListing).toBe(false)
+        expect(group.displayedListing).toBeUndefined()
+        expect(group.displayedCode).toBe('helper:\n    ret')
+        expect(group.editorDisabled).toBe(false)
+        expect(editorFileKind('@lib/util.c')).toBe('source')
+        //while an Executable runs and has loaded a library
+        emulator.buildSources = { entry: 'crackme', files: { ...fixture.project.files } }
+        emulator.canExecute = true
+        const program = emulator.listings!.openExecutable('crackme', fixture.project.files.crackme)!
+        emulator.listings!.setSession('crackme', program)
+        flushSync()
+        expect(emulator.listings!.isLibrary('@lib/helper.asm')).toBe(false)
+        expect(group.displayedLibraryListing).toBe(false)
+        expect(group.displayedFile?.encoding).toBe('plain')
+    })
+})
+
 describe("a library's Listing", () => {
     function startSession(fixture: ReturnType<typeof setup>) {
         const { emulator, project, listings } = fixture
@@ -176,14 +211,14 @@ describe("a library's Listing", () => {
         emulator.canExecute = true
         const store = emulator.listings!
         const program = store.openExecutable('crackme', files.crackme)!
-        store.session.set('crackme', program)
+        store.setSession('crackme', program)
         const library = store.open({
             name: 'libc.so.6',
             base: 0x7ffff7c00000,
             content: '/lib/x86_64-linux-gnu/libc.so.6',
             bytes: () => new Uint8Array(0x2000)
         })
-        store.session.set('@lib/libc.so.6', library)
+        store.setSession('@lib/libc.so.6', library, true)
         flushSync()
         return {
             program,
@@ -226,7 +261,7 @@ describe("a library's Listing", () => {
         expect(session.retainedModelKeys.some((key) => key.endsWith('/@lib/libc.so.6'))).toBe(true)
 
         //Stop: the library's tab goes, the Executable's stays and shows its own Listing again
-        emulator.listings!.session.clear()
+        emulator.listings!.clearSession()
         emulator.buildSources = undefined
         emulator.canExecute = false
         session.clearExecution()

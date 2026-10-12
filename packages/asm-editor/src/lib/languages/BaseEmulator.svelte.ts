@@ -199,6 +199,13 @@ export abstract class BaseEmulator<R extends string> {
     _nextInLibraryCode?(): boolean | undefined
 
     /**
+     * Whether a path is the Listing of a library the running program loaded (`@lib/libc.so.6`),
+     * which is library code. Undefined, or false, for every other path: a Project may hold Files
+     * under `@lib/` too, and on Targets that load no Executable every such path is one of them.
+     */
+    _isLibraryListing?(path: string): boolean
+
+    /**
      * Where the program's own code begins, for a Build and a Testcase to run to with the Undo
      * history paused before they start ([binary-import.md](../../../../../docs/design/binary-import.md),
      * decision 11): a loaded Executable's `main`, or its entry point when the Listing knows no

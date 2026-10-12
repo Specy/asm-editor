@@ -11,7 +11,6 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { instructionAddressAt } from '#lib/listing/listing.ts'
 import { breakpointLine } from '#lib/listing/listingBreakpoints.ts'
-import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { delay } from '#lib/utils.ts'
 import { compilationStatus, sourceLanguage } from '#lib/sourceCompilation/records.ts'
@@ -274,7 +273,7 @@ function listingAddress(emulator: Emulator, breakpoint: { file: string; address:
 function breakpointAt(emulator: Emulator, path: string, line: number): SourceBreakpoint | string {
     const document = emulator.listings?.session.get(path)
     if (!document) return { file: path, line }
-    if (isLibraryListingPath(path))
+    if (emulator.listings?.isLibrary(path))
         return `${path} is the Listing of a library; Breakpoints go in the Executable's own Listing.`
     const address = document.listing && instructionAddressAt(document.listing, line)
     return address === undefined

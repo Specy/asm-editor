@@ -100,7 +100,62 @@ describe('the x86 runtime in the editor', () => {
                 emulator.dispose()
             }
         }
-    })
+    }, 30_000)
+
+    it('shows a Run that stops on a Breakpoint inside a library member on that line', async () => {
+        const assembly = `default rel
+global main
+extern puts
+section .text
+main:
+    sub rsp, 8
+    lea rdi, [message]
+    call puts
+    add rsp, 8
+    xor eax, eax
+    ret
+section .rodata
+message: db "hi", 0
+`
+        const sources: BuildSources = {
+            entry: 'main.asm',
+            files: { 'main.asm': plain(assembly) },
+            entrySymbol: '_start',
+            runtimeAbi: 'v1'
+        }
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20_000, sources)
+            const [path, member] = Object.entries(emulator.buildLibraryFiles ?? {}).find(
+                ([, file]) => file.encoding === 'plain' && /^puts:/m.test(file.content)
+            )!
+            const lines = member.encoding === 'plain' ? member.content.split('\n') : []
+            const label = lines.findIndex((text) => text.startsWith('puts:'))
+            //the first instruction after the label: indented, and no directive
+            const line = lines.findIndex(
+                (text, index) => index > label && /^\s+[a-z]/.test(text) && !/^\s+\./.test(text)
+            )
+            emulator.toggleBreakpoint(line, path)
+            await emulator.run(0)
+            expect(emulator.errors).toEqual([])
+            // Steps run through the library, but a stop the person's Breakpoint made is shown
+            // where they put it, not at the program's call
+            expect({ file: emulator.currentFile, line: emulator.line }).toEqual({
+                file: path,
+                line
+            })
+            // and an Undo back to that stop shows it there again
+            await emulator.step()
+            expect(emulator.currentFile).toBe('main.asm')
+            emulator.undo()
+            expect({ file: emulator.currentFile, line: emulator.line }).toEqual({
+                file: path,
+                line
+            })
+        } finally {
+            emulator.dispose()
+        }
+    }, 30_000)
 
     it('steps over fwrite and keeps its filesystem effect behind an Undo barrier', async () => {
         preferencesStore.values.stepIntoRuntimeLibrary.value = false

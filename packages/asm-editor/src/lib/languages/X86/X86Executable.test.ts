@@ -511,4 +511,29 @@ describe('Testcases of an Executable', () => {
         )
         expect(results.map((result) => result.passed)).toEqual([true, true])
     })
+
+    it('take no Pause in their run to main, as no Testcase run does', async () => {
+        const sources = executableSources()
+        const emulator = await emulatorFor(sources)
+        let finished = false
+        const results = emulator
+            .test(
+                sources,
+                [testcase({ input: ['hunter2'], expectedOutput: 'Enter password: Correct!\n' })],
+                TESTCASE_INSTRUCTION_LIMIT
+            )
+            .finally(() => (finished = true))
+        //the Pause button stays a Pause button while the Testcases run
+        let pauses = 0
+        while (!finished) {
+            emulator.pause()
+            pauses++
+            await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        expect(pauses).toBeGreaterThan(1)
+        const [result] = await results
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
+        expect(emulator.paused).toBe(false)
+    })
 })

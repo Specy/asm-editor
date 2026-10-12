@@ -32,7 +32,6 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { instructionAddressAt } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
-import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
@@ -103,6 +102,7 @@ import { serializer } from '#lib/json.ts'
 import {
     ARGUMENTS_DIAGNOSTIC_SOURCE,
     commandLineProgram,
+    compiledEntrySource,
     parseCommandLine,
     type CommandLineParse
 } from '#lib/commandLine.ts'
@@ -272,7 +272,6 @@ export class WorkbenchSession {
             const running = listings.session.get(path)
             if (running) return running
         }
-        if (isLibraryListingPath(path)) return undefined
         return listings.openExecutable(
             path,
             selection.sourceKind === 'build'
@@ -340,8 +339,18 @@ export class WorkbenchSession {
 
     log = $state.raw<LogEntry[]>([])
     private logId = 0
-    /** The Command line the Debug session's program started with, see `commandLine`. */
-    private startedCommandLine = $state.raw<{ program: string; text: string }>()
+    /**
+     * The Command line the Debug session's program started with, see `commandLine`: recorded by
+     * a Build, and with `build` the Build snapshot it made, so a test run's or the coding agent's
+     * Build, which make their own, never show it.
+     */
+    private startedCommandLine = $state.raw<{
+        program: string
+        text: string
+        build?: BuildSources
+    }>()
+    /** Counts the ends of Debug sessions, so a Build knows that Stop ended it part way. */
+    private executionClears = 0
     /** Counts requests for the Command line to take the keyboard, as a Problem about it makes. */
     commandLineFocus = $state(0)
     bottomTab = $state<BottomTab>('terminal')
@@ -389,13 +398,31 @@ export class WorkbenchSession {
         this.debugSession = $derived(this.emulator.canExecute)
         this.commandLine = $derived.by<CommandLineState | undefined>(() => {
             if (this.project.language !== 'X86') return undefined
-            const started = this.debugSession ? this.startedCommandLine : undefined
-            if (started) return { ...started, parsed: parseCommandLine(started.text), locked: true }
+            const recorded = this.startedCommandLine
+            //during the Build that recorded it (its run to `main` included), then while the
+            //session it made lasts
+            const started =
+                recorded &&
+                (this.building ||
+                    (this.debugSession && recorded.build === this.emulator.buildSources))
+                    ? recorded
+                    : undefined
+            if (started)
+                return {
+                    program: started.program,
+                    text: started.text,
+                    parsed: parseCommandLine(started.text),
+                    locked: true
+                }
             const entry = this.project.entry
             const executable = executableKind(this.project.files[entry]) === 'supported'
             const text = this.effectiveSettings.programArguments
             return {
-                program: commandLineProgram(entry, executable),
+                program: commandLineProgram(
+                    entry,
+                    executable,
+                    compiledEntrySource(entry, this.project.compilations)
+                ),
                 text,
                 parsed: parseCommandLine(text),
                 locked: this.host.readonly || this.debugSession || this.building || this.running
@@ -426,7 +453,9 @@ export class WorkbenchSession {
             const buildKeys = [
                 ...Object.keys(this.emulator.buildSources?.files ?? {}),
                 //the libraries' Listings, kept while the session lasts so a tab comes back as left
-                ...[...(this.emulator.listings?.session.keys() ?? [])].filter(isLibraryListingPath)
+                ...[...(this.emulator.listings?.session.keys() ?? [])].filter((path) =>
+                    this.emulator.listings!.isLibrary(path)
+                )
             ].map((path) =>
                 projectSourceModelKey({
                     sessionId: this.languageSessionId,
@@ -1574,6 +1603,7 @@ export class WorkbenchSession {
             text: commandLine.text
         }
         this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
+        const clears = this.executionClears
         try {
             this.running = false
             this.building = true
@@ -1583,27 +1613,39 @@ export class WorkbenchSession {
             //only a compilation failure carries this Build's own findings: any other error leaves the
             //emulator's list as an earlier Build or check left it
             if (e instanceof CompilationFailedError) failure = e.diagnostics
-            toast.error('Error compiling code. ' + getM68kErrorMessage(e))
+            if (clears === this.executionClears)
+                toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             this.building = false
             //also after a failed build: the directive is read before the program is assembled
             this.syncDisplay()
-            const ok = this.emulator.canExecute
-            const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
-            if (!ok && diagnostics.length)
-                this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
-            this.appendLog(
-                buildEntry({
-                    ok,
-                    errors: diagnostics.filter((d) => d.severity === 'error').length,
-                    warnings: diagnostics.filter((d) => d.severity === 'warning').length,
-                    durationMs: performance.now() - started,
-                    entry: this.project.entry
-                })
-            )
-            this.bottomTab = ok ? 'terminal' : 'problems'
-            if (ok) this.revealCurrentInstruction()
+            //Stop during the Build, in its run to `main` (an input wait before it, or a long start):
+            //the person ended it, so it neither failed nor built, and the Log says nothing
+            if (clears === this.executionClears) this.finishBuild(sources, started, failure)
         }
+    }
+
+    /** What a Build that was not stopped part way leaves: its Log entry, and where it is shown. */
+    private finishBuild(sources: BuildSources, started: number, failure: Diagnostic[] | undefined) {
+        const ok = this.emulator.canExecute
+        if (this.startedCommandLine)
+            this.startedCommandLine = ok
+                ? { ...this.startedCommandLine, build: this.emulator.buildSources }
+                : undefined
+        const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
+        if (!ok && diagnostics.length)
+            this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
+        this.appendLog(
+            buildEntry({
+                ok,
+                errors: diagnostics.filter((d) => d.severity === 'error').length,
+                warnings: diagnostics.filter((d) => d.severity === 'warning').length,
+                durationMs: performance.now() - started,
+                entry: this.project.entry
+            })
+        )
+        this.bottomTab = ok ? 'terminal' : 'problems'
+        if (ok) this.revealCurrentInstruction()
     }
 
     private async runCode() {
@@ -1638,6 +1680,8 @@ export class WorkbenchSession {
     }
 
     async step() {
+        //the Build's run to `main` owns the Core until it stops there, as a Run does
+        if (this.building || this.running) return
         try {
             await this.emulator.step()
             this.revealCurrentInstruction()
@@ -1673,6 +1717,8 @@ export class WorkbenchSession {
 
     /** Ends the Debug session: the program is dropped and the editor goes back to the live Files. */
     clearExecution() {
+        this.executionClears += 1
+        this.startedCommandLine = undefined
         this.emulator.clear()
         this.emulator.setSources(this.sourceInput)
         this.returnToLiveFiles()

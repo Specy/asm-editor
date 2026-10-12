@@ -36,7 +36,8 @@ export type ImportedFile = {
 /**
  * Reads a file the Projects page imports: an ELF, recognised by its bytes since CTF binaries rarely
  * have an extension, before a Project archive (a zip, or an `.asmproj` or `.zip` name) and text.
- * Throws for an ELF the editor cannot run, with the reason.
+ * Throws for an ELF the editor cannot run, with the reason, and for anything else that is not text
+ * (an image, a PDF), which would otherwise become a Project of replacement characters.
  */
 export function importFile(bytes: Uint8Array, fileName: string): ImportedFile {
     const kind = executableKind(bytes)
@@ -51,8 +52,23 @@ export function importFile(bytes: Uint8Array, fileName: string): ImportedFile {
         imported:
             archive || /\.(?:asmproj|zip)$/i.test(fileName)
                 ? makeProjectFromArchive(bytes)
-                : makeProjectFromExternal(new TextDecoder().decode(bytes)),
+                : makeProjectFromExternal(importedText(bytes, fileName)),
         executable: false,
         archive
     }
+}
+
+/** A text file's contents: valid UTF-8 without NUL characters, which no source or Project has. */
+function importedText(bytes: Uint8Array, fileName: string): string {
+    let text: string
+    try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    } catch {
+        text = '\0'
+    }
+    if (text.includes('\0'))
+        throw new Error(
+            `${fileName} is not a Project: it is neither text, a Project archive nor an x86-64 Linux executable`
+        )
+    return text
 }

@@ -9,6 +9,7 @@ import {
     resolveX86Start
 } from './sourceCompilation/assemblyProfile'
 import type { CompilationRecord } from './sourceCompilation/records'
+import { compiledEntrySource } from './commandLine'
 
 /** Resolve the same input for execution, live analysis and embedded programs. */
 export function projectBuildSources(project: {
@@ -23,11 +24,15 @@ export function projectBuildSources(project: {
         entry: project.entry,
         compiledLanguages: compiledLanguages(project, project.compilations)
     }
-    if (project.language === 'X86')
+    if (project.language === 'X86') {
+        //the program's name on the Command line and in `argv[0]` (`./main` for `main.c.asm`)
+        const entrySource = compiledEntrySource(project.entry, project.compilations)
         return {
             ...sources,
+            ...(entrySource === undefined ? {} : { entrySource }),
             ...resolveX86Start(sources, project.compilations, project.settings?.linkRuntimeLibrary)
         }
+    }
     if (!hasRuntimeLibrary(project.language)) return sources
     return {
         ...sources,

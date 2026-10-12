@@ -114,7 +114,7 @@ async function setup(host: Partial<WorkbenchSessionHost> = {}) {
         emulator.canExecute = true
         program = store.openExecutable('crackme', files.crackme)!
         await program.ready
-        store.session.set('crackme', program)
+        store.setSession('crackme', program)
         const listing = program.listing!
         const check = lineOf(listing, 'jne .LAB_2', lineOf(listing, 'call strcmp@plt'))
         await session.revealSourceLocation('crackme', check)
@@ -165,7 +165,7 @@ describe('where Patch instruction… is offered', () => {
         expect(session.patchSite(group, check)).toBeDefined()
 
         //after Stop, the Listing is the File's again
-        emulator.listings!.session.clear()
+        emulator.listings!.clearSession()
         emulator.canExecute = false
         emulator.buildSources = undefined
         session.clearExecution()
@@ -183,7 +183,7 @@ describe('where Patch instruction… is offered', () => {
             bytes: () => crackmeBytes
         })
         await library.ready
-        emulator.listings!.session.set('@lib/libc.so.6', library)
+        emulator.listings!.setSession('@lib/libc.so.6', library, true)
         await session.revealSourceLocation('@lib/libc.so.6', check)
         flushSync()
         expect(group.displayedLibraryListing).toBe(true)
@@ -327,7 +327,7 @@ describe('the Patch instruction prompt', () => {
     it('closes when the Debug session it was opened in ends', async () => {
         const { session, emulator, group } = await opened()
         expect(group.openPatchPrompt).toBeDefined()
-        emulator.listings!.session.clear()
+        emulator.listings!.clearSession()
         emulator.canExecute = false
         session.clearExecution()
         flushSync()

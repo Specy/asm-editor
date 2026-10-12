@@ -30,12 +30,12 @@ import {
     type RegisterPoke,
     type RegisterSize,
     resolveRegisterFileLayout,
+    isLineBreakpoint,
     sameBreakpoint,
     type SourceBreakpoint,
     type UnreadableBytes
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
-import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import { type MemoryPage, readMemoryPage } from '#lib/languages/memoryPage.ts'
 import { Terminal, type TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { terminalTextConventions } from '#lib/languages/peripherals/terminalText.ts'
@@ -141,12 +141,12 @@ const STEP_THROUGH_LIMIT = 50_000_000
 const STEP_THROUGH_YIELD = 2_000
 
 /**
- * Whether a File is library code, which a Step runs through unless the Preference says otherwise:
- * a Runtime library member or the Start unit under `@runtime/`, or the Listing of a shared library
- * a loaded Executable uses under `@lib/`. An Executable's own Listing is program code.
+ * Whether a File is a Runtime library member or the Start unit, under `@runtime/`: library code on
+ * every Target. The Listings of the libraries a loaded Executable uses are library code too, which
+ * only the Emulator running it can say (`GenericEmulator.isLibraryCodeFile`).
  */
-export function isLibraryCodeFile(file: string | undefined): boolean {
-    return !!file && (file.startsWith(RUNTIME_NAMESPACE) || isLibraryListingPath(file))
+export function isRuntimeLibraryFile(file: string | undefined): boolean {
+    return !!file && file.startsWith(RUNTIME_NAMESPACE)
 }
 
 /** Why a Build or a Testcase stopped before the program's own code: it ran out of instructions. */
@@ -189,6 +189,8 @@ type SliceLoopEnd = 'stopped' | 'paused' | 'limit'
 type SliceLoopOptions = {
     breakpoints?: readonly SourceBreakpoint[]
     skipBreakpointAtStart?: boolean
+    /** False for a run Pause does not stop, as no test run's does: a Testcase's run to `main`. */
+    pausable?: boolean
 }
 
 export abstract class GenericEmulator<T, R extends string>
@@ -283,6 +285,11 @@ export abstract class GenericEmulator<T, R extends string>
     /** What the Log should say about the current program's run, see `notes`. */
     private noteList = $state.raw<EmulatorNote[]>([])
     private lastNoteId = 0
+    /**
+     * Whether the program's current end has had its notes read (`_terminationNotes`), kept apart
+     * from `terminated`, which a Step sets before the views read the Core.
+     */
+    private endNoted = false
     /**
      * Whether Step stops in library code like any other, the Preference _Step into library code_
      * (its key predates the libraries an Executable loads). Off by default: a Step that lands in a
@@ -854,7 +861,7 @@ export abstract class GenericEmulator<T, R extends string>
                 return
             }
             const [step] = this._getUndoHistory(1)
-            if (isLibraryCodeFile(step?.file) && !this.stepIntoRuntimeLibrary) {
+            if (this.isLibraryCodeFile(step?.file) && !this.stepIntoRuntimeLibrary) {
                 const site = this._libraryCallSite?.()
                 if (site) {
                     this.selectInstruction(site)
@@ -887,14 +894,16 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private readTermination(): void {
         if (this.state.termination?.kind === 'error') return
-        const wasTerminated = this.state.terminated
         const terminated = this._hasTerminated()
         this.state.terminated = terminated
         this.state.termination = terminated
             ? (this._getTermination() ?? { kind: 'end' })
             : undefined
-        //read once per end: an Undo that takes the end back and a run that ends again say it again
-        if (terminated && !wasTerminated) {
+        //read once per end, whether a Run or a Step ended it: an Undo that takes the end back and
+        //a run that ends again say it again
+        const noted = this.endNoted
+        this.endNoted = terminated
+        if (terminated && !noted) {
             try {
                 for (const note of this._terminationNotes?.() ?? []) this.addNote(note)
             } catch (e) {
@@ -1063,12 +1072,24 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
+     * Whether a File is library code, which a Step runs through unless the Preference says
+     * otherwise: a Runtime library member or the Start unit under `@runtime/`, or the Listing of a
+     * shared library the running Executable uses under `@lib/` (`_isLibraryListing`). A Project
+     * File under `@lib/` is program code, and so is an Executable's own Listing.
+     */
+    protected isLibraryCodeFile(file: string | undefined): boolean {
+        return isRuntimeLibraryFile(file) || (!!file && !!this._isLibraryListing?.(file))
+    }
+
+    /**
      * Whether the instruction about to run is library code (`isLibraryCodeFile`), asked of the
      * adapter first: an Executable's adapter knows from the objects the program mapped, without
      * reading the instruction, whose File a library's Listing would have to be made to name.
      */
     private nextInLibraryCode(): boolean {
-        return this._nextInLibraryCode?.() ?? isLibraryCodeFile(this._getNextInstruction()?.file)
+        return (
+            this._nextInLibraryCode?.() ?? this.isLibraryCodeFile(this._getNextInstruction()?.file)
+        )
     }
 
     /**
@@ -1076,15 +1097,42 @@ export abstract class GenericEmulator<T, R extends string>
      * library code Steps do not enter, the program's own call into it (`_libraryCallSite`), which
      * is where a Step goes on from. An input wait inside libc's `read`, a Pause or a Run's end
      * there shows the program's line rather than the library's; the Call stack still leads into
-     * the library. Where a program ended is shown by `selectLastExecuted`, a crash inside a library
-     * included.
+     * the library. A stop on one of the person's own Breakpoints is never moved: a Breakpoint in a
+     * Runtime library member stops there, and shows there (`atLibraryBreakpoint`). `byProgram` is
+     * a stop the program itself made, an input wait, which is moved even on a Breakpoint's line.
+     * Where a program ended is shown by `selectLastExecuted`, a crash inside a library included.
      */
-    private stopInstruction(): Instruction | null {
+    private stopInstruction(byProgram = false): Instruction | null {
         if (!this.stepIntoRuntimeLibrary && this._libraryCallSite && this.nextInLibraryCode()) {
+            const breakpoint = byProgram || this.state.paused ? null : this.atLibraryBreakpoint()
+            if (breakpoint) return breakpoint
             const site = this._libraryCallSite()
             if (site) return site
         }
         return this._getNextInstruction()
+    }
+
+    /**
+     * The instruction about to run when it is in library code and one of the person's Breakpoints
+     * is on its line: a Run that stopped there, or an Undo back to that stop. Only Runtime library
+     * members take Breakpoints in library code (a library's Listing takes none, decision 11), so
+     * the instruction is read only when one of them has a Breakpoint.
+     */
+    private atLibraryBreakpoint(): Instruction | null {
+        const breakpoints = this.state.breakpoints.filter(
+            (breakpoint) => isLineBreakpoint(breakpoint) && this.isLibraryCodeFile(breakpoint.file)
+        )
+        if (breakpoints.length === 0) return null
+        const next = this._getNextInstruction()
+        if (!next) return null
+        return breakpoints.some(
+            (breakpoint) =>
+                isLineBreakpoint(breakpoint) &&
+                breakpoint.file === next.file &&
+                breakpoint.line === next.lineNumber
+        )
+            ? next
+            : null
     }
 
     /**
@@ -1133,7 +1181,8 @@ export abstract class GenericEmulator<T, R extends string>
     private async runToProgramStart(
         start: SourceBreakpoint,
         execution: ExecutionGeneration,
-        breakpoints: readonly SourceBreakpoint[]
+        breakpoints: readonly SourceBreakpoint[],
+        canPause = true
     ): Promise<SliceLoopEnd> {
         const pausable = this._setUndoRecording !== undefined
         const countedBefore = this._getInstructionsExecuted?.()
@@ -1143,7 +1192,8 @@ export abstract class GenericEmulator<T, R extends string>
                 breakpoints: [...breakpoints, start],
                 //a Breakpoint on the instruction the program starts at, `_start` of a static
                 //program, is where the person wants the Build to stop
-                skipBreakpointAtStart: false
+                skipBreakpointAtStart: false,
+                pausable: canPause
             })
         } finally {
             if (pausable) this._setUndoRecording?.(true)
@@ -1207,6 +1257,7 @@ export abstract class GenericEmulator<T, R extends string>
         this._buildLibraryFiles = undefined
         this.undoLedger = []
         this.noteList = []
+        this.endNoted = false
         this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
@@ -1488,7 +1539,7 @@ export abstract class GenericEmulator<T, R extends string>
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
-            if (this.pauseRequested) {
+            if (this.pauseRequested && options.pausable !== false) {
                 this.state.paused = true
                 return 'paused'
             }
@@ -1612,7 +1663,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     protected refreshInputState(instruction?: Instruction | null): void {
         if (this._peripherals.terminal.inputSource === 'scripted') return
-        if (instruction === undefined) instruction = this.stopInstruction()
+        if (instruction === undefined) instruction = this.stopInstruction(true)
         this.selectInstruction(instruction)
         this.refreshRunningPanels(true)
     }
@@ -2001,7 +2052,14 @@ export abstract class GenericEmulator<T, R extends string>
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
             const programStart = this._programStart?.()
             if (programStart) {
-                const end = await this.runToProgramStart(programStart.breakpoint, execution, [])
+                //a test run takes no Pause, as no Target's Testcase run does: a pause here would
+                //set the starting registers part way through the dynamic linker
+                const end = await this.runToProgramStart(
+                    programStart.breakpoint,
+                    execution,
+                    [],
+                    false
+                )
                 this.executionController.ensureCurrent(execution)
                 if (end === 'limit')
                     throw new Error(

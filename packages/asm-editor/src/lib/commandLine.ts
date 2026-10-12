@@ -81,21 +81,42 @@ function unterminated(kind: 'single' | 'double', index: number): CommandLinePars
 }
 
 /**
- * The name a program runs under, after `./`: an Executable's Entry path, or an assembled (or
- * compiled) program's Entry path without its extension, as a shell user would have named the
- * program the assembler and linker made (`main.asm` runs as `./main`).
+ * The name a program runs under, after `./`: an Executable's Entry path, or an assembled program's
+ * Entry path without its extension, as a shell user would have named the program the assembler and
+ * linker made (`main.asm` runs as `./main`). A compiled program, whose Entry is Generated assembly
+ * (`main.c.asm`), is named after the source File it was compiled from (`compiledFrom`, `main.c`),
+ * likewise without its extension, as `cc -o main main.c` names it.
  */
-export function commandLineProgram(entry: string, executable: boolean): string {
+export function commandLineProgram(
+    entry: string,
+    executable: boolean,
+    compiledFrom?: string
+): string {
     if (executable) return entry
-    const slash = entry.lastIndexOf('/')
-    const dot = entry.lastIndexOf('.')
+    return withoutExtension(compiledFrom ?? entry)
+}
+
+function withoutExtension(path: string): string {
+    const slash = path.lastIndexOf('/')
+    const dot = path.lastIndexOf('.')
     //a dot that starts the file name (`.hidden`) is no extension
-    return dot > slash + 1 ? entry.slice(0, dot) : entry
+    return dot > slash + 1 ? path.slice(0, dot) : path
+}
+
+/**
+ * The source File the Entry's Generated assembly was compiled from, by the Project's compilation
+ * records (the newest for that output, as a Build reads them); undefined for any other Entry.
+ */
+export function compiledEntrySource(
+    entry: string,
+    compilations: readonly { sourcePath: string; outputPath: string }[] | undefined
+): string | undefined {
+    return compilations?.filter((record) => record.outputPath === entry).at(-1)?.sourcePath
 }
 
 /** `argv[0]` for a program: its name as typed in a shell, `./crackme`. */
-export function programArgv0(entry: string, executable: boolean): string {
-    return `./${commandLineProgram(entry, executable)}`
+export function programArgv0(entry: string, executable: boolean, compiledFrom?: string): string {
+    return `./${commandLineProgram(entry, executable, compiledFrom)}`
 }
 
 /** The parsed `argv` as the Command line's tooltip lists it, one entry a line. */

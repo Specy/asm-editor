@@ -14,7 +14,6 @@ import { lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
-import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
@@ -133,9 +132,12 @@ export class EditorGroup {
             ? prompt
             : undefined
     }
-    /** Whether the displayed Listing is a library's, which takes no Breakpoints (decision 11). */
+    /**
+     * Whether the displayed Listing is a library's the running program loaded, which takes no
+     * Breakpoints (decision 11); a Project File under `@lib/` is an ordinary File.
+     */
     get displayedLibraryListing() {
-        return isLibraryListingPath(this.displayedPath)
+        return this.session.emulator.listings?.isLibrary(this.displayedPath) ?? false
     }
     get displayedFile() {
         //a member of the Runtime library the Build linked: read-only, and outside the Project

@@ -125,6 +125,29 @@ describe('an instruction the Core cannot run', () => {
         expect(emulator.notes[0].tone).toBe('warning')
     })
 
+    it('is noted when a Step ends the program there, and again after an Undo and a Step', async () => {
+        const sources = executableSources('avx')
+        const emulator = await emulatorFor(sources, '1 2 3 4 5')
+        await emulator.compile(100, sources)
+        const listing = emulator.listings!.session.get('avx')!.listing!
+        const line = listing.text.split('\n').findIndex((text) => text.trim() === 'vmovd xmm0, edi')
+        const address = instructionAddressAt(listing, line)!
+        const note = `The program ran \`vmovd xmm0, edi\` at \`0x${(PIE_LOAD_BASE + address).toString(16)}\`, which the emulator does not support`
+        emulator.toggleAddressBreakpoint(address, 'avx')
+        await emulator.run(0)
+        expect(emulator.line).toBe(line)
+        expect(emulator.notes).toEqual([])
+        await emulator.step()
+        expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
+        expect(texts(emulator)).toEqual([note])
+        //an Undo takes the end back, and the Step that ends it again says it again, once
+        emulator.undo()
+        expect(emulator.terminated).toBe(false)
+        await emulator.step()
+        expect(emulator.terminated).toBe(true)
+        expect(texts(emulator)).toEqual([note, note])
+    })
+
     it('is not noted for a program that runs no such instruction', async () => {
         const sources = executableSources('avx')
         const emulator = await emulatorFor(sources)

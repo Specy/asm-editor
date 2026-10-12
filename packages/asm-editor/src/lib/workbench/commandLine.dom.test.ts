@@ -50,6 +50,55 @@ describe('the Command line', () => {
         expect(session.commandLine?.program).toBe('main')
     })
 
+    it('names a compiled program after the source File its Generated assembly came from', () => {
+        const fingerprint = 'a'.repeat(32)
+        const { session } = setup({
+            entry: 'main.c.asm',
+            files: {
+                'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' },
+                'main.c.asm': { encoding: 'plain', content: 'nop' }
+            },
+            compilations: [
+                {
+                    sourcePath: 'main.c',
+                    outputPath: 'main.c.asm',
+                    target: 'X86',
+                    language: 'c',
+                    compilerId: 'cg152',
+                    optimization: '0',
+                    inputs: { 'main.c': fingerprint },
+                    outputFingerprint: fingerprint
+                }
+            ]
+        })
+        expect(session.commandLine?.program).toBe('main')
+        //the same name the Build gives the program's argv[0]
+        expect(session.sourceInput).toMatchObject({ entry: 'main.c.asm', entrySource: 'main.c' })
+    })
+
+    it('shows what a Build started only in the Debug session that Build made', async () => {
+        const { session, emulator } = setup()
+        emulator.compile = async (_historySize, sources) => {
+            emulator.canExecute = true
+            emulator.buildSources = { ...sources }
+        }
+        session.setProgramArguments('hunter2')
+        await session.build()
+        flushSync()
+        expect(session.commandLine).toMatchObject({ text: 'hunter2', locked: true })
+        //a session the Workbench's Build did not make, a test run's or the coding agent's, ran
+        //with the Project's Arguments as they are now
+        session.applySettings({ programArguments: 'swordfish' })
+        emulator.buildSources = { ...emulator.buildSources! }
+        flushSync()
+        expect(session.commandLine).toMatchObject({ text: 'swordfish', locked: true })
+        //and ending the session forgets what the Build started
+        session.stop()
+        emulator.canExecute = true
+        flushSync()
+        expect(session.commandLine?.text).toBe('swordfish')
+    })
+
     it('is only for x86 Projects', () => {
         const fixture = editorGroupsFixture('RISC-V')
         disposers.push(fixture.dispose)

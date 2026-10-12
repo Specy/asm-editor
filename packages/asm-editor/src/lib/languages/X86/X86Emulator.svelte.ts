@@ -11,7 +11,11 @@ import {
 import { listingClient } from '#lib/listing/listingClient.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import { ListingPatcher } from '#lib/listing/listingPatcher.svelte.ts'
-import { LIBRARY_LISTING_NAMESPACE, libraryListingPath } from '#lib/listing/listingPaths.ts'
+import {
+    isLibraryListingPath,
+    LIBRARY_LISTING_NAMESPACE,
+    libraryListingPath
+} from '#lib/listing/listingPaths.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     EmulatorStatus,
@@ -32,7 +36,7 @@ import {
     type SourceBreakpoint,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { GenericEmulator, isLibraryCodeFile } from '#lib/languages/GenericEmulator.svelte.ts'
+import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -365,7 +369,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     _setProgramArguments(sources: BuildSources, args: string[]): void {
         const executable = executableKind(sources.files[sources.entry]) === 'supported'
-        this.requireCore().setProgramArguments(programArgv0(sources.entry, executable), args)
+        this.requireCore().setProgramArguments(
+            programArgv0(sources.entry, executable, sources.entrySource),
+            args
+        )
     }
 
     protected getInstance(): CoreX86Emulator | null {
@@ -408,7 +415,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.loadingExecutable = undefined
         this.loadedObjects = undefined
         this.trampolines = []
-        this._listings?.session.clear()
+        this._listings?.clearSession()
         this.patcher?.clear()
         if (this.compiling) {
             // compileProject detached the old capability before its first awaited tool call.
@@ -425,7 +432,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.executable = this.loadingExecutable
         this.loadingExecutable = undefined
         if (this.executable) {
-            this._listings?.session.set(this.executable.path, this.executable.document)
+            this._listings?.setSession(this.executable.path, this.executable.document)
             this.trampolines = pltRanges(this.executable.file)
         }
         const library = this.buildSources?.runtimeAbi
@@ -773,7 +780,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 content: object.path,
                 bytes: () => core.getLoadedObjectBytes(object.path) ?? new Uint8Array()
             })
-            this.listingOpened(path, document)
+            this.listingOpened(path, document, true)
         }
         return { path, document }
     }
@@ -792,12 +799,27 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * under `@runtime/`.
      */
     private isLibraryAddress(address: bigint): boolean {
-        if (!this.executable) return isLibraryCodeFile(this.core?.getInstructionAt(address)?.file)
+        if (!this.executable)
+            return this.isLibraryCodeFile(this.core?.getInstructionAt(address)?.file)
         const object = this.objectAt(address)
         if (!object) return false
         if (!object.main) return true
         const offset = Number(address - object.base)
         return this.trampolines.some(([start, end]) => offset >= start && offset < end)
+    }
+
+    /**
+     * A library's Listing path of the running Executable, `@lib/<soname>`, made or not: never the
+     * Executable's own path nor a File of the Build, since a Project may hold Files under `@lib/`.
+     */
+    _isLibraryListing(path: string): boolean {
+        const executable = this.executable
+        return (
+            !!executable &&
+            isLibraryListingPath(path) &&
+            path !== executable.path &&
+            !Object.prototype.hasOwnProperty.call(this.buildSources?.files ?? {}, path)
+        )
     }
 
     /**
@@ -886,8 +908,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     /** A running program's Listing, which once ready says where the program is. */
-    private listingOpened(path: string, document: ListingDocument): void {
-        this._listings?.session.set(path, document)
+    private listingOpened(path: string, document: ListingDocument, library = false): void {
+        this._listings?.setSession(path, document, library)
         if (document.status === 'generating')
             document.ready.then(
                 () => {
