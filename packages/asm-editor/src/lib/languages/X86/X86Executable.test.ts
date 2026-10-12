@@ -412,6 +412,17 @@ describe('library code of an Executable', () => {
         }
     })
 
+    it('shows a C++ program that caught an exception ending at `_start`, not at its throw', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        await emulator.run(0)
+        expect(emulator.stdOut).toBe('hello\nC++\ncaught exception\n')
+        expect(emulator.termination).toMatchObject({ kind: 'exit', code: 0 })
+        // the unwinding left __cxa_throw's frames and main returned: only exit's frames remain
+        expect(emulator.callStack.map((frame) => frame.name)).not.toContain('main')
+        expect(emulator.currentFile).toBe('cpp')
+        expect(emulator.line).toBe(lineOf(listing, 'call qword [rel __libc_start_main@got]'))
+    })
+
     it('shows a crash inside libc on its line, with the program a click away', async () => {
         const { emulator, listing } = await built(executableSources('overflow'))
         await emulator.run(0)
