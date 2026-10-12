@@ -1,4 +1,8 @@
-import type { SourceBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    isLineBreakpoint,
+    type LineBreakpoint,
+    type SourceBreakpoint
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type { ProjectFiles } from '#lib/projectFiles.ts'
 import {
@@ -59,9 +63,15 @@ export function blockEntryLines(map: CompilationSourceMap, location: SourceLocat
     return entries
 }
 
-/** Whether a Breakpoint is on a higher-level source File rather than on the Target's assembly. */
-export function isSourceBreakpoint(breakpoint: SourceBreakpoint, target: AvailableLanguages) {
-    return editorFileLanguage(breakpoint.file, target) !== target
+/**
+ * Whether a Breakpoint is on a higher-level source File rather than on the Target's assembly. A
+ * Listing's Breakpoints are addresses in its Executable, which are never on a source File.
+ */
+export function isSourceBreakpoint(
+    breakpoint: SourceBreakpoint,
+    target: AvailableLanguages
+): breakpoint is LineBreakpoint {
+    return isLineBreakpoint(breakpoint) && editorFileLanguage(breakpoint.file, target) !== target
 }
 
 /**
@@ -72,9 +82,9 @@ export function mappedBreakpoints(
     breakpoints: readonly SourceBreakpoint[],
     maps: readonly CurrentSourceMap[],
     target: AvailableLanguages
-): SourceBreakpoint[] {
+): LineBreakpoint[] {
     const seen = new Set<string>()
-    const result: SourceBreakpoint[] = []
+    const result: LineBreakpoint[] = []
     for (const breakpoint of breakpoints) {
         if (!isSourceBreakpoint(breakpoint, target)) continue
         for (const { outputPath, map } of maps) {
@@ -102,7 +112,9 @@ export function coreBreakpoints(
     target: AvailableLanguages
 ): SourceBreakpoint[] {
     const assembly = breakpoints.filter((breakpoint) => !isSourceBreakpoint(breakpoint, target))
-    const keys = new Set(assembly.map(({ file, line }) => `${line}:${file}`))
+    const keys = new Set(
+        assembly.filter(isLineBreakpoint).map(({ file, line }) => `${line}:${file}`)
+    )
     return [
         ...assembly,
         ...mappedBreakpoints(breakpoints, maps, target).filter(

@@ -154,3 +154,13 @@ export const DISCERNS_AVATAR_INSTANCE_ID = 75
  * sliced ([ADR 0007](../../../../docs/adr/0007-generic-emulator-run-scheduling.md)) and the user pauses it.
  */
 export const TESTCASE_INSTRUCTION_LIMIT = 2_000_000
+
+/**
+ * How far a Build or a Testcase of an Executable runs to reach `main` before it starts
+ * ([binary-import.md](../../../../docs/design/binary-import.md), decision 11): the dynamic linker
+ * and the start code of a C++ program run about 1.8 million instructions before `main` with
+ * libstdc++, so `TESTCASE_INSTRUCTION_LIMIT` counts from `main`, and this generous cap stops a
+ * program that never gets there. A Testcase whose program does not reach `main` within it fails
+ * saying so; a Build stops where it got to.
+ */
+export const PROGRAM_START_INSTRUCTION_LIMIT = 50_000_000

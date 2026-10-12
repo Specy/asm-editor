@@ -46,42 +46,44 @@ _start:
     syscall
 ```
 
-In this playground, `rsp` begins at `0x4FFFFFFFFED0`. Before either push, the nearby qwords look
-like this (the green marker shows `rsp`):
+In this playground, `rsp` begins at `0x7FFFFFFFEE10`. The initial qword there is 1: the
+argument count, including the program name. Other program names or Arguments can change the initial
+stack address; see [Program arguments](/documentation/x86/syscall#arguments). Before either push,
+the nearby qwords look like this (the green marker shows `rsp`):
 
 |          address |         value         |
 | ---------------: | :-------------------: |
-| `0x4FFFFFFFFEC0` |  `0000000000000000`   |
-| `0x4FFFFFFFFEC8` |  `0000000000000000`   |
-| `0x4FFFFFFFFED0` | 🟢 `0000000000000001` |
+| `0x7FFFFFFFEE00` |  `0000000000000000`   |
+| `0x7FFFFFFFEE08` |  `0000000000000000`   |
+| `0x7FFFFFFFEE10` | 🟢 `0000000000000001` |
 
-The first push subtracts 8, making `rsp` equal to `0x4FFFFFFFFEC8`, and stores the first value
+The first push subtracts 8, making `rsp` equal to `0x7FFFFFFFEE08`, and stores the first value
 there:
 
 |          address |         value         |
 | ---------------: | :-------------------: |
-| `0x4FFFFFFFFEC0` |  `0000000000000000`   |
-| `0x4FFFFFFFFEC8` | 🟢 `1111111111111111` |
-| `0x4FFFFFFFFED0` |  `0000000000000001`   |
+| `0x7FFFFFFFEE00` |  `0000000000000000`   |
+| `0x7FFFFFFFEE08` | 🟢 `1111111111111111` |
+| `0x7FFFFFFFEE10` |  `0000000000000001`   |
 
-The second push subtracts another 8, making `rsp` equal to `0x4FFFFFFFFEC0`, and stores the second
+The second push subtracts another 8, making `rsp` equal to `0x7FFFFFFFEE00`, and stores the second
 value:
 
 |          address |         value         |
 | ---------------: | :-------------------: |
-| `0x4FFFFFFFFEC0` | 🟢 `2222222222222222` |
-| `0x4FFFFFFFFEC8` |  `1111111111111111`   |
-| `0x4FFFFFFFFED0` |  `0000000000000001`   |
+| `0x7FFFFFFFEE00` | 🟢 `2222222222222222` |
+| `0x7FFFFFFFEE08` |  `1111111111111111`   |
+| `0x7FFFFFFFEE10` |  `0000000000000001`   |
 
 `pop r8` reads the qword at the current `rsp`, so `r8` receives
 `0x2222222222222222`. It then raises `rsp` by 8. `pop r9` reads the next qword, so `r9` receives
-`0x1111111111111111`, and `rsp` returns to `0x4FFFFFFFFED0`.
+`0x1111111111111111`, and `rsp` returns to `0x7FFFFFFFEE10`.
 
 The last value pushed is the first value popped. This order is called **last in, first out**, or
 **LIFO**.
 
 A pop does not erase the bytes it read. After both pops, the two values are still visible at
-`0x4FFFFFFFFEC0` and `0x4FFFFFFFFEC8`, but those bytes are no longer reserved by these pushes.
+`0x7FFFFFFFEE00` and `0x7FFFFFFFEE08`, but those bytes are no longer reserved by these pushes.
 Later stack use may overwrite them, so a program must not treat a popped value as current storage.
 
 ## Reserving several slots
@@ -154,8 +156,8 @@ directly from LIFO.
 
 `rbx` and `r12` hold 11 and 22. Swap them with exactly two `push` instructions followed by exactly
 two `pop` instructions. Do not use `xchg`, a third register, or arithmetic for the swap. Restore
-`rsp` to its starting value. Afterward, the released qwords at `0x4FFFFFFFFEC0` and
-`0x4FFFFFFFFEC8` should still contain 22 and 11.
+`rsp` to its starting value. Afterward, the released qwords at `0x7FFFFFFFEE00` and
+`0x7FFFFFFFEE08` should still contain 22 and 11.
 
 ```x86|playground|memory|exercise
 default rel
@@ -176,12 +178,12 @@ _start:
     "expectedRegisters": {
         "rbx": 22,
         "r12": 11,
-        "rsp": "0x4FFFFFFFFED0"
+        "rsp": "0x7FFFFFFFEE10"
     },
     "expectedMemory": [
         {
             "type": "number-chunk",
-            "address": "0x4FFFFFFFFEC0",
+            "address": "0x7FFFFFFFEE00",
             "bytes": 8,
             "expected": [22, 11]
         }
@@ -233,12 +235,12 @@ _start:
     "expectedRegisters": {
         "r8": 7,
         "r9": 9,
-        "rsp": "0x4FFFFFFFFED0"
+        "rsp": "0x7FFFFFFFEE10"
     },
     "expectedMemory": [
         {
             "type": "number-chunk",
-            "address": "0x4FFFFFFFFEB0",
+            "address": "0x7FFFFFFFEDF0",
             "bytes": 8,
             "expected": [5, 7, 8, 9]
         }

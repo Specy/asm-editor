@@ -12,7 +12,27 @@ export type StatusRegister = {
     prev: number
 }
 export type DiagnosticSeverity = 'error' | 'warning' | 'suggestion'
-export type SourceBreakpoint = { file: string; line: number }
+/** A Breakpoint on a line of a File: an assembly File's, or a C or C++ File's through its Source map. */
+export type LineBreakpoint = { file: string; line: number }
+/**
+ * A Breakpoint on a **Listing**, held as the link-time address of the instruction in its Executable
+ * rather than as a line, so it survives a Listing whose lines move
+ * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 5).
+ */
+export type AddressBreakpoint = { file: string; address: number }
+export type SourceBreakpoint = LineBreakpoint | AddressBreakpoint
+
+export function isLineBreakpoint(breakpoint: SourceBreakpoint): breakpoint is LineBreakpoint {
+    return 'line' in breakpoint
+}
+
+/** The same Breakpoint: on the same File, at the same line or the same address. */
+export function sameBreakpoint(a: SourceBreakpoint, b: SourceBreakpoint): boolean {
+    if (a.file !== b.file) return false
+    return isLineBreakpoint(a)
+        ? isLineBreakpoint(b) && a.line === b.line
+        : !isLineBreakpoint(b) && a.address === b.address
+}
 
 type DiagnosticBase = {
     file?: string
@@ -255,8 +275,14 @@ export type ExecutionStep = {
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
     /**
-     * Set on the instruction that started a Step through Runtime library code: the library function
-     * it entered and every instruction the Step ran, which one Undo takes back together.
+     * What a Poke did, in words, when it is more than the values it wrote: a patch of an
+     * Executable's instruction from its Listing reads `Patched jne → je at 0x5555555551f8`.
+     */
+    title?: string
+    /**
+     * Set on the instruction that started a Step through library code: the library function it
+     * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
+     * takes back together.
      */
     stretch?: { library: string; instructions: number }
 }
@@ -436,6 +462,21 @@ export type MemoryLayout = {
     dataLabels: DataLabel[]
     /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
     readOnly?: ReadOnlyMemory[]
+    /** Where the program's Arguments are, once the Core has stored them (`withArgumentsArea`). */
+    arguments?: { name: string; start: bigint; end: bigint }
+}
+/**
+ * What a program starts with above its stack, as the Core wrote it at the program's start: the
+ * `argv` array and its strings, and on x86 the rest of the Linux process-start block. Its parts
+ * become data labels of its region, so the memory view names them as it names variables.
+ */
+export type ArgumentsArea = {
+    /** The region's name: "Arguments", or "Arguments and environment" on x86. */
+    name: string
+    start: bigint
+    end: bigint
+    /** Each part where it starts; `text` for a NUL-terminated string, which the picker previews. */
+    parts: { name: string; address: bigint; text?: boolean }[]
 }
 /** A half-open range of memory that takes no Pokes, and why, which the memory view shows. */
 export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
@@ -443,7 +484,7 @@ export type HeapBounds = { start: bigint; end: bigint }
 export type DeviceRegion = { name: string; start: bigint; end: bigint }
 export type MemoryRegion = DeviceRegion & {
     id: string
-    kind: MemoryRunKind | 'heap' | 'stack' | 'device'
+    kind: MemoryRunKind | 'heap' | 'stack' | 'arguments' | 'device'
     section?: string
     /** The live stack jumps to SP, including when its extent is empty. */
     destination?: bigint
@@ -536,6 +577,18 @@ export type BaseEmulatorDerivedState = {
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
     readonly buildLibraryFiles?: import('#lib/projectFiles.ts').ProjectFiles
+    /** What the Log should say about the current program's run, oldest first; see `EmulatorNote`. */
+    readonly notes: readonly EmulatorNote[]
+    /**
+     * x86 only: the Listings of Executables this Emulator generates, and in `session` those of the
+     * running program and the libraries it loaded, under `@lib/`.
+     */
+    readonly listings?: import('#lib/listing/listingDocuments.svelte.ts').ListingDocuments
+    /**
+     * x86 only: patches of the running Executable's instructions from its Listing, written as
+     * Pokes, and the Listing lines they changed.
+     */
+    readonly patcher?: import('#lib/listing/listingPatcher.svelte.ts').ListingPatcher
 }
 
 export enum InterpreterStatus {
@@ -635,6 +688,23 @@ export type EmulatorSettings = {
     screenHistoryBudgetMb?: number
     /** FileSystem inverse-history budget in megabytes, applied at Build. */
     fileSystemHistoryBudgetMb?: number
+    /**
+     * x86, MIPS and RISC-V: the Project's **Arguments** as typed on the Command line, passed at
+     * every start; none when left out. Changed later with `setProgramArguments`.
+     */
+    programArguments?: string
+}
+
+/**
+ * Something the **Log** should say about a program's run that neither its output nor its exit
+ * says: a system call the Core does not implement, an instruction it cannot run, a library it
+ * does not bundle ([binary-import.md](../../../../../docs/design/binary-import.md), decision 17).
+ * `id` grows across the Emulator's life, so a reader that has seen up to one knows which are new.
+ */
+export type EmulatorNote = {
+    id: number
+    tone: 'info' | 'warning' | 'error'
+    text: string
 }
 
 export type BaseEmulatorActions = {
@@ -649,12 +719,20 @@ export type BaseEmulatorActions = {
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number, file?: string) => void
+    /** A Breakpoint on a Listing: the link-time address of an instruction of that Executable. */
+    toggleAddressBreakpoint: (address: number, file: string) => void
     /** Translates Breakpoints on Files the Core never sees into the ones it runs with. */
     setBreakpointResolver: (
         resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
     ) => void
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
+    /**
+     * The Core's own decoding of the instruction at an address, whatever line shows it: what runs
+     * there when the program jumps into the middle of a Listing's instruction. Undefined when the
+     * Core cannot read one there.
+     */
+    instructionCodeAt?: (address: bigint) => string | undefined
     /**
      * Whether a Poke is possible right now, which is exactly when Step is
      * ([the design record](../../../../../docs/design/pokes.md)): after a Build, with no Interrupt
@@ -693,6 +771,11 @@ export type BaseEmulatorActions = {
      */
     /** The Entry path of the sources currently set. */
     entry: string
+    /**
+     * The Arguments every later start passes the program, as typed on the Command line; a Testcase
+     * with Arguments of its own passes those instead. Only x86 programs take them.
+     */
+    setProgramArguments: (text: string) => void
     setScreenHistoryBudgetMb: (megabytes: number) => void
     /** The same for the FileSystem's Undo budget, likewise read by the next Build's session. */
     setFileSystemHistoryBudgetMb: (megabytes: number) => void

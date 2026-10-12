@@ -14,6 +14,15 @@ export type EditorSource = {
     value: string
     /** Gives the model a stable URI that language providers route back to the Project session. */
     identity?: ProjectModelIdentity
+    /**
+     * What generated text nobody edits by hand is a version of: a Listing's document. A new value
+     * of the same document changes a few lines at a time (a Debug session's patches) and replaces
+     * only the part that changed, so the cursor, the scroll position and the rest of the model's
+     * state stay as they were. Another document under the same key (an Executable replaced by
+     * new bytes) gets a model of its own, made with its whole text, since Monaco decides when a
+     * model is made whether it is too large to highlight.
+     */
+    generatedFrom?: object
 }
 
 /** The model bookkeeping `resolveEditorModel` drives, so the rule itself holds no Monaco types. */

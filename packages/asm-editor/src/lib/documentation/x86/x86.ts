@@ -43,6 +43,7 @@ import extensionsProse from './extensions.md?raw'
 import registersProse from './registers.md?raw'
 import syscallsProse from './syscalls.md?raw'
 import usingCProse from './using-c.md?raw'
+import executablesProse from './executables.md?raw'
 import runtimeProse from './runtime-library.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
@@ -582,7 +583,7 @@ function syscalls(): Chapter {
         title: 'Syscalls',
         href,
         description:
-            'The Linux calls this emulator implements, with register inputs, results, and C wrapper names where available. Errors return as negative values in `rax`.',
+            'The Linux calls this emulator implements, with register inputs, results, C wrapper names, and program arguments. Errors return as negative values in `rax`.',
         entries: interleave(
             proseEntries({
                 language: 'x86',
@@ -606,13 +607,36 @@ function usingC(): Chapter {
         title: 'Using C and C++',
         href,
         description:
-            'Compile C or C++, use the C runtime and Linux services, and debug the generated NASM assembly.',
+            'Compile C or C++, supply program arguments, use Runtime functions and Linux services, and debug the generated NASM assembly.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'using-c',
             chapterHref: href,
             markdown: usingCProse,
             openingTitle: 'Using C and C++'
+        })
+    }
+}
+
+/**
+ * Running a program built outside the editor: an **Executable**, shown as its **Listing**
+ * ([binary-import.md](../../../../../../docs/design/binary-import.md)).
+ */
+function executables(): Chapter {
+    const href = `${BASE}/executables`
+    return {
+        id: 'executables',
+        language: 'x86',
+        title: 'Executables',
+        href,
+        description:
+            'Import and debug an x86-64 Linux executable, inspect its Listing, and patch instructions during a paused run.',
+        entries: proseEntries({
+            language: 'x86',
+            chapter: 'executables',
+            chapterHref: href,
+            markdown: executablesProse,
+            openingTitle: 'Running an Executable'
         })
     }
 }
@@ -629,6 +653,10 @@ function runtimeLibrary(): Chapter {
         }),
         ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
             const convention = x86CallingConvention(entry.prototype)
+            const doc =
+                entry.name === 'getenv'
+                    ? 'Always returns NULL; this Runtime library does not expose environment variables.'
+                    : entry.doc
             return {
                 id: `x86/runtime-library/${entry.name}`,
                 language: 'x86',
@@ -637,12 +665,12 @@ function runtimeLibrary(): Chapter {
                 title: entry.name,
                 names: names(entry.name),
                 signature: `<${entry.header}>`,
-                summary: summaryOf(entry.doc),
+                summary: summaryOf(doc),
                 href: `${href}#${entry.name}`,
                 anchor: entry.name,
                 view: {
                     type: 'fields',
-                    markdown: entry.doc,
+                    markdown: doc,
                     fields: [
                         { label: 'Declaration', value: `\`${entry.prototype}\`` },
                         { label: 'Header', value: `\`<${entry.header}>\`` },
@@ -650,7 +678,7 @@ function runtimeLibrary(): Chapter {
                     ],
                     example: `call ${entry.name}`
                 },
-                searchText: `${entry.prototype}. ${entry.doc}`
+                searchText: `${entry.prototype}. ${doc}`
             }
         })
     ]
@@ -660,7 +688,7 @@ function runtimeLibrary(): Chapter {
         title: 'Runtime library',
         href,
         description:
-            'The C standard library compiled programs use, which hand-written assembly can call too.',
+            'The editor Runtime functions for compiled C/C++ and assembly programs that link Runtime ABI v1.',
         entries
     }
 }
@@ -676,7 +704,8 @@ export function chapters(): Chapter[] {
         registersAndFlags(),
         syscalls(),
         usingC(),
-        runtimeLibrary()
+        runtimeLibrary(),
+        executables()
     ]
     return cached
 }

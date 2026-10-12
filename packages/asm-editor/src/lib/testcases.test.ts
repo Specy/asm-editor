@@ -186,6 +186,19 @@ describe('matchResults', () => {
         const b = testcaseWith({ startingRegisters: { D1: 2n, D0: 1n } })
         expect(testcaseContentKey(a)).toBe(testcaseContentKey(b))
     })
+
+    it('has no result for a Testcase whose Arguments changed since the run', () => {
+        const a = testcaseWith({ arguments: 'hunter2' })
+        const b = testcaseWith({ arguments: 'swordfish' })
+        expect(testcaseContentKey(a)).not.toBe(testcaseContentKey(b))
+        expect(matchResults([b], [{ passed: true, errors: [], testcase: a }])).toEqual([undefined])
+    })
+
+    it('reads an empty Arguments field as none, which runs alike', () => {
+        const none = testcaseWith({})
+        expect(testcaseContentKey(testcaseWith({ arguments: '' }))).toBe(testcaseContentKey(none))
+        expect(testcaseContentKey(testcaseWith({ arguments: '  ' }))).toBe(testcaseContentKey(none))
+    })
 })
 
 describe('firstByteDifference', () => {

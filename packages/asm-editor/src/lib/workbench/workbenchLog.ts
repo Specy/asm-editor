@@ -6,8 +6,10 @@ import { formatTime } from '#lib/utils.ts'
 /**
  * The **Log** ([CONTEXT.md](../../../../../CONTEXT.md)): the Workbench's record of what it did for the
  * person. Each Build with its result, each test run with the outcome of every Testcase, each
- * program exit with its running time and how it ended. What the program itself wrote is the
- * Terminal's, and the Diagnostics are listed on their own, so neither is repeated here.
+ * program exit with its running time and how it ended, and notes on what the program's run met that
+ * neither its output nor its exit says (a system call the Core does not implement). What the
+ * program itself wrote is the Terminal's, and the Diagnostics are listed on their own, so neither
+ * is repeated here.
  */
 
 export type LogTone = 'info' | 'success' | 'warning' | 'error'
@@ -21,7 +23,7 @@ export type LogEntry = LogLine & {
     id: number
     /** When it was recorded, as `Date.now()`. */
     time: number
-    kind: 'build' | 'test' | 'exit'
+    kind: 'build' | 'test' | 'exit' | 'note'
     /** Lines under the entry: one per Testcase of a test run. */
     details: LogLine[]
 }
@@ -141,6 +143,25 @@ export function exitEntry(report: ExitReport): LogDraft {
         text: terminationSummary(termination, report.executionTimeMs),
         details: []
     }
+}
+
+/**
+ * A note on the program's run, as the Emulator words it: `` `ptrace` (syscall 101) is not
+ * implemented; the call returned ENOSYS ``. Text between backticks is code, which the Log sets apart
+ * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 17).
+ */
+export function noteEntry(note: LogLine): LogDraft {
+    return { kind: 'note', tone: note.tone, text: note.text, details: [] }
+}
+
+/** A note's text in pieces, the code between its backticks marked: what the Log draws. */
+export function noteSpans(text: string): { text: string; code: boolean }[] {
+    const parts = text.split('`')
+    //an unpaired backtick is a character, not the start of code that never ends
+    if (parts.length % 2 === 0) return [{ text, code: false }]
+    return parts
+        .map((part, index) => ({ text: part, code: index % 2 === 1 }))
+        .filter((span) => span.text !== '')
 }
 
 /** The log with one more entry, dropping the oldest past `limit`. */

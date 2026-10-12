@@ -93,6 +93,7 @@ export const X86_SYSCALLS: X86Syscall[] = [
     {"number":98,"name":"getrusage","arity":2,"args":["value","value"],"blocking":false},
     {"number":99,"name":"sysinfo","arity":1,"args":["value"],"blocking":false},
     {"number":100,"name":"times","arity":1,"args":["value"],"blocking":false},
+    {"number":101,"name":"ptrace","arity":4,"args":["value","value","value","value"],"blocking":false},
     {"number":102,"name":"getuid","arity":0,"args":[],"blocking":false},
     {"number":104,"name":"getgid","arity":0,"args":[],"blocking":false},
     {"number":105,"name":"setuid","arity":1,"args":["uid"],"blocking":false},
@@ -126,6 +127,7 @@ export const X86_SYSCALLS: X86Syscall[] = [
     {"number":186,"name":"gettid","arity":0,"args":[],"blocking":false},
     {"number":200,"name":"tkill","arity":2,"args":["process id","signal"],"blocking":false},
     {"number":201,"name":"time","arity":1,"args":[],"blocking":false},
+    {"number":202,"name":"futex","arity":6,"args":["value","value","value","value","value","value"],"blocking":true},
     {"number":204,"name":"sched_getaffinity","arity":3,"args":["value","value","value"],"blocking":false},
     {"number":217,"name":"getdents64","arity":3,"args":["value","value","value"],"blocking":false},
     {"number":218,"name":"set_tid_address","arity":1,"args":["value"],"blocking":false},
@@ -150,6 +152,8 @@ export const X86_SYSCALLS: X86Syscall[] = [
     {"number":269,"name":"faccessat","arity":3,"args":["directory descriptor","path","accmode"],"blocking":false},
     {"number":270,"name":"pselect6","arity":6,"args":["value","value","value","value","value","value"],"blocking":false},
     {"number":271,"name":"ppoll","arity":5,"args":["value","value","value","value","value"],"blocking":false},
+    {"number":273,"name":"set_robust_list","arity":2,"args":["value","value"],"blocking":false},
+    {"number":274,"name":"get_robust_list","arity":3,"args":["value","value","value"],"blocking":false},
     {"number":280,"name":"utimensat","arity":4,"args":["directory descriptor","path","o_time2","atflags"],"blocking":false},
     {"number":292,"name":"dup3","arity":3,"args":["file descriptor","int","open flags"],"blocking":false},
     {"number":293,"name":"pipe2","arity":2,"args":["o_pfds","open flags"],"blocking":false},
@@ -160,6 +164,7 @@ export const X86_SYSCALLS: X86Syscall[] = [
     {"number":318,"name":"getrandom","arity":3,"args":["buffer (written by the kernel)","byte count","int"],"blocking":true},
     {"number":327,"name":"preadv2","arity":6,"args":["file descriptor","iovec array (written)","byte count","offset","value","int"],"blocking":true},
     {"number":328,"name":"pwritev2","arity":6,"args":["file descriptor","iovec array (read)","byte count","offset","value","int"],"blocking":true},
+    {"number":334,"name":"rseq","arity":4,"args":["value","value","value","value"],"blocking":false},
     {"number":436,"name":"close_range","arity":3,"args":["value","value","value"],"blocking":false},
     {"number":439,"name":"faccessat2","arity":4,"args":["directory descriptor","path","accmode","atflags"],"blocking":false}
 ]

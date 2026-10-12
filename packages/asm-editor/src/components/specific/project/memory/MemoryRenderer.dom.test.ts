@@ -401,3 +401,46 @@ it('cuts a data region into chunks at its labels, each line drawn once in the re
         ui.close()
     }
 })
+
+it('outlines the Arguments in their colour, chunked and named by their parts', () => {
+    const label = (name: string, offset: bigint) => ({
+        name,
+        section: 'Arguments',
+        address: ADDRESS + offset,
+        fromLibrary: false
+    })
+    const ui = render({
+        memoryRegions: [
+            {
+                id: 'arguments',
+                name: 'Arguments',
+                section: 'Arguments',
+                kind: 'arguments',
+                start: ADDRESS,
+                end: ADDRESS + 8n
+            }
+        ],
+        //an array of two pointers, then a string
+        dataLabels: [label('argv', 0n), label('argv[0]', 4n)],
+        bytesPerRow: 8,
+        sp: ADDRESS + 8n
+    })
+    const style = (index: number) =>
+        ui.cells()[index].closest('.memory-number')!.getAttribute('style')!
+    const edges = (index: number) => /--region-edges: ([^;]*);/.exec(style(index))![1]
+    try {
+        expect(style(0)).toContain(`--region-color: ${memoryRegionColor('arguments')};`)
+        expect([0, 3, 4, 7].map(edges)).toEqual([
+            '1px 0 1px 1px',
+            '1px 0 1px 0',
+            '1px 0 1px 1px',
+            '1px 1px 1px 0'
+        ])
+        const hover = (index: number) =>
+            ui.cells()[index].closest('.memory-number')!.querySelector('.region-hover')?.textContent
+        expect(hover(1)).toBe('Arguments · argv+1')
+        expect(hover(5)).toBe('Arguments · argv[0]+1')
+    } finally {
+        ui.close()
+    }
+})

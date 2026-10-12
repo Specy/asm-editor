@@ -168,6 +168,11 @@ export type BuildConfiguration = Readonly<{
     compiledLanguages?: Readonly<
         Record<string, import('./sourceCompilation/records').SourceLanguage>
     >
+    /**
+     * The source File the Entry was compiled from when the Entry is Generated assembly, which
+     * names the program on the Command line and in its `argv[0]`: `main.c` runs as `./main`.
+     */
+    entrySource?: string
 }>
 
 export type BuildSources = Readonly<{ files: ProjectFiles; entry: string }> & BuildConfiguration
@@ -179,7 +184,8 @@ const BUILD_CONFIGURATION_KEYS: Record<keyof Required<BuildConfiguration>, true>
     runtimeAbi: true,
     entrySymbol: true,
     x86Support: true,
-    compiledLanguages: true
+    compiledLanguages: true,
+    entrySource: true
 }
 
 export function buildConfiguration(sources: BuildConfiguration): BuildConfiguration {
@@ -270,6 +276,11 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
                 ))
         )
             throw new ProjectFormatError('Invalid compiled source languages')
+        if (
+            hasOwn(input, 'entrySource') &&
+            (typeof input.entrySource !== 'string' || !isValidFilePath(input.entrySource))
+        )
+            throw new ProjectFormatError(`Invalid Entry source: ${String(input.entrySource)}`)
         return Object.freeze({
             files: cleanFiles(input.files),
             entry: input.entry,

@@ -22,11 +22,17 @@ import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
+    isLineBreakpoint,
     makeRegister,
+    sameBreakpoint,
     type Diagnostic,
+    type LineBreakpoint,
     type RegisterPoke,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { instructionAddressAt } from '#lib/listing/listing.ts'
+import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
@@ -93,6 +99,15 @@ import {
     type SourceLocation
 } from '#lib/sourceCompilation/records.ts'
 import { serializer } from '#lib/json.ts'
+import {
+    ARGUMENTS_DIAGNOSTIC_SOURCE,
+    commandLineProgram,
+    compiledEntrySource,
+    languageTakesArguments,
+    parseCommandLine,
+    type CommandLineParse
+} from '#lib/commandLine.ts'
+import { executableKind } from '#lib/executables.ts'
 import { createDebouncer } from '#lib/utils.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
 import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
@@ -100,11 +115,13 @@ import {
     appendLog,
     buildEntry,
     exitEntry,
+    noteEntry,
     testRunEntry,
     type LogDraft,
     type LogEntry
 } from './workbenchLog'
 import { EditorGroup } from './EditorGroup.svelte'
+import { PatchPrompt } from './patchPrompt.svelte'
 import { EditorModels } from './editorModels'
 import { resolveMappingPair } from './mappingPair'
 import { editorGroupForFile, editorFileKind } from './editorFileRouting'
@@ -117,6 +134,21 @@ import {
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
+
+/**
+ * The **Command line** the Terminal shows, `$ ./crackme hunter2`
+ * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 12): the name the
+ * program starts under and its Arguments, as typed and as read. Locked during a Debug session, to
+ * what that run started with.
+ */
+export type CommandLineState = {
+    /** The program's name after `./`: an Executable's Entry path, else without its extension. */
+    program: string
+    /** The Arguments as typed. */
+    text: string
+    parsed: CommandLineParse
+    locked: boolean
+}
 
 /**
  * What a host passes the session, as getters so that it stays reactive to the host's props
@@ -223,6 +255,32 @@ export class WorkbenchSession {
         this.show(liveSource(map.sourcePath), other)
     }
 
+    /**
+     * The Listing a version of a File is shown as
+     * ([binary-import.md](../../../../../docs/design/binary-import.md), decisions 5 and 18): in the
+     * current Build, the running program's own, at the address it was loaded at, or a library's it
+     * loaded, under `@lib/`; otherwise an Executable File's, at the address it will be loaded at.
+     * Undefined for any other File.
+     */
+    listingFor(selection: ProjectSourceSelection): ListingDocument | undefined {
+        const listings = this.emulator.listings
+        const path = selection.path
+        if (!listings || !path) return undefined
+        if (
+            selection.sourceKind === 'build' &&
+            selection.buildGeneration === this.buildGeneration
+        ) {
+            const running = listings.session.get(path)
+            if (running) return running
+        }
+        return listings.openExecutable(
+            path,
+            selection.sourceKind === 'build'
+                ? this.emulator.buildSources?.files[path]
+                : this.project.files[path]
+        )
+    }
+
     groupForFile(path: string) {
         return editorGroupForFile(path, this.groups)
     }
@@ -282,6 +340,20 @@ export class WorkbenchSession {
 
     log = $state.raw<LogEntry[]>([])
     private logId = 0
+    /**
+     * The Command line the Debug session's program started with, see `commandLine`: recorded by
+     * a Build, and with `build` the Build snapshot it made, so a test run's or the coding agent's
+     * Build, which make their own, never show it.
+     */
+    private startedCommandLine = $state.raw<{
+        program: string
+        text: string
+        build?: BuildSources
+    }>()
+    /** Counts the ends of Debug sessions, so a Build knows that Stop ended it part way. */
+    private executionClears = 0
+    /** Counts requests for the Command line to take the keyboard, as a Problem about it makes. */
+    commandLineFocus = $state(0)
     bottomTab = $state<BottomTab>('terminal')
 
     readonly pc
@@ -325,6 +397,38 @@ export class WorkbenchSession {
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
+        this.commandLine = $derived.by<CommandLineState | undefined>(() => {
+            if (!languageTakesArguments(this.project.language)) return undefined
+            const recorded = this.startedCommandLine
+            //during the Build that recorded it (its run to `main` included), then while the
+            //session it made lasts
+            const started =
+                recorded &&
+                (this.building ||
+                    (this.debugSession && recorded.build === this.emulator.buildSources))
+                    ? recorded
+                    : undefined
+            if (started)
+                return {
+                    program: started.program,
+                    text: started.text,
+                    parsed: parseCommandLine(started.text),
+                    locked: true
+                }
+            const entry = this.project.entry
+            const executable = executableKind(this.project.files[entry]) === 'supported'
+            const text = this.effectiveSettings.programArguments
+            return {
+                program: commandLineProgram(
+                    entry,
+                    executable,
+                    compiledEntrySource(entry, this.project.compilations)
+                ),
+                text,
+                parsed: parseCommandLine(text),
+                locked: this.host.readonly || this.debugSession || this.building || this.running
+            }
+        })
         this.mappingPair = $derived(
             resolveMappingPair(
                 this.groups,
@@ -347,7 +451,13 @@ export class WorkbenchSession {
                     path
                 })
             )
-            const buildKeys = Object.keys(this.emulator.buildSources?.files ?? {}).map((path) =>
+            const buildKeys = [
+                ...Object.keys(this.emulator.buildSources?.files ?? {}),
+                //the libraries' Listings, kept while the session lasts so a tab comes back as left
+                ...[...(this.emulator.listings?.session.keys() ?? [])].filter((path) =>
+                    this.emulator.listings!.isLibrary(path)
+                )
+            ].map((path) =>
                 projectSourceModelKey({
                     sessionId: this.languageSessionId,
                     sourceKind: 'build',
@@ -593,20 +703,30 @@ export class WorkbenchSession {
         })
 
         //each exit of the program goes in the Log with its running time and how it ended, whether
-        //a Run, a Step or a runtime error ended it
+        //a Run, a Step or a runtime error ended it, followed by what the Emulator noted about the
+        //run (a missing system call, an instruction it cannot run). A Build's own entry goes
+        //first: what the program did while the Build ran it to `main` follows it. A test run's
+        //entry says how each Testcase went, so what its runs met is not repeated
         let wasTerminated = untrack(() => this.emulator.terminated)
+        let lastNote = untrack(() => this.emulator.notes.at(-1)?.id ?? 0)
         $effect(() => {
             const terminated = this.emulator.terminated && this.emulator.canExecute
-            if (terminated && !wasTerminated && !this.testing) {
-                untrack(() =>
-                    this.appendLog(
-                        exitEntry({
-                            executionTimeMs: this.emulator.executionTime,
-                            termination: this.emulator.termination
-                        })
-                    )
-                )
-            }
+            const notes = this.emulator.notes
+            if (this.building) return
+            untrack(() => {
+                if (!this.testing) {
+                    if (terminated && !wasTerminated)
+                        this.appendLog(
+                            exitEntry({
+                                executionTimeMs: this.emulator.executionTime,
+                                termination: this.emulator.termination
+                            })
+                        )
+                    for (const note of notes)
+                        if (note.id > lastNote) this.appendLog(noteEntry(note))
+                }
+                lastNote = Math.max(lastNote, notes.at(-1)?.id ?? 0)
+            })
             wasTerminated = terminated
         })
     }
@@ -621,6 +741,8 @@ export class WorkbenchSession {
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
     declare readonly debugSession: boolean
+    /** The Command line of a Project whose programs take Arguments; undefined for the others. */
+    declare readonly commandLine: CommandLineState | undefined
     declare readonly mappingColors: SourceMapColoring | undefined
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
     declare readonly executionSourceLocation: SourceLocation | undefined
@@ -628,7 +750,7 @@ export class WorkbenchSession {
      * The assembly lines that Breakpoints on C and C++ Files stand for: the first instruction of
      * each block of Generated assembly mapped to the line. The Core stops on these.
      */
-    declare readonly mappedBreakpoints: SourceBreakpoint[]
+    declare readonly mappedBreakpoints: LineBreakpoint[]
     /** Palette indices of the selected or executing source lines, which the others dim around. */
     declare readonly activeMappingColors: ReadonlySet<number> | undefined
     declare readonly retainedModelKeys: string[]
@@ -770,11 +892,33 @@ export class WorkbenchSession {
 
     /** A decision or a reset from the panel; it takes effect at the next Build. */
     applySettings(next: ProjectSettingsDecisions) {
+        const argumentsChanged = next.programArguments !== this.project.settings?.programArguments
         this.project.settings = next
         const resolved = resolveProjectSettings(this.project.language, next)
         this.emulator.setScreenHistoryBudgetMb(resolved.screenHistoryBudgetMb)
         this.emulator.setFileSystemHistoryBudgetMb(resolved.fileSystemHistoryBudgetMb)
+        this.emulator.setProgramArguments(resolved.programArguments)
+        //a Build the Arguments stopped says nothing about Arguments typed since
+        if (
+            argumentsChanged &&
+            this.failedBuild?.diagnostics.every(
+                (diagnostic) => diagnostic.source === ARGUMENTS_DIAGNOSTIC_SOURCE
+            )
+        )
+            this.failedBuild = undefined
         this.changed()
+    }
+
+    /**
+     * The Arguments typed on the Command line, saved as the Project's Setting: empty is none, which
+     * is the default, so nothing is recorded for it. Refused while the line is locked.
+     */
+    setProgramArguments(text: string) {
+        if (this.commandLine?.locked !== false) return
+        const next = { ...this.project.settings }
+        if (text === '') delete next.programArguments
+        else next.programArguments = text
+        this.applySettings(next)
     }
 
     /** Whether the Display configuration can change now: never during a Debug session. */
@@ -843,6 +987,67 @@ export class WorkbenchSession {
         } catch (e) {
             toast.error(getM68kErrorMessage(e))
         }
+    }
+
+    // ---- patching from a Listing ---------------------------------------------------------------
+
+    /**
+     * The Listing line of a pane that "Patch instruction…" may rewrite now
+     * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): an
+     * instruction of the running Executable's own Listing, shown in the current Build, while a
+     * Poke is possible (paused, not waiting for input, not ended, and the Project not read-only).
+     * A library's Listing and any other line take none.
+     */
+    patchSite(group: EditorGroup, line: number): PatchSite | undefined {
+        const patcher = this.emulator.patcher
+        const selection = group.sourceSelection
+        if (
+            !patcher ||
+            !this.pokeable ||
+            group.displayedLibraryListing ||
+            selection.sourceKind !== 'build' ||
+            selection.buildGeneration !== this.buildGeneration
+        )
+            return undefined
+        const site = patcher.site(line)
+        return site?.path === group.displayedPath && site.document === group.displayedListing
+            ? site
+            : undefined
+    }
+
+    /** Opens the prompt over a line that takes a patch, with its instruction to retype. */
+    openPatchPrompt(group: EditorGroup, line: number): boolean {
+        const patcher = this.emulator.patcher
+        const site = this.patchSite(group, line)
+        if (!patcher || !site) return false
+        group.patchPrompt?.dispose()
+        const prompt = new PatchPrompt(site, patcher, this.buildGeneration)
+        group.patchPrompt = prompt
+        void prompt.update()
+        return true
+    }
+
+    closePatchPrompt(group: EditorGroup) {
+        group.patchPrompt?.dispose()
+        group.patchPrompt = undefined
+        group.editor?.focus()
+    }
+
+    /** Writes the prompt's previewed patch as one Poke, and closes it once written. */
+    applyPatch(group: EditorGroup): boolean {
+        const prompt = group.openPatchPrompt
+        if (!prompt || !this.pokeable) return false
+        try {
+            if (!prompt.apply()) {
+                prompt.failure = 'The patch could not be written'
+                return false
+            }
+        } catch (e) {
+            prompt.failure = getM68kErrorMessage(e)
+            return false
+        }
+        this.closePatchPrompt(group)
+        return true
     }
 
     // ---- which File is shown -------------------------------------------------------------------
@@ -994,11 +1199,15 @@ export class WorkbenchSession {
         if (this.executionGroupId === group.id) this.executionGroupId = this.groups[0].id
     }
 
-    /** Whether the Build has this File: its own, or a Runtime library member it linked. */
+    /**
+     * Whether the Build has this File: its own, a Runtime library member it linked, or the Listing
+     * of a library the running program loaded.
+     */
     private existsInBuild(path: string) {
         return (
             this.emulator.buildSources?.files[path] !== undefined ||
-            this.emulator.buildLibraryFiles?.[path] !== undefined
+            this.emulator.buildLibraryFiles?.[path] !== undefined ||
+            (this.emulator.listings?.session.has(path) ?? false)
         )
     }
 
@@ -1045,8 +1254,17 @@ export class WorkbenchSession {
     }
 
     async revealSourceLocation(file: string, line: number, column = 1) {
+        const group = this.showBuildFile(file)
+        if (!group) return
+        await tick()
+        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        this.followExecutionSource()
+    }
+
+    /** Shows the Build's version of a File in the pane execution is followed in. */
+    private showBuildFile(file: string): EditorGroup | undefined {
         const buildSources = this.emulator.buildSources
-        if (!buildSources || !this.existsInBuild(file)) return
+        if (!buildSources || !this.existsInBuild(file)) return undefined
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
@@ -1063,9 +1281,25 @@ export class WorkbenchSession {
                 }
             }
         }
-        await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
-        this.followExecutionSource()
+        return group
+    }
+
+    /**
+     * Shows an address of the running program, from the Call stack or the History: its line, or,
+     * in a Listing still being generated, that Listing with its progress and then the line.
+     */
+    async revealAddress(address: bigint) {
+        let location = this.emulator.getSourceLocationFromAddress(address)
+        if (location && location.line < 0) {
+            const pending = this.emulator.listings?.session.get(location.file)
+            if (pending?.status !== 'generating') return
+            this.showBuildFile(location.file)
+            await pending.ready.catch(() => undefined)
+            await tick()
+            location = this.emulator.getSourceLocationFromAddress(address)
+        }
+        if (location && location.line >= 0)
+            await this.revealSourceLocation(location.file, location.line)
     }
 
     /**
@@ -1086,6 +1320,12 @@ export class WorkbenchSession {
     }
 
     async revealDiagnostic(diagnostic: Diagnostic) {
+        //the Arguments are typed on the Command line, at the top of the Terminal
+        if (diagnostic.source === ARGUMENTS_DIAGNOSTIC_SOURCE) {
+            this.bottomTab = 'terminal'
+            this.commandLineFocus++
+            return
+        }
         const path =
             diagnostic.file ??
             this.emulator.buildSources?.entry ??
@@ -1102,8 +1342,23 @@ export class WorkbenchSession {
     }
 
     revealCurrentInstruction() {
-        if (this.emulator.line < 0) return
-        void this.revealSourceLocation(this.emulator.currentFile, this.emulator.line)
+        const file = this.emulator.currentFile
+        if (this.emulator.line >= 0) {
+            void this.revealSourceLocation(file, this.emulator.line)
+            return
+        }
+        //in a library whose Listing is still being generated: shown with its progress at once,
+        //and at the current line once the Emulator has read it from the finished Listing
+        const pending = this.emulator.listings?.session.get(file)
+        if (pending?.status === 'generating') void this.revealWhenListed(file, pending)
+    }
+
+    private async revealWhenListed(file: string, document: ListingDocument) {
+        this.showBuildFile(file)
+        await document.ready.catch(() => undefined)
+        await tick()
+        if (this.emulator.currentFile === file && this.emulator.line >= 0)
+            await this.revealSourceLocation(file, this.emulator.line)
     }
 
     /** After Stop: every tab shows the live File again, and tabs of Files that are gone close. */
@@ -1122,17 +1377,19 @@ export class WorkbenchSession {
 
     private moveFileBreakpoints(from: string, to?: string) {
         const moved = this.emulator.breakpoints.filter((breakpoint) => breakpoint.file === from)
-        for (const breakpoint of moved) this.emulator.toggleBreakpoint(breakpoint.line, from)
+        for (const breakpoint of moved) this.toggleEmulatorBreakpoint(breakpoint)
         if (!to) return
         for (const breakpoint of moved) {
-            if (
-                !this.emulator.breakpoints.some(
-                    (candidate) => candidate.file === to && candidate.line === breakpoint.line
-                )
-            ) {
-                this.emulator.toggleBreakpoint(breakpoint.line, to)
-            }
+            const renamed = { ...breakpoint, file: to }
+            if (!this.emulator.breakpoints.some((candidate) => sameBreakpoint(candidate, renamed)))
+                this.toggleEmulatorBreakpoint(renamed)
         }
+    }
+
+    private toggleEmulatorBreakpoint(breakpoint: SourceBreakpoint) {
+        if (isLineBreakpoint(breakpoint))
+            this.emulator.toggleBreakpoint(breakpoint.line, breakpoint.file)
+        else this.emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
     }
 
     fileRenamed(from: string, to: string) {
@@ -1191,7 +1448,17 @@ export class WorkbenchSession {
     }
 
     toggleBreakpoint(line: number, group = this.groups[0]) {
-        this.emulator.toggleBreakpoint(line, group.displayedPath)
+        const listing = group.displayedListing
+        if (!listing) {
+            this.emulator.toggleBreakpoint(line, group.displayedPath)
+            return
+        }
+        //a Listing's Breakpoint is the address of the instruction on the line, in its Executable
+        //(decision 5); a line without an instruction takes none, nor does a library (decision 11)
+        if (!listing.listing || group.displayedLibraryListing) return
+        const address = instructionAddressAt(listing.listing, line)
+        if (address !== undefined)
+            this.emulator.toggleAddressBreakpoint(address, group.displayedPath)
     }
 
     // ---- execution -----------------------------------------------------------------------------
@@ -1330,6 +1597,14 @@ export class WorkbenchSession {
         const sources = this.sourceInput
         this.failedBuild = undefined
         let failure: Diagnostic[] | undefined
+        //what the Debug session's Command line shows, locked, for as long as it lasts
+        const commandLine = this.commandLine
+        this.startedCommandLine = commandLine && {
+            program: commandLine.program,
+            text: commandLine.text
+        }
+        this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
+        const clears = this.executionClears
         try {
             this.running = false
             this.building = true
@@ -1339,27 +1614,39 @@ export class WorkbenchSession {
             //only a compilation failure carries this Build's own findings: any other error leaves the
             //emulator's list as an earlier Build or check left it
             if (e instanceof CompilationFailedError) failure = e.diagnostics
-            toast.error('Error compiling code. ' + getM68kErrorMessage(e))
+            if (clears === this.executionClears)
+                toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             this.building = false
             //also after a failed build: the directive is read before the program is assembled
             this.syncDisplay()
-            const ok = this.emulator.canExecute
-            const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
-            if (!ok && diagnostics.length)
-                this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
-            this.appendLog(
-                buildEntry({
-                    ok,
-                    errors: diagnostics.filter((d) => d.severity === 'error').length,
-                    warnings: diagnostics.filter((d) => d.severity === 'warning').length,
-                    durationMs: performance.now() - started,
-                    entry: this.project.entry
-                })
-            )
-            this.bottomTab = ok ? 'terminal' : 'problems'
-            if (ok) this.revealCurrentInstruction()
+            //Stop during the Build, in its run to `main` (an input wait before it, or a long start):
+            //the person ended it, so it neither failed nor built, and the Log says nothing
+            if (clears === this.executionClears) this.finishBuild(sources, started, failure)
         }
+    }
+
+    /** What a Build that was not stopped part way leaves: its Log entry, and where it is shown. */
+    private finishBuild(sources: BuildSources, started: number, failure: Diagnostic[] | undefined) {
+        const ok = this.emulator.canExecute
+        if (this.startedCommandLine)
+            this.startedCommandLine = ok
+                ? { ...this.startedCommandLine, build: this.emulator.buildSources }
+                : undefined
+        const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
+        if (!ok && diagnostics.length)
+            this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
+        this.appendLog(
+            buildEntry({
+                ok,
+                errors: diagnostics.filter((d) => d.severity === 'error').length,
+                warnings: diagnostics.filter((d) => d.severity === 'warning').length,
+                durationMs: performance.now() - started,
+                entry: this.project.entry
+            })
+        )
+        this.bottomTab = ok ? 'terminal' : 'problems'
+        if (ok) this.revealCurrentInstruction()
     }
 
     private async runCode() {
@@ -1394,6 +1681,8 @@ export class WorkbenchSession {
     }
 
     async step() {
+        //the Build's run to `main` owns the Core until it stops there, as a Run does
+        if (this.building || this.running) return
         try {
             await this.emulator.step()
             this.revealCurrentInstruction()
@@ -1429,6 +1718,14 @@ export class WorkbenchSession {
 
     /** Ends the Debug session: the program is dropped and the editor goes back to the live Files. */
     clearExecution() {
+        this.executionClears += 1
+        this.startedCommandLine = undefined
+        //a prompt belongs to the session it was opened in: the next Build of the same Executable
+        //must not show it again, let alone write its patch
+        for (const group of this.groups) {
+            group.patchPrompt?.dispose()
+            group.patchPrompt = undefined
+        }
         this.emulator.clear()
         this.emulator.setSources(this.sourceInput)
         this.returnToLiveFiles()
@@ -1447,6 +1744,7 @@ export class WorkbenchSession {
         await new Promise((resolve) => setTimeout(resolve, 50))
         const started = performance.now()
         this.testing = true
+        this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
             this.testcasesResult = await this.emulator.test(
                 this.sourceInput,

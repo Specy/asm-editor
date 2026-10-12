@@ -1,6 +1,6 @@
 <script lang="ts">
     /** The Log: what the Workbench did, newest at the bottom. */
-    import type { LogEntry, LogTone } from '#lib/workbench/workbenchLog.ts'
+    import { noteSpans, type LogEntry, type LogTone } from '#lib/workbench/workbenchLog.ts'
 
     interface Props {
         entries: readonly LogEntry[]
@@ -34,13 +34,23 @@
 
 <div class="log" bind:this={element}>
     {#if entries.length === 0}
-        <p class="empty">Builds, test runs and program exits are recorded here.</p>
+        <p class="empty">
+            Builds, test runs, program exits and notes on what a run met are recorded here.
+        </p>
     {/if}
     {#each entries as entry (entry.id)}
         <div class="entry {entry.tone}">
             <span class="time">{time(entry)}</span>
             <span class="mark">{MARKS[entry.tone]}</span>
-            <span class="text">{entry.text}</span>
+            {#if entry.kind === 'note'}
+                <span class="text note"
+                    >{#each noteSpans(entry.text) as span, index (index)}{#if span.code}<code
+                                >{span.text}</code
+                            >{:else}{span.text}{/if}{/each}</span
+                >
+            {:else}
+                <span class="text">{entry.text}</span>
+            {/if}
         </div>
         {#each entry.details as detail, index (index)}
             <div class="entry detail {detail.tone}">
@@ -96,6 +106,16 @@
     .text {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+    }
+
+    /* what the Emulator says about the run, with its code set apart */
+    .note {
+        code {
+            font: inherit;
+            padding: 0 0.25rem;
+            border-radius: 0.2rem;
+            background-color: color-mix(in srgb, var(--hint) 16%, transparent);
+        }
     }
 
     .success .mark {

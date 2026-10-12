@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { executableKind } from '#lib/executables.ts'
     /**
      * The Project's Files as a tree, with the controls that manage them: create, upload, rename or
      * move, delete, download, and choose the Entry path: the Workbench's Explorer panel. Mutations
@@ -416,6 +417,7 @@
     async function uploadFiles(uploaded: Iterable<File>, folder = '') {
         if (locked) return
         let last: string | null = null
+        let executable: string | null = null
         for (const file of uploaded) {
             const path = joinPath(folder, file.name)
             try {
@@ -423,9 +425,14 @@
                     const replace = await Prompt.confirm(`${path} already exists. Replace it?`)
                     if (!replace) continue
                 }
-                const data = await file.arrayBuffer()
-                fileSystem.writeBytes(path, new Uint8Array(data), true)
+                const bytes = new Uint8Array(await file.arrayBuffer())
+                fileSystem.writeBytes(path, bytes, true)
                 last = path
+                //only an x86 Project runs ELFs: elsewhere an ELF is just a File
+                if (language !== 'X86') continue
+                const kind = executableKind(bytes)
+                if (kind === 'supported') executable = path
+                else if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
             } catch (error) {
                 reportFailure(error)
             }
@@ -433,6 +440,11 @@
         if (last === null) return
         expandParents(last)
         onSelect(last)
+        if (language === 'X86' && executable && executableKind(files[entry]) !== 'supported') {
+            //a Debug session may have started while the question was open
+            if ((await Prompt.confirm(`Make ${executable} the Entry file?`)) && !locked)
+                onEntryChange(executable)
+        }
     }
 
     let uploadInput: HTMLInputElement

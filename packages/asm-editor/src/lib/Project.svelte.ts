@@ -227,6 +227,12 @@ export type MemoryValue =
 export type Testcase = {
     /** What the Testcases panel calls it; without one it is named by its place in the list. */
     name?: string
+    /**
+     * x86 only: the program's Arguments for this Testcase, as typed on a Command line; without
+     * them (or with an empty field) it runs with the Project's
+     * ([binary-import.md](../../../../docs/design/binary-import.md), decision 12).
+     */
+    arguments?: string
     input: string[]
     expectedOutput: string
     startingRegisters: Record<string, bigint>
@@ -655,10 +661,12 @@ export function cleanTestcases(testcases: Testcase[]) {
     return testcases.map((original) => {
         //a name that is not text is dropped rather than shown, and no key is added to a Testcase
         //saved without one, so loading it does not count as a change
-        const { name, ...testcase } = original
+        const { name, arguments: args, ...testcase } = original
         return {
             ...testcase,
             ...(typeof name === 'string' ? { name } : {}),
+            //likewise Arguments, which only text can be
+            ...(typeof args === 'string' ? { arguments: args } : {}),
             expectedMemory: testcase.expectedMemory.map((memory) => {
                 if (memory.type === 'number-chunk') {
                     return {

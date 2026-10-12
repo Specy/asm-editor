@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vite-plus/test'
 import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
-import { appendLog, buildEntry, exitEntry, testRunEntry, type LogDraft } from './workbenchLog'
+import {
+    appendLog,
+    buildEntry,
+    exitEntry,
+    noteEntry,
+    noteSpans,
+    testRunEntry,
+    type LogDraft
+} from './workbenchLog'
 
 const testcase: Testcase = {
     input: [],
@@ -153,5 +161,47 @@ describe('appendLog', () => {
         log = appendLog(log, draft, 3, 102, 2)
         expect(log.map((entry) => entry.id)).toEqual([2, 3])
         expect(log[1]).toMatchObject({ id: 3, time: 102, text: 'x' })
+    })
+})
+
+describe('noteEntry', () => {
+    it('records a note on the run in its own tone', () => {
+        expect(
+            noteEntry({
+                tone: 'warning',
+                text: '`ptrace` (syscall 101) is not implemented; the call returned ENOSYS'
+            })
+        ).toEqual({
+            kind: 'note',
+            tone: 'warning',
+            text: '`ptrace` (syscall 101) is not implemented; the call returned ENOSYS',
+            details: []
+        })
+        expect(noteEntry({ tone: 'info', text: 'x' }).tone).toBe('info')
+    })
+})
+
+describe('noteSpans', () => {
+    it('sets the code between backticks apart', () => {
+        expect(
+            noteSpans('The program ran `vmovd xmm0, edi` at `0x555555555195`, which it cannot')
+        ).toEqual([
+            { text: 'The program ran ', code: false },
+            { text: 'vmovd xmm0, edi', code: true },
+            { text: ' at ', code: false },
+            { text: '0x555555555195', code: true },
+            { text: ', which it cannot', code: false }
+        ])
+        expect(noteSpans('`getcpu` (syscall 309)')).toEqual([
+            { text: 'getcpu', code: true },
+            { text: ' (syscall 309)', code: false }
+        ])
+    })
+
+    it('reads text without code, or with an unpaired backtick, as plain text', () => {
+        expect(noteSpans('libz.so.6 is not one of the bundled libraries')).toEqual([
+            { text: 'libz.so.6 is not one of the bundled libraries', code: false }
+        ])
+        expect(noteSpans('a ` b')).toEqual([{ text: 'a ` b', code: false }])
     })
 })

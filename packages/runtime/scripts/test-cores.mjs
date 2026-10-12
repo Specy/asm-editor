@@ -363,6 +363,9 @@ async function main() {
                                 .join('\n')}`
                         )
                     core.setUndoEnabled(false)
+                    //argv as the editor passes it: the program's name alone, which crt0 hands to main
+                    if (TARGETS[target].core !== 'x86')
+                        core.setProgramArguments([`./${program.name}`])
                     core.initialize(true)
                     const stdinPath = join(corpus, `${program.name}.in`)
                     const inputFiles = Object.fromEntries(

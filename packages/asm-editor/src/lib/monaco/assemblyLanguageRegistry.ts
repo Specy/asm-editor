@@ -232,24 +232,72 @@ async function loadMarsDescriptor(
 }
 
 async function loadX86Descriptor(monacoInstance: MonacoType): Promise<AssemblyLanguageDescriptor> {
-    const [grammar, language, projectLanguage, textFeatures] = await Promise.all([
+    const [grammar, language, projectLanguage, textFeatures, listingProviders] = await Promise.all([
         import('#lib/languages/X86/X86-grammar.ts'),
         import('#lib/languages/X86/X86-language.ts'),
         import('#lib/languages/service/projectAssemblyLanguage.ts'),
-        import('#lib/languages/service/assemblyText.ts')
+        import('#lib/languages/service/assemblyText.ts'),
+        import('./listingProviders')
     ])
+    const projectHover = projectLanguage.createProjectSymbolHoverProvider(monacoInstance, {
+        comment: ';',
+        dialect: 'x86'
+    })
+    const providers = projectProviderSet(monacoInstance, projectLanguage, textFeatures, {
+        completion: language.createX86CompletionProvider(monacoInstance),
+        hover: language.createX86HoverProvider(monacoInstance),
+        signatureHelp: language.createX86SignatureHelpProvider(monacoInstance),
+        projectOptions: { comment: ';', dialect: 'x86' },
+        textOptions: language.X86_TEXT_OPTIONS,
+        insightOptions: { bits: 64, comment: ';', dialect: 'x86' },
+        projectHover: false
+    })
+    //an Executable's Listing is x86 assembly, highlighted and documented as any, but read for
+    //navigation from the Listing rather than from the Project's Files
+    const { withoutListings } = listingProviders
+    const listing = listingProviders.createListingProviders(monacoInstance)
     return {
         id: 'x86',
         monarch: grammar.X86Language,
         configuration: grammar.X86LanguageConfiguration,
-        providers: projectProviderSet(monacoInstance, projectLanguage, textFeatures, {
-            completion: language.createX86CompletionProvider(monacoInstance),
-            hover: language.createX86HoverProvider(monacoInstance),
-            signatureHelp: language.createX86SignatureHelpProvider(monacoInstance),
-            projectOptions: { comment: ';', dialect: 'x86' },
-            textOptions: language.X86_TEXT_OPTIONS,
-            insightOptions: { bits: 64, comment: ';', dialect: 'x86' }
-        })
+        providers: {
+            ...providers,
+            //in the order the other assembly languages register theirs
+            hover: [
+                ...(providers.hover ?? []).slice(0, 1),
+                withoutListings(projectHover, 'provideHover'),
+                ...(providers.hover ?? []).slice(1),
+                listing.hover
+            ],
+            documentSymbols: [
+                ...(providers.documentSymbols ?? []).map((provider) =>
+                    withoutListings(provider, 'provideDocumentSymbols')
+                ),
+                listing.documentSymbols
+            ],
+            definitions: [
+                ...(providers.definitions ?? []).map((provider) =>
+                    withoutListings(provider, 'provideDefinition')
+                ),
+                listing.definition
+            ],
+            references: [listing.references],
+            links: (providers.links ?? []).map((provider) =>
+                withoutListings(provider, 'provideLinks', { links: [] })
+            ),
+            folding: [
+                ...(providers.folding ?? []).map((provider) =>
+                    withoutListings(provider, 'provideFoldingRanges')
+                ),
+                listing.folding
+            ],
+            formatting: (providers.formatting ?? []).map((provider) =>
+                withoutListings(provider, 'provideDocumentFormattingEdits')
+            ),
+            rangeFormatting: (providers.rangeFormatting ?? []).map((provider) =>
+                withoutListings(provider, 'provideDocumentRangeFormattingEdits')
+            )
+        }
     }
 }
 

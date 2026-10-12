@@ -6,6 +6,11 @@
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import FileTabs from './FileTabs.svelte'
     import LibraryMemberNotice from './LibraryMemberNotice.svelte'
+    import ListingNotice from './ListingNotice.svelte'
+    import { LINE_KIND } from '#lib/listing/listing.ts'
+    import type { ListingModel } from '#lib/monaco/listingModels.ts'
+    import type { EditorLineAction } from '#lib/monaco/editorLineActions.ts'
+    import PatchPromptView from './PatchPrompt.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
@@ -17,7 +22,7 @@
         controls = false,
         fill = false
     }: { group: EditorGroup; share?: number; controls?: boolean; fill?: boolean } = $props()
-    const { session } = useWorkbench()
+    const { session, ui } = useWorkbench()
     const emulator = session.emulator
     let dragDepth = $state(0)
     /**
@@ -32,6 +37,46 @@
         }
     })
     const SPLIT_ZONE = 1 / 3
+
+    /**
+     * The displayed Listing, once generated, as the editor and the Listing providers read it: with
+     * the lines a Debug session patched as memory holds them.
+     */
+    const listingModel = $derived.by<ListingModel | undefined>(() => {
+        const document = group.displayedListing
+        const listing = group.displayedListingView
+        return document && listing
+            ? {
+                  listing,
+                  bytes: document.bytes,
+                  library: group.displayedLibraryListing,
+                  patches: group.displayedPatches?.lines,
+                  //a phone's editor is narrow: the gutter prints the low digits of addresses
+                  shortAddresses: ui.deviceClass === 'phone'
+              }
+            : undefined
+    })
+    const patchedLines = $derived([...(group.displayedPatches?.lines.keys() ?? [])])
+    /**
+     * "Patch instruction…" on an instruction of the running Executable's Listing
+     * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
+     * menu, and on Space, as x64dbg's disassembly assembles; the Listing is read-only, so Space
+     * types nothing there.
+     */
+    const listingActions: EditorLineAction[] = [
+        {
+            id: 'asm-editor.patchInstruction',
+            label: 'Patch instruction…',
+            keybindings: (monaco) => [monaco.KeyCode.Space],
+            available: (line) => session.patchSite(group, line) !== undefined,
+            run: (line) => void session.openPatchPrompt(group, line)
+        }
+    ]
+    /** A Listing's Breakpoints go on its instructions, no other line. */
+    const listingBreakable = $derived.by(() => {
+        const kinds = listingModel?.listing.lines.kinds
+        return kinds ? (line: number) => kinds[line] === LINE_KIND.instruction : undefined
+    })
 
     function overSplitZone(event: DragEvent) {
         if (!session.canSplitWithDrop()) return false
@@ -82,7 +127,17 @@
     onfocusin={() => session.focusEditorGroup(group)}
 >
     <FileTabs {group} />
-    {#if group.displayedLibraryMember && group.displayedFile}
+    {#if group.displayedListing}
+        <ListingNotice
+            document={group.displayedListing}
+            library={group.displayedLibraryListing}
+            patchable={!group.displayedLibraryListing &&
+                session.emulator.patcher !== undefined &&
+                group.sourceView === 'snapshot' &&
+                session.debugSession}
+            touch={!ui.viewport.canHover}
+        />
+    {:else if group.displayedLibraryMember && group.displayedFile}
         <LibraryMemberNotice
             path={group.displayedPath}
             onShowSource={group.libraryMemberSourceAvailable
@@ -108,7 +163,10 @@
                     ? {
                           key: group.modelKey,
                           value: group.displayedCode,
-                          identity: group.modelIdentity
+                          identity: group.modelIdentity,
+                          //a Listing changes only where a Debug session patches a line; a
+                          //new document is new text, with a model of its own
+                          generatedFrom: group.displayedListing
                       }
                     : undefined}
                 modelKey={group.modelKey}
@@ -146,6 +204,11 @@
                           })
                     : []}
                 on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1, group)}
+                listing={listingModel}
+                canBreakAt={listingBreakable}
+                {patchedLines}
+                lineNote={group.runningWithin}
+                lineActions={listingModel && !listingModel.library ? listingActions : undefined}
                 bind:editor={group.editor}
                 code={group.displayedCode}
                 breakpoints={group.displayedBreakpoints}
@@ -161,8 +224,38 @@
                 hasError={emulator.errors.length > 0}
             />
         {/if}
+        {#if group.openPatchPrompt}
+            <PatchPromptView
+                prompt={group.openPatchPrompt}
+                available={session.pokeable}
+                onapply={() => session.applyPatch(group)}
+                onclose={() => session.closePatchPrompt(group)}
+                onrelease={() => group.editor?.focus()}
+            />
+        {/if}
         {#if !group.displayedPath}
             <EmptyEditor {group} compact={session.groups.length > 1} />
+        {:else if group.displayedListing?.status === 'generating'}
+            {@const progress = group.displayedListing.progress}
+            <div class="file-notice">
+                <h2>Generating the Listing…</h2>
+                <p>
+                    Disassembling {group.displayedListing.name}{progress === undefined
+                        ? ''
+                        : `: ${Math.round(progress * 100)}%`}
+                </p>
+                <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
+            </div>
+        {:else if group.displayedListing?.status === 'failed'}
+            <div class="file-notice">
+                <h2>No Listing</h2>
+                <p>
+                    The Listing of {group.displayedListing.name} could not be generated: {group
+                        .displayedListing.error}
+                </p>
+            </div>
+        {:else if group.displayedListing}
+            <!-- an Executable is shown as its Listing, not as the bytes it is -->
         {:else if group.displayedFile?.encoding === 'base64'}
             <div class="file-notice">
                 <h2>Binary file</h2>
@@ -241,6 +334,10 @@
     .file-notice p {
         max-width: 30rem;
         opacity: 0.72;
+    }
+    .file-notice progress {
+        width: min(16rem, 80%);
+        accent-color: var(--accent);
     }
     .floating-controls {
         position: absolute;

@@ -66,6 +66,7 @@
             display: project.display,
             screenHistoryBudgetMb: effective.screenHistoryBudgetMb,
             fileSystemHistoryBudgetMb: effective.fileSystemHistoryBudgetMb,
+            programArguments: effective.programArguments,
             peripherals: { fileSystem: project.fileSystem }
         }}
     >

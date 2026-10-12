@@ -74,14 +74,12 @@
 >
     <CallStack
         stack={emulator.callStack}
-        onGoToInstruction={(address) => {
-            const location = emulator.getSourceLocationFromAddress(address)
-            if (!location) return
-            void session.revealSourceLocation(location.file, location.line)
-        }}
+        onGoToInstruction={(address) => void session.revealAddress(address)}
         onGoToLabel={(label) => {
             if (!label.file) return
-            void session.revealSourceLocation(label.file, label.line)
+            //a function in a Listing still being generated is found by its address once it is
+            if (label.line < 0) void session.revealAddress(label.address)
+            else void session.revealSourceLocation(label.file, label.line)
         }}
     />
 </ToggleableDraggable>
@@ -102,7 +100,8 @@
         on:highlight={(e) => {
             const step = e.detail
             if (!step.file) return
-            void session.revealSourceLocation(step.file, step.line, 0)
+            if (step.line < 0) void session.revealAddress(BigInt(step.pc))
+            else void session.revealSourceLocation(step.file, step.line, 0)
         }}
         steps={emulator.latestSteps}
     />

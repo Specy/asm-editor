@@ -36,7 +36,12 @@ afterEach(() => {
     document.body.innerHTML = ''
 })
 
-function render(testcases: Testcase[], results: TestcaseResult[] = [], editable = true) {
+function render(
+    testcases: Testcase[],
+    results: TestcaseResult[] = [],
+    editable = true,
+    language: 'M68K' | 'X86' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'Z80' = 'M68K'
+) {
     const props = $state({ testcases, testcasesResult: results })
     const target = document.createElement('div')
     document.body.appendChild(target)
@@ -56,7 +61,7 @@ function render(testcases: Testcase[], results: TestcaseResult[] = [], editable 
                 registerNames: ['D0', 'D1', 'A0'],
                 startingRegisterNames: ['D0', 'D1', 'A0'],
                 systemSize: RegisterSize.Long,
-                language: 'M68K',
+                language,
                 editable
             }
         })
@@ -311,6 +316,43 @@ describe('TestcasesList', () => {
             'Sum two inputs (copy)',
             undefined
         ])
+    })
+
+    it('gives an x86, MIPS or RISC-V Testcase Arguments of its own, an empty field being none', () => {
+        const { target, props } = render([testcaseWith({})], [], true, 'X86')
+        const field = target.querySelector<HTMLInputElement>('input.arguments')!
+        expect(field.placeholder).toBe("the Project's Arguments")
+        type(field, 'hunter2 "two words"')
+        expect(props.testcases[0].arguments).toBe('hunter2 "two words"')
+        expect(target.querySelector('.problem')).toBeNull()
+        type(field, "'open")
+        expect(target.querySelector('.problem')?.textContent).toBe(
+            "The single quote (') at column 1 is never closed"
+        )
+        type(field, '')
+        expect('arguments' in props.testcases[0]).toBe(false)
+        //MIPS and RISC-V programs take them too, M68K and Z80 programs none
+        for (const language of ['MIPS', 'RISC-V', 'RISC-V-64'] as const)
+            expect(
+                render([testcaseWith({})], [], true, language).target.querySelector(
+                    'input.arguments'
+                ),
+                language
+            ).not.toBeNull()
+        for (const language of ['M68K', 'Z80'] as const)
+            expect(
+                render([testcaseWith({})], [], true, language).target.querySelector(
+                    'input.arguments'
+                ),
+                language
+            ).toBeNull()
+    })
+
+    it('shows the Arguments of a read-only x86 Testcase that has some', () => {
+        const { target } = render([testcaseWith({ arguments: 'hunter2' })], [], false, 'X86')
+        expect(target.querySelector('pre.arguments')?.textContent).toBe('hunter2')
+        const none = render([testcaseWith({})], [], false, 'X86')
+        expect(none.target.querySelector('.arguments')).toBeNull()
     })
 
     it('shows a read-only Testcase without anything to edit', () => {

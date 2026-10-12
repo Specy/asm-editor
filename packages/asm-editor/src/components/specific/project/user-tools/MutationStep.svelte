@@ -200,6 +200,10 @@
                 would have the row drawing every one of them as clear
             -->
             <div class="column pokes">
+                {#if step.title}
+                    <!-- what the Poke was for, such as a patched instruction, above the bytes it wrote -->
+                    <div class="poke-title">{step.title}</div>
+                {/if}
                 {#each pokes as write, i (i)}
                     <!--
                         one sentence, in the words the instruction rows below use, so the two
@@ -234,7 +238,7 @@
                 <div class="stretch">Undo stops here: effects are not recorded.</div>
             {/if}
             {#if step.stretch}
-                <!-- a Step that ran through the Runtime library: one Undo takes all of it back -->
+                <!-- a Step that ran through library code: one Undo takes all of it back -->
                 <div
                     class="stretch"
                     title={step.undoable === false
@@ -395,6 +399,12 @@
 
     .poke-write {
         font-size: 0.9rem;
+        overflow-wrap: anywhere;
+    }
+
+    .poke-title {
+        font-size: 0.9rem;
+        font-weight: 500;
         overflow-wrap: anywhere;
     }
 

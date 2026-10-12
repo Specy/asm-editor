@@ -46,13 +46,18 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 
 ## Breakpoint
 
-A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
 
 ## Poke
 
 A change a person or the coding agent makes to one register or memory value of a **Debug session** between two instructions, kept in the same Undo history as the instructions as a step of its own. Distinct from a mutation, which is a write the program made, and from a **Testcase**'s starting values, which are preset before the run and never undone.
-_Avoid_: edit, value edit, override, patch, set value, host write, manual write
+_Avoid_: edit, value edit, override, set value, host write, manual write; patch, except for the **Patch** of an instruction
+
+## Patch
+
+A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes.
+_Avoid_: edit, binary patch, hot patch, modification
 
 ## Peripheral
 
@@ -73,6 +78,16 @@ The Peripheral representing pointing input for a program interacting with the **
 ## Terminal
 
 The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+
+## Command line
+
+The **Terminal**'s first line, `$ ./crackme hunter2`: the name an x86, MIPS or RISC-V program is started under followed by its **Arguments**, editable outside a **Debug session** and locked during one to what that run started with. It says how Build and Run start the program; it is not a shell and runs no commands.
+_Avoid_: prompt, shell, run line
+
+## Arguments
+
+The words an x86, MIPS or RISC-V program receives after its own name in `argv`, a **Setting** of the **Project** edited on the **Command line**. A **Testcase** can bring its own. MIPS and RISC-V programs find `argc` and `argv` in `a0` and `a1`, stored above the stack ([ADR 0046](./docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
+_Avoid_: args, parameters, command-line options
 
 ## Line discipline
 
@@ -214,12 +229,37 @@ The **Project**'s configured path from which a Build begins, `main.<ext>` by def
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
+The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing.
 _Avoid_: main file, active file, selected file, open file
+
+## Executable
+
+A **File** holding a program already built for the **Project**'s **Target** by a compiler and linker outside the editor, which a Build loads as it is instead of assembling. Today only an x86-64 Linux ELF in an x86 Project; its own symbols may have been stripped. See [the binary import design](./docs/design/binary-import.md).
+_Avoid_: binary (any File that is not text is binary), imported binary, compiled program, ELF (as a noun)
+
+## Listing
+
+The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it.
+_Avoid_: disassembly (the decoding that produces it), dump, decompilation, listing file
+
+## Invented name
+
+A name the **Listing** gives an address its **Executable** names nowhere: `FUN_<adjective>_<animal>` for a function, `DAT_<adjective>_<animal>` for data. It is derived from the address in the file, so it is the same on every open and for everyone, from word lists that are never edited once released. Distinct from the names the bytes give (symbols, `name@plt`, an `s_` string's text) and from the numbered `.LAB_n` of a jump target. See [ADR 0045](./docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
+_Avoid_: random name, generated name, placeholder name
+
+## Bundled library
+
+One of the five Linux shared libraries the x86 **Core** ships for the **Executables** that need them, from one Ubuntu release: glibc's dynamic linker, `libc.so.6` and `libm.so.6`, and GCC's `libstdc++.so.6` and `libgcc_s.so.1`. An Executable that needs any other library does not start. Unrelated to the **Runtime library**: an Executable was linked against glibc elsewhere and cannot use the editor's library.
+_Avoid_: system libraries, libc (when all five are meant), runtime
+
+## Library code
+
+The code a Step runs through in one go rather than entering, unless the _Step into library code_ **Preference** is on: a **Runtime library**'s **Library members** and the **Start unit**, shown read-only under `@runtime/`, and the shared libraries an **Executable** loads, each shown as its **Listing** under `@lib/<soname>` (`@lib/libc.so.6`). Neither path is a **File** of the **Project**, and a library's Listing takes no **Breakpoint**. An Executable's own PLT stubs are stepped through as library code too.
+_Avoid_: system code, external code, foreign code
 
 ## Displayed file
 
-The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation.
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. An **Executable** is displayed as its **Listing**.
 
 ## Build snapshot
 
@@ -246,17 +286,17 @@ _Avoid_: inspectors, trackers, user tools, floating panels
 
 ## Memory region
 
-A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. The memory view draws a data or reserved region in chunks, one for each data label in it, so the variables of a section read apart. Distinct from a page, which is the fixed-size window the memory view shows at a time.
+A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack, the program's **Arguments** and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. The Arguments region sits above the stack and holds what the program was started with, as the Core wrote it at the start: the `argv` array and its strings ("Arguments" on MIPS and RISC-V), or on x86 the whole Linux process-start block with the environment and the auxiliary vector ("Arguments and environment"), its parts named like data labels (`argv`, `argv[1]`). A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. The memory view draws a data or reserved region in chunks, one for each data label in it, so the variables of a section read apart. Distinct from a page, which is the fixed-size window the memory view shows at a time.
 _Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zone, memory map entry
 
 ## Log
 
-The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it). Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it), followed by notes on what the program met that the **Emulator** lacks, such as a system call it does not implement or an instruction it cannot run. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
 _Avoid_: output, build output, console
 
 ## Settings
 
-Per-Project configuration that changes what the **Emulator** or the program does: the undo history size and the separate **Screen** and **FileSystem** undo budgets. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86, MIPS or RISC-V program's **Arguments**. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
 _Avoid_: preferences, options, config, global settings
 
 ## Preferences
@@ -275,7 +315,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a program: starting registers/memory/input (and, on x86, MIPS and RISC-V, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 

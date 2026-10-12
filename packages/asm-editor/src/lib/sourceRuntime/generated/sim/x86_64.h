@@ -660,6 +660,17 @@ static inline long sim_times(void *buffer) {
     return rax;
 }
 
+/** ptrace, syscall 101. */
+static inline long sim_ptrace(long value1, long value2, long value3, long value4) {
+    register long rax __asm__("rax") = 101;
+    register long rdi __asm__("rdi") = value1;
+    register long rsi __asm__("rsi") = value2;
+    register long rdx __asm__("rdx") = value3;
+    register long r10 __asm__("r10") = value4;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10) : "rcx", "r11", "memory");
+    return rax;
+}
+
 /** getuid, syscall 102. */
 static inline long sim_getuid(void) {
     register long rax __asm__("rax") = 102;
@@ -940,6 +951,19 @@ static inline long sim_time(void *buffer) {
     return rax;
 }
 
+/** futex, syscall 202. */
+static inline long sim_futex(long value1, long value2, long value3, long value4, long value5, long value6) {
+    register long rax __asm__("rax") = 202;
+    register long rdi __asm__("rdi") = value1;
+    register long rsi __asm__("rsi") = value2;
+    register long rdx __asm__("rdx") = value3;
+    register long r10 __asm__("r10") = value4;
+    register long r8 __asm__("r8") = value5;
+    register long r9 __asm__("r9") = value6;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
+    return rax;
+}
+
 /** sched_getaffinity, syscall 204. */
 static inline long sim_sched_getaffinity(long pid, long size, void *mask) {
     register long rax __asm__("rax") = 204;
@@ -1188,6 +1212,25 @@ static inline long sim_ppoll(void *fds, long nfds, const void *timeout, const vo
     return rax;
 }
 
+/** set_robust_list, syscall 273. */
+static inline long sim_set_robust_list(long value1, long value2) {
+    register long rax __asm__("rax") = 273;
+    register long rdi __asm__("rdi") = value1;
+    register long rsi __asm__("rsi") = value2;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi) : "rcx", "r11", "memory");
+    return rax;
+}
+
+/** get_robust_list, syscall 274. */
+static inline long sim_get_robust_list(long value1, long value2, long value3) {
+    register long rax __asm__("rax") = 274;
+    register long rdi __asm__("rdi") = value1;
+    register long rsi __asm__("rsi") = value2;
+    register long rdx __asm__("rdx") = value3;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
+    return rax;
+}
+
 /** utimensat, syscall 280. */
 static inline long sim_utimensat(long dirfd, const void *path, const void *times, long flags) {
     register long rax __asm__("rax") = 280;
@@ -1296,6 +1339,17 @@ static inline long sim_pwritev2(long fd, const void *iov, long count, long offse
     register long r8 __asm__("r8") = value;
     register long r9 __asm__("r9") = number;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
+    return rax;
+}
+
+/** rseq, syscall 334. */
+static inline long sim_rseq(long value1, long value2, long value3, long value4) {
+    register long rax __asm__("rax") = 334;
+    register long rdi __asm__("rdi") = value1;
+    register long rsi __asm__("rsi") = value2;
+    register long rdx __asm__("rdx") = value3;
+    register long r10 __asm__("r10") = value4;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10) : "rcx", "r11", "memory");
     return rax;
 }
 

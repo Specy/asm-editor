@@ -1,10 +1,14 @@
 <script lang="ts">
     /**
-     * The Terminal tab: the Emulator's runtime errors, then the program's output, with a caret
-     * where a read waits for what is typed. It follows the end as the program writes.
+     * The Terminal tab: the Command line of a program that takes Arguments (x86, MIPS, RISC-V), then
+     * the Emulator's runtime errors and the program's output, with a caret where a read waits for
+     * what is typed. It follows the end as the program writes. The Command line stays above the transcript rather than scrolling with it,
+     * and the transcript does not repeat it.
      */
     import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'
     import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+    import type { CommandLineState } from '#lib/workbench/WorkbenchSession.svelte.ts'
+    import CommandLine from './CommandLine.svelte'
 
     interface Props {
         terminal: Terminal
@@ -19,6 +23,11 @@
         interactive?: boolean
         /** Whether the output's escape sequences are drawn: the x86 Target's. */
         escapes?: boolean
+        /** The Command line above the transcript, for a Target whose programs take Arguments. */
+        commandLine?: CommandLineState
+        onCommandLineChange?: (text: string) => void
+        /** A change asks the Command line for the keyboard. */
+        commandLineFocus?: number
     }
 
     let {
@@ -26,9 +35,16 @@
         errors = '',
         visible = true,
         interactive = false,
-        escapes = false
+        escapes = false,
+        commandLine,
+        onCommandLineChange = () => {},
+        commandLineFocus = 0
     }: Props = $props()
 </script>
+
+{#if commandLine}
+    <CommandLine {commandLine} onChange={onCommandLineChange} focusRequest={commandLineFocus} />
+{/if}
 
 <TerminalConsole
     {terminal}

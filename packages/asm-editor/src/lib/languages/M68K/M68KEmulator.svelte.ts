@@ -32,6 +32,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    isLineBreakpoint,
     makeLabelColor,
     type MutationOperation,
     type PokeWrite,
@@ -583,7 +584,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const interpreter = this.requireInterpreter()
         const budget = sliceInstructionBudget(request, M68K_INSTRUCTIONS_PER_MS)
         const isLastSlice = budget >= request.instructionBudget
-        const parsedBreakpoints = request.breakpoints
+        //a Listing's address Breakpoints are x86's alone
+        const parsedBreakpoints = request.breakpoints.filter(isLineBreakpoint)
         const hasBreakpoints = parsedBreakpoints.length > 0
         const execution = this.executionController.capture()
         //a trap is one instruction of progress but can be a whole screen of work, so the budget says

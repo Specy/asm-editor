@@ -287,5 +287,5 @@ GCC calls these on 32-bit Targets for 64-bit operations the hardware lacks, and 
 - **C++**: no exceptions (`operator new` aborts on exhaustion), no RTTI, no C++ standard library beyond `<new>` and the C wrappers (no `<iostream>`, `<string>`, `<vector>`, `<initializer_list>`). `<cstring>` keeps C's non-const `strchr` family. `std::nan` is not provided.
 - No threads: no locks, no `errno` per thread, no `thrd_*`.
 
-- **Arguments**: MIPS/RISC-V startup calls `main(0, argv)` with a valid `{ NULL }` array. x86 startup uses the loader's Linux arguments.
+- **Arguments**: MIPS/RISC-V startup calls `main(argc, argv)` with what the Core stored above the stack: `argv[0]` is the program's name (`./main` for `main.c`), the Command line's Arguments follow, and `argv[argc]` is NULL; the environment is empty. A Core that was given no arguments leaves `argc` 0 and a valid `{ NULL }` array. x86 startup uses the loader's Linux arguments.
 - **ABI scope**: required symbols, public function types, layouts and constants are frozen per target. Top-level C `restrict` qualifications are not part of function types; mangled type probes cannot encode that annotation. Internal implementation symbols are excluded.

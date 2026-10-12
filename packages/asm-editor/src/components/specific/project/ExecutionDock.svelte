@@ -252,7 +252,7 @@
                 type="button"
                 class="tool primary"
                 onclick={() => (running ? onPause() : onRun())}
-                disabled={executionDisabled}
+                disabled={executionDisabled || building}
                 title={running ? 'Pause the program' : 'Run to the end or the next breakpoint'}
             >
                 <Icon size={0.8}>
@@ -280,7 +280,7 @@
             <button
                 type="button"
                 class="tool emphasis"
-                disabled={executionDisabled || running}
+                disabled={executionDisabled || running || building}
                 onclick={onStep}
                 title="Run one instruction"
             >

@@ -3,9 +3,14 @@ import { z } from 'zod'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
     InterpreterStatus,
+    isLineBreakpoint,
+    sameBreakpoint,
     type RegisterFile,
-    type RegisterSize
+    type RegisterSize,
+    type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { instructionAddressAt } from '#lib/listing/listing.ts'
+import { breakpointLine } from '#lib/listing/listingBreakpoints.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { delay } from '#lib/utils.ts'
 import { compilationStatus, sourceLanguage } from '#lib/sourceCompilation/records.ts'
@@ -234,6 +239,51 @@ export function getFile(
         return { path: entry, content: context.getEditorCode() }
     }
     return null
+}
+
+/**
+ * A File's text as the breakpoint tools read it, or the running program's Listing at its path,
+ * which is what the editor shows for an Executable, with any line the session patched as memory
+ * holds it, and, under `@lib/`, for a library.
+ */
+function fileOf(
+    context: DefaultCodingAgentToolContext,
+    emulator: Emulator,
+    path: string
+): { path: string; content: string } | null {
+    const document = emulator.listings?.session.get(path)
+    const patched = emulator.patcher?.patched
+    const listing =
+        patched?.document === document && patched?.path === path
+            ? patched.listing
+            : document?.listing
+    return listing ? { path, content: listing.text } : getFile(context, path)
+}
+
+/** A Listing Breakpoint's run-time address, in hex. */
+function listingAddress(emulator: Emulator, breakpoint: { file: string; address: number }) {
+    const base = emulator.listings?.session.get(breakpoint.file)?.base ?? 0
+    return `0x${(breakpoint.address + base).toString(16)}`
+}
+
+/**
+ * The Breakpoint a 0-based line stands for: the line, or on the running Executable's Listing the
+ * address of the instruction on it. A string says why the line takes none.
+ */
+function breakpointAt(emulator: Emulator, path: string, line: number): SourceBreakpoint | string {
+    const document = emulator.listings?.session.get(path)
+    if (!document) return { file: path, line }
+    if (emulator.listings?.isLibrary(path))
+        return `${path} is the Listing of a library; Breakpoints go in the Executable's own Listing.`
+    const address = document.listing && instructionAddressAt(document.listing, line)
+    return address === undefined
+        ? `Line ${line + 1} of ${path} holds no instruction.`
+        : { file: path, address }
+}
+
+function toggleBreakpoint(emulator: Emulator, breakpoint: SourceBreakpoint) {
+    if (isLineBreakpoint(breakpoint)) emulator.toggleBreakpoint(breakpoint.line, breakpoint.file)
+    else emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
 }
 
 export function setFile(context: DefaultCodingAgentToolContext, path: string, content: string) {
@@ -851,15 +901,19 @@ function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
 
                 const items = filteredBreakpoints.map((breakpoint) => {
                     const bpFile = breakpoint.file ?? entry
-                    const fileObj = getFile(context, bpFile)
+                    const fileObj = fileOf(context, emulator, bpFile)
                     const content = fileObj?.content ?? ''
                     const lines = content.length === 0 ? [''] : content.split('\n')
-                    const lineNum = breakpoint.line + 1
+                    const lineNum = breakpointLine(breakpoint, emulator.listings) + 1
 
                     const snippetInfo = formatBreakpointSnippet(lines, lineNum)
                     return {
                         file: bpFile,
-                        line: lineNum,
+                        line: lineNum > 0 ? lineNum : null,
+                        //a Listing's Breakpoint is an address in its Executable
+                        ...(isLineBreakpoint(breakpoint)
+                            ? {}
+                            : { address: listingAddress(emulator, breakpoint) }),
                         isOutOfBounds: snippetInfo.isOutOfBounds,
                         snippet: snippetInfo.snippet,
                         context: snippetInfo.context
@@ -976,7 +1030,7 @@ function resolveBreakpointLocation(
             }
         }
 
-        const fileObj = getFile(context, resolvedFile)
+        const fileObj = fileOf(context, emulator, resolvedFile)
         if (!fileObj) {
             return {
                 success: false,
@@ -997,7 +1051,7 @@ function resolveBreakpointLocation(
     const allFiles = getAllProjectFiles(context)
     const targetPath =
         path ?? context.getActivePath?.() ?? emulator.currentFile ?? getEffectiveEntry(context)
-    const fileObj = getFile(context, targetPath)
+    const fileObj = fileOf(context, emulator, targetPath)
     if (!fileObj) {
         return {
             success: false,
@@ -1151,15 +1205,20 @@ function createSetBreakpointTool(context: DefaultCodingAgentToolContext) {
 
                 const { targetPath, lineNum, lines } = resolution
                 const lineIndex = lineNum - 1
+                const breakpoint = breakpointAt(emulator, targetPath, lineIndex)
+                if (typeof breakpoint === 'string') {
+                    return toolRun.failure('invalid_input', breakpoint, {
+                        retryable: true,
+                        nextAction: 'Choose a line with an instruction of the program.'
+                    })
+                }
 
-                const alreadySet = (emulator.breakpoints ?? []).some(
-                    (b) =>
-                        (b.file ?? getEffectiveEntry(context)) === targetPath &&
-                        b.line === lineIndex
+                const alreadySet = (emulator.breakpoints ?? []).some((b) =>
+                    sameBreakpoint({ ...b, file: b.file ?? getEffectiveEntry(context) }, breakpoint)
                 )
 
                 if (!alreadySet) {
-                    emulator.toggleBreakpoint(lineIndex, targetPath)
+                    toggleBreakpoint(emulator, breakpoint)
                 }
 
                 const snippetInfo = formatBreakpointSnippet(lines, lineNum)
@@ -1232,7 +1291,7 @@ function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
                     })
 
                     for (const b of toRemove) {
-                        emulator.toggleBreakpoint(b.line, b.file ?? entry)
+                        toggleBreakpoint(emulator, { ...b, file: b.file ?? entry })
                     }
 
                     return toolRun.success({
@@ -1258,13 +1317,16 @@ function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
 
                 const { targetPath, lineNum } = resolution
                 const lineIndex = lineNum - 1
+                const breakpoint = breakpointAt(emulator, targetPath, lineIndex)
 
-                const isSet = (emulator.breakpoints ?? []).some(
-                    (b) => (b.file ?? entry) === targetPath && b.line === lineIndex
-                )
+                const isSet =
+                    typeof breakpoint !== 'string' &&
+                    (emulator.breakpoints ?? []).some((b) =>
+                        sameBreakpoint({ ...b, file: b.file ?? entry }, breakpoint)
+                    )
 
                 if (isSet) {
-                    emulator.toggleBreakpoint(lineIndex, targetPath)
+                    toggleBreakpoint(emulator, breakpoint)
                 }
 
                 return toolRun.success({
@@ -1646,7 +1708,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         ? location.line
                         : emulator.getLineFromAddress(parsedAddress)
 
-                    const fileContent = getFile(context, targetFile)?.content ?? ''
+                    const fileContent = fileOf(context, emulator, targetFile)?.content ?? ''
                     const line =
                         lineIndex != null && lineIndex >= 0
                             ? formatSourceLine(fileContent, lineIndex, targetFile)

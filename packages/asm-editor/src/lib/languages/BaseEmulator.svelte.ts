@@ -1,9 +1,11 @@
 import {
     type Diagnostic,
     type EmulatorDecoration,
+    type EmulatorNote,
     type ExecutionStep,
     type RegisterFileDescriptor,
     RegisterSize,
+    type SourceBreakpoint,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
@@ -149,6 +151,20 @@ export abstract class BaseEmulator<R extends string> {
     /** Runs after the fresh FileSystem session exists, before any guest inspection or presets. */
     _beginExecutionSession?(): void
 
+    /**
+     * Gives the program these Arguments at the start `_compile` prepares, after `argv[0]`, its name
+     * as a shell would start it ([binary-import.md](../../../../../docs/design/binary-import.md),
+     * decision 12). Only a Target whose programs take Arguments has it; it throws when its Core
+     * refuses them, too many or too long, with a message for the person.
+     */
+    _setProgramArguments?(sources: BuildSources, args: string[]): void
+
+    /**
+     * What the Log should add about how the program just ended, read once when it ends: an
+     * instruction the Core cannot run, say, which only the end's reason and its bytes tell.
+     */
+    _terminationNotes?(): Omit<EmulatorNote, 'id'>[]
+
     /** Detaches native execution before the host ends its FileSystem capability. */
     _clearExecution?(): void
 
@@ -173,6 +189,45 @@ export abstract class BaseEmulator<R extends string> {
 
     _getLastInstruction?(): Instruction | null
 
+    /**
+     * Whether the instruction about to run is library code, which a Step runs through: answered
+     * from what the adapter knows without reading the instruction, such as the objects a loaded
+     * Executable's run has mapped, so that a Step through thousands of library instructions never
+     * makes the library's Listing. Undefined leaves it to the instruction's File (`@runtime/`,
+     * `@lib/`).
+     */
+    _nextInLibraryCode?(): boolean | undefined
+
+    /**
+     * Whether a path is the Listing of a library the running program loaded (`@lib/libc.so.6`),
+     * which is library code. Undefined, or false, for every other path: a Project may hold Files
+     * under `@lib/` too, and on Targets that load no Executable every such path is one of them.
+     */
+    _isLibraryListing?(path: string): boolean
+
+    /**
+     * Where the program's own code begins, for a Build and a Testcase to run to with the Undo
+     * history paused before they start ([binary-import.md](../../../../../docs/design/binary-import.md),
+     * decision 11): a loaded Executable's `main`, or its entry point when the Listing knows no
+     * `main`, as a temporary Breakpoint and the name a message gives it. Undefined for a program
+     * whose start is stepped through instead (`@runtime/` start code) or that starts in its own
+     * code.
+     */
+    _programStart?(): { breakpoint: SourceBreakpoint; name: string } | undefined
+
+    /**
+     * The program's own call into the library code it is stopped in: the call instruction of the
+     * innermost Call stack frame that returns to program code. What a stop inside library code
+     * shows when Steps do not enter it; null when no frame returns to program code.
+     */
+    _libraryCallSite?(): Instruction | null
+
+    /**
+     * What the History calls a Step's stretch of library code, from the first library instruction
+     * it ran (`puts in libc.so.6`); undefined to name it after that instruction's File.
+     */
+    _libraryStretchName?(entered: ExecutionStep): string | undefined
+
     abstract _getUndoHistory(max: number): ExecutionStep[]
 
     /** `max` entries of `_getUndoHistory` after the newest `skip`, for a history with library stretches. */
@@ -184,6 +239,11 @@ export abstract class BaseEmulator<R extends string> {
     _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
     _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
     _getStackTop?(): bigint
+    /**
+     * Where the Core stored the program's Arguments at its start, read until it answers once per
+     * Build: an x86 program starts only when it first runs or is asked where it is.
+     */
+    _getArgumentsArea?(): import('./commonLanguageFeatures.svelte').ArgumentsArea | undefined
     _getDeviceRegions?(): import('./commonLanguageFeatures.svelte').DeviceRegion[]
     _resolveMemoryLabel?(name: string): bigint | undefined
 

@@ -1,4 +1,4 @@
-import { memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
+import { argvArgumentsArea, memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
 import { makeRiscVCore, type RiscVLink } from './RISC-V-core'
 import {
     coreLibrary,
@@ -39,6 +39,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    isLineBreakpoint,
     makeLabelColor,
     type MutationOperation,
     type PokeWrite,
@@ -53,6 +54,7 @@ import { type ExecutionSlice, type ExecutionSliceRequest } from '#lib/languages/
 import { MarsSlicePacer } from '#lib/languages/mars/marsSlice.ts'
 import { canUndoMarsHistoryRange } from '#lib/languages/mars/marsUndo.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
+import { programArgv0 } from '#lib/commandLine.ts'
 import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
 import {
     exitStepText,
@@ -166,6 +168,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
+    /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
+    private programArgv: string[] = []
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         const systemSize =
@@ -300,6 +304,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
+     * `argv[0]` as a shell would start the program, `./main` for `main.s` or `main.c`, and the
+     * Arguments after it, which the Core stores above the stack at every start, with argc in `a0`
+     * and argv in `a1`, pointers as wide as the Target's
+     * ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
+     * Checked here at this Emulator's width, which needs no switch of the Core's global one, so the
+     * Core's refusal (too many, too long) stops the Build as an Arguments problem; the Core
+     * `_compile` creates gets them.
+     */
+    _setProgramArguments(sources: BuildSources, args: string[]): void {
+        const argv = [programArgv0(sources.entry, false, sources.entrySource), ...args]
+        RISCV.checkProgramArguments(argv, this.is64Bit)
+        this.programArgv = argv
+    }
+
+    /**
      * Loads the Runtime library a Build links, and the list of library functions that explains an
      * undefined `printf` in a Build that does not link it, before any Core is created.
      */
@@ -390,6 +409,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
         riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //stored by every `initialize`, a Testcase's included, before its starting registers
+        riscv.setProgramArguments(this.programArgv)
         const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
@@ -668,6 +689,10 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
     _getStackTop() {
         return BigInt((this.riscv?.getStackTop() ?? 0) >>> 0)
+    }
+    /** The argv the Core stored above the stack at its last initialize ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)). */
+    _getArgumentsArea() {
+        return argvArgumentsArea(this.riscv?.getProgramArgumentsLayout())
     }
     _getDeviceRegions() {
         return this.devices.regions()
@@ -1208,7 +1233,7 @@ function toCoreRegisterName(register: RISCVRegisterName): RegisterName {
  * Only the first address of the expansion is a breakpoint: it is where the line is entered.
  */
 function calculateBreakpoints(riscv: JsRiscV, breakpoints: SourceBreakpoint[]): number[] {
-    return breakpoints.flatMap((breakpoint) => {
+    return breakpoints.filter(isLineBreakpoint).flatMap((breakpoint) => {
         const statements = riscv.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
         const entry = statements.reduce<number | undefined>(
             (lowest, statement) =>

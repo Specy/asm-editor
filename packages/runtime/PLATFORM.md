@@ -60,16 +60,17 @@ Descriptors 0, 1 and 2 are the Terminal. Writes to 1 and 2 print. Reads from 0 h
 
 `arch/riscv32/crt0.s`, `arch/riscv64/crt0.s` and `arch/mips/crt0.s` (one file per Target; RV32 and RV64 differ only in the pointer size, so there are two files rather than a width-independent one) define `_start`, the entry symbol of a Build whose Entry is Generated assembly. They are plain GNU assembly, written exactly in the shape GCC 14.2 emits for the same code (`%hi`/`%lo` addresses, `.L`/`$L` local labels, `call`; on MIPS `.set noreorder` with an explicit `nop` in every delay slot, so they run the same with or without delayed branching), using only `.text`, `.align`, `.globl`, `.type`, `.size` and, on MIPS, the `.set`, `.ent` and `.end` directives GCC also emits. `_start`:
 
-1. aligns `sp` down to 16 bytes (on MIPS it then reserves the 16-byte argument area o32 callers provide);
-2. calls every function pointer from `__init_array_start` up to `__init_array_end` (4 bytes each on RV32 and MIPS, 8 on RV64), in order; the linker provides both symbols;
-3. calls `main(0, argv)` with a read-only `{ NULL }` argument array;
-4. passes `main`'s result to `exit`, which runs the `atexit` and `__cxa_atexit` handlers (C++ static destructors), then `.fini_array` from its end down to `__fini_array_start` (weak references, 0 when absent), then the exit service.
+1. keeps `argc` and `argv` in callee-saved registers (`s2` and `s3`; `$18` and `$19` on MIPS) for the constructors to leave alone. The Core sets them in `a0` and `a1` (`$a0` and `$a1`) before the first instruction: `argv[0]` is the program's name and the Command line's Arguments follow, the strings and the NULL-terminated array of pointers stored above the stack ([ADR 0046](../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)). A NULL `argv`, from a Core that was given none, becomes `argc` 0 and a read-only `{ NULL }` array, so `main` always gets a valid one;
+2. aligns `sp` down to 16 bytes (on MIPS it then reserves the 16-byte argument area o32 callers provide);
+3. calls every function pointer from `__init_array_start` up to `__init_array_end` (4 bytes each on RV32 and MIPS, 8 on RV64), in order; the linker provides both symbols;
+4. calls `main(argc, argv, envp)` with `envp` a read-only `{ NULL }` array: the environment is empty;
+5. passes `main`'s result to `exit`, which runs the `atexit` and `__cxa_atexit` handlers (C++ static destructors), then `.fini_array` from its end down to `__fini_array_start` (weak references, 0 when absent), then the exit service.
 
 Programs that never run `crt0` (hand-written assembly calling `printf`) work unchanged: no library function needs initialization. The standard streams are statically initialized, the heap is set up by the first `malloc`, `errno` and all other state start as zero, and default output streams write before returning. A program that requests buffering must call `fflush`, `fclose` or `exit` to retain pending output; raw exit can discard it. Such programs only miss what `crt0` adds: `.init_array` constructors and the `exit` call after `main`. The native tests run every C corpus program a second time with a start file that does exactly that (no `.init_array`, raw exit) to check initialization independence; cases that explicitly request output buffering are excluded.
 
 ## Native test layers (not Targets)
 
-`arch/host-x86_64/` and `arch/host-i386/` implement the same contract with Linux system calls (read 0/3, write 1/4, open 2/5 with `O_RDONLY`, `O_WRONLY|O_CREAT|O_TRUNC` or `O_WRONLY|O_CREAT|O_APPEND` and mode 0644, close 3/6, lseek 8/19, sbrk emulated on brk 12/45, exit_group 231/252, clock_gettime 228/clock_gettime64 403) and an AT&T `crt0.s` with the same steps. They exist only for `scripts/test-native.mjs`.
+`arch/host-x86_64/` and `arch/host-i386/` implement the same contract with Linux system calls (read 0/3, write 1/4, open 2/5 with `O_RDONLY`, `O_WRONLY|O_CREAT|O_TRUNC` or `O_WRONLY|O_CREAT|O_APPEND` and mode 0644, close 3/6, lseek 8/19, sbrk emulated on brk 12/45, exit_group 231/252, clock_gettime 228/clock_gettime64 403) and an AT&T `crt0.s` with the same steps, except that `main` gets `argc` 0 and a `{ NULL }` array whatever the process was started with. They exist only for `scripts/test-native.mjs`.
 
 ## Clock and allocation extensions
 

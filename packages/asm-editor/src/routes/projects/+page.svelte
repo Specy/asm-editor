@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { importFile, type ImportedFile } from '#lib/executableImport.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
     import { onMount } from 'svelte'
@@ -12,18 +13,14 @@
     import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '#stores/toastStore.ts'
-    import {
-        makeProjectFromExternal,
-        projectContentEquals,
-        type ExternalImport
-    } from '#lib/Project.svelte.ts'
+    import { projectContentEquals, type ExternalImport } from '#lib/Project.svelte.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { goto } from '$app/navigation'
     import Page from '#cmp/shared/layout/Page.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
-    import { looksLikeZip, makeProjectFromArchive, projectDownload } from '#lib/projectArchive.ts'
+    import { projectDownload } from '#lib/projectArchive.ts'
 
     let hasFileHandleSupport = false
 
@@ -62,15 +59,18 @@
         return undefined
     }
 
-    async function importFromData(data: ArrayBuffer, fileName: string) {
+    /** Imports a file: what it became, and how it was read, or undefined when it was not. */
+    async function importFromData(
+        data: ArrayBuffer,
+        fileName: string
+    ): Promise<
+        | { project: NonNullable<Awaited<ReturnType<typeof importProject>>>; read: ImportedFile }
+        | undefined
+    > {
         try {
-            const bytes = new Uint8Array(data)
-            const archiveName = /\.(?:asmproj|zip)$/i.test(fileName)
-            const imported =
-                looksLikeZip(bytes) || archiveName
-                    ? makeProjectFromArchive(bytes)
-                    : makeProjectFromExternal(new TextDecoder().decode(bytes))
-            return await importProject(imported)
+            const read = importFile(new Uint8Array(data), fileName)
+            const project = await importProject(read.imported)
+            return project ? { project, read } : undefined
         } catch (e) {
             console.error(e)
             toast.error(e instanceof Error ? e.message : 'Failed to import project!')
@@ -84,14 +84,13 @@
             // @ts-ignore -- File omits the nonstandard handle retained by the importer
             blob.handle = fileHandle
             const data = await blob.arrayBuffer()
-            const importedProject = await importFromData(data, blob.name)
-            if (!importedProject) continue
+            const result = await importFromData(data, blob.name)
+            if (!result) continue
+            const importedProject = result.project
             const id = importedProject.id
-            ProjectStore.setFileHandle(
-                id,
-                fileHandle,
-                looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
-            )
+            //an Executable's Project is never saved over the ELF it came from
+            if (result.read.executable) continue
+            ProjectStore.setFileHandle(id, fileHandle, result.read.archive ? 'archive' : 'legacy')
             //The imported instance, not a re-read by id: the store's array may not have reloaded
             //yet, and writing back a stale row reverted the import it had just applied.
             await ProjectStore.save(importedProject) //saves the new metadata to the file
@@ -112,13 +111,14 @@
                                 const blob = await file.getFile()
                                 blob.handle = file
                                 const data = await blob.arrayBuffer()
-                                const importedProject = await importFromData(data, blob.name)
-                                if (!importedProject) continue
-                                lastId = importedProject.id
+                                const result = await importFromData(data, blob.name)
+                                if (!result) continue
+                                lastId = result.project.id
+                                if (result.read.executable) continue
                                 ProjectStore.setFileHandle(
                                     lastId,
                                     file,
-                                    looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
+                                    result.read.archive ? 'archive' : 'legacy'
                                 )
                                 const proj = await ProjectStore.getProject(lastId)
                                 if (!proj) continue
@@ -195,7 +195,7 @@
                                 }
                             }}
                             as="buffer"
-                            accept=".asmproj,.zip,text/*,.s68k,.asm,.x68,.mips,.riscv,.z80"
+                            accept=""
                         >
                             <Button cssVar="secondary">
                                 <Icon style="margin-right: 0.4rem" size={1}>

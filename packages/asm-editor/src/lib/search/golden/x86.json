@@ -82,6 +82,26 @@
             "query": "getrandom syscall",
             "top": 5,
             "expect": "x86/syscalls/syscall-getrandom"
+        },
+        {
+            "query": "run a compiled ELF binary",
+            "top": 3,
+            "expect": ["x86/executables/overview", "x86/executables/what-runs"]
+        },
+        {
+            "query": "patch an instruction",
+            "top": 2,
+            "expect": "x86/executables/patching"
+        },
+        {
+            "query": "FUN_ invented names",
+            "top": 2,
+            "expect": "x86/executables/names"
+        },
+        {
+            "query": "bundled shared libraries",
+            "top": 3,
+            "expect": "x86/executables/libraries"
         }
     ]
 }

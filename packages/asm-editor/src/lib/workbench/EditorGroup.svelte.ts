@@ -1,4 +1,5 @@
 import type monaco from 'monaco-editor'
+import { ARGUMENTS_DIAGNOSTIC_SOURCE } from '#lib/commandLine.ts'
 import type { WorkbenchSession } from './WorkbenchSession.svelte'
 import { initialTabs, type FileTabs } from './fileTabs'
 import {
@@ -8,6 +9,11 @@ import {
     type ProjectSourceSelection
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
+import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
+import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
+import type { PatchPrompt } from './patchPrompt.svelte'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
@@ -34,6 +40,21 @@ export class EditorGroup {
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
     declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
+    /**
+     * The Listing the displayed File is shown as: an Executable's, or that of a library the running
+     * program loaded, under `@lib/` ([binary-import.md](../../../../../docs/design/binary-import.md),
+     * decisions 5 and 18). It is read-only and is no File of the Project.
+     */
+    declare readonly displayedListing: ListingDocument | undefined
+    /**
+     * The running Executable's patched lines, when this group shows its Listing in the current
+     * Build ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13).
+     */
+    declare readonly displayedPatches: PatchedListing | undefined
+    /** The displayed Listing as shown: with its patched lines, if any, in place. */
+    declare readonly displayedListingView: Listing | undefined
+    /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
+    patchPrompt = $state.raw<PatchPrompt | undefined>()
 
     constructor(
         readonly session: WorkbenchSession,
@@ -48,6 +69,21 @@ export class EditorGroup {
         )
         this.displayedLanguage = $derived(
             editorFileLanguage(this.displayedPath, this.session.project.language)
+        )
+        this.displayedListing = $derived(this.session.listingFor(this.sourceSelection))
+        this.displayedPatches = $derived.by(() => {
+            const patched = this.session.emulator.patcher?.patched
+            const selection = this.sourceSelection
+            return patched &&
+                patched.document === this.displayedListing &&
+                patched.path === this.displayedPath &&
+                selection.sourceKind === 'build' &&
+                selection.buildGeneration === this.session.buildGeneration
+                ? patched
+                : undefined
+        })
+        this.displayedListingView = $derived(
+            this.displayedPatches?.listing ?? this.displayedListing?.listing
         )
         this.resetCompilationOptions()
     }
@@ -81,14 +117,40 @@ export class EditorGroup {
         const map = this.session.runtimeSourceMap(this.displayedPath)
         return !!map && !this.session.groups.some((group) => group.displayedPath === map.sourcePath)
     }
+    /**
+     * The open "Patch instruction…" prompt, while the Listing line it patches is still shown in
+     * the Debug session it was opened in.
+     */
+    get openPatchPrompt(): PatchPrompt | undefined {
+        const prompt = this.patchPrompt
+        const selection = this.sourceSelection
+        return prompt &&
+            prompt.site.document === this.displayedListing &&
+            prompt.site.path === this.displayedPath &&
+            selection.sourceKind === 'build' &&
+            selection.buildGeneration === this.session.buildGeneration &&
+            prompt.buildGeneration === this.session.buildGeneration
+            ? prompt
+            : undefined
+    }
+    /**
+     * Whether the displayed Listing is a library's the running program loaded, which takes no
+     * Breakpoints (decision 11); a Project File under `@lib/` is an ordinary File.
+     */
+    get displayedLibraryListing() {
+        return this.session.emulator.listings?.isLibrary(this.displayedPath) ?? false
+    }
     get displayedFile() {
         //a member of the Runtime library the Build linked: read-only, and outside the Project
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
+        //a library's Listing is no File at all
+        if (this.displayedLibraryListing) return undefined
         return this.sourceView === 'snapshot'
             ? this.session.emulator.buildSources?.files[this.displayedPath]
             : this.session.project.files[this.displayedPath]
     }
     get displayedCode() {
+        if (this.displayedListing) return this.displayedListingView?.text ?? ''
         return this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
     }
     get displayedCompilation() {
@@ -178,6 +240,9 @@ export class EditorGroup {
     }
     get modelIdentity(): ProjectModelIdentity | undefined {
         if (!this.displayedPath) return undefined
+        //a Listing's model is made once its text exists, never filled in afterwards: Monaco decides
+        //at a model's creation whether it is too large to highlight
+        if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
         return { sessionId: this.session.languageSessionId, ...this.sourceSelection }
     }
     get modelKey() {
@@ -187,13 +252,32 @@ export class EditorGroup {
         const s = this.session
         const diagnostics =
             this.sourceView === 'live' ? s.liveViewDiagnostics : s.emulator.compilerDiagnostics
-        return diagnostics.filter((item) => !item.file || item.file === this.displayedPath)
+        //a Diagnostic of no File belongs to whichever File is shown, except the Arguments', which
+        //belong to the Command line
+        return diagnostics.filter(
+            (item) =>
+                (!item.file && item.source !== ARGUMENTS_DIAGNOSTIC_SOURCE) ||
+                item.file === this.displayedPath
+        )
     }
     get breakpointsEditable() {
         const s = this.session
         //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
         //during a Debug session
         if (this.displayedEnvironmentHeader) return !s.host.readonly && !s.building
+        //an Executable's Listing takes them on its instructions, a library's none: a Breakpoint
+        //is only ever in the Executable (decision 11)
+        const listing = this.displayedListing
+        if (listing)
+            return (
+                !this.displayedLibraryListing &&
+                listing.status === 'ready' &&
+                canEditProjectBreakpoints(this.sourceSelection, {
+                    readonly: s.host.readonly,
+                    building: s.building,
+                    fileSystemLocked: s.fileSystemLocked
+                })
+            )
         return (
             //a C or C++ File's Breakpoints stop on its Generated assembly; the library's C source
             //is not the user's code, and Step does not stop in it
@@ -208,13 +292,19 @@ export class EditorGroup {
     }
     get displayedBreakpoints() {
         const s = this.session
+        //a Listing's Breakpoints are addresses, drawn on the line that holds them now
+        const listing = this.displayedListing?.listing
         return (
             this.sourceView === 'snapshot' || !s.fileSystemLocked || this.displayedEnvironmentHeader
                 ? s.emulator.breakpoints
                 : []
         )
             .filter((item) => item.file === this.displayedPath)
-            .map((item) => item.line)
+            .flatMap((item) => {
+                if (isLineBreakpoint(item)) return [item.line]
+                const line = listing ? lineOfAddress(listing, item.address) : -1
+                return line >= 0 ? [line] : []
+            })
     }
     /** Lines of this assembly where a Breakpoint set on its C or C++ source stops. */
     get displayedMappedBreakpoints() {
@@ -234,6 +324,28 @@ export class EditorGroup {
         )
             ? s.emulator.line
             : -1
+    }
+    /**
+     * A note on the current line of a Listing when the program runs from inside the instruction
+     * the line shows, not at its first byte: a jump into the middle of an instruction, or data
+     * decoded as code, as CTF binaries do on purpose. What runs is not the line's text, so the note
+     * says how far in and what the Core decodes there.
+     */
+    get runningWithin(): { line: number; text: string } | undefined {
+        const s = this.session
+        const document = this.displayedListing
+        const listing = this.displayedListingView
+        const line = this.instructionLine
+        if (!document || !listing || line < 0 || !s.debugSession || s.emulator.terminated)
+            return undefined
+        if (listing.lines.kinds[line] !== LINE_KIND.instruction) return undefined
+        const offset = Number(s.emulator.pc) - (listing.lines.addresses[line] + document.base)
+        if (offset <= 0 || offset >= listing.lines.sizes[line]) return undefined
+        const code = s.emulator.instructionCodeAt?.(s.emulator.pc)
+        return {
+            line,
+            text: `running from inside this instruction, at +${offset}${code ? `: ${code}` : ''}`
+        }
     }
     get highlightedLine() {
         const pair = this.session.mappingPair
@@ -272,6 +384,7 @@ export class EditorGroup {
             s.building ||
             this.sourceView === 'snapshot' ||
             this.displayedLibraryMember ||
+            this.displayedListing !== undefined ||
             this.displayedFile?.encoding !== 'plain' ||
             s.fileSystemLocked ||
             (s.emulator.canExecute && !s.emulator.terminated)

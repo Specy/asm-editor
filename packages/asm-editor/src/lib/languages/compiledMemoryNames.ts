@@ -13,6 +13,24 @@ export async function prepareMemoryNames(sources: BuildSources): Promise<void> {
     await loading
 }
 
+/** Enough bytes for a preview's 24 characters, each up to four bytes of UTF-8, and one more. */
+export const PREVIEW_BYTES = 97
+
+/**
+ * What a label's preview shows of the text `bytes` hold: up to the first NUL, decoded as UTF-8,
+ * line breaks and tabs escaped, cut at 24 characters.
+ */
+export function textPreview(bytes: Uint8Array): string {
+    const nul = bytes.indexOf(0)
+    const text = new TextDecoder()
+        .decode(nul < 0 ? bytes : bytes.subarray(0, nul))
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t')
+    const characters = [...text]
+    return characters.slice(0, 24).join('') + (characters.length > 24 ? '…' : '')
+}
+
 export function compiledMemoryNames(
     labels: readonly DataLabel[],
     sources: BuildSources,
@@ -39,18 +57,12 @@ export function compiledMemoryNames(
         if (/^[.$]LC\d+/.test(label.name)) {
             const bytes: number[] = []
             try {
-                for (let offset = 0; offset < 97; offset++) {
+                for (let offset = 0; offset < PREVIEW_BYTES; offset++) {
                     const byte = read(label.address + BigInt(offset), 1n)[0]
                     if (byte === 0 || byte === undefined) break
                     bytes.push(byte)
                 }
-                const text = new TextDecoder()
-                    .decode(Uint8Array.from(bytes))
-                    .replace(/\n/g, '\\n')
-                    .replace(/\r/g, '\\r')
-                    .replace(/\t/g, '\\t')
-                const characters = [...text]
-                preview = characters.slice(0, 24).join('') + (characters.length > 24 ? '…' : '')
+                preview = textPreview(Uint8Array.from(bytes))
             } catch {
                 /* An unmapped string has no preview; its symbol remains useful. */
             }

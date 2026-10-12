@@ -5,7 +5,8 @@
         mount,
         onDestroy,
         onMount,
-        unmount
+        unmount,
+        untrack
     } from 'svelte'
     import type monaco from 'monaco-editor'
     import type {
@@ -30,7 +31,18 @@
     import { selectedLines } from '#lib/monaco/selectedLines.ts'
     import { setSourceHelpLanguage } from '#lib/sourceLanguageHelp/context.ts'
     import type { EditorModels } from '#lib/workbench/editorModels.ts'
+    import {
+        listingLineNumbers,
+        listingLineNumberWidth,
+        setModelListing,
+        type ListingModel
+    } from '#lib/monaco/listingModels.ts'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
+    import {
+        lineActionContextKey,
+        lineActionDescriptor,
+        type EditorLineAction
+    } from '#lib/monaco/editorLineActions.ts'
 
     interface Props {
         disabled?: boolean
@@ -75,6 +87,22 @@
             props: ViewZoneProps
         }[]
         buildArtifacts?: BuildArtifact[]
+        /**
+         * The Listing the model holds, when it is one: its gutter prints each line's address
+         * instead of its number, and the Listing providers read it.
+         */
+        listing?: ListingModel
+        /** Whether a 0-based line can take a Breakpoint; every line by default. */
+        canBreakAt?: (line: number) => boolean
+        /** 0-based lines a Debug session patched, marked beside their line numbers. */
+        patchedLines?: readonly number[]
+        /** A note written after a line's text, such as running from inside its instruction. */
+        lineNote?: { line: number; text: string }
+        /**
+         * Commands on the cursor's line, in the context menu and on their keys, offered on the
+         * lines where they are available: "Patch instruction…" on a Listing.
+         */
+        lineActions?: readonly EditorLineAction[]
     }
 
     let {
@@ -97,7 +125,12 @@
         breakpointsEditable = true,
         editor = $bindable(),
         viewZones = [],
-        buildArtifacts = []
+        buildArtifacts = [],
+        listing,
+        canBreakAt,
+        patchedLines = [],
+        lineNote,
+        lineActions
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -106,6 +139,8 @@
      * `_getCompiledCode` for a program with nothing to expand, so a successful Build would
      * otherwise replace the program with an empty model.
      */
+    /** How much smaller than the code a Listing's gutter prints its addresses, in rem. */
+    const ADDRESS_GUTTER_SHRINK_REM = 0.2
     const activeSource = $derived<EditorSource>(
         source ?? { key: modelKey, value: codeOverride || code, identity: modelIdentity }
     )
@@ -125,6 +160,10 @@
      */
     let viewStateKey = ''
     let hoveredGliphen: number | null = $state(null)
+    /** The 0-based line the cursor is on, which the line actions are offered for. */
+    let cursorLine = $state(-1)
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Monaco handles; nothing renders from them.
+    const lineActionKeys = new Map<string, monaco.editor.IContextKey<boolean>>()
     let destroyed = false
     /**
      * The editor this component created. `editor` is bound out to the host, and a host that swaps
@@ -243,6 +282,12 @@
         }
 
         toDispose.push(
+            mountedEditor.onDidChangeCursorPosition((event) => {
+                cursorLine = event.position.lineNumber - 1
+                //at once, not in an effect: a right click moves the cursor and opens the context
+                //menu in the same event, and the menu reads the keys as they are then
+                updateLineActionKeys(cursorLine)
+            }),
             mountedEditor.onDidChangeCursorSelection((event) => {
                 //Model switches and debugger navigation are not a new user source selection.
                 if (applyingExternalValue || event.source === 'api') return
@@ -251,7 +296,8 @@
             mountedEditor.onMouseDown((e) => {
                 if (
                     breakpointsEditable &&
-                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+                    (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
                 ) {
                     dispatcher('breakpointPress', e.target.position.lineNumber)
                 }
@@ -262,7 +308,8 @@
             mountedEditor.onMouseMove((e) => {
                 if (
                     breakpointsEditable &&
-                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+                    (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
                 ) {
                     hoveredGliphen = e.target.position.lineNumber
                 } else {
@@ -372,10 +419,78 @@
         }
         viewStateKey = next.key
         activeModelKey = next.key
+        cursorLine = (currentEditor.getPosition()?.lineNumber ?? 0) - 1
     }
 
     $effect(() => {
         selectModel(activeSource)
+    })
+
+    /** `lineNote`, written after the end of its line's text. */
+    function lineNoteDecorations(
+        currentEditor: monaco.editor.IStandaloneCodeEditor,
+        currentMonaco: MonacoType
+    ): monaco.editor.IModelDeltaDecoration[] {
+        const model = currentEditor.getModel()
+        if (!lineNote || !model || lineNote.line >= model.getLineCount()) return []
+        const line = lineNote.line + 1
+        const end = model.getLineMaxColumn(line)
+        return [
+            {
+                range: new currentMonaco.Range(line, end, line, end),
+                options: {
+                    after: { content: `  ⟵ ${lineNote.text}`, inlineClassName: 'line-note' }
+                }
+            }
+        ]
+    }
+
+    function lineActionKey(action: EditorLineAction) {
+        let key = lineActionKeys.get(action.id)
+        if (!key && editor) {
+            key = editor.createContextKey(lineActionContextKey(action), false)
+            lineActionKeys.set(action.id, key)
+        }
+        return key
+    }
+
+    function updateLineActionKeys(line: number) {
+        untrack(() => {
+            for (const action of lineActions ?? [])
+                lineActionKey(action)?.set(line >= 0 && action.available(line))
+        })
+    }
+
+    //each line action is a Monaco action while the host offers it, shown in the context menu and
+    //bound to its keys only where its context key says it is available
+    $effect(() => {
+        const currentEditor = editor
+        const currentMonaco = monacoInstance
+        const actions = lineActions
+        if (!currentEditor || !currentMonaco || !actions?.length) return
+        const registered = untrack(() =>
+            actions.map((action) => {
+                lineActionKey(action)
+                return currentEditor.addAction(
+                    lineActionDescriptor(action, currentMonaco, (target) => {
+                        const line = (target.getPosition()?.lineNumber ?? 0) - 1
+                        if (line >= 0 && action.available(line)) action.run(line)
+                    })
+                )
+            })
+        )
+        return () => {
+            for (const action of registered) action.dispose()
+            for (const action of actions) lineActionKeys.get(action.id)?.set(false)
+        }
+    })
+    //and again whenever what decides it changes: a Run starting or ending, another model
+    $effect(() => {
+        const actions = lineActions
+        void activeModelKey
+        if (!editor || !actions?.length) return
+        for (const action of actions)
+            lineActionKey(action)?.set(cursorLine >= 0 && action.available(cursorLine))
     })
 
     $effect(() => {
@@ -388,6 +503,61 @@
         }
         return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
     })
+
+    //a Listing's model is read by the Listing providers, and its gutter prints addresses; declared
+    //after the model is selected, so the two change together
+    $effect(() => {
+        if (!activeModelKey || !listing) return
+        const model = editor?.getModel()
+        if (!model || model.isDisposed()) return
+        return setModelListing(model.uri.toString(), listing)
+    })
+    /** Whether the gutter prints a Listing's addresses, so leaving one restores line numbers. */
+    let addressGutter = false
+    /** The same, for the editor's class, which prints the addresses smaller. */
+    let addressGutterShown = $state(false)
+    $effect(() => {
+        if (!activeModelKey || !editor) return
+        if (listing) {
+            const { listing: shown, shortAddresses } = listing
+            const currentEditor = editor
+            const fit = () =>
+                currentEditor.updateOptions({
+                    lineNumbers: listingLineNumbers(shown, shortAddresses),
+                    lineNumbersMinChars: addressGutterChars(
+                        listingLineNumberWidth(shown, shortAddresses)
+                    )
+                })
+            fit()
+            addressGutter = true
+            addressGutterShown = true
+            //the gutter's width is counted in the editor font's digits, so a new font size refits it
+            const fontOption = monacoInstance?.editor.EditorOption.fontInfo
+            const listener = currentEditor.onDidChangeConfiguration((event) => {
+                if (fontOption !== undefined && event.hasChanged(fontOption)) fit()
+            })
+            return () => listener.dispose()
+        } else if (addressGutter) {
+            editor.updateOptions({ lineNumbers: 'on', lineNumbersMinChars: 2 })
+            addressGutter = false
+            addressGutterShown = false
+        }
+    })
+
+    /**
+     * How many of the editor font's digits a Listing's address gutter needs for `chars` characters
+     * printed 0.2rem smaller (see `.address-gutter`): 64-bit addresses are long, so the smaller
+     * font gives the code more of the width.
+     */
+    function addressGutterChars(chars: number): number {
+        const fontSize = monacoInstance
+            ? editor?.getOption(monacoInstance.editor.EditorOption.fontSize)
+            : undefined
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+        if (!fontSize || !(rem > 0)) return chars
+        const scale = Math.max(0.5, (fontSize - ADDRESS_GUTTER_SHRINK_REM * rem) / fontSize)
+        return Math.max(2, Math.ceil(chars * scale))
+    }
 
     $effect(() => {
         if (!retainedModelKeys) return
@@ -644,6 +814,16 @@
                           }
                       ]
                     : []),
+                ...lineNoteDecorations(currentEditor, currentMonaco),
+                ...patchedLines.map((line) => ({
+                    range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: 'patched-line',
+                        linesDecorationsClassName: 'patched-line-marker',
+                        zIndex: 1
+                    }
+                })),
                 ...breakpoints.map((e) => ({
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
@@ -760,6 +940,7 @@
 <div
     bind:this={el}
     class="editor"
+    class:address-gutter={addressGutterShown}
     style:--compiled-section-border-width="{Math.max(0, SOURCE_MAP_SECTION_BORDER.width)}px"
 ></div>
 
@@ -937,6 +1118,17 @@
         margin-left: 0.2rem;
     }
 
+    //a Listing's gutter prints 64-bit addresses, 0.2rem smaller than the code
+    //(ADDRESS_GUTTER_SHRINK_REM) so they take less of the width, centred on the line's height
+    //rather than sitting on the code's baseline
+    .editor.address-gutter :global(.margin-view-overlays .line-numbers) {
+        font-size: calc(1em - 0.2rem);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        height: 100%;
+    }
+
     :global(.breakpoint-glyph),
     :global(.hovered-glyph) {
         width: calc(22px - 0.6rem) !important;
@@ -950,6 +1142,22 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    //what runs when it is not what the line shows, after the line's text
+    :global(.line-note) {
+        color: var(--warning, #d49a30);
+        font-style: italic;
+    }
+
+    //a line whose instruction a Debug session patched: a bar beside its address, and a tint
+    :global(.patched-line-marker) {
+        width: 3px !important;
+        margin-left: 3px;
+        background-color: var(--warning, #d49a30);
+    }
+    :global(.patched-line) {
+        background-color: color-mix(in srgb, var(--warning, #d49a30) 12%, transparent);
     }
 
     :global(.selected-line-number) {
