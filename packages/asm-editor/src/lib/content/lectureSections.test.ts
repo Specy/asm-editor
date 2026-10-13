@@ -105,33 +105,45 @@ describe('splitLecture', () => {
     })
 
     const all = lectures()
+    const parsed = new Map<string, ReturnType<typeof splitLecture>>()
+    function sectionsOf({ path, source }: (typeof all)[number]) {
+        let sections = parsed.get(path)
+        if (!sections) {
+            sections = splitLecture(source)
+            parsed.set(path, sections)
+        }
+        return sections
+    }
 
     it('finds every Lecture', () => {
         expect(all.length).toBeGreaterThan(200)
     })
 
-    it('gives every section something to read and a unique id', () => {
-        let sections = 0
-        for (const { path, source } of all) {
-            const split = splitLecture(source)
-            const slugs = split.map((section) => section.slug).filter(Boolean)
-            expect(new Set(slugs).size, path).toBe(slugs.length)
-            for (const section of split) {
-                sections++
-                expect(section.prose || section.code, `${path}#${section.slug}`).toBeTruthy()
-                expect(section.prose, `${path}#${section.slug}`).not.toContain('```')
-            }
+    // Each Lecture has its own timeout and failure name; a growing corpus should not share
+    // one five-second budget. Reuse the parsed sections across the content and sanitizer checks.
+    it.each(all)('gives every section in $path something to read and a unique id', (lecture) => {
+        const { path } = lecture
+        const split = sectionsOf(lecture)
+        const slugs = split.map((section) => section.slug).filter(Boolean)
+        expect(new Set(slugs).size, path).toBe(slugs.length)
+        for (const section of split) {
+            expect(section.prose || section.code, `${path}#${section.slug}`).toBeTruthy()
+            expect(section.prose, `${path}#${section.slug}`).not.toContain('```')
         }
-        expect(sections).toBeGreaterThan(900)
     })
 
-    it('makes ids the sanitizer keeps', () => {
-        for (const { path, source } of all) {
-            for (const { slug } of splitLecture(source)) {
-                if (!slug) continue
-                const html = DOMPurify.sanitize(`<h2 id="${slug}">x</h2>`)
-                expect(html, `${path}#${slug}`).toContain(`id="${slug}"`)
-            }
+    it.each(all)('makes ids in $path the sanitizer keeps', (lecture) => {
+        const { path } = lecture
+        for (const { slug } of sectionsOf(lecture)) {
+            if (!slug) continue
+            const html = DOMPurify.sanitize(`<h2 id="${slug}">x</h2>`)
+            expect(html, `${path}#${slug}`).toContain(`id="${slug}"`)
         }
+    })
+
+    it('checks every Lecture section', () => {
+        expect(
+            all.reduce((count, lecture) => count + sectionsOf(lecture).length, 0)
+        ).toBeGreaterThan(900)
     })
 })

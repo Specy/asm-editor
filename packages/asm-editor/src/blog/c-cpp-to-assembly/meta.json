@@ -1,0 +1,11 @@
+{
+    "title": "Compile C/C++ to assembly and debug it",
+    "description": "Compile a C or C++ loop, trace its MIPS instructions, and inspect the result in registers and memory.",
+    "tags": ["guide", "use-case", "c-cpp"],
+    "status": "published",
+    "datePublished": "2026-10-13",
+    "image": {
+        "src": "/images/blog/c-cpp-to-assembly/source-and-assembly.webp",
+        "alt": "C source and its generated MIPS assembly paused at a mapped breakpoint"
+    }
+}

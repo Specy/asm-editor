@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types'
 import { getProjectTemplates } from '#lib/content/templates.ts'
+import { blogCatalog } from '#lib/blog/catalog.server.ts'
 
 /**
  * Runs in the prerender, not in the browser: the templates are read out of `src/content`, which is
@@ -7,5 +8,8 @@ import { getProjectTemplates } from '#lib/content/templates.ts'
  * the result.
  */
 export const load: PageServerLoad = async () => {
-    return { templates: await getProjectTemplates() }
+    return {
+        templates: await getProjectTemplates(),
+        gettingStarted: blogCatalog.getPost('getting-started')?.pathname
+    }
 }

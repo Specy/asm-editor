@@ -360,7 +360,7 @@ One page of a **Course**: markdown text with **Playgrounds**, read in order with
 
 ## Playground
 
-A runnable code block inside a **Lecture**: an embedded editor with its own **Emulator**, configured by flags on the code fence (memory, console, tests, program counter, screen, open in the editor). Every Lecture that teaches an instruction shows it in a Playground.
+A runnable code block inside a **Lecture** or **Blog post**: an embedded editor with its own **Emulator**, configured by flags on the code fence (memory, console, tests, program counter, screen, open in the editor). Every Lecture that teaches an instruction shows it in a Playground.
 
 ## General course
 
@@ -385,3 +385,23 @@ _Avoid_: quiz, challenge, problem
 ## Topic
 
 The subject a **Lecture** teaches, named the same way in every **Course** that covers it (registers, the stack, syscalls, the snake game). It is what ties a **General course** Lecture to its deep dives in the **Language courses**, and an **Example** to the same program in the other languages; the links between them are derived from it, never written by hand.
+
+## Blog post
+
+A standalone article on the ASM Editor website explaining an app workflow, a **Use case**, or how the app is built. It can contain screenshots and **Playgrounds**, without belonging to a **Course**'s ordered Lectures.
+_Avoid_: Lecture (for a standalone article), Documentation entry
+
+## Use case
+
+A concrete task a reader can accomplish with ASM Editor, explained in a **Blog post** tagged "use case".
+_Avoid_: feature (one capability that may support several tasks), Topic (a Course's teaching subject)
+
+## Guided tour
+
+A **Blog post** that introduces the app through steps illustrated by annotated screenshots, **Playgrounds**, and actions to open examples in the editor.
+_Avoid_: in-app tour (an interface overlay), Lecture
+
+## Blog tag
+
+A shared label classifying **Blog posts** by their purpose or subject. A post can have several Blog tags, including both "guide" and "use case".
+_Avoid_: Topic (a Course's teaching subject), category (when it implies mutually exclusive groups)

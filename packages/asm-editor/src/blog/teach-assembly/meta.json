@@ -1,0 +1,11 @@
+{
+    "title": "Prepare and share an assembly exercise",
+    "description": "Configure register testcases, distribute a shared MIPS project, and embed the exercise in a lesson page.",
+    "tags": ["guide", "use-case", "teaching"],
+    "status": "published",
+    "datePublished": "2026-10-13",
+    "image": {
+        "src": "/images/blog/teach-assembly/testcases.webp",
+        "alt": "A MIPS exercise showing Actual and Expected register values in Testcases"
+    }
+}

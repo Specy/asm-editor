@@ -96,6 +96,13 @@
             </a>
             <Title>Create new project</Title>
         </div>
+        {#if data.gettingStarted}
+            <p style="margin: 0.8rem 0; line-height: 1.6">
+                New to ASM Editor? <a href={data.gettingStarted} style="color: var(--accent)"
+                    >Follow the getting-started guide</a
+                >.
+            </p>
+        {/if}
         <Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />

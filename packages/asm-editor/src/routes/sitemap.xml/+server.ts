@@ -1,4 +1,5 @@
 import { SITE_URL } from '#lib/seo.ts'
+import { blogCatalog } from '#lib/blog/catalog.server.ts'
 import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
 import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
 import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
@@ -80,11 +81,24 @@ function escapeXml(value: string) {
 export const GET = async () => {
     const buildDate = new Date().toISOString().slice(0, 10)
     const routes = [...staticRoutes(), ...courseRoutes(), ...instructionRoutes()]
+    const blogDates = new Map(
+        blogCatalog.posts.map((post) => [post.pathname, post.dateUpdated ?? post.datePublished])
+    )
+    for (const tag of blogCatalog.tags) {
+        const dates = blogCatalog
+            .forTag(tag.id)
+            .map((post) => post.dateUpdated ?? post.datePublished)
+            .sort()
+        blogDates.set(`/blog/tags/${tag.id}`, dates.at(-1)!)
+    }
+    const latestBlogDate = [...blogDates.values()].sort().at(-1)
+    if (latestBlogDate) blogDates.set('/blog', latestBlogDate)
+    routes.push(...blogDates.keys())
 
-    const entries = routes.map(
+    const entries = [...new Set(routes)].map(
         (route) => `    <url>
         <loc>${escapeXml(SITE_URL + route)}</loc>
-        <lastmod>${buildDate}</lastmod>
+        ${route === '/blog' && !latestBlogDate ? '' : `<lastmod>${blogDates.get(route) ?? buildDate}</lastmod>`}
     </url>`
     )
 

@@ -235,3 +235,31 @@ export function lectureLd(opts: {
         }
     }
 }
+
+export function blogPostingLd(post: {
+    title: string
+    description: string
+    pathname: string
+    datePublished: string
+    dateUpdated?: string
+    tags: string[]
+    image?: { src: string; alt: string }
+}) {
+    const url = toAbsoluteUrl(post.pathname)
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description: post.description,
+        url,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        inLanguage: 'en',
+        author: AUTHOR,
+        publisher: AUTHOR,
+        datePublished: post.datePublished,
+        ...(post.dateUpdated ? { dateModified: post.dateUpdated } : {}),
+        ...(post.image ? { image: toAbsoluteUrl(post.image.src) } : {}),
+        keywords: post.tags.join(', '),
+        isPartOf: { '@type': 'Blog', name: 'ASM Editor blog', url: toAbsoluteUrl('/blog') }
+    }
+}

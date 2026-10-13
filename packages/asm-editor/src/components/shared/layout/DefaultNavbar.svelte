@@ -28,6 +28,7 @@
         <a class="icon" href={resolve('/projects')} title="Go to your projects"> Projects </a>
         <a class="icon" href={resolve('/documentation')} title="Go to the docs"> Docs </a>
         <a class="icon" href={resolve('/learn/courses')} title="Learn assembly"> Learn </a>
+        <a class="icon" href={resolve('/blog')} title="Guides and use cases"> Blog </a>
         <a class="icon hidden-on-mobile" href={resolve('/embed')} title="Embed the website">
             Embed
         </a>
@@ -103,6 +104,11 @@
     }
     @media (max-width: 370px) {
         .hidden-very-small {
+            display: none;
+        }
+    }
+    @media (max-width: 400px), (min-width: 601px) and (max-width: 640px) {
+        .ai {
             display: none;
         }
     }

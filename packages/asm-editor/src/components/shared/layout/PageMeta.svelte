@@ -15,7 +15,7 @@
 
 <!-- The head block the instruction pages already write by hand, factored out so the
      documentation hubs, syscall pages and course pages get the same tags. The layout
-     supplies canonical, og:url, og:site_name and twitter:card. -->
+     supplies canonical, og:url, og:site_name, twitter:card and the social image. -->
 <svelte:head>
     <title>{title}</title>
     <meta name="description" content={description} />

@@ -1,0 +1,11 @@
+{
+    "title": "Run MIPS assembly with the MARS-based simulator",
+    "description": "Read input, inspect registers, and step through a MIPS calculation in ASM Editor's MARS-based simulator.",
+    "tags": ["guide", "use-case", "mips"],
+    "status": "published",
+    "datePublished": "2026-10-13",
+    "image": {
+        "src": "/images/blog/mips-mars-browser/input-breakpoint.webp",
+        "alt": "MIPS execution paused before adding the input value"
+    }
+}

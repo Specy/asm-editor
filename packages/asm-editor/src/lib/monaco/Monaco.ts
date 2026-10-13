@@ -16,6 +16,7 @@ class MonacoLoader {
     private declaredLanguageIds = new Set<AvailableLanguages>()
     private registeredLanguages = new Set<AvailableLanguages>()
     private registeringLanguages = new Map<AvailableLanguages, Promise<void>>()
+    private assemblyGeneration = 0
     private projectOpener: monaco.IDisposable | undefined
     private sourceHelpRegistration: Promise<void> | undefined
     private sourceHelpGeneration = 0
@@ -25,6 +26,7 @@ class MonacoLoader {
     }
 
     dispose = () => {
+        this.assemblyGeneration++
         this.sourceHelpGeneration++
 
         for (const disposable of this.toDispose.splice(0).reverse()) disposable.dispose()
@@ -77,32 +79,36 @@ class MonacoLoader {
 
         if (pending) return pending
 
-        const registration = this.installLanguage(lang)
+        const generation = this.assemblyGeneration
+        const registration = this.installLanguage(lang, generation)
+            .then(() => {
+                if (generation === this.assemblyGeneration) this.registeredLanguages.add(lang)
+            })
+            .finally(() => {
+                // Disposal can start a new registration while this one is still pending.
+                if (this.registeringLanguages.get(lang) === registration)
+                    this.registeringLanguages.delete(lang)
+            })
 
         this.registeringLanguages.set(lang, registration)
 
-        try {
-            await registration
-            this.registeredLanguages.add(lang)
-        } finally {
-            this.registeringLanguages.delete(lang)
-        }
+        return registration
     }
 
-    private async installLanguage(lang: AvailableLanguages): Promise<void> {
+    private async installLanguage(lang: AvailableLanguages, generation: number): Promise<void> {
         const monacoInstance = this.monaco ?? (await this.load())
+        const isCurrent = () => generation === this.assemblyGeneration
+        if (!isCurrent()) return
         this.ensureProjectOpener(monacoInstance)
         if (!this.declaredLanguageIds.has(lang)) {
             monacoInstance.languages.register({ id: lang.toLowerCase() })
             this.declaredLanguageIds.add(lang)
         }
 
-        let registrations: monaco.IDisposable[] = []
-        try {
-            registrations = await registerAssemblyLanguage(monacoInstance, lang)
-        } catch (error) {
+        const registrations = await registerAssemblyLanguage(monacoInstance, lang, isCurrent)
+        if (!isCurrent()) {
             for (const disposable of registrations.reverse()) disposable.dispose()
-            throw error
+            return
         }
         this.toDispose.push(...registrations)
     }
