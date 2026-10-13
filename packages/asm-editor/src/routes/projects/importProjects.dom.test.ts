@@ -114,7 +114,8 @@ it('never links an Executable Project to the ELF file it came from', async () =>
         expect(target.querySelector('input[type=file]')).toBeNull()
         importButton.click()
         await projectNamed('chall')
-        await vi.waitFor(() => expect(ProjectStore.projects).toHaveLength(2))
+        // The first detection loads every architecture's instruction tables on demand
+        await vi.waitFor(() => expect(ProjectStore.projects).toHaveLength(2), { timeout: 15000 })
         const executable = ProjectStore.projects.find((project) => project.name === 'chall')!
         const text = ProjectStore.projects.find((project) => project.name !== 'chall')!
         expect(ProjectStore.writableFiles.has(executable.id)).toBe(false)

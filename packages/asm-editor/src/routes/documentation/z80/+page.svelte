@@ -1,20 +1,24 @@
 <script lang="ts">
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
+
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Documentation', pathname: '/documentation' },
+            { name: 'Z80', pathname: '/documentation/z80' }
+        ])
+    ])
 </script>
 
-<svelte:head>
-    <title>Z80 Documentation</title>
-    <meta
-        name="description"
-        content="Read the Z80 Documentation, including all the instructions with their flags, timings and opcodes, the assembler directives, the registers and the console ports"
-    />
-    <meta
-        property="og:description"
-        content="Read the Z80 Documentation, including all the instructions with their flags, timings and opcodes, the assembler directives, the registers and the console ports"
-    />
-</svelte:head>
+<PageMeta
+    title="Z80 assembly reference - instructions, registers and I/O ports | Asm Editor"
+    description="Read the Z80 Documentation, including all the instructions with their flags, timings and opcodes, the assembler directives, the registers and the console ports"
+    type="website"
+    {jsonLd}
+/>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">Z80 Documentation</h1>
     <SearchLauncher size="full" placeholder="Search the Z80 docs and courses" />

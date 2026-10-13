@@ -18,8 +18,13 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
     import { isCompilationTarget } from '#lib/sourceCompilation/records.ts'
+    import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
+    import { onMount } from 'svelte'
 
     let { data }: { data: PageData } = $props()
+
+    //creating a project opens it in the editor straight after
+    onMount(warmUpMonaco)
 
     let name = $state('')
     let description = $state('')

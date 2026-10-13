@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '#lib/seo.ts'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd, breadcrumbLd } from '#lib/seo.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import { onMount } from 'svelte'
     import {
@@ -61,6 +61,14 @@
          so nothing interpolated can close the tag. -->
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html jsonLdScriptTag(structuredData)}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    {@html jsonLdScriptTag(
+        breadcrumbLd([
+            { name: 'Documentation', pathname: '/documentation' },
+            { name: 'M68K', pathname: '/documentation/m68k' },
+            { name: String(String(ins.name)).toUpperCase(), pathname: page.url.pathname }
+        ])
+    )}
 </svelte:head>
 
 <Page contentStyle="padding: 1rem; gap: 1rem;" style="flex: 1;">

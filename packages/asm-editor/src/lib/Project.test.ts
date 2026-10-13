@@ -274,7 +274,7 @@ describe('makeProject', () => {
 })
 
 describe('the exported file', () => {
-    it('round trips a project through metadata version 2', () => {
+    it('round trips a project through metadata version 2', async () => {
         const project = makeProject({
             name: 'Round trip',
             description: 'with a decision and a testcase',
@@ -288,7 +288,7 @@ describe('the exported file', () => {
         const text = project.toExternal()
         expect(text.startsWith('li $v0, 10\nsyscall')).toBe(true)
         expect(text).toContain('# ---METADATA---')
-        const { project: imported, notice } = makeProjectFromExternal(text)
+        const { project: imported, notice } = await makeProjectFromExternal(text)
         expect(notice).toBeUndefined()
         expect(imported.name).toBe('Round trip')
         expect(imported.language).toBe('MIPS')
@@ -300,7 +300,7 @@ describe('the exported file', () => {
         expect(imported.testcases[0]?.expectedRegisters.v0).toBe(10n)
     })
 
-    it('still imports a version 1 file, code first and metadata in comments', () => {
+    it('still imports a version 1 file, code first and metadata in comments', async () => {
         const text = [
             '    move.l #1, d0',
             '',
@@ -316,7 +316,7 @@ describe('the exported file', () => {
             ';     "testcases": []',
             '; }'
         ].join('\n')
-        const { project, notice } = makeProjectFromExternal(text)
+        const { project, notice } = await makeProjectFromExternal(text)
         expect(notice).toBeUndefined()
         expect(project.name).toBe('From before')
         expect(project.id).toBe('abcdefg')
@@ -324,22 +324,22 @@ describe('the exported file', () => {
         expect(project.files['main.m68k']?.content).toBe('    move.l #1, d0')
     })
 
-    it('imports the code only, and says so, from a newer version', () => {
+    it('imports the code only, and says so, from a newer version', async () => {
         const text = [
             'halt',
             '',
             '; ---METADATA--- do not write below here',
             '; {"version": 3, "name": "Future", "language": "Z80", "entry": "main.z80"}'
         ].join('\n')
-        const { project, notice } = makeProjectFromExternal(text)
+        const { project, notice } = await makeProjectFromExternal(text)
         expect(notice).toMatch(/newer version/)
         expect(project.language).toBe('Z80')
         expect(project.code).toBe('halt')
         expect(project.name).toBe('Future')
     })
 
-    it('imports a bare source file as a new project', () => {
-        const { project, notice } = makeProjectFromExternal(
+    it('imports a bare source file as a new project', async () => {
+        const { project, notice } = await makeProjectFromExternal(
             '        .org 0x8000\nstart:\n        halt\n'
         )
         expect(notice).toBeUndefined()

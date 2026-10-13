@@ -30,26 +30,26 @@ const ACCEPTED: Record<string, string[]> = {
 describe('language detection', () => {
     for (const [language, programs] of Object.entries(templates)) {
         const accepted = ACCEPTED[language] ?? [language]
-        it(`reads the ${language} templates as ${language}`, () => {
+        it(`reads the ${language} templates as ${language}`, async () => {
             for (const template of programs) {
                 expect(accepted, `${language}/${template.id}`).toContain(
-                    detectAssemblyLanguage(template.code)
+                    await detectAssemblyLanguage(template.code)
                 )
             }
         })
     }
 
-    it('tells the shared mnemonics apart by what surrounds them', () => {
+    it('tells the shared mnemonics apart by what surrounds them', async () => {
         // `ld` is Z80, `mov`/`syscall` are x86, and both programs are full of words the other
         // language also has (`add`, `call`, `ret`, `push`).
         const z80 = ['        ld a, 5', '        add a, b', '        call sub', '        halt']
         const x86 = ['        mov rax, 5', '        add rax, rbx', '        syscall']
-        expect(detectAssemblyLanguage(z80.join('\n'))).toBe('Z80')
-        expect(detectAssemblyLanguage(x86.join('\n'))).toBe('X86')
+        expect(await detectAssemblyLanguage(z80.join('\n'))).toBe('Z80')
+        expect(await detectAssemblyLanguage(x86.join('\n'))).toBe('X86')
     })
 
-    it('recognises the extensions no other language has', () => {
+    it('recognises the extensions no other language has', async () => {
         const avx = ['        vaddpd xmm0, xmm1, xmm2', '        vmovaps ymm3, ymm4']
-        expect(detectAssemblyLanguage(avx.join('\n'))).toBe('X86')
+        expect(await detectAssemblyLanguage(avx.join('\n'))).toBe('X86')
     })
 })

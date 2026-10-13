@@ -1,21 +1,25 @@
 <script lang="ts">
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd } from '#lib/seo.ts'
     import { resolve } from '$app/paths'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
+
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Documentation', pathname: '/documentation' },
+            { name: 'MIPS', pathname: '/documentation/mips' }
+        ])
+    ])
 </script>
 
-<svelte:head>
-    <title>MIPS Documentation</title>
-    <meta
-        name="description"
-        content="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
-    />
-    <meta
-        property="og:description"
-        content="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
-    />
-</svelte:head>
+<PageMeta
+    title="MIPS assembly reference - instructions, registers and syscalls | Asm Editor"
+    description="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
+    type="website"
+    {jsonLd}
+/>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">MIPS Documentation</h1>
     <SearchLauncher size="full" placeholder="Search the MIPS docs and courses" />

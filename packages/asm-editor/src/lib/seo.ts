@@ -2,10 +2,16 @@ export const SITE_URL = 'https://asm-editor.specy.app'
 
 /** The legal name is what a citation, an academic profile and a search engine can
  *  reconcile; `alternateName` keeps the handle the repo and the apps are known by, so
- *  the two identities resolve to one person instead of competing. */
+ *  the two identities resolve to one person instead of competing. The `@id` gives the
+ *  person one node in the JSON-LD graph, so the PAPER's author entry can point at the
+ *  same identity instead of describing a second person with the same name. */
+export const PERSON_ID = 'https://specy.app/#person'
+
 export const AUTHOR = {
     '@type': 'Person',
-    name: 'Specy',
+    '@id': PERSON_ID,
+    name: 'Enrico Menichelli',
+    alternateName: 'Specy',
     url: 'https://specy.app',
     sameAs: ['https://github.com/Specy']
 } as const
@@ -16,10 +22,7 @@ export const AUTHOR = {
 export const PAPER = {
     '@type': 'ScholarlyArticle',
     name: 'ASM Editor: Understanding Language Abstractions Through Assembly Programming',
-    author: [
-        { '@type': 'Person', name: 'Enrico Menichelli' },
-        { '@type': 'Person', name: 'Luca Forlizzi' }
-    ],
+    author: [{ '@id': PERSON_ID }, { '@type': 'Person', name: 'Luca Forlizzi' }],
     publisher: { '@type': 'Organization', name: 'IEEE' },
     datePublished: '2026-04-27',
     doi: '10.1109/EDUCON67543.2026.11574463',
@@ -121,7 +124,7 @@ export function instructionLd(opts: {
     return {
         '@context': 'https://schema.org',
         '@type': 'TechArticle',
-        headline: `${opts.name.toUpperCase()} — ${opts.architecture} instruction`,
+        headline: `${opts.name.toUpperCase()} - ${opts.architecture} instruction`,
         description: toMetaDescription(opts.description, 300),
         url,
         mainEntityOfPage: { '@type': 'WebPage', '@id': url },
@@ -131,7 +134,104 @@ export function instructionLd(opts: {
             '@type': 'TechArticle',
             name: `${opts.architecture} instruction set reference`,
             url: toAbsoluteUrl(opts.pathname.replace(/\/[^/]+$/, ''))
-        },
-        proficiencyLevel: 'Beginner'
+        }
+    }
+}
+
+export type Crumb = { name: string; pathname: string }
+
+/** A BreadcrumbList for a page reached through a chain of hubs, ending with the page
+ *  itself. Every crumb carries an absolute URL, as Google requires for the trail. */
+export function breadcrumbLd(trail: Crumb[]) {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: trail.map((crumb, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            name: crumb.name,
+            item: toAbsoluteUrl(crumb.pathname)
+        }))
+    }
+}
+
+/** A documentation hub page (a syscall or trap reference, an architecture index):
+ *  reference prose rather than a single instruction, so TechArticle without the
+ *  instruction-only fields. */
+export function documentationArticleLd(opts: {
+    headline: string
+    description: string
+    pathname: string
+    section: Crumb
+}) {
+    const url = toAbsoluteUrl(opts.pathname)
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'TechArticle',
+        headline: opts.headline,
+        description: toMetaDescription(opts.description, 300),
+        url,
+        inLanguage: 'en',
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        author: AUTHOR,
+        publisher: AUTHOR,
+        isPartOf: {
+            '@type': 'CreativeWork',
+            name: opts.section.name,
+            url: toAbsoluteUrl(opts.section.pathname)
+        }
+    }
+}
+
+/** A course and the lectures it is made of. `provider` and `author` are the same
+ *  Person as everywhere else, since the course content is written by them. */
+export function courseLd(opts: {
+    name: string
+    description: string
+    pathname: string
+    lectures: { name: string; description: string; pathname: string }[]
+}) {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'Course',
+        name: opts.name,
+        description: toMetaDescription(opts.description, 300),
+        url: toAbsoluteUrl(opts.pathname),
+        inLanguage: 'en',
+        provider: AUTHOR,
+        author: AUTHOR,
+        hasPart: opts.lectures.map((lecture, index) => ({
+            '@type': 'LearningResource',
+            position: index + 1,
+            name: lecture.name,
+            description: toMetaDescription(lecture.description, 300),
+            url: toAbsoluteUrl(lecture.pathname)
+        }))
+    }
+}
+
+/** One lecture of a course, a LearningResource that belongs to that course. */
+export function lectureLd(opts: {
+    name: string
+    description: string
+    pathname: string
+    course: Crumb
+}) {
+    const url = toAbsoluteUrl(opts.pathname)
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'LearningResource',
+        name: opts.name,
+        description: toMetaDescription(opts.description, 300),
+        url,
+        inLanguage: 'en',
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        author: AUTHOR,
+        provider: AUTHOR,
+        isPartOf: {
+            '@type': 'Course',
+            name: opts.course.name,
+            url: toAbsoluteUrl(opts.course.pathname)
+        }
     }
 }

@@ -1,20 +1,27 @@
 <script lang="ts">
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import { instructionsDocumentationList } from '#lib/languages/M68K/M68K-documentation.ts'
+
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Documentation', pathname: '/documentation' },
+            { name: 'M68K', pathname: '/documentation/m68k' }
+        ])
+    ])
 </script>
 
+<PageMeta
+    title="M68K assembly reference - instructions, addressing modes and traps | Asm Editor"
+    description="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
+    type="website"
+    {jsonLd}
+/>
+
 <svelte:head>
-    <title>M68K Documentation</title>
-    <meta
-        name="description"
-        content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
-    />
-    <meta
-        property="og:description"
-        content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
-    />
     <meta name="tags" content={instructionsDocumentationList.map((i) => i.name).join(', ')} />
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
