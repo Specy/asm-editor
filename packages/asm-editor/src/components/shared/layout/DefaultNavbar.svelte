@@ -16,7 +16,7 @@
 </script>
 
 <Navbar>
-    <Row style="gap: 0.6rem; align-items:center; flex: 1">
+    <Row style="gap: clamp(0.25rem, 1vw, 0.6rem); align-items:center; flex: 1">
         <a
             class="icon"
             style="width: 2.2rem; height: 2.2rem;"
@@ -28,6 +28,7 @@
         <a class="icon" href={resolve('/projects')} title="Go to your projects"> Projects </a>
         <a class="icon" href={resolve('/documentation')} title="Go to the docs"> Docs </a>
         <a class="icon" href={resolve('/learn/courses')} title="Learn assembly"> Learn </a>
+        <a class="icon" href={resolve('/blog')} title="Guides and use cases"> Blog </a>
         <a class="icon hidden-on-mobile" href={resolve('/embed')} title="Embed the website">
             Embed
         </a>
@@ -102,6 +103,14 @@
         display: flex;
     }
     @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
+        }
+    }
+    @media (max-width: 380px) {
+        .icon {
+            font-size: 0.8rem;
+        }
         .hidden-very-small {
             display: none;
         }

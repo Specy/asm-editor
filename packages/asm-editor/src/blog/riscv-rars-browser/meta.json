@@ -1,0 +1,11 @@
+{
+    "title": "Run RISC-V assembly with the RARS-based simulator",
+    "description": "Run an RV32 program, inspect its input and registers, and use breakpoints in ASM Editor's RARS-based simulator.",
+    "tags": ["guide", "use-case", "risc-v"],
+    "status": "published",
+    "datePublished": "2026-10-13",
+    "image": {
+        "src": "/images/blog/riscv-rars-browser/input-breakpoint.webp",
+        "alt": "RISC-V execution paused before adding the input value"
+    }
+}

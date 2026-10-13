@@ -22,6 +22,12 @@
     // Emitted once here rather than in each of the ~40 pages that write their own
     // head block: both values derive from the URL, so a page has nothing to add.
     let canonicalUrl = $derived(toAbsoluteUrl(page.url.pathname))
+    let socialImage = $derived(
+        page.data.socialImage ?? {
+            src: '/images/ASM-editor.webp',
+            alt: 'The ASM Editor assembly Workbench'
+        }
+    )
 
     onMount(() => {
         // The service worker is registered automatically by SvelteKit from
@@ -51,6 +57,10 @@
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:site_name" content="Asm Editor" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:image" content={toAbsoluteUrl(socialImage.src)} />
+    <meta property="og:image:alt" content={socialImage.alt} />
+    <meta name="twitter:image" content={toAbsoluteUrl(socialImage.src)} />
+    <meta name="twitter:image:alt" content={socialImage.alt} />
 </svelte:head>
 
 <ThemeProvider>

@@ -1,0 +1,198 @@
+.blog-intro {
+    max-width: 62rem;
+    padding: 2rem 0 3rem;
+}
+.blog-intro h1,
+.blog-article-header h1 {
+    font-size: clamp(2.3rem, 5vw, 4rem);
+    line-height: 1.12;
+    letter-spacing: -0.035em;
+    margin: 0.8rem 0 1.25rem;
+    font-weight: 700;
+    text-wrap: balance;
+}
+.blog-lead {
+    font-family: 'Noto Serif', serif;
+    font-size: 1.15rem;
+    line-height: 1.7;
+    opacity: 0.85;
+    max-width: 65ch;
+}
+.blog-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 1.1rem;
+}
+.blog-tag {
+    padding: 0.3rem 0.65rem;
+    border-radius: 1.2rem;
+    background: color-mix(in srgb, var(--accent) 9%, var(--secondary));
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+    font-size: 0.75rem;
+    color: var(--background-text);
+    text-decoration: none;
+}
+.blog-tag:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.blog-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 3rem;
+}
+.blog-section-heading {
+    margin: 1rem 0 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.75rem 1.5rem;
+}
+.blog-section-heading h2 {
+    font-size: 1.5rem;
+}
+.blog-card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 1rem;
+    background: var(--secondary);
+    border: 1px solid var(--tertiary);
+    overflow: hidden;
+}
+.blog-card-image {
+    display: block;
+    height: 12rem;
+    overflow: hidden;
+    background: var(--tertiary);
+}
+.blog-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+.blog-card:hover .blog-card-image img {
+    opacity: 1;
+}
+.blog-card-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+.blog-date,
+.blog-byline {
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+.blog-card h3 {
+    font-size: 1.35rem;
+    line-height: 1.35;
+    margin: 0.6rem 0 0.8rem;
+    text-wrap: balance;
+}
+.blog-card h3 a {
+    color: var(--background-text);
+    text-decoration: none;
+}
+.blog-card h3 a:hover {
+    color: var(--accent);
+}
+.blog-card p {
+    opacity: 0.8;
+    line-height: 1.6;
+    margin-bottom: auto;
+}
+.blog-card .blog-tags {
+    padding-top: 0.5rem;
+}
+.blog-article {
+    max-width: 64rem;
+    margin: 0 auto;
+}
+.blog-article-header {
+    max-width: 70ch;
+    margin: 1rem auto 3.5rem;
+}
+.blog-back {
+    font-size: 0.85rem;
+    color: var(--accent);
+    text-decoration: none;
+}
+.blog-back,
+.blog-article-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.blog-link-icon {
+    display: inline-flex;
+    width: 0.9rem;
+    height: 0.9rem;
+}
+.blog-link-icon svg {
+    width: 100%;
+    height: 100%;
+}
+.blog-byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: 1.5rem;
+}
+.blog-byline a {
+    color: inherit;
+}
+.blog-article ._markdown img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.7rem;
+    border: 1px solid var(--tertiary);
+    margin: 1rem auto;
+}
+.blog-article ._markdown figure {
+    max-width: 100%;
+    margin: 1.5rem 0;
+}
+.blog-article ._markdown figcaption {
+    max-width: 70ch;
+    margin: 0.75rem auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    opacity: 0.75;
+}
+.blog-article ._markdown h2,
+.blog-article ._markdown h3 {
+    scroll-margin-top: 5rem;
+}
+.blog-article-footer {
+    max-width: 70ch;
+    margin: 3rem auto 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--tertiary);
+    line-height: 1.7;
+}
+.blog-article-footer a {
+    color: var(--accent);
+}
+@media (max-width: 650px) {
+    .blog-grid {
+        grid-template-columns: 1fr;
+    }
+    .blog-intro {
+        padding-top: 1rem;
+    }
+    .blog-card-body {
+        padding: 1.1rem;
+    }
+    .blog-article-header {
+        margin-top: 0.5rem;
+        margin-bottom: 2rem;
+    }
+}
