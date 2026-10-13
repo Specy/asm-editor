@@ -2,9 +2,9 @@
 name: reverse-engineering-learner
 summary: A programming learner exploring small x86 executables in ASM Editor.
 interested-in:
-  - beginner reverse-engineering and cybersecurity use cases
-  - x86 executable walkthroughs
-  - understanding branches, input checks, and program state
+    - beginner reverse-engineering and cybersecurity use cases
+    - x86 executable walkthroughs
+    - understanding branches, input checks, and program state
 memory: false
 updated: 2026-10-12
 ---

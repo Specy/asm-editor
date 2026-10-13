@@ -2,9 +2,9 @@
 name: lecture-exposed-student
 summary: A student with some assembly lecture exposure who is discovering ASM Editor.
 interested-in:
-  - MARS and RARS entry-point guides
-  - turning lecture examples into runnable programs
-  - app setup, stepping, and understanding visible results
+    - MARS and RARS entry-point guides
+    - turning lecture examples into runnable programs
+    - app setup, stepping, and understanding visible results
 memory: false
 updated: 2026-10-12
 ---

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import type { MonacoType } from './Monaco'
 import {
+    registerAssemblyLanguage,
     registerAssemblyLanguageDescriptor,
     type AssemblyLanguageDescriptor
 } from './assemblyLanguageRegistry'
@@ -62,6 +63,16 @@ function completeDescriptor(): AssemblyLanguageDescriptor {
 }
 
 describe('assembly language provider registry', () => {
+    it('skips provider installation if its lifecycle expires while the descriptor loads', async () => {
+        const stub = registrationStub()
+        let current = true
+        const pending = registerAssemblyLanguage(stub.monaco, 'MIPS', () => current)
+        current = false
+        expect(await pending).toEqual([])
+        expect(stub.registered).toEqual([])
+        expect(stub.disposed).toEqual([])
+    })
+
     it('installs every capability declared by a descriptor', () => {
         const stub = registrationStub()
         const registrations = registerAssemblyLanguageDescriptor(stub.monaco, completeDescriptor())

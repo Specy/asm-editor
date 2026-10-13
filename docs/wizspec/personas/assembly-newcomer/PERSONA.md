@@ -2,8 +2,8 @@
 name: assembly-newcomer
 summary: A student encountering assembly and ASM Editor for the first time.
 interested-in:
-  - getting-started guides and feature walkthroughs
-  - beginner app use cases with runnable examples
+    - getting-started guides and feature walkthroughs
+    - beginner app use cases with runnable examples
 memory: false
 updated: 2026-10-12
 ---

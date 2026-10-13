@@ -45,9 +45,13 @@ const descriptorLoaders: Record<AvailableLanguages, DescriptorLoader> = {
 
 export async function registerAssemblyLanguage(
     monacoInstance: MonacoType,
-    language: AvailableLanguages
+    language: AvailableLanguages,
+    isCurrent: () => boolean = () => true
 ): Promise<monaco.IDisposable[]> {
     const descriptor = await descriptorLoaders[language](monacoInstance)
+    // Descriptor imports can outlive the loader's disposal. Do not overwrite providers from
+    // a newer lifecycle, including Monaco's single Monarch and configuration registrations.
+    if (!isCurrent()) return []
     return registerAssemblyLanguageDescriptor(monacoInstance, descriptor)
 }
 

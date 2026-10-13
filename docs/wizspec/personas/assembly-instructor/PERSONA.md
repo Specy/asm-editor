@@ -2,9 +2,9 @@
 name: assembly-instructor
 summary: An assembly instructor discovering ASM Editor and evaluating it for teaching.
 interested-in:
-  - MARS and RARS entry-point guides
-  - app introductions and classroom use cases
-  - shared examples, exercises, test cases, embeds, and exams
+    - MARS and RARS entry-point guides
+    - app introductions and classroom use cases
+    - shared examples, exercises, test cases, embeds, and exams
 memory: false
 updated: 2026-10-12
 ---

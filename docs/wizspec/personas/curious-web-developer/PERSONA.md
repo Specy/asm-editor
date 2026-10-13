@@ -2,9 +2,9 @@
 name: curious-web-developer
 summary: A web developer exploring how ASM Editor runs programs in the browser.
 interested-in:
-  - articles about how ASM Editor is built
-  - the connection between browser UI and program execution
-  - browser runtime, compilation, and debugging explanations
+    - articles about how ASM Editor is built
+    - the connection between browser UI and program execution
+    - browser runtime, compilation, and debugging explanations
 memory: false
 updated: 2026-10-12
 ---
