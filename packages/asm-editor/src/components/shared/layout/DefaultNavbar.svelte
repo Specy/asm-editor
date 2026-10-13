@@ -16,7 +16,7 @@
 </script>
 
 <Navbar>
-    <Row style="gap: clamp(0.25rem, 1vw, 0.6rem); align-items:center; flex: 1">
+    <Row style="gap: 0.6rem; align-items:center; flex: 1">
         <a
             class="icon"
             style="width: 2.2rem; height: 2.2rem;"
@@ -107,11 +107,8 @@
             display: none;
         }
     }
-    @media (max-width: 380px) {
-        .icon {
-            font-size: 0.8rem;
-        }
-        .hidden-very-small {
+    @media (max-width: 400px), (min-width: 601px) and (max-width: 640px) {
+        .ai {
             display: none;
         }
     }
