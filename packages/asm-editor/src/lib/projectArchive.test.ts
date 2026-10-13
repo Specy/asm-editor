@@ -119,7 +119,7 @@ describe('Project archives', () => {
 })
 
 describe('the single Project download', () => {
-    it('gives a one-File Project its source with the metadata block, losing nothing', () => {
+    it('gives a one-File Project its source with the metadata block, losing nothing', async () => {
         const project = makeProject({
             name: 'My / Project',
             description: 'a description',
@@ -142,7 +142,9 @@ describe('the single Project download', () => {
         expect(download.fileName).toBe('My___Project.mips')
         expect(typeof download.contents).toBe('string')
 
-        const { project: reimported, notice } = makeProjectFromExternal(download.contents as string)
+        const { project: reimported, notice } = await makeProjectFromExternal(
+            download.contents as string
+        )
         expect(notice).toBeUndefined()
         expect(reimported.name).toBe('My / Project')
         expect(reimported.description).toBe('a description')

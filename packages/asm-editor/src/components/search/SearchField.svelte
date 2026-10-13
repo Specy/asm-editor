@@ -1,8 +1,11 @@
 <script lang="ts">
     /**
-     * The search box of the Documentation panel and of the palette. While the model is still
-     * downloading and the reader types, a spinner says the results are by words only for now
+     * The search box of the Documentation panel and of the palette. Pointing at it, focusing it or
+     * typing in it starts the search model loading; while it loads, a spinner and a short status
+     * say the results are by words only for now
      * ([ADR 0026](../../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)).
+     * The status is a live region, there from the start so its change is announced; on a narrow
+     * box only the spinner shows and the words are left to screen readers.
      */
     import FaSearch from '~icons/fa-solid/search'
     import FaTimes from '~icons/fa-solid/times'
@@ -25,14 +28,14 @@
         ...rest
     }: Props = $props()
 
-    const downloading = $derived(searchClient.model === 'loading' && value.trim().length > 0)
+    const loading = $derived(searchClient.model === 'loading')
+    const warm = () => searchClient.warmModel()
 </script>
 
-<div class="search-field">
+<div class="search-field" onpointerenter={warm} onfocusin={warm} role="presentation">
     <span class="icon" aria-hidden="true">
-        {#if downloading}
-            <span class="spinner" title="Downloading the search model: matching words only for now"
-            ></span>
+        {#if loading}
+            <span class="spinner"></span>
         {:else}
             <FaSearch />
         {/if}
@@ -44,9 +47,19 @@
         spellcheck="false"
         autocomplete="off"
         aria-label={label}
+        aria-busy={loading}
+        oninput={warm}
         {placeholder}
         {...rest}
     />
+    <span
+        class="status"
+        class:quiet={!loading}
+        role="status"
+        title={loading ? 'Downloading the search model: matching words only for now' : undefined}
+    >
+        {#if loading}Loading semantic search…{/if}
+    </span>
     {#if value}
         <button
             type="button"
@@ -65,6 +78,8 @@
 
 <style>
     .search-field {
+        container-type: inline-size;
+        position: relative;
         display: flex;
         align-items: center;
         gap: 0.5rem;
@@ -115,6 +130,30 @@
     .clear:hover {
         opacity: 1;
         background-color: color-mix(in srgb, var(--tertiary-text) 12%, transparent);
+    }
+    .status {
+        flex: none;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        opacity: 0.7;
+    }
+    /* Out of sight, not out of the accessibility tree, so the live region is there before it speaks. */
+    .status.quiet {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+    /* Too narrow for the words beside the query: the spinner alone shows, the words stay for screen readers. */
+    @container (max-width: 20rem) {
+        .status {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
     }
     .spinner {
         width: 100%;

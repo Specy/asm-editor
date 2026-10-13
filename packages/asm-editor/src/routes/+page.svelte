@@ -50,7 +50,7 @@
 </script>
 
 <svelte:head>
-    <title>Welcome to Asm Editor</title>
+    <title>Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86 and Z80</title>
     <meta
         name="description"
         content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
@@ -59,7 +59,10 @@
         property="og:description"
         content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
-    <meta property="og:title" content="Asm Editor" />
+    <meta
+        property="og:title"
+        content="Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86 and Z80"
+    />
     <!-- The page's schema.org description. {@html} is the only way to emit a <script>
          from a component: <svelte:element this="script"> renders nothing in Svelte, and a
          literal script tag here is taken as the component's own instance script. Safe

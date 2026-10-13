@@ -402,10 +402,13 @@
             : resolveEditorModel(modelStore(currentMonaco), next)
         if (!sharedModels) models.set(next.key, model)
         setSourceHelpLanguage(model, language === 'c' || language === 'cpp' ? language : undefined)
-        if (language === 'c' || language === 'cpp')
-            void Monaco.registerLanguage(language).catch((error) =>
-                console.error('Source help registration failed', error)
-            )
+        //the language mounted with is registered in onMount, but a group that opened on a C file
+        //and then shows its Generated assembly reaches here with one nothing has registered yet.
+        //Registration is memoized; a model made before it lands reads as plain text and takes the
+        //language once Monaco learns its id
+        void Monaco.registerLanguage(language).catch((error) =>
+            console.error(`Language registration failed for ${language}`, error)
+        )
         if (currentEditor.getModel() !== model) {
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true

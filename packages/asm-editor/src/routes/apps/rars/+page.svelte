@@ -59,12 +59,12 @@
 </script>
 
 <svelte:head>
-    <title>RARS — RISC-V simulator in your browser</title>
+    <title>RARS - RISC-V simulator in your browser</title>
     <meta
         name="description"
         content="Run the RARS RISC-V assembler and runtime simulator directly in the browser, with no download or Java install."
     />
-    <meta property="og:title" content="RARS — RISC-V simulator in your browser" />
+    <meta property="og:title" content="RARS - RISC-V simulator in your browser" />
     <meta
         property="og:description"
         content="Run the RARS RISC-V assembler and runtime simulator directly in the browser, with no download or Java install."
@@ -74,7 +74,7 @@
 <DefaultNavbar />
 
 <Page hasNavbar>
-    <h1 class="visually-hidden">RARS — RISC-V simulator</h1>
+    <h1 class="visually-hidden">RARS - RISC-V simulator</h1>
     <div bind:this={wrapper} class="wrapper"></div>
 </Page>
 

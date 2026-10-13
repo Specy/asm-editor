@@ -20,12 +20,29 @@
     import { resolve } from '$app/paths'
     import { lectureAgent } from '../../lectureAgent.svelte'
     import { courseLanguage } from '#lib/search/scope.ts'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd, lectureLd } from '#lib/seo.ts'
 
     interface Props {
         data: PageData & { content: string }
     }
 
     let { data }: Props = $props()
+
+    let coursePathname = $derived(`/learn/courses/${data.course.slug}`)
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Courses', pathname: '/learn/courses' },
+            { name: data.course.name, pathname: coursePathname },
+            { name: data.lecture.name, pathname: page.url.pathname }
+        ]),
+        lectureLd({
+            name: data.lecture.name,
+            description: data.lecture.description,
+            pathname: page.url.pathname,
+            course: { name: data.course.name, pathname: coursePathname }
+        })
+    ])
 
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
@@ -89,12 +106,14 @@
     })
 </script>
 
+<PageMeta
+    title="{data.lecture.name} - {data.course.name}"
+    description={data.lecture.description}
+    type="article"
+    {jsonLd}
+/>
+
 <svelte:head>
-    <title>{data.lecture.name} - {data.course.name}</title>
-    <meta name="description" content={data.lecture.description} />
-    <meta property="og:title" content={data.lecture.name} />
-    <meta property="og:description" content={data.lecture.description} />
-    <meta property="og:type" content="article" />
     <meta property="og:image" content={data.course.image} />
 </svelte:head>
 

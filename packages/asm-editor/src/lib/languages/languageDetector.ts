@@ -1,23 +1,64 @@
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
-import { M68kInstructions } from './M68K/M68K-documentation'
-import { mipsInstructionNames } from './MIPS/MIPS-documentation'
-import { riscvInstructionMap } from './RISC-V/RISC-V-documentation'
-import { X86Instructions } from './X86/X86-grammar'
-import { z80InstructionNames } from './Z80/Z80-documentation'
 
-const m68kSet = new Set(M68kInstructions.map((i) => i.toLowerCase()))
-const mipsSet = new Set(mipsInstructionNames.map((i) => i.toLowerCase()))
-const x86Set = new Set(X86Instructions.map((i) => i.toLowerCase()))
-const z80Set = new Set(z80InstructionNames.map((i) => i.toLowerCase()))
+type InstructionSets = {
+    m68k: Set<string>
+    mips: Set<string>
+    x86: Set<string>
+    z80: Set<string>
+    riscv: Set<string>
+    /** RISC-V mnemonics whose every variant is 64-bit only. */
+    riscv64Only: Set<string>
+}
 
-// Build RISC-V sets: one for all instructions, one for 64-bit only
-const riscvSet = new Set<string>()
-const riscv64OnlySet = new Set<string>()
-for (const [name, variants] of riscvInstructionMap) {
-    riscvSet.add(name.toLowerCase())
-    if (variants.every((v) => v.isRv64Only)) {
-        riscv64OnlySet.add(name.toLowerCase())
-    }
+let instructionSets: Promise<InstructionSets> | undefined
+
+/**
+ * The instruction tables come from each language's documentation, which is large and would
+ * otherwise ship with every page that imports a Project (the docs layouts link to the projects
+ * through the store), so they load on the first detection and are shared by every later one.
+ */
+function loadInstructionSets(): Promise<InstructionSets> {
+    instructionSets ??= Promise.all([
+        import('./M68K/M68K-documentation'),
+        import('./MIPS/MIPS-documentation'),
+        import('./RISC-V/RISC-V-documentation'),
+        import('./X86/X86-grammar'),
+        import('./Z80/Z80-documentation')
+    ]).then(
+        ([
+            { M68kInstructions },
+            { mipsInstructionNames },
+            { riscvInstructionMap },
+            { X86Instructions },
+            { z80InstructionNames }
+        ]) => {
+            const riscv = new Set<string>()
+            const riscv64Only = new Set<string>()
+            for (const [name, variants] of riscvInstructionMap) {
+                riscv.add(name.toLowerCase())
+                if (variants.every((v) => v.isRv64Only)) riscv64Only.add(name.toLowerCase())
+            }
+            return {
+                m68k: new Set(M68kInstructions.map((i) => i.toLowerCase())),
+                mips: new Set(mipsInstructionNames.map((i) => i.toLowerCase())),
+                x86: new Set(X86Instructions.map((i) => i.toLowerCase())),
+                z80: new Set(z80InstructionNames.map((i) => i.toLowerCase())),
+                riscv,
+                riscv64Only
+            }
+        },
+        (error) => {
+            //a failed chunk load (offline, a stale deploy) is retried by the next detection
+            instructionSets = undefined
+            throw error
+        }
+    )
+    return instructionSets
+}
+
+/** Starts loading the instruction tables, so a later detection does not wait for them. */
+export function preloadLanguageDetector(): Promise<void> {
+    return loadInstructionSets().then(() => undefined)
 }
 
 /**
@@ -71,7 +112,8 @@ function extractMnemonics(code: string): string[] {
  * likely is by analyzing the instruction mnemonics. Returns the language with
  * the highest number of matched instructions.
  */
-export function detectAssemblyLanguage(code: string): AvailableLanguages {
+export async function detectAssemblyLanguage(code: string): Promise<AvailableLanguages> {
+    const sets = await loadInstructionSets()
     const mnemonics = extractMnemonics(code)
 
     let m68kScore = 0
@@ -84,17 +126,17 @@ export function detectAssemblyLanguage(code: string): AvailableLanguages {
     for (const mnemonic of mnemonics) {
         // M68K branches also accept `.s` as the short-displacement spelling.
         const m68kMnemonic = mnemonic.replace(/\.[bswl]$/, '')
-        if (m68kSet.has(m68kMnemonic)) m68kScore++
-        if (mipsSet.has(mnemonic)) mipsScore++
-        if (x86Set.has(mnemonic)) x86Score++
+        if (sets.m68k.has(m68kMnemonic)) m68kScore++
+        if (sets.mips.has(mnemonic)) mipsScore++
+        if (sets.x86.has(mnemonic)) x86Score++
         // The Z80's everyday mnemonics are all shared: `ld` and `jr` are MIPS and RISC-V
         // instructions too, and `add`, `push`, `call`, `ret`, `inc` are X86 ones, so Z80 code often
         // ties with another language instead of outscoring it. The order of `scores` below decides
         // those ties.
-        if (z80Set.has(mnemonic)) z80Score++
-        if (riscvSet.has(mnemonic)) {
+        if (sets.z80.has(mnemonic)) z80Score++
+        if (sets.riscv.has(mnemonic)) {
             riscvScore++
-            if (riscv64OnlySet.has(mnemonic)) riscv64Score++
+            if (sets.riscv64Only.has(mnemonic)) riscv64Score++
         }
     }
 

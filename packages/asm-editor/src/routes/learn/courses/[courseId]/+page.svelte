@@ -9,20 +9,44 @@
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import { courseLanguage } from '#lib/search/scope.ts'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd, courseLd } from '#lib/seo.ts'
 
     interface Props {
         data: PageData & { content: string }
     }
 
     let { data }: Props = $props()
+
+    let coursePathname = $derived(`/learn/courses/${data.course.slug}`)
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Courses', pathname: '/learn/courses' },
+            { name: data.course.name, pathname: coursePathname }
+        ]),
+        courseLd({
+            name: data.course.name,
+            description: data.course.description,
+            pathname: coursePathname,
+            lectures: data.course.modules.flatMap((module) =>
+                module.lectures.map((lecture) => ({
+                    name: lecture.name,
+                    description: lecture.description,
+                    pathname: `${coursePathname}/${module.slug}/${lecture.slug}`
+                }))
+            )
+        })
+    ])
 </script>
 
+<PageMeta
+    title="{data.course.name} course - free interactive lessons | Asm Editor"
+    description={data.course.description}
+    type="article"
+    {jsonLd}
+/>
+
 <svelte:head>
-    <title>{data.course.name}</title>
-    <meta name="description" content={data.course.description} />
-    <meta property="og:title" content={data.course.name} />
-    <meta property="og:description" content={data.course.description} />
-    <meta property="og:type" content="article" />
     <meta property="og:image" content={data.course.image} />
 </svelte:head>
 

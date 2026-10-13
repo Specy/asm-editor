@@ -12,9 +12,14 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * The panel, the palette and the agents' tool all ask through `search`, the plain function the
  * plan promised, with nothing in it about the UI.
  *
- * The model starts downloading when a page with a search box is entered (`preload`), unless the
- * browser asks to save data; there is no switch for it. Until it is ready, search matches words
- * only, and a query typed after it is ready uses both.
+ * Entering a page with a search box loads only its scope's word index (`preload`), once the page
+ * has settled: around a megabyte compressed, enough to match words at once. The model (tens of
+ * megabytes with its runtime) waits for a sign that the reader means to search: pointing at or
+ * focusing a search box or launcher, opening the palette (Ctrl+K included), or typing a query
+ * (`warmModel`, which `search` itself calls). It is then asked for once, unless the browser asks
+ * to save data; there is no switch for it, and a failed download is not retried. While it loads
+ * (`model === 'loading'`), the search box says so and search matches words only; a query typed
+ * after it is ready uses both.
  */
 export type ModelStatus =
     /** Not asked for yet. */
@@ -76,7 +81,10 @@ class SearchClient {
         const worker = await this.ensureWorker()
         const id = this.next++
         return new Promise<T>((resolve, reject) => {
-            this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
+            this.pending.set(id, {
+                resolve: resolve as (value: unknown) => void,
+                reject
+            })
             worker.postMessage({ ...message, id } as WorkerRequest)
         })
     }
@@ -122,8 +130,19 @@ class SearchClient {
     }
 
     /**
-     * What a page with a search box calls on arrival: the scope's shards and the model, once the
-     * page has settled, so neither competes with what the page itself is loading.
+     * What the search boxes call on a sign of intent (pointer over, focus, the palette opening, a
+     * query typed): starts the model download if nothing has asked for it yet. Cheap to call again;
+     * a skipped or failed model stays so.
+     */
+    warmModel(): void {
+        if (!browser || this.modelLoad) return
+        void this.loadModel()
+    }
+
+    /**
+     * What a page with a search box calls on arrival: the scope's shards, once the page has
+     * settled, so they do not compete with what the page itself is loading. Not the model, which
+     * waits for `warmModel`.
      */
     preload(scope: SearchScope): void {
         if (!browser) return
@@ -131,7 +150,6 @@ class SearchClient {
             this.loadScope(scope).catch((error: Error) =>
                 console.warn(`search: could not load the index (${error.message})`)
             )
-            void this.loadModel()
         }
         if ('requestIdleCallback' in window) window.requestIdleCallback(start, { timeout: 4000 })
         else setTimeout(start, 1500)
@@ -140,6 +158,7 @@ class SearchClient {
     /** The ranked results for a query in a scope, by words, and by meaning once the model is ready. */
     async search(scope: SearchScope, query: string, limit = 20): Promise<SearchAnswer> {
         if (!browser || !query.trim()) return { results: [], mode: 'text' }
+        this.warmModel()
         await this.loadScope(scope)
         return this.request<SearchAnswer>({ type: 'search', scope, query, limit })
     }

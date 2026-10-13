@@ -39,7 +39,7 @@ export type ImportedFile = {
  * Throws for an ELF the editor cannot run, with the reason, and for anything else that is not text
  * (an image, a PDF), which would otherwise become a Project of replacement characters.
  */
-export function importFile(bytes: Uint8Array, fileName: string): ImportedFile {
+export async function importFile(bytes: Uint8Array, fileName: string): Promise<ImportedFile> {
     const kind = executableKind(bytes)
     if (kind !== 'none')
         return {
@@ -52,7 +52,7 @@ export function importFile(bytes: Uint8Array, fileName: string): ImportedFile {
         imported:
             archive || /\.(?:asmproj|zip)$/i.test(fileName)
                 ? makeProjectFromArchive(bytes)
-                : makeProjectFromExternal(importedText(bytes, fileName)),
+                : await makeProjectFromExternal(importedText(bytes, fileName)),
         executable: false,
         archive
     }

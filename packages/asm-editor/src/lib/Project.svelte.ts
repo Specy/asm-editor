@@ -343,12 +343,12 @@ const UNREADABLE_METADATA_NOTICE =
  * current one both load; a newer one, and one that cannot be parsed, give a project with the code
  * only and a notice saying so, instead of dropping the metadata in silence.
  */
-export function makeProjectFromExternal(codeAndMeta: string): ExternalImport {
+export async function makeProjectFromExternal(codeAndMeta: string): Promise<ExternalImport> {
     const lines = codeAndMeta.split('\n')
     const threshold = lines.findIndex((line) => line.includes(CODE_SEPARATOR))
     if (threshold === -1) {
         const code = codeAndMeta.trimEnd()
-        return { project: makeProject({ language: detectAssemblyLanguage(code), code }) }
+        return { project: makeProject({ language: await detectAssemblyLanguage(code), code }) }
     }
     const code = lines.slice(0, threshold).join('\n').trimEnd()
     const metaLines = lines.slice(threshold + 1)
@@ -363,7 +363,7 @@ export function makeProjectFromExternal(codeAndMeta: string): ExternalImport {
     } catch (e) {
         console.error(e)
         return {
-            project: makeProject({ language: detectAssemblyLanguage(code), code }),
+            project: makeProject({ language: await detectAssemblyLanguage(code), code }),
             notice: UNREADABLE_METADATA_NOTICE
         }
     }
@@ -386,7 +386,7 @@ export function makeProjectFromExternal(codeAndMeta: string): ExternalImport {
     }
     const language = isAvailableLanguage(meta.language)
         ? meta.language
-        : detectAssemblyLanguage(code)
+        : await detectAssemblyLanguage(code)
     return {
         project: makeProject({ language, name: meta.name, code }),
         notice: NEWER_VERSION_NOTICE

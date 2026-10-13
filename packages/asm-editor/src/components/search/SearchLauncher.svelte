@@ -2,9 +2,11 @@
     /**
      * A box that opens the page's search palette: full width at the top of a landing page, compact
      * at the top of a sidebar. It looks like the box it opens, and what is typed into it goes on in
-     * the palette.
+     * the palette. Pointing at it or focusing it starts the search model loading, so it is on its
+     * way by the time the palette opens.
      */
     import FaSearch from '~icons/fa-solid/search'
+    import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { shortcutLabel, shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
     import { openSearchPalette } from './paletteState.svelte'
 
@@ -37,6 +39,8 @@
     class="search-launcher {size}"
     aria-haspopup="dialog"
     onclick={() => openSearchPalette()}
+    onpointerenter={() => searchClient.warmModel()}
+    onfocus={() => searchClient.warmModel()}
     {onkeydown}
 >
     <span class="icon" aria-hidden="true"><FaSearch /></span>

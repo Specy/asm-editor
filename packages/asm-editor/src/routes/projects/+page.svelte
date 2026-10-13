@@ -21,6 +21,7 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
     import { projectDownload } from '#lib/projectArchive.ts'
+    import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
 
     let hasFileHandleSupport = false
 
@@ -68,7 +69,7 @@
         | undefined
     > {
         try {
-            const read = importFile(new Uint8Array(data), fileName)
+            const read = await importFile(new Uint8Array(data), fileName)
             const project = await importProject(read.imported)
             return project ? { project, read } : undefined
         } catch (e) {
@@ -96,6 +97,9 @@
             await ProjectStore.save(importedProject) //saves the new metadata to the file
         }
     }
+
+    //opening a project from this list is the next step for most visits
+    onMount(warmUpMonaco)
 
     onMount(() => {
         hasFileHandleSupport = 'showOpenFilePicker' in window

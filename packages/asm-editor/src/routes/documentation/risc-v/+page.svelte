@@ -1,21 +1,25 @@
 <script lang="ts">
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd } from '#lib/seo.ts'
     import { resolve } from '$app/paths'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
+
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Documentation', pathname: '/documentation' },
+            { name: 'RISC-V', pathname: '/documentation/risc-v' }
+        ])
+    ])
 </script>
 
-<svelte:head>
-    <title>RISC-V Documentation</title>
-    <meta
-        name="description"
-        content="RISC-V assembly reference for RV32 and RV64 instructions, directives, simulator services, registers, and C/C++ programs."
-    />
-    <meta
-        property="og:description"
-        content="RISC-V assembly reference for RV32 and RV64 instructions, directives, simulator services, registers, and C/C++ programs."
-    />
-</svelte:head>
+<PageMeta
+    title="RISC-V assembly reference - instructions, registers and ecall syscalls | Asm Editor"
+    description="RISC-V assembly reference for RV32 and RV64 instructions, directives, simulator services, registers, and C/C++ programs."
+    type="website"
+    {jsonLd}
+/>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">RISC-V Documentation</h1>
     <SearchLauncher size="full" placeholder="Search the RISC-V docs and courses" />

@@ -1,3 +1,5 @@
+import { searchClient } from '#lib/search/searchClient.svelte.ts'
+
 /**
  * Whether the page's search palette is open, and what to start it with. A page has one palette,
  * mounted by its layout, and several ways in: the full-width box of a landing page, the box at the
@@ -10,7 +12,9 @@ export const searchPalette = $state({
     query: ''
 })
 
+/** Opening the palette is a sign the reader means to search, so the model starts loading. */
 export function openSearchPalette(query = '') {
+    searchClient.warmModel()
     searchPalette.query = query
     searchPalette.open = true
 }

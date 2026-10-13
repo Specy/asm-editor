@@ -105,7 +105,7 @@ function createProjectStore() {
     }
 
     async function importFromExternal(code: string): Promise<ExternalImport> {
-        const imported = makeProjectFromExternal(code)
+        const imported = await makeProjectFromExternal(code)
         await addProject(imported.project)
         return imported
     }

@@ -3,24 +3,17 @@
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { languageAccent } from '#lib/languages/languageColors.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     const langs = ['M68K', 'MIPS', 'RISC-V', 'X86', 'Z80'] satisfies AvailableLanguages[]
 </script>
 
 <DefaultNavbar />
-<svelte:head>
-    <title>Documentation</title>
-    <meta
-        name="description"
-        content="All the documentations for the languages and features available in the asm-editor"
-    />
-    <meta
-        property="og:description"
-        content="All the documentations for the languages and features available in the asm-editor"
-    />
-    <meta property="og:title" content="Documentation" />
-</svelte:head>
+<PageMeta
+    title="Documentation - M68K, MIPS, RISC-V, x86 and Z80 assembly reference | Asm Editor"
+    description="Instruction references, registers, directives, syscalls and runtime library docs for M68K, MIPS, RISC-V, x86-64 and Z80 assembly in the Asm Editor."
+/>
 
 <Page cropped hasNavbar contentStyle="padding: 1rem">
     <Header>Languages</Header>

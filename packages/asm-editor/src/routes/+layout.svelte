@@ -26,7 +26,6 @@
     onMount(() => {
         // The service worker is registered automatically by SvelteKit from
         // src/service-worker/index.ts — no manual registration needed here.
-        import('#lib/monaco/Monaco.ts').then((i) => i.Monaco.registerLanguages())
         metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
     })
     beforeNavigate((p) => {

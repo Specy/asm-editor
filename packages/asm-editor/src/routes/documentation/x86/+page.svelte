@@ -1,20 +1,24 @@
 <script lang="ts">
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
+
+    let jsonLd = $derived([
+        breadcrumbLd([
+            { name: 'Documentation', pathname: '/documentation' },
+            { name: 'x86-64', pathname: '/documentation/x86' }
+        ])
+    ])
 </script>
 
-<svelte:head>
-    <title>x86-64 Documentation</title>
-    <meta
-        name="description"
-        content="Read the x86-64 documentation, including the instructions with the operand forms NASM accepts, the assembler directives, the registers and flags, and the Linux syscalls this emulator implements"
-    />
-    <meta
-        property="og:description"
-        content="Read the x86-64 documentation, including the instructions with the operand forms NASM accepts, the assembler directives, the registers and flags, and the Linux syscalls this emulator implements"
-    />
-</svelte:head>
+<PageMeta
+    title="x86-64 assembly reference - instructions, registers and Linux syscalls | Asm Editor"
+    description="Read the x86-64 documentation, including the instructions with the operand forms NASM accepts, the assembler directives, the registers and flags, and the Linux syscalls this emulator implements"
+    type="website"
+    {jsonLd}
+/>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">x86-64 Documentation</h1>
     <SearchLauncher size="full" placeholder="Search the x86 docs and courses" />
