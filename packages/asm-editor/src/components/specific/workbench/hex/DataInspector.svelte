@@ -115,10 +115,13 @@
     .side dl {
         grid-template-columns: 1fr;
     }
+    /* a value too long to share its column with its name goes under it, whole, rather than
+       breaking a number in two */
     .row {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
-        gap: 0.6rem;
+        column-gap: 0.6rem;
         padding: 0.12rem 0;
         min-width: 0;
     }
@@ -127,9 +130,11 @@
         font-family: monospace;
     }
     dd {
+        margin-left: auto;
         font-family: monospace;
         text-align: right;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
+        min-width: 0;
         user-select: all;
     }
     .missing {
