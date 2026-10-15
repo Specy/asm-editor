@@ -145,6 +145,9 @@ import {
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
 
+/** `monaco.editor.ScrollType`'s values, named here so that the session never loads Monaco. */
+const SCROLL_TYPE = { smooth: 0, immediate: 1 } as const
+
 /**
  * The **Command line** the Terminal shows, `$ ./crackme hunter2`
  * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 12): the name the
@@ -1322,11 +1325,16 @@ export class WorkbenchSession {
         return !view || fileViewsOf(this.fileKindOf(file)).includes(view)
     }
 
-    revealEditorLine(lineNumber: number, column: number, group = this.groups[0]) {
+    revealEditorLine(
+        lineNumber: number,
+        column: number,
+        group = this.groups[0],
+        scroll: 'smooth' | 'immediate' = 'smooth'
+    ) {
         if (!this.groups.includes(group)) return
         const editor = group.editor
         if (!editor) return
-        editor.revealLineInCenter(lineNumber)
+        editor.revealLineInCenter(lineNumber, SCROLL_TYPE[scroll])
         editor.setPosition({ lineNumber, column })
     }
 
@@ -1642,7 +1650,8 @@ export class WorkbenchSession {
         if (!listing || !showing(pane)) return false
         const line = lineOfFileOffset(listing, offset)
         if (line < 0) return false
-        return this.revealWhenShown(pane, line)
+        //a pane that already showed the Listing scrolls to the line; one switched to it jumps
+        return this.revealWhenShown(pane, line, { scroll: target ? 'smooth' : 'immediate' })
     }
 
     /** Whether a pane's editor holds the model the pane shows, as it does once mounted. */
@@ -1656,18 +1665,26 @@ export class WorkbenchSession {
      * Reveals a line once the pane's editor holds the model it shows: a pane switched from the
      * Hex editor mounts its editor, and Monaco may still be loading. With `focus`, as Show in
      * Listing asks, the editor takes the keyboard; the debugger's reveal leaves it where it is.
+     * The editor jumps to the line unless asked to scroll: a smooth scroll in an editor just
+     * mounted is stopped part of the way by the layouts that follow (its notice, the debug
+     * column), as the current line's was (`CurrentLineReveal`), which left Show in Listing a
+     * tenth of the way to its line.
      */
     private async revealWhenShown(
         group: EditorGroup,
         line: number,
-        { column = 1, focus = true }: { column?: number; focus?: boolean } = {}
+        {
+            column = 1,
+            focus = true,
+            scroll = 'immediate'
+        }: { column?: number; focus?: boolean; scroll?: 'smooth' | 'immediate' } = {}
     ): Promise<boolean> {
         const key = group.modelKey
         for (let attempt = 0; attempt < 200; attempt++) {
             if (group.modelKey !== key || !this.groups.includes(group)) return false
             const editor = group.editor
             if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
-                this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+                this.revealEditorLine(zeroBasedLineToMonaco(line), column, group, scroll)
                 if (focus) editor.focus()
                 return true
             }

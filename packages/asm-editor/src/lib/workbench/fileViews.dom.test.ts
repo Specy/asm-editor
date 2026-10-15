@@ -349,8 +349,11 @@ describe('Show in Listing and Show in Hex', () => {
     /** An editor showing a group's model, which records what it was asked to reveal. */
     function fakeEditor(session: { languageSessionId: string }, lines = 5) {
         const revealed: number[] = []
+        //Monaco's ScrollType of each: 0 smooth, 1 at once
+        const scrolls: (number | undefined)[] = []
         const editor = {
             revealed,
+            scrolls,
             getModel: () => ({
                 uri: {
                     scheme: 'asm-editor',
@@ -361,7 +364,10 @@ describe('Show in Listing and Show in Hex', () => {
                 isDisposed: () => false,
                 getLineCount: () => lines
             }),
-            revealLineInCenter: (line: number) => revealed.push(line),
+            revealLineInCenter: (line: number, scroll?: number) => {
+                revealed.push(line)
+                scrolls.push(scroll)
+            },
             setPosition: () => {},
             focus: () => {}
         }
@@ -380,6 +386,8 @@ describe('Show in Listing and Show in Hex', () => {
         expect(await session.showInListing(group, 0x1004)).toBe(true)
         expect(group.displayedView).toBe('listing')
         expect(editor.revealed).toEqual([4])
+        //at once: a smooth scroll in an editor just mounted is cut short by the layouts after it
+        expect(editor.scrolls).toEqual([1])
         //and back, from the line to its one byte
         expect(session.hexRangeOfLine(group, 1)).toBeUndefined()
         expect(session.showInHex(group, 3)).toBe(true)
@@ -406,6 +414,8 @@ describe('Show in Listing and Show in Hex', () => {
         expect(await session.showInListing(right, 0x1000)).toBe(true)
         expect([left.displayedView, right.displayedView]).toEqual(['listing', 'hex'])
         expect(editor.revealed).toEqual([3])
+        //a pane already on the Listing scrolls there
+        expect(editor.scrolls).toEqual([0])
         expect(session.showInHex(left, 2)).toBe(true)
         expect([left.displayedView, right.displayedView]).toEqual(['listing', 'hex'])
         expect(right.hexReveal).toEqual({ path: 'crackme', offset: 0x1000, length: 4 })
