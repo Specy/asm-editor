@@ -7,8 +7,46 @@ import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import { executableKind } from '#lib/executables.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 const fixture = () => new Uint8Array(readFileSync('../x86/blink-js/tests/fixtures/elf/crackme'))
+
+it.each<AvailableLanguages>(['X86', 'M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'Z80'])(
+    'renders hints on the first open and keeps them on reopen for %s',
+    async (language) => {
+        const fileSystem = new FileSystem({ 'main.asm': { encoding: 'plain', content: 'nop' } })
+        const target = document.createElement('div')
+        document.body.append(target)
+        const props = {
+            files: fileSystem.files,
+            fileSystem,
+            language,
+            entry: 'main.asm',
+            selectedPath: 'main.asm',
+            hints: true,
+            onSelect: vi.fn(),
+            onEntryChange: vi.fn()
+        }
+        let component: ReturnType<typeof mount> | undefined
+        try {
+            component = mount(Explorer, { target, props })
+            flushSync()
+            const tipTexts = () =>
+                Array.from(target.querySelectorAll('.hints a, .hints p'), (tip) => tip.textContent)
+            const firstTips = tipTexts()
+            expect(firstTips).toHaveLength(language === 'M68K' || language === 'Z80' ? 2 : 1)
+            await unmount(component)
+            component = undefined
+
+            component = mount(Explorer, { target, props })
+            flushSync()
+            expect(tipTexts()).toEqual(firstTips)
+        } finally {
+            if (component) await unmount(component)
+            target.remove()
+        }
+    }
+)
 
 async function upload(bytes: Uint8Array, confirm = true) {
     const fileSystem = new FileSystem({ 'main.asm': { encoding: 'plain', content: 'nop' } })

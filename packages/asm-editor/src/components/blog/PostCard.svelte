@@ -6,9 +6,9 @@
 </script>
 
 <article class="blog-card">
-    {#if post.image}<a href={post.pathname} tabindex="-1" aria-hidden="true" class="blog-card-image"
-            ><img src={post.image.src} alt="" loading="lazy" width="1440" height="1000" /></a
-        >{/if}
+    {#if post.image}<div class="blog-card-image">
+            <img src={post.image.src} alt="" loading="lazy" width="1440" height="1000" />
+        </div>{/if}
     <div class="blog-card-body">
         <time class="blog-date" datetime={post.datePublished}
             >{formatBlogDate(post.datePublished)}</time

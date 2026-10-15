@@ -1,9 +1,10 @@
 {
-    "title": "Run MIPS assembly with the MARS-based simulator",
-    "description": "Read input, inspect registers, and step through a MIPS calculation in ASM Editor's MARS-based simulator.",
+    "title": "ASM Editor: MIPS assembly in your browser",
+    "description": "Explore ASM Editor's browser workspace, MARS-based MIPS simulator, debugger, simulated peripherals, project sharing, and C/C++ support.",
     "tags": ["guide", "use-case", "mips"],
     "status": "published",
     "datePublished": "2026-10-13",
+    "dateUpdated": "2026-10-15",
     "image": {
         "src": "/images/blog/mips-mars-browser/input-breakpoint.webp",
         "alt": "MIPS execution paused before adding the input value"
