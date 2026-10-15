@@ -331,6 +331,26 @@ describe('the Hex editor in a session', () => {
         )
     })
 
+    it('previews a PDF stored as text, whose bytes are read-only as any text File is', () => {
+        const { session } = setup('MIPS', {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'nop' },
+                'ascii.pdf': { encoding: 'plain', content: '%PDF-1.4\n%%EOF\n' }
+            }
+        })
+        const group = session.groups[0]
+        session.selectFile('ascii.pdf')
+        flushSync()
+        expect(group.displayedView).toBe('preview')
+        expect(group.viewSwitch).toEqual(['preview', 'hex'])
+        group.setView('ascii.pdf', 'hex')
+        flushSync()
+        expect(group.displayedView).toBe('hex')
+        expect(group.bytesReadOnly).toBe('This File is stored as text, which takes no Byte edits')
+        expect(session.editFileBytes('ascii.pdf', 0, Uint8Array.from([0x25]))).toBe(false)
+    })
+
     it("keeps a File's Undo across a rename and drops it with the File", () => {
         const { session, project } = setup()
         const blob = project.files['blob.bin']

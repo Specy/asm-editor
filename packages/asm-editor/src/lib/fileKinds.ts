@@ -26,6 +26,7 @@ const startsWith = (bytes: Uint8Array, ...values: number[]) =>
 
 const image = (mime: string): FilePreview => ({ preview: 'image', mime })
 const audio = (mime: string): FilePreview => ({ preview: 'audio', mime })
+const pdf = (): FilePreview => ({ preview: 'pdf', mime: 'application/pdf' })
 
 /** Layer III bit rates in kbit/s, by bit-rate index: MPEG-1's, then MPEG-2 and 2.5's. */
 const MP3_BIT_RATES = [
@@ -108,7 +109,7 @@ export function previewSignature(bytes: Uint8Array): FilePreview | undefined {
         startsWith(bytes, 0, 0, 0, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a)
     )
         return image('image/jxl')
-    if (ascii(bytes, 0, '%PDF-')) return { preview: 'pdf', mime: 'application/pdf' }
+    if (ascii(bytes, 0, '%PDF-')) return pdf()
     if (ascii(bytes, 0, 'ID3') || mp3WithoutTag(bytes)) return audio('audio/mpeg')
     if (ascii(bytes, 0, 'OggS') && bytes[4] === 0) return audio('audio/ogg')
     if (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WAVE')) return audio('audio/wav')
@@ -119,11 +120,13 @@ export function previewSignature(bytes: Uint8Array): FilePreview | undefined {
 
 /**
  * What a File is, from its bytes with their Byte edits. An ELF is an Executable only where a Build
- * can run it, in an x86 Project, as `executableKind` decides; anywhere else it is bytes.
+ * can run it, in an x86 Project, as `executableKind` decides; anywhere else it is bytes. A File
+ * stored as text is text whatever its first bytes, but for a PDF: one written in ASCII alone
+ * decodes as text, and is still a PDF to preview.
  */
 export function fileKind(file: ProjectFile, language: AvailableLanguages): ProjectFileKind {
     if (language === 'X86' && executableKind(file) === 'supported') return 'executable'
-    if (file.encoding === 'plain') return 'text'
+    if (file.encoding === 'plain') return file.content.startsWith('%PDF-') ? pdf() : 'text'
     let head: Uint8Array
     try {
         head = fileHead(file, HEAD_LENGTH)

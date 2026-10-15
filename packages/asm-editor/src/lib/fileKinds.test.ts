@@ -109,9 +109,19 @@ describe('Files that are not previewed', () => {
     })
 
     it('makes a text File text, whatever its first bytes say', () => {
-        expect(fileKind({ encoding: 'plain', content: '%PDF-1.7 but text' }, 'X86')).toBe('text')
         expect(fileKind({ encoding: 'plain', content: 'GIF89a' }, 'MIPS')).toBe('text')
         expect(fileKind(bytesFile(new TextEncoder().encode('BM text')), 'MIPS')).toBe('text')
+        expect(fileKind({ encoding: 'plain', content: '<svg xmlns="x"></svg>' }, 'X86')).toBe(
+            'text'
+        )
+        expect(fileKind({ encoding: 'plain', content: ' %PDF-1.7' }, 'X86')).toBe('text')
+    })
+
+    it('makes a PDF written in ASCII alone, which is stored as text, a PDF', () => {
+        const pdf = bytesFile(new TextEncoder().encode('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n'))
+        expect(pdf.encoding).toBe('plain')
+        for (const language of ['X86', 'MIPS'] as const)
+            expect(fileKind(pdf, language)).toEqual({ preview: 'pdf', mime: 'application/pdf' })
     })
 })
 
