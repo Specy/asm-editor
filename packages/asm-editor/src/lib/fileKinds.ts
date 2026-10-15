@@ -80,6 +80,37 @@ function isoBrands(bytes: Uint8Array): string[] | undefined {
     return brands
 }
 
+const u16 = (bytes: Uint8Array, offset: number) => bytes[offset] | (bytes[offset + 1] << 8)
+const u32 = (bytes: Uint8Array, offset: number) =>
+    (u16(bytes, offset) | (u16(bytes, offset + 2) << 16)) >>> 0
+
+/**
+ * The sizes of the DIB headers a BMP can carry, from `BITMAPCOREHEADER`'s 12 to
+ * `BITMAPV5HEADER`'s 124.
+ */
+const BMP_HEADER_SIZES = [12, 40, 52, 56, 64, 108, 124]
+
+/**
+ * A BMP: `BM`, and after the 14-byte file header a DIB header of a size Windows defines, which
+ * rules out most Files that merely start with those two letters.
+ */
+function isBmp(bytes: Uint8Array) {
+    return bytes.length >= 26 && ascii(bytes, 0, 'BM') && BMP_HEADER_SIZES.includes(u32(bytes, 14))
+}
+
+/**
+ * An icon or a cursor: its type, at least one image, and a first directory entry whose reserved
+ * byte is zero, which rules out most Files that merely start with a zero word and a 1 or a 2.
+ */
+function isIcon(bytes: Uint8Array) {
+    return (
+        bytes.length >= 22 &&
+        (startsWith(bytes, 0, 0, 1, 0) || startsWith(bytes, 0, 0, 2, 0)) &&
+        u16(bytes, 4) >= 1 &&
+        bytes[9] === 0
+    )
+}
+
 /** HEIF images, which only Safari shows: bytes elsewhere, so they open in the Hex editor. */
 const HEIF_BRANDS = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1']
 const MPEG4_AUDIO_BRANDS = ['M4A ', 'M4B ', 'M4P ']
@@ -94,7 +125,7 @@ export function previewSignature(bytes: Uint8Array): FilePreview | undefined {
     if (startsWith(bytes, 0xff, 0xd8, 0xff)) return image('image/jpeg')
     if (ascii(bytes, 0, 'GIF87a') || ascii(bytes, 0, 'GIF89a')) return image('image/gif')
     if (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WEBP')) return image('image/webp')
-    if (ascii(bytes, 0, 'BM')) return image('image/bmp')
+    if (isBmp(bytes)) return image('image/bmp')
     //an ISO media file's box size can read as an icon's header, so its `ftyp` comes first
     const brands = isoBrands(bytes)
     if (brands) {
@@ -103,7 +134,7 @@ export function previewSignature(bytes: Uint8Array): FilePreview | undefined {
         if (MPEG4_AUDIO_BRANDS.includes(brands[0])) return audio('audio/mp4')
         return { preview: 'video', mime: brands[0] === 'qt  ' ? 'video/quicktime' : 'video/mp4' }
     }
-    if (startsWith(bytes, 0, 0, 1, 0) || startsWith(bytes, 0, 0, 2, 0)) return image('image/x-icon')
+    if (isIcon(bytes)) return image('image/x-icon')
     if (
         startsWith(bytes, 0xff, 0x0a) ||
         startsWith(bytes, 0, 0, 0, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a)
