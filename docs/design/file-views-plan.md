@@ -94,12 +94,11 @@ Files: `host/` (C++), `js/src/`.
 1. **`prototypes/glibc.h`** (decision 5): write it from the bundled glibc's exported functions most programs call, and test that every declaration parses and every noreturn mark lands.
 2. **Guards**: `maxInstructions` (default Ghidra's 100,000) and a per-call time limit of 30 seconds, Ghidra's default, inside the wasm; a function that exceeds either returns `{ address, error }`, with tests of both.
 3. **Measurements**, recorded in the package README and the design's implementation notes: load time and the time to decompile each function of `crackme`, `crackme-stripped` and the static non-PIE `hello-atexit` (thousands of glibc functions; take its 20 largest), first call and warm. Targets: a small function under 100 ms warm. The slowest functions are recorded, not failed: `printf_positional` in `hello-atexit-static` took 14 s in D2, within the 30-second limit.
-4. *(Moved to E8.1 on 2026-10-15: it needs the monorepo, so it is written with the `ProgramImage` builder.)*
+4. _(Moved to E8.1 on 2026-10-15: it needs the monorepo, so it is written with the `ProgramImage` builder.)_
 
 ### D4. Decompiler: release
 
 After E8 has used the API in the editor (moved on 2026-10-15), so that 1.0.0 is the API the editor needs; the editor uses the workspace build until then.
-
 
 1. `README.md` shaped like the x86 Core's (library only; no mention of the editor), `CHANGELOG.md`, the licences and `NOTICE` in the package, a CD workflow copied from the x86 Core's `cd.yml` (tag on the default branch, version match, checks, `npm publish` with trusted publishing).
 2. Version `1.0.0`. Stop for the owner to review, push, tag and publish. The editor keeps using the workspace build meanwhile.
