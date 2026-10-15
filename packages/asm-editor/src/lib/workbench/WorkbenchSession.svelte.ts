@@ -31,7 +31,7 @@ import {
     type RegisterPoke,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { instructionAddressAt } from '#lib/listing/listing.ts'
+import { instructionAddressAt, lineOfFileOffset } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
@@ -59,6 +59,7 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import {
     createProjectLanguageSessionId,
+    parseProjectSourceUri,
     projectSourceModelKey
 } from '#lib/languages/service/uri.ts'
 import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
@@ -1545,6 +1546,87 @@ export class WorkbenchSession {
         if (this.emulator.canExecute && this.emulator.terminated && this.emulator.line >= 0) {
             this.emulator.resetSelectedLine()
         }
+    }
+
+    /**
+     * Show in Listing ([file-views.md](../../../../../docs/design/file-views.md), decision 9): the
+     * instruction holding a byte of the Executable a pane shows in the Hex editor, through the
+     * file offset the Listing keeps for each line. In the other pane when it shows the Listing
+     * already, else in this one, switched to it. False when no line holds the byte.
+     */
+    async showInListing(group: EditorGroup, offset: number): Promise<boolean> {
+        const path = group.displayedPath
+        const showing = (candidate: EditorGroup) =>
+            candidate.displayedPath === path && candidate.displayedView === 'listing'
+        const target = this.groups.find((candidate) => candidate !== group && showing(candidate))
+        const pane = target ?? group
+        if (!target) group.setView(path, 'listing')
+        this.focusEditorGroup(pane)
+        await tick()
+        const listing = await pane.displayedListing?.ready.catch(() => undefined)
+        if (!listing || !showing(pane)) return false
+        const line = lineOfFileOffset(listing, offset)
+        if (line < 0) return false
+        return this.revealWhenShown(pane, line)
+    }
+
+    /**
+     * Reveals a line once the pane's editor holds the model it shows: a pane switched from the
+     * Hex editor mounts its editor, and Monaco may still be loading.
+     */
+    private async revealWhenShown(group: EditorGroup, line: number): Promise<boolean> {
+        const key = group.modelKey
+        for (let attempt = 0; attempt < 200; attempt++) {
+            if (group.modelKey !== key) return false
+            const editor = group.editor
+            const model = editor?.getModel()
+            const identity = model && !model.isDisposed() ? parseProjectSourceUri(model.uri) : null
+            if (editor && identity && projectSourceModelKey(identity) === key) {
+                if (model!.getLineCount() > line) {
+                    this.revealEditorLine(zeroBasedLineToMonaco(line), 1, group)
+                    editor.focus()
+                    return true
+                }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        return false
+    }
+
+    /**
+     * The bytes of the instruction or data on a line of the Listing a pane shows, which Show in
+     * Hex selects: none for a line without bytes, or a library's Listing, which is no File.
+     */
+    hexRangeOfLine(
+        group: EditorGroup,
+        line: number
+    ): { offset: number; length: number } | undefined {
+        const listing = group.displayedListingView
+        if (!listing || group.displayedLibraryListing || !group.displayedFile) return undefined
+        const offset = listing.lines.offsets[line]
+        const length = listing.lines.sizes[line]
+        return offset >= 0 && length > 0 ? { offset, length } : undefined
+    }
+
+    /**
+     * Show in Hex: a Listing line's bytes, selected in the Hex editor, in the other pane when it
+     * shows the File's bytes already, else in this one, switched to them.
+     */
+    showInHex(group: EditorGroup, line: number): boolean {
+        const range = this.hexRangeOfLine(group, line)
+        if (!range) return false
+        const path = group.displayedPath
+        const target =
+            this.groups.find(
+                (candidate) =>
+                    candidate !== group &&
+                    candidate.displayedPath === path &&
+                    candidate.displayedView === 'hex'
+            ) ?? group
+        if (target === group) group.setView(path, 'hex')
+        target.hexReveal = { path, ...range }
+        this.focusEditorGroup(target)
+        return true
     }
 
     toggleBreakpoint(line: number, group = this.groups[0]) {

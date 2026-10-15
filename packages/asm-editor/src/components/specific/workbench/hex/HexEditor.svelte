@@ -1,15 +1,25 @@
 <script lang="ts" module>
     /**
      * Each original's bytes, decoded once: a Byte edit makes a new File record over the same
-     * original, and decoding a 16 MiB File again on every edit would stall the typing.
+     * original, and decoding a 16 MiB File again on every edit would stall the typing. Keyed by
+     * the content string itself, per encoding, as the ELF analyses are: a key built from it would
+     * copy megabytes at every lookup.
      */
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A cache read while deriving the bytes; nothing tracks it.
-    const originals = new Map<string, Uint8Array>()
+    const originals = {
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A cache read while deriving the bytes; nothing tracks it.
+        plain: new Map<string, Uint8Array>(),
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- The same, for Files stored as bytes.
+        base64: new Map<string, Uint8Array>()
+    }
     const KEPT_ORIGINALS = 4
 </script>
 
 <script lang="ts">
     import { onMount, tick, untrack } from 'svelte'
+    import type { ProjectFileKind } from '#lib/fileKinds.ts'
+    import { executableAnalysis } from '#lib/executables.ts'
+    import { plannedLoadBase } from '#lib/listing/listingPaths.ts'
+    import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
     import {
         applyByteEdits,
         originalBytes,
@@ -24,8 +34,10 @@
     import FaFont from '~icons/fa-solid/font'
     import FaSearch from '~icons/fa-solid/search'
     import FaMapMarkerAlt from '~icons/fa-solid/map-marker-alt'
+    import FaListOl from '~icons/fa-solid/list-ol'
     import { ByteEditHistory } from './byteEditHistory'
     import { INSPECTED_BYTES } from './dataInspector'
+    import { elfRegions, regionAt, regionHover, regionSpans, type FileRegion } from './elfRegions'
     import DataInspector from './DataInspector.svelte'
     import HexFindBar, { type FindKind } from './HexFindBar.svelte'
     import HexStatus from './HexStatus.svelte'
@@ -61,6 +73,8 @@
     interface Props {
         path: string
         file: ProjectFile
+        /** An Executable's bytes are tinted by what they are, as memory is by its regions. */
+        kind: ProjectFileKind
         /** Why the bytes take no Byte edits now, or undefined when they do. */
         readOnly?: string
         /** A notice above the bytes: an Executable's during a Debug session (decision 8). */
@@ -82,11 +96,14 @@
         viewState?: HexViewState
         /** Whether the execution dock floats over the pane's bottom edge, which the bytes leave room for. */
         dockInset?: boolean
+        /** Show in Listing, from a byte of an Executable's code. */
+        onShowInListing?: (offset: number) => void
     }
 
     let {
         path,
         file,
+        kind,
         readOnly,
         notice,
         history = new ByteEditHistory(),
@@ -95,7 +112,8 @@
         reveal,
         onRevealed,
         viewState,
-        dockInset = false
+        dockInset = false,
+        onShowInListing
     }: Props = $props()
 
     const uid = Math.random().toString(36).slice(2, 10)
@@ -115,12 +133,12 @@
     const TYPING_PAUSE = 600
 
     function originalOf(file: ProjectFile): Uint8Array {
-        const key = `${file.encoding}:`
-        const cached = originals.get(key + file.content)
+        const cache = originals[file.encoding]
+        const cached = cache.get(file.content)
         if (cached) return cached
         const bytes = originalBytes(file)
-        originals.set(key + file.content, bytes)
-        if (originals.size > KEPT_ORIGINALS) originals.delete(originals.keys().next().value!)
+        cache.set(file.content, bytes)
+        if (cache.size > KEPT_ORIGINALS) cache.delete(cache.keys().next().value!)
         return bytes
     }
 
@@ -129,6 +147,17 @@
     const size = $derived(bytes.length)
     const digits = $derived(offsetDigits(size))
     const editable = $derived(readOnly === undefined && !!onEdit)
+    /**
+     * An Executable's parts, laid flat for looking a byte up: from the ELF analysis the Listing
+     * reads, at the addresses the Listing shows. A File only an x86 Project runs has none.
+     */
+    const spans = $derived.by(() => {
+        if (kind !== 'executable') return undefined
+        const analysis = executableAnalysis(file)
+        return regionSpans(elfRegions(bytes, analysis, plannedLoadBase(analysis.pie)))
+    })
+    const regionOf = (offset: number): FileRegion | undefined =>
+        spans && offset >= 0 && offset < size ? regionAt(spans, offset) : undefined
 
     /**
      * Bytes typed and not yet saved, by offset: shown at once, saved as one Byte edit when the
@@ -500,10 +529,36 @@
         const frame = root.getBoundingClientRect()
         hovered = { offset, left: box.left - frame.left, top: box.bottom - frame.top + 2 }
     }
-    /** What a byte's hover card says, or nothing for a byte that needs no card. */
-    function hoverText(_offset: number): string | undefined {
-        return undefined
+    /** What a byte's hover card says: the region it is in, or nothing outside every region. */
+    function hoverText(offset: number): string | undefined {
+        const region = regionOf(offset)
+        return region && regionHover(region)
     }
+
+    /**
+     * A byte's tint: its region's colour, and a line on each side where the region ends, as the
+     * memory view outlines its regions, so a run of one region reads as one block.
+     */
+    function tint(offset: number, column: number): string | undefined {
+        const region = regionOf(offset)
+        if (!region) return undefined
+        const edges = [
+            regionOf(offset - bytesPerRow) !== region,
+            column === bytesPerRow - 1 || regionOf(offset + 1) !== region,
+            regionOf(offset + bytesPerRow) !== region,
+            column === 0 || regionOf(offset - 1) !== region
+        ].map((edge) => (edge ? '1px' : '0'))
+        return `--region-color: ${memoryRegionColor(region.kind)}; --region-edges: ${edges.join(' ')}; --bridge-edges: ${edges[0]} 0 ${edges[2]} 0;`
+    }
+    /** Whether a region runs on across the gap between a row's two halves, which it then fills. */
+    const bridged = (offset: number, column: number) =>
+        bytesPerRow === 16 &&
+        column === 8 &&
+        !!regionOf(offset) &&
+        regionOf(offset - 1) === regionOf(offset)
+    /** Whether Show in Listing can start from a byte: one of an Executable's code. */
+    const showsInListing = (offset: number) =>
+        !!onShowInListing && regionOf(offset)?.kind === 'code'
 
     //the context menu, at the pointer, or at the caret when the keyboard opened it
     let contextMenu = $state<{ x: number; y: number } | null>(null)
@@ -525,6 +580,20 @@
         { label: 'Copy as hex', icon: FaCopy, disabled: !size, onSelect: () => copy('hex') },
         { label: 'Copy as text', icon: FaFont, disabled: !size, onSelect: () => copy('text') },
         { separator: true },
+        ...(onShowInListing
+            ? [
+                  {
+                      label: 'Show in Listing',
+                      icon: FaListOl,
+                      disabled: !showsInListing(caret.offset),
+                      onSelect: () => {
+                          flush()
+                          onShowInListing(caret.offset)
+                      }
+                  },
+                  { separator: true } as const
+              ]
+            : []),
         { label: 'Go to offset…', icon: FaMapMarkerAlt, onSelect: () => openBar('goto') },
         { label: 'Find…', icon: FaSearch, onSelect: () => openBar('find') }
     ])
@@ -637,6 +706,9 @@
         class:selected={inSelection(offset)}
         class:caret={atCaret && caret.column === 'hex'}
         class:twin={atCaret && caret.column === 'text'}
+        class:tinted={!!spans && !!regionOf(offset)}
+        class:bridged={!!spans && bridged(offset, column)}
+        style={spans ? tint(offset, column) : undefined}
         role="gridcell"
         id={cellId('hex', offset)}
         aria-selected={inSelection(offset)}
@@ -648,7 +720,7 @@
     >
 {/snippet}
 
-{#snippet textCell(offset: number)}
+{#snippet textCell(offset: number, column: number)}
     {@const byte = byteAt(offset)}
     {@const atCaret = caret.offset === offset}
     <span
@@ -657,6 +729,8 @@
         class:selected={inSelection(offset)}
         class:caret={atCaret && caret.column === 'text'}
         class:twin={atCaret && caret.column === 'hex'}
+        class:tinted={!!spans && !!regionOf(offset)}
+        style={spans ? tint(offset, column) : undefined}
         role="gridcell"
         id={cellId('text', offset)}
         aria-selected={inSelection(offset)}
@@ -690,7 +764,7 @@
         {digits}
         edited={!!file.edits?.length || pending.size > 0}
         {readOnly}
-        region={undefined}
+        region={regionOf(caret.offset)?.name}
         {inspectorOpen}
         onFind={() => openBar('find')}
         onGoTo={() => openBar('goto')}
@@ -803,7 +877,7 @@
                                 <span class="hex-text" role="none">
                                     {#each columns as column (column)}
                                         {#if start + column < size}
-                                            {@render textCell(start + column)}
+                                            {@render textCell(start + column, column)}
                                         {/if}
                                     {/each}
                                 </span>
@@ -1027,6 +1101,35 @@
         .text-cell:hover {
             background: color-mix(in srgb, var(--secondary-text) 12%, transparent);
         }
+    }
+    /* a region's bytes: tinted with its colour, square so the tint runs on unbroken, and
+       outlined where it ends */
+    .tinted {
+        border-radius: 0;
+        background: color-mix(in srgb, var(--region-color) 14%, transparent);
+
+        &::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-style: solid;
+            border-color: var(--region-color);
+            border-width: var(--region-edges);
+            pointer-events: none;
+        }
+    }
+    .bridged::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 100%;
+        width: 0.5rem;
+        border-style: solid;
+        border-color: var(--region-color);
+        border-width: var(--bridge-edges);
+        background: color-mix(in srgb, var(--region-color) 14%, transparent);
+        pointer-events: none;
     }
     .zero,
     .unprintable {

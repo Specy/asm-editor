@@ -340,6 +340,73 @@ describe('the Hex editor in a session', () => {
     })
 })
 
+describe('Show in Listing and Show in Hex', () => {
+    /** An editor showing a group's model, which records what it was asked to reveal. */
+    function fakeEditor(session: { languageSessionId: string }, lines = 5) {
+        const revealed: number[] = []
+        const editor = {
+            revealed,
+            getModel: () => ({
+                uri: {
+                    scheme: 'asm-editor',
+                    authority: session.languageSessionId,
+                    path: '/live/crackme',
+                    fragment: 'listing'
+                },
+                isDisposed: () => false,
+                getLineCount: () => lines
+            }),
+            revealLineInCenter: (line: number) => revealed.push(line),
+            setPosition: () => {},
+            focus: () => {}
+        }
+        return editor
+    }
+
+    it('go from a code byte to its instruction and back, switching the pane', async () => {
+        const { session } = setup()
+        const group = session.groups[0]
+        group.setView('crackme', 'hex')
+        session.selectFile('crackme')
+        flushSync()
+        const editor = fakeEditor(session)
+        group.editor = editor as unknown as typeof group.editor
+        //`ret`, the smallListing's line 3, at offset 0x1004
+        expect(await session.showInListing(group, 0x1004)).toBe(true)
+        expect(group.displayedView).toBe('listing')
+        expect(editor.revealed).toEqual([4])
+        //and back, from the line to its one byte
+        expect(session.hexRangeOfLine(group, 1)).toBeUndefined()
+        expect(session.showInHex(group, 3)).toBe(true)
+        flushSync()
+        expect(group.displayedView).toBe('hex')
+        expect(group.hexReveal).toEqual({ path: 'crackme', offset: 0x1004, length: 1 })
+        //a byte no line holds stays where it is
+        group.setView('crackme', 'hex')
+        expect(await session.showInListing(group, 0x10)).toBe(false)
+    })
+
+    it('reveal in the other pane when it shows the view already', async () => {
+        const { session } = setup()
+        const left = session.groups[0]
+        session.selectFile('crackme', left)
+        flushSync()
+        await settle(left.displayedListing)
+        const right = session.splitEditor()
+        session.selectFile('crackme', right)
+        right.setView('crackme', 'hex', false)
+        flushSync()
+        const editor = fakeEditor(session)
+        left.editor = editor as unknown as typeof left.editor
+        expect(await session.showInListing(right, 0x1000)).toBe(true)
+        expect([left.displayedView, right.displayedView]).toEqual(['listing', 'hex'])
+        expect(editor.revealed).toEqual([3])
+        expect(session.showInHex(left, 2)).toBe(true)
+        expect([left.displayedView, right.displayedView]).toEqual(['listing', 'hex'])
+        expect(right.hexReveal).toEqual({ path: 'crackme', offset: 0x1000, length: 4 })
+    })
+})
+
 describe('the views still to come', () => {
     it('name the File, its size and what it is', () => {
         const target = document.createElement('div')

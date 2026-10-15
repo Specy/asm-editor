@@ -8,6 +8,8 @@ import { flushSync, mount, tick, unmount } from 'svelte'
 import HexEditor from './HexEditor.svelte'
 import { ByteEditHistory } from './byteEditHistory'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import type { ProjectFileKind } from '#lib/fileKinds.ts'
+import { readFileSync } from 'node:fs'
 import {
     cleanFiles,
     encodeBase64,
@@ -44,7 +46,15 @@ afterEach(() => {
 /** `ABCDEFGHIJKLMNOPQRSTUVWXYZ` and six more bytes, 32 in all: two rows. */
 const ALPHABET = Uint8Array.from({ length: 32 }, (_, index) => (index < 26 ? 0x41 + index : index))
 
-function setup(options: { bytes?: Uint8Array; readOnly?: string; file?: ProjectFile } = {}) {
+function setup(
+    options: {
+        bytes?: Uint8Array
+        readOnly?: string
+        file?: ProjectFile
+        kind?: ProjectFileKind
+        onShowInListing?: (offset: number) => void
+    } = {}
+) {
     let files = $state.raw<ProjectFiles>(
         cleanFiles({
             blob: options.file ?? {
@@ -71,6 +81,8 @@ function setup(options: { bytes?: Uint8Array; readOnly?: string; file?: ProjectF
         get file() {
             return files.blob
         },
+        kind: options.kind ?? 'bytes',
+        onShowInListing: options.onShowInListing,
         readOnly: options.readOnly,
         history,
         onEdit: (path: string, offset: number, bytes: Uint8Array) => {
@@ -301,5 +313,65 @@ describe('a large File', () => {
         expect(hex.cell('hex', size - 1)!.textContent).toBe('EE')
         expect(hex.status()).toContain('Offset 0xFFFFFF')
         expect(fileBytes(hex.fs.files.blob)[size - 1]).toBe(0xee)
+    })
+})
+
+describe('an Executable', () => {
+    //relative to the package, where the tests run: a DOM test's module URL is no file URL
+    const crackme = () => new Uint8Array(readFileSync('../x86/blink-js/tests/fixtures/elf/crackme'))
+
+    async function menu(hex: ReturnType<typeof setup>, offset: number) {
+        hex.cell('hex', offset)!.dispatchEvent(
+            new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+        )
+        await tick()
+        return [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+    }
+
+    it('tints its headers and sections and names them where the caret is', () => {
+        const hex = setup({ bytes: crackme(), kind: 'executable' })
+        const header = hex.cell('hex', 0x10)!
+        expect(header.classList).toContain('tinted')
+        expect(header.getAttribute('style')).toContain('--region-color')
+        expect(hex.status()).toContain('ELF header')
+        hex.key('g', { ctrlKey: true })
+        const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+        input.value = '11e9'
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        flushSync()
+        expect(hex.status()).toContain('.text')
+        expect(hex.cell('hex', 0x11e9)!.classList).toContain('tinted')
+        //a File that is no Executable has no tints
+        const bytes = setup({ bytes: crackme() })
+        expect(bytes.cell('hex', 0x10)!.classList).not.toContain('tinted')
+    })
+
+    it('shows a byte of its code in the Listing, from the context menu', async () => {
+        const shown: number[] = []
+        const hex = setup({
+            bytes: crackme(),
+            kind: 'executable',
+            onShowInListing: (offset) => shown.push(offset)
+        })
+        const header = (await menu(hex, 0x10)).find((item) =>
+            item.textContent?.includes('Show in Listing')
+        )!
+        expect(header.disabled).toBe(true)
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+        flushSync()
+        hex.key('g', { ctrlKey: true })
+        const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+        input.value = '1100'
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        flushSync()
+        const code = (await menu(hex, 0x1100)).find((item) =>
+            item.textContent?.includes('Show in Listing')
+        )!
+        expect(code.disabled).toBe(false)
+        code.click()
+        flushSync()
+        expect(shown).toEqual([0x1100])
     })
 })

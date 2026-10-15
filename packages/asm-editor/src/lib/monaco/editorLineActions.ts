@@ -13,6 +13,12 @@ export type EditorLineAction = {
     label: string
     /** Monaco key codes, modifiers included, that run it. */
     keybindings?: (monaco: MonacoType) => number[]
+    /**
+     * The context menu's group it is listed in, and its place there: the modification group
+     * first by default, as "Patch instruction…" is; `navigation` for one that goes elsewhere.
+     */
+    menuGroup?: string
+    menuOrder?: number
     /** Whether it applies to a 0-based line now. */
     available: (line: number) => boolean
     run: (line: number) => void
@@ -41,8 +47,8 @@ export function lineActionDescriptor(
         keybindings: action.keybindings?.(currentMonaco),
         precondition: lineActionContextKey(action),
         keybindingContext: 'editorTextFocus',
-        contextMenuGroupId: '1_modification',
-        contextMenuOrder: 0,
+        contextMenuGroupId: action.menuGroup ?? '1_modification',
+        contextMenuOrder: action.menuOrder ?? 0,
         run
     }
 }

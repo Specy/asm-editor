@@ -246,9 +246,11 @@ const regionColors = {
     heap: '#ab78e6',
     stack: '#30b4bd',
     arguments: '#d462b6',
-    device: '#e75b75'
+    device: '#e75b75',
+    //an Executable's own tables in the Hex editor: its headers, symbols and strings
+    metadata: '#94a3b8'
 } as const
-export function memoryRegionColor(kind: MemoryRegion['kind']): string {
+export function memoryRegionColor(kind: MemoryRegion['kind'] | 'metadata'): string {
     return `color-mix(in srgb, ${regionColors[kind]} 85%, var(--secondary-text))`
 }
 

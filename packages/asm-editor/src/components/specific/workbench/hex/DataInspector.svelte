@@ -109,7 +109,7 @@
     /* a narrow pane lays the readings out in two columns, so the inspector stays short */
     dl {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
         gap: 0 1rem;
     }
     .side dl {

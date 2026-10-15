@@ -15,7 +15,7 @@ import { beforeAll, describe, expect, it } from 'vite-plus/test'
 import { loadDecoder, type ListingDecoder } from './decoder'
 import { generateListing, ListingError } from './generateListing'
 import { findProgramStart } from './programStart'
-import { functionAtLine, LINE_KIND, lineOfAddress, type Listing } from './listing'
+import { functionAtLine, LINE_KIND, lineOfAddress, lineOfFileOffset, type Listing } from './listing'
 
 const UPDATE = !!process.env.UPDATE_LISTING_SNAPSHOTS
 const PIE_BASE = 0x555555554000
@@ -288,6 +288,27 @@ describe('Listings of dynamically linked programs', () => {
         expectSnapshot('crackme.asm', listing.text)
         expect(listing.main).toBe(0x11e9)
         expect(listing.entry).toBe(0x1100)
+    })
+
+    it("finds an instruction by its bytes' file offset and back, as Show in Listing does", () => {
+        const bytes = fixture('crackme')
+        const listing = listingOf(bytes, 'crackme')
+        const { kinds, offsets, sizes, addresses } = listing.lines
+        //main's first instruction, at offset 0x11e9 of the file (readelf: .text is at 0x1100
+        //in both), and a byte inside it
+        const line = lineOfFileOffset(listing, 0x11e9)
+        expect(kinds[line]).toBe(LINE_KIND.instruction)
+        expect(addresses[line]).toBe(0x11e9)
+        expect(functionAtLine(listing, line)?.name).toBe('main')
+        expect(lineOfFileOffset(listing, 0x11e9 + sizes[line] - 1)).toBe(line)
+        //and back: the line's bytes are the file's, where Show in Hex selects them
+        expect(offsets[line]).toBe(0x11e9)
+        expect([...bytes.subarray(offsets[line], offsets[line] + sizes[line])]).toEqual([
+            0xf3, 0x0f, 0x1e, 0xfa
+        ])
+        //the ELF header and the padding between sections are on no line
+        expect(lineOfFileOffset(listing, 0x10)).toBe(-1)
+        expect(lineOfFileOffset(listing, 0x800)).toBe(-1)
     })
 
     it('names an address just past a section, which alignment separates from the next', () => {

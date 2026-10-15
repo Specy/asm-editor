@@ -65,7 +65,7 @@
      * "Patch instruction…" on an instruction of the running Executable's Listing
      * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
      * menu, and on Space, as x64dbg's disassembly assembles; the Listing is read-only, so Space
-     * types nothing there.
+     * types nothing there. "Show in Hex" on any line with bytes of an Executable's own Listing.
      */
     const listingActions: EditorLineAction[] = [
         {
@@ -74,6 +74,15 @@
             keybindings: (monaco) => [monaco.KeyCode.Space],
             available: (line) => session.patchSite(group, line) !== undefined,
             run: (line) => void session.openPatchPrompt(group, line)
+        },
+        //the line's bytes in the Executable's File ([file-views.md](../../../../../docs/design/file-views.md), decision 9)
+        {
+            id: 'asm-editor.showInHex',
+            label: 'Show in Hex',
+            menuGroup: 'navigation',
+            menuOrder: 100,
+            available: (line) => session.hexRangeOfLine(group, line) !== undefined,
+            run: (line) => void session.showInHex(group, line)
         }
     ]
     /** A Listing's Breakpoints go on its instructions, no other line. */
@@ -263,6 +272,7 @@
                 <HexEditor
                     path={group.displayedPath}
                     file={group.displayedFile}
+                    kind={group.displayedKind}
                     readOnly={group.bytesReadOnly}
                     notice={group.bytesNotice}
                     history={session.byteEditHistory}
@@ -274,6 +284,9 @@
                     onRevealed={() => (group.hexReveal = undefined)}
                     viewState={hexViewState(group.displayedPath)}
                     dockInset={docked}
+                    onShowInListing={group.displayedKind === 'executable'
+                        ? (offset) => void session.showInListing(group, offset)
+                        : undefined}
                 />
             {/key}
         {:else if group.displayedView === 'preview' && group.displayedFile && isPreviewKind(group.displayedKind)}
