@@ -88,7 +88,9 @@ function setup() {
             crackme: { encoding: 'base64', content: crackme },
             'notes.txt': { encoding: 'plain', content: 'password?' },
             'blob.bin': { encoding: 'base64', content: 'AQIDBA==' }
-        }
+        },
+        //Disassemble, the view last chosen for it: an Executable opens in the Hex editor
+        fileViews: { crackme: 'listing' }
     })
     disposers.push(fixture.dispose)
     const listings = generator()
@@ -142,7 +144,7 @@ describe('an Executable shown as its Listing', () => {
     })
 
     it("takes Breakpoints on its instructions as addresses, drawn on the address's line", async () => {
-        const { session, emulator, listings } = setup()
+        const { session, emulator, listings, project } = setup()
         session.selectFile('crackme')
         flushSync()
         const group = session.groups[0]
@@ -159,10 +161,14 @@ describe('an Executable shown as its Listing', () => {
         flushSync()
         expect(group.displayedBreakpoints).toEqual([6])
 
-        //renaming the File moves its Breakpoints with it
+        //renaming the File moves its Breakpoints with it, and its view
+        project.fileSystem.rename('crackme', 'chall')
         session.fileRenamed('crackme', 'chall')
         expect(emulator.breakpoints).toEqual([{ file: 'chall', address: 0x1004 }])
+        project.fileSystem.rename('chall', 'crackme')
         session.fileRenamed('chall', 'crackme')
+        flushSync()
+        await settle(group.displayedListing!)
         session.toggleBreakpoint(6, group)
         expect(emulator.breakpoints).toEqual([])
     })

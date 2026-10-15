@@ -10,7 +10,7 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { ProjectFileKind } from '#lib/fileKinds.ts'
-import { resolveFileView, type FileView } from '#lib/fileViews.ts'
+import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
@@ -322,6 +322,33 @@ export class EditorGroup {
             this.session.project.language
         )
         return status.stale || status.edited
+    }
+    /**
+     * The views the displayed File can be switched between, in the order the view switch offers
+     * them (decision 4): Hex · Disassemble for an Executable, Preview · Hex for a File the browser
+     * can show, and none where there is only one view, as for text and other bytes. A library's
+     * Listing is no File and has none.
+     */
+    get viewSwitch(): readonly FileView[] {
+        if (!this.displayedFile || this.displayedLibraryMember) return []
+        const views = fileViewsOf(this.displayedKind)
+        return views.length > 1 ? views : []
+    }
+    /**
+     * Whether the execution dock floats over this pane. `controls` says whether the layout puts
+     * the execution controls in a pane, as a desktop and a phone do; a tablet has one bar for
+     * them. The controls group has it, a source File its compile dock outside a Debug session,
+     * and on every device a File shown in more than one way its view switch.
+     */
+    hasDock(controls: boolean): boolean {
+        const s = this.session
+        if (!this.displayedPath) return false
+        return (
+            (controls && s.controlsGroup === this) ||
+            ((!!sourceLanguage(this.displayedPath) || this.recompilationNeeded) &&
+                !s.debugSession) ||
+            this.viewSwitch.length > 1
+        )
     }
     /** Whether the displayed view is text in the code editor: a File's, a Listing or Pseudocode. */
     get showsCode() {

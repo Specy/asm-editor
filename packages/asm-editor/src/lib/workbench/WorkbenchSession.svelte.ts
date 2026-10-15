@@ -1317,24 +1317,40 @@ export class WorkbenchSession {
         const group = this.showBuildFile(file)
         if (!group) return
         await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        //a pane the Build moved from an Executable's bytes to its Listing mounts its editor first
+        if (this.holdsModel(group))
+            this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        else void this.revealWhenShown(group, line, { column, focus: false })
         this.followExecutionSource()
     }
 
-    /** Shows the Build's version of a File in the pane execution is followed in. */
+    /**
+     * Shows the Build's version of a File in the pane execution is followed in, in a view that
+     * draws the current instruction ([file-views.md](../../../../../docs/design/file-views.md),
+     * decision 8): a pane showing it as text or as its Listing, else one showing an Executable's
+     * bytes, which moves to its Listing, as debuggers switch to disassembly when a session
+     * starts; else the execution pane opens it on its Listing. A pane on an Executable's
+     * Pseudocode follows the program itself and is left as it is.
+     */
     private showBuildFile(file: string): EditorGroup | undefined {
         const buildSources = this.emulator.buildSources
         if (!buildSources || !this.existsInBuild(file)) return undefined
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
-        //a pane that can show the current instruction, as text or a Listing, before one that
-        //shows the File some other way
         const showing = this.groups.filter((group) => group.displayedPath === file)
+        const movable = (group: EditorGroup) =>
+            group.displayedPath !== file || group.displayedView !== 'pseudocode'
         const group =
-            showing.find((group) => group.showsInstructions) ?? showing[0] ?? this.executionGroup
+            showing.find((group) => group.showsInstructions) ??
+            showing.find(movable) ??
+            (movable(this.executionGroup)
+                ? this.executionGroup
+                : (this.groups.find(movable) ?? this.executionGroup))
         this.executionGroupId = group.id
-        this.show(buildSource(file, this.buildGeneration), group)
+        //an Executable's Listing, which is no view the person chose, so it is not saved
+        const view = group.displayedPath === file && group.showsInstructions ? undefined : 'listing'
+        this.show(buildSource(file, this.buildGeneration), group, view)
         //Both file editors retain the exact versions used by this Build.
         for (const other of this.groups) {
             if (other !== group && this.existsInBuild(other.displayedPath, other.displayedView)) {
@@ -1570,23 +1586,31 @@ export class WorkbenchSession {
         return this.revealWhenShown(pane, line)
     }
 
+    /** Whether a pane's editor holds the model the pane shows, as it does once mounted. */
+    private holdsModel(group: EditorGroup): boolean {
+        const model = group.editor?.getModel()
+        const identity = model && !model.isDisposed() ? parseProjectSourceUri(model.uri) : null
+        return !!identity && projectSourceModelKey(identity) === group.modelKey
+    }
+
     /**
      * Reveals a line once the pane's editor holds the model it shows: a pane switched from the
-     * Hex editor mounts its editor, and Monaco may still be loading.
+     * Hex editor mounts its editor, and Monaco may still be loading. With `focus`, as Show in
+     * Listing asks, the editor takes the keyboard; the debugger's reveal leaves it where it is.
      */
-    private async revealWhenShown(group: EditorGroup, line: number): Promise<boolean> {
+    private async revealWhenShown(
+        group: EditorGroup,
+        line: number,
+        { column = 1, focus = true }: { column?: number; focus?: boolean } = {}
+    ): Promise<boolean> {
         const key = group.modelKey
         for (let attempt = 0; attempt < 200; attempt++) {
-            if (group.modelKey !== key) return false
+            if (group.modelKey !== key || !this.groups.includes(group)) return false
             const editor = group.editor
-            const model = editor?.getModel()
-            const identity = model && !model.isDisposed() ? parseProjectSourceUri(model.uri) : null
-            if (editor && identity && projectSourceModelKey(identity) === key) {
-                if (model!.getLineCount() > line) {
-                    this.revealEditorLine(zeroBasedLineToMonaco(line), 1, group)
-                    editor.focus()
-                    return true
-                }
+            if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
+                this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+                if (focus) editor.focus()
+                return true
             }
             await new Promise((resolve) => setTimeout(resolve, 50))
         }

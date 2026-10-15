@@ -2,7 +2,6 @@
     import Editor from '#cmp/specific/project/Editor.svelte'
     import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
-    import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import FileTabs from './FileTabs.svelte'
     import LibraryMemberNotice from './LibraryMemberNotice.svelte'
@@ -92,12 +91,7 @@
     })
 
     /** Whether the execution dock floats over the bottom of this pane. */
-    const docked = $derived(
-        !!group.displayedPath &&
-            ((controls && session.controlsGroup === group) ||
-                ((!!sourceLanguage(group.displayedPath) || group.recompilationNeeded) &&
-                    !session.debugSession))
-    )
+    const docked = $derived(group.hasDock(controls))
     /** Where this pane was in a File's bytes, kept for as long as its tab is open. */
     function hexViewState(path: string): HexViewState {
         let state = group.hexViews.get(path)
