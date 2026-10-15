@@ -385,6 +385,8 @@ export class WorkbenchSession {
     private failedBuild = $state.raw<{ sources: BuildSources; diagnostics: Diagnostic[] }>()
     mappingSelection = $state.raw<MappingSelection | undefined>()
     private compilationController: AbortController | undefined
+    /** Set once the component or effect that made the session is gone, and its deriveds with it. */
+    private disposed = false
     /**
      * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
      * program exit or a Build of the person's own. Not reactive: the effects that ask read it at the
@@ -664,6 +666,11 @@ export class WorkbenchSession {
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
 
+        //what waits on the session (a reveal for an editor still mounting) stops with it, rather
+        //than reading deriveds that went inert with their owner
+        $effect(() => () => {
+            this.disposed = true
+        })
         $effect(() => {
             const pageSize = preferencesStore.values.memoryPanelSize.value
             untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
@@ -1377,6 +1384,7 @@ export class WorkbenchSession {
         const group = this.showBuildFile(file)
         if (!group) return
         await tick()
+        if (this.disposed) return
         //a pane the Build moved from an Executable's bytes to its Listing mounts its editor first
         if (this.holdsModel(group))
             this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
@@ -1679,9 +1687,11 @@ export class WorkbenchSession {
             scroll = 'immediate'
         }: { column?: number; focus?: boolean; scroll?: 'smooth' | 'immediate' } = {}
     ): Promise<boolean> {
+        if (this.disposed) return false
         const key = group.modelKey
         for (let attempt = 0; attempt < 200; attempt++) {
-            if (group.modelKey !== key || !this.groups.includes(group)) return false
+            if (this.disposed || group.modelKey !== key || !this.groups.includes(group))
+                return false
             const editor = group.editor
             if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
                 this.revealEditorLine(zeroBasedLineToMonaco(line), column, group, scroll)

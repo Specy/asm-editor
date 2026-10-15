@@ -399,6 +399,27 @@ describe('Show in Listing and Show in Hex', () => {
         expect(await session.showInListing(group, 0x10)).toBe(false)
     })
 
+    it('stop waiting for an editor once the session is gone', async () => {
+        const { session, dispose } = setup()
+        disposers.splice(disposers.indexOf(dispose), 1)
+        const group = session.groups[0]
+        group.setView('crackme', 'hex')
+        session.selectFile('crackme')
+        flushSync()
+        //no editor mounts here, so the reveal waits for one
+        const revealed = session.showInListing(group, 0x1004)
+        await new Promise((resolve) => setTimeout(resolve, 120))
+        const warn = vi.spyOn(console, 'warn')
+        dispose()
+        try {
+            expect(await revealed).toBe(false)
+            //the pane's deriveds went inert with the session; reading them warns
+            expect(warn).not.toHaveBeenCalled()
+        } finally {
+            warn.mockRestore()
+        }
+    })
+
     it('reveal in the other pane when it shows the view already', async () => {
         const { session } = setup()
         const left = session.groups[0]
