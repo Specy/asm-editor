@@ -4,6 +4,7 @@ import {
     projectFileFromBytes,
     encodeBase64,
     fileBytes,
+    fileByteLength,
     fileText,
     mergeOverwrites,
     isValidFilePath,
@@ -286,7 +287,7 @@ export class FileSystem {
         if (
             !Number.isSafeInteger(offset) ||
             offset < 0 ||
-            offset + bytes.length > fileBytes(file).length
+            offset + bytes.length > fileByteLength(file)
         )
             throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
         if (!bytes.length) return
