@@ -1,9 +1,10 @@
 {
-    "title": "Create and run a MIPS project",
-    "description": "Create a MIPS project, build and run it, inspect registers, use breakpoints and Undo, and share the project.",
-    "tags": ["guide", "use-case", "mips"],
+    "title": "Getting started with ASM Editor",
+    "description": "Explore ASM Editor's browser workspace: create a project, build and run programs, use the debugger, and test and share your work.",
+    "tags": ["guide", "use-case"],
     "status": "published",
     "datePublished": "2026-10-13",
+    "dateUpdated": "2026-10-15",
     "image": {
         "src": "/images/blog/getting-started/workbench.webp",
         "alt": "A MIPS project in the ASM Editor Workbench, with Build highlighted"
