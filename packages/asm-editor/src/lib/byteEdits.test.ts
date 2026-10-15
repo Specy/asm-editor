@@ -19,6 +19,8 @@ import {
     overwritesOnly,
     ProjectFormatError,
     sameFileContent,
+    storedFilesSize,
+    withByteEdits,
     FILE_BYTE_LIMIT,
     type ByteEdit,
     type ProjectFile
@@ -86,6 +88,31 @@ describe('merging overwrites', () => {
         expect(merged).toEqual([edit(2, 2, 5, 2, 4, 1), edit(10, 3)])
         const original = new Uint8Array(12)
         expect(applyByteEdits(original, merged)).toEqual(applyByteEdits(original, edits))
+    })
+
+    it('reads the same as the edits it merges, however they overlap, touch or lie apart', () => {
+        //a fixed pseudo-random sequence, so a failure reproduces
+        let seed = 7
+        const next = (below: number) => {
+            seed = (seed * 1103515245 + 12345) % 2 ** 31
+            return seed % below
+        }
+        for (let round = 0; round < 50; round++) {
+            const size = 1 + next(4000)
+            const edits = Array.from({ length: 1 + next(40) }, () => {
+                const offset = next(size)
+                const length = 1 + next(Math.min(64, size - offset))
+                return edit(offset, ...Array.from({ length }, () => next(256)))
+            })
+            const merged = mergeOverwrites(edits)
+            const original = Uint8Array.from({ length: size }, (_, index) => index & 0xff)
+            expect(applyByteEdits(original, merged)).toEqual(applyByteEdits(original, edits))
+            //sorted, and no two runs overlap or touch
+            for (let index = 1; index < merged.length; index++)
+                expect(merged[index].offset).toBeGreaterThan(
+                    merged[index - 1].offset + merged[index - 1].remove
+                )
+        }
     })
 
     it('keeps a single edit and refuses anything but overwrites', () => {
@@ -186,6 +213,34 @@ describe('a File with Byte edits', () => {
         const deleting = byteFile(half, [{ offset: 0, remove: FILE_BYTE_LIMIT / 2, insert: '' }])
         expect(fileByteLength(deleting)).toBe(0)
         expect(() => cleanFiles({ a: deleting, b: byteFile(half) })).not.toThrow()
+    })
+
+    it('counts toward the limit from stored lengths alone, as cleanFiles counts', () => {
+        const files = cleanFiles({
+            //one, two, three and four bytes a character: "aé€😀"
+            'notes.txt': { encoding: 'plain', content: 'a\u00e9\u20ac\u{1f600}' },
+            blob: byteFile(bytes(1, 2, 3, 4, 5), [
+                edit(1, 9, 9),
+                { offset: 0, remove: 0, insert: encodeBase64(bytes(7, 7, 7)) },
+                { offset: 2, remove: 3, insert: '' }
+            ])
+        })
+        expect(new TextEncoder().encode(files['notes.txt'].content)).toHaveLength(10)
+        expect(storedFilesSize(files)).toBe(10 + 5 + 2 + 3)
+    })
+
+    it('takes a new list over the same original, checked as a saved one is', () => {
+        const file = cleanFiles({ blob: byteFile(bytes(1, 2, 3, 4)) }).blob
+        const edited = withByteEdits('blob', file, [edit(3, 9)])
+        expect(edited).toEqual({ ...file, edits: [edit(3, 9)] })
+        expect(Object.isFrozen(edited) && Object.isFrozen(edited.edits)).toBe(true)
+        expect(withByteEdits('blob', edited, [])).toEqual(file)
+        expect(formatError(() => withByteEdits('blob', file, [edit(3, 9, 9)]))).toBe(
+            'A Byte edit is past the end of blob'
+        )
+        expect(
+            formatError(() => withByteEdits('blob', file, [{ offset: 0, remove: 1, insert: 'AQ' }]))
+        ).toBe('Noncanonical base64 content')
     })
 
     it('is refused when a text File carries edits', () => {

@@ -157,43 +157,43 @@ export function applyByteEdits(original: Uint8Array, edits: readonly ByteEdit[])
 /**
  * Overwrites folded into the fewest sorted runs that do not touch, which apply to the same bytes:
  * a later edit wins where two overlap. Only overwrites can be merged this way, since an insertion
- * or a deletion moves every byte after it.
+ * or a deletion moves every byte after it. Each edit is folded into the runs it overlaps or
+ * touches, so the work is the edits' bytes, however far apart they lie in the File.
  */
 export function mergeOverwrites(edits: readonly ByteEdit[]): ByteEdit[] {
     if (!edits.every(isOverwrite))
         throw new ProjectFormatError('Only overwriting Byte edits can be merged')
-    const live = edits.filter((edit) => edit.remove > 0)
-    if (!live.length) return []
-    let start = Infinity,
-        end = 0
-    for (const edit of live) {
-        start = Math.min(start, edit.offset)
-        end = Math.max(end, edit.offset + edit.remove)
-    }
-    const bytes = new Uint8Array(end - start)
-    const written = new Uint8Array(end - start)
-    for (const edit of live) {
-        bytes.set(decodeBase64(edit.insert), edit.offset - start)
-        written.fill(1, edit.offset - start, edit.offset - start + edit.remove)
-    }
-    const runs: ByteEdit[] = []
-    for (let index = 0; index < written.length;) {
-        if (!written[index]) {
-            index++
-            continue
+    //sorted by offset, none overlapping or touching another, so their ends are sorted too
+    const runs: { start: number; bytes: Uint8Array }[] = []
+    const endOf = (run: (typeof runs)[number]) => run.start + run.bytes.length
+    for (const edit of edits) {
+        if (!edit.remove) continue
+        const start = edit.offset
+        const end = edit.offset + edit.remove
+        //the first run that ends at or after this edit's start, which it then overlaps or touches
+        let first = 0
+        for (let high = runs.length; first < high;) {
+            const middle = (first + high) >> 1
+            if (endOf(runs[middle]) < start) first = middle + 1
+            else high = middle
         }
-        let last = index
-        while (last < written.length && written[last]) last++
-        runs.push(
-            Object.freeze({
-                offset: start + index,
-                remove: last - index,
-                insert: encodeBase64(bytes.subarray(index, last))
-            })
-        )
-        index = last
+        let last = first
+        while (last < runs.length && runs[last].start <= end) last++
+        const joined = runs.slice(first, last)
+        const from = Math.min(start, joined[0]?.start ?? start)
+        const to = Math.max(end, joined.length ? endOf(joined[joined.length - 1]) : end)
+        const bytes = new Uint8Array(to - from)
+        for (const run of joined) bytes.set(run.bytes, run.start - from)
+        bytes.set(decodeBase64(edit.insert), start - from)
+        runs.splice(first, joined.length, { start: from, bytes })
     }
-    return runs
+    return runs.map((run) =>
+        Object.freeze({
+            offset: run.start,
+            remove: run.bytes.length,
+            insert: encodeBase64(run.bytes)
+        })
+    )
 }
 
 /**
@@ -210,6 +210,53 @@ export function fileByteLength(file: ProjectFile): number {
     let length = base64Length(file.content)
     for (const edit of file.edits ?? []) length += base64Length(edit.insert) - edit.remove
     return length
+}
+
+/**
+ * The UTF-8 length of `text`, without encoding it, for text with no unpaired surrogate, as
+ * `cleanFiles` leaves every text File: each half of a pair is two of the character's four bytes.
+ */
+function utf8Length(text: string) {
+    let length = 0
+    for (let index = 0; index < text.length; index++) {
+        const code = text.charCodeAt(index)
+        length += code < 0x80 ? 1 : code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 2 : 3
+    }
+    return length
+}
+
+/**
+ * What the Files take of the Project's 16 MiB, as `cleanFiles` counts it: each original, and the
+ * bytes each Byte edit puts in (ADR 0047). Read from the stored lengths without decoding a File,
+ * for Files `cleanFiles` checked, whose base64 is canonical and whose text has no lone surrogate.
+ */
+export function storedFilesSize(files: ProjectFiles): number {
+    let size = 0
+    for (const file of Object.values(files)) {
+        size += file.encoding === 'base64' ? base64Length(file.content) : utf8Length(file.content)
+        for (const edit of file.edits ?? []) size += base64Length(edit.insert)
+    }
+    return size
+}
+
+/**
+ * A byte File with `edits` in place of its own over the same original, checked as `cleanFiles`
+ * checks a saved list, against the original's length, which is read from its base64 rather than
+ * decoded: `file` is a record `cleanFiles` checked, so its original needs no checking again, and
+ * a Byte edit costs what its edits do, not the whole File.
+ */
+export function withByteEdits(
+    path: string,
+    file: ProjectFile,
+    edits: readonly ByteEdit[]
+): ProjectFile {
+    const length = file.encoding === 'base64' ? base64Length(file.content) : 0
+    const clean = cleanByteEdits(path, { encoding: file.encoding, edits }, length)
+    return Object.freeze({
+        encoding: file.encoding,
+        content: file.content,
+        ...(clean ? { edits: clean } : {})
+    })
 }
 
 /** A stable text naming a File's Byte edits, empty when it has none, for keys and equality. */

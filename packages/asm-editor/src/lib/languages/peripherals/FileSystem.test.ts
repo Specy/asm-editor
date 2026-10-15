@@ -760,6 +760,36 @@ describe('Byte edits in the FileSystem', () => {
         run.stop()
     })
 
+    it('keeps the Project within 16 MiB without checking every File again', () => {
+        //16 MiB less one: the File, and two bytes of UTF-8 in a one-character text File
+        const fs = new FileSystem({
+            blob: {
+                encoding: 'base64',
+                content: encodeBase64(new Uint8Array(FILE_BYTE_LIMIT - 3))
+            },
+            'note.txt': { encoding: 'plain', content: '\u00e9' }
+        })
+        fs.editBytes('blob', 0, new Uint8Array([1]))
+        //over the same byte, the edit takes no more room
+        fs.editBytes('blob', 0, new Uint8Array([2]))
+        const before = fs.files
+        expect(() => fs.editBytes('blob', 2, new Uint8Array([3]))).toThrow(
+            'Project exceeds the 16 MiB file limit'
+        )
+        expect(() =>
+            fs.setByteEdits('blob', [{ offset: 5, remove: 2, insert: encodeBase64(encode('ab')) }])
+        ).toThrow('Project exceeds the 16 MiB file limit')
+        expect(fs.files).toBe(before)
+        fs.editBytes('blob', 0, new Uint8Array([4]))
+        expect(fs.files.blob.edits).toEqual([{ offset: 0, remove: 1, insert: 'BA==' }])
+        //the Files stay as `cleanFiles` leaves them: frozen, and a map with no prototype
+        expect(Object.isFrozen(fs.files)).toBe(true)
+        expect(Object.getPrototypeOf(fs.files)).toBe(null)
+        expect(() => fs.setByteEdits('blob', [{ offset: 0, remove: 1, insert: 'AQ' }])).toThrow(
+            'Noncanonical'
+        )
+    })
+
     it('drops the edits when the whole content is replaced, as an upload does', () => {
         const fs = edited()
         fs.writeBytes('blob', new Uint8Array([9, 0xff]))

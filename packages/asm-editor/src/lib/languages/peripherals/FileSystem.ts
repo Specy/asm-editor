@@ -8,6 +8,8 @@ import {
     fileText,
     mergeOverwrites,
     overwritesOnly,
+    storedFilesSize,
+    withByteEdits,
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
@@ -301,10 +303,7 @@ export class FileSystem {
             ...(file.edits ?? []),
             { offset, remove: bytes.length, insert: encodeBase64(bytes) }
         ])
-        this.commit({
-            ...this.files,
-            [path]: { encoding: file.encoding, content: file.content, edits }
-        })
+        this.commitByteEdits(path, file, edits)
     }
     /**
      * Puts back a whole list of Byte edits over a File's unchanged original, as the Hex editor's
@@ -318,14 +317,7 @@ export class FileSystem {
         if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
         if (file.encoding !== 'base64')
             throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
-        this.commit({
-            ...this.files,
-            [path]: {
-                encoding: file.encoding,
-                content: file.content,
-                ...(edits.length ? { edits } : {})
-            }
-        })
+        this.commitByteEdits(path, file, edits)
     }
     writeText(path: string, text: string, replace = true) {
         const file = { encoding: 'plain' as const, content: text }
@@ -355,6 +347,20 @@ export class FileSystem {
     }
     private commit(files: ProjectFiles) {
         this.store.write(cleanFiles(files))
+        this.notify(true)
+    }
+    /**
+     * Writes a byte File's new list of Byte edits. Nothing else changed, so instead of `cleanFiles`
+     * over the whole Project, which decodes every File and every edit, the new list is checked
+     * against the File's original and the Project's size is read from the stored lengths: a Byte
+     * edit typed into a 16 MiB File costs what the edits do.
+     */
+    private commitByteEdits(path: string, file: ProjectFile, edits: readonly ByteEdit[]) {
+        const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
+        files[path] = withByteEdits(path, file, edits)
+        if (storedFilesSize(files) > FILE_BYTE_LIMIT)
+            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+        this.store.write(Object.freeze(files))
         this.notify(true)
     }
     /**
