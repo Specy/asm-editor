@@ -102,6 +102,31 @@
             "query": "bundled shared libraries",
             "top": 3,
             "expect": "x86/executables/libraries"
+        },
+        {
+            "query": "edit the bytes of a file in hex",
+            "top": 3,
+            "expect": "x86/executables/byte-edits"
+        },
+        {
+            "query": "find hex bytes with a wildcard",
+            "top": 3,
+            "expect": "x86/executables/finding"
+        },
+        {
+            "query": "data inspector byte order",
+            "top": 3,
+            "expect": "x86/executables/data-inspector"
+        },
+        {
+            "query": "section header table tints",
+            "top": 3,
+            "expect": "x86/executables/elf-parts"
+        },
+        {
+            "query": "download the program a build links",
+            "top": 3,
+            "expect": "x86/executables/build-output"
         }
     ]
 }

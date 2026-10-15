@@ -66,6 +66,11 @@ describe('the x86 Documentation', () => {
             'overview',
             'what-runs',
             'libraries',
+            'hex-editor',
+            'byte-edits',
+            'elf-parts',
+            'finding',
+            'data-inspector',
             'listing',
             'names',
             'stepping',
@@ -73,6 +78,7 @@ describe('the x86 Documentation', () => {
             'arguments',
             'testcases',
             'patching',
+            'build-output',
             'log-notes',
             'safety'
         ])
@@ -105,6 +111,15 @@ describe('the x86 Documentation', () => {
         expect(text('patching')).toContain('**Space**')
         expect(text('patching')).toContain('long press')
         expect(text('stepping')).toContain('**Step into library code**')
+        // the Hex editor's switch, what a Byte edit is, and the Build output's actions
+        expect(text('hex-editor')).toContain('**Disassemble**')
+        expect(text('byte-edits')).toContain('**Byte edits**')
+        expect(text('byte-edits')).toContain('**Show in Hex**')
+        expect(text('elf-parts')).toContain('**Show in Listing**')
+        expect(text('finding')).toContain('`??`')
+        expect(text('data-inspector')).toContain('**Little**')
+        for (const action of ['**Download**', '**Keep as File**', '**From an earlier Build**'])
+            expect(text('build-output')).toContain(action)
     })
 
     it('has an instruction entry for every instruction page, alphabetically', () => {
