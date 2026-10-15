@@ -1,11 +1,12 @@
 {
-    "title": "Reverse engineering an x86-64 executable",
-    "description": "Import a Linux executable and follow an input byte through a comparison, flag, and conditional jump.",
+    "title": "Explore x86-64 executables with ASM Editor",
+    "description": "Inspect executable instructions, bytes, registers, and memory in ASM Editor's browser debugger, with an example project to try.",
     "tags": ["guide", "use-case", "x86", "reverse-engineering"],
     "status": "published",
     "datePublished": "2026-10-13",
     "image": {
         "src": "/images/blog/first-x86-reverse-engineering/compare.webp",
         "alt": "An x86 executable paused at a comparison with input bytes and processor flags visible"
-    }
+    },
+    "dateUpdated": "2026-10-16"
 }

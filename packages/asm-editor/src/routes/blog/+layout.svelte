@@ -8,10 +8,12 @@
 </script>
 
 <DefaultNavbar />
-<Page
-    hasNavbar
-    cropped={isArticle ? false : '74rem'}
-    contentStyle={`padding: 2.5rem ${isArticle ? '0' : '1.25rem'} 5rem`}
->
-    {@render children()}
-</Page>
+{#key page.url.pathname}
+    <Page
+        hasNavbar
+        cropped={isArticle ? false : '74rem'}
+        contentStyle={`padding: 2.5rem ${isArticle ? '0' : '1.25rem'} 5rem`}
+    >
+        {@render children()}
+    </Page>
+{/key}
