@@ -172,6 +172,37 @@ describe('the Build output in the Workbench', () => {
         expect(group.tabs.paths).toEqual(['main.asm'])
     })
 
+    //Stop closes them, as it closes any tab of a File that is gone: the Build output went as the
+    //Build started, so a stopped Build that never reaches `finishBuild` leaves no tab on nothing
+    it('closes its tabs when the next Build is stopped before it links', async () => {
+        const { session, emulator } = setup()
+        await built(session)
+        const group = session.groups[0]
+        session.selectFile('main', group)
+        session.stop()
+        flushSync()
+        //a Build stopped while it assembles, which then returns without a program, as the
+        //Emulator's does once it finds the Build was cleared
+        let assembled!: () => void
+        emulator.compile = async () => {
+            emulator.buildOutput = undefined
+            await new Promise<void>((resolve) => (assembled = resolve))
+        }
+        const building = session.build()
+        await tick()
+        //while it runs, the tab stays, on a Build output not placed yet
+        expect(session.buildOutput).toBeUndefined()
+        expect(group.tabs.paths).toContain('main')
+        session.stop()
+        assembled()
+        await building
+        flushSync()
+        expect(session.buildOutput).toBeUndefined()
+        expect(group.tabs.paths).toEqual(['main.asm'])
+        //and the Log says nothing of a Build the person ended
+        expect(session.log.filter((entry) => entry.kind === 'build')).toHaveLength(1)
+    })
+
     it('is dimmed as from an earlier Build once a File it was built from changes', async () => {
         const { session, project } = setup()
         await built(session)
