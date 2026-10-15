@@ -17,7 +17,7 @@ import {
     isEnvironmentHeaderPath,
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
-import type { ProjectFile } from '#lib/projectFiles.ts'
+import type { ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
 import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -108,6 +108,8 @@ import {
     type CommandLineParse
 } from '#lib/commandLine.ts'
 import { executableKind } from '#lib/executables.ts'
+import { fileKind, type ProjectFileKind } from '#lib/fileKinds.ts'
+import { defaultFileView, fileViewsOf, type FileView } from '#lib/fileViews.ts'
 import { createDebouncer } from '#lib/utils.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
 import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
@@ -282,7 +284,35 @@ export class WorkbenchSession {
     }
 
     groupForFile(path: string) {
-        return editorGroupForFile(path, this.groups)
+        return editorGroupForFile(path, this.groups, this.project.files[path])
+    }
+
+    /** What a File is, from its bytes, in this Project's Target; undefined for no File. */
+    fileKindOf(file: ProjectFile | undefined): ProjectFileKind | undefined {
+        return file ? fileKind(file, this.project.language) : undefined
+    }
+
+    /** What the File at a path is, in the version a Debug session shows or else the live one. */
+    kindAt(path: string): ProjectFileKind | undefined {
+        const built = this.debugSession ? this.emulator.buildSources?.files[path] : undefined
+        return this.fileKindOf(built ?? this.project.files[path])
+    }
+
+    /**
+     * Saves the view a person chose for a File as its last, beside the open tabs; its default is
+     * no choice to save ([file-views.md](../../../../../docs/design/file-views.md), decision 8).
+     */
+    viewChosen(path: string, view: FileView, kind = this.kindAt(path)) {
+        if (this.host.readonly || !this.project.files[path]) return
+        const saved = view === defaultFileView(kind) ? undefined : view
+        if (this.project.fileViews?.[path] === saved) return
+        //another pane with the File open keeps showing it as it does, rather than switching with
+        //the saved view it fell back on
+        for (const group of this.groups)
+            if (group.tabs.paths.includes(path) && !Object.hasOwn(group.views, path))
+                group.setView(path, group.viewOf(path, kind), false)
+        this.project.setFileView(path, saved)
+        this.changed()
     }
     get executionGroup() {
         return (
@@ -291,8 +321,11 @@ export class WorkbenchSession {
         )
     }
     get controlsGroup() {
+        //an Executable's Listing reads as assembly, and the program it shows is what runs
         const assembly = this.groups.filter(
-            (group) => editorFileKind(group.displayedPath) === 'assembly'
+            (group) =>
+                group.displayedView === 'listing' ||
+                editorFileKind(group.displayedPath, group.displayedFile) === 'assembly'
         )
         return (
             assembly.find((group) => group.id === this.executionGroupId) ??
@@ -444,28 +477,34 @@ export class WorkbenchSession {
             return map ? colorSourceMap(map) : undefined
         })
         this.retainedModelKeys = $derived.by(() => {
-            const liveKeys = Object.keys(this.project.files).map((path) =>
-                projectSourceModelKey({
-                    sessionId: this.languageSessionId,
-                    sourceKind: 'live',
-                    path
+            //a File's text, and for a File of bytes its Listing, which an Executable has; a key
+            //with no model behind it keeps nothing
+            const keys = (files: ProjectFiles, selection: ProjectSourceSelection) =>
+                Object.entries(files).flatMap(([path, file]) => {
+                    const identity = { sessionId: this.languageSessionId, ...selection, path }
+                    return file.encoding === 'plain'
+                        ? [projectSourceModelKey(identity)]
+                        : [
+                              projectSourceModelKey(identity),
+                              projectSourceModelKey({ ...identity, view: 'listing' })
+                          ]
                 })
-            )
-            const buildKeys = [
-                ...Object.keys(this.emulator.buildSources?.files ?? {}),
+            const build = buildSource('', this.buildGeneration)
+            return [
+                ...keys(this.project.files, liveSource('')),
+                ...keys(this.emulator.buildSources?.files ?? {}, build),
                 //the libraries' Listings, kept while the session lasts so a tab comes back as left
-                ...[...(this.emulator.listings?.session.keys() ?? [])].filter((path) =>
-                    this.emulator.listings!.isLibrary(path)
-                )
-            ].map((path) =>
-                projectSourceModelKey({
-                    sessionId: this.languageSessionId,
-                    sourceKind: 'build',
-                    buildGeneration: this.buildGeneration,
-                    path
-                })
-            )
-            return [...liveKeys, ...buildKeys]
+                ...[...(this.emulator.listings?.session.keys() ?? [])]
+                    .filter((path) => this.emulator.listings!.isLibrary(path))
+                    .map((path) =>
+                        projectSourceModelKey({
+                            sessionId: this.languageSessionId,
+                            ...build,
+                            path,
+                            view: 'listing'
+                        })
+                    )
+            ]
         })
         this.liveViewDiagnostics = $derived.by(() => {
             const live = [...this.liveLanguageDiagnostics, ...this.sourceDiagnostics]
@@ -791,18 +830,22 @@ export class WorkbenchSession {
                 if (identity.sourceKind === 'build') {
                     if (
                         identity.buildGeneration !== this.buildGeneration ||
-                        !this.existsInBuild(identity.path)
+                        !this.existsInBuild(identity.path, identity.view)
                     ) {
                         return false
                     }
-                    this.show(buildSource(identity.path, identity.buildGeneration), group)
+                    this.show(
+                        buildSource(identity.path, identity.buildGeneration),
+                        group,
+                        identity.view
+                    )
                 } else if (identity.path.startsWith(RUNTIME_NAMESPACE)) {
                     //a Runtime library member, opened read-only from go to definition
                     if (!this.runtimeMemberFile(identity.path)) return false
                     this.show(liveSource(identity.path), group)
                 } else {
                     if (!this.project.files[identity.path]) return false
-                    this.show(liveSource(identity.path), group)
+                    this.show(liveSource(identity.path), group, identity.view)
                 }
                 await tick()
                 if (selection) {
@@ -1075,9 +1118,17 @@ export class WorkbenchSession {
         if (this.groups.includes(group)) this.activeTabGroupId = group.id
     }
 
-    /** Shows a version of a File, opening its tab. */
-    private show(selection: ProjectSourceSelection, group = this.groupForFile(selection.path)) {
+    /**
+     * Shows a version of a File, opening its tab, in the view the pane remembers for it or, with
+     * `view`, in that one when the File offers it, as going to a definition in a Listing does.
+     */
+    private show(
+        selection: ProjectSourceSelection,
+        group = this.groupForFile(selection.path),
+        view?: FileView
+    ) {
         const changedPath = group.displayedPath !== selection.path
+        if (view) group.setView(selection.path, view, false)
         if (!isSameProjectSourceSelection(group.sourceSelection, selection)) {
             group.sourceSelection = selection
         }
@@ -1174,7 +1225,9 @@ export class WorkbenchSession {
             this.buildGeneration,
             this.existsInBuild(path)
         )
-        this.show(selection, destination)
+        //the tab moves in the view it was shown in
+        const view = origin.views[path]
+        this.show(selection, destination, view)
         this.closeTab(path, origin)
         this.focusEditorGroup(destination)
         await tick()
@@ -1201,14 +1254,16 @@ export class WorkbenchSession {
 
     /**
      * Whether the Build has this File: its own, a Runtime library member it linked, or the Listing
-     * of a library the running program loaded.
+     * of a library the running program loaded. With a view, whether it has the File in that view:
+     * a library's Listing is only ever a Listing, and a File of the Build only in a view its kind
+     * offers.
      */
-    private existsInBuild(path: string) {
-        return (
-            this.emulator.buildSources?.files[path] !== undefined ||
-            this.emulator.buildLibraryFiles?.[path] !== undefined ||
-            (this.emulator.listings?.session.has(path) ?? false)
-        )
+    private existsInBuild(path: string, view?: FileView) {
+        const file =
+            this.emulator.buildSources?.files[path] ?? this.emulator.buildLibraryFiles?.[path]
+        if (!file)
+            return (view ?? 'listing') === 'listing' && !!this.emulator.listings?.session.has(path)
+        return !view || fileViewsOf(this.fileKindOf(file)).includes(view)
     }
 
     revealEditorLine(lineNumber: number, column: number, group = this.groups[0]) {
@@ -1241,6 +1296,7 @@ export class WorkbenchSession {
         const next = closeTab(group.tabs, path)
         if (next === group.tabs) return
         group.tabs = next
+        group.moveView(path)
         if (!next.paths.length) {
             this.closeGroup(group)
             return
@@ -1268,13 +1324,16 @@ export class WorkbenchSession {
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
+        //a pane that can show the current instruction, as text or a Listing, before one that
+        //shows the File some other way
+        const showing = this.groups.filter((group) => group.displayedPath === file)
         const group =
-            this.groups.find((group) => group.displayedPath === file) ?? this.executionGroup
+            showing.find((group) => group.showsInstructions) ?? showing[0] ?? this.executionGroup
         this.executionGroupId = group.id
         this.show(buildSource(file, this.buildGeneration), group)
         //Both file editors retain the exact versions used by this Build.
         for (const other of this.groups) {
-            if (other !== group && this.existsInBuild(other.displayedPath)) {
+            if (other !== group && this.existsInBuild(other.displayedPath, other.displayedView)) {
                 const next = buildSource(other.displayedPath, this.buildGeneration)
                 if (!isSameProjectSourceSelection(other.sourceSelection, next)) {
                     other.sourceSelection = next
@@ -1395,16 +1454,28 @@ export class WorkbenchSession {
     fileRenamed(from: string, to: string) {
         this.project.renameCompilationFile(from, to)
         this.moveFileBreakpoints(from, to)
+        const view = this.project.fileViews?.[from]
+        if (view) {
+            this.project.setFileView(from, undefined)
+            this.project.setFileView(to, view)
+            this.changed()
+        }
         for (const group of this.groups) {
             group.tabs = renameTab(group.tabs, from, to)
+            group.moveView(from, to)
             if (group.displayedPath === from) this.show(liveSource(to), group)
         }
     }
 
     fileDeleted(path: string) {
         this.moveFileBreakpoints(path)
+        if (this.project.fileViews?.[path]) {
+            this.project.setFileView(path, undefined)
+            this.changed()
+        }
         for (const group of this.groups) {
             group.tabs = removeTab(group.tabs, path, '')
+            group.moveView(path)
             if (group.displayedPath === path) {
                 const next = liveSource(group.tabs.active)
                 if (!isSameProjectSourceSelection(group.sourceSelection, next)) {

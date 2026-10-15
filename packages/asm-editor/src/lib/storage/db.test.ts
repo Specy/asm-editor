@@ -121,6 +121,31 @@ describe('the version 2 upgrade', () => {
         }
     })
 
+    it('round trips the views Files were last shown in, beside the open tabs', async () => {
+        const db = new Db()
+        try {
+            const project = makeProject({
+                language: 'MIPS',
+                entry: 'main.mips',
+                files: {
+                    'main.mips': { encoding: 'plain', content: 'nop' },
+                    'image.png': { encoding: 'base64', content: 'iVBORw0KGgo=' }
+                },
+                openTabs: ['image.png', 'main.mips']
+            })
+            project.setFileView('image.png', 'hex')
+            await db.addProject(project)
+            const loaded = await db.getProject(project.id)
+            expect(loaded.fileViews).toEqual({ 'image.png': 'hex' })
+            expect(loaded.openTabs).toEqual(['image.png', 'main.mips'])
+            loaded.setFileView('image.png', undefined)
+            await db.updateProject(loaded)
+            expect((await db.getProject(project.id)).fileViews).toBeUndefined()
+        } finally {
+            db.close()
+        }
+    })
+
     it('skips, and keeps, a row this version cannot read', async () => {
         Dexie.dependencies.indexedDB = new IDBFactory()
         const db = new Db()

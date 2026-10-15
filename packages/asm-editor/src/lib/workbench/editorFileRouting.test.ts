@@ -25,6 +25,21 @@ describe('file-type editor routing', () => {
             expect(editorFileKind(path)).toBe('assembly')
         expect(editorFileKind('')).toBeUndefined()
     })
+    it('calls a File stored as bytes neither source nor assembly, whatever its name', () => {
+        const bytes = { encoding: 'base64', content: 'iVBORw==' } as const
+        const text = { encoding: 'plain', content: 'nop' } as const
+        for (const path of ['image.png', 'main.c', 'crackme', 'main.s'])
+            expect(editorFileKind(path, bytes)).toBe('bytes')
+        expect(editorFileKind('main.s', text)).toBe('assembly')
+        expect(editorFileKind('crackme', text)).toBe('assembly')
+        //a pane showing bytes takes another byte File; a source pane no longer takes a .png
+        const source = { displayedPath: 'main.c', displayedFile: text },
+            image = { displayedPath: 'other.png', displayedFile: bytes },
+            empty = { displayedPath: '' }
+        expect(editorGroupForFile('image.png', [source, image], bytes)).toBe(image)
+        expect(editorGroupForFile('image.png', [source, empty], bytes)).toBe(empty)
+        expect(editorGroupForFile('image.png', [source], bytes)).toBe(source)
+    })
     it('uses the matching pane for mixed source/assembly files in either order', () => {
         const source = { displayedPath: 'main.cpp' },
             assembly = { displayedPath: 'main.riscv' }

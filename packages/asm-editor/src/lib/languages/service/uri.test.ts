@@ -9,7 +9,8 @@ import {
 
 const monacoStub = {
     Uri: {
-        from: (parts: { scheme: string; authority: string; path: string }) => parts
+        from: (parts: { scheme: string; authority: string; path: string; fragment?: string }) =>
+            parts
     }
 } as never
 
@@ -37,6 +38,30 @@ describe('Project source URIs', () => {
     it('gives live and Build models distinct stable keys', () => {
         expect(projectSourceModelKey(live)).not.toBe(projectSourceModelKey(build))
         expect(projectSourceModelKey(live)).toBe(projectSourceModelKey({ ...live }))
+    })
+
+    it("gives a File's Listing and Pseudocode models of their own beside its text's", () => {
+        const listing = { ...build, path: 'crackme', view: 'listing' } as const
+        const pseudocode = { ...listing, view: 'pseudocode' } as const
+        const text = { ...build, path: 'crackme' }
+        const keys = [listing, pseudocode, text].map(projectSourceModelKey)
+        expect(new Set(keys).size).toBe(3)
+        expect(keys[0]).toBe('session-1:/build-7/crackme#listing')
+        expect(keys[2]).toBe('session-1:/build-7/crackme')
+        //the view is the URI's fragment, so its path still names the File
+        for (const identity of [listing, pseudocode, text]) {
+            const uri = projectSourceUri(monacoStub, identity)
+            expect(uri.path).toBe('/build-7/crackme')
+            expect(parseProjectSourceUri(uri)).toEqual(identity)
+        }
+        expect(
+            parseProjectSourceUri({
+                scheme: ASSEMBLY_MODEL_SCHEME,
+                authority: 'session-1',
+                path: '/live/crackme',
+                fragment: 'hex'
+            })
+        ).toEqual({ sessionId: 'session-1', sourceKind: 'live', path: 'crackme' })
     })
 
     it('rejects malformed or root-escaping identities', () => {

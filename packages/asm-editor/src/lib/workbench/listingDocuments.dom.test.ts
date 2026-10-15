@@ -257,8 +257,10 @@ describe("a library's Listing", () => {
         //a library's Listing is no File of the Project, so it is never saved as a tab
         flushSync()
         expect(project.openTabs).toEqual(['crackme', 'notes.txt'])
-        //its model is kept for the session, whichever tab is shown
-        expect(session.retainedModelKeys.some((key) => key.endsWith('/@lib/libc.so.6'))).toBe(true)
+        //its model, a Listing's, is kept for the session, whichever tab is shown
+        expect(
+            session.retainedModelKeys.some((key) => key.endsWith('/@lib/libc.so.6#listing'))
+        ).toBe(true)
 
         //Stop: the library's tab goes, the Executable's stays and shows its own Listing again
         emulator.listings!.clearSession()

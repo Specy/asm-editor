@@ -14,6 +14,7 @@ import {
     type ProjectDisplay
 } from './languages/mars/marsDisplay'
 import { serializer } from '#lib/json.ts'
+import { isFileView, type FileView } from './fileViews'
 import { detectAssemblyLanguage } from './languages/languageDetector'
 import { cleanProjectSettings, type ProjectSettingsDecisions } from './projectSettings'
 import {
@@ -61,6 +62,11 @@ export interface ProjectData {
     openTabs?: string[]
     /** The last selected editor path, independent of the Entry file. */
     activeTab?: string
+    /**
+     * The view each File was last shown in, where it is not its default (Hex for an image, say),
+     * restored with `openTabs` ([file-views.md](../../../../docs/design/file-views.md), decision 8).
+     */
+    fileViews?: Record<string, FileView>
 }
 
 /**
@@ -80,6 +86,7 @@ export type StoredProject = Partial<
         | 'display'
         | 'openTabs'
         | 'activeTab'
+        | 'fileViews'
     >
 > & {
     /** The version 1 program, and the convenience for creating a project from a template. */
@@ -92,6 +99,7 @@ export type StoredProject = Partial<
     display?: Partial<ProjectDisplay>
     openTabs?: unknown
     activeTab?: unknown
+    fileViews?: unknown
 }
 
 /**
@@ -122,9 +130,9 @@ function pickEntry(entry: unknown, files: ProjectFiles, language: AvailableLangu
 
 /** Unusable editor state never prevents a Project from opening. */
 function cleanEditorTabs(
-    raw: { openTabs?: unknown; activeTab?: unknown } | undefined,
+    raw: { openTabs?: unknown; activeTab?: unknown; fileViews?: unknown } | undefined,
     files: ProjectFiles
-): Pick<ProjectData, 'openTabs' | 'activeTab'> {
+): Pick<ProjectData, 'openTabs' | 'activeTab' | 'fileViews'> {
     const usable = (path: unknown): path is string =>
         typeof path === 'string' && isValidFilePath(path) && Object.hasOwn(files, path)
     const openTabs = Array.isArray(raw?.openTabs)
@@ -134,10 +142,22 @@ function cleanEditorTabs(
         usable(raw?.activeTab) && (openTabs === undefined || openTabs.includes(raw.activeTab))
             ? raw.activeTab
             : undefined
+    const fileViews = cleanFileViews(raw?.fileViews, usable)
     return {
         ...(openTabs !== undefined ? { openTabs } : {}),
-        ...(activeTab !== undefined ? { activeTab } : {})
+        ...(activeTab !== undefined ? { activeTab } : {}),
+        ...(fileViews !== undefined ? { fileViews } : {})
     }
+}
+
+/** The saved views of Files that still exist, by the same rule as the tabs; none is no map. */
+function cleanFileViews(
+    raw: unknown,
+    usable: (path: unknown) => path is string
+): Record<string, FileView> | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+    const views = Object.entries(raw).filter(([path, view]) => usable(path) && isFileView(view))
+    return views.length ? Object.fromEntries(views) : undefined
 }
 
 /**
@@ -201,7 +221,8 @@ function contentKey(project: ProjectData): string {
         exam: project.exam,
         compilations: project.compilations,
         openTabs: project.openTabs,
-        activeTab: project.activeTab
+        activeTab: project.activeTab,
+        fileViews: project.fileViews
     })
 }
 
@@ -322,6 +343,7 @@ type ProjectMetadata = {
     compilations?: CompilationRecord[]
     openTabs?: string[]
     activeTab?: string
+    fileViews?: Record<string, FileView>
 }
 
 const metaVersion = 2
@@ -434,7 +456,8 @@ export function makeProject(data?: StoredProject) {
             display: state.display,
             ...(state.compilations ? { compilations: state.compilations } : {}),
             ...(state.openTabs !== undefined ? { openTabs: state.openTabs } : {}),
-            ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {})
+            ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {}),
+            ...(state.fileViews !== undefined ? { fileViews: state.fileViews } : {})
         }) as ProjectData
     }
 
@@ -459,7 +482,8 @@ export function makeProject(data?: StoredProject) {
             files,
             ...(snapshot.compilations ? { compilations: snapshot.compilations } : {}),
             ...(snapshot.openTabs !== undefined ? { openTabs: snapshot.openTabs } : {}),
-            ...(snapshot.activeTab !== undefined ? { activeTab: snapshot.activeTab } : {})
+            ...(snapshot.activeTab !== undefined ? { activeTab: snapshot.activeTab } : {}),
+            ...(snapshot.fileViews !== undefined ? { fileViews: snapshot.fileViews } : {})
         }
         const metaJson = serializer.stringify(meta, null, 4)
         const commentCharacter = COMMENT_CHARACTER[snapshot.language]
@@ -504,6 +528,7 @@ export function makeProject(data?: StoredProject) {
         Object.assign(state, merged)
         state.openTabs = merged.openTabs
         state.activeTab = merged.activeTab
+        state.fileViews = merged.fileViews
         reconcileSourceMaps()
     }
 
@@ -563,6 +588,22 @@ export function makeProject(data?: StoredProject) {
             const clean = cleanEditorTabs({ openTabs, activeTab }, state.files)
             state.openTabs = clean.openTabs
             state.activeTab = clean.activeTab
+        },
+        get fileViews() {
+            return state.fileViews
+        },
+        /**
+         * Remembers the view a File was last shown in, or with none that it is shown in its
+         * default; like the tabs, without touching Files or taking their Debug lock.
+         */
+        setFileView(path: string, view: FileView | undefined) {
+            //entries rather than assignment, which a File named `__proto__` would turn into a prototype
+            const next = Object.entries(state.fileViews ?? {}).filter(([key]) => key !== path)
+            if (view) next.push([path, view])
+            state.fileViews = cleanEditorTabs(
+                { fileViews: Object.fromEntries(next) },
+                state.files
+            ).fileViews
         },
         get sourceMaps() {
             return sourceMaps

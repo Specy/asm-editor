@@ -49,7 +49,7 @@ export class EditorModels {
                     if (this.applyingExternalValue) return
                     this.values.delete(key)
                     const identity = parseProjectSourceUri(owned.uri)
-                    if (identity?.sourceKind === 'live')
+                    if (identity?.sourceKind === 'live' && !identity.view)
                         this.edited(identity.path, owned.getValue())
                 })
             )
@@ -91,7 +91,11 @@ export class EditorModels {
         try {
             for (const [key, model] of this.models) {
                 const identity = parseProjectSourceUri(model.uri)
-                const file = identity?.sourceKind === 'live' ? files[identity.path] : undefined
+                //a view's model, such as a Listing, is not the File's text
+                const file =
+                    identity?.sourceKind === 'live' && !identity.view
+                        ? files[identity.path]
+                        : undefined
                 if (file?.encoding === 'plain' && model.getValue() !== file.content) {
                     model.setValue(file.content)
                     this.values.delete(key)

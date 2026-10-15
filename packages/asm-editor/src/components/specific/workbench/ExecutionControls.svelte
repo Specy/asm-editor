@@ -89,9 +89,8 @@
         const file = session.project.files[path]
         return (
             !!file &&
-            file.encoding !== 'base64' &&
             path !== session.project.entry &&
-            editorFileKind(path) === 'assembly' &&
+            editorFileKind(path, file) === 'assembly' &&
             !pane.displayedLibraryMember &&
             !session.fileSystemLocked
         )

@@ -5,7 +5,7 @@ import {
     type CompilationSourceMap
 } from '#lib/sourceCompilation/records.ts'
 import { ENVIRONMENT_HEADER_PATH } from '#lib/sourceRuntime/environmentLibrary.ts'
-import { resolveMappingPair } from './mappingPair'
+import { resolveMappingPair, type MappingPane } from './mappingPair'
 
 const text = (content: string) => ({ encoding: 'plain' as const, content })
 const files = {
@@ -38,7 +38,7 @@ const map: CompilationSourceMap = {
     ]
 }
 const pane = (path: keyof typeof files) => ({ displayedPath: path, displayedFile: files[path] })
-const resolve = (panes: ReturnType<typeof pane>[], current = files, maps = { 'main.s': map }) =>
+const resolve = (panes: MappingPane[], current = files, maps = { 'main.s': map }) =>
     resolveMappingPair(panes, maps, [record], current, 'RISC-V')
 
 describe('mapping between displayed editor files', () => {
@@ -48,6 +48,12 @@ describe('mapping between displayed editor files', () => {
             expect(resolve([source, assembly])).toEqual({ source, assembly, map })
             expect(resolve([assembly, source])).toEqual({ source, assembly, map })
         }
+    })
+    it('pairs only panes that show their Files as text', () => {
+        const assembly = pane('main.s')
+        expect(resolve([{ ...pane('main.c'), displayedView: 'text' }, assembly])).toBeDefined()
+        expect(resolve([{ ...pane('main.c'), displayedView: 'hex' }, assembly])).toBeUndefined()
+        expect(resolve([pane('main.c'), { ...assembly, displayedView: 'hex' }])).toBeUndefined()
     })
     it('does not pair unrelated files, identical files, or a single editor', () => {
         expect(resolve([pane('main.c'), pane('other.s')])).toBeUndefined()

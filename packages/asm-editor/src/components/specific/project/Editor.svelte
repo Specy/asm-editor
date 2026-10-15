@@ -358,7 +358,7 @@
         const listener = model.onDidChangeContent(() => {
             if (disabled || applyingExternalValue) return
             const changed = parseProjectSourceUri(model.uri)
-            if (changed?.sourceKind === 'live') {
+            if (changed?.sourceKind === 'live' && !changed.view) {
                 dispatcher('fileChange', { path: changed.path, value: model.getValue() })
             }
         })
@@ -909,8 +909,9 @@
                         endLineNumber: lineNumber,
                         endColumn,
                         relatedInformation: e.related?.map((related) => {
+                            //another File's text, whichever view this model is
                             const relatedIdentity = modelIdentity
-                                ? { ...modelIdentity, path: related.file }
+                                ? { ...modelIdentity, path: related.file, view: undefined }
                                 : undefined
                             return {
                                 resource: relatedIdentity

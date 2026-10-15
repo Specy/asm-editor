@@ -14,6 +14,9 @@
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
+    import HexEditor from './hex/HexEditor.svelte'
+    import FilePreview from './preview/FilePreview.svelte'
+    import { isPreviewKind } from '#lib/fileKinds.ts'
     import { useWorkbench } from './workbenchContext'
 
     let {
@@ -157,7 +160,8 @@
                   }
                 : undefined}
         />
-        {#if group.displayedPath}
+        <!-- the File's text, a Listing or Pseudocode are code; its bytes and a Preview are not -->
+        {#if group.displayedPath && group.showsCode}
             <Editor
                 source={group.modelIdentity
                     ? {
@@ -235,6 +239,18 @@
         {/if}
         {#if !group.displayedPath}
             <EmptyEditor {group} compact={session.groups.length > 1} />
+        {:else if group.displayedView === 'hex' && group.displayedFile && group.displayedKind}
+            <HexEditor
+                path={group.displayedPath}
+                file={group.displayedFile}
+                kind={group.displayedKind}
+            />
+        {:else if group.displayedView === 'preview' && group.displayedFile && isPreviewKind(group.displayedKind)}
+            <FilePreview
+                path={group.displayedPath}
+                file={group.displayedFile}
+                kind={group.displayedKind}
+            />
         {:else if group.displayedListing?.status === 'generating'}
             {@const progress = group.displayedListing.progress}
             <div class="file-notice">
@@ -255,14 +271,7 @@
                 </p>
             </div>
         {:else if group.displayedListing}
-            <!-- an Executable is shown as its Listing, not as the bytes it is -->
-        {:else if group.displayedFile?.encoding === 'base64'}
-            <div class="file-notice">
-                <h2>Binary file</h2>
-                <p>
-                    {group.displayedPath} is preserved as exact bytes and is not editable as text.
-                </p>
-            </div>
+            <!-- an Executable shown as its Listing -->
         {:else if !group.displayedFile}
             <div class="file-notice">
                 <h2>File not found</h2>

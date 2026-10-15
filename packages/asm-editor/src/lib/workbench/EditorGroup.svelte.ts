@@ -9,6 +9,8 @@ import {
     type ProjectSourceSelection
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
+import type { ProjectFileKind } from '#lib/fileKinds.ts'
+import { resolveFileView, type FileView } from '#lib/fileViews.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
@@ -37,8 +39,19 @@ export class EditorGroup {
     optimization = $state<Optimization>('0')
     sourceCompiler = $state<SourceCompiler>('clang')
 
+    /**
+     * The view this pane last showed each File in
+     * ([file-views.md](../../../../../docs/design/file-views.md), decision 8), while its tab is
+     * open; a File it has none for opens in the view the Project saved for it, or its default.
+     */
+    views = $state.raw<Readonly<Record<string, FileView>>>({})
+
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
+    /** What the displayed File is, from its bytes; undefined for a library's Listing or no File. */
+    declare readonly displayedKind: ProjectFileKind | undefined
+    /** How the displayed File is shown: as text, in the Hex editor, as a Listing, as a Preview. */
+    declare readonly displayedView: FileView
     declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
     /**
      * The Listing the displayed File is shown as: an Executable's, or that of a library the running
@@ -70,7 +83,14 @@ export class EditorGroup {
         this.displayedLanguage = $derived(
             editorFileLanguage(this.displayedPath, this.session.project.language)
         )
-        this.displayedListing = $derived(this.session.listingFor(this.sourceSelection))
+        this.displayedKind = $derived(this.session.fileKindOf(this.displayedFile))
+        this.displayedView = $derived(this.viewOf(this.displayedPath, this.displayedKind))
+        //generated only for a pane that shows it: an Executable in the Hex editor needs none
+        this.displayedListing = $derived(
+            this.displayedView === 'listing'
+                ? this.session.listingFor(this.sourceSelection)
+                : undefined
+        )
         this.displayedPatches = $derived.by(() => {
             const patched = this.session.emulator.patcher?.patched
             const selection = this.sourceSelection
@@ -86,6 +106,35 @@ export class EditorGroup {
             this.displayedPatches?.listing ?? this.displayedListing?.listing
         )
         this.resetCompilationOptions()
+    }
+
+    /**
+     * The view this pane shows a File of this kind in: the one it last showed it in, else the one
+     * last chosen for it anywhere, which the Project saves, when the kind offers it; else the
+     * kind's default. A library's Listing is no File and is only ever a Listing.
+     */
+    viewOf(path: string, kind: ProjectFileKind | undefined): FileView {
+        if (!kind && this.session.emulator.listings?.isLibrary(path)) return 'listing'
+        return resolveFileView(kind, this.views[path], this.session.project.fileViews?.[path])
+    }
+
+    /**
+     * Shows a File in another view in this pane, when its kind offers that view. With `remember`,
+     * as when a person picks it, the Project saves it as the File's last view.
+     */
+    setView(path: string, view: FileView, remember = true) {
+        const kind = path === this.displayedPath ? this.displayedKind : this.session.kindAt(path)
+        if (resolveFileView(kind, view) !== view) return
+        if (this.views[path] !== view) this.views = { ...this.views, [path]: view }
+        if (remember) this.session.viewChosen(path, view, kind)
+    }
+
+    /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
+    moveView(from: string, to?: string) {
+        if (!Object.hasOwn(this.views, from)) return
+        const views = Object.entries(this.views).filter(([path]) => path !== from && path !== to)
+        if (to !== undefined) views.push([to, this.views[from]])
+        this.views = Object.fromEntries(views)
     }
 
     resetCompilationOptions() {
@@ -238,12 +287,23 @@ export class EditorGroup {
         )
         return status.stale || status.edited
     }
+    /** Whether the displayed view is text in the code editor: a File's, a Listing or Pseudocode. */
+    get showsCode() {
+        const view = this.displayedView
+        return view === 'text' || view === 'listing' || view === 'pseudocode'
+    }
     get modelIdentity(): ProjectModelIdentity | undefined {
-        if (!this.displayedPath) return undefined
+        if (!this.displayedPath || !this.showsCode) return undefined
         //a Listing's model is made once its text exists, never filled in afterwards: Monaco decides
         //at a model's creation whether it is too large to highlight
         if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
-        return { sessionId: this.session.languageSessionId, ...this.sourceSelection }
+        const view = this.displayedView
+        return {
+            sessionId: this.session.languageSessionId,
+            ...this.sourceSelection,
+            //a Listing's model is the File's as much as its text's is, so the view tells them apart
+            ...(view === 'listing' || view === 'pseudocode' ? { view } : {})
+        }
     }
     get modelKey() {
         return this.modelIdentity ? projectSourceModelKey(this.modelIdentity) : `empty:${this.id}`
@@ -315,13 +375,17 @@ export class EditorGroup {
             .filter((item) => item.file === this.displayedPath && !own.includes(item.line))
             .map((item) => item.line)
     }
+    /**
+     * Whether the displayed view draws the program's current instruction on its line: a File's
+     * text or its Listing, not its bytes or a Preview.
+     */
+    get showsInstructions() {
+        return this.displayedView === 'text' || this.displayedView === 'listing'
+    }
     get instructionLine() {
         const s = this.session
-        return isCurrentBuildLocation(
-            this.sourceSelection,
-            s.buildGeneration,
-            s.emulator.currentFile
-        )
+        return this.showsInstructions &&
+            isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
             ? s.emulator.line
             : -1
     }
