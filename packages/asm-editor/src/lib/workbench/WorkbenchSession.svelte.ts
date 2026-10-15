@@ -1589,11 +1589,6 @@ export class WorkbenchSession {
     }
 
     /**
-     * A change to one Project File's model. Monaco applies a rename or a code action to every
-     * resource it touches, including Files the editor is not showing, so this is driven per model
-     * rather than from the editor's active text.
-     */
-    /**
      * Byte edits typed in the Hex editor ([ADR 0047](../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
      * overwrites `bytes` at `offset`, or with `edits` puts back a whole list for Undo and Redo.
      * False when the edit is refused, as the Project's limit can refuse it, after saying why.
@@ -1617,6 +1612,11 @@ export class WorkbenchSession {
         }
     }
 
+    /**
+     * A change to one Project File's model. Monaco applies a rename or a code action to every
+     * resource it touches, including Files the editor is not showing, so this is driven per model
+     * rather than from the editor's active text.
+     */
     fileEdited(path: string, nextCode: string) {
         if (
             this.host.readonly ||
