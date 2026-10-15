@@ -61,7 +61,12 @@ Taken by default, for the owner to overturn. Record any change in the design.
 
 ## Milestones
 
-D1 to D3 build the decompiler package; E1 to E7 are editor work that does not need it and can run alongside; E8 and E9 need D3, against the workspace build, and D4 releases the package once E8 has used it. Each milestone ends with its checks green and a commit. The owner reviews after E7 and at D4.
+D1 to D3 build the decompiler package; E1 to E7 are editor work that does not need it and can run alongside; E8 and E9 need D3, against the workspace build, and D4 releases the package once E8 has used it. Each milestone ends with its checks green and a commit.
+
+**Two batches** (the owner's choice, 2026-10-15), each reviewed and merged as its own pull request:
+
+- **Batch 1, branch `feat/file-views`:** E1 to E7, and E10 for what they ship (Documentation of the Hex editor, Byte edits, Preview and the Build output; browser verification; review). No decompiler: the switch offers **Hex · Disassemble** and **Preview · Hex**, and Decompile is not shown at all, rather than shown disabled. Nothing in the batch depends on `@specy/decompiler`.
+- **Batch 2, branch `feat/pseudocode`, from `feat/file-views`** (rebased onto `main` once Batch 1 is merged): D1.6 (the submodule, once the owner has pushed `Specy/decompiler-js`), E8, E9, the rest of E10 (the Pseudocode's Documentation and verification), and D4, the package's 1.0.0 release, once E8 has used its API. Decompile joins the switch here.
 
 ### D1. Decompiler: repository and build
 
@@ -155,8 +160,8 @@ Files: new `components/specific/workbench/preview/FilePreview.svelte`.
 
 Files: `components/specific/project/ExecutionDock.svelte`, `components/specific/workbench/ExecutionControls.svelte`, `EditorPane.svelte`, `WorkbenchCompact.svelte`, `lib/workbench/WorkbenchSession.svelte.ts`.
 
-1. **The switch** (decisions 4 and 13): **Hex · Disassemble · Decompile** for an Executable and a Build output, **Preview · Hex** for a preview kind, none otherwise; visible during a Debug session; labels drop to icons in the dock's narrow container query like its other tools.
-2. **Disassemble** shows the Listing in the pane (today's Listing display, now under the `listing` view). **Decompile** until E8 is disabled with a tooltip ("Decompile comes with the decompiler package").
+1. **The switch** (decisions 4 and 13): **Hex · Disassemble** for an Executable and a Build output (**· Decompile** from E8), **Preview · Hex** for a preview kind, none otherwise; visible during a Debug session; labels drop to icons in the dock's narrow container query like its other tools.
+2. **Disassemble** shows the Listing in the pane (today's Listing display, now under the `listing` view). **Decompile** is not shown in Batch 1; E8 adds it to the switch.
 3. **Debug session** (decision 8): `showBuildFile` moves a pane showing the Executable in `hex` to `listing`, opens it in the execution pane on `listing` when no pane shows it, leaves a `pseudocode` pane alone; Stop changes no view.
 4. Tests: the switch's buttons per kind and during a session; Build of crackme from a Hex pane shows the Listing with the program counter on `main`; Stop keeps the view.
 
