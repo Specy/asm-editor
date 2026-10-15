@@ -1,7 +1,7 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
-import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
     instructionAddressAt,
@@ -774,6 +774,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 name: executable.document.name,
                 base,
                 content: executable.file.content,
+                edits: byteEditsKey(executable.file),
                 bytes: () => fileBytes(executable.file)
             })
             this.listingOpened(executable.path, executable.document)

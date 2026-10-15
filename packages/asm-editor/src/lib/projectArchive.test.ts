@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { zipSync } from 'fflate'
+import { unzipSync, zipSync } from 'fflate'
+import lzstring from 'lz-string'
+import { serializer } from '#lib/json.ts'
+import { createSharePayload } from '#lib/utils.ts'
 import { makeProject, makeProjectFromExternal } from '#lib/Project.svelte.ts'
 import {
     looksLikeZip,
@@ -212,5 +215,90 @@ describe('large binary Files', () => {
             ProjectFormatError
         )
         expect(() => fileBytes({ encoding: 'base64', content: 'QQ' })).toThrow(ProjectFormatError)
+    })
+})
+
+describe('Byte edits in an archive', () => {
+    const edits = [{ offset: 1, remove: 2, insert: 'QUI=' }]
+    function editedProject() {
+        return makeProject({
+            language: 'X86',
+            entry: 'chall',
+            files: {
+                chall: { encoding: 'base64', content: '/wABAg==', edits },
+                'notes.txt': { encoding: 'plain', content: 'hunter2?' }
+            }
+        })
+    }
+    const manifestOf = (archive: Uint8Array) =>
+        JSON.parse(new TextDecoder().decode(unzipSync(archive)['project.json']))
+    const originalOf = (archive: Uint8Array, path: string) => [
+        ...unzipSync(archive)[`files/${path}`]
+    ]
+
+    it('keeps the original bytes under files/ and the edits in the manifest, as version 2', () => {
+        const archive = projectToArchive(editedProject())
+        const manifest = manifestOf(archive)
+        expect(manifest.version).toBe(2)
+        expect(manifest.files).toEqual({
+            chall: { encoding: 'base64', edits },
+            'notes.txt': { encoding: 'plain' }
+        })
+        expect(originalOf(archive, 'chall')).toEqual([0xff, 0, 1, 2])
+        const imported = makeProjectFromArchive(archive).project
+        expect(imported.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==', edits })
+        expect([...fileBytes(imported.files.chall)]).toEqual([0xff, 0x41, 0x42, 2])
+        expect(imported.files['notes.txt']).toEqual({ encoding: 'plain', content: 'hunter2?' })
+    })
+
+    it('stays version 1 without any, which older editors read', () => {
+        const project = editedProject()
+        project.fileSystem.writeBytes('chall', new Uint8Array([0xff, 0x41, 0x42, 2]))
+        const archive = projectToArchive(project)
+        const manifest = manifestOf(archive)
+        expect(manifest.version).toBe(1)
+        expect(manifest.files.chall).toEqual({ encoding: 'base64' })
+        expect(makeProjectFromArchive(archive).project.files.chall).toEqual({
+            encoding: 'base64',
+            content: '/0FCAg=='
+        })
+    })
+
+    it('refuses edits in a version 1 manifest and edits that do not fit the original', () => {
+        const metadata = {
+            id: '',
+            name: 'Edited',
+            description: '',
+            language: 'X86',
+            entry: 'chall',
+            settings: {},
+            createdAt: 0,
+            updatedAt: 0,
+            testcases: []
+        }
+        const archive = (version: number, archivedEdits: unknown) =>
+            zipSync({
+                'project.json': encoder.encode(
+                    JSON.stringify({
+                        version,
+                        project: metadata,
+                        files: { chall: { encoding: 'base64', edits: archivedEdits } }
+                    })
+                ),
+                'files/chall': new Uint8Array([0xff, 0])
+            })
+        expect(() => makeProjectFromArchive(archive(1, edits))).toThrow('Malformed manifest')
+        expect(() => makeProjectFromArchive(archive(2, 'edits'))).toThrow('Malformed manifest')
+        expect(() => makeProjectFromArchive(archive(2, edits))).toThrow('past the end')
+        expect(() => makeProjectFromArchive(archive(3, edits))).toThrow('Unsupported')
+    })
+
+    it('travels in a share link', () => {
+        const payload = createSharePayload(editedProject())
+        const shared = makeProject(
+            serializer.parse(lzstring.decompressFromEncodedURIComponent(payload))
+        )
+        expect(shared.files.chall.edits).toEqual(edits)
+        expect([...fileBytes(shared.files.chall)]).toEqual([0xff, 0x41, 0x42, 2])
     })
 })

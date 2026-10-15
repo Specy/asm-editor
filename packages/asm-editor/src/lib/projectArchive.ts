@@ -14,15 +14,22 @@ import {
     FILE_COUNT_LIMIT,
     FILE_ENCODINGS,
     PATH_BYTE_LIMIT,
-    fileBytes,
     isValidFilePath,
+    originalBytes,
     projectFileFromBytes,
     ProjectFormatError,
-    type FileEncoding
+    type ByteEdit,
+    type FileEncoding,
+    type ProjectFile
 } from '#lib/projectFiles.ts'
 import { unzipSync, zipSync, type Unzipped } from 'fflate'
 
-const ARCHIVE_VERSION = 1
+/**
+ * Version 2 gave a File's manifest entry its Byte edits, beside the original bytes under `files/`.
+ * An archive with none is still written as version 1, which editors older than Byte edits read.
+ */
+const ARCHIVE_VERSION = 2
+const ARCHIVE_VERSION_WITHOUT_EDITS = 1
 const MANIFEST_NAME = 'project.json'
 const FILE_PREFIX = 'files/'
 const MANIFEST_BYTE_LIMIT = 1024 * 1024
@@ -34,9 +41,9 @@ const ARCHIVE_BYTE_LIMIT =
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
-type ArchivedFile = { encoding: FileEncoding }
+type ArchivedFile = { encoding: FileEncoding; edits?: readonly ByteEdit[] }
 type ProjectManifest = {
-    version: typeof ARCHIVE_VERSION
+    version: typeof ARCHIVE_VERSION | typeof ARCHIVE_VERSION_WITHOUT_EDITS
     project: Omit<ProjectData, 'files'>
     files: Record<string, ArchivedFile>
 }
@@ -51,11 +58,15 @@ export function projectToArchive(project: Project | ProjectData): Uint8Array<Arr
     const files = cleanFiles(snapshot.files)
     const projectMetadata = { ...snapshot }
     Reflect.deleteProperty(projectMetadata, 'files')
+    const edited = Object.values(files).some((file) => file.edits?.length)
     const manifest: ProjectManifest = {
-        version: ARCHIVE_VERSION,
+        version: edited ? ARCHIVE_VERSION : ARCHIVE_VERSION_WITHOUT_EDITS,
         project: projectMetadata,
         files: Object.fromEntries(
-            Object.entries(files).map(([path, file]) => [path, { encoding: file.encoding }])
+            Object.entries(files).map(([path, file]) => [
+                path,
+                { encoding: file.encoding, ...(file.edits ? { edits: file.edits } : {}) }
+            ])
         )
     }
     const manifestBytes = encoder.encode(serializer.stringify(manifest, null, 2))
@@ -63,8 +74,9 @@ export function projectToArchive(project: Project | ProjectData): Uint8Array<Arr
         throw new ProjectFormatError('Project metadata exceeds the 1 MiB archive limit')
     }
     const entries: Record<string, Uint8Array> = { [MANIFEST_NAME]: manifestBytes }
+    //the original bytes: the Byte edits are in the manifest, kept apart as the Project keeps them
     for (const [path, file] of Object.entries(files))
-        entries[`${FILE_PREFIX}${path}`] = fileBytes(file)
+        entries[`${FILE_PREFIX}${path}`] = originalBytes(file)
     return zipSync(entries, { level: 6 })
 }
 
@@ -199,14 +211,16 @@ export function makeProjectFromArchive(input: ArrayBuffer | Uint8Array): Externa
         throw new ProjectFormatError('Project manifest and archived Files do not match')
     }
 
-    const files: Record<string, ReturnType<typeof projectFileFromBytes>> = Object.create(null)
+    const files: Record<string, ProjectFile> = Object.create(null)
     for (const path of metadataPaths) {
         if (!isValidFilePath(path))
             throw new ProjectFormatError(`Invalid manifest File path: ${path}`)
         const archived = extracted[`${FILE_PREFIX}${path}`]
         if (!archived) throw new ProjectFormatError(`Archived File is missing: ${path}`)
         const info = rawManifest.files[path]
-        files[path] = projectFileFromBytes(archived, info.encoding)
+        const file = projectFileFromBytes(archived, info.encoding)
+        //`cleanFiles` below checks the edits against the original they apply to
+        files[path] = info.edits ? { ...file, edits: info.edits } : file
     }
     for (const name of Object.keys(extracted)) {
         if (name === MANIFEST_NAME) continue
@@ -233,9 +247,14 @@ function parseManifest(bytes: Uint8Array): ProjectManifest {
             `Invalid project.json manifest: ${error instanceof Error ? error.message : String(error)}`
         )
     }
-    if (!isRecord(parsed) || parsed.version !== ARCHIVE_VERSION) {
+    if (
+        !isRecord(parsed) ||
+        (parsed.version !== ARCHIVE_VERSION && parsed.version !== ARCHIVE_VERSION_WITHOUT_EDITS)
+    ) {
         throw new ProjectFormatError('Unsupported Project archive version')
     }
+    //only version 2 knows Byte edits
+    const keys = parsed.version === ARCHIVE_VERSION ? ['encoding', 'edits'] : ['encoding']
     if (!isRecord(parsed.project) || !isRecord(parsed.files)) {
         throw new ProjectFormatError('Malformed Project archive manifest')
     }
@@ -246,7 +265,8 @@ function parseManifest(bytes: Uint8Array): ProjectManifest {
             !isRecord(info) ||
             typeof info.encoding !== 'string' ||
             !FILE_ENCODINGS.includes(info.encoding as FileEncoding) ||
-            Object.keys(info).some((key) => key !== 'encoding')
+            Object.keys(info).some((key) => !keys.includes(key)) ||
+            (info.edits !== undefined && !Array.isArray(info.edits))
         ) {
             throw new ProjectFormatError(`Malformed manifest File entry: ${path}`)
         }

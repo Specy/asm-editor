@@ -1,4 +1,4 @@
-import type { BuildSources } from '#lib/projectFiles.ts'
+import { sameFileContent, type BuildSources } from '#lib/projectFiles.ts'
 import type { ProjectAnalysisSnapshot } from './protocol'
 import type { ProjectModelIdentity } from './uri'
 
@@ -53,7 +53,7 @@ export function analysisForModel(
     )
         return undefined
     //Keep only the symbols and occurrences whose File still reads the way the analysis read it.
-    const unchanged = (path: string) => live.files[path]?.content === sources.files[path]?.content
+    const unchanged = (path: string) => sameFileContent(live.files[path], sources.files[path])
     return {
         ...snapshot,
         symbols: snapshot.symbols.filter((symbol) => unchanged(symbol.location.path)),

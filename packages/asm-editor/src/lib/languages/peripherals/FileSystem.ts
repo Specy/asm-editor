@@ -1,8 +1,10 @@
 import {
     bytesFile,
     cleanFiles,
+    encodeBase64,
     fileBytes,
     fileText,
+    mergeOverwrites,
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
@@ -25,7 +27,11 @@ function decodeStandalone(bytes: Uint8Array): string | null {
     }
 }
 
-/** `file` caches this node's storage representation, dropped whenever `bytes` changes. */
+/**
+ * `file` caches this node's storage representation, dropped whenever `bytes` changes and put back
+ * by an Undo that restores the bytes it stood for, so a File's record (its original and Byte edits)
+ * comes back as it was rather than rebuilt from its bytes.
+ */
 type Node = { bytes: Uint8Array; file?: ProjectFile }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
 type Inverse = { bytes: number; filesChanged?: true; restore: () => void }
@@ -235,12 +241,44 @@ export class FileSystem {
         this.assertEditable()
         this.commit(files)
     }
+    /**
+     * Replaces a File's whole content, which becomes its new original: any Byte edits it had are
+     * dropped, as for an upload over it (ADR 0047).
+     */
     writeBytes(path: string, bytes: Uint8Array, replace = true) {
         this.assertEditable()
         path = resolveFilePath(path)
         if (!replace && hasOwn(this.files, path))
             throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
         this.commit({ ...this.files, [path]: bytesFile(bytes) })
+    }
+    /**
+     * Overwrites `bytes` at `offset` of a File stored as bytes, as a Byte edit kept apart from its
+     * original ([ADR 0047](../../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)).
+     * The File keeps its length and stays a byte File, whatever its bytes decode as.
+     */
+    editBytes(path: string, offset: number, bytes: Uint8Array) {
+        this.assertEditable()
+        path = resolveFilePath(path)
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (file.encoding !== 'base64')
+            throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
+        if (
+            !Number.isSafeInteger(offset) ||
+            offset < 0 ||
+            offset + bytes.length > fileBytes(file).length
+        )
+            throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
+        if (!bytes.length) return
+        const edits = mergeOverwrites([
+            ...(file.edits ?? []),
+            { offset, remove: bytes.length, insert: encodeBase64(bytes) }
+        ])
+        this.commit({
+            ...this.files,
+            [path]: { encoding: file.encoding, content: file.content, edits }
+        })
     }
     writeText(path: string, text: string, replace = true) {
         const file = { encoding: 'plain' as const, content: text }
@@ -275,9 +313,9 @@ export class FileSystem {
     /**
      * The Debug session's own publish. It validated each path through `resolveFilePath`'s rules,
      * refused File/directory collisions as it applied them and enforced the size and count limits
-     * through `capacity`, and every File it publishes came from `bytesFile`, so re-running
-     * `cleanFiles` here would decode and re-encode the whole Project on every Core step that
-     * touches a File.
+     * through `capacity`, and every File it publishes came from `bytesFile` or is a record it was
+     * given, which `cleanFiles` checked, so re-running `cleanFiles` here would decode and re-encode
+     * the whole Project on every Core step that touches a File.
      */
     private publishSessionFiles(files: ProjectFiles) {
         this.store.write(files)
@@ -810,12 +848,13 @@ export class FileSystemSession {
      */
     private appendBytes(node: Node, bytes: Uint8Array): void {
         const oldLength = node.bytes.length
+        const oldFile = node.file
         this.record({
             bytes: 16,
             filesChanged: true,
             restore: () => {
                 node.bytes = node.bytes.subarray(0, oldLength)
-                node.file = undefined
+                node.file = oldFile
             }
         })
         const required = oldLength + bytes.length
@@ -849,6 +888,7 @@ export class FileSystemSession {
         else end = oldLength
         if (oldLength === bytes.length && start === end) return false
         const before = node.bytes.slice(start, end)
+        const oldFile = node.file
         this.record({
             bytes: before.length + 16,
             filesChanged: true,
@@ -857,7 +897,7 @@ export class FileSystemSession {
                 restored.set(node.bytes.subarray(0, oldLength))
                 restored.set(before, start)
                 node.bytes = restored
-                node.file = undefined
+                node.file = oldFile
             }
         })
         node.bytes = bytes

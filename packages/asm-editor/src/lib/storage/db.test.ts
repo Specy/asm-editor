@@ -99,6 +99,28 @@ describe('the version 2 upgrade', () => {
         }
     })
 
+    it('round trips Byte edits apart from the original bytes through browser storage', async () => {
+        const db = new Db()
+        try {
+            const edits = [{ offset: 1, remove: 2, insert: 'QUI=' }]
+            const project = makeProject({
+                language: 'X86',
+                entry: 'chall',
+                files: { chall: { encoding: 'base64', content: '/wABAg==', edits } }
+            })
+            await db.addProject(project)
+            const loaded = await db.getProject(project.id)
+            expect(loaded.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==', edits })
+            loaded.fileSystem.editBytes('chall', 3, new Uint8Array([0x43]))
+            await db.updateProject(loaded)
+            const again = await db.getProject(project.id)
+            expect(again.files.chall.content).toBe('/wABAg==')
+            expect(again.files.chall.edits).toEqual([{ offset: 1, remove: 3, insert: 'QUJD' }])
+        } finally {
+            db.close()
+        }
+    })
+
     it('skips, and keeps, a row this version cannot read', async () => {
         Dexie.dependencies.indexedDB = new IDBFactory()
         const db = new Db()

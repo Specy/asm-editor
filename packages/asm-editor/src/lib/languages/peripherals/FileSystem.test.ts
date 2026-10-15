@@ -9,7 +9,9 @@ import {
 import {
     bytesFile,
     cleanFiles,
+    encodeBase64,
     fileBytes,
+    originalBytes,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
     ProjectFormatError
@@ -690,5 +692,101 @@ describe('FileSystemSession descriptors', () => {
         step(() => run.closeAll())
         //with nothing open there is nothing to record, so no step is needed
         expect(() => run.closeAll()).not.toThrow()
+    })
+})
+
+describe('Byte edits in the FileSystem', () => {
+    /** A byte File `blob` of `ff 00 01 02` with one edit, `41 42` at 1, and a text File. */
+    function edited() {
+        const fs = new FileSystem({
+            blob: { encoding: 'base64', content: encodeBase64(new Uint8Array([0xff, 0, 1, 2])) },
+            'notes.txt': { encoding: 'plain', content: 'notes' }
+        })
+        fs.editBytes('blob', 1, encode('AB'))
+        return fs
+    }
+
+    it('overwrites a byte File, keeping its original apart and its encoding', () => {
+        const fs = edited()
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
+        expect([...originalBytes(fs.files.blob)]).toEqual([0xff, 0, 1, 2])
+        expect(fs.files.blob.edits).toEqual([{ offset: 1, remove: 2, insert: 'QUI=' }])
+        //every byte now decodes as UTF-8, and the File is still one of bytes
+        fs.editBytes('blob', 0, encode('Z'))
+        expect(decode(fs.readBytes('blob'))).toBe('ZAB\x02')
+        expect(fs.files.blob.encoding).toBe('base64')
+        expect(fs.files.blob.edits).toEqual([{ offset: 0, remove: 3, insert: 'WkFC' }])
+        expect(() => fs.readText('blob')).toThrow(ProjectFormatError)
+        //what a Build reads
+        expect([...fileBytes(fs.snapshot('blob').files.blob)]).toEqual([0x5a, 0x41, 0x42, 2])
+    })
+
+    it('refuses a text File, a range past the end and a locked FileSystem', () => {
+        const fs = edited()
+        expect(() => fs.editBytes('notes.txt', 0, encode('N'))).toThrow(
+            'Only a File stored as bytes takes Byte edits'
+        )
+        expect(() => fs.editBytes('blob', 3, encode('XY'))).toThrow('past the end')
+        expect(failure(() => fs.editBytes('missing', 0, encode('X')))).toBe(FileErrorCode.NotFound)
+        const run = fs.beginSession()
+        expect(() => fs.editBytes('blob', 0, encode('X'))).toThrow('Stop')
+        run.stop()
+        fs.editBytes('blob', 3, encode('!'))
+        expect(decode(fs.readBytes('blob').subarray(1))).toBe('AB!')
+    })
+
+    it('drops the edits when the whole content is replaced, as an upload does', () => {
+        const fs = edited()
+        fs.writeBytes('blob', new Uint8Array([9, 0xff]))
+        expect(fs.files.blob).toEqual({ encoding: 'base64', content: 'Cf8=' })
+        //a rename keeps the record
+        const other = edited()
+        other.rename('blob', 'moved')
+        expect(other.files.moved.edits).toHaveLength(1)
+    })
+
+    it("drops the edits at a program's write, which becomes the original", () => {
+        const fs = edited()
+        const run = fs.beginSession()
+        run.beginInstruction(1)
+        const fd = run.open('blob', { access: 'read-write' })
+        expect([...run.read(fd, 4)]).toEqual([0xff, 0x41, 0x42, 2])
+        run.endInstruction()
+        //reading changes nothing
+        expect(fs.files.blob.edits).toHaveLength(1)
+        run.beginInstruction(2)
+        run.pwrite(fd, 3, new Uint8Array([0xfe]))
+        run.endInstruction()
+        expect(fs.files.blob).toEqual({
+            encoding: 'base64',
+            content: encodeBase64(new Uint8Array([0xff, 0x41, 0x42, 0xfe]))
+        })
+    })
+
+    it('restores the original and its edits on Undo, rather than rebuilding them', () => {
+        const fs = edited()
+        const before = fs.files.blob
+        const session = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: (run: typeof session) => T): T =>
+            session.performInstruction(steps++, () => operation(session))
+        const undo = () => session.undo(--steps)
+        const fd = step((run) => run.open('blob', { access: 'read-write' }))
+        //a write that turns every byte into valid UTF-8, which a rebuilt record would make text
+        step((run) => run.pwrite(fd, 0, encode('Z')))
+        step((run) => run.write(fd, encode('more')))
+        expect(fs.files.blob.encoding).toBe('plain')
+        undo()
+        undo()
+        expect(fs.files.blob).toBe(before)
+        //a truncation and an append, undone the same way
+        step((run) => run.ftruncate(fd, 1))
+        step((run) => run.seek(fd, 0, 2))
+        step((run) => run.write(fd, new Uint8Array([0x80])))
+        undo()
+        undo()
+        undo()
+        expect(fs.files.blob).toBe(before)
+        expect(fs.files.blob.edits).toHaveLength(1)
     })
 })
