@@ -115,6 +115,8 @@ it('downloads its exact bytes under its name', async () => {
     })
     await view.choose('Download')
     expect(names).toEqual(['main'])
+    //typed, or Chrome saves it as `main.txt`
+    expect(saved!.type).toBe('application/octet-stream')
     expect(new Uint8Array(await saved!.arrayBuffer())).toEqual(program)
 })
 

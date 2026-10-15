@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount } from 'svelte'
+import { flushSync, mount, tick, unmount } from 'svelte'
 import Explorer from './Explorer.svelte'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -108,5 +108,76 @@ it('keeps an unsupported ELF as a File and explains why it cannot run', async ()
         expect(result.warn).toHaveBeenCalledWith(expect.stringContaining('truncated'))
     } finally {
         await result.dispose()
+    }
+})
+
+it('downloads a File as its exact bytes under its name, typed so no extension is added', async () => {
+    //jsdom has no popovers, which the context menu opens as
+    HTMLElement.prototype.showPopover ??= function () {}
+    HTMLElement.prototype.hidePopover ??= function () {}
+    const fileSystem = new FileSystem({
+        'main.asm': { encoding: 'plain', content: 'nop' },
+        crackme: {
+            encoding: 'base64',
+            content: 'f0VMRgIBAQ==',
+            edits: [{ offset: 1, remove: 1, insert: 'RA==' }]
+        }
+    })
+    const target = document.createElement('div')
+    document.body.append(target)
+    const component = mount(Explorer, {
+        target,
+        props: {
+            files: fileSystem.files,
+            fileSystem,
+            language: 'X86',
+            entry: 'main.asm',
+            selectedPath: 'main.asm',
+            onSelect: vi.fn(),
+            onEntryChange: vi.fn()
+        }
+    })
+    const saved: { name: string; blob: Blob }[] = []
+    let blob: Blob | undefined
+    //jsdom has no Blob URLs
+    const { createObjectURL, revokeObjectURL } = URL
+    URL.createObjectURL = vi.fn((value: Blob) => ((blob = value), 'blob:crackme'))
+    URL.revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+        this: HTMLAnchorElement
+    ) {
+        saved.push({ name: this.download, blob: blob! })
+    })
+    try {
+        flushSync()
+        const row = [...target.querySelectorAll<HTMLElement>('.tree-row')].find((candidate) =>
+            candidate.textContent?.includes('crackme')
+        )!
+        row.dispatchEvent(
+            new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: 5,
+                clientY: 5
+            })
+        )
+        flushSync()
+        await tick()
+        const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+            (candidate) => candidate.textContent?.trim() === 'Download exact bytes'
+        )!
+        item.click()
+        expect(saved.map(({ name }) => name)).toEqual(['crackme'])
+        expect(saved[0].blob.type).toBe('application/octet-stream')
+        //the edited bytes, as every reader of the File sees them
+        expect(new Uint8Array(await saved[0].blob.arrayBuffer())).toEqual(
+            new Uint8Array([0x7f, 0x44, 0x4c, 0x46, 2, 1, 1])
+        )
+    } finally {
+        URL.createObjectURL = createObjectURL
+        URL.revokeObjectURL = revokeObjectURL
+        click.mockRestore()
+        await unmount(component)
+        target.remove()
     }
 })

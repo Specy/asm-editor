@@ -18,7 +18,7 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
     import { fileBytes, type ProjectFiles } from '#lib/projectFiles.ts'
-    import { blobDownloader } from '#lib/utils.ts'
+    import { bytesDownloader } from '#lib/utils.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import { untrack } from 'svelte'
@@ -563,20 +563,11 @@
     function downloadFile(targetPath = selectedPath) {
         const file = files[targetPath]
         if (!file) return
-        const bytes = fileBytes(file)
-        const contents = new Uint8Array(bytes).buffer
-        blobDownloader(new Blob([contents]), basename(targetPath))
+        bytesDownloader(fileBytes(file), basename(targetPath))
     }
 
     function downloadBuildOutput() {
-        if (!buildOutput) return
-        //typed, or a browser names an extension-less download `main.txt`
-        blobDownloader(
-            new Blob([new Uint8Array(buildOutput.bytes).buffer], {
-                type: 'application/octet-stream'
-            }),
-            basename(buildOutput.path)
-        )
+        if (buildOutput) bytesDownloader(buildOutput.bytes, basename(buildOutput.path))
     }
 
     /**
