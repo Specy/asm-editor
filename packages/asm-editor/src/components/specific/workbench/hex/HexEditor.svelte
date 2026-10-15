@@ -88,6 +88,11 @@
         onEdit?: (path: string, offset: number, bytes: Uint8Array) => boolean
         /** Puts back a File's whole list of edits, for Undo and Redo. */
         onSetEdits?: (path: string, edits: readonly ByteEdit[]) => boolean
+        /**
+         * Hands the Workbench the editor's save of what was typed and not saved yet, which it calls
+         * before a Build or a test run locks the Files; returns what takes it back.
+         */
+        registerFlush?: (flush: () => void) => () => void
         /** Bytes to bring into sight and select, as Show in Hex asks; `onRevealed` once done. */
         reveal?: { offset: number; length: number }
         onRevealed?: () => void
@@ -108,6 +113,7 @@
         history = new ByteEditHistory(),
         onEdit,
         onSetEdits,
+        registerFlush,
         reveal,
         onRevealed,
         viewState,
@@ -314,12 +320,17 @@
         //a page closed or hidden right after typing still keeps it
         const hide = () => flush()
         addEventListener('pagehide', hide)
+        //and so does a Build or a test run started before the typing paused, which the Workbench
+        //saves it for first: Safari's Build button takes no focus, so the bytes keep the keyboard
+        const unregister = registerFlush?.(flush)
         return () => {
             removeEventListener('pagehide', hide)
+            unregister?.()
             flush()
         }
     })
-    //what was typed goes once the bytes can no longer be typed over: a Build has started
+    //what was typed goes once the bytes can no longer be typed over by a lock that did not save
+    //it first, as a Build the coding agent starts through the Emulator does
     $effect(() => {
         if (!editable && untrack(() => pending.size)) untrack(() => (pending = new Map()))
     })

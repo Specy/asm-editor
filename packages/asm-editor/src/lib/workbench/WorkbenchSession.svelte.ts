@@ -209,6 +209,13 @@ export class WorkbenchSession {
     readonly models: EditorModels
     /** The Hex editor's Undo and Redo of each File, shared by both panes. */
     readonly byteEditHistory = new ByteEditHistory()
+    /**
+     * How each open Hex editor saves what was typed and not saved yet: typing becomes a Byte edit
+     * when it pauses, and a Build or a test run locks the Files, so it is saved before either
+     * starts, while the Files still take it.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Called before a Build or a test run; nothing tracks it.
+    private readonly typingFlushes = new Set<() => void>()
 
     /**
      * A Runtime library member as the editor shows it, read-only: the one the running Build linked,
@@ -1588,6 +1595,17 @@ export class WorkbenchSession {
         this.changed()
     }
 
+    /** Adds a Hex editor's save of its unsaved typing; the function returned removes it. */
+    registerTypingFlush(flush: () => void): () => void {
+        this.typingFlushes.add(flush)
+        return () => {
+            this.typingFlushes.delete(flush)
+        }
+    }
+    /** Saves what every open Hex editor has typed, before the Files are locked. */
+    private flushTyping() {
+        for (const flush of [...this.typingFlushes]) flush()
+    }
     /**
      * Byte edits typed in the Hex editor ([ADR 0047](../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
      * overwrites `bytes` at `offset`, or with `edits` puts back a whole list for Undo and Redo.
@@ -1886,6 +1904,8 @@ export class WorkbenchSession {
             toast.warn('Stop the current Debug session before building again')
             return
         }
+        //bytes typed into a Hex editor go into the Files this Build reads
+        this.flushTyping()
         const started = performance.now()
         const sources = this.sourceInput
         //the Build output this Build replaces, whose tabs it closes if it places none there
@@ -2046,6 +2066,7 @@ export class WorkbenchSession {
 
     async test() {
         if (this.building || this.running || this.compiling) return
+        this.flushTyping()
         this.running = true
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))

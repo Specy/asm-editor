@@ -14,9 +14,12 @@ import {
     cleanFiles,
     encodeBase64,
     fileBytes,
+    type BuildSources,
+    type ByteEdit,
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
+import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.svelte.ts'
 
 //`#lib/utils.ts`, which the data inspector reads numbers through, reaches the projects store and
 //its IndexedDB, which jsdom does not have
@@ -373,5 +376,121 @@ describe('an Executable', () => {
         code.click()
         flushSync()
         expect(shown).toEqual([0x1100])
+    })
+})
+
+describe('typing before a Build', () => {
+    /**
+     * The Hex editor in a Workbench session over `blob.bin`, its props passed as `EditorPane`
+     * passes them, so that a Build or a test run sees the session's view of the Files.
+     */
+    function inSession() {
+        const fixture = editorGroupsFixture('MIPS', {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'nop' },
+                'blob.bin': { encoding: 'base64', content: encodeBase64(ALPHABET) }
+            }
+        })
+        const { session, project, emulator } = fixture
+        const group = session.groups[0]
+        session.selectFile('blob.bin', group)
+        flushSync()
+        const built: BuildSources[] = []
+        const flushes = { count: 0 }
+        emulator.compile = async (_history, sources) => {
+            built.push(sources)
+        }
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const editor = mount(HexEditor, {
+            target,
+            props: {
+                path: 'blob.bin',
+                get file() {
+                    return group.displayedFile!
+                },
+                kind: 'bytes',
+                get readOnly() {
+                    return group.bytesReadOnly
+                },
+                history: session.byteEditHistory,
+                onEdit: (path: string, offset: number, bytes: Uint8Array) =>
+                    session.editFileBytes(path, offset, bytes),
+                onSetEdits: (path: string, edits: readonly ByteEdit[]) =>
+                    session.setFileByteEdits(path, edits),
+                registerFlush: (flush: () => void) =>
+                    session.registerTypingFlush(() => {
+                        flushes.count++
+                        flush()
+                    })
+            }
+        })
+        flushSync()
+        const grid = target.querySelector<HTMLElement>('[role="grid"]')!
+        const type = (text: string) => {
+            for (const key of text) {
+                grid.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+                flushSync()
+            }
+        }
+        let mounted = true
+        const close = () => {
+            if (mounted) unmount(editor)
+            mounted = false
+        }
+        return {
+            ...fixture,
+            built,
+            flushes,
+            type,
+            close,
+            dispose: () => {
+                close()
+                fixture.dispose()
+            },
+            blob: (files = project.files) => [...fileBytes(files['blob.bin'])].slice(0, 4)
+        }
+    }
+
+    it('saves what was typed into the File and the Build before the Build locks the Files', async () => {
+        const hex = inSession()
+        hex.type('7f45')
+        //the typing has not paused: nothing is saved yet
+        expect(hex.project.files['blob.bin'].edits).toBeUndefined()
+        await hex.session.build()
+        expect(hex.blob()).toEqual([0x7f, 0x45, 0x43, 0x44])
+        expect(hex.built).toHaveLength(1)
+        expect(hex.blob(hex.built[0].files)).toEqual([0x7f, 0x45, 0x43, 0x44])
+        //and Undo takes it back as one edit
+        expect(hex.session.byteEditHistory.undo('blob.bin', hex.project.files['blob.bin'])).toEqual(
+            {
+                edits: [],
+                offset: 0
+            }
+        )
+        hex.dispose()
+    })
+
+    it('saves it before a test run too, and no more once the editor is gone', async () => {
+        const hex = inSession()
+        const tested: BuildSources[] = []
+        Object.assign(hex.emulator, {
+            test: async (sources: BuildSources) => {
+                tested.push(sources)
+                return []
+            }
+        })
+        hex.type('00')
+        await hex.session.test()
+        expect(hex.blob(tested[0].files)).toEqual([0, 0x42, 0x43, 0x44])
+        expect(hex.blob()).toEqual([0, 0x42, 0x43, 0x44])
+        expect(hex.flushes.count).toBe(1)
+        //a closed editor saved its typing as it closed, and a Build no longer asks it
+        hex.close()
+        await hex.session.build()
+        expect(hex.built).toHaveLength(1)
+        expect(hex.flushes.count).toBe(1)
+        hex.dispose()
     })
 })

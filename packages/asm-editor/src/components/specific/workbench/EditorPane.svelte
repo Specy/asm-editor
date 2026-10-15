@@ -274,6 +274,7 @@
                     history={session.byteEditHistory}
                     onEdit={(path, offset, bytes) => session.editFileBytes(path, offset, bytes)}
                     onSetEdits={(path, edits) => session.setFileByteEdits(path, edits)}
+                    registerFlush={(flush) => session.registerTypingFlush(flush)}
                     reveal={group.hexReveal?.path === group.displayedPath
                         ? group.hexReveal
                         : undefined}
