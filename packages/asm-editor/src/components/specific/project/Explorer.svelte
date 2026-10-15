@@ -961,7 +961,8 @@
             {/if}
             {#if language === 'X86'}
                 <button class="hint" disabled={locked} onclick={() => pickUploads()}>
-                    You can run Linux binaries. Upload an ELF file to disassemble
+                    You can run Linux binaries. Upload an ELF file to see its bytes and disassemble
+                    it
                 </button>
             {/if}
             {#each tips as tip (tip.text)}
