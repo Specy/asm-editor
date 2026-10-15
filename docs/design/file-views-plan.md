@@ -66,7 +66,7 @@ D1 to D3 build the decompiler package; E1 to E7 are editor work that does not ne
 **Two batches** (the owner's choice, 2026-10-15), each reviewed and merged as its own pull request:
 
 - **Batch 1, branch `feat/file-views`:** E1 to E7, and E10 for what they ship (Documentation of the Hex editor, Byte edits, Preview and the Build output; browser verification; review). No decompiler: the switch offers **Hex · Disassemble** and **Preview · Hex**, and Decompile is not shown at all, rather than shown disabled. Nothing in the batch depends on `@specy/decompiler`.
-- **Batch 2, branch `feat/pseudocode`, from `feat/file-views`** (rebased onto `main` once Batch 1 is merged): D1.6 (the submodule, once the owner has pushed `Specy/decompiler-js`), E8, E9, the rest of E10 (the Pseudocode's Documentation and verification), and D4, the package's 1.0.0 release, once E8 has used its API. Decompile joins the switch here.
+- **Batch 2, branch `feat/pseudocode`, from `feat/file-views`** (rebased onto `main` once Batch 1 is merged): D1.6 (the submodule, once the owner has pushed `Specy/decompiler-js`), E8, E9, the rest of E10 (the Pseudocode's Documentation and verification), and D4, the package's 1.0.0 release, once E8 has used its API. Decompile joins the switch here. Start from [the Batch 2 handoff](./file-views-batch2-handoff.md), which collects what Batch 1 and the package work left for it.
 
 ### D1. Decompiler: repository and build
 
