@@ -75,10 +75,10 @@
          */
         libraryFiles?: readonly string[]
         /**
-         * The program the last Build linked, listed read-only under the tree: no File of the
-         * Project, never saved, opened, downloaded or kept as a File
+         * The program the last Build linked, listed read-only under the tree, to open, download
+         * or keep as a File: it is no File of the Project and is never saved
          * ([ADR 0050](../../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
-         * `stale` once the sources are no longer the ones it was built from.
+         * `stale` once the sources would no longer build it.
          */
         buildOutput?: { path: string; bytes: Uint8Array; stale: boolean }
         /** Whether to show the hints card under the tree. */

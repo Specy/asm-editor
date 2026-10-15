@@ -318,7 +318,7 @@ export class WorkbenchSession {
      * read-only, outside the Project, and shown like an Executable.
      */
     buildOutputAt(path: string): ProjectFile | undefined {
-        return path && this.buildOutput?.path === path ? this.buildOutputFile : undefined
+        return this.buildOutput?.path === path ? this.buildOutputFile : undefined
     }
 
     /**
