@@ -251,6 +251,27 @@ describe('Byte edits in an archive', () => {
         expect(imported.files['notes.txt']).toEqual({ encoding: 'plain', content: 'hunter2?' })
     })
 
+    it('keeps an insertion and a deletion, which a later version may save', () => {
+        const kept = [
+            { offset: 2, remove: 0, insert: 'QUI=' },
+            { offset: 0, remove: 1, insert: '' }
+        ]
+        const project = makeProject({
+            language: 'MIPS',
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'nop' },
+                'chall.bin': { encoding: 'base64', content: '/wABAg==', edits: kept }
+            }
+        })
+        const archive = projectToArchive(project)
+        expect(manifestOf(archive).files['chall.bin']).toEqual({ encoding: 'base64', edits: kept })
+        expect(originalOf(archive, 'chall.bin')).toEqual([0xff, 0, 1, 2])
+        const imported = makeProjectFromArchive(archive).project.files['chall.bin']
+        expect(imported).toEqual({ encoding: 'base64', content: '/wABAg==', edits: kept })
+        expect([...fileBytes(imported)]).toEqual([0, 0x41, 0x42, 1, 2])
+    })
+
     it('stays version 1 without any, which older editors read', () => {
         const project = editedProject()
         project.fileSystem.writeBytes('chall', new Uint8Array([0xff, 0x41, 0x42, 2]))

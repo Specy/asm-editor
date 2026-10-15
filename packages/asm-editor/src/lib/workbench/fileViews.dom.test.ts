@@ -351,6 +351,28 @@ describe('the Hex editor in a session', () => {
         expect(session.editFileBytes('ascii.pdf', 0, Uint8Array.from([0x25]))).toBe(false)
     })
 
+    it('keeps the bytes of a File whose saved edits insert or delete read-only', () => {
+        const { session } = setup('MIPS', {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'nop' },
+                'inserted.bin': {
+                    encoding: 'base64',
+                    content: 'AQIDBA==',
+                    edits: [{ offset: 1, remove: 0, insert: '/w==' }]
+                }
+            }
+        })
+        const group = session.groups[0]
+        session.selectFile('inserted.bin')
+        flushSync()
+        expect(group.displayedView).toBe('hex')
+        expect(group.bytesReadOnly).toBe(
+            'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
+        )
+        expect(session.editFileBytes('inserted.bin', 0, Uint8Array.from([0]))).toBe(false)
+    })
+
     it("keeps a File's Undo across a rename and drops it with the File", () => {
         const { session, project } = setup()
         const blob = project.files['blob.bin']

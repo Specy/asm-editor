@@ -10,6 +10,7 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { ProjectFileKind } from '#lib/fileKinds.ts'
+import { overwritesOnly } from '#lib/projectFiles.ts'
 import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
@@ -520,7 +521,8 @@ export class EditorGroup {
     }
     /**
      * Why the displayed File's bytes take no Byte edits now, or undefined when they do: whatever
-     * keeps a File's text read-only, and a File stored as text, whose bytes are its text.
+     * keeps a File's text read-only, a File stored as text, whose bytes are its text, and one whose
+     * saved edits insert or delete bytes, since only overwrites can be added to.
      */
     get bytesReadOnly(): string | undefined {
         const s = this.session
@@ -533,6 +535,8 @@ export class EditorGroup {
         if (s.running || s.building) return 'The Files are read-only while a Build runs'
         if (this.displayedFile?.encoding !== 'base64')
             return 'This File is stored as text, which takes no Byte edits'
+        if (!overwritesOnly(this.displayedFile))
+            return 'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
         return undefined
     }
     /**

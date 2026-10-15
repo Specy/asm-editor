@@ -6,8 +6,9 @@ export type FileEncoding = 'plain' | 'base64'
 /**
  * A **Byte edit** ([ADR 0047](../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
  * `remove` bytes at `offset` replaced by `insert`, in base64. A File's edits apply in order to its
- * original bytes. The Hex editor only overwrites, so `remove` is always the inserted length; the
- * shape can still express an insertion or a deletion, which no editor writes yet.
+ * original bytes. The Hex editor only overwrites, so there `remove` is the inserted length; the
+ * shape also expresses an insertion or a deletion, which a Project is read with, though this
+ * editor writes none yet.
  */
 export type ByteEdit = Readonly<{ offset: number; remove: number; insert: string }>
 /**
@@ -195,11 +196,20 @@ export function mergeOverwrites(edits: readonly ByteEdit[]): ByteEdit[] {
     return runs
 }
 
-/** How many bytes a File reads as, without decoding a byte File whose edits only overwrite. */
+/**
+ * Whether a File's Byte edits only overwrite, as the Hex editor's do: it can add to those alone,
+ * since an insertion or a deletion moves every byte after it.
+ */
+export function overwritesOnly(file: ProjectFile): boolean {
+    return (file.edits ?? []).every(isOverwrite)
+}
+
+/** How many bytes a File reads as, edits applied, without decoding a byte File. */
 export function fileByteLength(file: ProjectFile): number {
-    if (file.encoding === 'base64' && (file.edits ?? []).every(isOverwrite))
-        return base64Length(file.content)
-    return fileBytes(file).length
+    if (file.encoding !== 'base64') return fileBytes(file).length
+    let length = base64Length(file.content)
+    for (const edit of file.edits ?? []) length += base64Length(edit.insert) - edit.remove
+    return length
 }
 
 /** A stable text naming a File's Byte edits, empty when it has none, for keys and equality. */
@@ -243,9 +253,11 @@ export function fileHead(file: ProjectFile, length: number): Uint8Array {
 }
 
 /**
- * The Byte edits stored with a File, checked against its original's length: each in range and an
- * overwrite, the only kind this editor applies, so a Project is never opened with bytes it would
- * read differently. Undefined when there are none.
+ * The Byte edits stored with a File, checked by applying them in order to its original's
+ * `length`: each in range of the length the edits before it leave, so a Project is never opened
+ * with bytes it would read differently. An insertion or a deletion is as valid as an overwrite
+ * (ADR 0047), so a Project that carries one is read, though this editor writes only overwrites.
+ * Undefined when there are none.
  */
 function cleanByteEdits(
     path: string,
@@ -257,6 +269,7 @@ function cleanByteEdits(
     if (!value.edits.length) return undefined
     if (value.encoding !== 'base64')
         throw new ProjectFormatError(`Only a File stored as bytes has Byte edits: ${path}`)
+    let current = length
     return Object.freeze(
         value.edits.map((edit: unknown) => {
             if (
@@ -275,13 +288,14 @@ function cleanByteEdits(
                 !Number.isSafeInteger(offset) ||
                 !Number.isSafeInteger(remove) ||
                 offset < 0 ||
-                remove < 1
+                remove < 0
             )
                 throw new ProjectFormatError(`Invalid Byte edit for ${path}`)
-            if (decodeBase64(insert).length !== remove)
-                throw new ProjectFormatError(`A Byte edit of ${path} changes its length`)
-            if (offset + remove > length)
+            const inserted = decodeBase64(insert).length
+            if (!remove && !inserted) throw new ProjectFormatError(`An empty Byte edit for ${path}`)
+            if (offset + remove > current)
                 throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
+            current += inserted - remove
             return Object.freeze({ offset, remove, insert })
         })
     )
@@ -343,9 +357,10 @@ export function cleanFiles(raw: unknown): ProjectFiles {
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
         const bytes = originalBytes(value)
         const edits = cleanByteEdits(path, value, bytes.length)
-        //the original and its Byte edits are both kept, so both count (ADR 0047)
+        //the original and its Byte edits are both kept, so both count (ADR 0047): the bytes each
+        //edit puts in, an overwrite's length; the File as edited is never longer than all these
         size += bytes.length
-        for (const edit of edits ?? []) size += edit.remove
+        for (const edit of edits ?? []) size += base64Length(edit.insert)
         if (size > FILE_BYTE_LIMIT)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
         files[path] = Object.freeze({

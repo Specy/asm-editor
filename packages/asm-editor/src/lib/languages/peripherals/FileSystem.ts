@@ -7,6 +7,7 @@ import {
     fileByteLength,
     fileText,
     mergeOverwrites,
+    overwritesOnly,
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
@@ -275,7 +276,8 @@ export class FileSystem {
     /**
      * Overwrites `bytes` at `offset` of a File stored as bytes, as a Byte edit kept apart from its
      * original ([ADR 0047](../../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)).
-     * The File keeps its length and stays a byte File, whatever its bytes decode as.
+     * The File keeps its length and stays a byte File, whatever its bytes decode as. A File whose
+     * edits insert or delete, which a Project can carry, takes none: only overwrites merge.
      */
     editBytes(path: string, offset: number, bytes: Uint8Array) {
         this.assertEditable()
@@ -284,6 +286,10 @@ export class FileSystem {
         if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
         if (file.encoding !== 'base64')
             throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
+        if (!overwritesOnly(file))
+            throw new ProjectFormatError(
+                `${path} has Byte edits that insert or delete bytes, which this editor cannot add to`
+            )
         if (
             !Number.isSafeInteger(offset) ||
             offset < 0 ||

@@ -10,11 +10,13 @@ import {
     buildSourcesEqual,
     cleanFiles,
     encodeBase64,
+    fileByteLength,
     fileBytes,
     fileHead,
     fileText,
     mergeOverwrites,
     originalBytes,
+    overwritesOnly,
     ProjectFormatError,
     sameFileContent,
     FILE_BYTE_LIMIT,
@@ -122,16 +124,68 @@ describe('a File with Byte edits', () => {
 
     it.each([
         [[{ offset: 3, remove: 2, insert: encodeBase64(bytes(1, 2)) }], 'past the end'],
-        [[{ offset: 0, remove: 2, insert: encodeBase64(bytes(1)) }], 'changes its length'],
+        [[{ offset: 5, remove: 0, insert: encodeBase64(bytes(1)) }], 'past the end'],
+        //each edit is in range of the length the ones before it leave
+        [
+            [
+                { offset: 0, remove: 2, insert: '' },
+                { offset: 2, remove: 1, insert: encodeBase64(bytes(1)) }
+            ],
+            'past the end'
+        ],
         [[{ offset: -1, remove: 1, insert: encodeBase64(bytes(1)) }], 'Invalid Byte edit'],
         [[{ offset: 0.5, remove: 1, insert: encodeBase64(bytes(1)) }], 'Invalid Byte edit'],
-        [[{ offset: 0, remove: 0, insert: '' }], 'Invalid Byte edit'],
+        [[{ offset: 0, remove: -1, insert: encodeBase64(bytes(1)) }], 'Invalid Byte edit'],
+        [[{ offset: 0, remove: 0, insert: '' }], 'An empty Byte edit'],
         [[{ offset: 0, remove: 1, insert: 'AQ' }], 'Noncanonical'],
         [[{ offset: 0, remove: 1, insert: 'AQ==', note: 'x' }], 'Invalid Byte edit'],
         ['not a list', 'Invalid Byte edits']
     ])('is refused when its edits are malformed (%#)', (edits, message) => {
         const raw = { 'blob.bin': { encoding: 'base64', content: 'AAAAAA==', edits } }
         expect(String(formatError(() => cleanFiles(raw)))).toContain(message)
+    })
+
+    it('is read with an insertion and a deletion, which a later version may save', () => {
+        //"hunter2" made "ter42?": two insertions, an overwrite of a byte the second put past the
+        //original's end, and a deletion
+        const original = new TextEncoder().encode('hunter2')
+        const edits: ByteEdit[] = [
+            { offset: 6, remove: 0, insert: encodeBase64(bytes(0x34)) },
+            { offset: 8, remove: 0, insert: encodeBase64(bytes(0x21)) },
+            { offset: 8, remove: 1, insert: encodeBase64(bytes(0x3f)) },
+            { offset: 0, remove: 3, insert: '' }
+        ]
+        const project = makeProject({
+            language: 'MIPS',
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'nop' },
+                secret: byteFile(original, edits)
+            }
+        })
+        const file = project.files.secret
+        expect(file.edits).toEqual(edits)
+        expect(new TextDecoder().decode(fileBytes(file))).toBe('ter42?')
+        expect(new TextDecoder().decode(fileHead(file, 4))).toBe('ter4')
+        expect(fileByteLength(file)).toBe(6)
+        expect(overwritesOnly(file)).toBe(false)
+        expect(overwritesOnly(byteFile(original, [edit(0, 0x48)]))).toBe(true)
+        //what is stored counts: the original, and the bytes the edits put in
+        expect(() => cleanFiles({ secret: file })).not.toThrow()
+    })
+
+    it('counts an insertion by the bytes it puts in, a deletion by none', () => {
+        const half = new Uint8Array(FILE_BYTE_LIMIT / 2)
+        const inserting = byteFile(half, [
+            { offset: 0, remove: 0, insert: encodeBase64(new Uint8Array(FILE_BYTE_LIMIT / 2)) }
+        ])
+        expect(() => cleanFiles({ a: inserting })).not.toThrow()
+        expect(formatError(() => cleanFiles({ a: inserting, b: byteFile(bytes(1)) }))).toBe(
+            'Project exceeds the 16 MiB file limit'
+        )
+        const deleting = byteFile(half, [{ offset: 0, remove: FILE_BYTE_LIMIT / 2, insert: '' }])
+        expect(fileByteLength(deleting)).toBe(0)
+        expect(() => cleanFiles({ a: deleting, b: byteFile(half) })).not.toThrow()
     })
 
     it('is refused when a text File carries edits', () => {

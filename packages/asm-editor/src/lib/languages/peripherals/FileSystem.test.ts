@@ -735,6 +735,31 @@ describe('Byte edits in the FileSystem', () => {
         expect(decode(fs.readBytes('blob').subarray(1))).toBe('AB!')
     })
 
+    it('refuses a File whose saved edits insert or delete, which it reads all the same', () => {
+        const inserted = {
+            encoding: 'base64' as const,
+            content: encodeBase64(encode('abc')),
+            edits: [
+                { offset: 1, remove: 0, insert: encodeBase64(encode('XY')) },
+                { offset: 4, remove: 1, insert: '' }
+            ]
+        }
+        const fs = new FileSystem({ blob: inserted })
+        expect(decode(fs.readBytes('blob'))).toBe('aXYb')
+        expect(() => fs.editBytes('blob', 0, encode('Z'))).toThrow(
+            'blob has Byte edits that insert or delete bytes, which this editor cannot add to'
+        )
+        expect(fs.files.blob.edits).toEqual(inserted.edits)
+        //what a Build reads, and a session's program
+        expect(decode(fileBytes(fs.snapshot('blob').files.blob))).toBe('aXYb')
+        const run = fs.beginSession()
+        run.beginInstruction(1)
+        const fd = run.open('blob', { access: 'read' })
+        expect(decode(run.read(fd, 8))).toBe('aXYb')
+        run.endInstruction()
+        run.stop()
+    })
+
     it('drops the edits when the whole content is replaced, as an upload does', () => {
         const fs = edited()
         fs.writeBytes('blob', new Uint8Array([9, 0xff]))
