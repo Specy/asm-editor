@@ -566,7 +566,8 @@ describe("a Build's quick look for main", () => {
             })
         }
         expect(findProgramStart(decoder, new TextEncoder().encode('not an ELF'))).toBeUndefined()
-    })
+        //nineteen whole Listings, libc's among them: about 3.5 s alone, past 5 s under load
+    }, 30_000)
 })
 
 describe('determinism', () => {
