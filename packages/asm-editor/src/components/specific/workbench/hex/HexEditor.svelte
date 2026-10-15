@@ -5,10 +5,9 @@
      * the content string itself, per encoding, as the ELF analyses are: a key built from it would
      * copy megabytes at every lookup.
      */
+    //a cache read while deriving the bytes, which nothing tracks: a module script's Map is no state
     const originals = {
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A cache read while deriving the bytes; nothing tracks it.
         plain: new Map<string, Uint8Array>(),
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- The same, for Files stored as bytes.
         base64: new Map<string, Uint8Array>()
     }
     const KEPT_ORIGINALS = 4
