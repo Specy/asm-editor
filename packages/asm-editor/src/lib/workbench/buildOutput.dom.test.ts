@@ -172,18 +172,22 @@ describe('the Build output in the Workbench', () => {
         expect(group.tabs.paths).toEqual(['main.asm'])
     })
 
-    it('is dimmed as from an earlier Build once the sources change', async () => {
+    it('is dimmed as from an earlier Build once a File it was built from changes', async () => {
         const { session, project } = setup()
         await built(session)
         expect(session.buildOutputStale).toBe(false)
         session.stop()
-        project.fileSystem.writeText('notes.txt', 'unrelated')
-        flushSync()
-        expect(session.buildOutputStale).toBe(true)
-        project.fileSystem.remove('notes.txt')
+        //a File the Build did not have, its own copy kept as a File among them, changes nothing
+        project.fileSystem.writeBytes('bin/main', program, false, 'base64')
         flushSync()
         expect(session.buildOutputStale).toBe(false)
         project.fileSystem.writeText('main.asm', 'nop')
+        flushSync()
+        expect(session.buildOutputStale).toBe(true)
+        project.fileSystem.writeText('main.asm', 'nop\nnop')
+        flushSync()
+        expect(session.buildOutputStale).toBe(false)
+        project.fileSystem.rename('main.asm', 'start.asm')
         flushSync()
         expect(session.buildOutputStale).toBe(true)
     })

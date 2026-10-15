@@ -18,8 +18,12 @@ import {
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
 import type { ByteEdit, ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
-import { buildSourcesEqual } from '#lib/projectFiles.ts'
-import { buildOutputCollision, buildOutputFile, type BuildOutput } from '#lib/buildOutput.ts'
+import {
+    buildOutputCollision,
+    buildOutputFile,
+    buildOutputStale,
+    type BuildOutput
+} from '#lib/buildOutput.ts'
 import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
 import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
@@ -455,7 +459,7 @@ export class WorkbenchSession {
         })
         this.buildOutputFile = $derived(this.buildOutput && buildOutputFile(this.buildOutput))
         this.buildOutputStale = $derived(
-            !!this.buildOutput && !buildSourcesEqual(this.buildOutput.sources, this.sourceInput)
+            !!this.buildOutput && buildOutputStale(this.buildOutput, this.sourceInput)
         )
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
@@ -819,7 +823,7 @@ export class WorkbenchSession {
     declare readonly buildOutput: BuildOutput | undefined
     /** The Build output as the record the views read a File from, stored as bytes. */
     declare readonly buildOutputFile: ProjectFile | undefined
-    /** Whether the live sources are no longer the ones the Build output was built from. */
+    /** Whether the live sources would no longer build the Build output, see `buildOutputStale`. */
     declare readonly buildOutputStale: boolean
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'

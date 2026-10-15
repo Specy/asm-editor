@@ -1,6 +1,8 @@
 import { commandLineProgram } from './commandLine'
 import {
+    buildConfigurationsEqual,
     encodeBase64,
+    sameFileContent,
     type BuildSources,
     type ProjectFile,
     type ProjectFiles
@@ -45,6 +47,24 @@ export function buildOutputCollision(
 /** The Log's note for a Build output a Project's File or folder kept from its path. */
 export function buildOutputCollisionNote(path: string, collision: 'file' | 'folder'): string {
     return `\`${path}\` is already a ${collision === 'file' ? 'File' : 'folder'} of the Project, so the built program is not shown; rename one of them.`
+}
+
+/**
+ * Whether the Build output is from an earlier Build than the live sources would make: their Entry
+ * or Build configuration is another, or a File it was built from has changed or gone. A File added
+ * since does not count, since a Build that succeeded without it read nothing of it; so keeping the
+ * Build output as a File does not make it stale.
+ */
+export function buildOutputStale(output: BuildOutput, live: BuildSources): boolean {
+    const built = output.sources
+    return !(
+        built.entry === live.entry &&
+        buildConfigurationsEqual(built, live) &&
+        Object.entries(built.files).every(
+            ([path, file]) =>
+                Object.hasOwn(live.files, path) && sameFileContent(file, live.files[path])
+        )
+    )
 }
 
 const records = new WeakMap<BuildOutput, ProjectFile>()

@@ -570,8 +570,11 @@
 
     function downloadBuildOutput() {
         if (!buildOutput) return
+        //typed, or a browser names an extension-less download `main.txt`
         blobDownloader(
-            new Blob([new Uint8Array(buildOutput.bytes).buffer]),
+            new Blob([new Uint8Array(buildOutput.bytes).buffer], {
+                type: 'application/octet-stream'
+            }),
             basename(buildOutput.path)
         )
     }
