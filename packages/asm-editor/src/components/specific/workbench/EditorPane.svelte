@@ -15,6 +15,7 @@
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
     import HexEditor from './hex/HexEditor.svelte'
+    import type { HexViewState } from './hex/hexGrid'
     import FilePreview from './preview/FilePreview.svelte'
     import { isPreviewKind } from '#lib/fileKinds.ts'
     import { useWorkbench } from './workbenchContext'
@@ -80,6 +81,23 @@
         const kinds = listingModel?.listing.lines.kinds
         return kinds ? (line: number) => kinds[line] === LINE_KIND.instruction : undefined
     })
+
+    /** Whether the execution dock floats over the bottom of this pane. */
+    const docked = $derived(
+        !!group.displayedPath &&
+            ((controls && session.controlsGroup === group) ||
+                ((!!sourceLanguage(group.displayedPath) || group.recompilationNeeded) &&
+                    !session.debugSession))
+    )
+    /** Where this pane was in a File's bytes, kept for as long as its tab is open. */
+    function hexViewState(path: string): HexViewState {
+        let state = group.hexViews.get(path)
+        if (!state) {
+            state = { caret: { offset: 0, nibble: 0, column: 'hex' }, anchor: undefined, topRow: 0 }
+            group.hexViews.set(path, state)
+        }
+        return state
+    }
 
     function overSplitZone(event: DragEvent) {
         if (!session.canSplitWithDrop()) return false
@@ -240,11 +258,24 @@
         {#if !group.displayedPath}
             <EmptyEditor {group} compact={session.groups.length > 1} />
         {:else if group.displayedView === 'hex' && group.displayedFile && group.displayedKind}
-            <HexEditor
-                path={group.displayedPath}
-                file={group.displayedFile}
-                kind={group.displayedKind}
-            />
+            <!-- one Hex editor per File, so each keeps its own caret, typing and Find -->
+            {#key group.displayedPath}
+                <HexEditor
+                    path={group.displayedPath}
+                    file={group.displayedFile}
+                    readOnly={group.bytesReadOnly}
+                    notice={group.bytesNotice}
+                    history={session.byteEditHistory}
+                    onEdit={(path, offset, bytes) => session.editFileBytes(path, offset, bytes)}
+                    onSetEdits={(path, edits) => session.setFileByteEdits(path, edits)}
+                    reveal={group.hexReveal?.path === group.displayedPath
+                        ? group.hexReveal
+                        : undefined}
+                    onRevealed={() => (group.hexReveal = undefined)}
+                    viewState={hexViewState(group.displayedPath)}
+                    dockInset={docked}
+                />
+            {/key}
         {:else if group.displayedView === 'preview' && group.displayedFile && isPreviewKind(group.displayedKind)}
             <FilePreview
                 path={group.displayedPath}
@@ -278,7 +309,7 @@
                 <p>{group.displayedPath} does not currently name a File.</p>
             </div>
         {/if}
-        {#if group.displayedPath && ((controls && session.controlsGroup === group) || ((sourceLanguage(group.displayedPath) || group.recompilationNeeded) && !session.debugSession))}
+        {#if docked}
             <div class="floating-controls">
                 <ExecutionControls
                     {group}

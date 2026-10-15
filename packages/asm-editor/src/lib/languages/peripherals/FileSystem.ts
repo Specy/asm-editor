@@ -11,6 +11,7 @@ import {
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
     type BuildSources,
+    type ByteEdit,
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
@@ -278,6 +279,27 @@ export class FileSystem {
         this.commit({
             ...this.files,
             [path]: { encoding: file.encoding, content: file.content, edits }
+        })
+    }
+    /**
+     * Puts back a whole list of Byte edits over a File's unchanged original, as the Hex editor's
+     * Undo and Redo do: `editBytes` only adds to a list, and an Undo needs the list as it was. The
+     * list is checked as a saved one is, so it must fit the original it is put over.
+     */
+    setByteEdits(path: string, edits: readonly ByteEdit[]) {
+        this.assertEditable()
+        path = resolveFilePath(path)
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (file.encoding !== 'base64')
+            throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
+        this.commit({
+            ...this.files,
+            [path]: {
+                encoding: file.encoding,
+                content: file.content,
+                ...(edits.length ? { edits } : {})
+            }
         })
     }
     writeText(path: string, text: string, replace = true) {

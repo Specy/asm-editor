@@ -80,7 +80,11 @@ function decodeBase64(text: string): Uint8Array {
         throw new ProjectFormatError('Invalid file encoding or base64 content')
     }
     if (btoa(raw) !== text) throw new ProjectFormatError('Noncanonical base64 content')
-    return Uint8Array.from(raw, (character) => character.charCodeAt(0))
+    //a plain loop: `Uint8Array.from` with a mapping function takes about 50 times as long, over a
+    //second and a half for 16 MiB, and the Hex editor decodes a File again at every Byte edit
+    const bytes = new Uint8Array(raw.length)
+    for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index)
+    return bytes
 }
 
 export function encodeBase64(bytes: Uint8Array): string {

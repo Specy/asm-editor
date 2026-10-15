@@ -789,4 +789,23 @@ describe('Byte edits in the FileSystem', () => {
         expect(fs.files.blob).toBe(before)
         expect(fs.files.blob.edits).toHaveLength(1)
     })
+
+    it('puts back a whole list of edits, as the Hex editor undoes one', () => {
+        const fs = edited()
+        const before = fs.files.blob.edits!
+        fs.editBytes('blob', 3, encode('!'))
+        fs.setByteEdits('blob', before)
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
+        //an empty list leaves the original, with no edits kept
+        fs.setByteEdits('blob', [])
+        expect(fs.files.blob).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        //checked as a saved list is, and refused where `editBytes` is
+        expect(() => fs.setByteEdits('blob', [{ offset: 3, remove: 2, insert: 'QUI=' }])).toThrow(
+            'past the end'
+        )
+        expect(() => fs.setByteEdits('notes.txt', [])).toThrow('stored as bytes')
+        const run = fs.beginSession()
+        expect(() => fs.setByteEdits('blob', before)).toThrow('Stop')
+        run.stop()
+    })
 })

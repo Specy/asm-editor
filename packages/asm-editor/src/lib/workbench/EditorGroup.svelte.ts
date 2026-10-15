@@ -11,6 +11,7 @@ import {
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { ProjectFileKind } from '#lib/fileKinds.ts'
 import { resolveFileView, type FileView } from '#lib/fileViews.ts'
+import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
@@ -45,6 +46,14 @@ export class EditorGroup {
      * open; a File it has none for opens in the view the Project saved for it, or its default.
      */
     views = $state.raw<Readonly<Record<string, FileView>>>({})
+    /**
+     * Where this pane was in each File it showed in the Hex editor, while its tab is open: not
+     * reactive, since only the Hex editor reads it, when it opens the File again.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read once when a Hex editor opens a File; nothing tracks it.
+    readonly hexViews = new Map<string, HexViewState>()
+    /** The bytes Show in Hex asked this pane to select, until its Hex editor has. */
+    hexReveal = $state.raw<{ path: string; offset: number; length: number } | undefined>()
 
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
@@ -131,6 +140,9 @@ export class EditorGroup {
 
     /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
     moveView(from: string, to?: string) {
+        const place = this.hexViews.get(from)
+        this.hexViews.delete(from)
+        if (place && to !== undefined) this.hexViews.set(to, place)
         if (!Object.hasOwn(this.views, from)) return
         const views = Object.entries(this.views).filter(([path]) => path !== from && path !== to)
         if (to !== undefined) views.push([to, this.views[from]])
@@ -439,6 +451,30 @@ export class EditorGroup {
     }
     get activeLineColors() {
         return this.session.activeMappingColors
+    }
+    /**
+     * Why the displayed File's bytes take no Byte edits now, or undefined when they do: whatever
+     * keeps a File's text read-only, and a File stored as text, whose bytes are its text.
+     */
+    get bytesReadOnly(): string | undefined {
+        const s = this.session
+        if (s.host.readonly) return 'This Project is read-only'
+        if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
+        if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
+            return 'The Files are read-only during a Debug session: Stop to edit them'
+        if (s.running || s.building) return 'The Files are read-only while a Build runs'
+        if (this.displayedFile?.encoding !== 'base64')
+            return 'This File is stored as text, which takes no Byte edits'
+        return undefined
+    }
+    /**
+     * The Hex editor's notice over an Executable during a Debug session (decision 8): its bytes
+     * are the File's, not memory's, so a Patch missing from them does not read as a failed one.
+     */
+    get bytesNotice(): string | undefined {
+        return this.displayedKind === 'executable' && this.session.debugSession
+            ? "The File's bytes. Patches and the program's writes are in memory: see the memory view."
+            : undefined
     }
     get editorDisabled() {
         const s = this.session

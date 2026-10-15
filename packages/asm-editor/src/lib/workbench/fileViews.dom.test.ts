@@ -14,7 +14,6 @@ import type { ListingOrder } from '#lib/listing/listingClient.ts'
 import type { AvailableLanguages, StoredProject } from '#lib/Project.svelte.ts'
 import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
 import { encodeBase64 } from '#lib/projectFiles.ts'
-import HexEditor from '#cmp/specific/workbench/hex/HexEditor.svelte'
 import FilePreview from '#cmp/specific/workbench/preview/FilePreview.svelte'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
@@ -285,20 +284,65 @@ describe('the saved views', () => {
     })
 })
 
+describe('the Hex editor in a session', () => {
+    it('types over a byte File through the FileSystem, and over nothing else', () => {
+        const { session, project } = setup()
+        expect(session.editFileBytes('blob.bin', 1, Uint8Array.from([0xff]))).toBe(true)
+        expect(project.files['blob.bin'].edits).toEqual([{ offset: 1, remove: 1, insert: '/w==' }])
+        expect(session.setFileByteEdits('blob.bin', [])).toBe(true)
+        expect(project.files['blob.bin'].edits).toBeUndefined()
+        //refused, and said why, rather than thrown
+        expect(session.editFileBytes('notes.txt', 0, Uint8Array.from([0x41]))).toBe(false)
+        expect(session.editFileBytes('blob.bin', 3, Uint8Array.from([1, 2]))).toBe(false)
+        const run = project.fileSystem.beginSession()
+        flushSync()
+        expect(session.editFileBytes('blob.bin', 0, Uint8Array.from([0]))).toBe(false)
+        run.stop()
+    })
+
+    it('says why the bytes are read-only, and over an Executable in a Debug session why', () => {
+        const { session, emulator, project } = setup()
+        const group = session.groups[0]
+        session.selectFile('blob.bin')
+        flushSync()
+        expect(group.bytesReadOnly).toBeUndefined()
+        expect(group.bytesNotice).toBeUndefined()
+        group.setView('crackme', 'hex')
+        session.selectFile('crackme')
+        flushSync()
+        expect(group.bytesReadOnly).toBeUndefined()
+        emulator.buildSources = { entry: 'crackme', files: project.files }
+        emulator.canExecute = true
+        flushSync()
+        expect(group.bytesReadOnly).toMatch(/Debug session/)
+        expect(group.bytesNotice).toBe(
+            "The File's bytes. Patches and the program's writes are in memory: see the memory view."
+        )
+        session.selectFile('blob.bin')
+        flushSync()
+        expect(group.bytesNotice).toBeUndefined()
+        expect(setup(undefined, {}, { readonly: true }).session.groups[0].bytesReadOnly).toBe(
+            'This Project is read-only'
+        )
+    })
+
+    it("keeps a File's Undo across a rename and drops it with the File", () => {
+        const { session, project } = setup()
+        const blob = project.files['blob.bin']
+        session.byteEditHistory.record('blob.bin', blob, 0)
+        project.fileSystem.rename('blob.bin', 'moved.bin')
+        session.fileRenamed('blob.bin', 'moved.bin')
+        expect(session.byteEditHistory.undo('moved.bin', blob)).toEqual({ edits: [], offset: 0 })
+        session.byteEditHistory.record('moved.bin', blob, 0)
+        project.fileSystem.remove('moved.bin')
+        session.fileDeleted('moved.bin')
+        expect(session.byteEditHistory.undo('moved.bin', blob)).toBeUndefined()
+    })
+})
+
 describe('the views still to come', () => {
     it('name the File, its size and what it is', () => {
         const target = document.createElement('div')
-        const hex = mount(HexEditor, {
-            target,
-            props: {
-                path: 'blob.bin',
-                file: { encoding: 'base64', content: 'AQIDBA==' },
-                kind: 'bytes'
-            }
-        })
-        expect(target.textContent).toContain('Hex editor')
-        expect(target.textContent).toContain('blob.bin: 4 bytes, bytes.')
-        unmount(hex)
         const preview = mount(FilePreview, {
             target,
             props: {

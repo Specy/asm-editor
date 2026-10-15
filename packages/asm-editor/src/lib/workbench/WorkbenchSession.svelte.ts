@@ -17,7 +17,8 @@ import {
     isEnvironmentHeaderPath,
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
-import type { ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
+import type { ByteEdit, ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
+import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
 import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -196,6 +197,8 @@ export class WorkbenchSession {
     private nextGroupId = 1
     private activeTabGroupId = $state('editor-1')
     readonly models: EditorModels
+    /** The Hex editor's Undo and Redo of each File, shared by both panes. */
+    readonly byteEditHistory = new ByteEditHistory()
 
     /**
      * A Runtime library member as the editor shows it, read-only: the one the running Build linked,
@@ -1454,6 +1457,7 @@ export class WorkbenchSession {
     fileRenamed(from: string, to: string) {
         this.project.renameCompilationFile(from, to)
         this.moveFileBreakpoints(from, to)
+        this.byteEditHistory.move(from, to)
         const view = this.project.fileViews?.[from]
         if (view) {
             this.project.setFileView(from, undefined)
@@ -1469,6 +1473,7 @@ export class WorkbenchSession {
 
     fileDeleted(path: string) {
         this.moveFileBreakpoints(path)
+        this.byteEditHistory.move(path)
         if (this.project.fileViews?.[path]) {
             this.project.setFileView(path, undefined)
             this.changed()
@@ -1496,6 +1501,30 @@ export class WorkbenchSession {
      * resource it touches, including Files the editor is not showing, so this is driven per model
      * rather than from the editor's active text.
      */
+    /**
+     * Byte edits typed in the Hex editor ([ADR 0047](../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
+     * overwrites `bytes` at `offset`, or with `edits` puts back a whole list for Undo and Redo.
+     * False when the edit is refused, as the Project's limit can refuse it, after saying why.
+     */
+    editFileBytes(path: string, offset: number, bytes: Uint8Array): boolean {
+        return this.changeFileBytes(() => this.project.fileSystem.editBytes(path, offset, bytes))
+    }
+    setFileByteEdits(path: string, edits: readonly ByteEdit[]): boolean {
+        return this.changeFileBytes(() => this.project.fileSystem.setByteEdits(path, edits))
+    }
+    private changeFileBytes(change: () => void): boolean {
+        if (this.host.readonly || this.fileSystemLocked || this.running || this.building)
+            return false
+        try {
+            change()
+            return true
+        } catch (error) {
+            console.error(error)
+            toast.error(getM68kErrorMessage(error))
+            return false
+        }
+    }
+
     fileEdited(path: string, nextCode: string) {
         if (
             this.host.readonly ||
