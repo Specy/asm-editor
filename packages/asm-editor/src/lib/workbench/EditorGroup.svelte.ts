@@ -230,9 +230,23 @@ export class EditorGroup {
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
         //a library's Listing is no File at all
         if (this.displayedLibraryListing) return undefined
-        return this.sourceView === 'snapshot'
-            ? this.session.emulator.buildSources?.files[this.displayedPath]
-            : this.session.project.files[this.displayedPath]
+        //the Build output is outside the Project too, and the same in either version
+        return (
+            (this.sourceView === 'snapshot'
+                ? this.session.emulator.buildSources?.files[this.displayedPath]
+                : this.session.project.files[this.displayedPath]) ??
+            this.session.buildOutputAt(this.displayedPath)
+        )
+    }
+    /**
+     * Whether the displayed File is the Build output: the program the last Build linked, which
+     * shows like an Executable but is read-only, takes no Breakpoints and never shows where the
+     * program is, since the debugger follows its source
+     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+     */
+    get displayedBuildOutput() {
+        const output = this.session.buildOutputAt(this.displayedPath)
+        return output !== undefined && this.displayedFile === output
     }
     get displayedCode() {
         if (this.displayedListing) return this.displayedListingView?.text ?? ''
@@ -394,6 +408,7 @@ export class EditorGroup {
         if (listing)
             return (
                 !this.displayedLibraryListing &&
+                !this.displayedBuildOutput &&
                 listing.status === 'ready' &&
                 canEditProjectBreakpoints(this.sourceSelection, {
                     readonly: s.host.readonly,
@@ -510,6 +525,8 @@ export class EditorGroup {
     get bytesReadOnly(): string | undefined {
         const s = this.session
         if (s.host.readonly) return 'This Project is read-only'
+        if (this.displayedBuildOutput)
+            return 'The Build output is read-only: Keep as File copies it into the Project'
         if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
         if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
             return 'The Files are read-only during a Debug session: Stop to edit them'
@@ -526,7 +543,10 @@ export class EditorGroup {
     get bytesNotice(): string | undefined {
         if (this.displayedView === 'hex' && Object.hasOwn(this.previewNotes, this.displayedPath))
             return this.previewNotes[this.displayedPath]
-        return this.displayedKind === 'executable' && this.session.debugSession
+        //the Build output is the program as linked, which no Patch was ever made to
+        return this.displayedKind === 'executable' &&
+            this.session.debugSession &&
+            !this.displayedBuildOutput
             ? "The File's bytes. Patches and the program's writes are in memory: see the memory view."
             : undefined
     }

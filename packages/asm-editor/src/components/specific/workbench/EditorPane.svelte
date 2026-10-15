@@ -155,7 +155,9 @@
         <ListingNotice
             document={group.displayedListing}
             library={group.displayedLibraryListing}
+            built={group.displayedBuildOutput}
             patchable={!group.displayedLibraryListing &&
+                !group.displayedBuildOutput &&
                 session.emulator.patcher !== undefined &&
                 group.sourceView === 'snapshot' &&
                 session.debugSession}
