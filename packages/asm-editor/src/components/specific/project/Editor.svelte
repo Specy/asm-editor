@@ -26,6 +26,7 @@
     import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
     import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
     import { setModelBuildArtifacts } from '#lib/monaco/assemblyInsights.ts'
+    import { CurrentLineReveal } from '#lib/monaco/currentLineReveal.ts'
     import { keepHoverReachable } from '#lib/monaco/hoverReachability.ts'
     import type { EditorLineColoring } from '#lib/monaco/lineColoring.ts'
     import { selectedLines } from '#lib/monaco/selectedLines.ts'
@@ -865,10 +866,17 @@
         }
     })
 
+    /** The program's current line, revealed at once in a model just shown and smoothly after. */
+    const currentLine = new CurrentLineReveal()
     $effect(() => {
-        if (activeModelKey && editor && highlightedLine >= 0) {
-            editor.revealLineInCenter(zeroBasedLineToMonaco(highlightedLine))
-        }
+        const scroll = monacoInstance?.editor.ScrollType
+        if (activeModelKey && editor && scroll && highlightedLine >= 0)
+            currentLine.reveal(
+                editor,
+                scroll,
+                activeModelKey,
+                zeroBasedLineToMonaco(highlightedLine)
+            )
     })
     $effect(() => {
         const currentMonaco = monacoInstance
