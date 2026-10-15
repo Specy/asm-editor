@@ -290,11 +290,16 @@
                 />
             {/key}
         {:else if group.displayedView === 'preview' && group.displayedFile && isPreviewKind(group.displayedKind)}
-            <FilePreview
-                path={group.displayedPath}
-                file={group.displayedFile}
-                kind={group.displayedKind}
-            />
+            <!-- one Preview per File, whose Blob URL goes with it -->
+            {#key group.displayedPath}
+                <FilePreview
+                    path={group.displayedPath}
+                    file={group.displayedFile}
+                    kind={group.displayedKind}
+                    dockInset={docked}
+                    onUnavailable={(path, note) => group.previewUnavailable(path, note)}
+                />
+            {/key}
         {:else if group.displayedListing?.status === 'generating'}
             {@const progress = group.displayedListing.progress}
             <div class="file-notice">

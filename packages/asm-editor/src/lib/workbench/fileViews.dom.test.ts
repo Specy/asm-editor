@@ -6,7 +6,7 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount } from 'svelte'
+import { flushSync } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
@@ -14,7 +14,7 @@ import type { ListingOrder } from '#lib/listing/listingClient.ts'
 import type { AvailableLanguages, StoredProject } from '#lib/Project.svelte.ts'
 import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
 import { encodeBase64 } from '#lib/projectFiles.ts'
-import FilePreview from '#cmp/specific/workbench/preview/FilePreview.svelte'
+import { PREVIEW_UNAVAILABLE } from '#cmp/specific/workbench/preview/previewSupport.ts'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
@@ -407,19 +407,42 @@ describe('Show in Listing and Show in Hex', () => {
     })
 })
 
-describe('the views still to come', () => {
-    it('name the File, its size and what it is', () => {
-        const target = document.createElement('div')
-        const preview = mount(FilePreview, {
-            target,
-            props: {
-                path: 'image.png',
-                file: { encoding: 'base64', content: png },
-                kind: { preview: 'image', mime: 'image/png' }
-            }
-        })
-        expect(target.textContent).toContain('Preview')
-        expect(target.textContent).toContain('image.png: 10 bytes, an image (image/png).')
-        unmount(preview)
+describe('a Preview the browser cannot show', () => {
+    it('falls back to the Hex editor under a note, until a view is chosen again', () => {
+        const { session, project } = setup()
+        const group = session.groups[0]
+        session.selectFile('image.png')
+        flushSync()
+        expect(group.displayedView).toBe('preview')
+        group.previewUnavailable('image.png', PREVIEW_UNAVAILABLE.image)
+        flushSync()
+        expect(group.displayedView).toBe('hex')
+        expect(group.bytesNotice).toBe('This browser cannot show this image.')
+        //nobody chose the bytes, so nothing is saved
+        expect(project.fileViews).toBeUndefined()
+        //another File shows no note, and the note stays with its File
+        session.selectFile('blob.bin')
+        flushSync()
+        expect(group.bytesNotice).toBeUndefined()
+        session.selectFile('image.png')
+        flushSync()
+        expect(group.bytesNotice).toBe(PREVIEW_UNAVAILABLE.image)
+        //choosing the Preview tries it again
+        group.setView('image.png', 'preview')
+        flushSync()
+        expect(group.displayedView).toBe('preview')
+        expect(group.previewNotes).toEqual({})
+    })
+
+    it('forgets the note when the tab closes', () => {
+        const { session } = setup(undefined, { openTabs: ['notes.txt', 'image.png'] })
+        const group = session.groups[0]
+        session.selectFile('image.png')
+        group.previewUnavailable('image.png', PREVIEW_UNAVAILABLE.image)
+        session.closeTab('image.png', group)
+        session.selectFile('image.png')
+        flushSync()
+        expect(group.displayedView).toBe('preview')
+        expect(group.bytesNotice).toBeUndefined()
     })
 })

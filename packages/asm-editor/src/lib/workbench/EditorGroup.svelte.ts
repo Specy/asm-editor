@@ -54,6 +54,12 @@ export class EditorGroup {
     readonly hexViews = new Map<string, HexViewState>()
     /** The bytes Show in Hex asked this pane to select, until its Hex editor has. */
     hexReveal = $state.raw<{ path: string; offset: number; length: number } | undefined>()
+    /**
+     * Why this pane shows a File in the Hex editor where its Preview was asked for: the browser
+     * could not show it after all (decision 14). The note stands over the bytes until a view is
+     * chosen for the File again, and the Preview is tried anew when that view is the Preview.
+     */
+    previewNotes = $state.raw<Readonly<Record<string, string>>>({})
 
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
@@ -134,12 +140,30 @@ export class EditorGroup {
     setView(path: string, view: FileView, remember = true) {
         const kind = path === this.displayedPath ? this.displayedKind : this.session.kindAt(path)
         if (resolveFileView(kind, view) !== view) return
+        if (remember) this.forgetPreviewNote(path)
         if (this.views[path] !== view) this.views = { ...this.views, [path]: view }
         if (remember) this.session.viewChosen(path, view, kind)
     }
 
+    /**
+     * The browser could not preview the File at `path` after all: this pane shows its bytes
+     * instead, under the note that says why, without that counting as a view anyone chose.
+     */
+    previewUnavailable(path: string, note: string) {
+        this.previewNotes = { ...this.previewNotes, [path]: note }
+        this.setView(path, 'hex', false)
+    }
+
+    private forgetPreviewNote(path: string, to?: string) {
+        if (!Object.hasOwn(this.previewNotes, path)) return
+        const notes = Object.entries(this.previewNotes).filter(([key]) => key !== path)
+        if (to !== undefined) notes.push([to, this.previewNotes[path]])
+        this.previewNotes = Object.fromEntries(notes)
+    }
+
     /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
     moveView(from: string, to?: string) {
+        this.forgetPreviewNote(from, to)
         const place = this.hexViews.get(from)
         this.hexViews.delete(from)
         if (place && to !== undefined) this.hexViews.set(to, place)
@@ -468,10 +492,13 @@ export class EditorGroup {
         return undefined
     }
     /**
-     * The Hex editor's notice over an Executable during a Debug session (decision 8): its bytes
-     * are the File's, not memory's, so a Patch missing from them does not read as a failed one.
+     * The Hex editor's notice: why a File the browser could not preview is shown as bytes, and
+     * over an Executable during a Debug session (decision 8) that its bytes are the File's, not
+     * memory's, so a Patch missing from them does not read as a failed one.
      */
     get bytesNotice(): string | undefined {
+        if (this.displayedView === 'hex' && Object.hasOwn(this.previewNotes, this.displayedPath))
+            return this.previewNotes[this.displayedPath]
         return this.displayedKind === 'executable' && this.session.debugSession
             ? "The File's bytes. Patches and the program's writes are in memory: see the memory view."
             : undefined
