@@ -870,7 +870,7 @@
     :global(._markdown .code-playground) {
         box-sizing: border-box;
         border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: 0.8rem;
         width: 100%;
         min-height: 21.4rem;
         margin: 1.5rem var(--md-inline-margin, auto);

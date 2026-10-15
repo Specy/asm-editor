@@ -115,6 +115,14 @@
             max-height: 10rem;
         }
     }
+    /* Draw the focus ring on the rounded panel so its clipped contents cannot cut off the corners. */
+    .std-out:has(:global(.terminal-console.focused)) {
+        outline: 1px solid var(--accent);
+        outline-offset: -1px;
+    }
+    .std-out :global(.terminal-console.focused) {
+        outline: none;
+    }
     .output-content {
         display: flex;
         flex-direction: column;
