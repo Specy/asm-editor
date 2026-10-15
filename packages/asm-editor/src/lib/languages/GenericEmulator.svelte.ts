@@ -1,4 +1,10 @@
 import { buildSourcesEqual } from '#lib/projectFiles.ts'
+import {
+    buildOutputCollision,
+    buildOutputCollisionNote,
+    buildOutputPath,
+    type BuildOutput
+} from '#lib/buildOutput.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
@@ -276,6 +282,9 @@ export abstract class GenericEmulator<T, R extends string>
      * for the debugger to open. They are never part of the Project or its FileSystem.
      */
     protected _buildLibraryFiles: ProjectFiles | undefined = $state.raw()
+    /** The program the last Build linked, see `buildOutput`; a Testcase's Builds leave it alone. */
+    private buildOutputState = $state.raw<BuildOutput | undefined>()
+    private buildOutputs = 0
     /** The Listings of an adapter whose Builds can load Executables, see `listings`. */
     protected _listings: ListingDocuments | undefined
     /** What Undo takes back next, newest last; see `UndoSegment`. */
@@ -1320,6 +1329,8 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async compile(historySize: number, sourceOverride: BuildInput | undefined): Promise<void> {
+        //a Build replaces the Build output from the moment it starts, and a failed one leaves none
+        this.buildOutputState = undefined
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(() =>
@@ -1370,6 +1381,7 @@ export abstract class GenericEmulator<T, R extends string>
             //a successful build replaces the semantic check's list so stale squiggles drop and the
             //warnings the assembler emitted while succeeding are shown
             this.state.compilerDiagnostics = result.diagnostics ?? []
+            const output = this.placeBuildOutput(sources, result.program, stopInUserCode)
             this._initialize(historySize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
@@ -1377,6 +1389,7 @@ export abstract class GenericEmulator<T, R extends string>
                 Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
                 this.fileDescriptorOptions()
             )
+            if (output) this.fileSystemSession.presentBuildOutput(output.path, output.bytes)
             this._buildSources = sources
             this._beginExecutionSession?.()
             this.addDecorations()
@@ -1438,6 +1451,35 @@ export abstract class GenericEmulator<T, R extends string>
             this.debouncer[1]()
             throw e
         }
+    }
+
+    /**
+     * Where the program a Build linked goes ([file-views.md](../../../../../docs/design/file-views.md),
+     * decisions 16 to 18): at the path the Command line names, where the run's FileSystem presents
+     * it to the program, and for a person's Build (`build`), unlike a Testcase's, it becomes the
+     * Build output. A File or folder of the Project at that path keeps it out, and the Log says why.
+     */
+    private placeBuildOutput(
+        sources: BuildSources,
+        program: Uint8Array | undefined,
+        build: boolean
+    ): { path: string; bytes: Uint8Array } | undefined {
+        if (!program) return undefined
+        const path = buildOutputPath(sources)
+        const collision = buildOutputCollision(sources.files, path)
+        if (collision) {
+            if (build)
+                this.addNote({ tone: 'warning', text: buildOutputCollisionNote(path, collision) })
+            return undefined
+        }
+        if (build)
+            this.buildOutputState = {
+                path,
+                bytes: program,
+                generation: ++this.buildOutputs,
+                sources
+            }
+        return { path, bytes: program }
     }
 
     dispose(): void {
@@ -2538,6 +2580,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildLibraryFiles() {
         return this._buildLibraryFiles
+    }
+
+    get buildOutput() {
+        return this.buildOutputState
     }
 
     get listings() {

@@ -809,3 +809,65 @@ describe('Byte edits in the FileSystem', () => {
         run.stop()
     })
 })
+
+describe('the Build output in a FileSystemSession', () => {
+    const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
+
+    it('is a File the program lists, stats, opens and reads at its path', () => {
+        const { run, step } = steppedSession({ 'main.asm': 'nop', 'src/a.c': 'x' })
+        expect(run.presentBuildOutput('src/main', program)).toBe(true)
+        expect(run.buildOutputPath).toBe('src/main')
+        expect(run.list('src')).toEqual([
+            { name: 'a.c', kind: 'file' },
+            { name: 'main', kind: 'file' }
+        ])
+        expect(run.stat('./src/main')).toEqual({ kind: 'file', size: program.length })
+        const fd = step(() => run.open('src/main', { access: 'read', create: true }))
+        expect([...step(() => run.read(fd, 4))]).toEqual([0x7f, 0x45, 0x4c, 0x46])
+        expect(run.fstat(fd)).toEqual({ kind: 'file', size: program.length })
+    })
+
+    it('refuses every change to it, as Linux refuses a running executable, changing nothing', () => {
+        const { fs, run, step } = steppedSession({ 'main.asm': 'nop' })
+        run.presentBuildOutput('main', program)
+        const reader = step(() => run.open('main', 'read'))
+        const before = fs.files
+        const cases: [FileErrorCode, () => unknown][] = [
+            [FileErrorCode.TextBusy, () => run.open('main', 'write')],
+            [FileErrorCode.TextBusy, () => run.open('main', 'append')],
+            [FileErrorCode.TextBusy, () => run.open('main', { access: 'read-write' })],
+            [FileErrorCode.TextBusy, () => run.open('main', { access: 'read', truncate: true })],
+            [FileErrorCode.TextBusy, () => run.truncate('main', 0)],
+            [FileErrorCode.Busy, () => run.remove('main')],
+            [FileErrorCode.Busy, () => run.rename('main', 'other')],
+            [FileErrorCode.Busy, () => run.rename('main.asm', 'main')],
+            [
+                FileErrorCode.Exists,
+                () => run.open('main', { access: 'read', create: true, exclusive: true })
+            ],
+            [FileErrorCode.BadDescriptor, () => run.pwrite(reader, 0, encode('x'))],
+            [FileErrorCode.InvalidArgument, () => run.ftruncate(reader, 0)],
+            [FileErrorCode.NotDirectory, () => run.open('main/inner', 'write')]
+        ]
+        for (const [code, operation] of cases) expect(failure(() => step(operation))).toBe(code)
+        expect(fs.files).toBe(before)
+        expect([...step(() => run.read(reader, 8))]).toEqual([...program])
+    })
+
+    it('is never published into the Project, nor counted toward its limits', () => {
+        const { fs, run, step } = steppedSession({ 'main.asm': 'nop' })
+        run.presentBuildOutput('main', new Uint8Array(FILE_BYTE_LIMIT - 8))
+        const fd = step(() => run.open('out.txt', 'write'))
+        step(() => run.write(fd, encode('written')))
+        expect(Object.keys(fs.files).sort()).toEqual(['main.asm', 'out.txt'])
+        expect(fs.files['out.txt']).toEqual({ encoding: 'plain', content: 'written' })
+    })
+
+    it('is not placed where a File or a folder of the Project is', () => {
+        const { run } = steppedSession({ main: 'a note', 'src/main/x.c': 'x' })
+        expect(run.presentBuildOutput('main', program)).toBe(false)
+        expect(run.presentBuildOutput('src/main', program)).toBe(false)
+        expect(run.buildOutputPath).toBeUndefined()
+        expect(run.stat('main')).toEqual({ kind: 'file', size: 6 })
+    })
+})

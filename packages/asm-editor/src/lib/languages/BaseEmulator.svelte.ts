@@ -25,7 +25,16 @@ export type CompilationError = {
  * (errors *and* warnings) so nothing the assembler said is lost.
  */
 export type CompileResult =
-    | { ok: true; diagnostics?: Diagnostic[] }
+    | {
+          ok: true
+          diagnostics?: Diagnostic[]
+          /**
+           * The executable the Build linked, for a Target whose Builds link one (x86): the Build
+           * output, at the path the Command line names ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+           * None for a Build that loaded an Executable, which is a File already.
+           */
+          program?: Uint8Array
+      }
     | { ok: false; diagnostics: Diagnostic[]; report: string }
 
 /**

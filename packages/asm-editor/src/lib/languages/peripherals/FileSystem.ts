@@ -1,6 +1,7 @@
 import {
     bytesFile,
     cleanFiles,
+    projectFileFromBytes,
     encodeBase64,
     fileBytes,
     fileText,
@@ -12,6 +13,7 @@ import {
     FILE_COUNT_LIMIT,
     type BuildSources,
     type ByteEdit,
+    type FileEncoding,
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
@@ -31,9 +33,10 @@ function decodeStandalone(bytes: Uint8Array): string | null {
 /**
  * `file` caches this node's storage representation, dropped whenever `bytes` changes and put back
  * by an Undo that restores the bytes it stood for, so a File's record (its original and Byte edits)
- * comes back as it was rather than rebuilt from its bytes.
+ * comes back as it was rather than rebuilt from its bytes. `built` marks the Build output, which
+ * the program reads but never changes and which is no File of the Project.
  */
-type Node = { bytes: Uint8Array; file?: ProjectFile }
+type Node = { bytes: Uint8Array; file?: ProjectFile; built?: true }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
 type Inverse = { bytes: number; filesChanged?: true; restore: () => void }
 /** A Core-owned instruction identity. Values are compared exactly, without numeric coercion. */
@@ -79,7 +82,11 @@ export enum FileErrorCode {
     /** A malformed path, count, position, seek origin or open mode. */
     InvalidArgument = 'EINVAL',
     /** A path that climbs out of the Project root. */
-    AccessDenied = 'EACCES'
+    AccessDenied = 'EACCES',
+    /** A write to, or a truncation of, the running program's own File: the Build output. */
+    TextBusy = 'ETXTBSY',
+    /** A rename or removal of the Build output, which the running program was started from. */
+    Busy = 'EBUSY'
 }
 
 /**
@@ -183,6 +190,15 @@ function noFile(path: string, found: Exclude<Lookup, { kind: 'file' }>) {
     return new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
 }
 
+/**
+ * The failure for changing the Build output, the File the running program was started from, named
+ * as Linux names it: a write or truncation is ETXTBSY, a rename or removal EBUSY.
+ */
+function busyFile(path: string, code: FileErrorCode.TextBusy | FileErrorCode.Busy) {
+    const reason = code === FileErrorCode.TextBusy ? 'Text file busy' : 'Device or resource busy'
+    return new FileSystemGuestError(code, `${reason}: ${path}`)
+}
+
 /** A byte count or position the program passed: a non-negative safe integer, or EINVAL. */
 function checkCount(value: number, what: string) {
     if (!Number.isSafeInteger(value) || value < 0)
@@ -244,14 +260,16 @@ export class FileSystem {
     }
     /**
      * Replaces a File's whole content, which becomes its new original: any Byte edits it had are
-     * dropped, as for an upload over it (ADR 0047).
+     * dropped, as for an upload over it (ADR 0047). It is stored as text when the bytes decode as
+     * UTF-8, unless `encoding` says how.
      */
-    writeBytes(path: string, bytes: Uint8Array, replace = true) {
+    writeBytes(path: string, bytes: Uint8Array, replace = true, encoding?: FileEncoding) {
         this.assertEditable()
         path = resolveFilePath(path)
         if (!replace && hasOwn(this.files, path))
             throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
-        this.commit({ ...this.files, [path]: bytesFile(bytes) })
+        const file = encoding ? projectFileFromBytes(bytes, encoding) : bytesFile(bytes)
+        this.commit({ ...this.files, [path]: file })
     }
     /**
      * Overwrites `bytes` at `offset` of a File stored as bytes, as a Byte edit kept apart from its
@@ -393,6 +411,7 @@ export class FileSystemSession {
     private stopped = false
     private firstDescriptor: number
     private maxOpen: number
+    private builtPath: string | undefined
     constructor(
         files: ProjectFiles,
         private budget: number,
@@ -416,6 +435,27 @@ export class FileSystemSession {
     }
     private ensureActive() {
         if (this.stopped) throw new Error('FileSystem session has ended')
+    }
+    /**
+     * Shows the program the Build output at `path`
+     * ([ADR 0050](../../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)):
+     * a File it opens and reads like any other, where the Command line says it was started from,
+     * but cannot write, truncate, rename or remove, as Linux keeps a running program's own File.
+     * It is no File of the Project, so it is never published and counts toward no limit. False,
+     * placing nothing, when a File or a folder of the session has the path already.
+     */
+    presentBuildOutput(path: string, bytes: Uint8Array): boolean {
+        this.ensureActive()
+        path = resolveSessionPath(path)
+        if (path === '' || this.builtPath !== undefined || this.lookup(path).kind !== 'missing')
+            return false
+        this.paths.set(path, { bytes, built: true })
+        this.builtPath = path
+        return true
+    }
+    /** Where the session presents the Build output, if it does. */
+    get buildOutputPath(): string | undefined {
+        return this.builtPath
     }
     private record(change: Inverse) {
         this.ensureActive()
@@ -537,6 +577,7 @@ export class FileSystemSession {
     private flush() {
         const files: Record<string, ProjectFile> = Object.create(null)
         for (const [path, node] of this.paths) {
+            if (node.built) continue
             node.file ??= bytesFile(node.bytes)
             files[path] = node.file
         }
@@ -550,10 +591,12 @@ export class FileSystemSession {
     private capacity(node?: Node, length = 0, extra = false) {
         if (length > FILE_BYTE_LIMIT)
             throw new FileSystemGuestError(FileErrorCode.TooLarge, 'File too large (16 MiB)')
-        const nodes = new Set([
-            ...this.paths.values(),
-            ...Array.from(this.handles.values(), (h) => h.node)
-        ])
+        //the Build output is no File of the Project, and never changes
+        const nodes = new Set(
+            [...this.paths.values(), ...Array.from(this.handles.values(), (h) => h.node)].filter(
+                (target) => !target.built
+            )
+        )
         let bytes = extra ? length : 0
         for (const target of nodes) bytes += target === node ? length : target.bytes.length
         if (bytes > FILE_BYTE_LIMIT || nodes.size + Number(extra) > FILE_COUNT_LIMIT)
@@ -648,6 +691,8 @@ export class FileSystemSession {
         if (found.kind === 'file') {
             if (flags.create && flags.exclusive)
                 throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
+            if (found.node.built && (flags.access !== 'read' || flags.truncate))
+                throw busyFile(path, FileErrorCode.TextBusy)
             node = found.node
         } else {
             if (found.kind !== 'missing' || !flags.create) throw noFile(path, found)
@@ -794,7 +839,10 @@ export class FileSystemSession {
     truncate(path: string, length: number) {
         this.ensureActive()
         checkCount(length, 'file length')
-        this.resize(this.fileAt(resolveSessionPath(path)), length)
+        path = resolveSessionPath(path)
+        const node = this.fileAt(path)
+        if (node.built) throw busyFile(path, FileErrorCode.TextBusy)
+        this.resize(node, length)
     }
     /**
      * `truncate` through a descriptor, which reaches its File even after the path was removed. The
@@ -935,8 +983,10 @@ export class FileSystemSession {
         from = resolveSessionPath(from)
         to = resolveSessionPath(to)
         const node = this.fileAt(from)
+        if (node.built) throw busyFile(from, FileErrorCode.Busy)
         if (from === to) return
         const target = this.lookup(to)
+        if (target.kind === 'file' && target.node.built) throw busyFile(to, FileErrorCode.Busy)
         if (target.kind === 'file')
             throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${to}`)
         if (target.kind !== 'missing') throw noFile(to, target)
@@ -955,6 +1005,7 @@ export class FileSystemSession {
         this.ensureActive()
         path = resolveSessionPath(path)
         const node = this.fileAt(path)
+        if (node.built) throw busyFile(path, FileErrorCode.Busy)
         this.record({
             bytes: node.bytes.length + path.length * 2,
             filesChanged: true,
