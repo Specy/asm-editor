@@ -125,7 +125,12 @@
             />
             {#if !phone && executionBar}
                 <div class="controls-bar">
-                    <ExecutionControls fill group={session.controlsGroup} showCompilation={false} />
+                    <ExecutionControls
+                        fill
+                        group={session.controlsGroup}
+                        showCompilation={false}
+                        showViews={false}
+                    />
                 </div>
             {/if}
             <BottomPanel

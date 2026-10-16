@@ -139,6 +139,19 @@ export function lineOfAddress(listing: Listing, address: number): number {
     return -1
 }
 
+/**
+ * The line whose bytes hold the byte at a file offset, through the offset each line keeps of its
+ * bytes, or -1 when no line covers it: a header, a table, padding between sections.
+ */
+export function lineOfFileOffset(listing: Listing, offset: number): number {
+    const { byAddress, offsets, sizes } = listing.lines
+    for (const line of byAddress) {
+        const start = offsets[line]
+        if (start >= 0 && offset >= start && offset < start + sizes[line]) return line
+    }
+    return -1
+}
+
 /** The function a 0-based line belongs to, which is what a bare `.LAB_3` on that line means. */
 export function functionAtLine(listing: Listing, line: number): ListingFunction | undefined {
     const { functions } = listing

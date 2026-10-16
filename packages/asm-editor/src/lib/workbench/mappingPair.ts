@@ -7,8 +7,14 @@ import {
 import type { ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import type { FileView } from '#lib/fileViews.ts'
 
-export type MappingPane = { displayedPath: string; displayedFile: ProjectFile | undefined }
+export type MappingPane = {
+    displayedPath: string
+    displayedFile: ProjectFile | undefined
+    /** How the pane shows its File; a pair is drawn between two panes showing text. */
+    displayedView?: FileView
+}
 
 /** Resolve a pair from visible files, in either order, without changing editor layout. */
 export function resolveMappingPair<T extends MappingPane>(
@@ -21,6 +27,8 @@ export function resolveMappingPair<T extends MappingPane>(
     libraryMap?: (path: string) => CompilationSourceMap | undefined
 ): { source: T; assembly: T; map: CompilationSourceMap } | undefined {
     if (panes.length !== 2) return undefined
+    //a Source map pairs lines of text, which neither the Hex editor nor a Preview has
+    if (panes.some((pane) => (pane.displayedView ?? 'text') !== 'text')) return undefined
     for (const assembly of panes) {
         const source = panes.find((pane) => pane !== assembly)!
         //the library never changes under a Build, so its map is never stale

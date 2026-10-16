@@ -8,6 +8,7 @@ import {
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
+import type { BuildOutput } from '#lib/buildOutput.ts'
 import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
@@ -43,6 +44,7 @@ export function editorGroupsFixture(
         errors: [],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
+        buildOutput: undefined as BuildOutput | undefined,
         notes: [] as EmulatorNote[],
         /** The Arguments the last Build or test run was given, as `setProgramArguments` passes them. */
         programArguments: '',

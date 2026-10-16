@@ -17,7 +17,14 @@ import {
     isEnvironmentHeaderPath,
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
-import type { ProjectFile } from '#lib/projectFiles.ts'
+import type { ByteEdit, ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
+import {
+    buildOutputCollision,
+    buildOutputFile,
+    buildOutputStale,
+    type BuildOutput
+} from '#lib/buildOutput.ts'
+import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
 import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -30,7 +37,7 @@ import {
     type RegisterPoke,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { instructionAddressAt } from '#lib/listing/listing.ts'
+import { instructionAddressAt, lineOfFileOffset } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
@@ -58,6 +65,7 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import {
     createProjectLanguageSessionId,
+    parseProjectSourceUri,
     projectSourceModelKey
 } from '#lib/languages/service/uri.ts'
 import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
@@ -108,6 +116,8 @@ import {
     type CommandLineParse
 } from '#lib/commandLine.ts'
 import { executableKind } from '#lib/executables.ts'
+import { fileKind, type ProjectFileKind } from '#lib/fileKinds.ts'
+import { defaultFileView, fileViewsOf, type FileView } from '#lib/fileViews.ts'
 import { createDebouncer } from '#lib/utils.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
 import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
@@ -134,6 +144,9 @@ import {
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
+
+/** `monaco.editor.ScrollType`'s values, named here so that the session never loads Monaco. */
+const SCROLL_TYPE = { smooth: 0, immediate: 1 } as const
 
 /**
  * The **Command line** the Terminal shows, `$ ./crackme hunter2`
@@ -194,6 +207,15 @@ export class WorkbenchSession {
     private nextGroupId = 1
     private activeTabGroupId = $state('editor-1')
     readonly models: EditorModels
+    /** The Hex editor's Undo and Redo of each File, shared by both panes. */
+    readonly byteEditHistory = new ByteEditHistory()
+    /**
+     * How each open Hex editor saves what was typed and not saved yet: typing becomes a Byte edit
+     * when it pauses, and a Build or a test run locks the Files, so it is saved before either
+     * starts, while the Files still take it.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Called before a Build or a test run; nothing tracks it.
+    private readonly typingFlushes = new Set<() => void>()
 
     /**
      * A Runtime library member as the editor shows it, read-only: the one the running Build linked,
@@ -275,14 +297,55 @@ export class WorkbenchSession {
         }
         return listings.openExecutable(
             path,
-            selection.sourceKind === 'build'
+            (selection.sourceKind === 'build'
                 ? this.emulator.buildSources?.files[path]
-                : this.project.files[path]
+                : this.project.files[path]) ?? this.buildOutputAt(path)
         )
     }
 
     groupForFile(path: string) {
-        return editorGroupForFile(path, this.groups)
+        return editorGroupForFile(
+            path,
+            this.groups,
+            this.project.files[path] ?? this.buildOutputAt(path)
+        )
+    }
+
+    /** What a File is, from its bytes, in this Project's Target; undefined for no File. */
+    fileKindOf(file: ProjectFile | undefined): ProjectFileKind | undefined {
+        return file ? fileKind(file, this.project.language) : undefined
+    }
+
+    /** What the File at a path is, in the version a Debug session shows or else the live one. */
+    kindAt(path: string): ProjectFileKind | undefined {
+        const built = this.debugSession ? this.emulator.buildSources?.files[path] : undefined
+        return this.fileKindOf(built ?? this.project.files[path] ?? this.buildOutputAt(path))
+    }
+
+    /**
+     * The Build output's record when it is at `path`
+     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)):
+     * read-only, outside the Project, and shown like an Executable.
+     */
+    buildOutputAt(path: string): ProjectFile | undefined {
+        return this.buildOutput?.path === path ? this.buildOutputFile : undefined
+    }
+
+    /**
+     * Saves the view a person chose for a File as its last, beside the open tabs; its default is
+     * no choice to save ([file-views.md](../../../../../docs/design/file-views.md), decision 8).
+     */
+    viewChosen(path: string, view: FileView, kind = this.kindAt(path)) {
+        if (this.host.readonly || !this.project.files[path]) return
+        const saved = view === defaultFileView(kind) ? undefined : view
+        if (this.project.fileViews?.[path] === saved) return
+        //another pane with the File open keeps showing it as it does, rather than switching with
+        //the saved view it fell back on
+        for (const group of this.groups)
+            if (group.tabs.paths.includes(path) && !Object.hasOwn(group.views, path))
+                group.setView(path, group.viewOf(path, kind), false)
+        this.project.setFileView(path, saved)
+        this.changed()
     }
     get executionGroup() {
         return (
@@ -291,8 +354,11 @@ export class WorkbenchSession {
         )
     }
     get controlsGroup() {
+        //an Executable's Listing reads as assembly, and the program it shows is what runs
         const assembly = this.groups.filter(
-            (group) => editorFileKind(group.displayedPath) === 'assembly'
+            (group) =>
+                group.displayedView === 'listing' ||
+                editorFileKind(group.displayedPath, group.displayedFile) === 'assembly'
         )
         return (
             assembly.find((group) => group.id === this.executionGroupId) ??
@@ -326,6 +392,8 @@ export class WorkbenchSession {
     private failedBuild = $state.raw<{ sources: BuildSources; diagnostics: Diagnostic[] }>()
     mappingSelection = $state.raw<MappingSelection | undefined>()
     private compilationController: AbortController | undefined
+    /** Set once the component or effect that made the session is gone, and its deriveds with it. */
+    private disposed = false
     /**
      * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
      * program exit or a Build of the person's own. Not reactive: the effects that ask read it at the
@@ -394,6 +462,17 @@ export class WorkbenchSession {
                 }
             }
         })
+        this.buildOutput = $derived.by(() => {
+            const output = this.emulator.buildOutput
+            //a File or folder made at its path since the Build wins, as one there at the Build did
+            return output && !buildOutputCollision(this.project.files, output.path)
+                ? output
+                : undefined
+        })
+        this.buildOutputFile = $derived(this.buildOutput && buildOutputFile(this.buildOutput))
+        this.buildOutputStale = $derived(
+            !!this.buildOutput && buildOutputStale(this.buildOutput, this.sourceInput)
+        )
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
@@ -444,28 +523,38 @@ export class WorkbenchSession {
             return map ? colorSourceMap(map) : undefined
         })
         this.retainedModelKeys = $derived.by(() => {
-            const liveKeys = Object.keys(this.project.files).map((path) =>
-                projectSourceModelKey({
-                    sessionId: this.languageSessionId,
-                    sourceKind: 'live',
-                    path
+            //a File's text, and for a File of bytes its Listing, which an Executable has; a key
+            //with no model behind it keeps nothing
+            const keys = (files: ProjectFiles, selection: ProjectSourceSelection) =>
+                Object.entries(files).flatMap(([path, file]) => {
+                    const identity = { sessionId: this.languageSessionId, ...selection, path }
+                    return file.encoding === 'plain'
+                        ? [projectSourceModelKey(identity)]
+                        : [
+                              projectSourceModelKey(identity),
+                              projectSourceModelKey({ ...identity, view: 'listing' })
+                          ]
                 })
-            )
-            const buildKeys = [
-                ...Object.keys(this.emulator.buildSources?.files ?? {}),
+            const build = buildSource('', this.buildGeneration)
+            const output = this.buildOutput
+            const outputFiles = output ? { [output.path]: this.buildOutputFile! } : {}
+            return [
+                ...keys(this.project.files, liveSource('')),
+                ...keys(this.emulator.buildSources?.files ?? {}, build),
+                ...keys(outputFiles, liveSource('')),
+                ...(this.emulator.buildSources ? keys(outputFiles, build) : []),
                 //the libraries' Listings, kept while the session lasts so a tab comes back as left
-                ...[...(this.emulator.listings?.session.keys() ?? [])].filter((path) =>
-                    this.emulator.listings!.isLibrary(path)
-                )
-            ].map((path) =>
-                projectSourceModelKey({
-                    sessionId: this.languageSessionId,
-                    sourceKind: 'build',
-                    buildGeneration: this.buildGeneration,
-                    path
-                })
-            )
-            return [...liveKeys, ...buildKeys]
+                ...[...(this.emulator.listings?.session.keys() ?? [])]
+                    .filter((path) => this.emulator.listings!.isLibrary(path))
+                    .map((path) =>
+                        projectSourceModelKey({
+                            sessionId: this.languageSessionId,
+                            ...build,
+                            path,
+                            view: 'listing'
+                        })
+                    )
+            ]
         })
         this.liveViewDiagnostics = $derived.by(() => {
             const live = [...this.liveLanguageDiagnostics, ...this.sourceDiagnostics]
@@ -584,6 +673,11 @@ export class WorkbenchSession {
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
 
+        //what waits on the session (a reveal for an editor still mounting) stops with it, rather
+        //than reading deriveds that went inert with their owner
+        $effect(() => () => {
+            this.disposed = true
+        })
         $effect(() => {
             const pageSize = preferencesStore.values.memoryPanelSize.value
             untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
@@ -737,6 +831,17 @@ export class WorkbenchSession {
     /** The values a Build and a Test run with: the Project's decisions, the language's defaults elsewhere. */
     declare readonly effectiveSettings: ReturnType<typeof resolveProjectSettings>
     declare readonly sourceInput: BuildSources
+    /**
+     * The program the last Build linked, listed beside the Project's Files and shown like an
+     * Executable, read-only, until the next Build starts
+     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+     * None while a File or folder of the Project has its path.
+     */
+    declare readonly buildOutput: BuildOutput | undefined
+    /** The Build output as the record the views read a File from, stored as bytes. */
+    declare readonly buildOutputFile: ProjectFile | undefined
+    /** Whether the live sources would no longer build the Build output, see `buildOutputStale`. */
+    declare readonly buildOutputStale: boolean
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
@@ -791,18 +896,23 @@ export class WorkbenchSession {
                 if (identity.sourceKind === 'build') {
                     if (
                         identity.buildGeneration !== this.buildGeneration ||
-                        !this.existsInBuild(identity.path)
+                        !this.existsInBuild(identity.path, identity.view)
                     ) {
                         return false
                     }
-                    this.show(buildSource(identity.path, identity.buildGeneration), group)
+                    this.show(
+                        buildSource(identity.path, identity.buildGeneration),
+                        group,
+                        identity.view
+                    )
                 } else if (identity.path.startsWith(RUNTIME_NAMESPACE)) {
                     //a Runtime library member, opened read-only from go to definition
                     if (!this.runtimeMemberFile(identity.path)) return false
                     this.show(liveSource(identity.path), group)
                 } else {
-                    if (!this.project.files[identity.path]) return false
-                    this.show(liveSource(identity.path), group)
+                    if (!this.project.files[identity.path] && !this.buildOutputAt(identity.path))
+                        return false
+                    this.show(liveSource(identity.path), group, identity.view)
                 }
                 await tick()
                 if (selection) {
@@ -1075,9 +1185,17 @@ export class WorkbenchSession {
         if (this.groups.includes(group)) this.activeTabGroupId = group.id
     }
 
-    /** Shows a version of a File, opening its tab. */
-    private show(selection: ProjectSourceSelection, group = this.groupForFile(selection.path)) {
+    /**
+     * Shows a version of a File, opening its tab, in the view the pane remembers for it or, with
+     * `view`, in that one when the File offers it, as going to a definition in a Listing does.
+     */
+    private show(
+        selection: ProjectSourceSelection,
+        group = this.groupForFile(selection.path),
+        view?: FileView
+    ) {
         const changedPath = group.displayedPath !== selection.path
+        if (view) group.setView(selection.path, view, false)
         if (!isSameProjectSourceSelection(group.sourceSelection, selection)) {
             group.sourceSelection = selection
         }
@@ -1101,6 +1219,9 @@ export class WorkbenchSession {
     }
 
     startFileDrag(event: DragEvent, path: string, origin?: EditorGroup) {
+        //the Build output goes nowhere: it is no File of the Project to move, and a pane opens it
+        //from the Explorer
+        if (this.buildOutputAt(path)) return event.preventDefault()
         if (!event.dataTransfer || (!this.project.files[path] && !this.existsInBuild(path))) return
         const file = {
             sessionId: this.languageSessionId,
@@ -1174,7 +1295,9 @@ export class WorkbenchSession {
             this.buildGeneration,
             this.existsInBuild(path)
         )
-        this.show(selection, destination)
+        //the tab moves in the view it was shown in
+        const view = origin.views[path]
+        this.show(selection, destination, view)
         this.closeTab(path, origin)
         this.focusEditorGroup(destination)
         await tick()
@@ -1200,22 +1323,32 @@ export class WorkbenchSession {
     }
 
     /**
-     * Whether the Build has this File: its own, a Runtime library member it linked, or the Listing
-     * of a library the running program loaded.
+     * Whether the Build has this File: its own, a Runtime library member it linked, the program it
+     * linked (its Build output), or the Listing of a library the running program loaded. With a
+     * view, whether it has the File in that view: a library's Listing is only ever a Listing, and
+     * a File of the Build only in a view its kind offers.
      */
-    private existsInBuild(path: string) {
-        return (
-            this.emulator.buildSources?.files[path] !== undefined ||
-            this.emulator.buildLibraryFiles?.[path] !== undefined ||
-            (this.emulator.listings?.session.has(path) ?? false)
-        )
+    private existsInBuild(path: string, view?: FileView) {
+        const file =
+            this.emulator.buildSources?.files[path] ??
+            this.emulator.buildLibraryFiles?.[path] ??
+            //while a Debug session lasts, the Build output is its Build's: a Build replaces it
+            (this.emulator.buildSources ? this.buildOutputAt(path) : undefined)
+        if (!file)
+            return (view ?? 'listing') === 'listing' && !!this.emulator.listings?.session.has(path)
+        return !view || fileViewsOf(this.fileKindOf(file)).includes(view)
     }
 
-    revealEditorLine(lineNumber: number, column: number, group = this.groups[0]) {
+    revealEditorLine(
+        lineNumber: number,
+        column: number,
+        group = this.groups[0],
+        scroll: 'smooth' | 'immediate' = 'smooth'
+    ) {
         if (!this.groups.includes(group)) return
         const editor = group.editor
         if (!editor) return
-        editor.revealLineInCenter(lineNumber)
+        editor.revealLineInCenter(lineNumber, SCROLL_TYPE[scroll])
         editor.setPosition({ lineNumber, column })
     }
 
@@ -1241,6 +1374,7 @@ export class WorkbenchSession {
         const next = closeTab(group.tabs, path)
         if (next === group.tabs) return
         group.tabs = next
+        group.moveView(path)
         if (!next.paths.length) {
             this.closeGroup(group)
             return
@@ -1257,24 +1391,44 @@ export class WorkbenchSession {
         const group = this.showBuildFile(file)
         if (!group) return
         await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        if (this.disposed) return
+        //a pane the Build moved from an Executable's bytes to its Listing mounts its editor first
+        if (this.holdsModel(group))
+            this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        else void this.revealWhenShown(group, line, { column, focus: false })
         this.followExecutionSource()
     }
 
-    /** Shows the Build's version of a File in the pane execution is followed in. */
+    /**
+     * Shows the Build's version of a File in the pane execution is followed in, in a view that
+     * draws the current instruction ([file-views.md](../../../../../docs/design/file-views.md),
+     * decision 8): a pane showing it as text or as its Listing, else one showing an Executable's
+     * bytes, which moves to its Listing, as debuggers switch to disassembly when a session
+     * starts; else the execution pane opens it on its Listing. A pane on an Executable's
+     * Pseudocode follows the program itself and is left as it is.
+     */
     private showBuildFile(file: string): EditorGroup | undefined {
         const buildSources = this.emulator.buildSources
         if (!buildSources || !this.existsInBuild(file)) return undefined
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
+        const showing = this.groups.filter((group) => group.displayedPath === file)
+        const movable = (group: EditorGroup) =>
+            group.displayedPath !== file || group.displayedView !== 'pseudocode'
         const group =
-            this.groups.find((group) => group.displayedPath === file) ?? this.executionGroup
+            showing.find((group) => group.showsInstructions) ??
+            showing.find(movable) ??
+            (movable(this.executionGroup)
+                ? this.executionGroup
+                : (this.groups.find(movable) ?? this.executionGroup))
         this.executionGroupId = group.id
-        this.show(buildSource(file, this.buildGeneration), group)
+        //an Executable's Listing, which is no view the person chose, so it is not saved
+        const view = group.displayedPath === file && group.showsInstructions ? undefined : 'listing'
+        this.show(buildSource(file, this.buildGeneration), group, view)
         //Both file editors retain the exact versions used by this Build.
         for (const other of this.groups) {
-            if (other !== group && this.existsInBuild(other.displayedPath)) {
+            if (other !== group && this.existsInBuild(other.displayedPath, other.displayedView)) {
                 const next = buildSource(other.displayedPath, this.buildGeneration)
                 if (!isSameProjectSourceSelection(other.sourceSelection, next)) {
                     other.sourceSelection = next
@@ -1361,11 +1515,18 @@ export class WorkbenchSession {
             await this.revealSourceLocation(file, this.emulator.line)
     }
 
-    /** After Stop: every tab shows the live File again, and tabs of Files that are gone close. */
+    /**
+     * After Stop: every tab shows the live File again, and tabs of Files that are gone close. The
+     * Build output's stay, since it outlasts the session.
+     */
     returnToLiveFiles() {
         const files = this.project.files
         for (const group of this.groups) {
-            group.tabs = retainTabs(group.tabs, (path) => files[path] !== undefined, '')
+            group.tabs = retainTabs(
+                group.tabs,
+                (path) => files[path] !== undefined || this.buildOutputAt(path) !== undefined,
+                ''
+            )
             const next = liveSource(group.tabs.active)
             if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
                 group.sourceSelection = next
@@ -1395,16 +1556,30 @@ export class WorkbenchSession {
     fileRenamed(from: string, to: string) {
         this.project.renameCompilationFile(from, to)
         this.moveFileBreakpoints(from, to)
+        this.byteEditHistory.move(from, to)
+        const view = this.project.fileViews?.[from]
+        if (view) {
+            this.project.setFileView(from, undefined)
+            this.project.setFileView(to, view)
+            this.changed()
+        }
         for (const group of this.groups) {
             group.tabs = renameTab(group.tabs, from, to)
+            group.moveView(from, to)
             if (group.displayedPath === from) this.show(liveSource(to), group)
         }
     }
 
     fileDeleted(path: string) {
         this.moveFileBreakpoints(path)
+        this.byteEditHistory.move(path)
+        if (this.project.fileViews?.[path]) {
+            this.project.setFileView(path, undefined)
+            this.changed()
+        }
         for (const group of this.groups) {
             group.tabs = removeTab(group.tabs, path, '')
+            group.moveView(path)
             if (group.displayedPath === path) {
                 const next = liveSource(group.tabs.active)
                 if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
@@ -1418,6 +1593,41 @@ export class WorkbenchSession {
     setEntry(path: string) {
         this.project.entry = path
         this.changed()
+    }
+
+    /** Adds a Hex editor's save of its unsaved typing; the function returned removes it. */
+    registerTypingFlush(flush: () => void): () => void {
+        this.typingFlushes.add(flush)
+        return () => {
+            this.typingFlushes.delete(flush)
+        }
+    }
+    /** Saves what every open Hex editor has typed, before the Files are locked. */
+    private flushTyping() {
+        for (const flush of [...this.typingFlushes]) flush()
+    }
+    /**
+     * Byte edits typed in the Hex editor ([ADR 0047](../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
+     * overwrites `bytes` at `offset`, or with `edits` puts back a whole list for Undo and Redo.
+     * False when the edit is refused, as the Project's limit can refuse it, after saying why.
+     */
+    editFileBytes(path: string, offset: number, bytes: Uint8Array): boolean {
+        return this.changeFileBytes(() => this.project.fileSystem.editBytes(path, offset, bytes))
+    }
+    setFileByteEdits(path: string, edits: readonly ByteEdit[]): boolean {
+        return this.changeFileBytes(() => this.project.fileSystem.setByteEdits(path, edits))
+    }
+    private changeFileBytes(change: () => void): boolean {
+        if (this.host.readonly || this.fileSystemLocked || this.running || this.building)
+            return false
+        try {
+            change()
+            return true
+        } catch (error) {
+            console.error(error)
+            toast.error(getM68kErrorMessage(error))
+            return false
+        }
     }
 
     /**
@@ -1447,6 +1657,106 @@ export class WorkbenchSession {
         }
     }
 
+    /**
+     * Show in Listing ([file-views.md](../../../../../docs/design/file-views.md), decision 9): the
+     * instruction holding a byte of the Executable a pane shows in the Hex editor, through the
+     * file offset the Listing keeps for each line. In the other pane when it shows the Listing
+     * already, else in this one, switched to it. False when no line holds the byte.
+     */
+    async showInListing(group: EditorGroup, offset: number): Promise<boolean> {
+        const path = group.displayedPath
+        const showing = (candidate: EditorGroup) =>
+            candidate.displayedPath === path && candidate.displayedView === 'listing'
+        const target = this.groups.find((candidate) => candidate !== group && showing(candidate))
+        const pane = target ?? group
+        if (!target) group.setView(path, 'listing')
+        this.focusEditorGroup(pane)
+        await tick()
+        const listing = await pane.displayedListing?.ready.catch(() => undefined)
+        if (!listing || !showing(pane)) return false
+        const line = lineOfFileOffset(listing, offset)
+        if (line < 0) return false
+        //a pane that already showed the Listing scrolls to the line; one switched to it jumps
+        return this.revealWhenShown(pane, line, { scroll: target ? 'smooth' : 'immediate' })
+    }
+
+    /** Whether a pane's editor holds the model the pane shows, as it does once mounted. */
+    private holdsModel(group: EditorGroup): boolean {
+        const model = group.editor?.getModel()
+        const identity = model && !model.isDisposed() ? parseProjectSourceUri(model.uri) : null
+        return !!identity && projectSourceModelKey(identity) === group.modelKey
+    }
+
+    /**
+     * Reveals a line once the pane's editor holds the model it shows: a pane switched from the
+     * Hex editor mounts its editor, and Monaco may still be loading. With `focus`, as Show in
+     * Listing asks, the editor takes the keyboard; the debugger's reveal leaves it where it is.
+     * The editor jumps to the line unless asked to scroll: a smooth scroll in an editor just
+     * mounted is stopped part of the way by the layouts that follow (its notice, the debug
+     * column), as the current line's was (`CurrentLineReveal`), which left Show in Listing a
+     * tenth of the way to its line.
+     */
+    private async revealWhenShown(
+        group: EditorGroup,
+        line: number,
+        {
+            column = 1,
+            focus = true,
+            scroll = 'immediate'
+        }: { column?: number; focus?: boolean; scroll?: 'smooth' | 'immediate' } = {}
+    ): Promise<boolean> {
+        if (this.disposed) return false
+        const key = group.modelKey
+        for (let attempt = 0; attempt < 200; attempt++) {
+            if (this.disposed || group.modelKey !== key || !this.groups.includes(group))
+                return false
+            const editor = group.editor
+            if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
+                this.revealEditorLine(zeroBasedLineToMonaco(line), column, group, scroll)
+                if (focus) editor.focus()
+                return true
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        return false
+    }
+
+    /**
+     * The bytes of the instruction or data on a line of the Listing a pane shows, which Show in
+     * Hex selects: none for a line without bytes, or a library's Listing, which is no File.
+     */
+    hexRangeOfLine(
+        group: EditorGroup,
+        line: number
+    ): { offset: number; length: number } | undefined {
+        const listing = group.displayedListingView
+        if (!listing || group.displayedLibraryListing || !group.displayedFile) return undefined
+        const offset = listing.lines.offsets[line]
+        const length = listing.lines.sizes[line]
+        return offset >= 0 && length > 0 ? { offset, length } : undefined
+    }
+
+    /**
+     * Show in Hex: a Listing line's bytes, selected in the Hex editor, in the other pane when it
+     * shows the File's bytes already, else in this one, switched to them.
+     */
+    showInHex(group: EditorGroup, line: number): boolean {
+        const range = this.hexRangeOfLine(group, line)
+        if (!range) return false
+        const path = group.displayedPath
+        const target =
+            this.groups.find(
+                (candidate) =>
+                    candidate !== group &&
+                    candidate.displayedPath === path &&
+                    candidate.displayedView === 'hex'
+            ) ?? group
+        if (target === group) group.setView(path, 'hex')
+        target.hexReveal = { path, ...range }
+        this.focusEditorGroup(target)
+        return true
+    }
+
     toggleBreakpoint(line: number, group = this.groups[0]) {
         const listing = group.displayedListing
         if (!listing) {
@@ -1454,8 +1764,9 @@ export class WorkbenchSession {
             return
         }
         //a Listing's Breakpoint is the address of the instruction on the line, in its Executable
-        //(decision 5); a line without an instruction takes none, nor does a library (decision 11)
-        if (!listing.listing || group.displayedLibraryListing) return
+        //(decision 5); a line without an instruction takes none, nor does a library (decision 11),
+        //nor the Build output, whose program the debugger follows in its source
+        if (!listing.listing || group.displayedLibraryListing || group.displayedBuildOutput) return
         const address = instructionAddressAt(listing.listing, line)
         if (address !== undefined)
             this.emulator.toggleAddressBreakpoint(address, group.displayedPath)
@@ -1593,8 +1904,12 @@ export class WorkbenchSession {
             toast.warn('Stop the current Debug session before building again')
             return
         }
+        //bytes typed into a Hex editor go into the Files this Build reads
+        this.flushTyping()
         const started = performance.now()
         const sources = this.sourceInput
+        //the Build output this Build replaces, whose tabs it closes if it places none there
+        const replaced = this.buildOutput?.path
         this.failedBuild = undefined
         let failure: Diagnostic[] | undefined
         //what the Debug session's Command line shows, locked, for as long as it lasts
@@ -1622,12 +1937,24 @@ export class WorkbenchSession {
             this.syncDisplay()
             //Stop during the Build, in its run to `main` (an input wait before it, or a long start):
             //the person ended it, so it neither failed nor built, and the Log says nothing
-            if (clears === this.executionClears) this.finishBuild(sources, started, failure)
+            if (clears === this.executionClears)
+                this.finishBuild(sources, started, failure, replaced)
         }
     }
 
-    /** What a Build that was not stopped part way leaves: its Log entry, and where it is shown. */
-    private finishBuild(sources: BuildSources, started: number, failure: Diagnostic[] | undefined) {
+    /**
+     * What a Build that was not stopped part way leaves: its Log entry, and where it is shown. The
+     * tabs of the Build output it `replaced` close when it left no program at that path, as a
+     * failed Build does.
+     */
+    private finishBuild(
+        sources: BuildSources,
+        started: number,
+        failure: Diagnostic[] | undefined,
+        replaced: string | undefined
+    ) {
+        if (replaced && !this.buildOutputAt(replaced) && !this.project.files[replaced])
+            for (const group of [...this.groups]) this.closeTab(replaced, group)
         const ok = this.emulator.canExecute
         if (this.startedCommandLine)
             this.startedCommandLine = ok
@@ -1739,6 +2066,7 @@ export class WorkbenchSession {
 
     async test() {
         if (this.building || this.running || this.compiling) return
+        this.flushTyping()
         this.running = true
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))

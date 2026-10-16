@@ -18,7 +18,7 @@
     $effect(() => {
         if (Prompt.id !== currentId) {
             currentId = Prompt.id
-            value = ''
+            value = Prompt.initial
             //every prompt takes the keyboard, not just the ones that arrive with the form off the
             //screen. A program that opens two input dialogs in a row — MARS's service 51 for each of
             //two numbers — asks again before this form has finished leaving, and Svelte keeps the

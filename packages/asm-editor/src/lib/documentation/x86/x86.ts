@@ -619,8 +619,10 @@ function usingC(): Chapter {
 }
 
 /**
- * Running a program built outside the editor: an **Executable**, shown as its **Listing**
- * ([binary-import.md](../../../../../../docs/design/binary-import.md)).
+ * Running a program built outside the editor: an **Executable**, shown in the **Hex editor** and
+ * as its **Listing** ([binary-import.md](../../../../../../docs/design/binary-import.md),
+ * [file-views.md](../../../../../../docs/design/file-views.md)), and the **Build output**, the
+ * program an x86 Build links, which opens like one.
  */
 function executables(): Chapter {
     const href = `${BASE}/executables`
@@ -630,7 +632,7 @@ function executables(): Chapter {
         title: 'Executables',
         href,
         description:
-            'Import and debug an x86-64 Linux executable, inspect its Listing, and patch instructions during a paused run.',
+            'Import and debug an x86-64 Linux executable, read and edit its bytes, inspect its Listing, patch instructions during a paused run, and open the program a Build links.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'executables',

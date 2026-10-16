@@ -90,6 +90,20 @@ describe('the input prompt', () => {
         Prompt.answerText('12')
         expect(await next).toBe('12')
     })
+    it('starts with the answer it was given, which the next prompt does not keep', async () => {
+        render()
+        const kept = Prompt.askText('Keep the built program as the File', true, 'main', 'main')
+        await settled()
+        expect(input()?.value).toBe('main')
+        //Ok answers what the input holds, changed or not
+        okButton().click()
+        expect(await kept).toBe('main')
+        const next = Prompt.askText('Number?')
+        await settled()
+        expect(input()?.value).toBe('')
+        Prompt.answerText('12')
+        expect(await next).toBe('12')
+    })
     it('focuses the input of the prompt being asked', async () => {
         render()
         const asked = Prompt.askText('first')

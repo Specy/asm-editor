@@ -1,6 +1,6 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
-import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import { ListingError, type Listing } from './listing'
 import type { ListingOrder } from './listingClient'
 import { plannedLoadBase } from './listingPaths'
@@ -69,6 +69,8 @@ export type ListingDocumentOrder = {
     base: number
     /** Identifies the bytes: a File's content, or a bundled library's path in the Core. */
     content: string
+    /** A File's Byte edits as `byteEditsKey` names them, which change its bytes too. */
+    edits?: string
     /** Reads the bytes, called only when the Listing has not been made yet. */
     bytes: () => Uint8Array
 }
@@ -130,7 +132,7 @@ export class ListingDocuments {
      * any other reason (its worker died) is generated again.
      */
     open(order: ListingDocumentOrder): ListingDocument {
-        const key = `${order.base}\0${order.name}\0${this.contentId(order.content)}`
+        const key = `${order.base}\0${order.name}\0${this.contentId(order.content)}\0${order.edits ?? ''}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
         if (!document || (document.status === 'failed' && !document.lasting))
@@ -151,6 +153,7 @@ export class ListingDocuments {
             name: path.slice(path.lastIndexOf('/') + 1),
             base: plannedLoadBase(executableAnalysis(file).pie),
             content: file.content,
+            edits: byteEditsKey(file),
             bytes: () => fileBytes(file)
         })
     }

@@ -46,7 +46,7 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 
 ## Breakpoint
 
-A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. A Breakpoint on a line of **Pseudocode** is the same rule applied through the decompiler's addresses: it places address Breakpoints on the Listing, kept as the Listing's own. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
 
 ## Poke
@@ -56,8 +56,23 @@ _Avoid_: edit, value edit, override, set value, host write, manual write; patch,
 
 ## Patch
 
-A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes.
+A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes. Distinct from a **Byte edit**, which changes the File.
 _Avoid_: edit, binary patch, hot patch, modification
+
+## Hex editor
+
+The **Workbench**'s view of a **File** stored as bytes, as rows of hexadecimal bytes beside their text, where typing over the bytes makes **Byte edits**. An **Executable** opens in it, and so does any byte File the browser cannot preview, in every **Target**. Distinct from the memory view, which shows a **Debug session**'s memory rather than a File.
+_Avoid_: hex view, hex dump, byte viewer
+
+## Preview
+
+The **Workbench**'s view of a byte **File** as the browser itself shows its kind: an image, a PDF, audio or video, recognised by the File's first bytes and never by its name. Every Preview can be switched to the **Hex editor**.
+_Avoid_: viewer, render, thumbnail
+
+## Byte edit
+
+A change typed into a byte **File** in the **Hex editor**, saved with the **Project** apart from the File's original bytes, which are kept unchanged. It overwrites bytes and never changes the File's length. Everything that reads the File (the **FileSystem**, a Build, the **Listing**, a download) sees the edited bytes, and nothing in the interface yet lists Byte edits or shows the original. Distinct from a **Patch** and any other **Poke**, which change only a Debug session's memory. See [ADR 0047](./docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md).
+_Avoid_: patch (the memory-only **Patch**), binary patch, modification, diff
 
 ## Peripheral
 
@@ -240,7 +255,12 @@ _Avoid_: binary (any File that is not text is binary), imported binary, compiled
 ## Listing
 
 The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it.
-_Avoid_: disassembly (the decoding that produces it), dump, decompilation, listing file
+_Avoid_: disassembly (the decoding that produces it), dump, decompilation (see **Pseudocode**), listing file
+
+## Pseudocode
+
+The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
+_Avoid_: decompiled C, decompilation (when the text is meant), source, C code
 
 ## Invented name
 
@@ -259,11 +279,16 @@ _Avoid_: system code, external code, foreign code
 
 ## Displayed file
 
-The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. An **Executable** is displayed as its **Listing**.
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. A File stored as bytes is displayed in the **Hex editor**, or as a **Preview** when the browser can show its kind; an **Executable** opens in the Hex editor too and can be switched to its **Listing** or its **Pseudocode**.
 
 ## Build snapshot
 
 The fixed versions of the **Files** and **Entry path** used by one Build, identifying the source of its running program. Later **FileSystem** changes belong to the current Project Files and affect subsequent Builds.
+
+## Build output
+
+The executable an x86 Build links from its sources, shown in the Explorer as a read-only File of that Build and present in the program's **FileSystem**, so it opens like any **Executable** and can be downloaded or run elsewhere. Each Build replaces it, and it is never saved with the **Project**; keeping one copies it into the Project as an Executable. See [ADR 0050](./docs/adr/0050-the-built-program-is-a-build-output-never-saved.md).
+_Avoid_: a.out, binary, compiled program, artifact (the Core's build artifacts are line data, not this File)
 
 ## Debug session
 

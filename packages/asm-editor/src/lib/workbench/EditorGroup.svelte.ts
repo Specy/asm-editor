@@ -9,6 +9,10 @@ import {
     type ProjectSourceSelection
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
+import type { ProjectFileKind } from '#lib/fileKinds.ts'
+import { overwritesOnly } from '#lib/projectFiles.ts'
+import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
+import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
@@ -37,8 +41,33 @@ export class EditorGroup {
     optimization = $state<Optimization>('0')
     sourceCompiler = $state<SourceCompiler>('clang')
 
+    /**
+     * The view this pane last showed each File in
+     * ([file-views.md](../../../../../docs/design/file-views.md), decision 8), while its tab is
+     * open; a File it has none for opens in the view the Project saved for it, or its default.
+     */
+    views = $state.raw<Readonly<Record<string, FileView>>>({})
+    /**
+     * Where this pane was in each File it showed in the Hex editor, while its tab is open: not
+     * reactive, since only the Hex editor reads it, when it opens the File again.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read once when a Hex editor opens a File; nothing tracks it.
+    readonly hexViews = new Map<string, HexViewState>()
+    /** The bytes Show in Hex asked this pane to select, until its Hex editor has. */
+    hexReveal = $state.raw<{ path: string; offset: number; length: number } | undefined>()
+    /**
+     * Why this pane shows a File in the Hex editor where its Preview was asked for: the browser
+     * could not show it after all (decision 14). The note stands over the bytes until a view is
+     * chosen for the File again, and the Preview is tried anew when that view is the Preview.
+     */
+    previewNotes = $state.raw<Readonly<Record<string, string>>>({})
+
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
+    /** What the displayed File is, from its bytes; undefined for a library's Listing or no File. */
+    declare readonly displayedKind: ProjectFileKind | undefined
+    /** How the displayed File is shown: as text, in the Hex editor, as a Listing, as a Preview. */
+    declare readonly displayedView: FileView
     declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
     /**
      * The Listing the displayed File is shown as: an Executable's, or that of a library the running
@@ -70,7 +99,14 @@ export class EditorGroup {
         this.displayedLanguage = $derived(
             editorFileLanguage(this.displayedPath, this.session.project.language)
         )
-        this.displayedListing = $derived(this.session.listingFor(this.sourceSelection))
+        this.displayedKind = $derived(this.session.fileKindOf(this.displayedFile))
+        this.displayedView = $derived(this.viewOf(this.displayedPath, this.displayedKind))
+        //generated only for a pane that shows it: an Executable in the Hex editor needs none
+        this.displayedListing = $derived(
+            this.displayedView === 'listing'
+                ? this.session.listingFor(this.sourceSelection)
+                : undefined
+        )
         this.displayedPatches = $derived.by(() => {
             const patched = this.session.emulator.patcher?.patched
             const selection = this.sourceSelection
@@ -86,6 +122,56 @@ export class EditorGroup {
             this.displayedPatches?.listing ?? this.displayedListing?.listing
         )
         this.resetCompilationOptions()
+    }
+
+    /**
+     * The view this pane shows a File of this kind in: the one it last showed it in, else the one
+     * last chosen for it anywhere, which the Project saves, when the kind offers it; else the
+     * kind's default. A library's Listing is no File and is only ever a Listing.
+     */
+    viewOf(path: string, kind: ProjectFileKind | undefined): FileView {
+        if (!kind && this.session.emulator.listings?.isLibrary(path)) return 'listing'
+        return resolveFileView(kind, this.views[path], this.session.project.fileViews?.[path])
+    }
+
+    /**
+     * Shows a File in another view in this pane, when its kind offers that view. With `remember`,
+     * as when a person picks it, the Project saves it as the File's last view.
+     */
+    setView(path: string, view: FileView, remember = true) {
+        const kind = path === this.displayedPath ? this.displayedKind : this.session.kindAt(path)
+        if (resolveFileView(kind, view) !== view) return
+        if (remember) this.forgetPreviewNote(path)
+        if (this.views[path] !== view) this.views = { ...this.views, [path]: view }
+        if (remember) this.session.viewChosen(path, view, kind)
+    }
+
+    /**
+     * The browser could not preview the File at `path` after all: this pane shows its bytes
+     * instead, under the note that says why, without that counting as a view anyone chose.
+     */
+    previewUnavailable(path: string, note: string) {
+        this.previewNotes = { ...this.previewNotes, [path]: note }
+        this.setView(path, 'hex', false)
+    }
+
+    private forgetPreviewNote(path: string, to?: string) {
+        if (!Object.hasOwn(this.previewNotes, path)) return
+        const notes = Object.entries(this.previewNotes).filter(([key]) => key !== path)
+        if (to !== undefined) notes.push([to, this.previewNotes[path]])
+        this.previewNotes = Object.fromEntries(notes)
+    }
+
+    /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
+    moveView(from: string, to?: string) {
+        this.forgetPreviewNote(from, to)
+        const place = this.hexViews.get(from)
+        this.hexViews.delete(from)
+        if (place && to !== undefined) this.hexViews.set(to, place)
+        if (!Object.hasOwn(this.views, from)) return
+        const views = Object.entries(this.views).filter(([path]) => path !== from && path !== to)
+        if (to !== undefined) views.push([to, this.views[from]])
+        this.views = Object.fromEntries(views)
     }
 
     resetCompilationOptions() {
@@ -145,9 +231,23 @@ export class EditorGroup {
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
         //a library's Listing is no File at all
         if (this.displayedLibraryListing) return undefined
-        return this.sourceView === 'snapshot'
-            ? this.session.emulator.buildSources?.files[this.displayedPath]
-            : this.session.project.files[this.displayedPath]
+        //the Build output is outside the Project too, and the same in either version
+        return (
+            (this.sourceView === 'snapshot'
+                ? this.session.emulator.buildSources?.files[this.displayedPath]
+                : this.session.project.files[this.displayedPath]) ??
+            this.session.buildOutputAt(this.displayedPath)
+        )
+    }
+    /**
+     * Whether the displayed File is the Build output: the program the last Build linked, which
+     * shows like an Executable but is read-only, takes no Breakpoints and never shows where the
+     * program is, since the debugger follows its source
+     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+     */
+    get displayedBuildOutput() {
+        const output = this.session.buildOutputAt(this.displayedPath)
+        return output !== undefined && this.displayedFile === output
     }
     get displayedCode() {
         if (this.displayedListing) return this.displayedListingView?.text ?? ''
@@ -238,12 +338,50 @@ export class EditorGroup {
         )
         return status.stale || status.edited
     }
+    /**
+     * The views the displayed File can be switched between, in the order the view switch offers
+     * them (decision 4): Hex · Disassemble for an Executable, Preview · Hex for a File the browser
+     * can show, and none where there is only one view, as for text and other bytes. A library's
+     * Listing is no File and has none.
+     */
+    get viewSwitch(): readonly FileView[] {
+        if (!this.displayedFile || this.displayedLibraryMember) return []
+        const views = fileViewsOf(this.displayedKind)
+        return views.length > 1 ? views : []
+    }
+    /**
+     * Whether the execution dock floats over this pane. `controls` says whether the layout puts
+     * the execution controls in a pane, as a desktop and a phone do; a tablet has one bar for
+     * them. The controls group has it, a source File its compile dock outside a Debug session,
+     * and on every device a File shown in more than one way its view switch.
+     */
+    hasDock(controls: boolean): boolean {
+        const s = this.session
+        if (!this.displayedPath) return false
+        return (
+            (controls && s.controlsGroup === this) ||
+            ((!!sourceLanguage(this.displayedPath) || this.recompilationNeeded) &&
+                !s.debugSession) ||
+            this.viewSwitch.length > 1
+        )
+    }
+    /** Whether the displayed view is text in the code editor: a File's, a Listing or Pseudocode. */
+    get showsCode() {
+        const view = this.displayedView
+        return view === 'text' || view === 'listing' || view === 'pseudocode'
+    }
     get modelIdentity(): ProjectModelIdentity | undefined {
-        if (!this.displayedPath) return undefined
+        if (!this.displayedPath || !this.showsCode) return undefined
         //a Listing's model is made once its text exists, never filled in afterwards: Monaco decides
         //at a model's creation whether it is too large to highlight
         if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
-        return { sessionId: this.session.languageSessionId, ...this.sourceSelection }
+        const view = this.displayedView
+        return {
+            sessionId: this.session.languageSessionId,
+            ...this.sourceSelection,
+            //a Listing's model is the File's as much as its text's is, so the view tells them apart
+            ...(view === 'listing' || view === 'pseudocode' ? { view } : {})
+        }
     }
     get modelKey() {
         return this.modelIdentity ? projectSourceModelKey(this.modelIdentity) : `empty:${this.id}`
@@ -271,6 +409,7 @@ export class EditorGroup {
         if (listing)
             return (
                 !this.displayedLibraryListing &&
+                !this.displayedBuildOutput &&
                 listing.status === 'ready' &&
                 canEditProjectBreakpoints(this.sourceSelection, {
                     readonly: s.host.readonly,
@@ -315,13 +454,17 @@ export class EditorGroup {
             .filter((item) => item.file === this.displayedPath && !own.includes(item.line))
             .map((item) => item.line)
     }
+    /**
+     * Whether the displayed view draws the program's current instruction on its line: a File's
+     * text or its Listing, not its bytes or a Preview.
+     */
+    get showsInstructions() {
+        return this.displayedView === 'text' || this.displayedView === 'listing'
+    }
     get instructionLine() {
         const s = this.session
-        return isCurrentBuildLocation(
-            this.sourceSelection,
-            s.buildGeneration,
-            s.emulator.currentFile
-        )
+        return this.showsInstructions &&
+            isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
             ? s.emulator.line
             : -1
     }
@@ -375,6 +518,41 @@ export class EditorGroup {
     }
     get activeLineColors() {
         return this.session.activeMappingColors
+    }
+    /**
+     * Why the displayed File's bytes take no Byte edits now, or undefined when they do: whatever
+     * keeps a File's text read-only, a File stored as text, whose bytes are its text, and one whose
+     * saved edits insert or delete bytes, since only overwrites can be added to.
+     */
+    get bytesReadOnly(): string | undefined {
+        const s = this.session
+        if (s.host.readonly) return 'This Project is read-only'
+        if (this.displayedBuildOutput)
+            return 'The Build output is read-only: Keep as File copies it into the Project'
+        if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
+        if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
+            return 'The Files are read-only during a Debug session: Stop to edit them'
+        if (s.running || s.building) return 'The Files are read-only while a Build runs'
+        if (this.displayedFile?.encoding !== 'base64')
+            return 'This File is stored as text, which takes no Byte edits'
+        if (!overwritesOnly(this.displayedFile))
+            return 'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
+        return undefined
+    }
+    /**
+     * The Hex editor's notice: why a File the browser could not preview is shown as bytes, and
+     * over an Executable during a Debug session (decision 8) that its bytes are the File's, not
+     * memory's, so a Patch missing from them does not read as a failed one.
+     */
+    get bytesNotice(): string | undefined {
+        if (this.displayedView === 'hex' && Object.hasOwn(this.previewNotes, this.displayedPath))
+            return this.previewNotes[this.displayedPath]
+        //the Build output is the program as linked, which no Patch was ever made to
+        return this.displayedKind === 'executable' &&
+            this.session.debugSession &&
+            !this.displayedBuildOutput
+            ? "The File's bytes. Patches and the program's writes are in memory: see the memory view."
+            : undefined
     }
     get editorDisabled() {
         const s = this.session

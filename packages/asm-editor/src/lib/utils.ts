@@ -52,6 +52,14 @@ export function blobDownloader(blob: Blob, fileName: string) {
     a.remove()
     URL.revokeObjectURL(a.href)
 }
+/**
+ * Saves bytes under exactly `fileName`. The Blob is typed as bytes: Chrome names an untyped
+ * download without an extension as text, `crackme.txt` for `crackme`.
+ */
+export function bytesDownloader(bytes: Uint8Array, fileName: string) {
+    const contents = new Uint8Array(bytes).buffer
+    blobDownloader(new Blob([contents], { type: 'application/octet-stream' }), fileName)
+}
 export function textDownloader(text: string, fileName: string) {
     blobDownloader(new Blob([text], { type: 'text/json' }), fileName)
 }

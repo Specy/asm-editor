@@ -2,7 +2,8 @@ import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 import {
     normalizeBuildInput,
     buildConfiguration,
-    buildConfigurationsEqual
+    buildConfigurationsEqual,
+    sameFileContent
 } from '#lib/projectFiles.ts'
 import { languageWorkerManager } from './LanguageWorkerManager'
 import type {
@@ -23,7 +24,7 @@ function fileChanges(previous: ProjectFiles, next: ProjectFiles): ProjectFileCha
     const changes: ProjectFileChange[] = []
     for (const [path, file] of Object.entries(next)) {
         const old = previous[path]
-        if (!old || old.encoding !== file.encoding || old.content !== file.content) {
+        if (!sameFileContent(old, file)) {
             changes.push({ type: 'set', path, file })
         }
     }

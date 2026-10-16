@@ -9,12 +9,18 @@
     let {
         document,
         library = false,
+        built = false,
         patchable = false,
         touch = false
     }: {
         document: ListingDocument
         /** A shared library's Listing, under `@lib/`, rather than the Executable's own. */
         library?: boolean
+        /**
+         * The Build output's, the program the Build linked, which the debugger follows in its
+         * source rather than here.
+         */
+        built?: boolean
         /**
          * The running Executable's own Listing in a Debug session, whose instructions take patches
          * (decision 13): the notice says how.
@@ -30,6 +36,9 @@
         The Listing of {document.name} could not be generated.
     {:else if library}
         Generated Listing of {document.name}, a library the program loaded: read-only.
+    {:else if built}
+        Generated Listing of {document.name}, the program the Build linked: read-only. The debugger
+        follows it in its source.
     {:else if patchable && touch}
         Generated Listing of {document.name}: read-only. While the program is paused, a long press
         on a line offers to patch its instruction, in memory only.

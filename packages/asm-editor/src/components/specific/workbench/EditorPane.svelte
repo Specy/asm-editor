@@ -2,7 +2,6 @@
     import Editor from '#cmp/specific/project/Editor.svelte'
     import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
-    import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import FileTabs from './FileTabs.svelte'
     import LibraryMemberNotice from './LibraryMemberNotice.svelte'
@@ -14,6 +13,10 @@
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
+    import HexEditor from './hex/HexEditor.svelte'
+    import type { HexViewState } from './hex/hexGrid'
+    import FilePreview from './preview/FilePreview.svelte'
+    import { isPreviewKind } from '#lib/fileKinds.ts'
     import { useWorkbench } from './workbenchContext'
 
     let {
@@ -61,7 +64,7 @@
      * "Patch instruction…" on an instruction of the running Executable's Listing
      * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
      * menu, and on Space, as x64dbg's disassembly assembles; the Listing is read-only, so Space
-     * types nothing there.
+     * types nothing there. "Show in Hex" on any line with bytes of an Executable's own Listing.
      */
     const listingActions: EditorLineAction[] = [
         {
@@ -70,6 +73,15 @@
             keybindings: (monaco) => [monaco.KeyCode.Space],
             available: (line) => session.patchSite(group, line) !== undefined,
             run: (line) => void session.openPatchPrompt(group, line)
+        },
+        //the line's bytes in the Executable's File ([file-views.md](../../../../../docs/design/file-views.md), decision 9)
+        {
+            id: 'asm-editor.showInHex',
+            label: 'Show in Hex',
+            menuGroup: 'navigation',
+            menuOrder: 100,
+            available: (line) => session.hexRangeOfLine(group, line) !== undefined,
+            run: (line) => void session.showInHex(group, line)
         }
     ]
     /** A Listing's Breakpoints go on its instructions, no other line. */
@@ -77,6 +89,18 @@
         const kinds = listingModel?.listing.lines.kinds
         return kinds ? (line: number) => kinds[line] === LINE_KIND.instruction : undefined
     })
+
+    /** Whether the execution dock floats over the bottom of this pane. */
+    const docked = $derived(group.hasDock(controls))
+    /** Where this pane was in a File's bytes, kept for as long as its tab is open. */
+    function hexViewState(path: string): HexViewState {
+        let state = group.hexViews.get(path)
+        if (!state) {
+            state = { caret: { offset: 0, nibble: 0, column: 'hex' }, anchor: undefined, topRow: 0 }
+            group.hexViews.set(path, state)
+        }
+        return state
+    }
 
     function overSplitZone(event: DragEvent) {
         if (!session.canSplitWithDrop()) return false
@@ -131,7 +155,9 @@
         <ListingNotice
             document={group.displayedListing}
             library={group.displayedLibraryListing}
+            built={group.displayedBuildOutput}
             patchable={!group.displayedLibraryListing &&
+                !group.displayedBuildOutput &&
                 session.emulator.patcher !== undefined &&
                 group.sourceView === 'snapshot' &&
                 session.debugSession}
@@ -157,7 +183,8 @@
                   }
                 : undefined}
         />
-        {#if group.displayedPath}
+        <!-- the File's text, a Listing or Pseudocode are code; its bytes and a Preview are not -->
+        {#if group.displayedPath && group.showsCode}
             <Editor
                 source={group.modelIdentity
                     ? {
@@ -235,6 +262,41 @@
         {/if}
         {#if !group.displayedPath}
             <EmptyEditor {group} compact={session.groups.length > 1} />
+        {:else if group.displayedView === 'hex' && group.displayedFile && group.displayedKind}
+            <!-- one Hex editor per File, so each keeps its own caret, typing and Find -->
+            {#key group.displayedPath}
+                <HexEditor
+                    path={group.displayedPath}
+                    file={group.displayedFile}
+                    kind={group.displayedKind}
+                    readOnly={group.bytesReadOnly}
+                    notice={group.bytesNotice}
+                    history={session.byteEditHistory}
+                    onEdit={(path, offset, bytes) => session.editFileBytes(path, offset, bytes)}
+                    onSetEdits={(path, edits) => session.setFileByteEdits(path, edits)}
+                    registerFlush={(flush) => session.registerTypingFlush(flush)}
+                    reveal={group.hexReveal?.path === group.displayedPath
+                        ? group.hexReveal
+                        : undefined}
+                    onRevealed={() => (group.hexReveal = undefined)}
+                    viewState={hexViewState(group.displayedPath)}
+                    dockInset={docked}
+                    onShowInListing={group.displayedKind === 'executable'
+                        ? (offset) => void session.showInListing(group, offset)
+                        : undefined}
+                />
+            {/key}
+        {:else if group.displayedView === 'preview' && group.displayedFile && isPreviewKind(group.displayedKind)}
+            <!-- one Preview per File, whose Blob URL goes with it -->
+            {#key group.displayedPath}
+                <FilePreview
+                    path={group.displayedPath}
+                    file={group.displayedFile}
+                    kind={group.displayedKind}
+                    dockInset={docked}
+                    onUnavailable={(path, note) => group.previewUnavailable(path, note)}
+                />
+            {/key}
         {:else if group.displayedListing?.status === 'generating'}
             {@const progress = group.displayedListing.progress}
             <div class="file-notice">
@@ -255,21 +317,14 @@
                 </p>
             </div>
         {:else if group.displayedListing}
-            <!-- an Executable is shown as its Listing, not as the bytes it is -->
-        {:else if group.displayedFile?.encoding === 'base64'}
-            <div class="file-notice">
-                <h2>Binary file</h2>
-                <p>
-                    {group.displayedPath} is preserved as exact bytes and is not editable as text.
-                </p>
-            </div>
+            <!-- an Executable shown as its Listing -->
         {:else if !group.displayedFile}
             <div class="file-notice">
                 <h2>File not found</h2>
                 <p>{group.displayedPath} does not currently name a File.</p>
             </div>
         {/if}
-        {#if group.displayedPath && ((controls && session.controlsGroup === group) || ((sourceLanguage(group.displayedPath) || group.recompilationNeeded) && !session.debugSession))}
+        {#if docked}
             <div class="floating-controls">
                 <ExecutionControls
                     {group}

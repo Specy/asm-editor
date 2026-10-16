@@ -5,9 +5,19 @@
      * what says a Debug session is on ([the design record](../../../../../../docs/design/workbench.md)).
      * The Testcases run on the same Emulator, so Test during a Debug session ends it first. Edge to
      * edge in the bottom corners of the editor on a desktop, along its bottom edge on a phone, and
-     * stuck under it on a tablet.
+     * stuck under it on a tablet. A pane showing a File in more than one way carries the view
+     * switch, during a Debug session too ([file-views.md](../../../../../../docs/design/file-views.md),
+     * decisions 4 and 8).
      */
-    import ExecutionDock, { type DockCompilation } from '#cmp/specific/project/ExecutionDock.svelte'
+    import ExecutionDock, {
+        type DockCompilation,
+        type DockView,
+        type DockViews
+    } from '#cmp/specific/project/ExecutionDock.svelte'
+    import type { FileView } from '#lib/fileViews.ts'
+    import FaTh from '~icons/fa-solid/th'
+    import FaListOl from '~icons/fa-solid/list-ol'
+    import FaEye from '~icons/fa-solid/eye'
     import {
         isCompilationTarget,
         OPTIMIZATIONS,
@@ -25,6 +35,8 @@
         group?: EditorGroup
         execution?: boolean
         showCompilation?: boolean
+        /** The pane's view switch: a tablet's shared bar leaves it to each pane's own dock. */
+        showViews?: boolean
     }
 
     let {
@@ -32,8 +44,20 @@
         attached = false,
         group,
         execution = true,
-        showCompilation = true
+        showCompilation = true,
+        showViews = true
     }: Props = $props()
+
+    /** The view switch's button for each view; Pseudocode joins once there is a decompiler. */
+    const VIEW_BUTTONS: Partial<Record<FileView, Omit<DockView, 'id'>>> = {
+        hex: { label: 'Hex', title: "Show the File's bytes in the Hex editor", icon: FaTh },
+        listing: {
+            label: 'Disassemble',
+            title: 'Show the Executable as its Listing, an instruction a line',
+            icon: FaListOl
+        },
+        preview: { label: 'Preview', title: 'Show the File as the browser shows it', icon: FaEye }
+    }
 
     const { session } = useWorkbench()
     const emulator = session.emulator
@@ -83,15 +107,28 @@
         }
     })
 
+    const views = $derived.by<DockViews | undefined>(() => {
+        if (!showViews) return undefined
+        const options = pane.viewSwitch.flatMap((view) => {
+            const button = VIEW_BUTTONS[view]
+            return button ? [{ id: view, ...button }] : []
+        })
+        if (options.length < 2) return undefined
+        return {
+            options,
+            value: pane.displayedView,
+            onChange: (view) => pane.setView(pane.displayedPath, view as FileView)
+        }
+    })
+
     //an assembly File of the Project's own that Build would not start from
     const entryCandidate = $derived.by(() => {
         const path = pane.displayedPath
         const file = session.project.files[path]
         return (
             !!file &&
-            file.encoding !== 'base64' &&
             path !== session.project.entry &&
-            editorFileKind(path) === 'assembly' &&
+            editorFileKind(path, file) === 'assembly' &&
             !pane.displayedLibraryMember &&
             !session.fileSystemLocked
         )
@@ -109,6 +146,7 @@
     roundedStart={session.groups.length > 1 && session.groups[0] !== pane}
     roundedEnd={session.groups.length > 1 && session.groups[0] === pane}
     {compilation}
+    {views}
     compileOnly={!execution ||
         (!!sourceLanguage(pane.displayedPath) && session.groups.length === 1)}
     showExecution={execution}

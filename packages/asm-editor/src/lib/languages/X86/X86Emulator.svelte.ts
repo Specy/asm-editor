@@ -1,7 +1,7 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
-import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
     instructionAddressAt,
@@ -437,6 +437,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _beginExecutionSession(): void {
         if (!this.fileSystemSession) throw new Error('Missing x86 FileSystem session')
+        //the program reads its own File, the Build output, but cannot write, rename or remove it
+        //while it runs, as Linux refuses for a running executable (ETXTBSY, EBUSY)
+        const output = this.fileSystemSession.buildOutputPath
+        if (output !== undefined) this.requireCore().setProtectedPath('/project/' + output)
         this.requireCore().mountProjectFileSystem(this.fileSystemSession)
         this.executable = this.loadingExecutable
         this.loadingExecutable = undefined
@@ -594,7 +598,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 : linked || sources.x86Support
                   ? X86_START_UNIT_FILES
                   : undefined
-            return { ok: true, diagnostics }
+            //the linked executable, a copy, which becomes the Build output (ADR 0050)
+            return { ok: true, diagnostics, program: core.getExecutable() ?? undefined }
         }
         return { ok: false, diagnostics, report: result.report }
     }
@@ -774,6 +779,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 name: executable.document.name,
                 base,
                 content: executable.file.content,
+                edits: byteEditsKey(executable.file),
                 bytes: () => fileBytes(executable.file)
             })
             this.listingOpened(executable.path, executable.document)

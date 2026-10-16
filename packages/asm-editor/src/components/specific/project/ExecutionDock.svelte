@@ -30,12 +30,31 @@
         onCompile: () => void
         onCancel: () => void
     }
+
+    /** One button of the view switch: a way the pane can show its File. */
+    export interface DockView {
+        id: string
+        label: string
+        title: string
+        icon: Component
+    }
+
+    /**
+     * The view switch, beside Build: one button per view the pane's File offers, the pressed one
+     * the view it shows ([file-views.md](../../../../../../docs/design/file-views.md), decision 4).
+     */
+    export interface DockViews {
+        options: readonly DockView[]
+        value: string
+        onChange: (id: string) => void
+    }
 </script>
 
 <script lang="ts">
     /**
      * The execution dock: Build, and once built Stop, Run, Undo and Step, with Test and the caller's
-     * own actions at the far end. Run turns into Pause while the program runs. It only draws the
+     * own actions at the far end, and after them, in either case, the view switch of a pane that
+     * shows a File in more than one way. Run turns into Pause while the program runs. It only draws the
      * controls and says which was pressed; what a press does, and when the program counts as built,
      * is the host's: the Workbench's `ExecutionControls` and the documentation's Playground. It is a
      * bar with nothing of its own to draw, laid over the bottom of an editor or stuck under it,
@@ -79,6 +98,8 @@
         roundedEnd?: boolean
         actions?: DockAction[]
         compilation?: DockCompilation
+        /** The pane's view switch, shown during a Debug session too. */
+        views?: DockViews
         /** The displayed File is source, so Compile takes the place of Build. */
         compileOnly?: boolean
         /** Compilation-only docks in another pane share one project execution dock. */
@@ -114,6 +135,7 @@
         roundedEnd = false,
         actions = [],
         compilation,
+        views,
         compileOnly = false,
         showExecution = true,
         buildLabel = 'Build',
@@ -128,6 +150,10 @@
     }: Props = $props()
 
     const hasEnd = $derived(showExecution && (hasTests || actions.length > 0))
+    /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
+    const beforeViews = $derived(
+        debugging ? showExecution : (showExecution && !compileOnly) || !!compilation
+    )
 </script>
 
 <div
@@ -138,8 +164,11 @@
     class:rounded-end={roundedEnd}
     class:debugging
     class:with-end={debugging && hasEnd}
+    class:with-far-end={hasEnd}
+    class:with-session={debugging && showExecution}
     class:with-actions={debugging && actions.length > 0}
     class:with-compilation={!!compilation}
+    class:with-views={!!views}
 >
     <div class="toolbar">
         {#if !debugging}
@@ -289,6 +318,28 @@
                 </Icon>
                 <span class="label">Step</span>
             </button>
+        {/if}
+        {#if views}
+            {#if beforeViews}
+                <span class="divider" aria-hidden="true"></span>
+            {/if}
+            <div class="view-switch" role="group" aria-label="View">
+                {#each views.options as option (option.id)}
+                    <button
+                        type="button"
+                        class="tool view"
+                        aria-pressed={option.id === views.value}
+                        aria-label={option.label}
+                        title={option.title}
+                        onclick={() => views?.onChange(option.id)}
+                    >
+                        <Icon size={0.85}>
+                            <option.icon />
+                        </Icon>
+                        <span class="label">{option.label}</span>
+                    </button>
+                {/each}
+            </div>
         {/if}
     </div>
     {#if hasEnd}
@@ -444,6 +495,22 @@
         margin-left: 0.45rem;
     }
 
+    /* the views, one pressed: sunk into the tray like a pressed key, which a pill would not be */
+    .view-switch {
+        display: flex;
+        align-items: center;
+        gap: 0.2rem;
+        height: 100%;
+    }
+
+    .view[aria-pressed='true'] {
+        background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+    }
+
+    .view[aria-pressed='true']:hover {
+        background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+
     .optimization,
     .compiler {
         font-size: 0.85rem;
@@ -481,7 +548,8 @@
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         pointer-events: auto;
 
-        .toolbar {
+        .toolbar,
+        .view-switch {
             display: contents;
         }
 
@@ -617,6 +685,90 @@
 
     @container (max-width: 22rem) {
         .debugging .label {
+            display: none;
+        }
+    }
+
+    /* The view switch drops its words first, then the rest go as above, Test's before the others'.
+       Measured: Hex 4.7rem and Disassemble 8.7rem with their words, 2.45rem bare; beside them
+       Build 5.3rem ("Build entry" 7.9rem), a Debug session's four 21.8rem and Test 5.5rem. A pane's
+       dock with the switch alone keeps its words down to 14rem, in a Debug session too */
+    @container (max-width: 24rem) {
+        .with-views .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 30rem) {
+        .with-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 20rem) {
+        .with-views.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 37rem) {
+        .with-views.with-session .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 43rem) {
+        .with-views.with-session.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 33.5rem) {
+        .with-views.with-session.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 27.5rem) {
+        .with-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 31rem) {
+        .with-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    /* in one tray across the bar every button has an equal share, so the widest word decides:
+       Disassemble's needs 8.7rem a button, a Debug session's 5.5rem */
+    @container (max-width: 27rem) {
+        .fill.with-views .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 36rem) {
+        .fill.with-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 34rem) {
+        .fill.with-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 39.5rem) {
+        .fill.with-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 14rem) {
+        .with-views .label {
             display: none;
         }
     }

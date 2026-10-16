@@ -3,11 +3,21 @@ import { isValidFilePath } from '#lib/projectFiles.ts'
 
 export const ASSEMBLY_MODEL_SCHEME = 'asm-editor'
 
-export type ProjectModelIdentity =
+/**
+ * A view of a File with a model of its own beside the File's text: an Executable's Listing and its
+ * Pseudocode ([file-views.md](../../../../../../docs/design/file-views.md), decision 12). A model
+ * of the text has none.
+ */
+export type ModelView = 'listing' | 'pseudocode'
+
+export type ProjectModelIdentity = (
     | { sessionId: string; sourceKind: 'live'; path: string }
     | { sessionId: string; sourceKind: 'build'; buildGeneration: number; path: string }
+) & { view?: ModelView }
 
-type UriLike = { scheme: string; authority: string; path: string }
+type UriLike = { scheme: string; authority: string; path: string; fragment?: string }
+
+const MODEL_VIEWS: readonly string[] = ['listing', 'pseudocode'] satisfies ModelView[]
 
 let fallbackSessionId = 0
 
@@ -34,6 +44,7 @@ function identityPath(identity: ProjectModelIdentity): string {
     return `/${source}/${identity.path}`
 }
 
+/** A view's model is told apart by the URI's fragment, which leaves its path the File's. */
 export function projectSourceUri(
     monaco: Pick<MonacoType, 'Uri'>,
     identity: ProjectModelIdentity
@@ -42,13 +53,14 @@ export function projectSourceUri(
     return monaco.Uri.from({
         scheme: ASSEMBLY_MODEL_SCHEME,
         authority: identity.sessionId,
-        path: identityPath(identity)
+        path: identityPath(identity),
+        ...(identity.view ? { fragment: identity.view } : {})
     })
 }
 
 export function projectSourceModelKey(identity: ProjectModelIdentity): string {
     validateIdentity(identity)
-    return `${identity.sessionId}:${identityPath(identity)}`
+    return `${identity.sessionId}:${identityPath(identity)}${identity.view ? `#${identity.view}` : ''}`
 }
 
 export function parseProjectSourceUri(uri: UriLike): ProjectModelIdentity | null {
@@ -61,10 +73,14 @@ export function parseProjectSourceUri(uri: UriLike): ProjectModelIdentity | null
     const [source, ...pathParts] = parts
     const path = pathParts.join('/')
     if (!isValidFilePath(path)) return null
-    if (source === 'live') return { sessionId: uri.authority, sourceKind: 'live', path }
+    const view =
+        uri.fragment && MODEL_VIEWS.includes(uri.fragment)
+            ? { view: uri.fragment as ModelView }
+            : {}
+    if (source === 'live') return { sessionId: uri.authority, sourceKind: 'live', path, ...view }
     const match = /^build-(\d+)$/.exec(source)
     if (!match) return null
     const buildGeneration = Number(match[1])
     if (!Number.isSafeInteger(buildGeneration)) return null
-    return { sessionId: uri.authority, sourceKind: 'build', buildGeneration, path }
+    return { sessionId: uri.authority, sourceKind: 'build', buildGeneration, path, ...view }
 }

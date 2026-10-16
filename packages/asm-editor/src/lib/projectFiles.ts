@@ -3,7 +3,24 @@ import { isRuntimeAbiName } from './runtimeAbi'
 
 /** Shared byte and path rules for persistence, assembly, and the FileSystem. */
 export type FileEncoding = 'plain' | 'base64'
-export type ProjectFile = Readonly<{ encoding: FileEncoding; content: string }>
+/**
+ * A **Byte edit** ([ADR 0047](../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
+ * `remove` bytes at `offset` replaced by `insert`, in base64. A File's edits apply in order to its
+ * original bytes. The Hex editor only overwrites, so there `remove` is the inserted length; the
+ * shape also expresses an insertion or a deletion, which a Project is read with, though this
+ * editor writes none yet.
+ */
+export type ByteEdit = Readonly<{ offset: number; remove: number; insert: string }>
+/**
+ * One File as the Project stores it: its original bytes as `content` and, on a File stored as bytes
+ * only, the Byte edits typed over them, omitted when there are none. Every reader goes through
+ * `fileBytes`, which applies them.
+ */
+export type ProjectFile = Readonly<{
+    encoding: FileEncoding
+    content: string
+    edits?: readonly ByteEdit[]
+}>
 export type ProjectFiles = Readonly<Record<string, ProjectFile>>
 export const FILE_ENCODINGS: readonly FileEncoding[] = ['plain', 'base64']
 export const FILE_BYTE_LIMIT = 16 * 1024 * 1024
@@ -49,7 +66,37 @@ export function resolveFilePath(path: string): string {
     return result
 }
 
-export function fileBytes(file: ProjectFile): Uint8Array {
+/**
+ * Decodes canonical base64, the form every byte File and Byte edit is stored in. Decoding is the
+ * validation. A structural regex over the whole string is not an option here:
+ * `(?:[A-Za-z0-9+/]{4})*` overflows V8's backtrack arena above roughly 4.5 million characters, so
+ * any File past about 3.3 MiB threw a RangeError well inside the 16 MiB limit. `atob` rejects an
+ * invalid alphabet and the round trip below rejects everything else, both in linear time.
+ */
+function decodeBase64(text: string): Uint8Array {
+    let raw: string
+    try {
+        raw = atob(text)
+    } catch {
+        throw new ProjectFormatError('Invalid file encoding or base64 content')
+    }
+    if (btoa(raw) !== text) throw new ProjectFormatError('Noncanonical base64 content')
+    //a plain loop: `Uint8Array.from` with a mapping function takes about 50 times as long, over a
+    //second and a half for 16 MiB, and the Hex editor decodes a File again at every Byte edit
+    const bytes = new Uint8Array(raw.length)
+    for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index)
+    return bytes
+}
+
+export function encodeBase64(bytes: Uint8Array): string {
+    let raw = ''
+    for (let i = 0; i < bytes.length; i += 8192)
+        raw += String.fromCharCode(...bytes.subarray(i, i + 8192))
+    return btoa(raw)
+}
+
+/** A File's bytes as stored, before its Byte edits. */
+export function originalBytes(file: ProjectFile): Uint8Array {
     if (file.encoding === 'plain') {
         const bytes = encoder.encode(file.content)
         if (decoder.decode(bytes) !== file.content)
@@ -59,28 +106,253 @@ export function fileBytes(file: ProjectFile): Uint8Array {
     if (file.encoding !== 'base64') {
         throw new ProjectFormatError('Invalid file encoding or base64 content')
     }
-    //Decoding is the validation. A structural regex over the whole string is not an option here:
-    //`(?:[A-Za-z0-9+/]{4})*` overflows V8's backtrack arena above roughly 4.5 million characters,
-    //so any File past about 3.3 MiB threw a RangeError well inside the 16 MiB limit. `atob` rejects
-    //an invalid alphabet and the round trip below rejects everything else, both in linear time.
-    let raw: string
-    try {
-        raw = atob(file.content)
-    } catch {
-        throw new ProjectFormatError('Invalid file encoding or base64 content')
+    return decodeBase64(file.content)
+}
+
+/** A File's bytes as everything reads them: the original with its Byte edits applied. */
+export function fileBytes(file: ProjectFile): Uint8Array {
+    const bytes = originalBytes(file)
+    return file.edits?.length ? applyByteEdits(bytes, file.edits) : bytes
+}
+
+/**
+ * Whether a Byte edit only overwrites, the one kind the editor writes: the File keeps its length,
+ * and every offset names the same byte before and after it.
+ */
+function isOverwrite(edit: ByteEdit) {
+    return edit.remove === base64Length(edit.insert)
+}
+
+/** The byte length of canonical base64, without decoding it. */
+function base64Length(text: string) {
+    if (!text.length) return 0
+    return (text.length / 4) * 3 - (text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0)
+}
+
+/** The bytes of `original` after `edits`, applied in order; `original` is left unchanged. */
+export function applyByteEdits(original: Uint8Array, edits: readonly ByteEdit[]): Uint8Array {
+    if (edits.every(isOverwrite)) {
+        const result = original.slice()
+        for (const edit of edits) {
+            if (edit.offset + edit.remove > result.length)
+                throw new ProjectFormatError('A Byte edit is past the end of its File')
+            result.set(decodeBase64(edit.insert), edit.offset)
+        }
+        return result
     }
-    if (btoa(raw) !== file.content) throw new ProjectFormatError('Noncanonical base64 content')
-    return Uint8Array.from(raw, (character) => character.charCodeAt(0))
+    let result = original
+    for (const edit of edits) {
+        if (edit.offset + edit.remove > result.length)
+            throw new ProjectFormatError('A Byte edit is past the end of its File')
+        const insert = decodeBase64(edit.insert)
+        const next = new Uint8Array(result.length - edit.remove + insert.length)
+        next.set(result.subarray(0, edit.offset))
+        next.set(insert, edit.offset)
+        next.set(result.subarray(edit.offset + edit.remove), edit.offset + insert.length)
+        result = next
+    }
+    return result
+}
+
+/**
+ * Overwrites folded into the fewest sorted runs that do not touch, which apply to the same bytes:
+ * a later edit wins where two overlap. Only overwrites can be merged this way, since an insertion
+ * or a deletion moves every byte after it. Each edit is folded into the runs it overlaps or
+ * touches, so the work is the edits' bytes, however far apart they lie in the File.
+ */
+export function mergeOverwrites(edits: readonly ByteEdit[]): ByteEdit[] {
+    if (!edits.every(isOverwrite))
+        throw new ProjectFormatError('Only overwriting Byte edits can be merged')
+    //sorted by offset, none overlapping or touching another, so their ends are sorted too
+    const runs: { start: number; bytes: Uint8Array }[] = []
+    const endOf = (run: (typeof runs)[number]) => run.start + run.bytes.length
+    for (const edit of edits) {
+        if (!edit.remove) continue
+        const start = edit.offset
+        const end = edit.offset + edit.remove
+        //the first run that ends at or after this edit's start, which it then overlaps or touches
+        let first = 0
+        for (let high = runs.length; first < high;) {
+            const middle = (first + high) >> 1
+            if (endOf(runs[middle]) < start) first = middle + 1
+            else high = middle
+        }
+        let last = first
+        while (last < runs.length && runs[last].start <= end) last++
+        const joined = runs.slice(first, last)
+        const from = Math.min(start, joined[0]?.start ?? start)
+        const to = Math.max(end, joined.length ? endOf(joined[joined.length - 1]) : end)
+        const bytes = new Uint8Array(to - from)
+        for (const run of joined) bytes.set(run.bytes, run.start - from)
+        bytes.set(decodeBase64(edit.insert), start - from)
+        runs.splice(first, joined.length, { start: from, bytes })
+    }
+    return runs.map((run) =>
+        Object.freeze({
+            offset: run.start,
+            remove: run.bytes.length,
+            insert: encodeBase64(run.bytes)
+        })
+    )
+}
+
+/**
+ * Whether a File's Byte edits only overwrite, as the Hex editor's do: it can add to those alone,
+ * since an insertion or a deletion moves every byte after it.
+ */
+export function overwritesOnly(file: ProjectFile): boolean {
+    return (file.edits ?? []).every(isOverwrite)
+}
+
+/** How many bytes a File reads as, edits applied, without decoding a byte File. */
+export function fileByteLength(file: ProjectFile): number {
+    if (file.encoding !== 'base64') return fileBytes(file).length
+    let length = base64Length(file.content)
+    for (const edit of file.edits ?? []) length += base64Length(edit.insert) - edit.remove
+    return length
+}
+
+/**
+ * The UTF-8 length of `text`, without encoding it, for text with no unpaired surrogate, as
+ * `cleanFiles` leaves every text File: each half of a pair is two of the character's four bytes.
+ */
+function utf8Length(text: string) {
+    let length = 0
+    for (let index = 0; index < text.length; index++) {
+        const code = text.charCodeAt(index)
+        length += code < 0x80 ? 1 : code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 2 : 3
+    }
+    return length
+}
+
+/**
+ * What the Files take of the Project's 16 MiB, as `cleanFiles` counts it: each original, and the
+ * bytes each Byte edit puts in (ADR 0047). Read from the stored lengths without decoding a File,
+ * for Files `cleanFiles` checked, whose base64 is canonical and whose text has no lone surrogate.
+ */
+export function storedFilesSize(files: ProjectFiles): number {
+    let size = 0
+    for (const file of Object.values(files)) {
+        size += file.encoding === 'base64' ? base64Length(file.content) : utf8Length(file.content)
+        for (const edit of file.edits ?? []) size += base64Length(edit.insert)
+    }
+    return size
+}
+
+/**
+ * A byte File with `edits` in place of its own over the same original, checked as `cleanFiles`
+ * checks a saved list, against the original's length, which is read from its base64 rather than
+ * decoded: `file` is a record `cleanFiles` checked, so its original needs no checking again, and
+ * a Byte edit costs what its edits do, not the whole File.
+ */
+export function withByteEdits(
+    path: string,
+    file: ProjectFile,
+    edits: readonly ByteEdit[]
+): ProjectFile {
+    const length = file.encoding === 'base64' ? base64Length(file.content) : 0
+    const clean = cleanByteEdits(path, { encoding: file.encoding, edits }, length)
+    return Object.freeze({
+        encoding: file.encoding,
+        content: file.content,
+        ...(clean ? { edits: clean } : {})
+    })
+}
+
+/** A stable text naming a File's Byte edits, empty when it has none, for keys and equality. */
+export function byteEditsKey(file: ProjectFile): string {
+    return file.edits?.length
+        ? file.edits.map((edit) => `${edit.offset},${edit.remove},${edit.insert}`).join(';')
+        : ''
+}
+
+/** Whether two Files hold the same bytes the same way: encoding, original and Byte edits. */
+export function sameFileContent(left: ProjectFile | undefined, right: ProjectFile | undefined) {
+    if (!left || !right) return left === right
+    return (
+        left.encoding === right.encoding &&
+        left.content === right.content &&
+        byteEditsKey(left) === byteEditsKey(right)
+    )
+}
+
+/**
+ * The first `length` bytes a File reads as, edits applied, decoding only as much of it as they
+ * need: recognising a File by its first bytes runs on every check and must not decode 16 MiB.
+ */
+export function fileHead(file: ProjectFile, length: number): Uint8Array {
+    if (file.edits?.length && !file.edits.every(isOverwrite))
+        return fileBytes(file).slice(0, length)
+    let head: Uint8Array
+    if (file.encoding === 'plain') {
+        //every character is at least one byte of UTF-8, so `length` characters are enough
+        head = encoder.encode(file.content.slice(0, length)).slice(0, length)
+    } else {
+        //every four base64 characters are three bytes, and canonical base64 decodes in pieces
+        head = decodeBase64(file.content.slice(0, Math.ceil(length / 3) * 4)).slice(0, length)
+    }
+    for (const edit of file.edits ?? []) {
+        if (edit.offset >= head.length) continue
+        const insert = decodeBase64(edit.insert)
+        head.set(insert.subarray(0, head.length - edit.offset), edit.offset)
+    }
+    return head
+}
+
+/**
+ * The Byte edits stored with a File, checked by applying them in order to its original's
+ * `length`: each in range of the length the edits before it leave, so a Project is never opened
+ * with bytes it would read differently. An insertion or a deletion is as valid as an overwrite
+ * (ADR 0047), so a Project that carries one is read, though this editor writes only overwrites.
+ * Undefined when there are none.
+ */
+function cleanByteEdits(
+    path: string,
+    value: { encoding: FileEncoding; edits?: unknown },
+    length: number
+): readonly ByteEdit[] | undefined {
+    if (value.edits === undefined) return undefined
+    if (!Array.isArray(value.edits)) throw new ProjectFormatError(`Invalid Byte edits for ${path}`)
+    if (!value.edits.length) return undefined
+    if (value.encoding !== 'base64')
+        throw new ProjectFormatError(`Only a File stored as bytes has Byte edits: ${path}`)
+    let current = length
+    return Object.freeze(
+        value.edits.map((edit: unknown) => {
+            if (
+                !edit ||
+                typeof edit !== 'object' ||
+                Object.keys(edit).some(
+                    (key) => key !== 'offset' && key !== 'remove' && key !== 'insert'
+                )
+            )
+                throw new ProjectFormatError(`Invalid Byte edit for ${path}`)
+            const { offset, remove, insert } = edit as Record<string, unknown>
+            if (
+                typeof offset !== 'number' ||
+                typeof remove !== 'number' ||
+                typeof insert !== 'string' ||
+                !Number.isSafeInteger(offset) ||
+                !Number.isSafeInteger(remove) ||
+                offset < 0 ||
+                remove < 0
+            )
+                throw new ProjectFormatError(`Invalid Byte edit for ${path}`)
+            const inserted = decodeBase64(insert).length
+            if (!remove && !inserted) throw new ProjectFormatError(`An empty Byte edit for ${path}`)
+            if (offset + remove > current)
+                throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
+            current += inserted - remove
+            return Object.freeze({ offset, remove, insert })
+        })
+    )
 }
 
 export function bytesFile(bytes: Uint8Array): ProjectFile {
     try {
         return Object.freeze({ encoding: 'plain', content: decoder.decode(bytes) })
     } catch {
-        let raw = ''
-        for (let i = 0; i < bytes.length; i += 8192)
-            raw += String.fromCharCode(...bytes.subarray(i, i + 8192))
-        return Object.freeze({ encoding: 'base64', content: btoa(raw) })
+        return Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) })
     }
 }
 
@@ -94,14 +366,15 @@ export function projectFileFromBytes(bytes: Uint8Array, encoding: FileEncoding):
         return automatic
     }
     if (encoding !== 'base64') throw new ProjectFormatError('Invalid file encoding')
-    let raw = ''
-    for (let i = 0; i < bytes.length; i += 8192) {
-        raw += String.fromCharCode(...bytes.subarray(i, i + 8192))
-    }
-    return Object.freeze({ encoding: 'base64', content: btoa(raw) })
+    return Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) })
 }
 
+/**
+ * A File's text. A File with Byte edits has none: only a File stored as bytes takes them, and it
+ * stays one whatever its edited bytes decode as.
+ */
 export function fileText(file: ProjectFile): string {
+    if (file.edits?.length) throw new ProjectFormatError('File is not readable UTF-8 text')
     try {
         return decoder.decode(fileBytes(file))
     } catch {
@@ -129,11 +402,19 @@ export function cleanFiles(raw: unknown): ProjectFiles {
         }
         if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        const bytes = fileBytes(value)
+        const bytes = originalBytes(value)
+        const edits = cleanByteEdits(path, value, bytes.length)
+        //the original and its Byte edits are both kept, so both count (ADR 0047): the bytes each
+        //edit puts in, an overwrite's length; the File as edited is never longer than all these
         size += bytes.length
+        for (const edit of edits ?? []) size += base64Length(edit.insert)
         if (size > FILE_BYTE_LIMIT)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        files[path] = Object.freeze({ encoding: value.encoding, content: value.content })
+        files[path] = Object.freeze({
+            encoding: value.encoding,
+            content: value.content,
+            ...(edits ? { edits } : {})
+        })
     }
     for (const path of Object.keys(files)) {
         const parts = path.split('/')
@@ -217,9 +498,7 @@ export function buildSourcesEqual(left: BuildSources, right: BuildSources): bool
         Object.keys(left.files).length === Object.keys(right.files).length &&
         Object.keys(left.files).every(
             (path) =>
-                hasOwn(right.files, path) &&
-                left.files[path].encoding === right.files[path].encoding &&
-                left.files[path].content === right.files[path].content
+                hasOwn(right.files, path) && sameFileContent(left.files[path], right.files[path])
         )
     )
 }

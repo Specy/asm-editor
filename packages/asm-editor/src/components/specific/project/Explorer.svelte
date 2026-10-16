@@ -10,13 +10,15 @@
      * on the rows. Files dragged in from the computer are uploaded into the folder they are dropped
      * on. With `hints`, a dismissible card under the tree offers to create a C file where the
      * language compiles C, to upload an ELF on x86, and links one tip about the language (two
-     * where there is no action to offer), picked at every page load.
+     * where there is no action to offer), picked at every page load. The Runtime library members a
+     * Build linked and the program it linked, its Build output, are listed apart under the tree:
+     * they are no Files of the Project.
      */
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
     import { fileBytes, type ProjectFiles } from '#lib/projectFiles.ts'
-    import { blobDownloader } from '#lib/utils.ts'
+    import { bytesDownloader } from '#lib/utils.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import { untrack } from 'svelte'
@@ -33,6 +35,7 @@
     import FaFolder from '~icons/fa-solid/folder'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaFileAlt from '~icons/fa-solid/file-alt'
+    import FaFileImport from '~icons/fa-solid/file-import'
     import FaPen from '~icons/fa-solid/pen'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTimes from '~icons/fa-solid/times'
@@ -71,6 +74,13 @@
          * Project's Files: they are not the Project's, and the running program cannot see them.
          */
         libraryFiles?: readonly string[]
+        /**
+         * The program the last Build linked, listed read-only under the tree, to open, download
+         * or keep as a File: it is no File of the Project and is never saved
+         * ([ADR 0050](../../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+         * `stale` once the sources would no longer build it.
+         */
+        buildOutput?: { path: string; bytes: Uint8Array; stale: boolean }
         /** Whether to show the hints card under the tree. */
         hints?: boolean
     }
@@ -93,6 +103,7 @@
         onFileDragStart,
         onFileDragEnd,
         libraryFiles = [],
+        buildOutput,
         hints = false
     }: Props = $props()
 
@@ -552,9 +563,55 @@
     function downloadFile(targetPath = selectedPath) {
         const file = files[targetPath]
         if (!file) return
-        const bytes = fileBytes(file)
-        const contents = new Uint8Array(bytes).buffer
-        blobDownloader(new Blob([contents]), basename(targetPath))
+        bytesDownloader(fileBytes(file), basename(targetPath))
+    }
+
+    function downloadBuildOutput() {
+        if (buildOutput) bytesDownloader(buildOutput.bytes, basename(buildOutput.path))
+    }
+
+    /**
+     * Copies the Build output into the Project as a File stored as bytes, an Executable like an
+     * uploaded one, under a name asked for, which starts as its own path; a name a File has is
+     * refused rather than replaced.
+     */
+    async function keepBuildOutput() {
+        const output = buildOutput
+        if (!output || locked) return
+        const answer = await Prompt.askText(
+            'Keep the built program as the File',
+            true,
+            output.path,
+            output.path
+        )
+        const path = answer?.trim()
+        //a Debug session may have started while the question was open
+        if (!path || locked) return
+        try {
+            if (files[path]) throw new Error(`${path} already exists`)
+            fileSystem.writeBytes(path, output.bytes, false, 'base64')
+            expandParents(path)
+            onSelect(path)
+        } catch (error) {
+            reportFailure(error)
+        }
+    }
+
+    function buildOutputItems(): ContextMenuEntry[] {
+        return [
+            {
+                label: 'Open',
+                icon: FaFileAlt,
+                onSelect: () => buildOutput && onSelect(buildOutput.path)
+            },
+            { label: 'Download', icon: FaDownload, onSelect: downloadBuildOutput },
+            {
+                label: 'Keep as File',
+                icon: FaFileImport,
+                disabled: locked,
+                onSelect: () => void keepBuildOutput()
+            }
+        ]
     }
 </script>
 
@@ -799,6 +856,61 @@
                 {/if}
             {/each}
         </div>
+        {#if buildOutput}
+            {@const output = buildOutput}
+            <div class="library-files" aria-label="The program the last Build linked">
+                <div
+                    class="library-title"
+                    title="Linked by the last Build; read-only and never saved"
+                >
+                    Build output
+                </div>
+                <div class="library-list">
+                    <!-- the keyboard opens the menu from the row's focused button, with Shift+F10 or the Menu key -->
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div
+                        class="tree-row file built"
+                        class:selected={selectedPaths
+                            ? selectedPaths.includes(output.path)
+                            : output.path === selectedPath}
+                        class:stale={output.stale}
+                        class:menu-open={contextMenu !== null && menuPath === output.path}
+                        title={output.stale
+                            ? `${output.path}: from an earlier Build; the sources have changed since`
+                            : `${output.path} (read-only)`}
+                        oncontextmenu={(event) => {
+                            menuPath = output.path
+                            openContextMenu(event, buildOutputItems())
+                        }}
+                    >
+                        <button
+                            class="file-select"
+                            style:padding-left="0.35rem"
+                            onclick={() => onSelect(output.path)}
+                        >
+                            <span class="disclosure-spacer"></span>
+                            <SourceFileIcon path={output.path} {language} binary />
+                            <span class="ellipsis">{output.path}</span>
+                            {#if output.stale}
+                                <span class="stale-note">From an earlier Build</span>
+                            {/if}
+                        </button>
+                        <div class="row-actions">
+                            <button title="Download" onclick={downloadBuildOutput}>
+                                <FaDownload />
+                            </button>
+                            <button
+                                disabled={locked}
+                                title="Keep as File"
+                                onclick={() => void keepBuildOutput()}
+                            >
+                                <FaFileImport />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {/if}
         {#if libraryFiles.length > 0}
             <div class="library-files" aria-label="Runtime library members this Build linked">
                 <div class="library-title" title="Linked by this Build; read-only">
@@ -849,7 +961,8 @@
             {/if}
             {#if language === 'X86'}
                 <button class="hint" disabled={locked} onclick={() => pickUploads()}>
-                    You can run Linux binaries. Upload an ELF file to disassemble
+                    You can run Linux binaries. Upload an ELF file to see its bytes and disassemble
+                    it
                 </button>
             {/if}
             {#each tips as tip (tip.text)}
@@ -901,6 +1014,19 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         opacity: 0.7;
+    }
+
+    /* a Build output whose sources have changed since: still there to look at, but dimmed */
+    .tree-row.built.stale .file-select {
+        opacity: 0.55;
+    }
+
+    .stale-note {
+        flex: none;
+        margin-left: auto;
+        font-size: 0.65rem;
+        font-style: italic;
+        white-space: nowrap;
     }
 
     /* a panel of its own under the tree, its hints parted by lines that fade out toward the sides */
