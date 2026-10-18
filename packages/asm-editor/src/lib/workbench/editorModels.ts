@@ -73,6 +73,16 @@ export class EditorModels {
         return model
     }
 
+    /** The model kept under a key, if any. */
+    modelOf(key: string): monaco.editor.ITextModel | undefined {
+        return this.models.get(key)
+    }
+
+    /** What the generated model kept under a key is a version of, see `EditorSource.generatedFrom`. */
+    originOf(key: string): object | undefined {
+        return this.origins.get(key)
+    }
+
     artifacts(key: string, artifacts: readonly BuildArtifact[]) {
         const model = this.models.get(key)
         if (!model) return

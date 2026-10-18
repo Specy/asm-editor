@@ -93,7 +93,8 @@ describe('the Build output in the Workbench', () => {
         expect(group.displayedFile?.encoding).toBe('base64')
         expect(group.displayedKind).toBe('executable')
         expect(group.displayedView).toBe('hex')
-        expect(group.viewSwitch).toEqual(['hex', 'listing'])
+        //Hex · Disassemble · Decompile, like any Executable
+        expect(group.viewSwitch).toEqual(['hex', 'listing', 'pseudocode'])
         expect(group.bytesReadOnly).toMatch(/^The Build output is read-only/)
         expect(group.bytesNotice).toBeUndefined()
         //a view chosen for it is the pane's alone: there is no File to save it with

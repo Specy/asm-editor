@@ -16,13 +16,12 @@ export function isFileView(value: unknown): value is FileView {
 
 /**
  * The views a kind of File can be shown in, its default first, in the order the view switch
- * offers them: an Executable opens in the Hex editor and can be switched to its Listing, a File
- * the browser can show opens as its Preview. Pseudocode is offered once there is a decompiler to
- * make it.
+ * offers them: an Executable opens in the Hex editor and can be switched to its Listing and its
+ * Pseudocode, a File the browser can show opens as its Preview.
  */
 export function fileViewsOf(kind: ProjectFileKind | undefined): readonly FileView[] {
     if (kind === undefined || kind === 'text') return ['text']
-    if (kind === 'executable') return ['hex', 'listing']
+    if (kind === 'executable') return ['hex', 'listing', 'pseudocode']
     if (kind === 'bytes') return ['hex']
     return ['preview', 'hex']
 }

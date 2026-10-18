@@ -38,6 +38,7 @@
         setModelListing,
         type ListingModel
     } from '#lib/monaco/listingModels.ts'
+    import { setModelPseudocode, type PseudocodeModel } from '#lib/monaco/pseudocodeModels.ts'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
     import {
         lineActionContextKey,
@@ -93,6 +94,8 @@
          * instead of its number, and the Listing providers read it.
          */
         listing?: ListingModel
+        /** The Pseudocode the model holds, when it is one, which its navigation reads. */
+        pseudocode?: PseudocodeModel
         /** Whether a 0-based line can take a Breakpoint; every line by default. */
         canBreakAt?: (line: number) => boolean
         /** 0-based lines a Debug session patched, marked beside their line numbers. */
@@ -128,6 +131,7 @@
         viewZones = [],
         buildArtifacts = [],
         listing,
+        pseudocode,
         canBreakAt,
         patchedLines = [],
         lineNote,
@@ -186,6 +190,8 @@
         /** A change to any Project File's model, including one the editor is not showing. */
         fileChange: { path: string; value: string }
         breakpointPress: number
+        /** The cursor's zero-based line, whoever moved it: the person, the debugger, a model switch. */
+        cursorMove: number
         /** Zero-based lines covered by the user's selections, a click's single line included. */
         linesSelect: number[]
     }>()
@@ -288,6 +294,7 @@
                 //at once, not in an effect: a right click moves the cursor and opens the context
                 //menu in the same event, and the menu reads the keys as they are then
                 updateLineActionKeys(cursorLine)
+                dispatcher('cursorMove', cursorLine)
             }),
             mountedEditor.onDidChangeCursorSelection((event) => {
                 //Model switches and debugger navigation are not a new user source selection.
@@ -515,6 +522,12 @@
         const model = editor?.getModel()
         if (!model || model.isDisposed()) return
         return setModelListing(model.uri.toString(), listing)
+    })
+    $effect(() => {
+        if (!activeModelKey || !pseudocode) return
+        const model = editor?.getModel()
+        if (!model || model.isDisposed()) return
+        return setModelPseudocode(model.uri.toString(), pseudocode)
     })
     /** Whether the gutter prints a Listing's addresses, so leaving one restores line numbers. */
     let addressGutter = false

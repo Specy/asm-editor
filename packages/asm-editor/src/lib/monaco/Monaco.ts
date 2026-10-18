@@ -123,11 +123,19 @@ class MonacoLoader {
         this.toDispose.push(this.projectOpener)
     }
 
+    /** C's providers: its source help, and the navigation of Pseudocode, which reads as C. */
     private async installSourceHelp(generation: number): Promise<void> {
         const monacoInstance = this.monaco ?? (await this.load())
-        const { registerSourceLanguageHelp } = await import('#lib/sourceLanguageHelp/register.ts')
+        const [{ registerSourceLanguageHelp }, { registerPseudocodeProviders }] = await Promise.all(
+            [import('#lib/sourceLanguageHelp/register.ts'), import('./pseudocodeProviders')]
+        )
         if (generation !== this.sourceHelpGeneration) return
-        this.toDispose.push(...registerSourceLanguageHelp(monacoInstance))
+        //a Pseudocode's Go to Definition goes to its Listing's model, which the Workbench opens
+        this.ensureProjectOpener(monacoInstance)
+        this.toDispose.push(
+            ...registerSourceLanguageHelp(monacoInstance),
+            ...registerPseudocodeProviders(monacoInstance)
+        )
     }
 
     setCustomTheme = (theme: monaco.editor.IStandaloneThemeData) => {

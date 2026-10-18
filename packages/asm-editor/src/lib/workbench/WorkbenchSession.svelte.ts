@@ -37,8 +37,20 @@ import {
     type RegisterPoke,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { instructionAddressAt, lineOfFileOffset } from '#lib/listing/listing.ts'
+import {
+    functionAtLine,
+    instructionAddressAt,
+    lineOfFileOffset,
+    type Listing,
+    type ListingFunction
+} from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import { PseudocodeDocuments } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
+import {
+    defaultPseudocodeFunction,
+    functionAt,
+    pseudocodeLinesOf
+} from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
@@ -58,6 +70,7 @@ import {
 import type { BuildSources } from '#lib/projectFiles.ts'
 import {
     buildSource,
+    isCurrentBuildLocation,
     isSameProjectSourceSelection,
     liveSource,
     selectProjectFile,
@@ -91,16 +104,10 @@ import {
     mappedBreakpoints
 } from '#lib/sourceCompilation/sourceBreakpoints.ts'
 import {
-    colorSourceMap,
     sourceMapColorIndices,
     type SourceMapColoring
 } from '#lib/sourceCompilation/sourceColoring.ts'
-import {
-    assemblyLinesOf,
-    sameLocations,
-    sourceLocationsOf,
-    type MappingSelection
-} from '#lib/sourceCompilation/mappingSelection.ts'
+import { sameLocations, type MappingSelection } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     editorFileLanguage,
     type CompilationSourceMap,
@@ -134,6 +141,12 @@ import { EditorGroup } from './EditorGroup.svelte'
 import { PatchPrompt } from './patchPrompt.svelte'
 import { EditorModels } from './editorModels'
 import { resolveMappingPair } from './mappingPair'
+import {
+    pseudocodePairing,
+    resolvePseudocodePair,
+    sourceMapPairing,
+    type LinePairing
+} from './linePairing'
 import { editorGroupForFile, editorFileKind } from './editorFileRouting'
 import {
     EDITOR_FILE_DRAG_TYPE,
@@ -209,6 +222,11 @@ export class WorkbenchSession {
     readonly models: EditorModels
     /** The Hex editor's Undo and Redo of each File, shared by both panes. */
     readonly byteEditHistory = new ByteEditHistory()
+    /**
+     * The Pseudocode the panes show, and the session's Pseudocode worker, started with the first
+     * function decompiled ([file-views.md](../../../../../docs/design/file-views.md), decision 6).
+     */
+    readonly pseudocode = new PseudocodeDocuments()
     /**
      * How each open Hex editor saves what was typed and not saved yet: typing becomes a Byte edit
      * when it pauses, and a Build or a test run locks the Files, so it is saved before either
@@ -518,13 +536,17 @@ export class WorkbenchSession {
                 (path) => this.runtimeSourceMap(path)
             )
         )
-        this.mappingColors = $derived.by<SourceMapColoring | undefined>(() => {
-            const map = this.mappingPair?.map
-            return map ? colorSourceMap(map) : undefined
+        this.pseudocodePair = $derived(resolvePseudocodePair(this.groups))
+        this.linePairing = $derived.by<LinePairing<EditorGroup> | undefined>(() => {
+            const pair = this.mappingPair
+            if (pair) return sourceMapPairing(pair)
+            const pseudocode = this.pseudocodePair
+            return pseudocode ? pseudocodePairing(pseudocode) : undefined
         })
+        this.mappingColors = $derived<SourceMapColoring | undefined>(this.linePairing?.coloring)
         this.retainedModelKeys = $derived.by(() => {
-            //a File's text, and for a File of bytes its Listing, which an Executable has; a key
-            //with no model behind it keeps nothing
+            //a File's text, and for a File of bytes its Listing and Pseudocode, which an
+            //Executable has; a key with no model behind it keeps nothing
             const keys = (files: ProjectFiles, selection: ProjectSourceSelection) =>
                 Object.entries(files).flatMap(([path, file]) => {
                     const identity = { sessionId: this.languageSessionId, ...selection, path }
@@ -532,7 +554,8 @@ export class WorkbenchSession {
                         ? [projectSourceModelKey(identity)]
                         : [
                               projectSourceModelKey(identity),
-                              projectSourceModelKey({ ...identity, view: 'listing' })
+                              projectSourceModelKey({ ...identity, view: 'listing' }),
+                              projectSourceModelKey({ ...identity, view: 'pseudocode' })
                           ]
                 })
             const build = buildSource('', this.buildGeneration)
@@ -656,9 +679,10 @@ export class WorkbenchSession {
                 ? coreBreakpoints(breakpoints, breakpointSourceMaps, this.project.language)
                 : [...breakpoints]
         )
-        this.executionSourceLocation = $derived(
-            this.mappingPair?.map.lines[this.mappingPair.assembly.instructionLine] ?? undefined
-        )
+        this.executionSourceLocation = $derived.by(() => {
+            const pair = this.linePairing
+            return pair?.locationAt(pair.assembly.instructionLine)
+        })
         this.activeMappingColors = $derived.by(() => {
             const coloring = this.mappingColors
             const execution = this.executionSourceLocation
@@ -677,6 +701,7 @@ export class WorkbenchSession {
         //than reading deriveds that went inert with their owner
         $effect(() => () => {
             this.disposed = true
+            this.pseudocode.dispose()
         })
         $effect(() => {
             const pageSize = preferencesStore.values.memoryPanelSize.value
@@ -684,9 +709,9 @@ export class WorkbenchSession {
         })
 
         let previousPairKey = ''
-        let previousPairMap: CompilationSourceMap | undefined
+        let previousPairMap: object | undefined
         $effect(() => {
-            const pair = this.mappingPair
+            const pair = this.linePairing
             const key = pair
                 ? `${pair.source.id}:${pair.source.displayedPath}:${pair.assembly.id}:${pair.assembly.displayedPath}`
                 : ''
@@ -699,7 +724,7 @@ export class WorkbenchSession {
             previousPairMap = pair?.map
         })
         $effect(() => {
-            const map = this.mappingPair?.map
+            const map = this.linePairing?.map
             const executionLocation = this.executionSourceLocation
             untrack(() => {
                 //Keep the selected correspondence through Build's unmapped startup wrapper.
@@ -715,6 +740,45 @@ export class WorkbenchSession {
                 this.models.retain(keys)
                 this.models.synchronize(files)
             })
+        })
+
+        //a Pseudocode never shows without its Listing beside it (decision 11): a pane that starts
+        //showing one, as Decompile, a reopened Project or a moved tab make it, gets the Listing in
+        //the other pane
+        let showingPseudocode: readonly string[] = []
+        $effect(() => {
+            const panes = this.groups.filter(
+                (group) => group.displayedView === 'pseudocode' && !!group.displayedFile
+            )
+            const keys = panes.map((group) => `${group.id}\0${group.displayedPath}`)
+            const previous = showingPseudocode
+            showingPseudocode = keys
+            untrack(() => {
+                panes.forEach((group, index) => {
+                    if (!previous.includes(keys[index])) this.listingBeside(group)
+                })
+            })
+        })
+        //the worker decompiles only what panes show, and keeps the programs of those Executables
+        $effect(() => {
+            const shown = this.groups.flatMap((group) =>
+                group.displayedPseudocode ? [group.displayedPseudocode] : []
+            )
+            const paths = this.groups
+                .filter((group) => group.displayedView === 'pseudocode')
+                .map((group) => group.displayedPath)
+            untrack(() => this.pseudocode.retain(shown, paths))
+        })
+        //a function's Pseudocode, once decompiled, opens at the line the Listing's cursor is on,
+        //rather than where the function shown before it was scrolled to
+        const revealed = new WeakMap<EditorGroup, object>()
+        $effect(() => {
+            for (const group of this.groups) {
+                const document = group.displayedPseudocode
+                if (document?.status !== 'ready' || revealed.get(group) === document) continue
+                revealed.set(group, document)
+                untrack(() => void this.revealPseudocodeLine(group))
+            }
         })
 
         //Batch tab moves and pane changes into one save. The initial view is only a restore;
@@ -848,8 +912,17 @@ export class WorkbenchSession {
     declare readonly debugSession: boolean
     /** The Command line of a Project whose programs take Arguments; undefined for the others. */
     declare readonly commandLine: CommandLineState | undefined
+    /** The colours of the panes whose lines are linked, see `linePairing`. */
     declare readonly mappingColors: SourceMapColoring | undefined
+    /** A C File and its Generated assembly, shown side by side with a current Source map. */
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
+    /** A function's Pseudocode and the Listing beside it, once it is decompiled. */
+    declare readonly pseudocodePair: ReturnType<typeof resolvePseudocodePair<EditorGroup>>
+    /**
+     * The panes whose lines are linked, as they are drawn and selected: the mapped pair, else the
+     * Pseudocode pair.
+     */
+    declare readonly linePairing: LinePairing<EditorGroup> | undefined
     declare readonly executionSourceLocation: SourceLocation | undefined
     /**
      * The assembly lines that Breakpoints on C and C++ Files stand for: the first instruction of
@@ -890,9 +963,20 @@ export class WorkbenchSession {
         const unregisterNavigation = registerProjectNavigation(
             this.languageSessionId,
             async (identity, selection, originatingEditor) => {
-                const group =
-                    this.groups.find((group) => group.editor === originatingEditor) ??
-                    this.groupForFile(identity.path)
+                const origin = this.groups.find((group) => group.editor === originatingEditor)
+                //Go to Definition on a name in a Pseudocode moves both panes: the Listing to what
+                //it names, and the Pseudocode to the function that is in
+                if (
+                    origin?.displayedView === 'pseudocode' &&
+                    identity.view === 'listing' &&
+                    identity.path === origin.displayedPath &&
+                    selection
+                ) {
+                    const lineNumber =
+                        'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
+                    return this.followPseudocodeTarget(origin, lineNumber - 1)
+                }
+                const group = origin ?? this.groupForFile(identity.path)
                 if (identity.sourceKind === 'build') {
                     if (
                         identity.buildGeneration !== this.buildGeneration ||
@@ -970,6 +1054,7 @@ export class WorkbenchSession {
             this.languageSession = undefined
             this.emulator.dispose()
             this.compilationController?.abort()
+            this.pseudocode.dispose()
             this.models.dispose()
         }
     }
@@ -1305,9 +1390,14 @@ export class WorkbenchSession {
             destination.editor?.restoreViewState(viewState)
     }
 
-    private createGroup() {
+    /** Opens a pane, on the right, or with `before` on that pane's left. */
+    private createGroup(before?: EditorGroup) {
         const group = new EditorGroup(this, `editor-${++this.nextGroupId}`)
-        this.groups = [...this.groups, group]
+        const index = before ? this.groups.indexOf(before) : -1
+        this.groups =
+            index < 0
+                ? [...this.groups, group]
+                : [...this.groups.slice(0, index), group, ...this.groups.slice(index)]
         return group
     }
 
@@ -1390,6 +1480,13 @@ export class WorkbenchSession {
     async revealSourceLocation(file: string, line: number, column = 1) {
         const group = this.showBuildFile(file)
         if (!group) return
+        //a Pseudocode of the running Executable shows the function the program is in
+        for (const other of this.groups) {
+            const listing = other.pseudocodeListing?.listing
+            const fn = listing && functionAtLine(listing, line)
+            if (fn && isCurrentBuildLocation(other.sourceSelection, this.buildGeneration, file))
+                other.followFunction(file, fn.address)
+        }
         await tick()
         if (this.disposed) return
         //a pane the Build moved from an Executable's bytes to its Listing mounts its editor first
@@ -1419,9 +1516,10 @@ export class WorkbenchSession {
         const group =
             showing.find((group) => group.showsInstructions) ??
             showing.find(movable) ??
-            (movable(this.executionGroup)
-                ? this.executionGroup
-                : (this.groups.find(movable) ?? this.executionGroup))
+            (movable(this.executionGroup) ? this.executionGroup : this.groups.find(movable)) ??
+            //every pane shows the File's Pseudocode: its Listing opens beside it
+            this.listingBeside(this.executionGroup) ??
+            this.executionGroup
         this.executionGroupId = group.id
         //an Executable's Listing, which is no view the person chose, so it is not saved
         const view = group.displayedPath === file && group.showsInstructions ? undefined : 'listing'
@@ -1680,11 +1778,19 @@ export class WorkbenchSession {
         return this.revealWhenShown(pane, line, { scroll: target ? 'smooth' : 'immediate' })
     }
 
-    /** Whether a pane's editor holds the model the pane shows, as it does once mounted. */
+    /**
+     * Whether a pane's editor holds the model the pane shows, as it does once mounted: for a
+     * Pseudocode, the one made for the function shown, since every function's has the same key.
+     */
     private holdsModel(group: EditorGroup): boolean {
         const model = group.editor?.getModel()
         const identity = model && !model.isDisposed() ? parseProjectSourceUri(model.uri) : null
-        return !!identity && projectSourceModelKey(identity) === group.modelKey
+        if (!identity || projectSourceModelKey(identity) !== group.modelKey) return false
+        return (
+            group.displayedView !== 'pseudocode' ||
+            (this.models.modelOf(group.modelKey) === model &&
+                this.models.originOf(group.modelKey) === group.displayedPseudocode)
+        )
     }
 
     /**
@@ -1694,7 +1800,8 @@ export class WorkbenchSession {
      * The editor jumps to the line unless asked to scroll: a smooth scroll in an editor just
      * mounted is stopped part of the way by the layouts that follow (its notice, the debug
      * column), as the current line's was (`CurrentLineReveal`), which left Show in Listing a
-     * tenth of the way to its line.
+     * tenth of the way to its line. With `still`, the reveal is dropped once it no longer holds,
+     * so a reveal waiting for an editor does not undo a move made meanwhile.
      */
     private async revealWhenShown(
         group: EditorGroup,
@@ -1702,13 +1809,24 @@ export class WorkbenchSession {
         {
             column = 1,
             focus = true,
-            scroll = 'immediate'
-        }: { column?: number; focus?: boolean; scroll?: 'smooth' | 'immediate' } = {}
+            scroll = 'immediate',
+            still
+        }: {
+            column?: number
+            focus?: boolean
+            scroll?: 'smooth' | 'immediate'
+            still?: () => boolean
+        } = {}
     ): Promise<boolean> {
         if (this.disposed) return false
         const key = group.modelKey
         for (let attempt = 0; attempt < 200; attempt++) {
-            if (this.disposed || group.modelKey !== key || !this.groups.includes(group))
+            if (
+                this.disposed ||
+                group.modelKey !== key ||
+                !this.groups.includes(group) ||
+                (still && !still())
+            )
                 return false
             const editor = group.editor
             if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
@@ -1719,6 +1837,182 @@ export class WorkbenchSession {
             await new Promise((resolve) => setTimeout(resolve, 50))
         }
         return false
+    }
+
+    // ---- Pseudocode ----------------------------------------------------------------------------
+
+    /**
+     * The pane showing the Listing a Pseudocode pane pairs with: the other one, on the same
+     * version of the File.
+     */
+    listingPaneOf(group: EditorGroup): EditorGroup | undefined {
+        return this.groups.find(
+            (other) =>
+                other !== group &&
+                other.displayedView === 'listing' &&
+                other.displayedPath === group.displayedPath &&
+                other.displayedListing === group.pseudocodeListing
+        )
+    }
+
+    /**
+     * The function a pane shows the Pseudocode of, in the Listing it decompiles from: the one it
+     * last followed, else the one the Listing's cursor beside it is in, else in a Debug session
+     * the program counter's, else `main`, the entry point's or the first.
+     */
+    pseudocodeFunctionFor(group: EditorGroup, listing: Listing): ListingFunction | undefined {
+        const followed = group.pseudocodeFunctions[group.displayedPath]
+        const chosen = followed === undefined ? undefined : functionAt(listing, followed)
+        if (chosen) return chosen
+        const pane = this.listingPaneOf(group)
+        const atCursor =
+            pane && pane.cursorLine >= 0 ? functionAtLine(listing, pane.cursorLine) : undefined
+        if (atCursor) return atCursor
+        const running =
+            this.emulator.line >= 0 &&
+            isCurrentBuildLocation(
+                group.sourceSelection,
+                this.buildGeneration,
+                this.emulator.currentFile
+            )
+                ? functionAtLine(listing, this.emulator.line)
+                : undefined
+        return running ?? defaultPseudocodeFunction(listing)
+    }
+
+    /**
+     * Decompile, from the view switch ([file-views.md](../../../../../docs/design/file-views.md),
+     * decision 6): the pane shows the Pseudocode of the function the Listing's cursor is in, in
+     * this pane or the other, and the Listing opens in the other pane if it does not show it,
+     * splitting the editor with the Listing on the left as Ghidra lays them out. Saved as the
+     * File's last view, as any view a person picks.
+     */
+    decompile(group: EditorGroup) {
+        const path = group.displayedPath
+        if (
+            !this.groups.includes(group) ||
+            !fileViewsOf(group.displayedKind).includes('pseudocode')
+        )
+            return
+        const reading =
+            group.displayedView === 'listing'
+                ? group
+                : this.groups.find(
+                      (other) =>
+                          other !== group &&
+                          other.displayedPath === path &&
+                          other.displayedView === 'listing'
+                  )
+        const listing = reading?.displayedListing?.listing
+        const fn =
+            listing && reading.cursorLine >= 0
+                ? functionAtLine(listing, reading.cursorLine)
+                : undefined
+        if (fn) group.followFunction(path, fn.address)
+        group.setView(path, 'pseudocode')
+        this.listingBeside(group)
+    }
+
+    /**
+     * The Listing beside a pane showing the Pseudocode: the other pane, switched to the Listing of
+     * the same version of the File unless it shows it, or a new pane on the left when there is
+     * only one. A Listing opened here scrolls to the function the Pseudocode shows.
+     */
+    private listingBeside(group: EditorGroup): EditorGroup | undefined {
+        const path = group.displayedPath
+        if (!this.groups.includes(group) || !path) return undefined
+        const shown = this.listingPaneOf(group)
+        if (shown) return shown
+        const other =
+            this.groups.find((candidate) => candidate !== group) ?? this.createGroup(group)
+        const selection = group.sourceSelection
+        this.show(
+            selection.sourceKind === 'build'
+                ? buildSource(path, selection.buildGeneration)
+                : liveSource(path),
+            other,
+            'listing'
+        )
+        this.focusEditorGroup(group)
+        void this.revealPseudocodeFunction(other, group)
+        return other
+    }
+
+    /** Scrolls a Listing just opened beside a Pseudocode to the function the Pseudocode shows. */
+    private async revealPseudocodeFunction(listingPane: EditorGroup, pseudocodePane: EditorGroup) {
+        const document = listingPane.displayedListing
+        const listing = await document?.ready.catch(() => undefined)
+        await tick()
+        if (this.disposed || !listing || listingPane.displayedListing !== document) return
+        //the debugger puts the running program's Listing on the program counter itself
+        const selection = listingPane.sourceSelection
+        if (isCurrentBuildLocation(selection, this.buildGeneration, this.emulator.currentFile))
+            return
+        const fn = pseudocodePane.pseudocodeFunction
+        if (fn && pseudocodePane.pseudocodeListing === document)
+            await this.revealWhenShown(listingPane, fn.line, {
+                focus: false,
+                still: () => pseudocodePane.pseudocodeFunction === fn
+            })
+    }
+
+    /**
+     * The cursor of a pane's editor moved, by the person or the debugger: a Pseudocode beside a
+     * Listing follows it into another function.
+     */
+    cursorMoved(group: EditorGroup, line: number) {
+        if (!this.groups.includes(group)) return
+        if (group.cursorLine !== line) group.cursorLine = line
+        const listing = group.displayedView === 'listing' ? group.displayedListing : undefined
+        const fn = listing?.listing && functionAtLine(listing.listing, line)
+        if (!fn) return
+        for (const other of this.groups)
+            if (
+                other !== group &&
+                other.displayedView === 'pseudocode' &&
+                other.displayedPath === group.displayedPath &&
+                other.pseudocodeListing === listing
+            )
+                other.followFunction(other.displayedPath, fn.address)
+    }
+
+    /**
+     * Go to Definition on a name in a Pseudocode, whose target is on a line of its Listing: the
+     * Listing beside it moves to that line, and the Pseudocode to the function it is in, as the
+     * Listing's cursor going there does. A name of data moves the Listing alone.
+     */
+    async followPseudocodeTarget(group: EditorGroup, line: number): Promise<boolean> {
+        const listing = group.pseudocodeListing?.listing
+        if (group.displayedView !== 'pseudocode' || !listing || line < 0) return false
+        const fn = functionAtLine(listing, line)
+        if (fn) group.followFunction(group.displayedPath, fn.address)
+        const pane = this.listingBeside(group)
+        if (!pane) return false
+        await tick()
+        //a Listing already shown scrolls to it; one opened for it jumps
+        return this.revealWhenShown(pane, line, {
+            focus: false,
+            scroll: this.holdsModel(pane) ? 'smooth' : 'immediate'
+        })
+    }
+
+    /**
+     * A function's Pseudocode just decompiled in a pane: shown at the line holding the instruction
+     * at the Listing's cursor beside it, else at the program counter's line, else at its top.
+     */
+    private async revealPseudocodeLine(group: EditorGroup) {
+        const document = group.displayedPseudocode
+        const map = document?.map
+        if (!map) return
+        const pane = this.listingPaneOf(group)
+        const atCursor = pane ? pseudocodeLinesOf(map, pane.cursorLine)[0] : undefined
+        const running = group.pseudocodeProgramLine
+        const line = atCursor ?? (running >= 0 ? running : 0)
+        await tick()
+        await this.revealWhenShown(group, line, {
+            focus: false,
+            still: () => group.displayedPseudocode === document
+        })
     }
 
     /**
@@ -1758,6 +2052,8 @@ export class WorkbenchSession {
     }
 
     toggleBreakpoint(line: number, group = this.groups[0]) {
+        //a Pseudocode line takes none yet (the plan's E9)
+        if (group.displayedView === 'pseudocode') return
         const listing = group.displayedListing
         if (!listing) {
             this.emulator.toggleBreakpoint(line, group.displayedPath)
@@ -1776,11 +2072,11 @@ export class WorkbenchSession {
 
     /** Select the source lines behind any set of lines in either pane of the mapped pair. */
     selectMappedLines(group: EditorGroup, lines: readonly number[]) {
-        const pair = this.mappingPair
+        const pair = this.linePairing
         if (!pair || (group !== pair.source && group !== pair.assembly)) return
         const locations =
             group === pair.assembly
-                ? sourceLocationsOf(pair.map, lines)
+                ? pair.sourceLocationsOf(lines)
                 : lines.map((line) => ({ path: group.displayedPath, line }))
         const selection = locations.length ? locations : undefined
         //Dragging a selection repeats the same lines; keep the value so nothing recomputes.
@@ -1792,7 +2088,7 @@ export class WorkbenchSession {
                 ? selection.flatMap((location) =>
                       location.path === other.displayedPath ? [location.line] : []
                   )
-                : assemblyLinesOf(pair.map, selection)
+                : pair.assemblyLinesOf(selection)
         const editor = other.editor
         if (!editor || !otherLines.length) return
         //Leave the other pane alone while any related line is in view, so growing a selection

@@ -7,9 +7,13 @@ const { install, disposed } = vi.hoisted(() => {
 vi.mock('$app/env', () => ({ browser: false }))
 vi.mock('#lib/monaco/editorTheme.ts', () => ({ generateTheme: () => ({}) }))
 vi.mock('monaco-editor/editor/editor.worker?worker', () => ({ default: class {} }))
-vi.mock('monaco-editor', () => ({ editor: { defineTheme() {} } }))
+vi.mock('monaco-editor', () => ({
+    editor: { defineTheme() {}, registerEditorOpener: () => ({ dispose() {} }) }
+}))
 vi.mock('./assemblyLanguageRegistry', () => ({ registerAssemblyLanguage: vi.fn() }))
 vi.mock('#lib/sourceLanguageHelp/register.ts', () => ({ registerSourceLanguageHelp: install }))
+//the Pseudocode's providers are C's too, installed with its source help
+vi.mock('./pseudocodeProviders', () => ({ registerPseudocodeProviders: () => [] }))
 import { Monaco } from './Monaco'
 
 beforeAll(() => vi.stubGlobal('self', {}))

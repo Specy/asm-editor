@@ -6,6 +6,9 @@
     import FileTabs from './FileTabs.svelte'
     import LibraryMemberNotice from './LibraryMemberNotice.svelte'
     import ListingNotice from './ListingNotice.svelte'
+    import PseudocodeNotice from './PseudocodeNotice.svelte'
+    import PseudocodeStatus from './PseudocodeStatus.svelte'
+    import type { PseudocodeModel } from '#lib/monaco/pseudocodeModels.ts'
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
     import type { EditorLineAction } from '#lib/monaco/editorLineActions.ts'
@@ -60,6 +63,26 @@
             : undefined
     })
     const patchedLines = $derived([...(group.displayedPatches?.lines.keys() ?? [])])
+    /**
+     * The displayed Pseudocode, once decompiled, as its navigation reads it: its names' targets go
+     * to the Listing's model of the same version of the File.
+     */
+    const pseudocodeModel = $derived.by<PseudocodeModel | undefined>(() => {
+        const document = group.displayedPseudocode
+        const identity = group.modelIdentity
+        return document?.status === 'ready' && identity && group.displayedView === 'pseudocode'
+            ? {
+                  lines: document.lines,
+                  firstLine: document.firstLine,
+                  listing: document.listing,
+                  listingIdentity: { ...identity, view: 'listing' }
+              }
+            : undefined
+    })
+    /** The Listing being generated or failed, for this pane's Listing or its Pseudocode's. */
+    const pendingListing = $derived(group.displayedListing ?? group.pseudocodeListing)
+    /** A Pseudocode has no Build artifacts or pseudo-instructions of its own. */
+    const showsFileLines = $derived(group.displayedView !== 'pseudocode')
     /**
      * "Patch instruction…" on an instruction of the running Executable's Listing
      * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
@@ -163,6 +186,13 @@
                 session.debugSession}
             touch={!ui.viewport.canHover}
         />
+    {:else if group.displayedView === 'pseudocode' && group.displayedFile}
+        <PseudocodeNotice
+            name={group.pseudocodeListing?.name ??
+                group.displayedPath.slice(group.displayedPath.lastIndexOf('/') + 1)}
+            fn={group.pseudocodeFunction?.name}
+            built={group.displayedBuildOutput}
+        />
     {:else if group.displayedLibraryMember && group.displayedFile}
         <LibraryMemberNotice
             path={group.displayedPath}
@@ -192,20 +222,22 @@
                           value: group.displayedCode,
                           identity: group.modelIdentity,
                           //a Listing changes only where a Debug session patches a line; a
-                          //new document is new text, with a model of its own
-                          generatedFrom: group.displayedListing
+                          //new document is new text, with a model of its own, as is each
+                          //function's Pseudocode
+                          generatedFrom: group.displayedListing ?? group.displayedPseudocode
                       }
                     : undefined}
                 modelKey={group.modelKey}
                 modelIdentity={group.modelIdentity}
                 sharedModels={session.models}
                 retainedModelKeys={session.retainedModelKeys}
-                buildArtifacts={group.sourceView === 'snapshot'
+                buildArtifacts={group.sourceView === 'snapshot' && showsFileLines
                     ? emulator.buildArtifacts.filter(
                           (artifact) => artifact.file === group.displayedPath
                       )
                     : []}
                 viewZones={group.sourceView === 'snapshot' &&
+                showsFileLines &&
                 preferencesStore.values.showPseudoInstructions.value
                     ? emulator.decorations
                           .filter(
@@ -232,6 +264,8 @@
                     : []}
                 on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1, group)}
                 listing={listingModel}
+                pseudocode={pseudocodeModel}
+                on:cursorMove={(event) => session.cursorMoved(group, event.detail)}
                 canBreakAt={listingBreakable}
                 {patchedLines}
                 lineNote={group.runningWithin}
@@ -297,25 +331,33 @@
                     onUnavailable={(path, note) => group.previewUnavailable(path, note)}
                 />
             {/key}
-        {:else if group.displayedListing?.status === 'generating'}
-            {@const progress = group.displayedListing.progress}
+        {:else if pendingListing?.status === 'generating'}
+            <!-- a Pseudocode is decompiled from the Listing, which comes first -->
+            {@const progress = pendingListing.progress}
             <div class="file-notice">
                 <h2>Generating the Listing…</h2>
                 <p>
-                    Disassembling {group.displayedListing.name}{progress === undefined
+                    Disassembling {pendingListing.name}{progress === undefined
                         ? ''
                         : `: ${Math.round(progress * 100)}%`}
                 </p>
                 <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
             </div>
-        {:else if group.displayedListing?.status === 'failed'}
+        {:else if pendingListing?.status === 'failed'}
             <div class="file-notice">
                 <h2>No Listing</h2>
                 <p>
-                    The Listing of {group.displayedListing.name} could not be generated: {group
-                        .displayedListing.error}
+                    The Listing of {pendingListing.name} could not be generated: {pendingListing.error}
                 </p>
             </div>
+        {:else if group.displayedView === 'pseudocode' && group.pseudocodeListing}
+            <PseudocodeStatus
+                {group}
+                onRetry={() => {
+                    if (group.displayedPseudocode)
+                        session.pseudocode.retry(group.displayedPseudocode)
+                }}
+            />
         {:else if group.displayedListing}
             <!-- an Executable shown as its Listing -->
         {:else if !group.displayedFile}
@@ -394,6 +436,7 @@
         width: min(16rem, 80%);
         accent-color: var(--accent);
     }
+
     .floating-controls {
         position: absolute;
         z-index: 5;

@@ -113,9 +113,9 @@ function show(session: WorkbenchSession, path: string, group: EditorGroup = sess
 }
 
 describe('the view switch', () => {
-    it('offers Hex · Disassemble for an Executable, Preview · Hex for an image, none otherwise', () => {
+    it('offers Hex · Disassemble · Decompile for an Executable, Preview · Hex for an image, none otherwise', () => {
         const { session } = setup()
-        expect(show(session, 'crackme').viewSwitch).toEqual(['hex', 'listing'])
+        expect(show(session, 'crackme').viewSwitch).toEqual(['hex', 'listing', 'pseudocode'])
         expect(show(session, 'image.png').viewSwitch).toEqual(['preview', 'hex'])
         expect(show(session, 'blob.bin').viewSwitch).toEqual([])
         expect(show(session, 'notes.txt').viewSwitch).toEqual([])
@@ -128,7 +128,7 @@ describe('the view switch', () => {
         const { session, project } = setup()
         const group = show(session, 'crackme')
         const { read, press } = dock(session, { group })
-        expect(read().buttons).toEqual(['Build', 'Hex', 'Disassemble'])
+        expect(read().buttons).toEqual(['Build', 'Hex', 'Disassemble', 'Decompile'])
         expect(read().pressed).toEqual(['Hex'])
         press('Disassemble')
         expect(group.displayedView).toBe('listing')
@@ -152,7 +152,15 @@ describe('the view switch', () => {
         await session.build()
         await tick()
         flushSync()
-        expect(read().buttons).toEqual(['Stop', 'Run', 'Undo', 'Step', 'Hex', 'Disassemble'])
+        expect(read().buttons).toEqual([
+            'Stop',
+            'Run',
+            'Undo',
+            'Step',
+            'Hex',
+            'Disassemble',
+            'Decompile'
+        ])
         expect(read().pressed).toEqual(['Disassemble'])
         //the bytes, read-only, under the notice that they are the File's and not memory's
         press('Hex')
@@ -176,7 +184,8 @@ describe('the view switch', () => {
         //the pane that is not the controls group: its switch alone
         expect(dock(session, { group: right, execution: false }).read().buttons).toEqual([
             'Hex',
-            'Disassemble'
+            'Disassemble',
+            'Decompile'
         ])
         //a tablet's shared bar leaves the switch to the pane's own dock
         expect(
@@ -187,7 +196,8 @@ describe('the view switch', () => {
         expect(dock(session, { group: left, fill: true, attached: true }).read().buttons).toEqual([
             'Build',
             'Hex',
-            'Disassemble'
+            'Disassemble',
+            'Decompile'
         ])
         //text and other bytes have no switch, and no dock for it
         show(session, 'notes.txt', right)

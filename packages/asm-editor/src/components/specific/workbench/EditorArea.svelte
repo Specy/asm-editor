@@ -12,7 +12,7 @@
     }: { controls?: boolean; fill?: boolean; style?: string } = $props()
     const { session } = useWorkbench()
     let frameWidth = $state(0)
-    const gutterWidth = $derived(session.groups.length < 2 ? 0 : session.mappingPair ? 48 : 4)
+    const gutterWidth = $derived(session.groups.length < 2 ? 0 : session.linePairing ? 48 : 4)
     const paneWidth = $derived(Math.max(0, frameWidth - gutterWidth))
     const minPaneWidth = $derived(Math.min(160, paneWidth / 2))
     const leftWidth = $derived(
@@ -45,20 +45,21 @@
     >
         {#each session.groups as group, index (group.id)}
             {#if index === 1}
-                {#if session.mappingPair && session.mappingColors}
+                {#if session.linePairing}
+                    <!-- a C File and its Generated assembly, or a Pseudocode and its Listing -->
                     <SourceMapConnections
-                        sourceEditor={session.mappingPair.source.editor}
-                        assemblyEditor={session.mappingPair.assembly.editor}
-                        sourceOnLeft={session.mappingPair.source === session.groups[0]}
-                        sourcePath={session.mappingPair.source.displayedPath}
-                        coloring={session.mappingColors}
+                        sourceEditor={session.linePairing.source.editor}
+                        assemblyEditor={session.linePairing.assembly.editor}
+                        sourceOnLeft={session.linePairing.source === session.groups[0]}
+                        sourcePath={session.linePairing.source.displayedPath}
+                        coloring={session.linePairing.coloring}
                         activeColors={session.activeMappingColors}
                         onSelect={(line) => {
-                            const source = session.mappingPair?.source
+                            const source = session.linePairing?.source
                             if (source) session.selectMappedLines(source, [line])
                         }}
-                        sourceLine={session.mappingPair.source.highlightedLine}
-                        assemblyLine={session.mappingPair.assembly.instructionLine}
+                        sourceLine={session.linePairing.source.highlightedLine}
+                        assemblyLine={session.linePairing.assembly.instructionLine}
                         {divider}
                     />
                 {:else}

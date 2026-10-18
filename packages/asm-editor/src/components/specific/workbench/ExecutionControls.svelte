@@ -18,6 +18,7 @@
     import FaTh from '~icons/fa-solid/th'
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaEye from '~icons/fa-solid/eye'
+    import FaFileCode from '~icons/fa-solid/file-code'
     import {
         isCompilationTarget,
         OPTIMIZATIONS,
@@ -48,13 +49,18 @@
         showViews = true
     }: Props = $props()
 
-    /** The view switch's button for each view; Pseudocode joins once there is a decompiler. */
+    /** The view switch's button for each view a File can be switched to. */
     const VIEW_BUTTONS: Partial<Record<FileView, Omit<DockView, 'id'>>> = {
         hex: { label: 'Hex', title: "Show the File's bytes in the Hex editor", icon: FaTh },
         listing: {
             label: 'Disassemble',
             title: 'Show the Executable as its Listing, an instruction a line',
             icon: FaListOl
+        },
+        pseudocode: {
+            label: 'Decompile',
+            title: "Show the Pseudocode of the function at the Listing's cursor, beside the Listing",
+            icon: FaFileCode
         },
         preview: { label: 'Preview', title: 'Show the File as the browser shows it', icon: FaEye }
     }
@@ -117,7 +123,11 @@
         return {
             options,
             value: pane.displayedView,
-            onChange: (view) => pane.setView(pane.displayedPath, view as FileView)
+            //Decompile also opens the Listing beside the Pseudocode
+            onChange: (view) =>
+                view === 'pseudocode'
+                    ? session.decompile(pane)
+                    : pane.setView(pane.displayedPath, view as FileView)
         }
     })
 

@@ -14,14 +14,20 @@ import { overwritesOnly } from '#lib/projectFiles.ts'
 import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
+import {
+    LINE_KIND,
+    lineOfAddress,
+    type Listing,
+    type ListingFunction
+} from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import type { PseudocodeDocument } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
+import { pseudocodeLineOfAddress } from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
-import { assemblyLinesOf } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     compilationStatus,
     defaultSourceCompiler,
@@ -61,6 +67,14 @@ export class EditorGroup {
      * chosen for the File again, and the Preview is tried anew when that view is the Preview.
      */
     previewNotes = $state.raw<Readonly<Record<string, string>>>({})
+    /**
+     * The function this pane shows each Executable's Pseudocode of, by its link-time address,
+     * while its tab is open: the one the Listing's cursor was last in, a call followed to, or the
+     * program counter's ([file-views.md](../../../../../docs/design/file-views.md), decision 6).
+     */
+    pseudocodeFunctions = $state.raw<Readonly<Record<string, number>>>({})
+    /** The 0-based line of the editor's cursor, in whatever the pane shows; -1 before it has one. */
+    cursorLine = $state(-1)
 
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
@@ -82,6 +96,17 @@ export class EditorGroup {
     declare readonly displayedPatches: PatchedListing | undefined
     /** The displayed Listing as shown: with its patched lines, if any, in place. */
     declare readonly displayedListingView: Listing | undefined
+    /**
+     * The Listing a pane showing an Executable's Pseudocode decompiles from and pairs with: the
+     * one a Listing pane of the same version of the File shows, generated for it even when no
+     * pane shows the Listing. Undefined in every other view, so a pane showing the bytes makes no
+     * Listing.
+     */
+    declare readonly pseudocodeListing: ListingDocument | undefined
+    /** The function whose Pseudocode the pane shows, once the Listing is ready. */
+    declare readonly pseudocodeFunction: ListingFunction | undefined
+    /** That function's Pseudocode, decompiling or decompiled. */
+    declare readonly displayedPseudocode: PseudocodeDocument | undefined
     /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
     patchPrompt = $state.raw<PatchPrompt | undefined>()
 
@@ -96,8 +121,11 @@ export class EditorGroup {
         this.sourceView = $derived<'snapshot' | 'live'>(
             this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
         )
+        //Pseudocode reads like C, whatever the Executable's name
         this.displayedLanguage = $derived(
-            editorFileLanguage(this.displayedPath, this.session.project.language)
+            this.displayedView === 'pseudocode'
+                ? 'c'
+                : editorFileLanguage(this.displayedPath, this.session.project.language)
         )
         this.displayedKind = $derived(this.session.fileKindOf(this.displayedFile))
         this.displayedView = $derived(this.viewOf(this.displayedPath, this.displayedKind))
@@ -121,6 +149,23 @@ export class EditorGroup {
         this.displayedListingView = $derived(
             this.displayedPatches?.listing ?? this.displayedListing?.listing
         )
+        this.pseudocodeListing = $derived(
+            this.displayedView === 'pseudocode'
+                ? this.session.listingFor(this.sourceSelection)
+                : undefined
+        )
+        this.pseudocodeFunction = $derived.by(() => {
+            const listing = this.pseudocodeListing?.listing
+            return listing ? this.session.pseudocodeFunctionFor(this, listing) : undefined
+        })
+        this.displayedPseudocode = $derived.by(() => {
+            const document = this.pseudocodeListing
+            const fn = this.pseudocodeFunction
+            const file = this.displayedFile
+            return document && fn && file
+                ? this.session.pseudocode.open(this.displayedPath, file, document, fn)
+                : undefined
+        })
         this.resetCompilationOptions()
     }
 
@@ -162,9 +207,22 @@ export class EditorGroup {
         this.previewNotes = Object.fromEntries(notes)
     }
 
+    /** Shows the Pseudocode of the function at a link-time address, when this pane shows one. */
+    followFunction(path: string, address: number) {
+        if (this.pseudocodeFunctions[path] !== address)
+            this.pseudocodeFunctions = { ...this.pseudocodeFunctions, [path]: address }
+    }
+
     /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
     moveView(from: string, to?: string) {
         this.forgetPreviewNote(from, to)
+        if (Object.hasOwn(this.pseudocodeFunctions, from)) {
+            const functions = Object.entries(this.pseudocodeFunctions).filter(
+                ([path]) => path !== from && path !== to
+            )
+            if (to !== undefined) functions.push([to, this.pseudocodeFunctions[from]])
+            this.pseudocodeFunctions = Object.fromEntries(functions)
+        }
         const place = this.hexViews.get(from)
         this.hexViews.delete(from)
         if (place && to !== undefined) this.hexViews.set(to, place)
@@ -251,6 +309,8 @@ export class EditorGroup {
     }
     get displayedCode() {
         if (this.displayedListing) return this.displayedListingView?.text ?? ''
+        if (this.displayedView === 'pseudocode')
+            return this.displayedPseudocode?.status === 'ready' ? this.displayedPseudocode.text : ''
         return this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
     }
     get displayedCompilation() {
@@ -340,9 +400,9 @@ export class EditorGroup {
     }
     /**
      * The views the displayed File can be switched between, in the order the view switch offers
-     * them (decision 4): Hex · Disassemble for an Executable, Preview · Hex for a File the browser
-     * can show, and none where there is only one view, as for text and other bytes. A library's
-     * Listing is no File and has none.
+     * them (decision 4): Hex · Disassemble · Decompile for an Executable, Preview · Hex for a File
+     * the browser can show, and none where there is only one view, as for text and other bytes. A
+     * library's Listing is no File and has none.
      */
     get viewSwitch(): readonly FileView[] {
         if (!this.displayedFile || this.displayedLibraryMember) return []
@@ -372,10 +432,12 @@ export class EditorGroup {
     }
     get modelIdentity(): ProjectModelIdentity | undefined {
         if (!this.displayedPath || !this.showsCode) return undefined
+        const view = this.displayedView
         //a Listing's model is made once its text exists, never filled in afterwards: Monaco decides
         //at a model's creation whether it is too large to highlight
         if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
-        const view = this.displayedView
+        //and a function's Pseudocode once it is decompiled, a model of its own for each function
+        if (view === 'pseudocode' && this.displayedPseudocode?.status !== 'ready') return undefined
         return {
             sessionId: this.session.languageSessionId,
             ...this.sourceSelection,
@@ -388,6 +450,8 @@ export class EditorGroup {
     }
     get displayedDiagnostics() {
         const s = this.session
+        //a Pseudocode is the decompiler's, which no Build or check reports on
+        if (this.displayedView === 'pseudocode') return []
         const diagnostics =
             this.sourceView === 'live' ? s.liveViewDiagnostics : s.emulator.compilerDiagnostics
         //a Diagnostic of no File belongs to whichever File is shown, except the Arguments', which
@@ -400,6 +464,8 @@ export class EditorGroup {
     }
     get breakpointsEditable() {
         const s = this.session
+        //a Pseudocode line takes none yet: they come with the plan's E9
+        if (this.displayedView === 'pseudocode') return false
         //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
         //during a Debug session
         if (this.displayedEnvironmentHeader) return !s.host.readonly && !s.building
@@ -429,8 +495,9 @@ export class EditorGroup {
             })
         )
     }
-    get displayedBreakpoints() {
+    get displayedBreakpoints(): number[] {
         const s = this.session
+        if (this.displayedView === 'pseudocode') return []
         //a Listing's Breakpoints are addresses, drawn on the line that holds them now
         const listing = this.displayedListing?.listing
         return (
@@ -490,8 +557,27 @@ export class EditorGroup {
             text: `running from inside this instruction, at +${offset}${code ? `: ${code}` : ''}`
         }
     }
+    /**
+     * The program counter's line in a Pseudocode of the running Executable: the first whose
+     * instructions hold it, by its link-time address; -1 when none does, and always for the Build
+     * output, whose program the debugger follows in its source (plan decision 15).
+     */
+    get pseudocodeProgramLine() {
+        const s = this.session
+        const document = this.displayedPseudocode
+        const map = document?.map
+        if (
+            !map ||
+            this.displayedBuildOutput ||
+            !isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
+        )
+            return -1
+        const address = Number(s.emulator.pc) - document.listingDocument.base
+        return pseudocodeLineOfAddress(map, document.listing, address)
+    }
     get highlightedLine() {
-        const pair = this.session.mappingPair
+        if (this.displayedView === 'pseudocode') return this.pseudocodeProgramLine
+        const pair = this.session.linePairing
         if (pair?.source === this) {
             const location = this.session.executionSourceLocation
             return location?.path === this.displayedPath ? location.line : -1
@@ -500,7 +586,7 @@ export class EditorGroup {
     }
     get mappedLines() {
         const s = this.session
-        const pair = s.mappingPair
+        const pair = s.linePairing
         const selected = s.mappingSelection
         if (!pair || !selected) return []
         if (pair.source === this)
@@ -508,12 +594,12 @@ export class EditorGroup {
                 location.path === this.displayedPath ? [location.line] : []
             )
         if (pair.assembly !== this) return []
-        return assemblyLinesOf(pair.map, selected)
+        return pair.assemblyLinesOf(selected)
     }
     get lineColoring() {
-        const s = this.session
-        if (s.mappingPair?.assembly === this) return s.mappingColors?.assembly
-        if (s.mappingPair?.source === this) return s.mappingColors?.source.get(this.displayedPath)
+        const pair = this.session.linePairing
+        if (pair?.assembly === this) return pair.coloring.assembly
+        if (pair?.source === this) return pair.coloring.source.get(this.displayedPath)
         return undefined
     }
     get activeLineColors() {
