@@ -53,8 +53,8 @@ function model(line: string) {
     } as unknown as monaco.editor.ITextModel
 }
 
-async function hover(line: string, at: string, offset = 0) {
-    const result = await createRISCVHoverProvider(monacoStub).provideHover(
+async function hover(line: string, at: string, offset = 0, is64 = false) {
+    const result = await createRISCVHoverProvider(monacoStub, is64).provideHover(
         model(line),
         { lineNumber: 1, column: line.indexOf(at) + offset + 1 } as monaco.Position,
         {} as monaco.CancellationToken
@@ -73,6 +73,21 @@ describe('RISC-V hovers', () => {
 
     it('still finds directives without their dot', async () => {
         expect(await hover('    .text', 'text')).not.toBe('')
+    })
+
+    it('names the category and the tags of the forms the Target accepts', async () => {
+        const addw = await hover('addw a0, a1, a2', 'addw', 0, true)
+        expect(addw).toMatch(/^\*\*addw\*\*/)
+        expect(addw.split('\n\n')[1]).toBe('*Arithmetic · RV64 only*')
+        // RV32 does not accept `addw` at all.
+        expect(await hover('addw a0, a1, a2', 'addw')).toBe('')
+        // RV32 has `slli` too, with a 5 bit shift amount.
+        const slli = await hover('slli a0, a0, 3', 'slli', 0, true)
+        expect(slli.split('\n\n')[1]).toBe('*Shifts and rotates*')
+        expect(slli).not.toContain('RV64 only')
+        expect((await hover('li a0, 5', 'li')).split('\n\n')[1]).toBe(
+            '*Data movement · Pseudo-instruction*'
+        )
     })
 })
 

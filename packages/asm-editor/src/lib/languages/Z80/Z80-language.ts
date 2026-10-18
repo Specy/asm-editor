@@ -18,6 +18,10 @@ import {
     splitAssemblyComment,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import type { InstructionTag } from '#lib/documentation/instructions/categories.ts'
+import { z80FormTags } from '#lib/documentation/instructions/formTags.ts'
+import { documentHover, formHoverLine } from '#lib/documentation/instructions/hoverLine.ts'
+import { z80InstructionDocument } from '#lib/documentation/z80/instructionDocument.ts'
 
 const registerMap = new Map(z80Registers.map((register) => [register.name, register]))
 const conditionMap = new Map(z80ConditionCodes.map((condition) => [condition.name, condition]))
@@ -41,21 +45,32 @@ export const Z80_TEXT_OPTIONS = {
     ]
 } satisfies AssemblyTextOptions
 
-/** A hover on `ld` would otherwise print a 192 row table. */
-const HOVER_VARIANT_LIMIT = 25
+type InstructionDocs = {
+    summary: string
+    /** The name, its summary, its category and the tags all of its forms have. */
+    heading: string
+    /** Its summary and its first Form patterns. */
+    table: string
+    /** `heading` and `table` together, as completion shows them. */
+    hover: string
+}
 
 /**
  * The summary and the markdown table of a mnemonic. Completion rebuilds its whole list on every
- * keystroke and there are 68 mnemonics, so the markdown is built once and kept.
+ * keystroke and there are 68 mnemonics, so the markdown is built once and kept. It is the same
+ * whichever form a line uses: the hover adds the form's own tags as a block of its own.
  */
-const documentationCache = new Map<string, { summary: string; hover: string }>()
-function instructionDocs(name: string): { summary: string; hover: string } {
+const documentationCache = new Map<string, InstructionDocs>()
+function instructionDocs(name: string): InstructionDocs {
     const cached = documentationCache.get(name)
     if (cached) return cached
     const variants = z80InstructionMap.get(name) ?? []
+    const { heading, table } = formatInstructionHover(name)
     const docs = {
         summary: formatZ80InstructionSummary(variants),
-        hover: formatInstructionHover(name, variants)
+        heading,
+        table,
+        hover: `${heading}\n\n${table}`
     }
     documentationCache.set(name, docs)
     return docs
@@ -113,16 +128,17 @@ type LineAnalysis =
     /** The cursor is where a mnemonic (or a directive, or a label) goes. */
     | { kind: 'mnemonic' }
     /** The cursor is inside the operands of `mnemonic`, at `node` in the assembler's parse trie. */
-    | { kind: 'operands'; mnemonic: string; node: AsmTrieNode }
+    | { kind: 'operands'; mnemonic: string; mnemonicToken: AsmToken; node: AsmTrieNode }
     /** The line does not parse (an unknown mnemonic, a half written expression). */
     | { kind: 'unknown' }
 
 /**
  * Walks the assembler's own parse trie with the tokens that follow the mnemonic. Every node holds
  * the literal tokens that may come next (`a`, `,`, `(`, `nz`, …) and, when an operand expression is
- * allowed at that point, where to continue once the expression has been read.
+ * allowed at that point, where to continue once the expression has been read. `whole` says the
+ * tokens are the entire line, as a hover reads it, rather than the part before the cursor.
  */
-function walkTrie(start: AsmTrieNode, tokens: AsmToken[]): AsmTrieNode | null {
+function walkTrie(start: AsmTrieNode, tokens: AsmToken[], whole = false): AsmTrieNode | null {
     let node = start
     let index = 0
     while (index < tokens.length) {
@@ -153,8 +169,9 @@ function walkTrie(start: AsmTrieNode, tokens: AsmToken[]): AsmTrieNode | null {
         while (index < tokens.length && !node.tokens.has(tokens[index].text.toLowerCase())) index++
         // Running out of line while skipping means the expression is still being written, so the
         // cursor belongs to the node that opened it: `ld bc,label+` offers the program's symbols
-        // again, instead of the node after the expression, which allows nothing at all.
-        if (index > skipped && index === tokens.length) return opened
+        // again, instead of the node after the expression, which allows nothing at all. On a whole
+        // line the expression is finished: `ld hl,label+2` is `ld hl,nnnn`.
+        if (!whole && index > skipped && index === tokens.length) return opened
     }
     return node
 }
@@ -173,13 +190,17 @@ function analyzeLine(linePrefix: string): LineAnalysis {
         last.end >= linePrefix.length &&
         (last.tag === 'identifier' || last.tag === 'number')
     const complete = isTyping ? tokens.slice(0, -1) : tokens
-
-    const root = getAsmInstructionTrie()
-    let index = 0
-    const first = complete[0]
     // A lone prefix is a directive that has just been started: `#` tokenizes as a symbol and `.`
     // does not tokenize at all, so neither reaches the mnemonic test below on its own.
     if (/^\s*[#.]$/.test(linePrefix)) return { kind: 'mnemonic' }
+    return analyzeTokens(complete)
+}
+
+/** Locates the end of `complete`, the tokens of a line that are final, in the grammar. */
+function analyzeTokens(complete: AsmToken[], whole = false): LineAnalysis {
+    const root = getAsmInstructionTrie()
+    let index = 0
+    const first = complete[0]
     // The `#` directives (`#include`, `#code`) tokenize as a symbol followed by a word.
     if (first?.tag === 'symbol' && first.text === '#') return { kind: 'mnemonic' }
     if (first?.tag === 'identifier' && !root.tokens.has(first.text.toLowerCase())) {
@@ -196,8 +217,22 @@ function analyzeLine(linePrefix: string): LineAnalysis {
     const mnemonic = mnemonicToken.text.toLowerCase()
     const start = root.tokens.get(mnemonic)
     if (!start) return { kind: 'unknown' }
-    const node = walkTrie(start, complete.slice(index + 1))
-    return node ? { kind: 'operands', mnemonic, node } : { kind: 'unknown' }
+    const node = walkTrie(start, complete.slice(index + 1), whole)
+    return node ? { kind: 'operands', mnemonic, mnemonicToken, node } : { kind: 'unknown' }
+}
+
+/**
+ * The tags of the form a whole line spells out, when `column` (0 based) is where its mnemonic
+ * starts; none when the line is not a complete instruction. The trie's own variant is read, not
+ * `variantOf`'s: a pseudo spelling (`add c`) shares its table row with its canonical form, which
+ * is not a pseudo-instruction.
+ */
+function formTagsAt(line: string, column: number): InstructionTag[] {
+    const analysis = analyzeTokens(tokenizeLine(line), true)
+    if (analysis.kind !== 'operands' || analysis.mnemonicToken.begin !== column) return []
+    const variant = analysis.node.variant
+    if (!variant) return []
+    return z80FormTags({ isPseudo: variant.isPseudo, undocumented: variant.clr.undocumented })
 }
 
 /** The variant a token leads to, when that token completes an instruction by itself. */
@@ -455,52 +490,21 @@ export function createZ80SignatureHelpProvider(
     }
 }
 
-/** Markdown table cells cannot contain a pipe or a newline, and a long row wraps badly. */
-function cell(text: string, maxLength: number): string {
-    const flat = text.replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim()
-    return flat.length > maxLength ? `${flat.slice(0, maxLength - 1)}…` : flat
-}
-
-function formatFlags(variant: Z80InstructionVariant): string {
-    const touched = variant.flagsTable.filter((flag) => flag.effect !== '-')
-    if (touched.length === 0) return '-'
-    //the table writes an undefined flag as either `*` or a space; a space would render as a chip
-    //with a blank in it, which reads as "affected, effect missing" rather than "undefined"
-    return touched
-        .map((flag) => `\`${flag.name}${flag.effect === ' ' ? '*' : flag.effect}\``)
-        .join(' ')
-}
-
-function formatCycles(variant: Z80InstructionVariant): string {
-    const { taken, notTaken } = variant.cycles
-    return taken === notTaken ? `${taken}` : `${taken}/${notTaken}`
-}
-
-function formatInstructionHover(name: string, variants: Z80InstructionVariant[]): string {
-    const header = `**${name}** - ${formatZ80InstructionSummary(variants)}`
-    const rows = variants.slice(0, HOVER_VARIANT_LIMIT).map((variant) => {
-        const instruction = variant.undocumented
-            ? `\`${variant.instruction}\` ⚠`
-            : `\`${variant.instruction}\``
-        return `| ${instruction} | ${cell(variant.description, 120)} | ${formatFlags(variant)} | ${variant.bytes} | ${formatCycles(variant)} |`
+/**
+ * A mnemonic's hover: the same header and first rows as its page and its panel row
+ * ([the plan](../../../../../docs/design/instruction-layout-plan.md), decision 22), the name and
+ * its italic line apart from the rest so the form's own tags can go between them.
+ */
+function formatInstructionHover(name: string): { heading: string; table: string } {
+    const [heading, ...rest] = documentHover(z80InstructionDocument(name), {
+        href: `/documentation/z80/instruction/${name}`
     })
-    const table = [
-        '| Instruction | Description | Flags | Bytes | Cycles |',
-        '| --- | --- | --- | --- | --- |',
-        ...rows
-    ].join('\n')
-    const hidden = variants.length - rows.length
-    const more = hidden > 0 ? `\n\n… ${hidden} more, see the documentation.` : ''
-    const undocumented = variants
-        .slice(0, HOVER_VARIANT_LIMIT)
-        .some((variant) => variant.undocumented)
-        ? '\n\n⚠ undocumented: implemented by the hardware and by this emulator, but not by Zilog.'
-        : ''
-    return `${header}\n\n${table}${more}${undocumented}`
+    return { heading, table: rest.join('\n\n') }
 }
 
 /**
- * The hover. Mnemonics get the table of their variants, everything else gets the one line of
+ * The hover. Mnemonics get the table of their variants, and on the mnemonic of a complete line the
+ * tags of the form it uses between the heading and the table; everything else gets the one line of
  * documentation the pages would show.
  */
 export function createZ80HoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
@@ -518,7 +522,15 @@ export function createZ80HoverProvider(monaco: MonacoType): monaco.languages.Hov
             const lower = word.toLowerCase()
             const contents: monaco.IMarkdownString[] = []
 
-            if (z80InstructionMap.has(lower)) contents.push({ value: instructionDocs(lower).hover })
+            if (z80InstructionMap.has(lower)) {
+                const docs = instructionDocs(lower)
+                const form = formHoverLine(
+                    formTagsAt(model.getLineContent(position.lineNumber), found.startColumn - 1)
+                )
+                if (form)
+                    contents.push({ value: docs.heading }, { value: form }, { value: docs.table })
+                else contents.push({ value: docs.hover })
+            }
 
             const register = registerMap.get(lower)
             if (register) {

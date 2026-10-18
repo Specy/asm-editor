@@ -15,6 +15,9 @@ import {
     M68KRecognizedInstructions
 } from './M68K-documentation'
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
+import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
+import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
+import { m68kInstructionDocument } from '#lib/documentation/m68k/instructionDocument.ts'
 
 const completionTokens = [...M68kInstructions, ...M68KDirectives]
 const recognizedTokens = [...M68KRecognizedInstructions, ...M68KRecognizedDirectives]
@@ -313,6 +316,14 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
     }
 }
 
+const hoverDocuments = new Map<string, InstructionDocument | undefined>()
+
+/** An instruction's shared document, built once per name; none for a name with no page. */
+function m68kHoverDocument(name: string): InstructionDocument | undefined {
+    if (!hoverDocuments.has(name)) hoverDocuments.set(name, m68kInstructionDocument(name))
+    return hoverDocuments.get(name)
+}
+
 export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
@@ -355,12 +366,24 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                     })
                     .join(' | ')
                 const flagsTable = `| ${flagHeaders} |\n|${flagSymbols.map(() => ' :---: ').join('|')}|\n| ${flagValues} |`
+                const operands =
+                    documentation.args?.map(
+                        (e, i) => `**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``
+                    ) ?? []
+                const name = operation.name.toLowerCase()
+                const document = parsed.kind === 'instruction' ? m68kHoverDocument(name) : undefined
+                if (document) {
+                    // The same header and first rows as the page and the panel row (the plan,
+                    // decision 22).
+                    const blocks = documentHover(document, {
+                        word: operation.name,
+                        href: `/documentation/m68k/instruction/${document.name}`
+                    })
+                    return { range, contents: blocks.map((value) => ({ value })) }
+                }
                 const contents = [
                     {
-                        value: `
-							# ${operation.name}
-							${documentation.args?.map((e, i) => `\n**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``).join('\n') ?? ''}
-						`.trim()
+                        value: [`# ${operation.name}`, ...operands].join('\n\n')
                     },
                     {
                         value: `**Sizes:** ${documentation.sizes?.length ? fromSizesToString(documentation.sizes) : 'Not sized'} ${defaultSize ? `\n\n**Default:**  ${defaultSize}` : ''}`

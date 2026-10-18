@@ -7,10 +7,7 @@
     import type { DocumentationEntry } from '#lib/documentation/entries.ts'
     import CodeSample from './CodeSample.svelte'
     import InlineMarkdown from './InlineMarkdown.svelte'
-    import M68KInstructionView from './M68KInstructionView.svelte'
-    import MarsInstructionView from './MarsInstructionView.svelte'
-    import X86InstructionView from './X86InstructionView.svelte'
-    import Z80InstructionView from './Z80InstructionView.svelte'
+    import InstructionDocumentView from '../instruction/InstructionDocumentView.svelte'
 
     interface Props {
         entry: DocumentationEntry
@@ -21,6 +18,15 @@
     let { entry, disableLinks = false }: Props = $props()
 
     const view = $derived(entry.view)
+
+    /** The language an instruction's own example program is highlighted as. */
+    const EXAMPLE_LANGUAGES = {
+        m68k: 'M68K',
+        mips: 'MIPS',
+        'risc-v': 'RISC-V',
+        x86: 'X86',
+        z80: 'Z80'
+    } as const
     const codeLanguage = $derived(
         entry.chapter !== 'runtime-library'
             ? undefined
@@ -33,7 +39,26 @@
 </script>
 
 <div class="entry-body">
-    {#if entry.instructionContent?.description}
+    {#if view.type === 'instruction'}
+        <InstructionDocumentView
+            document={view.document()}
+            density="panel"
+            {disableLinks}
+            language={EXAMPLE_LANGUAGES[entry.language]}
+        >
+            {#snippet example()}
+                {#if entry.instructionContent?.example}
+                    <CodeSample
+                        code={entry.instructionContent.example.code}
+                        language={entry.instructionContent.example.target}
+                    />
+                {:else if view.example}
+                    <CodeSample code={view.example} language={EXAMPLE_LANGUAGES[entry.language]} />
+                {/if}
+            {/snippet}
+        </InstructionDocumentView>
+    {/if}
+    {#if view.type !== 'instruction' && entry.instructionContent?.description}
         <MarkdownRenderer
             source={entry.instructionContent.description}
             linksInNewTab
@@ -98,16 +123,8 @@
                 </li>
             {/each}
         </ul>
-    {:else if view.type === 'm68k-instruction'}
-        <M68KInstructionView instruction={view.instruction} {disableLinks} />
-    {:else if view.type === 'mips-instruction' || view.type === 'riscv-instruction'}
-        <MarsInstructionView variants={view.variants} {disableLinks} />
-    {:else if view.type === 'x86-instruction'}
-        <X86InstructionView instruction={view.instruction} {disableLinks} />
-    {:else if view.type === 'z80-instruction'}
-        <Z80InstructionView variants={view.variants} {disableLinks} />
     {/if}
-    {#if entry.instructionContent?.example}
+    {#if view.type !== 'instruction' && entry.instructionContent?.example}
         <CodeSample
             code={entry.instructionContent.example.code}
             language={entry.instructionContent.example.target}

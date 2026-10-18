@@ -1,11 +1,8 @@
-import type { InstructionDocumentation } from '#lib/languages/M68K/M68K-documentation.ts'
-import type { MIPSInstruction } from '#lib/languages/MIPS/MIPS-documentation.ts'
-import type { RISCVInstruction } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
-import type { X86Instruction } from '#lib/languages/X86/X86-documentation.ts'
-import type { Z80InstructionVariant } from '#lib/languages/Z80/Z80-documentation.ts'
 import { splitLecture } from '#lib/content/lectureSections.ts'
 import type { DocumentationLanguage } from '#lib/search/scope.ts'
 import type { InstructionContent } from './instructions/content'
+import type { InstructionCategory, InstructionTag } from './instructions/categories'
+import type { InstructionDocument } from './instructions/document'
 
 /**
  * The **Documentation** as a list of **Documentation entries** grouped in **Chapters**
@@ -38,7 +35,10 @@ export type EntryField = { label: string; value: string }
 
 export type EntrySwatch = { name: string; color: string; value: string }
 
-/** What an expanded row and a Chapter page show; each kind of view has its own renderer. */
+/**
+ * What an expanded row and a Chapter page show; each kind of view has its own renderer. Every
+ * language's instruction is the one shared instruction document.
+ */
 export type EntryView =
     | { type: 'markdown'; markdown: string }
     | {
@@ -51,11 +51,17 @@ export type EntryView =
           after?: EntryField[]
       }
     | { type: 'swatches'; markdown?: string; swatches: EntrySwatch[] }
-    | { type: 'm68k-instruction'; instruction: InstructionDocumentation }
-    | { type: 'mips-instruction'; variants: MIPSInstruction[] }
-    | { type: 'riscv-instruction'; variants: RISCVInstruction[] }
-    | { type: 'x86-instruction'; instruction: X86Instruction }
-    | { type: 'z80-instruction'; variants: Z80InstructionVariant[] }
+    /**
+     * Every language's instruction, drawn by the shared instruction view
+     * ([ADR 0052](../../../../../docs/adr/0052-instruction-documents-are-built-in-the-editor-from-core-facts.md)).
+     * Built the first time a row is expanded, not when the Chapters load.
+     */
+    | {
+          type: 'instruction'
+          document: () => InstructionDocument
+          /** The language's own example program, where it has no authored Instruction example. */
+          example?: string
+      }
 
 /** Kinds whose names are code (`move`, `.data`, `$t0`), set in the code font; the rest are words. */
 const CODE_NAMED_KINDS = new Set<EntryKind>([
@@ -99,6 +105,10 @@ export type DocumentationEntry = {
     view: EntryView
     /** Architecture-neutral authored content for an instruction, shared with its own page. */
     instructionContent?: InstructionContent
+    /** An instruction's **Instruction category**, from its language's `categories.ts`. */
+    category?: InstructionCategory
+    /** The **Instruction tags** every one of an instruction's forms has, shown beside its name. */
+    tags?: InstructionTag[]
     /** Markdown the index reads besides the title and the summary. */
     searchText: string
     /** Example code the index reads, with a lower weight than text. */
@@ -221,7 +231,10 @@ export function fillPlaceholders(markdown: string, values: Record<string, string
     return markdown.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match)
 }
 
-/** Checks a language's Chapters: unique ids and anchors, and something to show for every entry. */
+/**
+ * Checks a language's Chapters: unique ids and anchors, something to show for every entry, and an
+ * **Instruction category** for every instruction.
+ */
 export function documentationProblems(chapters: Chapter[]): string[] {
     const problems: string[] = []
     const ids = new Set<string>()
@@ -240,6 +253,9 @@ export function documentationProblems(chapters: Chapter[]): string[] {
             if (!entry.summary.trim()) problems.push(`${entry.id} has no summary`)
             if (!entry.searchText.trim() && !entry.summary.trim()) {
                 problems.push(`${entry.id} has no text`)
+            }
+            if (entry.kind === 'instruction' && !entry.category) {
+                problems.push(`${entry.id} has no category`)
             }
             for (const name of entry.names) {
                 if (name !== name.toLowerCase().trim()) {

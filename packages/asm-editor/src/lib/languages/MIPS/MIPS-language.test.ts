@@ -75,6 +75,18 @@ describe('MIPS hovers', () => {
         expect(await hover('    .data', 'data')).not.toBe('')
         expect(await hover('lw $t0, 4($sp)', 't0')).toContain('t0')
     })
+
+    it('names the category and the tags every form has, right under the name', async () => {
+        const li = await hover('li $t0, 5', 'li')
+        expect(li).toMatch(/^\*\*li\*\*/)
+        expect(li.split('\n\n')[1]).toBe('*Data movement · Pseudo-instruction*')
+        // `add $t1, $t2, -100` is a pseudo-instruction, but `add $t1, $t2, $t3` is not: the tag
+        // goes on the row of the pseudo form, never on the line under the name.
+        const add = await hover('add $t0, $t1, $t2', 'add')
+        expect(add.split('\n\n')[1]).toBe('*Arithmetic*')
+        expect(add).toContain('`add $t1, $t2, $t3`  \n')
+        expect(add).toMatch(/`add \$t1, \$t2, imm` · Pseudo-instruction/)
+    })
 })
 
 describe('MIPS completion', () => {

@@ -9,6 +9,7 @@ import {
     M68KDirectiveDocumentationList,
     type Size
 } from '#lib/languages/M68K/M68K-documentation.ts'
+import { m68kInstructionForms } from '#lib/languages/M68K/M68K-forms.ts'
 import {
     M68K_COLORS,
     M68K_KEY_CODE_DOCS,
@@ -30,6 +31,11 @@ import {
     type EntryKind,
     type EntrySwatch
 } from '../entries'
+import { m68kInstructionCategories } from './categories'
+import { m68kFormTags } from '../instructions/formTags'
+import { withInstructionCategory } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { m68kInstructionDocument } from './instructionDocument'
 import addressingModesMarkdown from './addressing-modes.md?raw'
 import assemblerFeaturesMarkdown from './assembler-features.md?raw'
 import conditionCodesMarkdown from './condition-codes.md?raw'
@@ -41,7 +47,8 @@ import trapsMarkdown from './traps.md?raw'
  * The M68K Documentation. Instructions, directives, condition codes and trap tasks come from the
  * same tables the editor's hovers and the agent's prompt read; the explanations around them are the
  * markdown files beside this one, and the lists and tables inside those are filled in from the
- * tables too, so the text cannot drift from what the editor does.
+ * tables too, so the text cannot drift from what the editor does. An instruction's forms, which the
+ * hand-written tables do not list, come from s68k's own instruction table.
  */
 
 const BASE = '/documentation/m68k'
@@ -68,22 +75,34 @@ function prose(
 
 function instructions(): Chapter {
     const href = `${BASE}/instruction`
-    const entries = instructionsDocumentationList.map((instruction): DocumentationEntry => ({
-        id: `m68k/instructions/${instruction.name}`,
-        language: 'm68k',
-        chapter: 'instructions',
-        kind: 'instruction',
-        title: instruction.name,
-        //a family is one entry named by every mnemonic it stands for, so `beq` finds Bcc
-        names: names(instruction.name, ...(instruction.compundNames ?? [])),
-        signature: sizesOf(instruction.sizes),
-        summary: summaryOf(instruction.description),
-        href: `${href}/${instruction.name}`,
-        anchor: instruction.name,
-        view: { type: 'm68k-instruction', instruction },
-        searchText: instruction.description,
-        code: instruction.example
-    }))
+    const entries = instructionsDocumentationList.map((instruction): DocumentationEntry => {
+        const forms = m68kInstructionForms(instruction)
+        const document = m68kInstructionDocument(instruction.name)!
+        return withInstructionCategory(
+            {
+                id: `m68k/instructions/${instruction.name}`,
+                language: 'm68k',
+                chapter: 'instructions',
+                kind: 'instruction',
+                title: instruction.name,
+                //a family is one entry named by every mnemonic it stands for, so `beq` finds Bcc
+                names: names(instruction.name, ...(instruction.compundNames ?? [])),
+                signature: documentSignature(document),
+                summary: document.summary,
+                href: `${href}/${instruction.name}`,
+                anchor: instruction.name,
+                view: {
+                    type: 'instruction',
+                    document: () => document,
+                    example: instruction.interactiveExample?.code
+                },
+                searchText: [document.longName, instruction.description].join('\n'),
+                code: instruction.example
+            },
+            m68kInstructionCategories[instruction.name],
+            forms.map(m68kFormTags)
+        )
+    })
     return {
         id: 'instructions',
         language: 'm68k',

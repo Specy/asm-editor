@@ -18,7 +18,7 @@
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
-    import { z80InstructionEntries } from '#lib/languages/Z80/Z80-documentation.ts'
+    import { z80InstructionNames } from '#lib/languages/Z80/Z80-documentation.ts'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -30,17 +30,12 @@
 
     let { children }: Props = $props()
 
-    // The search matches the description of the first form, which is the plainest one, so that
-    // typing "rotate" finds `rlc` without dragging in every variant that mentions the accumulator.
-    let instructions = z80InstructionEntries.map(([name, variants]) => ({
-        name,
-        description: variants[0].description
-    }))
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(z80InstructionNames)].sort((a, b) => a.localeCompare(b))
 
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
-
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -125,7 +120,7 @@
                 {/snippet}
                 <InstructionsMenu
                     hrefBase="/documentation/z80/instruction"
-                    instructions={instructionNames}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />

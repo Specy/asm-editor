@@ -18,7 +18,6 @@ import {
     X86_SYSCALLS,
     describeX86Instruction,
     describeX86Syscall,
-    formatX86InstructionSummary,
     hasX86Description,
     hasX86InstructionPage,
     x86DocumentedNames,
@@ -125,12 +124,6 @@ describe('descriptions', () => {
         expect(describeX86Instruction('vpmovm2b').length).toBeGreaterThan(0)
         expect(hasX86Description('vpmovm2b')).toBe(false)
         expect(hasX86Description('add')).toBe(true)
-    })
-
-    it('summarises the operand shapes', () => {
-        const summary = formatX86InstructionSummary(x86InstructionMap.get('lea')!)
-        expect(summary).toContain('lea reg64, mem')
-        expect(summary.split(' | ').length).toBe(x86InstructionMap.get('lea')!.forms.length)
     })
 })
 

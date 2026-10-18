@@ -1,17 +1,24 @@
 <script lang="ts">
+    /**
+     * The documentation sidebar's instructions, in alphabetical order: the sidebar is for finding a
+     * mnemonic by name, and the Workbench's Documentation panel is what groups them by
+     * **Instruction category** ([the plan](../../../../../../docs/design/instruction-layout-plan.md),
+     * decision 32).
+     */
     import Column from '#cmp/shared/layout/Column.svelte'
+
     interface Props {
         currentInstructionName?: string
-        instructions: string[]
+        names: string[]
         onClick?: (e: MouseEvent) => void
         hrefBase: string
     }
 
-    let { currentInstructionName = '', instructions, onClick, hrefBase }: Props = $props()
+    let { currentInstructionName = '', names, onClick, hrefBase }: Props = $props()
 </script>
 
 <Column>
-    {#each instructions as ins (ins)}
+    {#each names as ins (ins)}
         <a
             href="{hrefBase}/{ins}"
             class="instruction-link"

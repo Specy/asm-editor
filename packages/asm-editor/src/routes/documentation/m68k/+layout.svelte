@@ -27,12 +27,13 @@
     }
 
     let { children }: Props = $props()
-    let instructions = Array.from(M68KUncompoundedInstructions.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
+    // Every member of a family has its own page. Alphabetical: the sidebar is for finding a
+    // mnemonic by name, and the Workbench's Documentation panel is what groups them by category.
+    const instructionNames = [...new Set([...M68KUncompoundedInstructions.keys()])].sort((a, b) =>
+        a.localeCompare(b)
     )
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
-    const instructionNames = instructions.map((instruction) => instruction.name)
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -127,7 +128,7 @@
                 </h2>
             {/snippet}
             <InstructionsMenu
-                instructions={instructionNames}
+                names={instructionNames}
                 hrefBase="/documentation/m68k/instruction"
                 onClick={() => (menuOpen = false)}
                 {currentInstructionName}

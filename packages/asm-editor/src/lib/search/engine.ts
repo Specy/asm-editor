@@ -1,4 +1,5 @@
 import { create, insertMultiple, search as oramaSearch, type AnyOrama } from '@orama/orama'
+import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
 import { VECTOR_DIMS } from './model'
 import {
     payloadVectors,
@@ -261,7 +262,15 @@ export class SearchEngine {
                 ref,
                 names: entry.names,
                 title: entry.title,
-                context: `${entry.chapterTitle} ${entry.signature}`,
+                // An instruction's category sits beside its Chapter, so "shift" or "atomic" finds
+                // every member of the group by words alone.
+                context: [
+                    entry.chapterTitle,
+                    entry.category ? categoryLabel(entry.category) : '',
+                    entry.signature
+                ]
+                    .filter(Boolean)
+                    .join(' '),
                 text: `${entry.summary}\n${entry.text}`,
                 code: entry.code,
                 embedding: vectors ? Array.from(vectors[ref]) : undefined

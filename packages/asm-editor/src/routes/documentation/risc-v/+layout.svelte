@@ -18,7 +18,7 @@
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
-    import { riscvInstructionEntries } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+    import { riscvInstructionNames } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -29,11 +29,12 @@
     }
 
     let { children }: Props = $props()
-    let instructions = riscvInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
 
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(riscvInstructionNames)].sort((a, b) => a.localeCompare(b))
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -128,7 +129,7 @@
                 {/snippet}
                 <InstructionsMenu
                     hrefBase="/documentation/risc-v/instruction"
-                    instructions={instructionNames}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />

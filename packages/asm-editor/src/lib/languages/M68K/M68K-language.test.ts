@@ -257,6 +257,33 @@ describe('M68K v2 language tooling', () => {
         ).toBeNull()
     })
 
+    it('names the category of a family member under its heading', async () => {
+        const provider = createM68kHoverProvider(monacoStub)
+        const value = async (line: string, column: number) => {
+            const hover = await provider.provideHover(
+                { getLineContent: () => line } as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+            return hover?.contents.map((content) => content.value) ?? []
+        }
+        // `beq` is a member of the Bcc family, whose category it takes.
+        const [beq, summary, flags, rows] = await value('    beq loop', 6)
+        expect(beq.split('\n\n')).toEqual([
+            '**beq** Branch if equal',
+            '*Control flow · Sizes .b .s .w .l*'
+        ])
+        expect(summary).toMatch(/^Branches /)
+        expect(flags).toBe('Flags: X – · N – · Z – · V – · C –')
+        expect(rows).toBe('`beq label`')
+        // `move <ea>,sr` is privileged, but `move` is not in all of its forms.
+        const [move] = await value('    move.w d0,d1', 6)
+        expect(move.split('\n\n')[1]).toBe('*Data movement*')
+        // Directives have no category.
+        const [org] = await value('    org $1000', 6)
+        expect(org).not.toContain('*')
+    })
+
     it('tracks the active operand in signature help without counting nested commas', async () => {
         const provider = createM68kSignatureHelpProvider(monacoStub)
         const line = 'move.w 0(a0,d0), '

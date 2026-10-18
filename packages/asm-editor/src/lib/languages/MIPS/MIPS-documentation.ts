@@ -12,6 +12,10 @@ export type MIPSInstruction = {
     args: MIPSAddressingMode[][]
     description: string
     example: string
+    /** One of MARS's extended instructions, which the assembler expands into real ones. */
+    isPseudo: boolean
+    /** The instructions a pseudo-instruction becomes, as MARS's templates write them; empty otherwise. */
+    expansion: string[]
 }
 
 type MIPSInstructionVariants = [MIPSInstruction, ...MIPSInstruction[]]
@@ -32,7 +36,9 @@ export const mipsInstructionsWithDuplicates = mipsIse.map((ins) => {
                     value: t.value
                 }
             ] satisfies MIPSAddressingMode[]
-        })
+        }),
+        isPseudo: ins.isPseudo,
+        expansion: [...ins.expansion]
     } satisfies MIPSInstruction
 })
 
@@ -44,25 +50,6 @@ for (const ins of mipsInstructionsWithDuplicates) {
     } else {
         mipsInstructionMap.set(ins.name, [ins])
     }
-}
-
-export function aggregateArgs(ins: MIPSInstruction[]): MIPSAddressingMode[][] {
-    const args = new Array(Math.max(...ins.map((i) => i.args.length))).fill(
-        undefined
-    ) as MIPSAddressingMode[][]
-    for (const i of ins) {
-        i.args.forEach((a, idx) => {
-            if (args[idx] === undefined) {
-                args[idx] = []
-            }
-            for (const arg of a) {
-                if (!args[idx].some((e) => e.type === arg.type)) {
-                    args[idx].push(arg)
-                }
-            }
-        })
-    }
-    return args
 }
 
 export const mipsInstructionsVariants = [...mipsInstructionMap.values()]
@@ -116,40 +103,6 @@ export function mipsVariantOperands(variant: MIPSInstruction): string[] {
     }
     if (parts.length > 0) operands.push(parts.join(''))
     return operands
-}
-
-export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
-    const allOps = ins.map(mipsVariantOperands)
-    const maxLen = Math.max(...allOps.map((o) => o.length))
-    const result: string[] = []
-
-    for (let pos = 0; pos < maxLen; pos++) {
-        const values = [...new Set(allOps.map((o) => o[pos]).filter(Boolean))]
-        if (values.length <= 1) {
-            result.push(values[0] ?? '')
-        } else {
-            result.push(`[${values.join(' / ')}]`)
-        }
-    }
-
-    return result.join(', ')
-}
-
-export function groupVariantsByDescription(
-    variants: MIPSInstruction[]
-): { description: string; examples: string[] }[] {
-    const groups: { description: string; examples: string[] }[] = []
-    const map = new Map<string, number>()
-    for (const v of variants) {
-        const idx = map.get(v.description)
-        if (idx !== undefined) {
-            groups[idx].examples.push(v.example)
-        } else {
-            map.set(v.description, groups.length)
-            groups.push({ description: v.description, examples: [v.example] })
-        }
-    }
-    return groups
 }
 
 export const MIPSAddressingModes = {

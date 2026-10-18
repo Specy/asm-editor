@@ -5,8 +5,6 @@ import {
     mipsDirectivesMap,
     mipsInstructionMap,
     mipsInstructionsVariants,
-    formatAggregatedArgs,
-    groupVariantsByDescription,
     mipsVariantOperands,
     type MIPSInstruction
 } from './MIPS-documentation'
@@ -21,6 +19,9 @@ import {
     parseAssemblyLine,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
+import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
+import { mipsInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
 
 export const MIPS_TEXT_OPTIONS = {
     comment: '#',
@@ -325,21 +326,22 @@ export function createMIPSCompletion(monaco: MonacoType): monaco.languages.Compl
     }
 }
 
+const hoverDocuments = new Map<string, InstructionDocument>()
+
+/**
+ * An instruction's hover: the same header and first rows as its page and its panel row
+ * ([the plan](../../../../../docs/design/instruction-layout-plan.md), decision 22), built once per
+ * set of forms.
+ */
 function formatInstructionHover(ins: MIPSInstruction[]) {
-    const args = formatAggregatedArgs(ins)
-    const groups = groupVariantsByDescription(ins)
-    const header = `**${ins[0].name}** ${args}`
-    const body = groups
-        .map((g) => {
-            const desc = g.description
-            const examples = g.examples.filter(Boolean)
-            if (examples.length > 0) {
-                return `${desc}\n\n\`${examples[0]}\``
-            }
-            return desc
-        })
-        .join('\n\n---\n\n')
-    return `${header}\n\n${body}`
+    const name = ins[0].name
+    const key = `${name}\0${ins.length}`
+    let document = hoverDocuments.get(key)
+    if (!document) {
+        document = mipsInstructionDocument(name, ins)
+        hoverDocuments.set(key, document)
+    }
+    return documentHover(document, { href: `/documentation/mips/instruction/${name}` }).join('\n\n')
 }
 
 export function createMIPSHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {

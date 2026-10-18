@@ -16,6 +16,7 @@
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import { goto } from '$app/navigation'
     import { hasCodeName } from '#lib/documentation/entries.ts'
+    import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
     import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
@@ -201,7 +202,13 @@
                             onclick={() => go(result)}
                         >
                             {#if result.kind === 'entry'}
-                                <span class="kind">{result.entry.chapterTitle}</span>
+                                <!-- an instruction names its category after its Chapter:
+                                     "Instructions · Arithmetic" -->
+                                <span class="kind"
+                                    >{result.entry.category
+                                        ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
+                                        : result.entry.chapterTitle}</span
+                                >
                                 <span class="title">
                                     <span
                                         class:code={hasCodeName({

@@ -143,7 +143,8 @@ describe('the x86 Documentation', () => {
         expect(find('instructions', 'add')).toMatchObject({
             kind: 'instruction',
             names: ['add'],
-            summary: 'Add',
+            summary:
+                'Adds the source (second) operand to the destination (first) operand and leaves the sum in the destination.',
             href: '/documentation/x86/instruction/add',
             anchor: 'add'
         })
@@ -352,24 +353,26 @@ describe('the x86 Documentation', () => {
             expect(entry.summary.trim(), entry.id).not.toBe('')
             expect(entry.summary, entry.id).not.toMatch(/\n|&apos;/)
         }
+        // nothing describes these four, so their sentence is written in the names table
         for (const name of ['brkpt', 'jmpe', 'movrs', 'nop2']) {
-            expect(find('instructions', name).summary).toBe(name)
+            expect(find('instructions', name).summary).toMatch(/^[A-Z][^.]+\.$/)
         }
-        // The appendix's heading, which is also the page's title, before a long first sentence.
-        expect(find('instructions', 'loop').summary).toBe('Loop with Counter')
+        // a summary the whole row can show, not the appendix's long first sentence
+        expect(find('instructions', 'loop').summary.length).toBeLessThanOrEqual(140)
         expect(find('instructions', 'movabs').summary).toBe(
             'Moves a full 64 bit immediate into a register.'
         )
     })
 
-    it("shows an instruction's operand shapes without their widths", () => {
+    it("shows an instruction's first Form patterns, general ones first", () => {
         const signature = (name: string) => find('instructions', name).signature
+        // the accumulator's short encodings are left out: `r/m, imm` covers them
         expect(signature('add')).toBe('r/m, reg | reg, r/m | r/m, imm')
-        expect(signature('mov')).toBe('r/m, reg | reg, r/m | r/m, imm | …')
-        expect(signature('push')).toBe('r/m | imm | …')
-        expect(signature('pop')).toBe('r/m | fs | gs')
-        expect(signature('shl')).toBe('r/m, imm | r/m, cl')
-        expect(signature('ret')).toBe('[imm]')
+        expect(signature('mov')).toBe('r/m, reg | reg, r/m | reg, imm | …')
+        expect(signature('push')).toBe('reg | r/m | imm | …')
+        expect(signature('pop')).toBe('reg | r/m | fs | …')
+        expect(signature('shl')).toBe('r/m, imm8 | r/m, 1 | r/m, cl')
+        expect(signature('ret')).toBe('[imm16]')
         expect(signature('syscall')).toBeUndefined()
     })
 })

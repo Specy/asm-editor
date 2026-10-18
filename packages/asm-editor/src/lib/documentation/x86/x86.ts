@@ -20,7 +20,6 @@ import {
     formatX86Form,
     x86DocumentedInstructions,
     x86InstructionsBySection,
-    x86InstructionTitle,
     x86SyscallArgs,
     x86SyscallMap,
     type X86Instruction,
@@ -31,13 +30,17 @@ import { capitalize } from '#lib/utils.ts'
 import {
     fillPlaceholders,
     names,
-    plainText,
     proseEntries,
     summaryOf,
     type Chapter,
     type DocumentationEntry,
     type EntryField
 } from '../entries'
+import { x86InstructionCategories } from './categories'
+import { x86FormTags } from '../instructions/formTags'
+import { withInstructionCategory } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { isShortEncoding, x86InstructionDocument } from './instructionDocument'
 import directivesProse from './directives.md?raw'
 import extensionsProse from './extensions.md?raw'
 import registersProse from './registers.md?raw'
@@ -86,119 +89,43 @@ function interleave(
 
 // --- instructions -------------------------------------------------------------------------------
 
-/** Registers a form names on its own, which a `reg` or `r/m` operand accepts too. */
-const NAMED_REGISTERS = new Set(
-    'al ah ax eax rax bl bh bx ebx rbx cl ch cx ecx rcx dl dh dx edx rdx'.split(' ')
-)
-
-/** An operand without its width or encoding hint: `r/m64` reads `r/m`, `imm8 {short}` `imm`. */
-function operandKind(operand: string): string {
-    return operand
-        .replace(/\s*\{[^}]*\}/g, '')
-        .replace(/\b(reg|r\/m|mem|imm)(8|16|32|64|80|128)?(na)?\b/g, '$1')
-}
-
-/** True when `wide` accepts every operand `narrow` does: `al` is a `reg`, and a `reg` an `r/m`. */
-function within(narrow: string, wide: string): boolean {
-    if (narrow === wide) return true
-    switch (wide) {
-        case 'r/m':
-            return ['reg', 'mem', 'moffs'].includes(narrow) || NAMED_REGISTERS.has(narrow)
-        case 'reg':
-            return NAMED_REGISTERS.has(narrow)
-        case 'mem':
-            return narrow === 'moffs'
-        case 'imm':
-            return narrow === '1'
-        default:
-            return false
-    }
-}
-
-/** True when shape `wide` accepts everything shape `narrow` does, operand by operand. */
-function covers(wide: string, narrow: string): boolean {
-    if (!wide || !narrow || wide === narrow) return false
-    const wides = wide.split(', ')
-    const narrows = narrow.split(', ')
-    return (
-        wides.length === narrows.length &&
-        narrows.every((operand, index) => within(operand, wides[index]))
-    )
-}
-
-/** Notes on a form a program here does not write: legacy modes, the kernel's, undocumented. */
-const UNUSUAL_FORMS = ['NOLONG', 'PRIV', 'OBSOLETE', 'UNDOC']
-
-/** How many operand shapes a row shows; `mov` alone has 65 forms, and the page lists them all. */
-const SIGNATURE_SHAPES = 3
-
-/** A shape of registers, memory and immediates in general, rather than of particular registers. */
-function isGeneral(shape: string): boolean {
-    return shape.split(', ').every((operand) => ['reg', 'r/m', 'mem', 'imm'].includes(operand))
-}
-
-/**
- * An instruction's operand shapes for its row, without their widths. The forms a 64 bit program
- * writes are the ones shown, a shape a wider one covers is left out (`al, imm` beside `r/m, imm`),
- * the general shapes come first and a row that has to cut stops after them (`push r/m | imm | …`
- * rather than a segment register), and optional operands are bracketed, as in `ret [imm]`.
- */
-function instructionSignature(instruction: X86Instruction): string | undefined {
-    const plain = instruction.forms.filter((form) => form.features.length === 0)
-    const usual = plain.filter((form) => !form.notes.some((note) => UNUSUAL_FORMS.includes(note)))
-    const forms = usual.length > 0 ? usual : plain.length > 0 ? plain : instruction.forms
-    const shapes = [...new Set(forms.map((form) => form.operands.map(operandKind).join(', ')))]
-    const kept = shapes.filter((shape) => !shapes.some((other) => covers(other, shape)))
-    const operands = kept
-        .filter(Boolean)
-        .sort((a, b) => Number(isGeneral(b)) - Number(isGeneral(a)))
-    if (operands.length === 0) return undefined
-    const general = operands.filter(isGeneral).length
-    const count =
-        operands.length <= SIGNATURE_SHAPES
-            ? operands.length
-            : Math.min(general || SIGNATURE_SHAPES, SIGNATURE_SHAPES)
-    const shown = operands.slice(0, count).join(' | ')
-    const cut = count < operands.length ? `${shown} | …` : shown
-    return kept.includes('') ? `[${cut}]` : cut
-}
-
-/**
- * An instruction's row: its one line summary or the appendix's heading, which is also the title of
- * its page, then the first sentence of its description, then the mnemonic for the few that have
- * neither.
- */
-function instructionSummary(instruction: X86Instruction, description: string): string {
-    const title = x86InstructionTitle(instruction.name)
-    if (title !== instruction.name) return plainText(title)
-    return summaryOf(description) || instruction.name
-}
-
 function instructions(): Chapter {
     const entries = [...x86DocumentedInstructions]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((instruction): DocumentationEntry => {
             const description = describeX86Instruction(instruction.name)
-            const summary = instructionSummary(instruction, description)
+            const document = x86InstructionDocument(instruction)
             const forms = instruction.forms.map((form) => formatX86Form(instruction.name, form))
-            return {
+            const entry: DocumentationEntry = {
                 id: `x86/instructions/${instruction.name}`,
                 language: 'x86',
                 chapter: 'instructions',
                 kind: 'instruction',
                 title: instruction.name,
                 names: names(instruction.name),
-                signature: instructionSignature(instruction),
-                summary,
+                signature: documentSignature(document, isShortEncoding),
+                summary: document.summary,
                 href: `${BASE}/instruction/${instruction.name}`,
                 anchor: instruction.name,
-                view: { type: 'x86-instruction', instruction },
+                view: { type: 'instruction', document: () => document },
                 // The section too: the rows are alphabetical, so NASM's heading is only found here.
-                searchText: [...new Set([description, summary, instruction.section])]
+                searchText: [
+                    ...new Set([
+                        description,
+                        document.longName,
+                        document.summary,
+                        instruction.section
+                    ])
+                ]
                     .filter(Boolean)
                     .join('\n'),
                 code: [...new Set(forms)].join('\n')
             }
+            return withInstructionCategory(
+                entry,
+                x86InstructionCategories[instruction.name],
+                instruction.forms.map(x86FormTags)
+            )
         })
     return {
         id: 'instructions',

@@ -176,14 +176,6 @@ export function formatX86Form(name: string, form: X86InstructionForm): string {
     return form.operands.length ? `${name} ${form.operands.join(', ')}` : name
 }
 
-/** One line for the top of an instruction page: the operand shapes, deduplicated and joined. */
-export function formatX86InstructionSummary(instruction: X86Instruction): string {
-    const shapes = [
-        ...new Set(instruction.forms.map((form) => formatX86Form(instruction.name, form)))
-    ]
-    return shapes.join(' | ')
-}
-
 /**
  * How NASM's processor level flags read on a page. The table's own descriptions are terse to the
  * point of being a puzzle (`P6`, `WILLAMETTE`), and what a reader wants to know is how old the

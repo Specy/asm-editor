@@ -1,5 +1,4 @@
 import {
-    formatAggregatedArgs,
     riscvDirectivesMap,
     riscvInstructionEntries,
     riscvRegisterFiles,
@@ -25,11 +24,15 @@ import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import registersIntro from './registers.md?raw'
 import syscallsIntro from './syscalls.md?raw'
 import { riscvInstructionContent } from './instructionContent'
-import { withInstructionContent } from '../instructions/resolve'
+import { riscvInstructionCategories } from './categories'
+import { riscvFormTags } from '../instructions/formTags'
+import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { riscvInstructionDocument } from '../mars/instructionDocument'
 
 /**
  * The RISC-V Documentation, which RISC-V-64 Projects read too: the instruction list is the RV64
- * one, and an instruction that exists only there says so.
+ * one, and a form that exists only there is tagged RV64 only.
  */
 
 const BASE = '/documentation/risc-v'
@@ -37,7 +40,12 @@ const BASE = '/documentation/risc-v'
 function instructions(): Chapter {
     const entries = riscvInstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
         const descriptions = [...new Set(variants.map((variant) => variant.description))]
-        return withInstructionContent(
+        const document = riscvInstructionDocument(
+            mnemonic,
+            variants,
+            riscvInstructionContent[mnemonic]
+        )
+        const entry = withInstructionContent(
             {
                 id: `risc-v/instructions/${mnemonic}`,
                 language: 'risc-v',
@@ -45,15 +53,20 @@ function instructions(): Chapter {
                 kind: 'instruction',
                 title: mnemonic,
                 names: names(mnemonic),
-                signature: formatAggregatedArgs(variants),
-                summary: summaryOf(variants[0].description),
+                signature: documentSignature(document),
+                summary: document.summary,
                 href: `${BASE}/instruction/${mnemonic}`,
                 anchor: mnemonic,
-                view: { type: 'riscv-instruction', variants },
-                searchText: descriptions.join('\n'),
+                view: { type: 'instruction', document: () => document },
+                searchText: [document.longName, ...descriptions].join('\n'),
                 code: [...new Set(variants.map((variant) => variant.example))].join('\n')
             },
             riscvInstructionContent[mnemonic]
+        )
+        return withInstructionCategory(
+            entry,
+            riscvInstructionCategories[mnemonic],
+            variants.map(riscvFormTags)
         )
     })
     return {

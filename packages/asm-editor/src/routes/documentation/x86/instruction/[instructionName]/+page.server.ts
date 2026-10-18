@@ -1,13 +1,8 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
 import { chapters } from '#lib/documentation/x86/x86.ts'
-import {
-    describeX86Instruction,
-    formatX86InstructionSummary,
-    x86InstructionMap,
-    x86InstructionTitle,
-    hasX86InstructionPage
-} from '#lib/languages/X86/X86-documentation.ts'
+import { x86InstructionMap, hasX86InstructionPage } from '#lib/languages/X86/X86-documentation.ts'
+import { x86InstructionDocument } from '#lib/documentation/x86/instructionDocument.ts'
 import { buildX86Example } from './example'
 
 export const load = (async ({ params }) => {
@@ -19,11 +14,7 @@ export const load = (async ({ params }) => {
     }
     return {
         props: {
-            instruction,
-            name: instruction.name,
-            title: x86InstructionTitle(instruction.name),
-            description: describeX86Instruction(instruction.name),
-            summary: formatX86InstructionSummary(instruction),
+            document: x86InstructionDocument(instruction),
             // Generated here so the page ships the example already assembled into the HTML, which
             // is what the prerendered pages serve to readers without JavaScript. Null for the
             // instructions there is no safe program to show.

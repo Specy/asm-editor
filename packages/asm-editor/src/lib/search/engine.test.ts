@@ -164,6 +164,23 @@ describe('SearchEngine', () => {
         ])
     })
 
+    it("finds an instruction by its category's name, which its text never says", async () => {
+        const engine = SearchEngine.create()
+        const entries = [
+            entry('asl', 'Moves every bit left.', { category: 'shifts-and-rotates' }),
+            entry('move', 'Copies the source operand to the destination.', {
+                category: 'data-movement'
+            })
+        ]
+        await engine.add(
+            createPayload({ shard: 'docs-m68k', entries, sections: [], windows: [] }, null, null)
+        )
+        const results = await engine.search('shifts', { scope: languageScope('m68k', false) })
+        expect(results.map((result) => result.kind === 'entry' && result.entry.id)).toEqual([
+            'm68k/instructions/asl'
+        ])
+    })
+
     it('knows which scopes it covers and which have vectors', async () => {
         const engine = await engineWith()
         expect(engine.covers(languageScope('m68k', false))).toBe(true)

@@ -6,8 +6,6 @@ import {
     type RISCVInstruction,
     riscvInstructionMap,
     riscvInstructionsVariants,
-    formatAggregatedArgs,
-    groupVariantsByDescription,
     riscvVariantOperands
 } from './RISC-V-documentation'
 import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
@@ -23,6 +21,9 @@ import {
     parseAssemblyLine,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
+import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
+import { riscvInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
 
 export const RISCV_TEXT_OPTIONS = {
     comment: '#',
@@ -356,21 +357,25 @@ export function createRISCVCompletion(
     }
 }
 
+const hoverDocuments = new Map<string, InstructionDocument>()
+
+/** `ins` are the forms the Target accepts, so RV32 never calls a mnemonic RV64 only. */
+/**
+ * An instruction's hover: the same header and first rows as its page and its panel row
+ * ([the plan](../../../../../docs/design/instruction-layout-plan.md), decision 22), built once per
+ * set of forms.
+ */
 function formatInstructionHover(ins: RISCVInstruction[]) {
-    const args = formatAggregatedArgs(ins)
-    const groups = groupVariantsByDescription(ins)
-    const header = `**${ins[0].name}** ${args}`
-    const body = groups
-        .map((g) => {
-            const desc = g.description
-            const examples = g.examples.filter(Boolean)
-            if (examples.length > 0) {
-                return `${desc}\n\n\`${examples[0]}\``
-            }
-            return desc
-        })
-        .join('\n\n---\n\n')
-    return `${header}\n\n${body}`
+    const name = ins[0].name
+    const key = `${name}\0${ins.length}`
+    let document = hoverDocuments.get(key)
+    if (!document) {
+        document = riscvInstructionDocument(name, ins)
+        hoverDocuments.set(key, document)
+    }
+    return documentHover(document, { href: `/documentation/risc-v/instruction/${name}` }).join(
+        '\n\n'
+    )
 }
 
 export function createRISCVHoverProvider(

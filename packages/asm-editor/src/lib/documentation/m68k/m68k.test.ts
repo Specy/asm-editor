@@ -32,8 +32,14 @@ function markdownOf(entry: DocumentationEntry): string[] {
             return [view.markdown ?? '', ...view.fields.map((field) => field.value)]
         case 'swatches':
             return [view.markdown ?? '']
-        case 'm68k-instruction':
-            return [view.instruction.description]
+        case 'instruction': {
+            const document = view.document()
+            return [
+                document.description ?? '',
+                ...document.operands.map((operand) => operand.meaning),
+                ...document.headerFacts
+            ]
+        }
         default:
             return []
     }

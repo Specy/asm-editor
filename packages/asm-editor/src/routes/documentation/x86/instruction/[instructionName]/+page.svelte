@@ -1,13 +1,9 @@
 <script lang="ts">
     import type { PageData } from './$types'
-    import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd, breadcrumbLd } from '#lib/seo.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
-    import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
-    import Column from '#cmp/shared/layout/Column.svelte'
     import { onMount } from 'svelte'
-    import X86InstructionForms from '#cmp/documentation/x86/X86InstructionForms.svelte'
-    import { formatX86Cpu } from '#lib/languages/X86/X86-documentation.ts'
+    import InstructionDocumentView from '#cmp/documentation/instruction/InstructionDocumentView.svelte'
+    import InstructionPageHead from '#cmp/documentation/instruction/InstructionPageHead.svelte'
 
     interface Props {
         data: PageData
@@ -15,9 +11,7 @@
 
     let { data }: Props = $props()
 
-    let instruction = $derived(data.props.instruction)
-    let name = $derived(data.props.name)
-    let description = $derived(data.props.description)
+    let document = $derived(data.props.document)
 
     // Bound into the editor below, which is free to overwrite it; navigating to another
     // instruction re-derives it, the same way the other languages' instruction pages do.
@@ -28,89 +22,33 @@
     onMount(async () => {
         component = (await import('#cmp/documentation/site/ClientOnly.svelte')).default
     })
-
-    let pageTitle = $derived(`${String(name).toUpperCase()} - x86-64 instruction reference`)
-    let metaDescription = $derived(
-        toMetaDescription(`The ${name} x86-64 instruction. ${description}`)
-    )
-    let structuredData = $derived(
-        instructionLd({
-            name: String(name),
-            architecture: 'x86-64',
-            description,
-            pathname: page.url.pathname
-        })
-    )
 </script>
 
-<svelte:head>
-    <title>{pageTitle}</title>
-    <meta name="description" content={metaDescription} />
-    <meta property="og:title" content={pageTitle} />
-    <meta property="og:description" content={metaDescription} />
-    <meta property="og:type" content="article" />
-    <!-- The page's schema.org description; see the M68K page for why this is {@html}. -->
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html jsonLdScriptTag(structuredData)}
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html jsonLdScriptTag(
-        breadcrumbLd([
-            { name: 'Documentation', pathname: '/documentation' },
-            { name: 'x86-64', pathname: '/documentation/x86' },
-            { name: String(String(name)).toUpperCase(), pathname: page.url.pathname }
-        ])
-    )}
-</svelte:head>
+<InstructionPageHead {document} architecture="x86-64" root="/documentation/x86" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <div class="instruction-info" style="flex: 1;">
-        <Column>
-            <h1 class="instruction-name">
-                {name}
-            </h1>
-            <span class="since">{formatX86Cpu(instruction.cpu)} and later</span>
-        </Column>
-
-        <Column gap="1rem" flex1>
-            <Column gap="1rem">
-                <h2>{data.props.title}</h2>
-                <span class="summary">
-                    {data.props.summary}
-                </span>
-            </Column>
-
-            <article class="description">
-                <MarkdownRenderer source={description} centered={false} />
-            </article>
-        </Column>
-    </div>
-
-    {#if data.props.example}
-        {#if component}
-            {@const SvelteComponent_1 = component}
-            <SvelteComponent_1
-                bind:code
-                instructionKey={name}
-                language="X86"
-                showPc={true}
-                showFlags={true}
-                showConsole={true}
-            />
-        {:else}
-            <div class="loading">Loading...</div>
-        {/if}
-    {/if}
-
-    <Column gap="1rem">
-        <h2>Forms</h2>
-        <p class="forms-hint">
-            Every form of <code>{name}</code> the assembler accepts.
-        </p>
-        <X86InstructionForms {instruction} />
-    </Column>
+    <InstructionDocumentView {document} language="X86">
+        {#snippet example()}
+            {#if data.props.example}
+                {#if component}
+                    {@const SvelteComponent_1 = component}
+                    <SvelteComponent_1
+                        bind:code
+                        instructionKey={document.name}
+                        language="X86"
+                        showPc={true}
+                        showFlags={true}
+                        showConsole={true}
+                    />
+                {:else}
+                    <div class="loading">Loading...</div>
+                {/if}
+            {/if}
+        {/snippet}
+    </InstructionDocumentView>
 </Page>
 
-<style lang="scss">
+<style>
     .loading {
         display: flex;
         justify-content: center;
@@ -121,48 +59,5 @@
         font-size: 2rem;
         border-radius: 0.5rem;
         min-height: 19.75rem;
-    }
-    .instruction-info {
-        display: flex;
-        gap: 1rem;
-    }
-    .instruction-name {
-        font-size: 4rem;
-        margin-top: 0;
-        line-height: 1.1;
-        margin-right: 2rem;
-        min-width: 11.2rem;
-        font-weight: 600;
-        color: var(--accent);
-    }
-    .since {
-        color: var(--background-text-muted);
-        margin-bottom: 1rem;
-    }
-    .summary {
-        font-family: 'Fira Code', monospace;
-        line-height: 1.6;
-        word-break: break-word;
-    }
-    .description {
-        font-size: 1.1rem;
-        line-height: 1.4rem;
-        width: 100%;
-    }
-    :global(.description a) {
-        color: var(--accent);
-        text-decoration: underline;
-    }
-    .forms-hint {
-        line-height: 1.5;
-    }
-    code {
-        font-family: 'Fira Code', monospace;
-        color: var(--accent);
-    }
-    @media (max-width: 800px) {
-        .instruction-info {
-            flex-direction: column;
-        }
     }
 </style>

@@ -13,7 +13,7 @@
     import Row from '#cmp/shared/layout/Row.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
     import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
-    import { mipsInstructionEntries } from '#lib/languages/MIPS/MIPS-documentation.ts'
+    import { mipsInstructionNames } from '#lib/languages/MIPS/MIPS-documentation.ts'
     import MenuLink from '#cmp/documentation/site/MenuLink.svelte'
     import InstructionsMenu from '#cmp/documentation/site/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
@@ -29,11 +29,12 @@
     }
 
     let { children }: Props = $props()
-    let instructions = mipsInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
 
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(mipsInstructionNames)].sort((a, b) => a.localeCompare(b))
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -128,7 +129,7 @@
                 {/snippet}
                 <InstructionsMenu
                     hrefBase="/documentation/mips/instruction"
-                    instructions={instructionNames}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />

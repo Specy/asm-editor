@@ -1,5 +1,4 @@
 import {
-    formatAggregatedArgs,
     mipsDirectivesMap,
     mipsInstructionEntries,
     mipsRegisterFiles,
@@ -26,14 +25,23 @@ import { mipsCallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import syscallsIntro from './syscalls.md?raw'
 import { mipsInstructionContent } from './instructionContent'
-import { withInstructionContent } from '../instructions/resolve'
+import { mipsInstructionCategories } from './categories'
+import { mipsFormTags } from '../instructions/formTags'
+import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { mipsInstructionDocument } from '../mars/instructionDocument'
 
 const BASE = '/documentation/mips'
 
 function instructions(): Chapter {
     const entries = mipsInstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
         const descriptions = [...new Set(variants.map((variant) => variant.description))]
-        return withInstructionContent(
+        const document = mipsInstructionDocument(
+            mnemonic,
+            variants,
+            mipsInstructionContent[mnemonic]
+        )
+        const entry = withInstructionContent(
             {
                 id: `mips/instructions/${mnemonic}`,
                 language: 'mips',
@@ -41,15 +49,20 @@ function instructions(): Chapter {
                 kind: 'instruction',
                 title: mnemonic,
                 names: names(mnemonic),
-                signature: formatAggregatedArgs(variants),
-                summary: summaryOf(variants[0].description),
+                signature: documentSignature(document),
+                summary: document.summary,
                 href: `${BASE}/instruction/${mnemonic}`,
                 anchor: mnemonic,
-                view: { type: 'mips-instruction', variants },
-                searchText: descriptions.join('\n'),
+                view: { type: 'instruction', document: () => document },
+                searchText: [document.longName, ...descriptions].join('\n'),
                 code: [...new Set(variants.map((variant) => variant.example))].join('\n')
             },
             mipsInstructionContent[mnemonic]
+        )
+        return withInstructionCategory(
+            entry,
+            mipsInstructionCategories[mnemonic],
+            variants.map(mipsFormTags)
         )
     })
     return {

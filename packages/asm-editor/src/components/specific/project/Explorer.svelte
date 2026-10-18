@@ -991,12 +991,13 @@
 </section>
 
 <style lang="scss">
-    /* at most half the panel, its list scrolling under its title past that */
+    /* at most a quarter of the panel each, their lists scrolling under their titles past that,
+       so the Project's own Files keep at least half of it */
     .library-files {
         display: flex;
         flex: none;
         flex-direction: column;
-        max-height: 50%;
+        max-height: 25%;
         margin-top: 0.4rem;
         padding-top: 0.3rem;
         border-top: solid 0.1rem var(--tertiary);

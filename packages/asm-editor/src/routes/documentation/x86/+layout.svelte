@@ -18,7 +18,7 @@
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
-    import { x86DocumentedInstructions } from '#lib/languages/X86/X86-documentation.ts'
+    import { x86DocumentedNames } from '#lib/languages/X86/X86-documentation.ts'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -30,17 +30,13 @@
 
     let { children }: Props = $props()
 
-    // The sidebar lists the integer instruction set, the same set that has pages. Search matches
-    // the one line summary as well as the name, so typing "rotate" finds `rol` and `rcl`.
-    let instructions = x86DocumentedInstructions.map((instruction) => ({
-        name: instruction.name,
-        description: instruction.summary
-    }))
+    // The sidebar lists the integer instruction set, the same set that has pages, by category.
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(x86DocumentedNames)].sort((a, b) => a.localeCompare(b))
 
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
-
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -140,7 +136,7 @@
                 {/snippet}
                 <InstructionsMenu
                     hrefBase="/documentation/x86/instruction"
-                    instructions={instructionNames}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />

@@ -9,6 +9,7 @@
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import HighlightedText from '#cmp/search/HighlightedText.svelte'
     import { hasCodeName, type DocumentationEntry } from '#lib/documentation/entries.ts'
+    import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
     import EntryBody from '../entries/EntryBody.svelte'
 
     interface Props {
@@ -20,6 +21,11 @@
         disableLinks?: boolean
         /** Shown under the expanded entry: a link to its own page. */
         pageLink?: boolean
+        /**
+         * Name an instruction's **Instruction category** beside its signature: in search results,
+         * where no category heading is left to say it.
+         */
+        showCategory?: boolean
     }
 
     let {
@@ -28,7 +34,8 @@
         ontoggle,
         terms = [],
         disableLinks = false,
-        pageLink = false
+        pageLink = false,
+        showCategory = false
     }: Props = $props()
 </script>
 
@@ -41,6 +48,9 @@
             >
             {#if entry.signature}
                 <span class="signature">{entry.signature}</span>
+            {/if}
+            {#if showCategory && entry.category}
+                <span class="category">{categoryLabel(entry.category)}</span>
             {/if}
         </span>
         {#if !expanded}
@@ -141,6 +151,13 @@
         color: var(--background-text-muted);
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .category {
+        flex: none;
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: var(--background-text-muted);
         white-space: nowrap;
     }
     .summary {

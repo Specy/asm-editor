@@ -69,6 +69,30 @@
             ]
         },
         {
+            "query": "atomic",
+            "top": 3,
+            "expect": [
+                "risc-v/instructions/amoadd.w",
+                "risc-v/instructions/amoadd.d",
+                "risc-v/instructions/amoand.w",
+                "risc-v/instructions/amoand.d",
+                "risc-v/instructions/amomax.w",
+                "risc-v/instructions/amomax.d",
+                "risc-v/instructions/amomaxu.w",
+                "risc-v/instructions/amomaxu.d",
+                "risc-v/instructions/amomin.w",
+                "risc-v/instructions/amomin.d",
+                "risc-v/instructions/amominu.w",
+                "risc-v/instructions/amominu.d",
+                "risc-v/instructions/amoor.w",
+                "risc-v/instructions/amoor.d",
+                "risc-v/instructions/amoswap.w",
+                "risc-v/instructions/amoswap.d",
+                "risc-v/instructions/amoxor.w",
+                "risc-v/instructions/amoxor.d"
+            ]
+        },
+        {
             "query": "go 64 bit",
             "top": 3,
             "expect": "risc-v/introduction/going-64-bit#",
