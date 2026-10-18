@@ -355,7 +355,27 @@ _Avoid_: doc item, article, card, topic (a **Topic** is what a Lecture teaches)
 ## Chapter
 
 A named group of one language's **Documentation entries** that share a kind or a subject: Instructions, Directives, Trap tasks, Registers, the Screen. It is a heading in the Documentation panel and one page of the language's documentation site.
-_Avoid_: section, category, group (a **Module** groups Lectures)
+_Avoid_: section, category (an **Instruction category** groups instructions inside the Instructions Chapter), group (a **Module** groups Lectures)
+
+## Instruction category
+
+The one kind of work an instruction does, such as Arithmetic or Control flow: its **Documentation entry** is listed under it in the Instructions **Chapter**, and its page, its row and the editor's hover name it. Every language draws its Instruction categories from one shared list and uses the ones that apply, adding one of its own only where nothing in the shared list fits. A mnemonic has exactly one, decided by its main job rather than by what each of its **Instruction forms** does.
+_Avoid_: section (NASM's heading for an x86 instruction), class, family, group
+
+## Instruction form
+
+One operand shape a mnemonic is accepted with, as the **Core**'s assembler lists it: `lw $t1, -100($t2)` and `lw $t1, label` are two forms of MIPS `lw`. A mnemonic's **Documentation entry** lists its forms.
+_Avoid_: variant (in prose; the code's `variants` are forms), overload, syntax
+
+## Form pattern
+
+One row of an instruction's list of forms, standing for every **Instruction form** that differs only in an operand's width or in which register of one class it names: x86 `add r/m, imm` for its 8, 16, 32 and 64-bit forms, Z80 `ld r, r'` for 49 forms. Forms with different **Instruction tags** are never one Form pattern.
+_Avoid_: template, shape, syntax line, variant
+
+## Instruction tag
+
+A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
+_Avoid_: category, flag (a **Status flag** is a CPU bit), badge, attribute
 
 ## Instruction example
 
