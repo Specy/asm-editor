@@ -23,6 +23,7 @@ import { setModelPseudocode } from '#lib/monaco/pseudocodeModels.ts'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
+import PseudocodeNotice from '#cmp/specific/workbench/PseudocodeNotice.svelte'
 import PseudocodeStatus from '#cmp/specific/workbench/PseudocodeStatus.svelte'
 
 /**
@@ -344,6 +345,27 @@ describe('the Pseudocode beside its Listing', () => {
         flushSync()
         expect(pane.requestedPseudocode?.fn.name).toBe('main')
         expect((await decompiled(pane)).text).toContain('strcmp(acStack_98,"hunter2")')
+    })
+
+    it('names the function being decompiled in its notice, as "Decompiling…" does', async () => {
+        const { session, pane, listingPane, listing } = await paired()
+        const host = document.createElement('div')
+        document.body.appendChild(host)
+        const notice = mount(PseudocodeNotice, { target: host, props: { group: pane } })
+        disposers.push(() => unmount(notice))
+        flushSync()
+        expect(host.textContent?.trim()).toBe(
+            'Pseudocode of main, decompiled from crackme by Ghidra: read-only, and not meant to compile.'
+        )
+        //main's Pseudocode stays in view while _start's is decompiled, under the name of _start
+        session.cursorMoved(listingPane, listingLine(listing, '_start', 'hlt'))
+        flushSync()
+        expect(pane.requestedPseudocode?.status).toBe('decompiling')
+        expect(pane.displayedPseudocode?.fn.name).toBe('main')
+        expect(host.textContent).toContain('Pseudocode of _start,')
+        await decompiled(pane)
+        flushSync()
+        expect(host.textContent).toContain('Pseudocode of _start,')
     })
 
     it('goes to a call’s definition in both panes', async () => {

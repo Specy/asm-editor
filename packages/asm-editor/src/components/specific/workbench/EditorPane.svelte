@@ -193,13 +193,7 @@
             touch={!ui.viewport.canHover}
         />
     {:else if group.displayedView === 'pseudocode' && group.displayedFile}
-        <PseudocodeNotice
-            name={group.pseudocodeListing?.name ??
-                group.displayedPath.slice(group.displayedPath.lastIndexOf('/') + 1)}
-            fn={(group.displayedPseudocode ?? group.requestedPseudocode)?.fn.name ??
-                group.pseudocodeFunction?.name}
-            built={group.displayedBuildOutput}
-        />
+        <PseudocodeNotice {group} />
     {:else if group.displayedLibraryMember && group.displayedFile}
         <LibraryMemberNotice
             path={group.displayedPath}
