@@ -33,27 +33,27 @@ Status: written on 2026-10-18 after the grill recorded in [instruction-layout.md
 
 ```ts
 type InstructionDocument = {
-    name: string                    // the mnemonic
+    name: string // the mnemonic
     longName: string
-    summary: string                 // one sentence, plain text
+    summary: string // one sentence, plain text
     category?: InstructionCategory
-    tags: InstructionTag[]          // tags every form has
-    headerFacts: string[]           // facts every row shares
-    flags?: FlagStrip               // decision 5
-    sections: FormSection[]         // decision 3, in order: untagged, then by tag set
-    omitted?: { count: number; reason: string; href?: string }  // decision 10
-    operands: OperandSymbol[]       // decision 7, only the symbols used on the page
-    description?: string            // markdown, when there is more than the summary
+    tags: InstructionTag[] // tags every form has
+    headerFacts: string[] // facts every row shares
+    flags?: FlagStrip // decision 5
+    sections: FormSection[] // decision 3, in order: untagged, then by tag set
+    omitted?: { count: number; reason: string; href?: string } // decision 10
+    operands: OperandSymbol[] // decision 7, only the symbols used on the page
+    description?: string // markdown, when there is more than the summary
 }
 type FormSection = { tags: InstructionTag[]; collapsed: boolean; groups: NoteGroup[] }
 type NoteGroup = { note?: string; patterns: FormPattern[] }
 type FormPattern = {
-    parts: SyntaxPart[]             // { text, symbol? }: symbols link to the legend
-    chips: { label: string; title?: string }[]   // x86 sizes
-    facts: string[]                 // decision 4
-    flags?: FlagMarks               // only when the mnemonic's patterns differ
-    forms: ConcreteForm[]           // what expanding shows
-    details: { label: string; values: string[]; note?: string }[]  // M68K modes per operand
+    parts: SyntaxPart[] // { text, symbol? }: symbols link to the legend
+    chips: { label: string; title?: string }[] // x86 sizes
+    facts: string[] // decision 4
+    flags?: FlagMarks // only when the mnemonic's patterns differ
+    forms: ConcreteForm[] // what expanding shows
+    details: { label: string; values: string[]; note?: string }[] // M68K modes per operand
 }
 type ConcreteForm = { code: string; note?: string; facts: string[]; expansion?: string }
 type FlagStrip = { order: string[]; marks: FlagMarks; legend: FlagMarkKind[] }
@@ -67,10 +67,12 @@ type OperandSymbol = { symbol: string; meaning: string; href?: string }
 ## Milestones
 
 **M1. Shape, grouping and view** (Opus, me).
+
 - `document.ts`, `formPatterns.ts` + `formPatterns.test.ts`.
 - `src/components/documentation/instruction/InstructionDocumentView.svelte` with `density: 'page' | 'panel'`, and its parts: `InstructionHeader`, `FlagStrip`, `FormSectionList` (rows, chips, fact lines, expand, "Show all" past six rows in the panel, collapsed Undocumented on the page), `OperandLegend` (hover/tap on a symbol shows its line). Phone: the fact line drops under the syntax; no table scrolls sideways.
 
 **M2. Adapters**, each `src/lib/documentation/<language>/instructionDocument.ts` with a test (Opus).
+
 - x86 (me, as the reference): decisions 14-16, header processor level, notes in words, omitted line, legend for `reg r/m imm mem moffs acc segreg creg dreg`.
 - Z80: decision 17, facts `N bytes · M cycles` (`taken/not taken`), flags per pattern from the Core's flag string, strip when every pattern agrees.
 - MIPS and RISC-V (one shared MARS adapter): decision 13, notes from the per-form descriptions with the "Title :" prefix and stray whitespace removed, a note dropped when it repeats the description, RV64 only as a section.
@@ -78,24 +80,29 @@ type OperandSymbol = { symbol: string; meaning: string; href?: string }
 - Row order follows the language's manual where the source order puts rare forms first (x86 `mov`'s `moffs`).
 
 **M3. Long names and summaries** (Haiku writes, Opus checks).
+
 - `src/lib/documentation/<language>/instructionNames.ts`: `Record<mnemonic, { longName: string; summary?: string }>`.
 - Derived first: MARS/RARS "Title :" prefix and first sentence of the main form's body; x86 Opcodes summary (long name) and the first sentence of the appendix text (summary); M68K first sentence. The tables supply what is missing or reads badly ("ADDition", "Branch if EQual"), all of the Z80's, and every M68K long name.
 - A test per language: every documented mnemonic has a long name and a summary; summaries are one sentence.
 
 **M4. Pseudo-instruction expansions** (Opus agent, Cores).
+
 - MARS and RARS export each form's template (`JsInstruction`), with the TypeScript wrapper and type; built locally (`vp run build:<core>`), not released.
 - The MARS adapter rewrites the placeholders (`RG1`, `VL2`, `VH2`, `$1`…) into the row's symbols; a template with a placeholder it does not know shows no expansion, and a test reports how many forms get one.
 
 **M5. x86 data** (Opus agent).
+
 - Flags from Intel XED (Apache-2.0) through `scripts/x86-docs-generate.mjs` into `generated/x86Flags.ts`, per mnemonic, with the attribution in the generated header and the licence notice where the others are.
 - The description bugs the critique found, in the same script: raw `\c{MOV DS,EAX}`, references that lost their link ("see the condition codes"), doubled parentheticals ("DEC ( DEC )").
 
 **M6. Wiring** (me).
+
 - `EntryView` gets one `{ type: 'instruction'; document: () => InstructionDocument }`, built lazily and cached; `EntryBody` draws it with the panel density; the four per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell` and `DocsOperand` (if unused elsewhere) go.
 - The five instruction routes build the document in `+page.server.ts` and draw `InstructionDocumentView` with their example in a snippet; the page's title, meta and JSON-LD use the long name and summary.
 - Entries' `summary` (search rows) and the hovers use the new long name and summary.
 
 **M7. Checks.**
+
 - `vp test`, `svelte-check`, lint, a production build, the search goldens (re-recorded only where a better summary moved a result, with the reason).
 - Headless Chrome: two instructions per language at 1440×900 and 390×844, and the panel for `mov`, `ld` (Z80), `lw` (MIPS), `move` (M68K); no horizontal page scroll at 390.
 

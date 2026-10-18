@@ -206,7 +206,7 @@ committed modules under `packages/asm-editor/src/lib/languages/X86/generated/`:
 | `x86Descriptions.ts` | 586 descriptions, converted to markdown                                                                            | `insref.src`                                                                       |
 | `x86Syscalls.ts`     | 138 syscalls with canonical numbers, names and arities exported by the built Core                                  | `getImplementedSyscalls()`, `syscall.c`, `strace.h`                                |
 | `x86Tokens.ts`       | directives, standard macros, preprocessor directives, prefixes, size specifiers, 344 register names, flag meanings | `directiv.dat`, `standard.mac`, `pptok.dat`, `tokens.dat`, `regs.dat`, `iflags.ph` |
-| `x86Flags.ts`        | per documented instruction, what it does to each flag and which flags it reads, with notes where a form decides  | Intel XED `datafiles/*.txt`, through `scripts/x86-docs/xed-flags.txt`              |
+| `x86Flags.ts`        | per documented instruction, what it does to each flag and which flags it reads, with notes where a form decides    | Intel XED `datafiles/*.txt`, through `scripts/x86-docs/xed-flags.txt`              |
 
 [`X86-documentation.ts`](../../packages/asm-editor/src/lib/languages/X86/X86-documentation.ts) is the curated layer on
 top: the documented set, the written descriptions that outrank the generated ones, the registers,
