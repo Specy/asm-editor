@@ -7,6 +7,7 @@ import {
     fileByteLength,
     fileText,
     mergeOverwrites,
+    overwriteText,
     overwritesOnly,
     storedFilesSize,
     withByteEdits,
@@ -318,6 +319,34 @@ export class FileSystem {
         if (file.encoding !== 'base64')
             throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
         this.commitByteEdits(path, file, edits)
+    }
+    /**
+     * Overwrites `bytes` at `offset` of a File stored as text, whose bytes are its UTF-8: its text
+     * changes, as typing into it does, and it keeps no Byte edits (ADR 0047). The File keeps its
+     * length, and the bytes must leave it UTF-8.
+     */
+    overwriteText(path: string, offset: number, bytes: Uint8Array) {
+        this.assertEditable()
+        path = resolveFilePath(path)
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (file.encoding !== 'plain')
+            throw new ProjectFormatError(
+                `Only a File stored as text has its text overwritten: ${path}`
+            )
+        if (
+            !Number.isSafeInteger(offset) ||
+            offset < 0 ||
+            offset + bytes.length > fileByteLength(file)
+        )
+            throw new ProjectFormatError(`An overwrite is past the end of ${path}`)
+        if (!bytes.length) return
+        const text = overwriteText(file.content, offset, bytes)
+        if (text === undefined)
+            throw new ProjectFormatError(
+                `Not saved: ${path} is stored as text, and these bytes would leave it no longer UTF-8`
+            )
+        this.commit({ ...this.files, [path]: Object.freeze({ encoding: 'plain', content: text }) })
     }
     writeText(path: string, text: string, replace = true) {
         const file = { encoding: 'plain' as const, content: text }

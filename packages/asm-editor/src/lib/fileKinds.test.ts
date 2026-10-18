@@ -92,7 +92,7 @@ describe('the signature table', () => {
     ])('recognises %s', (_name, head, preview, mime) => {
         expect(previewSignature(head)).toEqual({ preview, mime })
         //by its bytes alone, whatever the File is called
-        expect(fileKind(byteFile(head), 'MIPS')).toEqual({ preview, mime })
+        expect(fileKind(byteFile(head), 'MIPS', 'notes.md')).toEqual({ preview, mime })
     })
 
     it.each([
@@ -118,7 +118,7 @@ describe('the signature table', () => {
         ['a zero word, a 1 and zeros', bytes([0, 0, 1, 0], new Array(28).fill(0))]
     ])('leaves %s as bytes', (_name, head) => {
         expect(previewSignature(head)).toBeUndefined()
-        expect(fileKind(byteFile(head), 'X86')).toBe('bytes')
+        expect(fileKind(byteFile(head), 'X86', 'a.png')).toBe('bytes')
     })
 
     it('reads the bytes as edited, not as stored', () => {
@@ -126,7 +126,10 @@ describe('the signature table', () => {
             ...byteFile(bytes('XPDF-1.7')),
             edits: [{ offset: 0, remove: 1, insert: 'JQ==' }]
         }
-        expect(fileKind(file, 'RISC-V')).toEqual({ preview: 'pdf', mime: 'application/pdf' })
+        expect(fileKind(file, 'RISC-V', 'paper')).toEqual({
+            preview: 'pdf',
+            mime: 'application/pdf'
+        })
     })
 })
 
@@ -137,28 +140,43 @@ describe('Files that are not previewed', () => {
     )
 
     it('makes a supported ELF an Executable in an x86 Project only', () => {
-        expect(fileKind(crackme, 'X86')).toBe('executable')
+        expect(fileKind(crackme, 'X86', 'crackme')).toBe('executable')
         for (const language of ['MIPS', 'RISC-V', 'RISC-V-64', 'M68K', 'Z80'] as const)
-            expect(fileKind(crackme, language)).toBe('bytes')
+            expect(fileKind(crackme, language, 'crackme')).toBe('bytes')
         //an ELF the editor cannot run, a 32-bit one, is bytes in x86 too
         const thirtyTwo = { ...crackme, edits: [{ offset: 4, remove: 1, insert: 'AQ==' }] }
-        expect(fileKind(thirtyTwo, 'X86')).toBe('bytes')
+        expect(fileKind(thirtyTwo, 'X86', 'crackme')).toBe('bytes')
     })
 
     it('makes a text File text, whatever its first bytes say', () => {
-        expect(fileKind({ encoding: 'plain', content: 'GIF89a' }, 'MIPS')).toBe('text')
-        expect(fileKind(bytesFile(new TextEncoder().encode('BM text')), 'MIPS')).toBe('text')
-        expect(fileKind({ encoding: 'plain', content: '<svg xmlns="x"></svg>' }, 'X86')).toBe(
+        expect(fileKind({ encoding: 'plain', content: 'GIF89a' }, 'MIPS', 'a.gif')).toBe('text')
+        expect(fileKind(bytesFile(new TextEncoder().encode('BM text')), 'MIPS', 'a.bmp')).toBe(
             'text'
         )
-        expect(fileKind({ encoding: 'plain', content: ' %PDF-1.7' }, 'X86')).toBe('text')
+        expect(
+            fileKind({ encoding: 'plain', content: '<svg xmlns="x"></svg>' }, 'X86', 'a.svg')
+        ).toBe('text')
+        expect(fileKind({ encoding: 'plain', content: ' %PDF-1.7' }, 'X86', 'a.pdf')).toBe('text')
+    })
+
+    it('makes a text File named as Markdown Markdown, and only a text File', () => {
+        const notes = { encoding: 'plain', content: '# Notes\n' } as const
+        for (const path of ['README.md', 'docs/Notes.MARKDOWN'])
+            expect(fileKind(notes, 'X86', path)).toBe('markdown')
+        for (const path of ['README', 'README.md.asm', 'notes.mdx', '.md'])
+            expect(fileKind(notes, 'X86', path)).toBe('text')
+        //bytes are what their bytes say, whatever the name
+        expect(fileKind(byteFile(bytes([0xde, 0xad, 0xbe, 0xef])), 'MIPS', 'a.md')).toBe('bytes')
     })
 
     it('makes a PDF written in ASCII alone, which is stored as text, a PDF', () => {
         const pdf = bytesFile(new TextEncoder().encode('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n'))
         expect(pdf.encoding).toBe('plain')
         for (const language of ['X86', 'MIPS'] as const)
-            expect(fileKind(pdf, language)).toEqual({ preview: 'pdf', mime: 'application/pdf' })
+            expect(fileKind(pdf, language, 'paper.md')).toEqual({
+                preview: 'pdf',
+                mime: 'application/pdf'
+            })
     })
 })
 
@@ -175,6 +193,13 @@ describe('the views of each kind', () => {
         expect(defaultFileView('executable')).toBe('hex')
         //the order the view switch offers them: Hex · Disassemble · Decompile
         expect(fileViewsOf('executable')).toEqual(['hex', 'listing', 'pseudocode'])
+    })
+
+    it('opens Markdown as its text, offering its Preview and its bytes', () => {
+        //the order the view switch offers them: Text · Preview · Hex
+        expect(fileViewsOf('markdown')).toEqual(['text', 'preview', 'hex'])
+        expect(resolveFileView('markdown', 'preview')).toBe('preview')
+        expect(resolveFileView('markdown', 'listing')).toBe('text')
     })
 
     it('takes the first view asked for that the kind offers, else its default', () => {

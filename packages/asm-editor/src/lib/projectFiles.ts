@@ -204,6 +204,22 @@ export function overwritesOnly(file: ProjectFile): boolean {
     return (file.edits ?? []).every(isOverwrite)
 }
 
+/**
+ * The text of a File stored as text once `bytes` overwrite its UTF-8 from `offset`, or undefined
+ * when they would leave it no longer UTF-8, which such a File must be. A text File keeps no Byte
+ * edits (ADR 0047): typing over its bytes in the Hex editor changes its text, as typing into its
+ * Text view does.
+ */
+export function overwriteText(text: string, offset: number, bytes: Uint8Array): string | undefined {
+    const next = encoder.encode(text)
+    next.set(bytes, offset)
+    try {
+        return decoder.decode(next)
+    } catch {
+        return undefined
+    }
+}
+
 /** How many bytes a File reads as, edits applied, without decoding a byte File. */
 export function fileByteLength(file: ProjectFile): number {
     if (file.encoding !== 'base64') return fileBytes(file).length

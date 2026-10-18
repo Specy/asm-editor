@@ -290,14 +290,21 @@ describe('the saved views', () => {
 })
 
 describe('the Hex editor in a session', () => {
-    it('types over a byte File through the FileSystem, and over nothing else', () => {
+    it("types over a byte File's bytes and a text File's text through the FileSystem", () => {
         const { session, project } = setup()
         expect(session.editFileBytes('blob.bin', 1, Uint8Array.from([0xff]))).toBe(true)
         expect(project.files['blob.bin'].edits).toEqual([{ offset: 1, remove: 1, insert: '/w==' }])
         expect(session.setFileByteEdits('blob.bin', [])).toBe(true)
         expect(project.files['blob.bin'].edits).toBeUndefined()
+        //a text File keeps no Byte edits: its text changes, and must stay UTF-8
+        const notes = project.files['notes.txt'].content
+        expect(session.editFileBytes('notes.txt', 0, Uint8Array.from([0x41]))).toBe(true)
+        expect(project.files['notes.txt']).toEqual({
+            encoding: 'plain',
+            content: 'A' + notes.slice(1)
+        })
         //refused, and said why, rather than thrown
-        expect(session.editFileBytes('notes.txt', 0, Uint8Array.from([0x41]))).toBe(false)
+        expect(session.editFileBytes('notes.txt', 0, Uint8Array.from([0xff]))).toBe(false)
         expect(session.editFileBytes('blob.bin', 3, Uint8Array.from([1, 2]))).toBe(false)
         const run = project.fileSystem.beginSession()
         flushSync()
@@ -331,7 +338,7 @@ describe('the Hex editor in a session', () => {
         )
     })
 
-    it('previews a PDF stored as text, whose bytes are read-only as any text File is', () => {
+    it('previews a PDF stored as text, whose bytes are typed over as its text', () => {
         const { session } = setup('MIPS', {
             entry: 'main.s',
             files: {
@@ -347,8 +354,15 @@ describe('the Hex editor in a session', () => {
         group.setView('ascii.pdf', 'hex')
         flushSync()
         expect(group.displayedView).toBe('hex')
-        expect(group.bytesReadOnly).toBe('This File is stored as text, which takes no Byte edits')
-        expect(session.editFileBytes('ascii.pdf', 0, Uint8Array.from([0x25]))).toBe(false)
+        expect(group.bytesReadOnly).toBeUndefined()
+        expect(session.editFileBytes('ascii.pdf', 5, new TextEncoder().encode('1.7'))).toBe(true)
+        expect(session.project.files['ascii.pdf']).toEqual({
+            encoding: 'plain',
+            content: '%PDF-1.7\n%%EOF\n'
+        })
+        //a lone byte of a character would leave the text no longer UTF-8
+        expect(session.editFileBytes('ascii.pdf', 0, Uint8Array.from([0xc3]))).toBe(false)
+        expect(session.project.files['ascii.pdf'].content).toBe('%PDF-1.7\n%%EOF\n')
     })
 
     it('keeps the bytes of a File whose saved edits insert or delete read-only', () => {

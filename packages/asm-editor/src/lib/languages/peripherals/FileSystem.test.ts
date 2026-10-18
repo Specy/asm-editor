@@ -735,6 +735,24 @@ describe('Byte edits in the FileSystem', () => {
         expect(decode(fs.readBytes('blob').subarray(1))).toBe('AB!')
     })
 
+    it('overwrites the text of a text File, which must stay UTF-8, keeping no Byte edits', () => {
+        const fs = new FileSystem({ 'notes.md': { encoding: 'plain', content: 'é ok' } })
+        fs.overwriteText('notes.md', 3, encode('OK'))
+        expect(fs.files['notes.md']).toEqual({ encoding: 'plain', content: 'é OK' })
+        //the two bytes of `é` together, but not one of them alone
+        fs.overwriteText('notes.md', 0, Uint8Array.of(0xc3, 0xa8))
+        expect(fs.readText('notes.md')).toBe('è OK')
+        expect(() => fs.overwriteText('notes.md', 0, encode('e'))).toThrow(
+            'notes.md is stored as text, and these bytes would leave it no longer UTF-8'
+        )
+        expect(fs.readText('notes.md')).toBe('è OK')
+        expect(() => fs.overwriteText('notes.md', 4, encode('!!'))).toThrow('past the end')
+        const bytes = new FileSystem({ blob: { encoding: 'base64', content: 'AAAA' } })
+        expect(() => bytes.overwriteText('blob', 0, encode('X'))).toThrow(
+            'Only a File stored as text has its text overwritten'
+        )
+    })
+
     it('refuses a File whose saved edits insert or delete, which it reads all the same', () => {
         const inserted = {
             encoding: 'base64' as const,

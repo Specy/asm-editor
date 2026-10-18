@@ -4,7 +4,9 @@
      * ([the design record](../../../../../../docs/design/workbench.md), File tabs). The row also carries
      * "Live file" while a Debug
      * session shows a File's current contents rather than the Build's own, and a dimmed tab for a
-     * File the language service does not reach from the Entry file.
+     * File the language service does not reach from the Entry file. The preview tab, a File opened
+     * with a single click in the Explorer that the next one takes the place of, is named in
+     * italics, as an IDE names it; a double click on it keeps it open.
      */
     import FaTimes from '~icons/fa-solid/times'
     import FaColumns from '~icons/fa-solid/columns'
@@ -45,11 +47,14 @@
             {@const unreached =
                 group.sourceView === 'live' &&
                 session.languageAnalysis?.fileStatus[path] === 'not-reachable'}
+            {@const preview = path === group.tabs.preview}
             <div
                 class="tab"
                 class:active
                 class:unreached
-                title={unreached ? `${path}: not analyzed from the Entry file` : path}
+                class:preview
+                title={(unreached ? `${path}: not analyzed from the Entry file` : path) +
+                    (preview ? ' (preview: double-click to keep it open)' : '')}
             >
                 <button
                     class="tab-select"
@@ -59,6 +64,7 @@
                     role="tab"
                     aria-selected={active}
                     onclick={() => session.activateTab(path, group)}
+                    ondblclick={() => session.keepOpen(path, group)}
                     onauxclick={(event) => {
                         if (event.button === 1) session.closeTab(path, group)
                     }}
@@ -171,6 +177,10 @@
 
         &.unreached .tab-select span:first-child {
             opacity: 0.55;
+        }
+
+        /* italics are the preview tab's, as in an IDE */
+        &.preview .tab-select span:first-child {
             font-style: italic;
         }
     }

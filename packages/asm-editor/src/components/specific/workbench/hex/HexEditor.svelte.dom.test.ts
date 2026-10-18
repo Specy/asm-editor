@@ -76,6 +76,8 @@ function setup(
         }
     )
     const history = new ByteEditHistory()
+    /** Why each edit the FileSystem refused was refused, as the Workbench would say it. */
+    const refused: string[] = []
     const target = document.createElement('div')
     document.body.appendChild(target)
     //a getter keeps the File the editor is given the FileSystem's current one
@@ -88,9 +90,16 @@ function setup(
         onShowInListing: options.onShowInListing,
         readOnly: options.readOnly,
         history,
+        //as the Workbench session's: a File stored as text has its text overwritten instead
         onEdit: (path: string, offset: number, bytes: Uint8Array) => {
-            fs.editBytes(path, offset, bytes)
-            return true
+            try {
+                if (files[path].encoding === 'plain') fs.overwriteText(path, offset, bytes)
+                else fs.editBytes(path, offset, bytes)
+                return true
+            } catch (error) {
+                refused.push((error as Error).message)
+                return false
+            }
         },
         onSetEdits: (path: string, edits: Parameters<FileSystem['setByteEdits']>[1]) => {
             fs.setByteEdits(path, edits)
@@ -106,6 +115,7 @@ function setup(
     }
     return {
         fs,
+        refused,
         props,
         target,
         grid,
@@ -199,6 +209,51 @@ describe('typing in the Hex editor', () => {
         window.removeEventListener('keydown', workbench)
         expect(workbench).not.toHaveBeenCalled()
         expect(hex.cell('hex', 0)!.textContent).toBe('B1')
+    })
+})
+
+describe('typing over a File stored as text', () => {
+    /** `C3 A9 20 61 62`: a character of two bytes, then ASCII. */
+    const notes = { encoding: 'plain', content: 'é ab' } as const
+
+    it('changes its text, keeping no Byte edits, and undoes by writing back what it wrote over', () => {
+        const hex = setup({ file: notes, kind: 'markdown' })
+        expect(hex.grid.getAttribute('aria-readonly')).toBe('false')
+        hex.key('End')
+        hex.key('ArrowLeft')
+        hex.key('Tab')
+        hex.type('XY')
+        hex.key('ArrowLeft')
+        expect(hex.fs.files.blob).toEqual({ encoding: 'plain', content: 'é XY' })
+        hex.key('z', { ctrlKey: true })
+        expect(hex.fs.files.blob.content).toBe('é ab')
+        hex.key('y', { ctrlKey: true })
+        expect(hex.fs.files.blob).toEqual({ encoding: 'plain', content: 'é XY' })
+    })
+
+    it('waits for the rest of a character typed in hex, and refuses one left cut in two', () => {
+        vi.useFakeTimers()
+        const hex = setup({ file: notes, kind: 'markdown' })
+        hex.key('ArrowRight')
+        hex.key('ArrowRight')
+        hex.type('c3')
+        vi.advanceTimersByTime(1000)
+        flushSync()
+        //`C3 61` is not UTF-8: what was typed waits, shown, for the character's second byte
+        expect(hex.fs.files.blob.content).toBe('é ab')
+        expect(hex.cell('hex', 2)!.textContent).toBe('C3')
+        hex.type('a8')
+        vi.advanceTimersByTime(1000)
+        flushSync()
+        expect(hex.fs.files.blob.content).toBe('éèb')
+        //a letter over the first byte of `é` strands its second: the caret leaving says why not
+        hex.key('Home')
+        hex.key('Tab')
+        hex.type('e')
+        hex.key('End')
+        expect(hex.refused).toEqual([expect.stringContaining('no longer UTF-8')])
+        expect(hex.fs.files.blob.content).toBe('éèb')
+        expect(hex.cell('text', 0)!.textContent).toBe('.')
     })
 })
 

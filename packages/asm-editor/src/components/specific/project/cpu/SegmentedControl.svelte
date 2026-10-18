@@ -1,37 +1,62 @@
 <script lang="ts">
     /**
-     * The choice of one of a few options, drawn as a pill whose highlight slides to the one picked,
-     * after genshin-music's `MultipleOptionSlider`. It is every such choice in the editor: the
-     * Testcases' memory form, the choices in Settings, and the strips of the Register file panel's
-     * header, where `SizeSelector` is this control with the Target's widths baked in, so every strip
-     * there is the same control at the same size. `tabs` draws the Register file panel's tabs
-     * instead, where the picked option is a tab running into the panel under it.
+     * The choice of one of a few options, drawn as a rounded strip whose highlight slides to the one
+     * picked, after genshin-music's `MultipleOptionSlider`. It is every such choice in the editor: the
+     * Testcases' memory form, the execution dock's view switch, the Hex editor's byte order and
+     * Find kind, and the strips of the Register file panel's header, where `SizeSelector` is this
+     * control with the Target's widths baked in, so every strip there is the same control at the
+     * same size. `tabs` draws the Register file panel's tabs instead, where the picked option is a
+     * tab running into the panel under it.
      */
-    import type { Component } from 'svelte'
+    import type { Component, Snippet } from 'svelte'
+
+    /**
+     * `title` is the button's tooltip, for a label too short to read on its own; `icon` is drawn
+     * before the label, in the colour the option gives it.
+     */
+    interface Option {
+        id: string
+        label: string
+        title?: string
+        icon?: Component
+        iconColor?: string
+    }
 
     interface Props {
-        /**
-         * `title` is the button's tooltip, for a label too short to read on its own; `icon` is drawn
-         * before the label, in the colour the option gives it.
-         */
-        options: {
-            id: string
-            label: string
-            title?: string
-            icon?: Component
-            iconColor?: string
-        }[]
+        options: readonly Option[]
         selected: string
         onSelect: (id: string) => void
         style?: string
+        /** Names the choice as a whole, such as "Byte order", for a reader of the page. */
+        ariaLabel?: string
         /**
          * Draws the strip as the tabs of what is under it: the picked button keeps its bottom square
          * so it runs into the panel below instead of ending in a corner of its own.
          */
         tabs?: boolean
+        /**
+         * The strip takes the whole box it is given, an equal share for each option, as the compact
+         * layouts' one tray across the bar shares its width among its buttons.
+         */
+        fill?: boolean
+        /**
+         * Draws an option's face in place of its icon and label, for a host whose buttons must read
+         * as its own: the execution dock's view switch, whose narrow layouts drop the words and keep
+         * the icons. The label still names the button.
+         */
+        face?: Snippet<[Option]>
     }
 
-    let { options, selected, onSelect, style = '', tabs = false }: Props = $props()
+    let {
+        options,
+        selected,
+        onSelect,
+        style = '',
+        ariaLabel,
+        tabs = false,
+        fill = false,
+        face
+    }: Props = $props()
 
     let root: HTMLDivElement | undefined = $state()
     /** Where the highlight sits, under the picked button: unknown until that button has a box. */
@@ -67,6 +92,9 @@
     class:tabs
     class:slider={!tabs}
     class:measured={highlight !== null}
+    class:fill={fill && !tabs}
+    role={ariaLabel ? 'group' : undefined}
+    aria-label={ariaLabel}
     {style}
     bind:this={root}
 >
@@ -77,14 +105,19 @@
             class="segmented-control-button"
             class:segmented-control-button-selected={selected === option.id}
             aria-pressed={selected === option.id}
+            aria-label={option.label}
             title={option.title ?? ''}
         >
-            {#if option.icon}
-                <span class="segmented-control-icon" style:color={option.iconColor}>
-                    <option.icon />
-                </span>
+            {#if face}
+                {@render face(option)}
+            {:else}
+                {#if option.icon}
+                    <span class="segmented-control-icon" style:color={option.iconColor}>
+                        <option.icon />
+                    </span>
+                {/if}
+                {option.label}
             {/if}
-            {option.label}
         </button>
     {/each}
     {#if !tabs && highlight}
@@ -119,9 +152,10 @@
         margin-right: 0.35rem;
     }
 
-    // the pill: each option as wide as its label, sharing whatever room the pill is given beyond
+    // the strip: each option as wide as its label, sharing whatever room the strip is given beyond
     // that, and the highlight slides under them to the one picked, resizing as it goes, inside a
-    // border of its colour
+    // border of its colour. The highlight's corners are the strip's less its border and the gap
+    // around the highlight, so the two curves run parallel
     .slider {
         position: relative;
         display: grid;
@@ -129,7 +163,7 @@
         grid-auto-columns: auto;
         width: fit-content;
         border: 0.1rem solid var(--accent2);
-        border-radius: 3rem;
+        border-radius: 0.4rem;
         background-color: var(--primary);
         isolation: isolate;
 
@@ -137,13 +171,18 @@
             position: relative;
             z-index: 1;
             padding: 0.25rem 0.6rem;
-            border-radius: 3rem;
+            border-radius: 0.2rem;
             color: color-mix(in srgb, var(--primary-text) 70%, transparent);
             background-color: transparent;
             transition: color 0.2s;
 
             &:hover {
                 color: var(--primary-text);
+            }
+
+            &:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: -2px;
             }
         }
 
@@ -159,11 +198,21 @@
         }
     }
 
+    .slider.fill {
+        width: 100%;
+        height: 100%;
+        grid-auto-columns: minmax(0, 1fr);
+
+        .segmented-control-button {
+            min-width: 0;
+        }
+    }
+
     .segmented-control-highlight {
         position: absolute;
         top: 0.1rem;
         bottom: 0.1rem;
-        border-radius: 3rem;
+        border-radius: 0.2rem;
         background-color: var(--accent2);
         pointer-events: none;
         transition:

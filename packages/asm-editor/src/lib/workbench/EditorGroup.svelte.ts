@@ -10,8 +10,10 @@ import {
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { ProjectFileKind } from '#lib/fileKinds.ts'
+import { textFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
 import { overwritesOnly } from '#lib/projectFiles.ts'
 import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
+import { offersBuild } from './editorFileRouting'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import {
     isLineBreakpoint,
@@ -88,7 +90,7 @@ export class EditorGroup {
     declare readonly displayedKind: ProjectFileKind | undefined
     /** How the displayed File is shown: as text, in the Hex editor, as a Listing, as a Preview. */
     declare readonly displayedView: FileView
-    declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
+    declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage> | TextFileLanguage
     /**
      * The Listing the displayed File is shown as: an Executable's, or that of a library the running
      * program loaded, under `@lib/` ([binary-import.md](../../../../../docs/design/binary-import.md),
@@ -139,13 +141,17 @@ export class EditorGroup {
         this.sourceView = $derived<'snapshot' | 'live'>(
             this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
         )
-        //Pseudocode reads like C, whatever the Executable's name
+        //Pseudocode reads like C, and a Listing like the Target's assembly, whatever the
+        //Executable's name; a File's text like what its name says it is
         this.displayedLanguage = $derived(
             this.displayedView === 'pseudocode'
                 ? 'c'
-                : editorFileLanguage(this.displayedPath, this.session.project.language)
+                : (this.displayedView === 'text' && textFileLanguage(this.displayedPath)) ||
+                      editorFileLanguage(this.displayedPath, this.session.project.language)
         )
-        this.displayedKind = $derived(this.session.fileKindOf(this.displayedFile))
+        this.displayedKind = $derived(
+            this.session.fileKindOf(this.displayedFile, this.displayedPath)
+        )
         this.displayedView = $derived(this.viewOf(this.displayedPath, this.displayedKind))
         //generated only for a pane that shows it: an Executable in the Hex editor needs none
         this.displayedListing = $derived(
@@ -447,16 +453,24 @@ export class EditorGroup {
         return views.length > 1 ? views : []
     }
     /**
+     * Whether the pane offers Build outside a Debug session: not for a document or data such as
+     * text, Markdown, an image or a PDF, which Build has nothing to do with.
+     */
+    get offersBuild() {
+        return offersBuild(this.displayedPath, this.displayedKind)
+    }
+    /**
      * Whether the execution dock floats over this pane. `controls` says whether the layout puts
      * the execution controls in a pane, as a desktop and a phone do; a tablet has one bar for
-     * them. The controls group has it, a source File its compile dock outside a Debug session,
-     * and on every device a File shown in more than one way its view switch.
+     * them. The controls group has it, during a Debug session or where it offers Build, a source
+     * File its compile dock outside a Debug session, and on every device a File shown in more
+     * than one way its view switch.
      */
     hasDock(controls: boolean): boolean {
         const s = this.session
         if (!this.displayedPath) return false
         return (
-            (controls && s.controlsGroup === this) ||
+            (controls && s.controlsGroup === this && (s.debugSession || this.offersBuild)) ||
             ((!!sourceLanguage(this.displayedPath) || this.recompilationNeeded) &&
                 !s.debugSession) ||
             this.viewSwitch.length > 1
@@ -679,9 +693,9 @@ export class EditorGroup {
         return this.session.activeMappingColors
     }
     /**
-     * Why the displayed File's bytes take no Byte edits now, or undefined when they do: whatever
-     * keeps a File's text read-only, a File stored as text, whose bytes are its text, and one whose
-     * saved edits insert or delete bytes, since only overwrites can be added to.
+     * Why the displayed File's bytes cannot be typed over now, or undefined when they can: whatever
+     * keeps a File's text read-only, and saved edits that insert or delete bytes, since only
+     * overwrites can be added to. A File stored as text has its text overwritten instead.
      */
     get bytesReadOnly(): string | undefined {
         const s = this.session
@@ -692,9 +706,7 @@ export class EditorGroup {
         if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
             return 'The Files are read-only during a Debug session: Stop to edit them'
         if (s.running || s.building) return 'The Files are read-only while a Build runs'
-        if (this.displayedFile?.encoding !== 'base64')
-            return 'This File is stored as text, which takes no Byte edits'
-        if (!overwritesOnly(this.displayedFile))
+        if (this.displayedFile && !overwritesOnly(this.displayedFile))
             return 'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
         return undefined
     }

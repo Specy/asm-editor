@@ -129,7 +129,16 @@ import { fileKind, type ProjectFileKind } from '#lib/fileKinds.ts'
 import { defaultFileView, fileViewsOf, type FileView } from '#lib/fileViews.ts'
 import { createDebouncer } from '#lib/utils.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
-import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
+import {
+    closeTab,
+    initialTabs,
+    keepTab,
+    openTab,
+    previewTab,
+    renameTab,
+    retainTabs,
+    removeTab
+} from './fileTabs'
 import {
     appendLog,
     buildEntry,
@@ -331,15 +340,18 @@ export class WorkbenchSession {
         )
     }
 
-    /** What a File is, from its bytes, in this Project's Target; undefined for no File. */
-    fileKindOf(file: ProjectFile | undefined): ProjectFileKind | undefined {
-        return file ? fileKind(file, this.project.language) : undefined
+    /**
+     * What the File at `path` is, from its bytes, or for a text File its name, in this Project's
+     * Target; undefined for no File.
+     */
+    fileKindOf(file: ProjectFile | undefined, path: string): ProjectFileKind | undefined {
+        return file ? fileKind(file, this.project.language, path) : undefined
     }
 
     /** What the File at a path is, in the version a Debug session shows or else the live one. */
     kindAt(path: string): ProjectFileKind | undefined {
         const built = this.debugSession ? this.emulator.buildSources?.files[path] : undefined
-        return this.fileKindOf(built ?? this.project.files[path] ?? this.buildOutputAt(path))
+        return this.fileKindOf(built ?? this.project.files[path] ?? this.buildOutputAt(path), path)
     }
 
     /**
@@ -380,10 +392,13 @@ export class WorkbenchSession {
                 group.displayedView === 'listing' ||
                 editorFileKind(group.displayedPath, group.displayedFile) === 'assembly'
         )
+        const shown = [...this.groups].reverse().filter((group) => group.displayedPath)
         return (
             assembly.find((group) => group.id === this.executionGroupId) ??
             assembly[assembly.length - 1] ??
-            [...this.groups].reverse().find((group) => group.displayedPath) ??
+            //an Executable's bytes or a C File before a document, whose pane offers no Build
+            shown.find((group) => group.offersBuild) ??
+            shown[0] ??
             this.groups[this.groups.length - 1]
         )
     }
@@ -1289,18 +1304,23 @@ export class WorkbenchSession {
     /**
      * Shows a version of a File, opening its tab, in the view the pane remembers for it or, with
      * `view`, in that one when the File offers it, as going to a definition in a Listing does.
+     * With `preview` the tab opened is the pane's preview tab, in the place of the one before it.
      */
     private show(
         selection: ProjectSourceSelection,
         group = this.groupForFile(selection.path),
-        view?: FileView
+        view?: FileView,
+        preview = false
     ) {
         const changedPath = group.displayedPath !== selection.path
         if (view) group.setView(selection.path, view, false)
         if (!isSameProjectSourceSelection(group.sourceSelection, selection)) {
             group.sourceSelection = selection
         }
-        group.tabs = openTab(group.tabs, selection.path)
+        const replaced = group.tabs.preview
+        group.tabs = (preview ? previewTab : openTab)(group.tabs, selection.path)
+        //the File previewed before goes as a closed tab does
+        if (replaced !== undefined && !group.tabs.paths.includes(replaced)) group.moveView(replaced)
         this.focusEditorGroup(group)
         if (changedPath) group.resetCompilationOptions()
     }
@@ -1442,7 +1462,7 @@ export class WorkbenchSession {
             (this.emulator.buildSources ? this.buildOutputAt(path) : undefined)
         if (!file)
             return (view ?? 'listing') === 'listing' && !!this.emulator.listings?.session.has(path)
-        return !view || fileViewsOf(this.fileKindOf(file)).includes(view)
+        return !view || fileViewsOf(this.fileKindOf(file, path)).includes(view)
     }
 
     revealEditorLine(
@@ -1459,7 +1479,7 @@ export class WorkbenchSession {
     }
 
     /** Explorer navigation: changes the File, not which version of the Project is being looked at. */
-    selectFile(path: string, group = this.groupForFile(path)) {
+    selectFile(path: string, group = this.groupForFile(path), preview = false) {
         this.show(
             selectProjectFile(
                 group.sourceSelection,
@@ -1467,8 +1487,36 @@ export class WorkbenchSession {
                 this.buildGeneration,
                 this.existsInBuild(path)
             ),
-            group
+            group,
+            undefined,
+            preview
         )
+    }
+
+    /**
+     * A single click on a File in the Explorer: opens it in the pane's preview tab, in the place of
+     * the File previewed there before, as an IDE does, so that looking through Files does not fill
+     * the row. A click on the File the preview tab already shows keeps it open, so a double click
+     * opens a File for good.
+     */
+    previewFile(path: string) {
+        const previewed = this.groups.find((group) => group.tabs.preview === path)
+        if (previewed) {
+            this.keepOpen(path, previewed)
+            this.selectFile(path, previewed)
+            return
+        }
+        this.selectFile(path, this.groupForFile(path), true)
+    }
+
+    /**
+     * Keeps a File in preview open, in `group` or in every pane: a second click on it in the
+     * Explorer, a double click on its tab, or an edit to it.
+     */
+    keepOpen(path: string, group?: EditorGroup) {
+        for (const candidate of group ? [group] : this.groups) {
+            candidate.tabs = keepTab(candidate.tabs, path)
+        }
     }
 
     /** Clicking a tab: the same rule as the Explorer. */
@@ -1732,19 +1780,27 @@ export class WorkbenchSession {
     /**
      * Byte edits typed in the Hex editor ([ADR 0047](../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
      * overwrites `bytes` at `offset`, or with `edits` puts back a whole list for Undo and Redo.
-     * False when the edit is refused, as the Project's limit can refuse it, after saying why.
+     * A File stored as text takes no Byte edits: the overwrite changes its text, which must stay
+     * UTF-8. False when the edit is refused, as the Project's limit can refuse it, after saying why.
      */
     editFileBytes(path: string, offset: number, bytes: Uint8Array): boolean {
-        return this.changeFileBytes(() => this.project.fileSystem.editBytes(path, offset, bytes))
+        return this.changeFileBytes(path, () => {
+            const fileSystem = this.project.fileSystem
+            if (this.project.files[path]?.encoding === 'plain')
+                fileSystem.overwriteText(path, offset, bytes)
+            else fileSystem.editBytes(path, offset, bytes)
+        })
     }
     setFileByteEdits(path: string, edits: readonly ByteEdit[]): boolean {
-        return this.changeFileBytes(() => this.project.fileSystem.setByteEdits(path, edits))
+        return this.changeFileBytes(path, () => this.project.fileSystem.setByteEdits(path, edits))
     }
-    private changeFileBytes(change: () => void): boolean {
+    private changeFileBytes(path: string, change: () => void): boolean {
         if (this.host.readonly || this.fileSystemLocked || this.running || this.building)
             return false
         try {
             change()
+            //an edited File in preview is kept open, as typing into it does
+            this.keepOpen(path)
             return true
         } catch (error) {
             console.error(error)
@@ -1770,7 +1826,10 @@ export class WorkbenchSession {
         //A File the Project no longer has is not recreated by typing into a stale model.
         if (this.project.files[path]?.encoding !== 'plain') return
         try {
+            const changed = this.project.files[path].content !== nextCode
             this.project.fileSystem.writeText(path, nextCode)
+            //typing into a File in preview keeps it open, as an IDE does
+            if (changed) this.keepOpen(path)
         } catch (error) {
             console.error(error)
             toast.error(getM68kErrorMessage(error))

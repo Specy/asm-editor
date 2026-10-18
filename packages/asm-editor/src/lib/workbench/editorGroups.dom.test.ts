@@ -210,6 +210,87 @@ describe('saved editor tabs', () => {
     })
 })
 
+describe('the preview tab', () => {
+    it('opens a File clicked in the Explorer in preview, and the next one in its place', () => {
+        const { session } = setup()
+        const group = session.groups[0]
+        session.previewFile('value.h')
+        expect(group.tabs).toEqual({
+            paths: ['main.c', 'value.h'],
+            active: 'value.h',
+            preview: 'value.h'
+        })
+        session.previewFile('other.c')
+        expect(group.tabs).toEqual({
+            paths: ['main.c', 'other.c'],
+            active: 'other.c',
+            preview: 'other.c'
+        })
+        expect(group.displayedPath).toBe('other.c')
+        //a File kept open is only focused, and the preview tab stays in preview
+        session.previewFile('main.c')
+        expect(group.tabs).toEqual({
+            paths: ['main.c', 'other.c'],
+            active: 'main.c',
+            preview: 'other.c'
+        })
+    })
+
+    it('keeps it open on a second click or a double click on its tab', () => {
+        const { session } = setup()
+        const group = session.groups[0]
+        session.previewFile('value.h')
+        session.previewFile('value.h')
+        expect(group.tabs).toEqual({ paths: ['main.c', 'value.h'], active: 'value.h' })
+        session.previewFile('other.c')
+        session.keepOpen('other.c', group)
+        session.previewFile('main.s')
+        expect(group.tabs.paths).toEqual(['main.c', 'value.h', 'other.c', 'main.s'])
+        expect(group.tabs.preview).toBe('main.s')
+    })
+
+    it('keeps it open once it is edited, as text or as bytes, but not for an edit that changes nothing', () => {
+        const { session } = setup(undefined, {
+            files: {
+                'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' },
+                'value.h': { encoding: 'plain', content: '#define VALUE 0' },
+                'blob.bin': { encoding: 'base64', content: 'AQIDBA==' }
+            }
+        })
+        const group = session.groups[0]
+        session.previewFile('value.h')
+        session.fileEdited('value.h', '#define VALUE 0')
+        expect(group.tabs.preview).toBe('value.h')
+        session.fileEdited('value.h', '#define VALUE 1')
+        expect(group.tabs.preview).toBeUndefined()
+        session.previewFile('blob.bin')
+        const bytes = session.groupForFile('blob.bin')
+        expect(bytes.tabs.preview).toBe('blob.bin')
+        expect(session.editFileBytes('blob.bin', 0, Uint8Array.of(9))).toBe(true)
+        expect(bytes.tabs.preview).toBeUndefined()
+    })
+
+    it('opens a File kept open any other way, and saves the preview tab as an open tab', () => {
+        const { session, project } = setup()
+        const group = session.groups[0]
+        session.previewFile('value.h')
+        //the Explorer's menu, a File made or dropped, the debugger's navigation
+        session.selectFile('other.c')
+        expect(group.tabs).toEqual({
+            paths: ['main.c', 'value.h', 'other.c'],
+            active: 'other.c',
+            preview: 'value.h'
+        })
+        flushSync()
+        expect(project.openTabs).toEqual(['main.c', 'value.h', 'other.c'])
+        const restored = setup(undefined, project.toObject()).session.groups[0]
+        expect(restored.tabs).toEqual({
+            paths: ['main.c', 'value.h', 'other.c'],
+            active: 'other.c'
+        })
+    })
+})
+
 describe('independent editor groups', () => {
     it('splits a single tab into an empty second pane', () => {
         const { session } = setup()

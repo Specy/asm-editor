@@ -76,8 +76,8 @@
     const screenOpen = $derived(!workbenchLayout.isCollapsed('compact:screen', true))
     const executionBar = $derived(
         session.debugSession ||
-            session.groups.length > 1 ||
-            !sourceLanguage(session.controlsGroup.displayedPath)
+            (session.controlsGroup.offersBuild &&
+                (session.groups.length > 1 || !sourceLanguage(session.controlsGroup.displayedPath)))
     )
     //the Debug session's sections are built at the first Build and only hidden after a Stop
     let debugged = false

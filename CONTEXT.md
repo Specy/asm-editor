@@ -66,7 +66,7 @@ _Avoid_: hex view, hex dump, byte viewer
 
 ## Preview
 
-The **Workbench**'s view of a byte **File** as the browser itself shows its kind: an image, a PDF, audio or video, recognised by the File's first bytes and never by its name. Every Preview can be switched to the **Hex editor**.
+The **Workbench**'s view of a **File** as it reads rather than as its bytes or text: a byte File as the browser itself shows its kind, an image, a PDF, audio or video, recognised by the File's first bytes and never by its name, which can be switched to the **Hex editor**; or a Markdown text File rendered, recognised by its name as a C File is, which can be switched back to its text or to the Hex editor.
 _Avoid_: viewer, render, thumbnail
 
 ## Byte edit

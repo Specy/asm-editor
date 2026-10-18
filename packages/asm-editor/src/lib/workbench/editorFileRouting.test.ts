@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { editorFileKind, editorGroupForFile } from './editorFileRouting'
+import { editorFileKind, editorGroupForFile, offersBuild } from './editorFileRouting'
 
 describe('file-type editor routing', () => {
     it('recognizes sources and headers independently of supported compiler languages', () => {
@@ -39,6 +39,21 @@ describe('file-type editor routing', () => {
         expect(editorGroupForFile('image.png', [source, image], bytes)).toBe(image)
         expect(editorGroupForFile('image.png', [source, empty], bytes)).toBe(empty)
         expect(editorGroupForFile('image.png', [source], bytes)).toBe(source)
+    })
+    it('offers Build for code and an Executable, not for a document or data', () => {
+        for (const path of ['main.s', 'main.asm', 'macros.inc', 'main.c', 'value.h', 'main'])
+            expect(offersBuild(path, 'text')).toBe(true)
+        //an include File's extension is anyone's guess
+        expect(offersBuild('macros.m68', 'text')).toBe(true)
+        expect(offersBuild('crackme', 'executable')).toBe(true)
+        //a path that names nothing still builds, to say what is missing
+        expect(offersBuild('main.s', undefined)).toBe(true)
+        for (const path of ['notes.txt', 'data.csv', 'config.json', 'solve.py', 'README.md'])
+            expect(offersBuild(path, 'text')).toBe(false)
+        expect(offersBuild('README.md', 'markdown')).toBe(false)
+        expect(offersBuild('image.png', { preview: 'image', mime: 'image/png' })).toBe(false)
+        expect(offersBuild('manual.pdf', { preview: 'pdf', mime: 'application/pdf' })).toBe(false)
+        expect(offersBuild('blob.bin', 'bytes')).toBe(false)
     })
     it('uses the matching pane for mixed source/assembly files in either order', () => {
         const source = { displayedPath: 'main.cpp' },

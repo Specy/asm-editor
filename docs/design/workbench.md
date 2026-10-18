@@ -281,3 +281,21 @@ From the owner's phone screenshots:
 - **One scroll:** the Debug session's sections no longer scroll inside themselves past a screen's height; the column scrolls, on tablets too.
 - **Run info:** a phone's bottom panel leaves "Ran in …, exited with code N" out of its tab strip, where it had no room; the Log still records it. Elsewhere it stays on one line and is cut short rather than wrapped.
 - **Settings on a phone:** a switch or choice that wraps under its name stays at the right, where the others are.
+
+## No Build beside a document, 2026-10-18
+
+From the owner, after a grilling on the Entry path, which stays as it is: "Set file as entry" and the Explorer's controls are unchanged.
+
+- **A pane showing a document or data offers no Build.** Outside a Debug session, a pane whose File is text with a known non-code format (`.txt`, `.md`, `.json`, `.py`: whatever `textFileLanguage` names), Markdown, a Preview (an image, a PDF) or other bytes has neither Build, "Build entry" nor Test. It keeps its view switch when it has one, and has no dock otherwise. Code keeps them: the Target's assembly, a text File whose extension names no known format (an include File's extension is anyone's guess), C and C++ as before, and an Executable. A path that names nothing still offers Build, which says what is missing. The rule is `offersBuild` in `editorFileRouting.ts`.
+- **The session's controls stay.** Once a Debug session is on, Stop, Run, Undo, Step and Test are on whatever pane holds the controls, a document's too: a program can write a File, and its output is worth opening while stepping.
+- **The controls prefer a pane that offers Build.** After a pane showing assembly or a Listing, `controlsGroup` takes one showing an Executable's bytes or a C File before one showing a document, so a split with a README never hides Build. The tablet's shared bar follows the same rule, and Shift+B builds from any File.
+- **The Interactive editor is unchanged** for now; its dock still reads "Build entry" on any File but the Entry file.
+
+## Preview tabs, 2026-10-18
+
+At the owner's request, the tabs work as in VS Code. This supersedes "There are no preview tabs" under File tabs.
+
+- **A single click on a File in the Explorer opens it in the pane's preview tab,** named in italics. The next File opened that way takes its place in the row, so looking through Files does not fill it. A File already open, kept or in preview, is only focused. Each pane has its own preview tab (`FileTabs.preview`, `previewTab` in `fileTabs.ts`, `WorkbenchSession.previewFile`).
+- **A preview tab is kept open** by a second click on its File in the Explorer, which makes a double click open a File for good, by a double click on the tab, or by an edit that changes the File, typed as text or as bytes in the Hex editor (`keepOpen`). Its italics then go. A File not analyzed from the Entry file keeps its dimmed name but loses its italics, which are the preview's now.
+- **Every other way of opening a File keeps its tab open,** as before: the Explorer menu's Open, a File made, renamed, uploaded or dropped, a tab moved to the other pane, the debugger's navigation, Problems, Go to Definition, Compile and Decompile.
+- **The preview tab is saved as an ordinary open tab:** a reopened Project shows it kept open. The Project format is unchanged.

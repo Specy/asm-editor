@@ -64,6 +64,12 @@
         locked?: boolean
         diagnosticCounts?: Readonly<Record<string, { errors: number; warnings: number }>>
         onSelect: (path: string) => void
+        /**
+         * A single click on a File's row, which an IDE opens in its preview tab; `onSelect` when
+         * not given. Opening a File any other way (the menu's Open, a File made, renamed or
+         * uploaded) is `onSelect`.
+         */
+        onPreview?: (path: string) => void
         onEntryChange: (path: string) => void
         onRenamed?: (from: string, to: string) => void
         onDeleted?: (path: string) => void
@@ -97,6 +103,7 @@
         locked = false,
         diagnosticCounts = {},
         onSelect,
+        onPreview = onSelect,
         onEntryChange,
         onRenamed,
         onDeleted,
@@ -683,7 +690,7 @@
                             style:padding-left={`${0.35 + row.depth * 0.85}rem`}
                         >
                             <span class="disclosure-spacer"></span>
-                            <SourceFileIcon path={draftName} {language} binary={false} />
+                            <SourceFileIcon path={draftName} {language} />
                             <input
                                 class="name-input"
                                 aria-label="Name of the new file"
@@ -755,7 +762,7 @@
                             <SourceFileIcon
                                 path={draftName || row.path}
                                 {language}
-                                binary={files[row.path]?.encoding === 'base64'}
+                                file={files[row.path]}
                             />
                             <input
                                 class="name-input"
@@ -794,14 +801,10 @@
                             ondragstart={(event) => startDrag(event, row.path)}
                             ondragend={endDrag}
                             style:padding-left={`${0.35 + row.depth * 0.85}rem`}
-                            onclick={() => onSelect(row.path)}
+                            onclick={() => onPreview(row.path)}
                         >
                             <span class="disclosure-spacer"></span>
-                            <SourceFileIcon
-                                path={row.path}
-                                {language}
-                                binary={files[row.path]?.encoding === 'base64'}
-                            />
+                            <SourceFileIcon path={row.path} {language} file={files[row.path]} />
                             <span class="ellipsis">{row.name}</span>
                             {#if diagnosticCounts[row.path]?.errors}
                                 <span
@@ -886,10 +889,10 @@
                         <button
                             class="file-select"
                             style:padding-left="0.35rem"
-                            onclick={() => onSelect(output.path)}
+                            onclick={() => onPreview(output.path)}
                         >
                             <span class="disclosure-spacer"></span>
-                            <SourceFileIcon path={output.path} {language} binary />
+                            <SourceFileIcon path={output.path} {language} file={output.bytes} />
                             <span class="ellipsis">{output.path}</span>
                             {#if output.stale}
                                 <span class="stale-note">From an earlier Build</span>
@@ -928,10 +931,10 @@
                             <button
                                 class="file-select"
                                 style:padding-left="0.35rem"
-                                onclick={() => onSelect(path)}
+                                onclick={() => onPreview(path)}
                             >
                                 <span class="disclosure-spacer"></span>
-                                <SourceFileIcon {path} {language} binary={false} />
+                                <SourceFileIcon {path} {language} />
                                 <span class="ellipsis">{path.slice(path.lastIndexOf('/') + 1)}</span
                                 >
                             </button>

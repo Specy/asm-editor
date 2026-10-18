@@ -1,25 +1,60 @@
 /**
  * The Workbench's row of open Files ([the design record](../../../../../docs/design/workbench.md), File
- * tabs): paths in the order they were opened, and the one shown. Which version of a File a tab shows,
- * the live one or the Build snapshot, is not a property of the tab but of the Debug session, see
- * `selectProjectFile`; these rules only decide which paths are open.
+ * tabs): paths in the order they were opened, the one shown, and the one in preview. Which version
+ * of a File a tab shows, the live one or the Build snapshot, is not a property of the tab but of the
+ * Debug session, see `selectProjectFile`; these rules only decide which paths are open.
  */
 export type FileTabs = {
     readonly paths: readonly string[]
     readonly active: string
+    /**
+     * The preview tab, as an IDE has one: a File opened from the Explorer with a single click,
+     * which the next File opened that way takes the place of, until it is kept open.
+     */
+    readonly preview?: string
+}
+
+/** The row with `preview` as its preview tab, or none, leaving out the field when there is none. */
+function withPreview(paths: readonly string[], active: string, preview?: string): FileTabs {
+    return preview !== undefined && paths.includes(preview)
+        ? { paths, active, preview }
+        : { paths, active }
 }
 
 export function initialTabs(path: string): FileTabs {
     return { paths: path ? [path] : [], active: path }
 }
 
-/** Opens a File's tab at the end of the row, or focuses it when it is already open. */
+/**
+ * Opens a File's tab at the end of the row, kept open, or focuses it when it is already open,
+ * whether kept or in preview.
+ */
 export function openTab(tabs: FileTabs, path: string): FileTabs {
     if (!path) return tabs
     if (tabs.paths.includes(path)) {
-        return tabs.active === path ? tabs : { paths: tabs.paths, active: path }
+        return tabs.active === path ? tabs : withPreview(tabs.paths, path, tabs.preview)
     }
-    return { paths: [...tabs.paths, path], active: path }
+    return withPreview([...tabs.paths, path], path, tabs.preview)
+}
+
+/**
+ * Opens a File in the preview tab, in the place of the File previewed before it, or at the end of
+ * the row when there is none; a File already open is only focused, whether kept or in preview.
+ */
+export function previewTab(tabs: FileTabs, path: string): FileTabs {
+    if (!path) return tabs
+    if (tabs.paths.includes(path)) return openTab(tabs, path)
+    const index = tabs.preview === undefined ? -1 : tabs.paths.indexOf(tabs.preview)
+    const paths =
+        index < 0
+            ? [...tabs.paths, path]
+            : [...tabs.paths.slice(0, index), path, ...tabs.paths.slice(index + 1)]
+    return { paths, active: path, preview: path }
+}
+
+/** Keeps a File in preview open, so that the next File previewed opens beside it. */
+export function keepTab(tabs: FileTabs, path: string): FileTabs {
+    return tabs.preview === path ? { paths: tabs.paths, active: tabs.active } : tabs
 }
 
 /**
@@ -32,7 +67,7 @@ export function closeTab(tabs: FileTabs, path: string): FileTabs {
     const paths = tabs.paths.filter((candidate) => candidate !== path)
     const active =
         tabs.active === path ? (paths[Math.min(index, paths.length - 1)] ?? '') : tabs.active
-    return { paths, active }
+    return withPreview(paths, active, tabs.preview)
 }
 
 /** A renamed or moved File keeps its place in the row, and stays shown if it was. */
@@ -43,7 +78,8 @@ export function renameTab(tabs: FileTabs, from: string, to: string): FileTabs {
         const next = path === from ? to : path
         if (!paths.includes(next)) paths.push(next)
     }
-    return { paths, active: tabs.active === from ? to : tabs.active }
+    const preview = tabs.preview === from ? to : tabs.preview
+    return withPreview(paths, tabs.active === from ? to : tabs.active, preview)
 }
 
 /**
@@ -59,11 +95,11 @@ export function retainTabs(
     const paths = tabs.paths.filter(keep)
     if (paths.length === 0) return initialTabs(fallback)
     if (paths.length === tabs.paths.length && paths.includes(tabs.active)) return tabs
-    if (paths.includes(tabs.active)) return { paths, active: tabs.active }
+    if (paths.includes(tabs.active)) return withPreview(paths, tabs.active, tabs.preview)
     const index = tabs.paths.indexOf(tabs.active)
     //the shown tab went: show the nearest survivor to its right, else the last one
     const after = tabs.paths.slice(index + 1).find((path) => paths.includes(path))
-    return { paths, active: after ?? paths[paths.length - 1] }
+    return withPreview(paths, after ?? paths[paths.length - 1], tabs.preview)
 }
 
 /** A deleted File takes its tab with it. */

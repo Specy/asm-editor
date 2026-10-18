@@ -6,7 +6,6 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import FaExpand from '~icons/fa-solid/expand'
     import FaFilePdf from '~icons/fa-solid/file-pdf'
-    import FaMusic from '~icons/fa-solid/music'
     import { formatDuration, pdfDisplay, PREVIEW_UNAVAILABLE } from './previewSupport'
 
     /**
@@ -22,7 +21,10 @@
         kind: FilePreview
         /** The browser could not show the File at `path` as its kind; the note says so. */
         onUnavailable?: (path: string, note: string) => void
-        /** Whether the execution dock floats over the pane's bottom edge, which the Preview leaves room for. */
+        /**
+         * Whether the execution dock floats over the pane's bottom edge, which an image, audio or
+         * video leaves room for; a PDF's frame runs under it.
+         */
         dockInset?: boolean
     }
 
@@ -149,16 +151,12 @@
                     </div>
                 {/if}
             {:else if kind.preview === 'audio'}
-                <div class="audio">
-                    <span class="audio-icon" aria-hidden="true"><FaMusic /></span>
-                    <span class="audio-name">{name}</span>
-                    <audio
-                        controls
-                        src={source.url}
-                        onloadedmetadata={(event) => (duration = event.currentTarget.duration)}
-                        onerror={(event) => failed(event, PREVIEW_UNAVAILABLE.audio)}
-                    ></audio>
-                </div>
+                <audio
+                    controls
+                    src={source.url}
+                    onloadedmetadata={(event) => (duration = event.currentTarget.duration)}
+                    onerror={(event) => failed(event, PREVIEW_UNAVAILABLE.audio)}
+                ></audio>
             {:else}
                 <!-- a File's video comes with no captions to give it -->
                 <!-- svelte-ignore a11y_media_has_caption -->
@@ -301,8 +299,10 @@
         background-size: 1rem 1rem;
         box-shadow: 0 0 0 1px var(--preview-line);
     }
+    /* the frame runs to the pane's bottom edge, as the code editor does, with the dock floating over
+       the viewer: room left above the dock showed as a strip of the pane under the PDF */
     .pdf {
-        padding: 0 0 var(--dock-room);
+        padding: 0;
     }
     iframe {
         flex: 1;
@@ -311,8 +311,7 @@
         border: none;
         background: var(--secondary);
     }
-    .pdf-notice,
-    .audio {
+    .pdf-notice {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -325,8 +324,7 @@
         margin: 0;
         opacity: 0.8;
     }
-    .pdf-icon,
-    .audio-icon {
+    .pdf-icon {
         display: grid;
         place-items: center;
         width: 3rem;
@@ -340,18 +338,10 @@
             height: 1.3rem;
         }
     }
-    .audio {
-        width: min(32rem, 100%);
-    }
-    .audio-name {
-        max-width: 100%;
-        overflow-wrap: anywhere;
-        font-family: monospace;
-        font-size: 0.85rem;
-        opacity: 0.85;
-    }
+    /* the player alone, centred in the pane: the status line above already names its type */
     audio {
-        width: 100%;
+        margin: auto;
+        width: min(32rem, 100%);
     }
     .pdf-actions {
         display: flex;

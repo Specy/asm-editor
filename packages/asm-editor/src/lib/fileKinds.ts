@@ -1,16 +1,19 @@
 import type { AvailableLanguages } from './Project.svelte'
 import { executableKind } from './executables'
 import { fileHead, type ProjectFile } from './projectFiles'
+import { isMarkdownPath } from './textFileLanguages'
 
 /**
  * What a File is, from its bytes and never its name, since forensics files often carry a wrong
  * extension or none ([file-views.md](../../../../docs/design/file-views.md), decisions 1 and 14):
- * text, an **Executable**, a kind the browser can **Preview**, or bytes for the Hex editor.
+ * text, an **Executable**, a kind the browser can **Preview**, or bytes for the Hex editor. Only
+ * a text File's name counts, as it makes a File C: one named as Markdown is `markdown`, text with
+ * a rendered Preview.
  */
 
 /** A kind of File the browser shows itself, and the type it is handed as. */
 export type FilePreview = Readonly<{ preview: 'image' | 'pdf' | 'audio' | 'video'; mime: string }>
-export type ProjectFileKind = 'text' | 'executable' | FilePreview | 'bytes'
+export type ProjectFileKind = 'text' | 'markdown' | 'executable' | FilePreview | 'bytes'
 
 /**
  * How much of a File recognition reads: enough for an ISO media file's `ftyp` box with its brands,
@@ -150,21 +153,36 @@ export function previewSignature(bytes: Uint8Array): FilePreview | undefined {
 }
 
 /**
- * What a File is, from its bytes with their Byte edits. An ELF is an Executable only where a Build
- * can run it, in an x86 Project, as `executableKind` decides; anywhere else it is bytes. A File
- * stored as text is text whatever its first bytes, but for a PDF: one written in ASCII alone
- * decodes as text, and is still a PDF to preview.
+ * What the File at `path` is, from its bytes with their Byte edits. An ELF is an Executable only
+ * where a Build can run it, in an x86 Project, as `executableKind` decides; anywhere else it is
+ * bytes. A File stored as text is text whatever its first bytes, Markdown by its name, but for a
+ * PDF: one written in ASCII alone decodes as text, and is still a PDF to preview.
  */
-export function fileKind(file: ProjectFile, language: AvailableLanguages): ProjectFileKind {
+export function fileKind(
+    file: ProjectFile,
+    language: AvailableLanguages,
+    path: string
+): ProjectFileKind {
     if (language === 'X86' && executableKind(file) === 'supported') return 'executable'
-    if (file.encoding === 'plain') return file.content.startsWith('%PDF-') ? pdf() : 'text'
+    const preview = filePreview(file)
+    if (preview) return preview
+    if (file.encoding === 'plain') return isMarkdownPath(path) ? 'markdown' : 'text'
+    return 'bytes'
+}
+
+/**
+ * The previewable kind a File's first bytes, with their Byte edits, match; a File stored as text
+ * only as a PDF, which `fileKind` explains.
+ */
+export function filePreview(file: ProjectFile): FilePreview | undefined {
+    if (file.encoding === 'plain') return file.content.startsWith('%PDF-') ? pdf() : undefined
     let head: Uint8Array
     try {
         head = fileHead(file, HEAD_LENGTH)
     } catch {
-        return 'bytes'
+        return undefined
     }
-    return previewSignature(head) ?? 'bytes'
+    return previewSignature(head)
 }
 
 export function isPreviewKind(kind: ProjectFileKind | undefined): kind is FilePreview {

@@ -626,6 +626,69 @@
             }
         })
     )
+
+    /**
+     * Takes every `style` attribute off, before Shiki colours the code with its own: one written
+     * into a Project File's Markdown could restyle or cover the page around the preview.
+     */
+    const rehypeStripStyles = () => (tree: Root) => {
+        visit(tree, 'element', (node: Element) => {
+            delete node.properties.style
+        })
+    }
+
+    const strippedStylesPlugin: Plugin = {
+        transformers: [
+            {
+                execution: 'sync',
+                type: 'rehype',
+                transform({ processor }) {
+                    processor.use(rehypeStripStyles)
+                }
+            }
+        ]
+    }
+
+    /** What a Project File's Markdown may not bring: stylesheets, frames, plugins and forms. */
+    function sanitizeUntrustedHtml(html: string) {
+        return DOMPurify.sanitize(html, {
+            FORBID_TAGS: [
+                'style',
+                'iframe',
+                'frame',
+                'object',
+                'embed',
+                'form',
+                'input',
+                'button',
+                'select',
+                'textarea'
+            ]
+        })
+    }
+
+    /**
+     * A Project File's Markdown, which whoever shared the Project wrote: playgrounds as plain
+     * code, links out in a new tab, and none of its own styles, frames or forms.
+     */
+    const cartaUntrusted = $derived(
+        new Carta({
+            sanitizer: sanitizeUntrustedHtml,
+            extensions: [
+                extWithExternalLins,
+                strippedStylesPlugin,
+                plainPlaygroundsPlugin,
+                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                codeBlocksPlugin
+            ],
+            rehypeOptions: {
+                allowDangerousHtml: true
+            },
+            shikiOptions: {
+                themes: [theme]
+            }
+        })
+    )
 </script>
 
 <script lang="ts">
@@ -660,6 +723,22 @@
          * (`code`), which is how a Lecture section reads inside the Documentation panel.
          */
         playgrounds?: 'embed' | 'code'
+        /**
+         * Markdown a Project File holds, which whoever shared the Project wrote: playgrounds as
+         * plain code, links out in a new tab, and none of its own styles, frames or forms.
+         */
+        untrusted?: boolean
+        /**
+         * Render again in place as `source` changes, keeping what is shown until the new render is
+         * ready, as a preview beside the text being typed has to, rather than starting over from
+         * the render without highlighting each time.
+         */
+        live?: boolean
+        /**
+         * Called with each live render's content, still inert, before it is shown: where a host
+         * points images and links at things of its own. A new function renders again.
+         */
+        prepare?: (content: DocumentFragment) => void
     }
 
     let {
@@ -673,20 +752,51 @@
         disableLinks,
         centered = true,
         headingIds = false,
-        playgrounds = 'embed'
+        playgrounds = 'embed',
+        untrusted = false,
+        live = false,
+        prepare
     }: Props = $props()
 
     const carta = $derived(
-        playgrounds === 'code'
-            ? cartaWithPlainPlaygrounds
-            : disableLinks
-              ? cartaWithoutLinks
-              : headingIds
-                ? cartaWithHeadingIds
-                : linksInNewTab
-                  ? cartaWithExternalLins
-                  : cartaNormal
+        untrusted
+            ? cartaUntrusted
+            : playgrounds === 'code'
+              ? cartaWithPlainPlaygrounds
+              : disableLinks
+                ? cartaWithoutLinks
+                : headingIds
+                  ? cartaWithHeadingIds
+                  : linksInNewTab
+                    ? cartaWithExternalLins
+                    : cartaNormal
     )
+
+    /** A render's HTML as the host prepared it, parsed where nothing in it loads or runs. */
+    function prepared(html: string, finish: typeof prepare): string {
+        if (!finish || typeof document === 'undefined') return html
+        const template = document.createElement('template')
+        template.innerHTML = html
+        finish(template.content)
+        return template.innerHTML
+    }
+
+    /** The newest live render that finished; until one has, the first one without highlighting. */
+    let liveHtml = $state<string>()
+    $effect(() => {
+        if (!live) return
+        const [value, current, finish] = [source, carta, prepare]
+        let replaced = false
+        current
+            .render(value)
+            .then((html) => {
+                if (!replaced) liveHtml = prepared(html, finish)
+            })
+            .catch((error) => console.error('The Markdown could not be rendered', error))
+        return () => {
+            replaced = true
+        }
+    })
 
     let wrapper: HTMLDivElement | undefined = $state()
 
@@ -724,9 +834,17 @@
     style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
     style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
 >
-    {#key source + theme + disableLinks + playgrounds + headingIds}
-        <Markdown value={source} {carta} />
-    {/key}
+    {#if live}
+        <div class="carta-viewer carta-theme__default markdown-body">
+            <!-- sanitized by the Carta instance, as the Markdown component's own is -->
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html liveHtml ?? prepared(carta.renderSSR(source), prepare)}
+        </div>
+    {:else}
+        {#key source + theme + disableLinks + playgrounds + headingIds + untrusted}
+            <Markdown value={source} {carta} />
+        {/key}
+    {/if}
 </div>
 
 <style lang="scss">

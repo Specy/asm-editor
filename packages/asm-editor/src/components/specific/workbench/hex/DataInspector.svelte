@@ -1,4 +1,5 @@
 <script lang="ts">
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import { inspectBytes } from './dataInspector'
 
     /**
@@ -17,25 +18,26 @@
         side?: boolean
     } = $props()
     const rows = $derived(inspectBytes(bytes, littleEndian))
+
+    const BYTE_ORDERS = [
+        {
+            id: 'little',
+            label: 'Little',
+            title: 'Little endian: the first byte is the least significant, as on x86'
+        },
+        { id: 'big', label: 'Big', title: 'Big endian: the first byte is the most significant' }
+    ]
 </script>
 
 <section class="data-inspector" class:side aria-label="Data inspector">
     <header>
         <h3>Data inspector</h3>
-        <div class="byte-order" role="group" aria-label="Byte order">
-            <button
-                type="button"
-                aria-pressed={littleEndian}
-                title="Little endian: the first byte is the least significant, as on x86"
-                onclick={() => (littleEndian = true)}>Little</button
-            >
-            <button
-                type="button"
-                aria-pressed={!littleEndian}
-                title="Big endian: the first byte is the most significant"
-                onclick={() => (littleEndian = false)}>Big</button
-            >
-        </div>
+        <SegmentedControl
+            ariaLabel="Byte order"
+            options={BYTE_ORDERS}
+            selected={littleEndian ? 'little' : 'big'}
+            onSelect={(id) => (littleEndian = id === 'little')}
+        />
     </header>
     {#if bytes.length}
         <dl>
@@ -82,29 +84,6 @@
         font-size: 0.8rem;
         font-weight: 500;
         opacity: 0.85;
-    }
-    .byte-order {
-        display: flex;
-        border: 1px solid var(--wb-line, var(--tertiary));
-        border-radius: 0.3rem;
-        overflow: hidden;
-
-        button {
-            padding: 0.15rem 0.45rem;
-            background: transparent;
-            color: inherit;
-            font: inherit;
-            font-size: 0.75rem;
-            cursor: pointer;
-
-            &[aria-pressed='true'] {
-                background: color-mix(in srgb, var(--accent) 22%, transparent);
-            }
-            &:focus-visible {
-                outline: 2px solid var(--accent);
-                outline-offset: -2px;
-            }
-        }
     }
     /* a narrow pane lays the readings out in two columns, so the inspector stays short */
     dl {

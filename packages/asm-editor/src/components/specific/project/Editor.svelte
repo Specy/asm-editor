@@ -13,6 +13,7 @@
         AvailableLanguages,
         AvailableProgrammingLanguages
     } from '../../../lib/Project.svelte'
+    import { isTextFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
     import type { MonacoType } from '#lib/monaco/Monaco.ts'
     import { Monaco } from '#lib/monaco/Monaco.ts'
     import { generateTheme } from '#lib/monaco/editorTheme.ts'
@@ -75,7 +76,7 @@
         /** Palette indices emphasized by the active source/assembly connections; others dim. */
         activeLineColors?: ReadonlySet<number>
         hasError?: boolean
-        language: AvailableLanguages | AvailableProgrammingLanguages
+        language: AvailableLanguages | AvailableProgrammingLanguages | TextFileLanguage
         diagnostics?: Diagnostic[]
         breakpoints?: number[]
         /** Lines where a Breakpoint set on another File, through a Source map, stops. */
@@ -904,7 +905,9 @@
             }
             currentMonaco.editor.setModelMarkers(
                 model,
-                language,
+                //JSON, JavaScript, CSS and HTML report their own problems under their language's
+                //name, which the editor's would replace
+                isTextFileLanguage(language) ? `asm-editor-${language}` : language,
                 diagnostics.map((e) => {
                     const lineNumber = Math.min(Math.max(e.lineIndex + 1, 1), model.getLineCount())
                     const maxColumn = model.getLineMaxColumn(lineNumber)

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { importFile, type ImportedFile } from '#lib/executableImport.ts'
+    import { IMPORTABLE_FILES, importFiles, importFromData } from '#lib/projectImport.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
     import { onMount } from 'svelte'
@@ -9,12 +9,10 @@
     import Title from '#cmp/shared/layout/Header.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
-    import FileImporter from '#cmp/shared/fileImporter/FileImporter.svelte'
+    import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
     import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '#stores/toastStore.ts'
-    import { projectContentEquals, type ExternalImport } from '#lib/Project.svelte.ts'
-    import { Prompt } from '#stores/promptStore.svelte.ts'
     import { goto } from '$app/navigation'
     import Page from '#cmp/shared/layout/Page.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
@@ -24,58 +22,26 @@
     import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
 
     let hasFileHandleSupport = false
+    let fileInput: HTMLInputElement | undefined
 
-    async function importProject({ project, notice }: ExternalImport) {
+    /**
+     * Import's picker: where the browser can write back to a file, the Projects it picked are
+     * linked to it and saved there; elsewhere they are imported as copies.
+     */
+    async function pickAndImport() {
+        if (!hasFileHandleSupport) return fileInput?.click()
+        let files: FileSystemFileHandle[]
         try {
-            if (notice) toast.warn(notice, 8000)
-            const existing = await ProjectStore.getProject(project.id)
-            if (existing && !projectContentEquals(existing.toObject(), project.toObject())) {
-                const override = await Prompt.confirm(
-                    'An existing project with this id already exists, do you want to override it?'
-                )
-                if (override === null) {
-                    toast.success('Cancelled import')
-                    return undefined
-                }
-                if (!override) {
-                    toast.success('Cancelled import')
-                    return undefined
-                }
-                await ProjectStore.save(project)
-                toast.logPill('Overriden project!')
-                return project
-            } else if (existing) {
-                ProjectStore.save(project)
-                toast.logPill('Updated project!')
-                return project
-            } else {
-                const proj = await ProjectStore.addProject(project)
-                toast.success('Imported project!')
-                return proj
-            }
+            //@ts-expect-error showOpenFilePicker is not in the types
+            files = await window.showOpenFilePicker({ multiple: true })
+        } catch {
+            return //cancelled
+        }
+        try {
+            await importFromFileHandle(files)
         } catch (e) {
             console.error(e)
             toast.error('Failed to import project!')
-        }
-        return undefined
-    }
-
-    /** Imports a file: what it became, and how it was read, or undefined when it was not. */
-    async function importFromData(
-        data: ArrayBuffer,
-        fileName: string
-    ): Promise<
-        | { project: NonNullable<Awaited<ReturnType<typeof importProject>>>; read: ImportedFile }
-        | undefined
-    > {
-        try {
-            const read = await importFile(new Uint8Array(data), fileName)
-            const project = await importProject(read.imported)
-            return project ? { project, read } : undefined
-        } catch (e) {
-            console.error(e)
-            toast.error(e instanceof Error ? e.message : 'Failed to import project!')
-            return undefined
         }
     }
 
@@ -171,43 +137,26 @@
                     <Title style="margin: 0">Your projects</Title>
                 </Row>
                 <div class="row top-row-buttons">
-                    {#if hasFileHandleSupport}
-                        <!-- Ignored for now as browser asks for permission -->
-                        <Button
-                            cssVar="secondary"
-                            onClick={async () => {
-                                //@ts-expect-error showOpenFilePicker is not in the types
-                                const files = await window.showOpenFilePicker({ multiple: true })
-                                try {
-                                    await importFromFileHandle(files)
-                                } catch (e) {
-                                    console.error(e)
-                                    toast.error('Failed to import project!')
-                                }
-                            }}
-                        >
-                            <Icon style="margin-right: 0.4rem" size={1}>
-                                <FaUpload />
-                            </Icon>
-                            Import
-                        </Button>
-                    {:else}
-                        <FileImporter
-                            on:import={(e) => {
-                                if (e.detail.data instanceof ArrayBuffer) {
-                                    void importFromData(e.detail.data, e.detail.file.name)
-                                }
-                            }}
-                            as="buffer"
+                    <Button cssVar="secondary" onClick={pickAndImport}>
+                        <Icon style="margin-right: 0.4rem" size={1}>
+                            <FaUpload />
+                        </Icon>
+                        Import
+                    </Button>
+                    {#if !hasFileHandleSupport}
+                        <!-- No filter: CTF binaries rarely have an extension -->
+                        <input
+                            type="file"
+                            multiple
                             accept=""
-                        >
-                            <Button cssVar="secondary">
-                                <Icon style="margin-right: 0.4rem" size={1}>
-                                    <FaUpload />
-                                </Icon>
-                                Import
-                            </Button>
-                        </FileImporter>
+                            hidden
+                            bind:this={fileInput}
+                            on:change={(event) => {
+                                const files = [...(event.currentTarget.files ?? [])]
+                                event.currentTarget.value = ''
+                                void importFiles(files)
+                            }}
+                        />
                     {/if}
 
                     <ButtonLink href="/projects/create" title="Create a new project">
@@ -218,8 +167,16 @@
                     </ButtonLink>
                 </div>
             </div>
+            <div class="import-drop">
+                <FileDropZone
+                    title="Drop files here to import them"
+                    hint={IMPORTABLE_FILES}
+                    onFiles={(files) => void importFiles(files)}
+                    onBrowse={pickAndImport}
+                />
+            </div>
             {#if ProjectStore.projects.length === 0}
-                <h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
+                <h3 style="margin-top: 1rem; margin-left: 2rem; font-weight:unset">
                     You seem to have no projects, create one!
                 </h3>
             {/if}
@@ -297,6 +254,10 @@
 
     .top-row-buttons {
         gap: 0.8rem;
+    }
+
+    .import-drop {
+        margin-bottom: 1.5rem;
     }
 
     .add-project {

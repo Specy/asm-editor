@@ -22,6 +22,7 @@
     import {
         applyByteEdits,
         originalBytes,
+        overwriteText,
         type ByteEdit,
         type ProjectFile
     } from '#lib/projectFiles.ts'
@@ -67,7 +68,9 @@
      * 2, 3, 7, 8 and 9): a File's bytes as rows of hex beside their text, drawn for the rows in
      * sight only, over the File's whole length. A caret moved by the keys overwrites a digit at a
      * time in the hex column or a character in the text column; each run of typing is one Byte
-     * edit, and Undo and Redo put back the File's whole list of edits.
+     * edit, and Undo and Redo put back the File's whole list of edits. A File stored as text keeps
+     * no Byte edits: a run of typing changes its text, which must stay UTF-8, and Undo writes back
+     * the bytes it wrote over.
      */
     interface Props {
         path: string
@@ -81,12 +84,12 @@
         /** Shared by every pane, so that a File's Undo is the same whichever pane typed. */
         history?: ByteEditHistory
         /**
-         * Overwrites bytes of the File at `path`; false when the edit was refused, which drops
-         * what was typed. The path is passed back because what was typed is saved as the editor
-         * closes too, when the pane may already show another File.
+         * Overwrites bytes of the File at `path`, or of a File stored as text its text; false when
+         * the edit was refused, which drops what was typed. The path is passed back because what
+         * was typed is saved as the editor closes too, when the pane may already show another File.
          */
         onEdit?: (path: string, offset: number, bytes: Uint8Array) => boolean
-        /** Puts back a File's whole list of edits, for Undo and Redo. */
+        /** Puts back a byte File's whole list of edits, for Undo and Redo. */
         onSetEdits?: (path: string, edits: readonly ByteEdit[]) => boolean
         /**
          * Hands the Workbench the editor's save of what was typed and not saved yet, which it calls
@@ -296,25 +299,45 @@
         }
     })
 
+    /** What was typed and not saved yet, as the one run of bytes it is. */
+    function typedRun(): { start: number; run: Uint8Array } {
+        const offsets = [...pending.keys()]
+        const start = Math.min(...offsets)
+        const run = new Uint8Array(Math.max(...offsets) + 1 - start)
+        for (const [offset, byte] of pending) run[offset - start] = byte
+        return { start, run }
+    }
     /**
-     * Saves what was typed as one Byte edit, with the edits before it for Undo. What was typed is
-     * one run of bytes, so the run is read from it alone.
+     * Saves what was typed as one Byte edit, with the edits before it for Undo, or over a File
+     * stored as text as a change to its text, with the bytes it wrote over.
      */
     function flush() {
         clearTimeout(flushTimer)
         flushTimer = undefined
         if (!pending.size) return
-        const offsets = [...pending.keys()]
-        const start = Math.min(...offsets)
-        const run = new Uint8Array(Math.max(...offsets) + 1 - start)
-        for (const [offset, byte] of pending) run[offset - start] = byte
+        const { start, run } = typedRun()
         const before = currentFile
+        const overwritten =
+            before.encoding === 'plain'
+                ? originalOf(before).slice(start, start + run.length)
+                : undefined
         pending = new Map()
-        if (onEdit?.(ownPath, start, run)) history.record(ownPath, before, pendingStart)
+        if (!onEdit?.(ownPath, start, run)) return
+        if (overwritten)
+            history.recordText(ownPath, { offset: start, before: overwritten, after: run })
+        else history.record(ownPath, before, pendingStart)
     }
     function scheduleFlush() {
         clearTimeout(flushTimer)
-        flushTimer = setTimeout(flush, TYPING_PAUSE)
+        flushTimer = setTimeout(() => {
+            if (!pending.size) return
+            //a character of a text File typed byte by byte in hex is not UTF-8 until its last
+            //byte: a pause halfway waits for the rest, and the caret leaving saves it or says why not
+            const { start, run } = typedRun()
+            const text = currentFile.encoding === 'plain' ? currentFile.content : undefined
+            if (text !== undefined && overwriteText(text, start, run) === undefined) return
+            flush()
+        }, TYPING_PAUSE)
     }
     onMount(() => {
         //a page closed or hidden right after typing still keeps it
@@ -351,10 +374,10 @@
     }
 
     function undo(redo = false) {
-        if (!editable || !onSetEdits) return
+        if (!editable) return
         flush()
-        const step = redo ? history.redo(ownPath, file) : history.undo(ownPath, file)
-        if (!step || !onSetEdits(ownPath, step.edits)) return
+        const step = file.encoding === 'plain' ? undoText(redo) : undoEdits(redo)
+        if (!step) return
         anchor = undefined
         caret = {
             offset: Math.min(step.offset, Math.max(0, size - 1)),
@@ -362,6 +385,18 @@
             column: caret.column
         }
         revealCaret()
+    }
+    function undoEdits(redo: boolean) {
+        if (!onSetEdits) return undefined
+        const step = redo ? history.redo(ownPath, file) : history.undo(ownPath, file)
+        return step && onSetEdits(ownPath, step.edits) ? step : undefined
+    }
+    function undoText(redo: boolean) {
+        if (!onEdit) return undefined
+        const step = redo ? history.redoText(ownPath, bytes) : history.undoText(ownPath, bytes)
+        return step && onEdit(ownPath, step.offset, redo ? step.after : step.before)
+            ? step
+            : undefined
     }
 
     /** The bytes a copy takes: the selection's, or the caret's byte. */

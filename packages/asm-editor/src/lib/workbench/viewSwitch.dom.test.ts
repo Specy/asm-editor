@@ -137,7 +137,7 @@ describe('the view switch', () => {
         expect(project.fileViews).toEqual({ crackme: 'listing' })
 
         show(session, 'image.png')
-        expect(read().buttons).toEqual(['Build entry', 'Preview', 'Hex'])
+        expect(read().buttons).toEqual(['Preview', 'Hex'])
         expect(read().pressed).toEqual(['Preview'])
         press('Hex')
         expect(group.displayedView).toBe('hex')
@@ -289,6 +289,47 @@ describe('the views of a Debug session', () => {
 })
 
 describe('the execution dock', () => {
+    it('offers no Build or Test beside a document, only the controls of a Debug session', async () => {
+        const testcase = {
+            input: [],
+            expectedOutput: '',
+            startingRegisters: {},
+            expectedRegisters: {},
+            startingMemory: [],
+            expectedMemory: []
+        }
+        const { session } = setup(undefined, { testcases: [testcase] })
+        const group = show(session, 'notes.txt')
+        const { read } = dock(session, { group })
+        //text and other bytes have no dock at all, an image its switch alone
+        expect(session.controlsGroup).toBe(group)
+        expect(group.hasDock(true)).toBe(false)
+        expect(read().buttons).toEqual([])
+        show(session, 'blob.bin')
+        expect(group.hasDock(true)).toBe(false)
+        show(session, 'image.png')
+        expect(read().buttons).toEqual(['Preview', 'Hex'])
+        //code a Build would not start from keeps them, and says what Build starts from
+        show(session, 'main.asm')
+        expect(group.hasDock(true)).toBe(true)
+        expect(read().buttons).toEqual(['Build entry', 'Set file as entry', 'Test'])
+        await session.build()
+        await tick()
+        flushSync()
+        show(session, 'notes.txt')
+        expect(group.hasDock(true)).toBe(true)
+        expect(read().buttons).toEqual(['Stop', 'Run', 'Undo', 'Step', 'Test'])
+    })
+
+    it('puts the controls beside an Executable rather than a document', () => {
+        const { session } = setup(undefined, { openTabs: ['crackme'] })
+        const left = show(session, 'crackme')
+        const right = show(session, 'notes.txt', session.splitEditor())
+        expect(session.controlsGroup).toBe(left)
+        expect(left.hasDock(true)).toBe(true)
+        expect(right.hasDock(true)).toBe(false)
+    })
+
     it('draws the views after the controls, in or out of a Debug session', () => {
         const onChange = vi.fn()
         const views = {
@@ -324,9 +365,12 @@ describe('the execution dock', () => {
                 'true',
                 'false'
             ])
-            //the dock's own tool buttons, set apart from the controls by a divider
-            expect(buttons.every((button) => button.classList.contains('tool'))).toBe(true)
-            expect(group.previousElementSibling?.classList.contains('divider')).toBe(true)
+            //the editor's one choice control, set apart from the dock's buttons by a divider
+            expect(group.classList.contains('segmented-control')).toBe(true)
+            expect(buttons.every((button) => !button.classList.contains('tool'))).toBe(true)
+            expect(group.parentElement?.previousElementSibling?.classList.contains('divider')).toBe(
+                true
+            )
             buttons[1].click()
             expect(onChange).toHaveBeenLastCalledWith('listing')
             unmount(app)

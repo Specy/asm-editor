@@ -40,8 +40,8 @@
     }
 
     /**
-     * The view switch, beside Build: one button per view the pane's File offers, the pressed one
-     * the view it shows ([file-views.md](../../../../../../docs/design/file-views.md), decision 4).
+     * The view switch, beside Build: one option per view the pane's File offers, the picked one the
+     * view it shows ([file-views.md](../../../../../../docs/design/file-views.md), decision 4).
      */
     export interface DockViews {
         options: readonly DockView[]
@@ -62,6 +62,7 @@
      * one tray spans the bar and the buttons share its width.
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
@@ -327,22 +328,28 @@
             {#if beforeViews}
                 <span class="divider" aria-hidden="true"></span>
             {/if}
-            <div class="view-switch" role="group" aria-label="View">
-                {#each views.options as option (option.id)}
-                    <button
-                        type="button"
-                        class="tool view"
-                        aria-pressed={option.id === views.value}
-                        aria-label={option.label}
-                        title={option.title}
-                        onclick={() => views?.onChange(option.id)}
-                    >
-                        <Icon size={0.85}>
-                            <option.icon />
-                        </Icon>
-                        <span class="label">{option.label}</span>
-                    </button>
-                {/each}
+            <!-- the choice every other switch in the editor is, drawn at the dock's height and in
+                 its words, which drop as the dock narrows as the other buttons' do -->
+            <div class="view-switch" style:--views={views.options.length}>
+                <SegmentedControl
+                    ariaLabel="View"
+                    options={views.options}
+                    selected={views.value}
+                    onSelect={(id) => views?.onChange(id)}
+                    {fill}
+                    style="height: 100%"
+                >
+                    {#snippet face(option)}
+                        <span class="view">
+                            {#if option.icon}
+                                <Icon size={0.85}>
+                                    <option.icon />
+                                </Icon>
+                            {/if}
+                            <span class="label">{option.label}</span>
+                        </span>
+                    {/snippet}
+                </SegmentedControl>
             </div>
         {/if}
     </div>
@@ -499,20 +506,23 @@
         margin-left: 0.45rem;
     }
 
-    /* the views, one pressed: sunk into the tray like a pressed key, which a pill would not be */
+    /* the views, the editor's one control for a choice: a strip as tall as the tray's buttons,
+       whose highlight slides to the view shown, its faces in the tray's type */
     .view-switch {
         display: flex;
-        align-items: center;
-        gap: 0.2rem;
         height: 100%;
     }
 
-    .view[aria-pressed='true'] {
-        background-color: color-mix(in srgb, var(--accent) 22%, transparent);
-    }
+    .view {
+        display: flex;
+        align-items: center;
+        font-size: 0.95rem;
+        font-weight: 500;
+        user-select: none;
 
-    .view[aria-pressed='true']:hover {
-        background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+        :global(.icon) {
+            cursor: inherit;
+        }
     }
 
     .optimization,
@@ -552,9 +562,16 @@
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         pointer-events: auto;
 
-        .toolbar,
-        .view-switch {
+        .toolbar {
             display: contents;
+        }
+
+        /* the switch one item among the buttons, with a share for each of its options: its basis
+           the narrow tools' padding, which each of their shares holds beyond its part of the
+           width left over */
+        .view-switch {
+            flex: var(--views) 1 calc(var(--views) * 1.2rem);
+            min-width: 0;
         }
 
         .fill-only {
@@ -698,7 +715,10 @@
        for Preview · Hex, which is narrower: Hex 4.7rem and Disassemble 8.7rem with their words,
        2.45rem bare; beside them Build 5.3rem ("Build entry" 7.9rem), a Debug session's four 21.8rem
        and Test 5.5rem. A pane's dock with the switch alone keeps its words down to 14rem, in a
-       Debug session too. A switch of three has its own steps below */
+       Debug session too. A switch of three has its own steps below. These widths are the tool
+       buttons the switch was before it became the segmented control, which is narrower: Hex
+       4.3rem, Disassemble 8.3rem and Decompile 7.4rem with their words, 2.05rem bare, and no gap
+       between them, so each step comes a little before it has to */
     @container (max-width: 24rem) {
         .with-views:not(.switch-only) .view .label {
             display: none;

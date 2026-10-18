@@ -145,6 +145,10 @@
                             session.selectFile(path)
                             if (ui.deviceClass === 'phone') ui.drawerOpen = false
                         }}
+                        onPreview={(path) => {
+                            session.previewFile(path)
+                            if (ui.deviceClass === 'phone') ui.drawerOpen = false
+                        }}
                         onEntryChange={(path) => session.setEntry(path)}
                         onRenamed={(from, to) => session.fileRenamed(from, to)}
                         onDeleted={(path) => session.fileDeleted(path)}

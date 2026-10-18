@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { closeTab, initialTabs, openTab, removeTab, renameTab, retainTabs } from './fileTabs'
+import {
+    closeTab,
+    initialTabs,
+    keepTab,
+    openTab,
+    previewTab,
+    removeTab,
+    renameTab,
+    retainTabs
+} from './fileTabs'
 
 describe('openTab', () => {
     it('appends a new File and shows it', () => {
@@ -15,6 +24,47 @@ describe('openTab', () => {
     it('ignores an empty path', () => {
         const tabs = initialTabs('main.s')
         expect(openTab(tabs, '')).toBe(tabs)
+    })
+})
+
+describe('previewTab and keepTab', () => {
+    it('opens a File in preview at the end of the row, then another in its place', () => {
+        const one = previewTab(initialTabs('main.s'), 'a.s')
+        expect(one).toEqual({ paths: ['main.s', 'a.s'], active: 'a.s', preview: 'a.s' })
+        const two = previewTab(openTab(one, 'main.s'), 'b.s')
+        expect(two).toEqual({ paths: ['main.s', 'b.s'], active: 'b.s', preview: 'b.s' })
+    })
+
+    it('only focuses a File already open, kept or in preview, leaving the preview tab alone', () => {
+        const tabs = { paths: ['main.s', 'a.s'], active: 'a.s', preview: 'a.s' }
+        expect(previewTab(tabs, 'main.s')).toEqual({ ...tabs, active: 'main.s' })
+        expect(openTab(tabs, 'main.s')).toEqual({ ...tabs, active: 'main.s' })
+        expect(previewTab(tabs, 'a.s')).toBe(tabs)
+    })
+
+    it('opens a File kept open beside the preview tab, which stays in preview', () => {
+        const tabs = { paths: ['main.s', 'a.s'], active: 'a.s', preview: 'a.s' }
+        expect(openTab(tabs, 'b.s')).toEqual({
+            paths: ['main.s', 'a.s', 'b.s'],
+            active: 'b.s',
+            preview: 'a.s'
+        })
+    })
+
+    it('keeps the File in preview open, so the next preview opens beside it', () => {
+        const kept = keepTab(previewTab(initialTabs('main.s'), 'a.s'), 'a.s')
+        expect(kept).toEqual({ paths: ['main.s', 'a.s'], active: 'a.s' })
+        expect(previewTab(kept, 'b.s').paths).toEqual(['main.s', 'a.s', 'b.s'])
+        //keeping a File that is not in preview changes nothing
+        expect(keepTab(kept, 'main.s')).toBe(kept)
+    })
+
+    it('follows the File in preview through a rename, and drops it when it closes or goes', () => {
+        const tabs = { paths: ['main.s', 'a.s'], active: 'main.s', preview: 'a.s' }
+        expect(renameTab(tabs, 'a.s', 'lib/a.s').preview).toBe('lib/a.s')
+        expect(closeTab(tabs, 'a.s')).toEqual({ paths: ['main.s'], active: 'main.s' })
+        expect(removeTab(tabs, 'a.s', 'main.s')).toEqual({ paths: ['main.s'], active: 'main.s' })
+        expect(closeTab(tabs, 'main.s')).toEqual({ paths: ['a.s'], active: 'a.s', preview: 'a.s' })
     })
 })
 

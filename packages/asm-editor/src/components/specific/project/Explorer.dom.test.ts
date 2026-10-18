@@ -181,3 +181,34 @@ it('downloads a File as its exact bytes under its name, typed so no extension is
         target.remove()
     }
 })
+
+it("opens a File's row in preview with a click, or selects it when the host has no preview", async () => {
+    const fileSystem = new FileSystem({
+        'main.asm': { encoding: 'plain', content: 'nop' },
+        'notes.txt': { encoding: 'plain', content: 'hi' }
+    })
+    for (const preview of [true, false]) {
+        const target = document.createElement('div')
+        document.body.append(target)
+        const onSelect = vi.fn()
+        const onPreview = vi.fn()
+        const component = mount(Explorer, {
+            target,
+            props: {
+                files: fileSystem.files,
+                fileSystem,
+                entry: 'main.asm',
+                selectedPath: 'main.asm',
+                onSelect,
+                ...(preview ? { onPreview } : {}),
+                onEntryChange: vi.fn()
+            }
+        })
+        flushSync()
+        target.querySelector<HTMLElement>('[title="notes.txt"] .file-select')!.click()
+        expect((preview ? onPreview : onSelect).mock.calls).toEqual([['notes.txt']])
+        expect((preview ? onSelect : onPreview).mock.calls).toEqual([])
+        await unmount(component)
+        target.remove()
+    }
+})

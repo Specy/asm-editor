@@ -3,7 +3,12 @@ import { generateTheme } from '#lib/monaco/editorTheme.ts'
 import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
 import type monaco from 'monaco-editor'
 import editorWorker from 'monaco-editor/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/language/json/json.worker?worker'
+import cssWorker from 'monaco-editor/language/css/css.worker?worker'
+import htmlWorker from 'monaco-editor/language/html/html.worker?worker'
+import tsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
 import type { AvailableLanguages, AvailableProgrammingLanguages } from '#lib/Project.svelte.ts'
+import { isTextFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
 import { openProjectResource } from '#lib/languages/service/navigation.ts'
 import { registerAssemblyLanguage } from './assemblyLanguageRegistry'
 
@@ -55,14 +60,28 @@ class MonacoLoader {
         monacoInstance.editor.defineTheme('custom-theme', generateTheme())
         this.monaco = monacoInstance
         self.MonacoEnvironment = {
-            getWorker: function (_moduleId: unknown, _label: string) {
+            //Monaco asks here for every worker, its language services' too: a JSON, CSS, HTML or
+            //JavaScript File's model starts one of its own, which the editor's worker cannot be
+            getWorker: function (_moduleId: unknown, label: string) {
+                if (label === 'json') return new jsonWorker()
+                if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
+                if (label === 'html' || label === 'handlebars' || label === 'razor')
+                    return new htmlWorker()
+                if (label === 'typescript' || label === 'javascript') return new tsWorker()
                 return new editorWorker()
             }
         }
         return monacoInstance
     }
 
-    async registerLanguage(lang: AvailableLanguages | AvailableProgrammingLanguages) {
+    async registerLanguage(
+        lang: AvailableLanguages | AvailableProgrammingLanguages | TextFileLanguage
+    ) {
+        //Markdown, Python, JSON and the rest are Monaco's own, there as soon as it is
+        if (isTextFileLanguage(lang)) {
+            await this.load()
+            return
+        }
         if (lang === 'c' || lang === 'cpp') {
             const generation = this.sourceHelpGeneration
             this.sourceHelpRegistration ??= this.installSourceHelp(generation).catch((error) => {

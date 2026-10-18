@@ -20,6 +20,7 @@
     import HexEditor from './hex/HexEditor.svelte'
     import type { HexViewState } from './hex/hexGrid'
     import FilePreview from './preview/FilePreview.svelte'
+    import MarkdownPreview from './preview/MarkdownPreview.svelte'
     import { isPreviewKind } from '#lib/fileKinds.ts'
     import { useWorkbench } from './workbenchContext'
 
@@ -331,6 +332,17 @@
                     kind={group.displayedKind}
                     dockInset={docked}
                     onUnavailable={(path, note) => group.previewUnavailable(path, note)}
+                />
+            {/key}
+        {:else if group.displayedView === 'preview' && group.displayedFile && group.displayedKind === 'markdown'}
+            <!-- one Preview per File, whose images' Blob URLs go with it -->
+            {#key group.displayedPath}
+                <MarkdownPreview
+                    path={group.displayedPath}
+                    file={group.displayedFile}
+                    files={session.project.files}
+                    dockInset={docked}
+                    onOpenFile={(path) => session.selectFile(path)}
                 />
             {/key}
         {:else if pendingListing?.status === 'generating'}

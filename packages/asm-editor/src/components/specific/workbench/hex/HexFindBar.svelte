@@ -4,6 +4,7 @@
 
 <script lang="ts">
     import { onMount } from 'svelte'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaTimes from '~icons/fa-solid/times'
@@ -35,6 +36,11 @@
     } = $props()
     let input = $state<HTMLInputElement>()
 
+    const KINDS = [
+        { id: 'hex', label: 'Hex', title: 'Hex bytes, ?? for any byte' },
+        { id: 'text', label: 'Text', title: 'Text' }
+    ]
+
     onMount(() => {
         input?.focus()
         input?.select()
@@ -64,26 +70,16 @@
     aria-label={mode === 'find' ? 'Find in the File' : 'Go to offset'}
 >
     {#if mode === 'find'}
-        <div class="kinds" role="group" aria-label="Find as">
-            <button
-                type="button"
-                aria-pressed={kind === 'hex'}
-                title="Hex bytes, ?? for any byte"
-                onclick={() => {
-                    kind = 'hex'
-                    input?.focus()
-                }}>Hex</button
-            >
-            <button
-                type="button"
-                aria-pressed={kind === 'text'}
-                title="Text"
-                onclick={() => {
-                    kind = 'text'
-                    input?.focus()
-                }}>Text</button
-            >
-        </div>
+        <SegmentedControl
+            ariaLabel="Find as"
+            options={KINDS}
+            selected={kind}
+            onSelect={(id) => {
+                kind = id as FindKind
+                input?.focus()
+            }}
+            style="flex-shrink: 0"
+        />
     {/if}
     <input
         bind:this={input}
@@ -177,25 +173,6 @@
         &.failed {
             color: var(--red);
             opacity: 1;
-        }
-    }
-    .kinds {
-        display: flex;
-        flex-shrink: 0;
-        border: 1px solid var(--wb-line, var(--tertiary));
-        border-radius: 0.25rem;
-        overflow: hidden;
-
-        button {
-            padding: 0.2rem 0.4rem;
-            background: transparent;
-            color: inherit;
-            font: inherit;
-            cursor: pointer;
-
-            &[aria-pressed='true'] {
-                background: color-mix(in srgb, var(--accent) 22%, transparent);
-            }
         }
     }
     button {

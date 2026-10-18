@@ -2,9 +2,9 @@ import type { ProjectFileKind } from './fileKinds'
 
 /**
  * How a pane shows a File ([file-views.md](../../../../docs/design/file-views.md), decisions 1, 4
- * and 8): as text, in the Hex editor, as an Executable's Listing or Pseudocode, or as the browser's
- * Preview. Kept apart from `fileKinds.ts` so that a Project can clean its saved views without
- * loading the ELF analysis.
+ * and 8): as text, in the Hex editor, as an Executable's Listing or Pseudocode, or as a Preview:
+ * the browser's own, or Markdown rendered. Kept apart from `fileKinds.ts` so that a Project can
+ * clean its saved views without loading the ELF analysis.
  */
 export type FileView = 'text' | 'hex' | 'listing' | 'pseudocode' | 'preview'
 
@@ -17,10 +17,12 @@ export function isFileView(value: unknown): value is FileView {
 /**
  * The views a kind of File can be shown in, its default first, in the order the view switch
  * offers them: an Executable opens in the Hex editor and can be switched to its Listing and its
- * Pseudocode, a File the browser can show opens as its Preview.
+ * Pseudocode, a File the browser can show opens as its Preview, and Markdown, which is written as
+ * much as read, opens as its text and can be switched to its rendered Preview and to its bytes.
  */
 export function fileViewsOf(kind: ProjectFileKind | undefined): readonly FileView[] {
     if (kind === undefined || kind === 'text') return ['text']
+    if (kind === 'markdown') return ['text', 'preview', 'hex']
     if (kind === 'executable') return ['hex', 'listing', 'pseudocode']
     if (kind === 'bytes') return ['hex']
     return ['preview', 'hex']

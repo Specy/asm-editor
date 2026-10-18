@@ -3,9 +3,10 @@
      * The Workbench's execution dock: Build, and once built Stop, Run, Undo and Step, with Test at
      * the far end in both. The Workbench has no mode switch, the Build becoming Stop in its place is
      * what says a Debug session is on ([the design record](../../../../../../docs/design/workbench.md)).
-     * The Testcases run on the same Emulator, so Test during a Debug session ends it first. Edge to
-     * edge in the bottom corners of the editor on a desktop, along its bottom edge on a phone, and
-     * stuck under it on a tablet. A pane showing a File in more than one way carries the view
+     * The Testcases run on the same Emulator, so Test during a Debug session ends it first. A pane
+     * showing a document or data, such as text, Markdown, an image or a PDF, has neither Build nor
+     * Test, only the session's controls once one is on. Edge to edge in the bottom corners of the
+     * editor on a desktop, along its bottom edge on a phone, and stuck under it on a tablet. A pane showing a File in more than one way carries the view
      * switch, during a Debug session too ([file-views.md](../../../../../../docs/design/file-views.md),
      * decisions 4 and 8).
      */
@@ -19,6 +20,7 @@
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaEye from '~icons/fa-solid/eye'
     import FaFileCode from '~icons/fa-solid/file-code'
+    import FaAlignLeft from '~icons/fa-solid/align-left'
     import {
         isCompilationTarget,
         OPTIMIZATIONS,
@@ -51,6 +53,8 @@
 
     /** The view switch's button for each view a File can be switched to. */
     const VIEW_BUTTONS: Partial<Record<FileView, Omit<DockView, 'id'>>> = {
+        //a Markdown File's, beside its rendered Preview
+        text: { label: 'Text', title: "Show the File's text", icon: FaAlignLeft },
         hex: { label: 'Hex', title: "Show the File's bytes in the Hex editor", icon: FaTh },
         listing: {
             label: 'Disassemble',
@@ -159,7 +163,7 @@
     {views}
     compileOnly={!execution ||
         (!!sourceLanguage(pane.displayedPath) && session.groups.length === 1)}
-    showExecution={execution}
+    showExecution={execution && (session.debugSession || pane.offersBuild)}
     debugging={session.debugSession}
     building={session.building}
     running={session.running}
