@@ -51,7 +51,9 @@ export default defineConfig({
         }
     },
     optimizeDeps: {
-        exclude: ['@specy/s68k', '@specy/x86']
+        // The decompiler fetches its wasm and processor description from beside its module
+        // (`new URL(…, import.meta.url)`), which pre-bundling would move away from them.
+        exclude: ['@specy/s68k', '@specy/x86', '@specy/decompiler']
     },
     build: {
         sourcemap: true
