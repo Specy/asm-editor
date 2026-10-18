@@ -1,0 +1,558 @@
+# The status flags x86 instructions read and write, for the instructions the editor documents.
+#
+# Extracted from Intel XED (https://github.com/intelxed/xed), v2026.08.23, commit
+# 0bcb6237345c5066726dcc08b3d87928df3b5b26,
+# by `node scripts/x86-docs-generate.mjs --xed <checkout>`; regenerate it that way rather than
+# editing it.
+#
+# SPDX-License-Identifier: Apache-2.0; the licence is XED-LICENSE.txt beside this file.
+# Modified: from the instruction records of the files below, only the ICLASS, EXTENSION,
+# ISA_SET, CPL, IFORM and FLAGS fields are kept, one record per line, tab separated, IFORMs
+# joined by commas ("-" where a field is absent); APX re-encodings and the instruction classes
+# the documentation does not use are left out. Each file carries its own notice:
+#
+#   datafiles/amd/xed-amd-base.txt               Copyright (c) 2024 Intel Corporation
+#   datafiles/amd/xed-amd-sse4a.txt              Copyright (c) 2024 Intel Corporation
+#   datafiles/cet/cet-nop-remove.xed.txt         Copyright (c) 2026 Intel Corporation
+#   datafiles/cldemote/cldemote-nop-mod.xed.txt  Copyright (c) 2026 Intel Corporation
+#   datafiles/hsw/lzcnt-isa.xed.txt              Copyright (c) 2024 Intel Corporation
+#   datafiles/hswbmi/tzcnt-isa.xed.txt           Copyright (c) 2019 Intel Corporation
+#   datafiles/ibhf/ibhf-nop-remove.xed.txt       Copyright (c) 2026 Intel Corporation
+#   datafiles/movrs/movrs-isa.xed.txt            Copyright (c) 2024 Intel Corporation
+#   datafiles/mpx/mpx-isa.txt                    Copyright (c) 2024 Intel Corporation
+#   datafiles/xed-amd-prefetch.txt               Copyright (c) 2025 Intel Corporation
+#   datafiles/xed-isa.txt                        Copyright (c) 2026 Intel Corporation
+#
+# iclass	extension	isaSet	cpl	iforms	flags
+SYSCALL_AMD	BASE	AMD	3	-	MUST [ id-mod vip-mod vif-mod ac-mod vm-0 rf-0 nt-mod iopl-mod of-mod df-mod if-mod tf-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SYSRET_AMD	BASE	AMD	0	-	MUST [ id-mod vip-mod vif-mod ac-mod rf-0 nt-mod iopl-mod of-mod df-mod if-mod tf-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+BSR	BASE	I386	3	-	MUST [ of-u sf-u zf-mod af-u pf-u cf-u ]
+NOP	BASE	PPRO	3	NOP_MEMv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	PPRO	3	NOP_MEMv_GPRv_0F1C,NOP_MEMv_GPRv_0F1C,NOP_MEMv_GPRv_0F1C	-
+NOP	BASE	PPRO	3	NOP_MEMv_GPRv_0F1C	-
+NOP	BASE	PPRO	3	NOP_MEMv_GPRv_0F1C,NOP_MEMv_GPRv_0F1C	-
+NOP	BASE	PPRO	3	NOP_MEMv_GPRv_0F1C	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1C	-
+NOP	BASE	PPRO	3	NOP_MEMv_GPRv_0F1C	-
+BSR	BASE	I386	3	-	MUST [ of-u sf-u zf-mod af-u pf-u cf-u ]
+BSF	BASE	I386	3	-	MUST [ of-u sf-u zf-mod af-u pf-u cf-u ]
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E	-
+MOVRS	MOVRS	MOVRS	3	MOVRS_GPRv_MEMv	-
+MOVRS	MOVRS	MOVRS	3	MOVRS_GPR8i8_MEMi8	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1A,NOP_GPRv_GPRv_0F1B,NOP_GPRv_GPRv_0F1B	-
+NOP	BASE	PPRO	3	NOP_GPRv_GPRv_0F1A,NOP_GPRv_GPRv_0F1B,NOP_GPRv_MEMv_0F1A,NOP_GPRv_MEM_0F1B	-
+NOP	BASE	PREFETCH_NOP	3	NOP_GPRv_GPRv_0F0D	-
+ADD	BASE	I86	3	ADD_MEMb_IMMb_80r0	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_GPR8_IMMb_80r0	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+OR	BASE	I86	3	OR_MEMb_IMMb_80r1	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	OR_GPR8_IMMb_80r1	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+ADC	BASE	I86	3	ADC_MEMb_IMMb_80r2	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	ADC_GPR8_IMMb_80r2	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_MEMb_IMMb_80r3	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_GPR8_IMMb_80r3	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+AND	BASE	I86	3	AND_MEMb_IMMb_80r4	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	AND_GPR8_IMMb_80r4	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+SUB	BASE	I86	3	SUB_MEMb_IMMb_80r5	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	SUB_GPR8_IMMb_80r5	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XOR	BASE	I86	3	XOR_MEMb_IMMb_80r6	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	XOR_GPR8_IMMb_80r6	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+CMP	BASE	I86	3	CMP_MEMb_IMMb_80r7,CMP_GPR8_IMMb_80r7	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+CMP	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_MEMb_IMMb_82r0	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_GPR8_IMMb_82r0	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+OR	BASE	I86	3	OR_MEMb_IMMb_82r1	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	OR_GPR8_IMMb_82r1	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+ADC	BASE	I86	3	ADC_MEMb_IMMb_82r2	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	ADC_GPR8_IMMb_82r2	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_MEMb_IMMb_82r3	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_GPR8_IMMb_82r3	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+AND	BASE	I86	3	AND_MEMb_IMMb_82r4	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	AND_GPR8_IMMb_82r4	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+SUB	BASE	I86	3	SUB_MEMb_IMMb_82r5	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	SUB_GPR8_IMMb_82r5	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XOR	BASE	I86	3	XOR_MEMb_IMMb_82r6	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	XOR_GPR8_IMMb_82r6	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+CMP	BASE	I86	3	CMP_MEMb_IMMb_82r7,CMP_GPR8_IMMb_82r7	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+CMP	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+POP	BASE	I86	3	POP_GPRv_8F	-
+ROL	BASE	I186	3	-	IMM1 MUST [ of-mod cf-mod ], IMMx MUST [ of-u cf-mod ]
+ROL	BASE	I186	3	-	IMM1 MUST [ of-mod cf-mod ], IMMx MUST [ of-u cf-mod ]
+ROR	BASE	I186	3	-	IMM1 MUST [ of-mod cf-mod ], IMMx MUST [ of-u cf-mod ]
+ROR	BASE	I186	3	-	IMM1 MUST [ of-mod cf-mod ], IMMx MUST [ of-u cf-mod ]
+ROR	BASE	I86	3	ROR_MEMb_ONE,ROR_GPR8_ONE	MUST [ of-mod cf-mod ]
+ROR	BASE	I86	3	ROR_MEMv_ONE,ROR_GPRv_ONE	MUST [ of-mod cf-mod ]
+ROR	BASE	I86	3	-	MAY [ of-u cf-mod ]
+ROR	BASE	I86	3	-	MAY [ of-u cf-mod ]
+ROL	BASE	I86	3	ROL_MEMb_ONE,ROL_GPR8_ONE	MUST [ of-mod cf-mod ]
+ROL	BASE	I86	3	ROL_MEMv_ONE,ROL_GPRv_ONE	MUST [ of-mod cf-mod ]
+ROL	BASE	I86	3	-	MAY [ of-u cf-mod ]
+ROL	BASE	I86	3	-	MAY [ of-u cf-mod ]
+RCL	BASE	I186	3	-	IMM1 MUST [ of-mod cf-tst cf-mod ], IMMx MUST [ of-u cf-tst cf-mod ]
+RCR	BASE	I186	3	-	IMM1 MUST [ of-mod cf-tst cf-mod ], IMMx MUST [ of-u cf-tst cf-mod ]
+SHL	BASE	I186	3	SHL_MEMb_IMMb_C0r4,SHL_GPR8_IMMb_C0r4	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHR	BASE	I186	3	-	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I186	3	SHL_MEMb_IMMb_C0r6,SHL_GPR8_IMMb_C0r6	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I186	3	-	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+RCL	BASE	I186	3	-	IMM1 MUST [ of-mod cf-tst cf-mod ], IMMx MUST [ of-u cf-tst cf-mod ]
+RCR	BASE	I186	3	-	IMM1 MUST [ of-mod cf-tst cf-mod ], IMMx MUST [ of-u cf-tst cf-mod ]
+SHL	BASE	I186	3	SHL_MEMv_IMMb_C1r4,SHL_GPRv_IMMb_C1r4	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHR	BASE	I186	3	-	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I186	3	SHL_MEMv_IMMb_C1r6,SHL_GPRv_IMMb_C1r6	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I186	3	-	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+RCL	BASE	I86	3	RCL_MEMb_ONE,RCL_GPR8_ONE	MUST [ of-mod cf-tst cf-mod ]
+RCR	BASE	I86	3	RCR_MEMb_ONE,RCR_GPR8_ONE	MUST [ of-mod cf-tst cf-mod ]
+SHL	BASE	I86	3	SHL_MEMb_ONE_D0r4,SHL_GPR8_ONE_D0r4,SHL_MEMb_ONE_D0r6	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_GPR8_ONE_D0r6	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+SHR	BASE	I86	3	SHR_MEMb_ONE,SHR_GPR8_ONE	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I86	3	SAR_MEMb_ONE,SAR_GPR8_ONE	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+RCL	BASE	I86	3	RCL_MEMv_ONE,RCL_GPRv_ONE	MUST [ of-mod cf-tst cf-mod ]
+RCR	BASE	I86	3	RCR_MEMv_ONE,RCR_GPRv_ONE	MUST [ of-mod cf-tst cf-mod ]
+SHR	BASE	I86	3	SHR_MEMv_ONE,SHR_GPRv_ONE	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_MEMv_ONE_D1r6,SHL_MEMv_ONE_D1r4,SHL_GPRv_ONE_D1r4	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_GPRv_ONE_D1r6	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I86	3	SAR_MEMv_ONE,SAR_GPRv_ONE	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ]
+RCL	BASE	I86	3	-	MAY [ of-u cf-tst cf-mod ]
+RCR	BASE	I86	3	-	MAY [ of-u cf-tst cf-mod ]
+SHL	BASE	I86	3	SHL_MEMb_CL_D2r4,SHL_GPR8_CL_D2r4	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHR	BASE	I86	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_MEMb_CL_D2r6,SHL_GPR8_CL_D2r6	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I86	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+RCL	BASE	I86	3	-	MAY [ of-u cf-tst cf-mod ]
+RCL	BASE	I86	3	-	MAY [ of-u cf-tst cf-mod ]
+RCR	BASE	I86	3	-	MAY [ of-u cf-tst cf-mod ]
+RCR	BASE	I86	3	-	MAY [ of-u cf-tst cf-mod ]
+SHL	BASE	I86	3	SHL_MEMv_CL_D3r4	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_GPRv_CL_D3r4	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHR	BASE	I86	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHR	BASE	I86	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_MEMv_CL_D3r6	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHL	BASE	I86	3	SHL_GPRv_CL_D3r6	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I86	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SAR	BASE	I86	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+TEST	BASE	I86	3	TEST_MEMb_IMMb_F6r0,TEST_GPR8_IMMb_F6r0	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+TEST	BASE	I86	3	TEST_MEMb_IMMb_F6r1,TEST_GPR8_IMMb_F6r1	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+NOT	BASE	I86	3	-	-
+NOT	BASE	I86	3	-	-
+NEG	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+NEG	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+MUL	BASE	I86	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+IMUL	BASE	I86	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+DIV	BASE	I86	3	-	MUST [ of-u sf-u zf-u af-u pf-u cf-u ]
+IDIV	BASE	I86	3	-	MUST [ of-u sf-u zf-u af-u pf-u cf-u ]
+TEST	BASE	I86	3	TEST_MEMv_IMMz_F7r0,TEST_GPRv_IMMz_F7r0	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+TEST	BASE	I86	3	TEST_MEMv_IMMz_F7r1,TEST_GPRv_IMMz_F7r1	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+NOT	BASE	I86	3	-	-
+NOT	BASE	I86	3	-	-
+NEG	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+NEG	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+MUL	BASE	I86	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+MUL	BASE	I86	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+IMUL	BASE	I86	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+DIV	BASE	I86	3	-	MUST [ of-u sf-u zf-u af-u pf-u cf-u ]
+IDIV	BASE	I86	3	-	MUST [ of-u sf-u zf-u af-u pf-u cf-u ]
+INC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+INC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+DEC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+DEC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+INC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+INC	BASE	I86	3	INC_GPRv_FFr0	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+DEC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+DEC	BASE	I86	3	DEC_GPRv_FFr1	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+CALL_NEAR	BASE	I86	3	-	-
+CALL_NEAR	BASE	I86	3	-	-
+JMP	BASE	I86	3	-	-
+JMP_FAR	BASE	I86	3	-	-
+PUSH	BASE	I86	3	PUSH_GPRv_FFr6	-
+BT	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BT	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTS	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTS	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTR	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTR	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTC	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTC	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+CMPXCHG8B	BASE	PENTIUMREAL	3	-	MUST [ zf-mod ]
+CMPXCHG16B	LONGMODE	CMPXCHG16B	3	-	MUST [ zf-mod ]
+MOV	BASE	I86	3	MOV_GPR8_IMMb_C6r0	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+NOP	BASE	FAT_NOP	3	NOP_GPRv_0F18r0,NOP_GPRv_0F18r1,NOP_GPRv_0F18r2,NOP_GPRv_0F18r3,NOP_GPRv_0F18r4,NOP_MEMv_0F18r5,NOP_GPRv_0F18r5,NOP_GPRv_0F18r6,NOP_GPRv_0F18r7	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_0F18r4	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_0F18r6	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_0F18r7	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_GPRv_0F19,NOP_GPRv_GPRv_0F19	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_GPRv_0F1A,NOP_GPRv_GPRv_0F1A	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_GPRv_0F1B,NOP_GPRv_GPRv_0F1B	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_GPRv_0F1C,NOP_GPRv_GPRv_0F1C	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_GPRv_0F1D,NOP_GPRv_GPRv_0F1D	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_GPRv_0F1E,NOP_GPRv_GPRv_0F1E	-
+NOP	BASE	FAT_NOP	3	NOP_MEMv_0F1F,NOP_GPRv_0F1F	-
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_GPR8_GPR8_00	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_GPRv_GPRv_01	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_GPR8_GPR8_02	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	ADD_GPRv_GPRv_03	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+ADD	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+PUSH	BASE	I86	3	-	-
+POP	BASE	I86	3	-	-
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	OR_GPR8_GPR8_08	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	OR_GPRv_GPRv_09	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	OR_GPR8_GPR8_0A	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	OR_GPRv_GPRv_0B	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+OR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+PUSH	BASE	I86	3	-	-
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	ADC_GPR8_GPR8_10	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	ADC_GPRv_GPRv_11	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	ADC_GPR8_GPR8_12	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	ADC_GPRv_GPRv_13	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+ADC	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]
+PUSH	BASE	I86	3	-	-
+POP	BASE	I86	3	-	-
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_GPR8_GPR8_18	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_GPRv_GPRv_19	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_GPR8_GPR8_1A	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	SBB_GPRv_GPRv_1B	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+SBB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-tst cf-mod ]
+PUSH	BASE	I86	3	-	-
+POP	BASE	I86	3	-	-
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	AND_GPR8_GPR8_20	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	AND_GPRv_GPRv_21	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	AND_GPR8_GPR8_22	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	AND_GPRv_GPRv_23	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AND	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+DAA	BASE	I86	3	-	MUST [ of-u sf-mod zf-mod af-tst af-mod pf-mod cf-tst cf-mod ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	SUB_GPR8_GPR8_28	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	SUB_GPRv_GPRv_29	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	SUB_GPR8_GPR8_2A	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	SUB_GPRv_GPRv_2B	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SUB	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+DAS	BASE	I86	3	-	MUST [ of-u sf-mod zf-mod af-tst af-mod pf-mod cf-tst cf-mod ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	XOR_GPR8_GPR8_30	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	XOR_GPRv_GPRv_31	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	XOR_GPR8_GPR8_32	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	XOR_GPRv_GPRv_33	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XOR	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+AAA	BASE	I86	3	-	MUST [ of-u sf-u zf-u af-tst af-mod pf-u cf-mod ]
+CMP	BASE	I86	3	CMP_GPR8_GPR8_38	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMP	BASE	I86	3	CMP_GPRv_GPRv_39	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMP	BASE	I86	3	CMP_GPR8_GPR8_3A	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMP	BASE	I86	3	CMP_GPRv_GPRv_3B	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMP	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMP	BASE	I86	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+AAS	BASE	I86	3	-	MUST [ of-u sf-u zf-u af-tst af-mod pf-u cf-mod ]
+INC	BASE	I86	3	INC_GPRv_40	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+DEC	BASE	I86	3	DEC_GPRv_48	MUST [ of-mod sf-mod zf-mod af-mod pf-mod ]
+PUSH	BASE	I86	3	PUSH_GPRv_50,PUSH_GPRv_50	-
+POP	BASE	I86	3	POP_GPRv_58,POP_GPRv_58	-
+PUSHA	BASE	I186	3	-	-
+PUSHAD	BASE	I386	3	-	-
+POPA	BASE	I186	3	-	-
+POPAD	BASE	I386	3	-	-
+BOUND	BASE	I186	3	-	-
+MOVSXD	LONGMODE	-	3	MOVSXD_GPRz_MEMz,MOVSXD_GPR64_MEMd	-
+MOVSXD	LONGMODE	-	3	-	-
+PUSH	BASE	I186	3	-	-
+IMUL	BASE	I186	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+PUSH	BASE	I186	3	-	-
+IMUL	BASE	I186	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+INSB	BASE	I186	3	-	READONLY [ iopl-tst df-tst ]
+INSW	BASE	I186	3	-	READONLY [ iopl-tst df-tst ]
+INSD	BASE	I386	3	-	READONLY [ iopl-tst df-tst ]
+OUTSB	BASE	I186	3	-	READONLY [ iopl-tst df-tst ]
+OUTSW	BASE	I186	3	-	READONLY [ iopl-tst df-tst ]
+OUTSD	BASE	I386	3	-	READONLY [ iopl-tst df-tst ]
+JO	BASE	I86	3	-	READONLY [ of-tst ]
+JNO	BASE	I86	3	-	READONLY [ of-tst ]
+JB	BASE	I86	3	-	READONLY [ cf-tst ]
+JNB	BASE	I86	3	-	READONLY [ cf-tst ]
+JZ	BASE	I86	3	-	READONLY [ zf-tst ]
+JNZ	BASE	I86	3	-	READONLY [ zf-tst ]
+JBE	BASE	I86	3	-	READONLY [ cf-tst zf-tst ]
+JNBE	BASE	I86	3	-	READONLY [ cf-tst zf-tst ]
+JS	BASE	I86	3	-	READONLY [ sf-tst ]
+JNS	BASE	I86	3	-	READONLY [ sf-tst ]
+JP	BASE	I86	3	-	READONLY [ pf-tst ]
+JNP	BASE	I86	3	-	READONLY [ pf-tst ]
+JL	BASE	I86	3	-	READONLY [ sf-tst of-tst ]
+JNL	BASE	I86	3	-	READONLY [ sf-tst of-tst ]
+JLE	BASE	I86	3	-	READONLY [ sf-tst of-tst zf-tst ]
+JNLE	BASE	I86	3	-	READONLY [ sf-tst of-tst zf-tst ]
+TEST	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+TEST	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+TEST	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+TEST	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+XCHG	BASE	I86	3	-	-
+XCHG	BASE	I86	3	-	-
+XCHG	BASE	I86	3	-	-
+XCHG	BASE	I86	3	-	-
+MOV	BASE	I86	3	MOV_GPR8_GPR8_88	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	MOV_GPRv_GPRv_89	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	MOV_GPR8_GPR8_8A	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	MOV_GPRv_GPRv_8B	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+LEA	BASE	I86	3	-	-
+MOV	BASE	I86	3	MOV_SEG_MEMw	-
+MOV	BASE	I86	3	MOV_SEG_GPR16	-
+NOP	BASE	I86	3	NOP_90	-
+NOP	BASE	I86	3	NOP_90	-
+XCHG	BASE	I86	3	-	-
+CBW	BASE	I86	3	-	-
+CDQE	LONGMODE	-	3	-	-
+CWDE	BASE	I386	3	-	-
+CWD	BASE	I86	3	-	-
+CQO	LONGMODE	-	3	-	-
+CDQ	BASE	I386	3	-	-
+CALL_FAR	BASE	I86	3	-	-
+CALL_FAR	BASE	I86	3	-	-
+PUSHF	BASE	I86	3	-	MUST [ id-tst vip-tst vif-tst ac-tst vm-tst rf-tst nt-tst iopl-tst iopl-tst of-tst df-tst if-tst tf-tst sf-tst zf-tst af-tst pf-tst cf-tst ]
+PUSHFD	BASE	I386	3	-	MUST [ id-tst vip-tst vif-tst ac-tst vm-tst rf-tst nt-tst iopl-tst iopl-tst of-tst df-tst if-tst tf-tst sf-tst zf-tst af-tst pf-tst cf-tst ]
+PUSHFQ	LONGMODE	-	3	-	MUST [ id-tst vip-tst vif-tst ac-tst vm-tst rf-tst nt-tst iopl-tst iopl-tst of-tst df-tst if-tst tf-tst sf-tst zf-tst af-tst pf-tst cf-tst ]
+POPF	BASE	I86	3	-	MUST [ id-pop vip-tst vif-mod ac-pop vm-tst rf-0 nt-pop iopl-tst iopl-pop of-pop df-pop if-pop tf-pop sf-pop zf-pop af-pop pf-pop cf-pop ]
+POPFD	BASE	I386	3	-	MUST [ id-pop vip-tst vif-mod ac-pop vm-tst rf-0 nt-pop iopl-tst iopl-pop of-pop df-pop if-pop tf-pop sf-pop zf-pop af-pop pf-pop cf-pop ]
+POPFQ	LONGMODE	-	3	-	MUST [ id-pop vip-tst vif-mod ac-pop vm-tst rf-0 nt-pop iopl-tst iopl-pop of-pop df-pop if-pop tf-pop sf-pop zf-pop af-pop pf-pop cf-pop ]
+SAHF	BASE	LAHF	3	-	MUST [ sf-ah zf-ah af-ah pf-ah cf-ah ]
+LAHF	BASE	LAHF	3	-	MUST [ sf-tst zf-tst af-tst pf-tst cf-tst ]
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+MOV	BASE	I86	3	-	-
+MOVSB	BASE	I86	3	-	READONLY [ df-tst ]
+MOVSW	BASE	I86	3	-	READONLY [ df-tst ]
+MOVSQ	LONGMODE	-	3	-	READONLY [ df-tst ]
+CMPSB	BASE	I86	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPSW	BASE	I86	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPSD	BASE	I386	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPSQ	LONGMODE	-	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+TEST	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+TEST	BASE	I86	3	-	MUST [ of-0 sf-mod zf-mod af-u pf-mod cf-0 ]
+STOSB	BASE	I86	3	-	READONLY [ df-tst ]
+STOSW	BASE	I86	3	-	READONLY [ df-tst ]
+STOSD	BASE	I386	3	-	READONLY [ df-tst ]
+STOSQ	LONGMODE	-	3	-	READONLY [ df-tst ]
+LODSB	BASE	I86	3	-	READONLY [ df-tst ]
+LODSW	BASE	I86	3	-	READONLY [ df-tst ]
+LODSD	BASE	I386	3	-	READONLY [ df-tst ]
+LODSQ	LONGMODE	-	3	-	READONLY [ df-tst ]
+SCASB	BASE	I86	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+SCASW	BASE	I86	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+SCASD	BASE	I386	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+SCASQ	LONGMODE	-	3	-	MUST [ of-mod df-tst sf-mod zf-mod af-mod pf-mod cf-mod ]
+MOV	BASE	I86	3	MOV_GPR8_IMMb_B0	-
+MOV	BASE	I86	3	-	-
+RET_NEAR	BASE	I86	3	-	-
+RET_NEAR	BASE	I86	3	-	-
+ENTER	BASE	I186	3	-	-
+LEAVE	BASE	I186	3	-	-
+RET_FAR	BASE	I86	3	-	-
+RET_FAR	BASE	I86	3	-	-
+INT3	BASE	I86	3	-	MUST [ vif-mod ac-mod vm-tst vm-mod rf-0 nt-mod iopl-tst if-mod tf-0 ]
+INT	BASE	I86	3	-	MUST [ vif-mod ac-mod vm-tst vm-mod rf-0 nt-mod iopl-tst if-mod tf-0 ]
+INTO	BASE	I86	3	-	MUST [ ac-mod vm-tst vm-mod rf-0 nt-mod iopl-tst of-tst if-mod tf-mod ]
+IRET	BASE	I86	3	-	MUST [ id-pop vip-pop vif-pop ac-pop vm-tst vm-pop rf-pop nt-tst nt-pop iopl-tst iopl-pop of-pop df-pop if-pop tf-pop sf-pop zf-pop af-pop pf-pop cf-pop ]
+IRETD	BASE	I386	3	-	MUST [ id-pop vip-pop vif-pop ac-pop vm-tst vm-pop rf-pop nt-tst nt-pop iopl-tst iopl-pop of-pop df-pop if-pop tf-pop sf-pop zf-pop af-pop pf-pop cf-pop ]
+IRETQ	LONGMODE	-	3	-	MUST [ id-pop vip-pop vif-pop ac-pop vm-tst vm-pop rf-pop nt-tst nt-pop iopl-tst iopl-pop of-pop df-pop if-pop tf-pop sf-pop zf-pop af-pop pf-pop cf-pop ]
+AAM	BASE	I86	3	-	MUST [ of-u sf-mod zf-mod af-u pf-mod cf-u ]
+AAD	BASE	I86	3	-	MUST [ of-u sf-mod zf-mod af-u pf-mod cf-u ]
+SALC	BASE	I86	3	-	MUST [ cf-tst ]
+LOOPNE	BASE	I86	3	-	READONLY [ zf-tst ]
+LOOPNE	BASE	I86	3	-	READONLY [ zf-tst ]
+LOOPE	BASE	I86	3	-	READONLY [ zf-tst ]
+LOOPE	BASE	I86	3	-	READONLY [ zf-tst ]
+LOOP	BASE	I86	3	-	-
+JCXZ	BASE	I386	3	-	-
+JECXZ	BASE	I386	3	-	-
+JRCXZ	BASE	LONGMODE	3	-	-
+JMP	BASE	I86	3	-	-
+JMP_FAR	BASE	I86	3	-	-
+JMP	BASE	I86	3	-	-
+INT1	BASE	I86	3	-	-
+CMC	BASE	I86	3	-	MUST [ cf-tst cf-mod ]
+CLC	BASE	I86	3	-	MUST [ cf-0 ]
+STC	BASE	I86	3	-	MUST [ cf-1 ]
+CLI	BASE	I86	3	-	MUST [ vif-mod iopl-tst if-mod ]
+STI	BASE	I86	3	-	MUST [ vif-mod iopl-tst if-mod ]
+CLD	BASE	I86	3	-	MUST [ df-0 ]
+STD	BASE	I86	3	-	MUST [ df-1 ]
+SYSCALL	LONGMODE	LONGMODE	3	-	MUST [ id-mod vip-mod vif-mod ac-mod vm-0 rf-0 nt-mod iopl-mod of-mod df-mod if-mod tf-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SYSRET	LONGMODE	LONGMODE	0	-	MUST [ id-mod vip-mod vif-mod ac-mod rf-0 nt-mod iopl-mod of-mod df-mod if-mod tf-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+SYSRET64	LONGMODE	LONGMODE	0	-	MUST [ id-mod vip-mod vif-mod ac-mod rf-0 nt-mod iopl-mod of-mod df-mod if-mod tf-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+MOV_CR	BASE	I86	0	-	-
+MOV_CR	BASE	I86	0	-	-
+MOV_DR	BASE	I86	0	-	-
+MOV_DR	BASE	I86	0	-	-
+SYSENTER	BASE	SEP	3	-	MUST [ vm-0 rf-0 if-0 ]
+SYSEXIT	BASE	SEP	0	-	-
+CMOVO	BASE	CMOV	3	-	READONLY [ of-tst ]
+CMOVNO	BASE	CMOV	3	-	READONLY [ of-tst ]
+CMOVB	BASE	CMOV	3	-	READONLY [ cf-tst ]
+CMOVNB	BASE	CMOV	3	-	READONLY [ cf-tst ]
+CMOVZ	BASE	CMOV	3	-	READONLY [ zf-tst ]
+CMOVNZ	BASE	CMOV	3	-	READONLY [ zf-tst ]
+CMOVBE	BASE	CMOV	3	-	READONLY [ cf-tst zf-tst ]
+CMOVNBE	BASE	CMOV	3	-	READONLY [ cf-tst zf-tst ]
+JO	BASE	I86	3	-	READONLY [ of-tst ]
+JO	BASE	I86	3	-	READONLY [ of-tst ]
+JNO	BASE	I86	3	-	READONLY [ of-tst ]
+JNO	BASE	I86	3	-	READONLY [ of-tst ]
+JB	BASE	I86	3	-	READONLY [ cf-tst ]
+JB	BASE	I86	3	-	READONLY [ cf-tst ]
+JNB	BASE	I86	3	-	READONLY [ cf-tst ]
+JNB	BASE	I86	3	-	READONLY [ cf-tst ]
+JZ	BASE	I86	3	-	READONLY [ zf-tst ]
+JZ	BASE	I86	3	-	READONLY [ zf-tst ]
+JNZ	BASE	I86	3	-	READONLY [ zf-tst ]
+JNZ	BASE	I86	3	-	READONLY [ zf-tst ]
+JBE	BASE	I86	3	-	READONLY [ cf-tst zf-tst ]
+JBE	BASE	I86	3	-	READONLY [ cf-tst zf-tst ]
+JNBE	BASE	I86	3	-	READONLY [ cf-tst zf-tst ]
+JNBE	BASE	I86	3	-	READONLY [ cf-tst zf-tst ]
+SETO	BASE	I386	3	-	READONLY [ of-tst ]
+SETNO	BASE	I386	3	-	READONLY [ of-tst ]
+SETB	BASE	I386	3	-	READONLY [ cf-tst ]
+SETNB	BASE	I386	3	-	READONLY [ cf-tst ]
+SETZ	BASE	I386	3	-	READONLY [ zf-tst ]
+SETNZ	BASE	I386	3	-	READONLY [ zf-tst ]
+SETBE	BASE	I386	3	-	READONLY [ cf-tst zf-tst ]
+SETNBE	BASE	I386	3	-	READONLY [ cf-tst zf-tst ]
+PUSH	BASE	I86	3	-	-
+POP	BASE	I86	3	-	-
+BT	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+CMPXCHG	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPXCHG	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPXCHG	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPXCHG	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+BTR	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTR	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+MOVZX	BASE	I386	3	-	-
+MOVZX	BASE	I386	3	MOVZX_GPRv_MEMw,MOVZX_GPR64_MEMw,MOVZX_GPR16_MEMw,MOVZX_GPR32_MEMw	-
+MOVZX	BASE	I386	3	-	-
+XADD	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XADD	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XADD	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+XADD	BASE	I486REAL	3	-	MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-mod ]
+CMPSD_XMM	SSE2	-	3	-	-
+CMOVS	BASE	CMOV	3	-	READONLY [ sf-tst ]
+CMOVS	BASE	CMOV	3	-	READONLY [ sf-tst ]
+CMOVNS	BASE	CMOV	3	-	READONLY [ sf-tst ]
+CMOVNS	BASE	CMOV	3	-	READONLY [ sf-tst ]
+CMOVP	BASE	CMOV	3	-	READONLY [ pf-tst ]
+CMOVP	BASE	CMOV	3	-	READONLY [ pf-tst ]
+CMOVNP	BASE	CMOV	3	-	READONLY [ pf-tst ]
+CMOVNP	BASE	CMOV	3	-	READONLY [ pf-tst ]
+CMOVL	BASE	CMOV	3	-	READONLY [ sf-tst of-tst ]
+CMOVL	BASE	CMOV	3	-	READONLY [ sf-tst of-tst ]
+CMOVNL	BASE	CMOV	3	-	READONLY [ sf-tst of-tst ]
+CMOVNL	BASE	CMOV	3	-	READONLY [ sf-tst of-tst ]
+CMOVLE	BASE	CMOV	3	-	READONLY [ sf-tst of-tst zf-tst ]
+CMOVLE	BASE	CMOV	3	-	READONLY [ sf-tst of-tst zf-tst ]
+CMOVNLE	BASE	CMOV	3	-	READONLY [ sf-tst of-tst zf-tst ]
+CMOVNLE	BASE	CMOV	3	-	READONLY [ sf-tst of-tst zf-tst ]
+JS	BASE	I86	3	-	READONLY [ sf-tst ]
+JS	BASE	I86	3	-	READONLY [ sf-tst ]
+JNS	BASE	I86	3	-	READONLY [ sf-tst ]
+JNS	BASE	I86	3	-	READONLY [ sf-tst ]
+JP	BASE	I86	3	-	READONLY [ pf-tst ]
+JP	BASE	I86	3	-	READONLY [ pf-tst ]
+JNP	BASE	I86	3	-	READONLY [ pf-tst ]
+JNP	BASE	I86	3	-	READONLY [ pf-tst ]
+JL	BASE	I86	3	-	READONLY [ sf-tst of-tst ]
+JL	BASE	I86	3	-	READONLY [ sf-tst of-tst ]
+JNL	BASE	I86	3	-	READONLY [ sf-tst of-tst ]
+JNL	BASE	I86	3	-	READONLY [ sf-tst of-tst ]
+JLE	BASE	I86	3	-	READONLY [ sf-tst of-tst zf-tst ]
+JLE	BASE	I86	3	-	READONLY [ sf-tst of-tst zf-tst ]
+JNLE	BASE	I86	3	-	READONLY [ sf-tst of-tst zf-tst ]
+JNLE	BASE	I86	3	-	READONLY [ sf-tst of-tst zf-tst ]
+SETS	BASE	I386	3	-	READONLY [ sf-tst ]
+SETNS	BASE	I386	3	-	READONLY [ sf-tst ]
+SETP	BASE	I386	3	-	READONLY [ pf-tst ]
+SETNP	BASE	I386	3	-	READONLY [ pf-tst ]
+SETL	BASE	I386	3	-	READONLY [ sf-tst of-tst ]
+SETNL	BASE	I386	3	-	READONLY [ sf-tst of-tst ]
+SETLE	BASE	I386	3	-	READONLY [ sf-tst of-tst zf-tst ]
+SETNLE	BASE	I386	3	-	READONLY [ sf-tst of-tst zf-tst ]
+PUSH	BASE	I86	3	-	-
+POP	BASE	I86	3	-	-
+BTS	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTS	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+SHRD	BASE	I386	3	-	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHRD	BASE	I386	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHLD	BASE	I386	3	-	IMM1 MUST [ of-mod sf-mod zf-mod af-u pf-mod cf-mod ], IMMx MUST [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+SHLD	BASE	I386	3	-	MAY [ of-u sf-mod zf-mod af-u pf-mod cf-mod ]
+IMUL	BASE	I86	3	-	MUST [ of-mod sf-u zf-u af-u pf-u cf-mod ]
+BTC	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BTC	BASE	I386	3	-	MUST [ of-u sf-u af-u pf-u cf-mod ]
+BSF	BASE	I386	3	-	MUST [ of-u sf-u zf-mod af-u pf-u cf-u ]
+BSR	BASE	I386	3	-	MUST [ of-u sf-u zf-mod af-u pf-u cf-u ]
+MOVSX	BASE	I386	3	-	-
+MOVSX	BASE	I386	3	MOVSX_GPRv_MEMw,MOVSX_GPR64_MEMw,MOVSX_GPR16_MEMw,MOVSX_GPR32_MEMw	-
+MOVSX	BASE	I386	3	-	-
+BSWAP	BASE	I486REAL	3	-	-
+MOVBE	MOVBE	-	3	-	-

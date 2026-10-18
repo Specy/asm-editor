@@ -302,37 +302,112 @@ export async function readBlinkSyscalls() {
 
 // --- insref: the prose ---------------------------------------------------------------------------
 
-/** The tables the appendix points at but does not itself contain; see `toMarkdown`. */
+/**
+ * The tables the appendix points at but does not itself contain (`\k{iref-cc}`), where the
+ * documentation has one of its own. The others (the SSE condition predicates, the register values
+ * and the effective address encoding) are encoding tables nothing here documents, so a reference
+ * to one is dropped with the words that introduce it; see `toMarkdown`.
+ */
 const IREF_SECTIONS = {
-    cc: 'the condition codes',
-    'SSE-cc': 'the SSE condition predicates',
-    rv: 'the register values',
-    ea: 'the effective address encoding',
-    Flags: 'the status flags'
+    cc: { text: 'the condition code table', href: '/documentation/x86/registers#condition-codes' },
+    Flags: { text: 'the flags', href: '/documentation/x86/registers#flags' }
 }
 
-/** NASM's doc markup, reduced to the markdown the documentation pages already render. */
-export function toMarkdown(source) {
+/** `\c{MOV}` or `\i\c{MOV}`: a mention of code, the only thing a cross reference can follow. */
+const MENTION = String.raw`(?:\\i)?\\c\{[^}]*\}`
+
+/**
+ * `\c{DEC} (\k{insDEC})`, `the \c{CPUID} instruction (\k{insCPUID})`, `\c{STC}, \c{STD} and \c{STI}
+ * instructions (\k{insSTC})`: the appendix names an instruction and then points at its entry in
+ * brackets, which on a page of its own would read "`DEC` (`DEC`)". The brackets go, and the names
+ * become the link.
+ */
+const MENTIONED_REFERENCE = new RegExp(
+    String.raw`((?:${MENTION}(?:,\s*|\s+(?:and|or)\s+))*${MENTION})(\s+instructions?)?\s*\((?:see\s+)?\\[kK]\{ins([^}]*)\}\)`,
+    'g'
+)
+
+/** A reference with nowhere to go: `\k{iref-rv}`, `\k{chrconst}` (a section of NASM's manual). */
+const DANGLING = String.raw`\\[kK]\{(?!ins|iref-cc\}|iref-Flags\})[^}]*\}`
+
+/**
+ * Removes the sentence a dangling reference sits in. A sentence ends at `.`, `!` or `?` before
+ * whitespace; a paragraph boundary ends one too.
+ */
+function dropSentences(text, pattern) {
+    let out = text
+    for (let match = pattern.exec(out); match; match = pattern.exec(out)) {
+        const boundaries = [...out.slice(0, match.index).matchAll(/[.!?](?=\s)|\n[ \t]*\n/g)]
+        const last = boundaries.at(-1)
+        const start = last ? last.index + last[0].length : 0
+        const from = match.index + match[0].length
+        const stop = /[.!?](?=\s|$)|\n[ \t]*\n|$/.exec(out.slice(from))
+        const end = from + stop.index + (stop[0].startsWith('\n') ? 0 : stop[0].length)
+        out = out.slice(0, start) + out.slice(end)
+    }
+    return out
+}
+
+/**
+ * NASM's doc markup, reduced to the markdown the documentation pages already render. Whole
+ * paragraphs go through it at once, because the appendix wraps its lines inside markup
+ * (`\c{MOV` on one line, `DS,EAX}` on the next).
+ *
+ * `pageOf(mnemonic)` answers the documentation page of an instruction, or nothing when it has
+ * none; a cross reference to an entry becomes a link to that page, and the mnemonic alone where
+ * there is no page.
+ */
+export function toMarkdown(source, { pageOf = () => undefined } = {}) {
+    const code = (text) => `\`${text.replace(/\s+/g, ' ').trim()}\``
+    const link = (text, href) => (href ? `[${text}](${href})` : text)
+    /** The page a mention of `ADD something,1` points at: the one for its first word. */
+    const pageOfMention = (text) =>
+        pageOf(
+            text
+                .trim()
+                .split(/[\s,]+/)[0]
+                .toLowerCase()
+        )
+    const mentionText = (mention) => /\{([^}]*)\}$/.exec(mention)[1]
+    const linked = source
+        // The appendix quotes words the TeX way, `like this', which markdown reads as an unclosed
+        // code span. Done first, while a backtick still means only that: the conversions below
+        // introduce backticks of their own.
+        .replace(/`([^`\n]{1,40})'/g, "'$1'")
+        // `\b` opens a bullet, and the text of the bullet runs to the next blank line.
+        .replace(/^\\b\s+/gm, '- ')
+        .replace(MENTIONED_REFERENCE, (_, list, words = '', id) => {
+            const single = [...list.matchAll(new RegExp(MENTION, 'g'))].length === 1
+            const mentions = list.replace(new RegExp(MENTION, 'g'), (mention) => {
+                const text = mentionText(mention)
+                return link(
+                    code(text),
+                    pageOfMention(text) ?? (single ? pageOf(id.toLowerCase()) : '')
+                )
+            })
+            return `${mentions}${words}`
+        })
+        // A reference that leads nowhere goes with the words that introduce it: "(see …)",
+        // "described in …", or failing those the whole sentence.
+        .replace(new RegExp(String.raw`\s*\((?:see\s+)?${DANGLING}\)`, 'g'), '')
+        .replace(new RegExp(String.raw`,?\s*(?:described|given)\s+in\s+${DANGLING}`, 'g'), '')
     return (
-        source
-            // The appendix quotes words the TeX way, `like this', which markdown reads as an
-            // unclosed code span. Done first, while a backtick still means only that: the
-            // conversions below introduce backticks of their own.
-            .replace(/`([^`\n]{1,40})'/g, "'$1'")
-            // `\b` opens a bullet, and the text of the bullet runs to the next blank line.
-            .replace(/^\\b\s+/, '- ')
+        dropSentences(linked, new RegExp(DANGLING))
             .replace(/\\W\{([^}]*)\}\\c\{([^}]*)\}/g, '[$2]($1)')
             .replace(/\\I(?:\\c)?\{[^}]*\}/g, '')
-            .replace(/\\(?:i\\)?c\{([^}]*)\}/g, '`$1`')
+            .replace(/\\(?:i\\)?c\{([^}]*)\}/g, (_, text) => code(text))
             .replace(/\\e\{([^}]*)\}/g, '*$1*')
             .replace(/\\i\{([^}]*)\}/g, '$1')
+            .replace(/\\[kK]\{iref-([^}]*)\}/g, (_, id) =>
+                link(IREF_SECTIONS[id].text, IREF_SECTIONS[id].href)
+            )
             // `\k{insSETcc}` is a cross reference to another entry; the page it lands on is ours,
             // so it keeps the mnemonic and loses the appendix's section id.
-            .replace(/\\[kK]\{iref-([^}]*)\}/g, (_, id) => IREF_SECTIONS[id] ?? 'the reference')
-            .replace(/\\[kK]\{ins([^}]*)\}/g, '`$1`')
-            .replace(/\\[kK]\{[^}]*\}/g, '')
+            .replace(/\\[kK]\{ins([^}]*)\}/g, (_, id) => link(code(id), pageOf(id.toLowerCase())))
             .replace(/\\#/g, '#')
-            .replace(/[ \t]+/g, ' ')
+            .split('\n')
+            .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+            .join('\n')
             .trim()
     )
 }
@@ -399,17 +474,42 @@ export function isTemplate(mnemonic, accepted) {
 /**
  * An entry is a `\S{insADD}` heading, a block of `\c` form lines, and prose. One entry can document
  * several mnemonics (`\i\c{MOVSX}, \i\c{MOVZX}: …`), so the map is per mnemonic and the entry is
- * shared.
+ * shared. `options` go to `toMarkdown`: `pageOf` turns the cross references into links.
  */
-export function parseInsref(text, accepted, conditions) {
+export function parseInsref(text, accepted, conditions, options = {}) {
     const byMnemonic = new Map()
     const entries = []
     let current = null
+    /**
+     * Converts the prose read since the last code line, a paragraph at a time: markup can wrap
+     * onto the next line, and only a blank line ends it.
+     */
+    const flushProse = () => {
+        if (!current) return
+        let paragraph = []
+        const convert = () => {
+            if (paragraph.length === 0) return
+            current.prose.push(...toMarkdown(paragraph.join('\n'), options).split('\n'))
+            paragraph = []
+        }
+        for (const line of current.pending) {
+            if (line.trim()) {
+                paragraph.push(line)
+                continue
+            }
+            convert()
+            current.prose.push('')
+        }
+        convert()
+        current.pending = []
+    }
     const flush = () => {
         if (!current) return
+        flushProse()
+        closeExample()
         const entry = {
             id: current.id,
-            title: toMarkdown(current.title),
+            title: toMarkdown(current.title, options),
             mnemonics: current.mnemonics,
             forms: current.forms,
             description: current.prose
@@ -447,6 +547,8 @@ export function parseInsref(text, accepted, conditions) {
                 mnemonics,
                 forms: [],
                 prose: [],
+                /** Prose lines not yet converted; see `flushProse`. */
+                pending: [],
                 inExample: false,
                 // A heading can wrap: "…: ASCII" on one line, "Adjustments" on the next. Until the
                 // blank line that ends it, what follows is still the heading.
@@ -469,6 +571,7 @@ export function parseInsref(text, accepted, conditions) {
         }
         const code = /^\\c\s(.*)$/.exec(line)
         if (code) {
+            flushProse()
             // The block of `\c` lines that opens an entry is its form table. Later ones are worked
             // examples inside the prose, and belong in the description as code.
             if (current.prose.some((prose) => prose.length > 0)) {
@@ -489,7 +592,7 @@ export function parseInsref(text, accepted, conditions) {
             continue
         }
         closeExample()
-        current.prose.push(toMarkdown(line))
+        current.pending.push(line)
     }
     flush()
     return { byMnemonic, entries }
