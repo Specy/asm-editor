@@ -1515,8 +1515,9 @@ export class WorkbenchSession {
      * draws the current instruction ([file-views.md](../../../../../docs/design/file-views.md),
      * decision 8): a pane showing it as text or as its Listing, else one showing an Executable's
      * bytes, which moves to its Listing, as debuggers switch to disassembly when a session
-     * starts; else the execution pane opens it on its Listing. A pane on an Executable's
-     * Pseudocode follows the program itself and is left as it is.
+     * starts; else the execution pane opens it on its Listing. A pane on a Pseudocode, the
+     * File's or another Executable's such as the Build output's, follows its program itself and
+     * is left as it is.
      */
     private showBuildFile(file: string): EditorGroup | undefined {
         const buildSources = this.emulator.buildSources
@@ -1525,15 +1526,12 @@ export class WorkbenchSession {
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
         const showing = this.groups.filter((group) => group.displayedPath === file)
-        const movable = (group: EditorGroup) =>
-            group.displayedPath !== file || group.displayedView !== 'pseudocode'
+        const movable = (group: EditorGroup) => group.displayedView !== 'pseudocode'
         const group =
             showing.find((group) => group.showsInstructions) ??
             showing.find(movable) ??
             (movable(this.executionGroup) ? this.executionGroup : this.groups.find(movable)) ??
-            //every pane shows the File's Pseudocode: its Listing opens beside it
-            this.listingBeside(this.executionGroup) ??
-            this.executionGroup
+            this.paneBesidePseudocode(file)
         this.executionGroupId = group.id
         //an Executable's Listing, which is no view the person chose, so it is not saved
         const view = group.displayedPath === file && group.showsInstructions ? undefined : 'listing'
@@ -1548,6 +1546,17 @@ export class WorkbenchSession {
             }
         }
         return group
+    }
+
+    /**
+     * Where the Build's version of a File opens when every pane shows a Pseudocode: as the Listing
+     * beside the File's own Pseudocode, as Decompile opens it; beside another Executable's, in a
+     * new pane while there is only one, else in the execution pane.
+     */
+    private paneBesidePseudocode(file: string): EditorGroup {
+        const own = this.groups.find((group) => group.displayedPath === file)
+        if (own) return this.listingBeside(own) ?? own
+        return this.groups.length === 1 ? this.createGroup() : this.executionGroup
     }
 
     /**

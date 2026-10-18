@@ -649,4 +649,43 @@ describe('the Pseudocode in a Debug session', () => {
         flushSync()
         expect(pane.highlightedLine).toBe(-1)
     })
+
+    it("keeps the Build output's Pseudocode when a Step shows the program's source", async () => {
+        const source = 'global _start\n_start:\n    mov rax, 60\n    syscall\n'
+        const files = { 'main.asm': { encoding: 'plain' as const, content: source } }
+        const { session, emulator } = setup({ entry: 'main.asm', files })
+        emulator.buildOutput = {
+            path: 'main',
+            bytes: new Uint8Array(crackmeBytes),
+            generation: 1,
+            sources: { entry: 'main.asm', files }
+        }
+        flushSync()
+        const pane = show(session, 'main')
+        session.decompile(pane)
+        flushSync()
+        const [listingPane] = session.groups
+        await decompiled(pane)
+        //a Debug session of main.asm, whose Step shows its source: in the pane beside, which
+        //showed the Build output's Listing, never in place of a Pseudocode
+        emulator.buildSources = { entry: 'main.asm', files }
+        emulator.canExecute = true
+        flushSync()
+        await session.revealSourceLocation('main.asm', 2)
+        flushSync()
+        expect(session.groups).toEqual([listingPane, pane])
+        expect(listingPane.displayedPath).toBe('main.asm')
+        expect(pane.displayedPath).toBe('main')
+        expect(pane.displayedView).toBe('pseudocode')
+        //with the Pseudocode alone, the source opens in a new pane beside it
+        session.closeGroup(listingPane)
+        flushSync()
+        await session.revealSourceLocation('main.asm', 3)
+        flushSync()
+        expect(session.groups).toHaveLength(2)
+        expect(session.groups[0]).toBe(pane)
+        expect(pane.displayedView).toBe('pseudocode')
+        expect(session.groups[1].displayedPath).toBe('main.asm')
+        expect(session.executionGroup).toBe(session.groups[1])
+    })
 })
