@@ -762,7 +762,9 @@ export class WorkbenchSession {
         //the worker decompiles only what panes show, and keeps the programs of those Executables
         $effect(() => {
             const shown = this.groups.flatMap((group) =>
-                group.displayedPseudocode ? [group.displayedPseudocode] : []
+                [group.requestedPseudocode, group.displayedPseudocode].filter(
+                    (document) => document !== undefined
+                )
             )
             const paths = this.groups
                 .filter((group) => group.displayedView === 'pseudocode')
@@ -772,6 +774,16 @@ export class WorkbenchSession {
         //a function's Pseudocode, once decompiled, opens at the line the Listing's cursor is on,
         //rather than where the function shown before it was scrolled to
         const revealed = new WeakMap<EditorGroup, object>()
+        //and the Listing it pairs with scrolls to that function, when it is a Listing new to the
+        //pair
+        const pairedListings = new WeakMap<EditorGroup, ListingDocument>()
+        $effect(() => {
+            const pair = this.pseudocodePair
+            const document = pair?.assembly.displayedListing
+            if (!pair || !document || pairedListings.get(pair.assembly) === document) return
+            pairedListings.set(pair.assembly, document)
+            untrack(() => void this.revealPseudocodeFunction(pair.assembly, pair.source))
+        })
         $effect(() => {
             for (const group of this.groups) {
                 const document = group.displayedPseudocode
@@ -1801,7 +1813,8 @@ export class WorkbenchSession {
      * mounted is stopped part of the way by the layouts that follow (its notice, the debug
      * column), as the current line's was (`CurrentLineReveal`), which left Show in Listing a
      * tenth of the way to its line. With `still`, the reveal is dropped once it no longer holds,
-     * so a reveal waiting for an editor does not undo a move made meanwhile.
+     * so a reveal waiting for an editor does not undo a move made meanwhile; with `unless`, it is
+     * not made when the editor, holding the model, says so.
      */
     private async revealWhenShown(
         group: EditorGroup,
@@ -1810,12 +1823,14 @@ export class WorkbenchSession {
             column = 1,
             focus = true,
             scroll = 'immediate',
-            still
+            still,
+            unless
         }: {
             column?: number
             focus?: boolean
             scroll?: 'smooth' | 'immediate'
             still?: () => boolean
+            unless?: (editor: NonNullable<EditorGroup['editor']>) => boolean
         } = {}
     ): Promise<boolean> {
         if (this.disposed) return false
@@ -1830,6 +1845,7 @@ export class WorkbenchSession {
                 return false
             const editor = group.editor
             if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
+                if (unless?.(editor)) return false
                 this.revealEditorLine(zeroBasedLineToMonaco(line), column, group, scroll)
                 if (focus) editor.focus()
                 return true
@@ -1934,26 +1950,37 @@ export class WorkbenchSession {
             'listing'
         )
         this.focusEditorGroup(group)
-        void this.revealPseudocodeFunction(other, group)
         return other
     }
 
-    /** Scrolls a Listing just opened beside a Pseudocode to the function the Pseudocode shows. */
+    /**
+     * Scrolls a Listing that just paired with a Pseudocode (opened beside it, switched back to
+     * from the bytes, or made again after a Byte edit) to the function the Pseudocode shows,
+     * unless its cursor is in that function already.
+     */
     private async revealPseudocodeFunction(listingPane: EditorGroup, pseudocodePane: EditorGroup) {
         const document = listingPane.displayedListing
-        const listing = await document?.ready.catch(() => undefined)
+        const fn = pseudocodePane.displayedPseudocode?.fn
         await tick()
-        if (this.disposed || !listing || listingPane.displayedListing !== document) return
         //the debugger puts the running program's Listing on the program counter itself
         const selection = listingPane.sourceSelection
-        if (isCurrentBuildLocation(selection, this.buildGeneration, this.emulator.currentFile))
+        if (
+            this.disposed ||
+            !fn ||
+            listingPane.displayedListing !== document ||
+            isCurrentBuildLocation(selection, this.buildGeneration, this.emulator.currentFile)
+        )
             return
-        const fn = pseudocodePane.pseudocodeFunction
-        if (fn && pseudocodePane.pseudocodeListing === document)
-            await this.revealWhenShown(listingPane, fn.line, {
-                focus: false,
-                still: () => pseudocodePane.pseudocodeFunction === fn
-            })
+        await this.revealWhenShown(listingPane, fn.line, {
+            focus: false,
+            still: () =>
+                pseudocodePane.displayedPseudocode?.fn === fn &&
+                listingPane.displayedListing === document,
+            unless: (editor) => {
+                const line = (editor.getPosition()?.lineNumber ?? 0) - 1
+                return line >= fn.line && line < fn.endLine
+            }
+        })
     }
 
     /**

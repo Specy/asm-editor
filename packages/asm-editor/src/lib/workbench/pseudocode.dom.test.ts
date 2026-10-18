@@ -132,12 +132,15 @@ function show(session: WorkbenchSession, path: string, group: EditorGroup = sess
     return group
 }
 
-/** Waits for a pane's Pseudocode to be decompiled, or to fail. */
+/** Waits for the Pseudocode of a pane's function to be decompiled, or to fail, and shown. */
 async function decompiled(group: EditorGroup): Promise<PseudocodeDocument> {
     for (let attempt = 0; attempt < 500; attempt++) {
         flushSync()
-        const document = group.displayedPseudocode
-        if (document && document.status !== 'decompiling') return document
+        const document = group.requestedPseudocode
+        if (document && document.status !== 'decompiling') {
+            expect(group.displayedPseudocode).toBe(document)
+            return document
+        }
         await new Promise((resolve) => setTimeout(resolve, 10))
     }
     throw new Error(`${group.displayedPath}'s Pseudocode was not decompiled`)
@@ -338,7 +341,7 @@ describe('the Pseudocode beside its Listing', () => {
         //and back in main, its Pseudocode, kept, shows at once
         session.cursorMoved(listingPane, listingLine(listing, 'main', 'call strcmp@plt'))
         flushSync()
-        expect(pane.displayedPseudocode?.fn.name).toBe('main')
+        expect(pane.requestedPseudocode?.fn.name).toBe('main')
         expect((await decompiled(pane)).text).toContain('strcmp(acStack_98,"hunter2")')
     })
 

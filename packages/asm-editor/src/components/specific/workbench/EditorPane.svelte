@@ -190,7 +190,8 @@
         <PseudocodeNotice
             name={group.pseudocodeListing?.name ??
                 group.displayedPath.slice(group.displayedPath.lastIndexOf('/') + 1)}
-            fn={group.pseudocodeFunction?.name}
+            fn={(group.displayedPseudocode ?? group.requestedPseudocode)?.fn.name ??
+                group.pseudocodeFunction?.name}
             built={group.displayedBuildOutput}
         />
     {:else if group.displayedLibraryMember && group.displayedFile}
@@ -354,8 +355,8 @@
             <PseudocodeStatus
                 {group}
                 onRetry={() => {
-                    if (group.displayedPseudocode)
-                        session.pseudocode.retry(group.displayedPseudocode)
+                    if (group.requestedPseudocode)
+                        session.pseudocode.retry(group.requestedPseudocode)
                 }}
             />
         {:else if group.displayedListing}

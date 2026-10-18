@@ -154,6 +154,8 @@
     const beforeViews = $derived(
         debugging ? showExecution : (showExecution && !compileOnly) || !!compilation
     )
+    /** Whether the dock holds the view switch and nothing else, as a pane's beside the controls. */
+    const switchOnly = $derived(!!views && !beforeViews && !hasEnd)
 </script>
 
 <div
@@ -169,6 +171,8 @@
     class:with-actions={debugging && actions.length > 0}
     class:with-compilation={!!compilation}
     class:with-views={!!views}
+    class:with-wide-views={(views?.options.length ?? 0) > 2}
+    class:switch-only={switchOnly}
 >
     <div class="toolbar">
         {#if !debugging}
@@ -690,11 +694,13 @@
     }
 
     /* The view switch drops its words first, then the rest go as above, Test's before the others'.
-       Measured: Hex 4.7rem and Disassemble 8.7rem with their words, 2.45rem bare; beside them
-       Build 5.3rem ("Build entry" 7.9rem), a Debug session's four 21.8rem and Test 5.5rem. A pane's
-       dock with the switch alone keeps its words down to 14rem, in a Debug session too */
+       Measured for a switch of two, as Hex · Disassemble was before Decompile joined it, and kept
+       for Preview · Hex, which is narrower: Hex 4.7rem and Disassemble 8.7rem with their words,
+       2.45rem bare; beside them Build 5.3rem ("Build entry" 7.9rem), a Debug session's four 21.8rem
+       and Test 5.5rem. A pane's dock with the switch alone keeps its words down to 14rem, in a
+       Debug session too. A switch of three has its own steps below */
     @container (max-width: 24rem) {
-        .with-views .view .label {
+        .with-views:not(.switch-only) .view .label {
             display: none;
         }
     }
@@ -744,7 +750,7 @@
     /* in one tray across the bar every button has an equal share, so the widest word decides:
        Disassemble's needs 8.7rem a button, a Debug session's 5.5rem */
     @container (max-width: 27rem) {
-        .fill.with-views .view .label {
+        .fill.with-views:not(.switch-only) .view .label {
             display: none;
         }
     }
@@ -769,6 +775,104 @@
 
     @container (max-width: 14rem) {
         .with-views .label {
+            display: none;
+        }
+    }
+
+    /* and one across a phone's pane, a share for each */
+    @container (max-width: 18rem) {
+        .fill.switch-only .label {
+            display: none;
+        }
+    }
+
+    /* An Executable's switch has a third button, Decompile, 7.77rem with its word and 2.45rem
+       bare, so the same steps come later. Measured beside it: Build and the three views 28.31rem
+       (30.9rem with "Build entry"), 14.47rem with the views bare; a Debug session's four and the
+       views 44.17rem, 30.32rem with the views bare; Test's tray 5.51rem, 3.06rem bare, after a
+       0.4rem gap; the switch alone 22.16rem */
+    @container (max-width: 32rem) {
+        .with-wide-views:not(.switch-only) .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 38rem) {
+        .with-wide-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 23.5rem) {
+        .with-wide-views.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 45rem) {
+        .with-wide-views.with-session .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 51rem) {
+        .with-wide-views.with-session.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 36.5rem) {
+        .with-wide-views.with-session.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 30.5rem) {
+        .with-wide-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 34rem) {
+        .with-wide-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    /* in one tray across the bar, one more equal share: 8.7rem for Disassemble's word, 5.5rem in
+       a Debug session */
+    @container (max-width: 36rem) {
+        .fill.with-wide-views:not(.switch-only) .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 45rem) {
+        .fill.with-wide-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 39.5rem) {
+        .fill.with-wide-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 45rem) {
+        .fill.with-wide-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 22.5rem) {
+        .with-wide-views .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 27rem) {
+        .fill.switch-only.with-wide-views .label {
             display: none;
         }
     }

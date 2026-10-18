@@ -106,6 +106,13 @@ export class EditorGroup {
     /** The function whose Pseudocode the pane shows, once the Listing is ready. */
     declare readonly pseudocodeFunction: ListingFunction | undefined
     /** That function's Pseudocode, decompiling or decompiled. */
+    declare readonly requestedPseudocode: PseudocodeDocument | undefined
+    /**
+     * The Pseudocode the pane shows: the function's once it is decompiled or has failed, and until
+     * then the one it showed before, of the same Listing, so that moving between functions neither
+     * empties the pane nor resizes the pair for the moment a function takes. A function that takes
+     * longer is covered by "Decompiling…".
+     */
     declare readonly displayedPseudocode: PseudocodeDocument | undefined
     /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
     patchPrompt = $state.raw<PatchPrompt | undefined>()
@@ -158,13 +165,22 @@ export class EditorGroup {
             const listing = this.pseudocodeListing?.listing
             return listing ? this.session.pseudocodeFunctionFor(this, listing) : undefined
         })
-        this.displayedPseudocode = $derived.by(() => {
+        this.requestedPseudocode = $derived.by(() => {
             const document = this.pseudocodeListing
             const fn = this.pseudocodeFunction
             const file = this.displayedFile
             return document && fn && file
                 ? this.session.pseudocode.open(this.displayedPath, file, document, fn)
                 : undefined
+        })
+        let settled: PseudocodeDocument | undefined
+        this.displayedPseudocode = $derived.by(() => {
+            const requested = this.requestedPseudocode
+            if (requested?.status !== 'decompiling') return (settled = requested)
+            return settled?.listingDocument === requested.listingDocument &&
+                settled.path === requested.path
+                ? settled
+                : requested
         })
         this.resetCompilationOptions()
     }

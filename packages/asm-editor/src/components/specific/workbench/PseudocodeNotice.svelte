@@ -19,9 +19,9 @@
 </script>
 
 <div class="pseudocode-notice" role="status">
-    Pseudocode of {fn ?? 'a function'} in {name}{built ? ', the program the Build linked' : ''},
-    decompiled by Ghidra: read-only. It reads like C without being meant to compile, and follows the
-    Listing's cursor.
+    Pseudocode of {fn ?? 'a function'}, decompiled from {name}{built
+        ? ', the program the Build linked,'
+        : ''} by Ghidra: read-only, and not meant to compile.
 </div>
 
 <style lang="scss">

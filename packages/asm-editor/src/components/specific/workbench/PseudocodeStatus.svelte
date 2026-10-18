@@ -8,7 +8,7 @@
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
 
     let { group, onRetry }: { group: EditorGroup; onRetry: () => void } = $props()
-    const document = $derived(group.displayedPseudocode)
+    const document = $derived(group.requestedPseudocode)
     const fn = $derived(group.pseudocodeFunction)
 </script>
 
