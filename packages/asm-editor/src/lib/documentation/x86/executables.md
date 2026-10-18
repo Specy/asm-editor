@@ -1,6 +1,6 @@
 An **Executable** is a program compiled and linked outside the editor. Build loads its machine code directly, so you can inspect and debug it even when you do not have its source. The supported file format is **ELF**, the format Linux uses for executable programs and libraries.
 
-Use **Import** on the Projects page to create an x86 project with the ELF file as its **Entry** file. In an existing x86 project, upload it in the **Explorer** and accept the offer to make it the Entry file. The editor recognises the file from its first bytes, so names such as `crackme` or `chall` work without an extension. The Executable opens in the [Hex editor](#hex-editor), and **Disassemble** shows it as assembly.
+Use **Import** on the Projects page to create an x86 project with the ELF file as its **Entry** file. In an existing x86 project, upload it in the **Explorer** and accept the offer to make it the Entry file. The editor recognises the file from its first bytes, so names such as `crackme` or `chall` work without an extension. The Executable opens in the [Hex editor](#hex-editor); **Disassemble** shows it as assembly, and **Decompile** as C-like [Pseudocode](#decompile).
 
 ## What runs {#what-runs}
 
@@ -36,7 +36,7 @@ These Linux libraries are separate from the editor's [Runtime library](/document
 
 An Executable opens in the **Hex editor**, which shows the File's bytes. Each row starts with its offset in the File, followed by 16 bytes in hexadecimal and the same bytes as text, where a byte outside printable ASCII shows as `.`. On a narrow screen, a row holds 8 bytes.
 
-The switch in the execution dock chooses what the pane shows: **Hex** for the bytes, **Disassemble** for the [Listing](#listing). The project remembers the view you last chose for each File. **Build** moves a pane showing the Executable in Hex to Disassemble, because the program counter, Breakpoints and Patches are shown on the Listing. During the Debug session you can switch back to Hex to read the File's bytes, but the next Step returns a single pane to Disassemble; split the editor to keep both in sight. Stop leaves each pane on its view.
+The switch in the execution dock chooses what the pane shows: **Hex** for the bytes, **Disassemble** for the [Listing](#listing), **Decompile** for the [Pseudocode](#decompile). The project remembers the view you last chose for each File. **Build** moves a pane showing the Executable in Hex to Disassemble, because the program counter, Breakpoints and Patches are shown on the Listing; a pane on Decompile stays there. During the Debug session you can switch back to Hex to read the File's bytes, but the next Step returns a single pane to Disassemble; split the editor to keep both in sight. Stop leaves each pane on its view.
 
 Other Files stored as bytes open in the Hex editor too. An image, a PDF, audio or video opens in **Preview**, which shows it as the browser does, with **Preview** and **Hex** in the switch; if the browser cannot show it, the File opens in Hex with a note saying so. The editor recognises these kinds from their first bytes, not their names.
 
@@ -93,6 +93,36 @@ A **symbol** is a saved name for a function or data address. **Stripping** a pro
 
 The invented words do not describe what the code does. They depend on its address in the file, so the same program gets the same names on every open and for every reader. You can use those names in shared notes.
 
+## Decompile {#decompile}
+
+**Decompile** shows a function of the Executable as **Pseudocode**: C-like text that Ghidra's decompiler produces from the function's machine code. Pseudocode helps you read the program. It is not the program's source and is not meant to compile: it uses the decompiler's own names and types, such as `iVar1` and `undefined8`, and can contain the decompiler's warnings.
+
+The Pseudocode shows one function at a time: the function the Listing's cursor is in. The Listing stays beside it; if no pane shows the Listing, Decompile opens it in a second pane on the left, or above on a narrow screen. Move the Listing's cursor into another function to show that function's Pseudocode. A line outside any function, such as data, leaves the Pseudocode as it is. If the cursor is in no function, Decompile shows the function the program is in during a Debug session, and otherwise `main`, or the function at the entry point when no `main` is found.
+
+Each Pseudocode line is linked to the instructions it came from. Linked lines share a colour in both panes, and selecting lines in one pane highlights the linked lines in the other. Some instructions, such as `endbr64` and `push rbp` at the start of a function, belong to no Pseudocode line.
+
+Like the Listing, the Pseudocode is generated from the File's current bytes and is never saved; a [Byte edit](#byte-edits) makes the editor decompile the function again. The decompiler runs in your browser, so the Executable is not uploaded anywhere. The first Decompile loads the decompiler, which takes a moment. Decompile is not available for a shared library's Listing, such as `@lib/libc.so.6`.
+
+## Reading the Pseudocode {#pseudocode}
+
+The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`. Functions and data have the names the [Listing](#names) gives them, invented ones included, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`.
+
+The decompiler names everything else itself:
+
+- Local variables by type and number: `iVar1` is an `int`, `pcVar2` a `char *`, `uVar3` a value of unsigned or unknown type. Parameters are `param_1`, `param_2`, …
+- Stack variables by their offset in the stack frame, such as the array `acStack_98`.
+- Types it cannot determine by their size: `undefined8` is 8 bytes and `undefined4` 4 bytes of unknown type.
+
+A comment starting with `WARNING:` is a note from the decompiler about code it could not fully recover, such as a jump through a table. A name with an extra leading `_`, such as `_DAT_epic_cicada`, refers to more bytes than the Listing's label for that address covers.
+
+**Go to Definition**: Ctrl+click (Cmd+click on a Mac) a called function or a data name to show it in the Listing. For a called function, the Pseudocode then shows that function. Hover over the name to see the Listing's name and address for it.
+
+## When decompiling takes long {#decompile-time}
+
+Most functions decompile in well under a second. A large function can take much longer: `printf_positional`, part of the C library in a statically linked program, takes 10 seconds or more. While the decompiler works, the pane shows **Decompiling…** with the function's name. For a large program, the pane first shows the progress of its Listing, which the decompiler needs.
+
+The decompiler stops working on a function after 30 seconds. The pane then shows **No Pseudocode** with the reason, such as "printf_positional took longer than 30 seconds to decompile". **Try again** starts again; on a less busy device, the function may finish within the limit. A function the decompiler cannot handle shows **No Pseudocode** with the decompiler's reason.
+
 ## Building and stepping {#stepping}
 
 **Build** loads the Executable and runs its startup code, including the dynamic linker, toward the first instruction of detected `main`. When no `main` is found, the target is the executable entry point: the address recorded in the ELF file where program execution starts. This startup advance happens even when **Step into library code** is enabled.
@@ -109,9 +139,17 @@ A crash inside a library, such as invalid data reaching `strlen`, is shown on th
 
 ## Breakpoints {#breakpoints}
 
-Click beside a Listing instruction to place a Breakpoint. **Run** stops before that instruction. A Breakpoint holds its address, so it stays on the instruction if the Listing's lines move. You can set Breakpoints on the Executable's instructions, but not on labels, data, or a library's Listing.
+Click beside a Listing instruction to place a Breakpoint. **Run** stops before that instruction. A Breakpoint holds its address, so it stays on the instruction if the Listing's lines move. You can set Breakpoints on the Executable's instructions, but not on labels, data, or a library's Listing. You can also set them from the [Pseudocode](#pseudocode-debugging).
 
 To inspect the inputs to a library function, stop on its `call` instruction. Integer and pointer arguments in the x86-64 function calling convention use `rdi`, `rsi`, `rdx`, `rcx`, `r8`, and `r9`. For example, at `call strcmp@plt`, `rdi` and `rsi` hold the addresses of the strings to compare.
+
+## Debugging in the Pseudocode {#pseudocode-debugging}
+
+During a Debug session, a pane showing the Pseudocode stays on it. The Pseudocode shows the function the program is in and highlights the line the current instruction belongs to. An instruction that belongs to no line, such as `endbr64`, highlights no line; the Listing beside it always shows the instruction.
+
+Click beside a Pseudocode line to set a Breakpoint on it. The editor places a Breakpoint on the first instruction of each block of instructions the line came from. These are ordinary Breakpoints of the Listing, which shows them too. For example, in crackme, a Breakpoint on `if (iVar1 == 0) {` goes on `test eax, eax`, so **Run** stops after `strcmp` returns and before the program branches. A Pseudocode line is marked when any of its instructions has a Breakpoint, wherever you set it. Clicking the mark removes all of those Breakpoints, and removing them in the Listing removes the mark. Lines without instructions, such as declarations and braces, take none.
+
+The Breakpoints belong to instructions, not to the text: they stay where they are when the Pseudocode is generated again, for example after a Byte edit. The Pseudocode of a [Build output](#build-output) takes no Breakpoints and highlights no line, like its Listing.
 
 ## The Command line and Arguments {#arguments}
 
@@ -151,7 +189,7 @@ A patch changes memory only. The Executable File keeps its bytes, and the next B
 
 ## The Build output {#build-output}
 
-When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, in Hex and Disassemble, and it is read-only. Its Listing takes no Breakpoints; the debugger follows the program in your source.
+When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, in Hex, Disassemble and Decompile, and it is read-only. Its Listing and Pseudocode take no Breakpoints; the debugger follows the program in your source.
 
 The running program finds it in its working directory: it can open `./main` and read its bytes, but writing it fails with `ETXTBSY`, and renaming or deleting it fails with `EBUSY`. Each Testcase's program finds its own copy.
 
@@ -170,6 +208,6 @@ The **Log** reports unsupported operations once per run:
 
 ## Safety {#safety}
 
-The program runs in an emulator inside the browser's sandbox. Its file access is limited to project Files and bundled libraries, and it has no network access. Breakpoints do not modify program bytes, and `ptrace(PTRACE_TRACEME)` succeeds as it does when no debugger is attached. Timing checks still see real time, so pausing or stepping can change their results.
+The program runs in an emulator inside the browser's sandbox, and the Listing and the Pseudocode are made in the browser too. Its file access is limited to project Files and bundled libraries, and it has no network access. Breakpoints do not modify program bytes, and `ptrace(PTRACE_TRACEME)` succeeds as it does when no debugger is attached. Timing checks still see real time, so pausing or stepping can change their results.
 
 A share link stores the project in its URL, which most Executables are too large for. Download the project as an archive from the Projects page to share it instead.

@@ -182,8 +182,8 @@
                     {#if canCreate && project.language === 'X86'}
                         <li>
                             <button class="hint-action" onclick={() => elfInput?.click()}>
-                                You can run Linux binaries. Upload an ELF file to see its bytes and
-                                disassemble it
+                                You can run Linux binaries. Upload an ELF file to see its bytes,
+                                disassemble it and decompile it
                             </button>
                             <input type="file" hidden bind:this={elfInput} onchange={uploadElf} />
                         </li>

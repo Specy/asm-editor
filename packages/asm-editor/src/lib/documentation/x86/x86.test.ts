@@ -73,8 +73,12 @@ describe('the x86 Documentation', () => {
             'data-inspector',
             'listing',
             'names',
+            'decompile',
+            'pseudocode',
+            'decompile-time',
             'stepping',
             'breakpoints',
+            'pseudocode-debugging',
             'arguments',
             'testcases',
             'patching',
@@ -120,6 +124,13 @@ describe('the x86 Documentation', () => {
         expect(text('data-inspector')).toContain('**Little**')
         for (const action of ['**Download**', '**Keep as File**', '**From an earlier Build**'])
             expect(text('build-output')).toContain(action)
+        // Decompile: the switch's third view, Ghidra's Pseudocode, its limit and its Breakpoints
+        expect(text('hex-editor')).toContain('**Decompile**')
+        expect(text('decompile')).toContain('Ghidra')
+        expect(text('pseudocode')).toContain('**Go to Definition**')
+        expect(text('decompile-time')).toContain('30 seconds')
+        expect(text('pseudocode-debugging')).toContain('`if (iVar1 == 0) {`')
+        expect(text('build-output')).toContain('Decompile')
     })
 
     it('has an instruction entry for every instruction page, alphabetically', () => {
