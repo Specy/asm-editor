@@ -108,6 +108,8 @@ export class PseudocodeDocuments {
     private readonly paths = new Set<string>()
     /** Bumped by `retry`, so that what shows a failed document opens it again. */
     private revision = $state(0)
+    /** Set by `dispose`: a pane's derived state read after the session ended starts no worker. */
+    private disposed = false
 
     constructor(
         private readonly createClient: () => PseudocodeClient = () => new PseudocodeClient()
@@ -125,7 +127,7 @@ export class PseudocodeDocuments {
     ): PseudocodeDocument | undefined {
         void this.revision
         const listing = listingDocument.listing
-        if (!listing) return undefined
+        if (!listing || this.disposed) return undefined
         const key = `${this.listingId(listingDocument)}\0${path}\0${fn.address}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
@@ -173,6 +175,7 @@ export class PseudocodeDocuments {
 
     /** Ends the worker and forgets every document, as the Workbench session ends. */
     dispose(): void {
+        this.disposed = true
         for (const document of this.documents.values()) document.abort()
         this.documents.clear()
         this.paths.clear()
