@@ -13,7 +13,14 @@ export type ModelView = 'listing' | 'pseudocode'
 export type ProjectModelIdentity = (
     | { sessionId: string; sourceKind: 'live'; path: string }
     | { sessionId: string; sourceKind: 'build'; buildGeneration: number; path: string }
-) & { view?: ModelView }
+) & {
+    view?: ModelView
+    /**
+     * A Pseudocode's function, by its link-time address: each function's Pseudocode is a model of
+     * its own, so two panes showing two functions of one File never share one.
+     */
+    functionAddress?: number
+}
 
 type UriLike = { scheme: string; authority: string; path: string; fragment?: string }
 
@@ -36,6 +43,13 @@ function validateIdentity(identity: ProjectModelIdentity): void {
     ) {
         throw new Error('Invalid Build generation')
     }
+    const address = identity.functionAddress
+    if (
+        address !== undefined &&
+        (identity.view !== 'pseudocode' || !Number.isSafeInteger(address) || address < 0)
+    ) {
+        throw new Error('Invalid Pseudocode function')
+    }
 }
 
 function identityPath(identity: ProjectModelIdentity): string {
@@ -44,23 +58,55 @@ function identityPath(identity: ProjectModelIdentity): string {
     return `/${source}/${identity.path}`
 }
 
+/** The view, and for a Pseudocode its function's address in hex: `listing`, `pseudocode-11e9`. */
+function identityFragment(identity: ProjectModelIdentity): string | undefined {
+    if (!identity.view || identity.functionAddress === undefined) return identity.view
+    return `${identity.view}-${identity.functionAddress.toString(16)}`
+}
+
+function parseFragment(
+    fragment: string | undefined
+): Pick<ProjectModelIdentity, 'view' | 'functionAddress'> {
+    if (!fragment) return {}
+    if (MODEL_VIEWS.includes(fragment)) return { view: fragment as ModelView }
+    const match = /^pseudocode-([0-9a-f]+)$/.exec(fragment)
+    const address = match ? Number.parseInt(match[1], 16) : NaN
+    return Number.isSafeInteger(address) ? { view: 'pseudocode', functionAddress: address } : {}
+}
+
 /** A view's model is told apart by the URI's fragment, which leaves its path the File's. */
 export function projectSourceUri(
     monaco: Pick<MonacoType, 'Uri'>,
     identity: ProjectModelIdentity
 ): ReturnType<MonacoType['Uri']['from']> {
     validateIdentity(identity)
+    const fragment = identityFragment(identity)
     return monaco.Uri.from({
         scheme: ASSEMBLY_MODEL_SCHEME,
         authority: identity.sessionId,
         path: identityPath(identity),
-        ...(identity.view ? { fragment: identity.view } : {})
+        ...(fragment ? { fragment } : {})
     })
 }
 
 export function projectSourceModelKey(identity: ProjectModelIdentity): string {
     validateIdentity(identity)
-    return `${identity.sessionId}:${identityPath(identity)}${identity.view ? `#${identity.view}` : ''}`
+    const fragment = identityFragment(identity)
+    return `${identity.sessionId}:${identityPath(identity)}${fragment ? `#${fragment}` : ''}`
+}
+
+/**
+ * Another view of the same version of a File, or with no view its text: the Listing a Pseudocode
+ * was decompiled from, which has no function of its own.
+ */
+export function fileViewIdentity(
+    identity: ProjectModelIdentity,
+    view?: ModelView
+): ProjectModelIdentity {
+    const other: ProjectModelIdentity = { ...identity, view }
+    delete other.functionAddress
+    if (!view) delete other.view
+    return other
 }
 
 export function parseProjectSourceUri(uri: UriLike): ProjectModelIdentity | null {
@@ -73,10 +119,7 @@ export function parseProjectSourceUri(uri: UriLike): ProjectModelIdentity | null
     const [source, ...pathParts] = parts
     const path = pathParts.join('/')
     if (!isValidFilePath(path)) return null
-    const view =
-        uri.fragment && MODEL_VIEWS.includes(uri.fragment)
-            ? { view: uri.fragment as ModelView }
-            : {}
+    const view = parseFragment(uri.fragment)
     if (source === 'live') return { sessionId: uri.authority, sourceKind: 'live', path, ...view }
     const match = /^build-(\d+)$/.exec(source)
     if (!match) return null

@@ -547,8 +547,8 @@ export class WorkbenchSession {
         })
         this.mappingColors = $derived<SourceMapColoring | undefined>(this.linePairing?.coloring)
         this.retainedModelKeys = $derived.by(() => {
-            //a File's text, and for a File of bytes its Listing and Pseudocode, which an
-            //Executable has; a key with no model behind it keeps nothing
+            //a File's text, and for a File of bytes its Listing, which an Executable has; a key
+            //with no model behind it keeps nothing
             const keys = (files: ProjectFiles, selection: ProjectSourceSelection) =>
                 Object.entries(files).flatMap(([path, file]) => {
                     const identity = { sessionId: this.languageSessionId, ...selection, path }
@@ -556,8 +556,7 @@ export class WorkbenchSession {
                         ? [projectSourceModelKey(identity)]
                         : [
                               projectSourceModelKey(identity),
-                              projectSourceModelKey({ ...identity, view: 'listing' }),
-                              projectSourceModelKey({ ...identity, view: 'pseudocode' })
+                              projectSourceModelKey({ ...identity, view: 'listing' })
                           ]
                 })
             const build = buildSource('', this.buildGeneration)
@@ -578,7 +577,10 @@ export class WorkbenchSession {
                             path,
                             view: 'listing'
                         })
-                    )
+                    ),
+                //and the Pseudocode each pane last showed of each Executable it has open, a
+                //model of its own for each function
+                ...this.groups.flatMap((group) => group.pseudocodeModelKeys)
             ]
         })
         this.liveViewDiagnostics = $derived.by(() => {
@@ -1803,7 +1805,8 @@ export class WorkbenchSession {
 
     /**
      * Whether a pane's editor holds the model the pane shows, as it does once mounted: for a
-     * Pseudocode, the one made for the function shown, since every function's has the same key.
+     * Pseudocode, the one made for the document shown, since a function's Pseudocode decompiled
+     * again from edited bytes is a new document under the same key.
      */
     private holdsModel(group: EditorGroup): boolean {
         const model = group.editor?.getModel()

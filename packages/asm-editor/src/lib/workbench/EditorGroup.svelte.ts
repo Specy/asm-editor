@@ -120,6 +120,11 @@ export class EditorGroup {
      * longer is covered by "Decompiling…".
      */
     declare readonly displayedPseudocode: PseudocodeDocument | undefined
+    /**
+     * The model key of the Pseudocode this pane last showed of each File it has open, whatever it
+     * shows now: kept, so that the File shown again finds its model and scroll position as it was.
+     */
+    declare readonly pseudocodeModelKeys: readonly string[]
     /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
     patchPrompt = $state.raw<PatchPrompt | undefined>()
 
@@ -187,6 +192,16 @@ export class EditorGroup {
                 settled.path === requested.path
                 ? settled
                 : requested
+        })
+        let shown: Readonly<Record<string, string>> = {}
+        this.pseudocodeModelKeys = $derived.by(() => {
+            const paths = this.tabs.paths
+            const identity = this.modelIdentity
+            const kept = Object.entries(shown).filter(([path]) => paths.includes(path))
+            if (identity?.view === 'pseudocode')
+                kept.push([identity.path, projectSourceModelKey(identity)])
+            shown = Object.fromEntries(kept)
+            return Object.values(shown)
         })
         this.resetCompilationOptions()
     }
@@ -459,12 +474,14 @@ export class EditorGroup {
         //at a model's creation whether it is too large to highlight
         if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
         //and a function's Pseudocode once it is decompiled, a model of its own for each function
-        if (view === 'pseudocode' && this.displayedPseudocode?.status !== 'ready') return undefined
+        const pseudocode = view === 'pseudocode' ? this.displayedPseudocode : undefined
+        if (view === 'pseudocode' && pseudocode?.status !== 'ready') return undefined
         return {
             sessionId: this.session.languageSessionId,
             ...this.sourceSelection,
             //a Listing's model is the File's as much as its text's is, so the view tells them apart
-            ...(view === 'listing' || view === 'pseudocode' ? { view } : {})
+            ...(view === 'listing' || view === 'pseudocode' ? { view } : {}),
+            ...(pseudocode ? { functionAddress: pseudocode.fn.address } : {})
         }
     }
     get modelKey() {

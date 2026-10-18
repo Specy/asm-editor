@@ -21,6 +21,7 @@ import { listingLineOfTarget, pseudocodeTargetAt } from '#lib/pseudocode/pseudoc
 import { createPseudocodeProviders } from '#lib/monaco/pseudocodeProviders.ts'
 import { setModelPseudocode } from '#lib/monaco/pseudocodeModels.ts'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import { fileViewIdentity } from '#lib/languages/service/uri.ts'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
 import PseudocodeNotice from '#cmp/specific/workbench/PseudocodeNotice.svelte'
@@ -235,7 +236,11 @@ describe('Decompile', () => {
         expect(document.text).toContain('puts("Correct!");')
         //a read-only C model of its own, kept like the Listing's
         expect(pane.displayedLanguage).toBe('c')
-        expect(pane.modelIdentity).toMatchObject({ path: 'crackme', view: 'pseudocode' })
+        expect(pane.modelIdentity).toMatchObject({
+            path: 'crackme',
+            view: 'pseudocode',
+            functionAddress: 0x11e9
+        })
         expect(pane.displayedCode).toBe(document.text)
         expect(pane.editorDisabled).toBe(true)
         //read-only, but its lines take Breakpoints on their instructions (decision 10)
@@ -368,6 +373,33 @@ describe('the Pseudocode beside its Listing', () => {
         expect(host.textContent).toContain('Pseudocode of _start,')
     })
 
+    it('gives each function’s Pseudocode a model of its own, which two panes never share', async () => {
+        const { session, pane, listingPane, listing } = await paired()
+        const main = pane.modelKey
+        expect(main).toMatch(/#pseudocode-11e9$/)
+        session.cursorMoved(listingPane, listingLine(listing, '_start', 'hlt'))
+        flushSync()
+        await decompiled(pane)
+        const start = pane.modelKey
+        expect(start).not.toBe(main)
+        //the other pane on main's Pseudocode of the same File, as a moved tab may show it, has
+        //main's model, not the one this pane shows
+        listingPane.followFunction(
+            'crackme',
+            listing.functions.find((fn) => fn.name === 'main')!.address
+        )
+        listingPane.setView('crackme', 'pseudocode', false)
+        expect(listingPane.displayedPseudocode?.fn.name).toBe('main')
+        expect(listingPane.modelKey).toBe(main)
+        expect(pane.modelKey).toBe(start)
+        listingPane.setView('crackme', 'listing', false)
+        flushSync()
+        //the Pseudocode a pane last showed of a File keeps its model while it shows another
+        session.selectFile('notes.txt', pane)
+        flushSync()
+        expect(session.retainedModelKeys).toContain(start)
+    })
+
     it('goes to a call’s definition in both panes', async () => {
         const { session, pane, listingPane, document, listing } = await paired()
         const revealed = listingEditor(session, listingPane)
@@ -419,7 +451,7 @@ describe('the Pseudocode beside its Listing', () => {
                 lines: document.lines,
                 firstLine: document.firstLine,
                 listing,
-                listingIdentity: { ...pane.modelIdentity!, view: 'listing' }
+                listingIdentity: fileViewIdentity(pane.modelIdentity!, 'listing')
             })
         )
         const { definition, hover } = createPseudocodeProviders(monaco)

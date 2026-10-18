@@ -9,6 +9,7 @@
     import PseudocodeNotice from './PseudocodeNotice.svelte'
     import PseudocodeStatus from './PseudocodeStatus.svelte'
     import type { PseudocodeModel } from '#lib/monaco/pseudocodeModels.ts'
+    import { fileViewIdentity } from '#lib/languages/service/uri.ts'
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
     import type { EditorLineAction } from '#lib/monaco/editorLineActions.ts'
@@ -75,7 +76,7 @@
                   lines: document.lines,
                   firstLine: document.firstLine,
                   listing: document.listing,
-                  listingIdentity: { ...identity, view: 'listing' }
+                  listingIdentity: fileViewIdentity(identity, 'listing')
               }
             : undefined
     })

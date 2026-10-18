@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
     ASSEMBLY_MODEL_SCHEME,
+    fileViewIdentity,
     parseProjectSourceUri,
     projectSourceModelKey,
     projectSourceUri,
@@ -44,12 +45,22 @@ describe('Project source URIs', () => {
         const listing = { ...build, path: 'crackme', view: 'listing' } as const
         const pseudocode = { ...listing, view: 'pseudocode' } as const
         const text = { ...build, path: 'crackme' }
-        const keys = [listing, pseudocode, text].map(projectSourceModelKey)
-        expect(new Set(keys).size).toBe(3)
+        //each function's Pseudocode a model of its own, its address in hex
+        const main = { ...pseudocode, functionAddress: 0x11e9 }
+        const start = { ...pseudocode, functionAddress: 0x1100 }
+        const keys = [listing, pseudocode, text, main, start].map(projectSourceModelKey)
+        expect(new Set(keys).size).toBe(5)
         expect(keys[0]).toBe('session-1:/build-7/crackme#listing')
         expect(keys[2]).toBe('session-1:/build-7/crackme')
+        expect(keys[3]).toBe('session-1:/build-7/crackme#pseudocode-11e9')
+        expect(projectSourceUri(monacoStub, main)).toMatchObject({ fragment: 'pseudocode-11e9' })
+        //a Pseudocode's Listing, and its text, have no function
+        expect(fileViewIdentity(main, 'listing')).toEqual(listing)
+        expect(fileViewIdentity(main)).toEqual(text)
+        expect(() => projectSourceModelKey({ ...listing, functionAddress: 0x11e9 })).toThrow()
+        expect(() => projectSourceModelKey({ ...pseudocode, functionAddress: -1 })).toThrow()
         //the view is the URI's fragment, so its path still names the File
-        for (const identity of [listing, pseudocode, text]) {
+        for (const identity of [listing, pseudocode, text, main, start]) {
             const uri = projectSourceUri(monacoStub, identity)
             expect(uri.path).toBe('/build-7/crackme')
             expect(parseProjectSourceUri(uri)).toEqual(identity)
