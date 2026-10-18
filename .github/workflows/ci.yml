@@ -49,6 +49,7 @@ jobs:
                       packages/m68k/ts-lib/dist
                       packages/x86/blink-js/dist
                       packages/z80/packages/z80-machine/dist
+                      packages/decompiler/js/dist
                   if-no-files-found: error
                   retention-days: 1
 

@@ -18,3 +18,7 @@
 	path = packages/z80
 	url = https://github.com/Specy/trs80.git
 	branch = master
+[submodule "packages/decompiler"]
+	path = packages/decompiler
+	url = https://github.com/Specy/decompiler-js
+	branch = main

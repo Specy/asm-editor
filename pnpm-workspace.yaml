@@ -6,6 +6,8 @@ packages:
     - packages/risc-v/rarsjs/ts
     - packages/m68k/ts-lib
     - packages/x86/blink-js
+    # Not a Core, but a submodule like them: Ghidra's decompiler, whose npm package is in js/.
+    - packages/decompiler/js
     # packages/z80 is not listed: trs80 is an npm workspace of its own whose packages rely on its
     # root's hoisting, so it installs and builds itself and the editor links its @specy/z80.
 
