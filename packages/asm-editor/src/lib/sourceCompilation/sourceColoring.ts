@@ -10,7 +10,7 @@ export type SourceMapColoring = {
 }
 
 /** Stable per original File/line, independent of compiler order or optimization. No fixed palette. */
-function sourceColor({ path, line }: SourceLocation) {
+export function sourceColor({ path, line }: SourceLocation) {
     let hash = 2166136261
     for (let index = 0; index < path.length; index++) {
         hash = Math.imul(hash ^ path.charCodeAt(index), 16777619)

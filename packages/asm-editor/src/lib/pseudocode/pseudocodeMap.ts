@@ -1,0 +1,217 @@
+import type { DecompiledLine, DecompiledToken } from '@specy/decompiler'
+import { lineOfAddress, type Listing, type ListingFunction } from '#lib/listing/listing.ts'
+import type { SourceLocation } from '#lib/sourceCompilation/records.ts'
+import { sourceColor, type SourceMapColoring } from '#lib/sourceCompilation/sourceColoring.ts'
+import type { ColoredLineRange } from '#lib/monaco/lineColoring.ts'
+
+/**
+ * How one function's Pseudocode and the Listing beside it are linked line by line
+ * ([file-views.md](../../../../../docs/design/file-views.md), decision 5; the plan's decision 14):
+ * through the instruction addresses the decompiler gives each of its lines, each found in the
+ * Listing by `lineOfAddress`. It covers the function's Listing lines only, so nothing that reads
+ * it walks a whole Listing (libc's has 473,000 lines). Lines are 0-based lines of the Pseudocode
+ * document, whose header comes before the decompiler's first line, and of the Listing.
+ */
+export type PseudocodeMap = {
+    /** The document line of the decompiler's first line. */
+    firstLine: number
+    /**
+     * The Listing lines the map covers, end exclusive: the function's, and any other a line of
+     * its Pseudocode maps to.
+     */
+    listingStart: number
+    listingEnd: number
+    /** By document line, the link-time addresses of its instructions, ascending. */
+    addresses: readonly (readonly number[])[]
+    /** By document line, the Listing lines of those instructions, ascending, each once. */
+    listingLines: readonly (readonly number[])[]
+    /** By Listing line from `listingStart`, the document lines holding its instruction, ascending. */
+    pseudocodeLines: readonly (readonly number[])[]
+}
+
+const NONE: readonly number[] = []
+
+/** The map of a function's Pseudocode, its decompiled `lines` starting at document line `firstLine`. */
+export function pseudocodeMap(
+    listing: Listing,
+    fn: ListingFunction,
+    lines: readonly DecompiledLine[],
+    firstLine: number
+): PseudocodeMap {
+    const addresses: (readonly number[])[] = Array.from({ length: firstLine }, () => NONE)
+    const listingLines: (readonly number[])[] = [...addresses]
+    let start = fn.line
+    let end = fn.endLine
+    for (const line of lines) {
+        addresses.push(line.addresses.length ? [...line.addresses] : NONE)
+        const found: number[] = []
+        for (const address of line.addresses) {
+            const at = lineOfAddress(listing, address)
+            if (at < 0 || found.includes(at)) continue
+            found.push(at)
+            start = Math.min(start, at)
+            end = Math.max(end, at + 1)
+        }
+        listingLines.push(found.length ? found.sort((a, b) => a - b) : NONE)
+    }
+    const pseudocodeLines: number[][] = Array.from({ length: Math.max(0, end - start) }, () => [])
+    listingLines.forEach((mapped, row) => {
+        for (const line of mapped) pseudocodeLines[line - start].push(row)
+    })
+    return {
+        firstLine,
+        listingStart: start,
+        listingEnd: end,
+        addresses,
+        listingLines,
+        pseudocodeLines: pseudocodeLines.map((rows) => (rows.length ? rows : NONE))
+    }
+}
+
+/** The document lines holding the instruction on a Listing line, none outside the map's range. */
+export function pseudocodeLinesOf(map: PseudocodeMap, listingLine: number): readonly number[] {
+    return listingLine >= map.listingStart && listingLine < map.listingEnd
+        ? map.pseudocodeLines[listingLine - map.listingStart]
+        : NONE
+}
+
+/**
+ * The first document line whose instructions hold a link-time address, as the program counter's
+ * line is found; -1 when none does, as for an instruction the decompiler folded into another's.
+ */
+export function pseudocodeLineOfAddress(
+    map: PseudocodeMap,
+    listing: Listing,
+    address: number
+): number {
+    return pseudocodeLinesOf(map, lineOfAddress(listing, address))[0] ?? -1
+}
+
+/** The Pseudocode lines behind Listing lines, deduplicated, as the pairing's Source locations. */
+export function pseudocodeLocationsOf(
+    map: PseudocodeMap,
+    path: string,
+    listingLines: readonly number[]
+): SourceLocation[] {
+    const rows = new Set<number>()
+    for (const line of listingLines) for (const row of pseudocodeLinesOf(map, line)) rows.add(row)
+    return [...rows].map((line) => ({ path, line }))
+}
+
+/** Every Listing line, ascending, of the instructions of the given Pseudocode lines. */
+export function listingLinesOfLocations(
+    map: PseudocodeMap,
+    path: string,
+    locations: readonly SourceLocation[]
+): number[] {
+    const lines = new Set<number>()
+    for (const location of locations)
+        if (location.path === path)
+            for (const line of map.listingLines[location.line] ?? NONE) lines.add(line)
+    return [...lines].sort((a, b) => a - b)
+}
+
+/**
+ * The pair's colours, as a C File's Source map colours its pair: one for each Pseudocode line with
+ * instructions, which the Listing lines of those instructions share; a Listing line on several
+ * Pseudocode lines takes the first's. `path` names the Pseudocode's File, which the colours of its
+ * lines are kept under.
+ */
+export function colorPseudocodeMap(map: PseudocodeMap, path: string): SourceMapColoring {
+    const colors: string[] = []
+    const rows = new Map<number, number>()
+    const source: ColoredLineRange[] = []
+    map.listingLines.forEach((mapped, line) => {
+        if (!mapped.length) return
+        const colorIndex = colors.length
+        colors.push(sourceColor({ path, line }))
+        rows.set(line, colorIndex)
+        source.push({ startLine: line, endLine: line, colorIndex })
+    })
+    const assembly: ColoredLineRange[] = []
+    for (let line = map.listingStart; line < map.listingEnd; line++) {
+        const first = map.pseudocodeLines[line - map.listingStart][0]
+        if (first === undefined) continue
+        const colorIndex = rows.get(first)!
+        const previous = assembly[assembly.length - 1]
+        if (previous?.colorIndex === colorIndex && previous.endLine === line - 1)
+            previous.endLine = line
+        else assembly.push({ startLine: line, endLine: line, colorIndex })
+    }
+    return {
+        assembly: { colors, ranges: assembly },
+        source: new Map([[path, { colors, ranges: source }]]),
+        indices: new Map([[path, rows]])
+    }
+}
+
+/** The function starting at a link-time address, found in the Listing's functions by address. */
+export function functionAt(listing: Listing, address: number): ListingFunction | undefined {
+    const { functions } = listing
+    let low = 0
+    let high = functions.length - 1
+    while (low <= high) {
+        const middle = (low + high) >> 1
+        const candidate = functions[middle]
+        if (candidate.address > address) high = middle - 1
+        else if (candidate.address < address) low = middle + 1
+        else return candidate
+    }
+    return undefined
+}
+
+/**
+ * The function a Pseudocode shows when nothing chose one: `main`, else the entry point's, else
+ * the Listing's first.
+ */
+export function defaultPseudocodeFunction(listing: Listing): ListingFunction | undefined {
+    return (
+        (listing.main === undefined ? undefined : functionAt(listing, listing.main)) ??
+        functionAt(listing, listing.entry) ??
+        listing.functions[0]
+    )
+}
+
+/**
+ * The name under a 0-based column of a line of the Pseudocode document that refers to something
+ * (a called function, a global, a string), with its link-time `target`; none for a name without
+ * one, such as Ghidra's own operations (`syscall`, `cpuid`), or any other token.
+ */
+export function pseudocodeTargetAt(
+    lines: readonly DecompiledLine[],
+    firstLine: number,
+    line: number,
+    column: number
+): (DecompiledToken & { target: number }) | undefined {
+    const named = (lines[line - firstLine]?.tokens ?? []).filter(
+        (token): token is DecompiledToken & { target: number } => token.target !== undefined
+    )
+    //a position just after a name, where a click past its last letter puts the cursor, is on it
+    return (
+        named.find((token) => token.start <= column && column < token.end) ??
+        named.find((token) => token.end === column)
+    )
+}
+
+/**
+ * The Listing line a target is shown on: a function's label, else the label operands use for
+ * the address (the last there, after its aliases), else the line holding it; -1 for none.
+ */
+export function listingLineOfTarget(listing: Listing, target: number): number {
+    const fn = functionAt(listing, target)
+    if (fn) return fn.line
+    let labelLine = -1
+    for (const label of listing.labels)
+        if (label.address === target && label.kind !== 'block') labelLine = label.line
+    return labelLine >= 0 ? labelLine : lineOfAddress(listing, target)
+}
+
+/** The name the Listing gives a target, for a hover: its function's, else its label's. */
+export function listingNameOfTarget(listing: Listing, target: number): string | undefined {
+    const fn = functionAt(listing, target)
+    if (fn) return fn.name
+    let name: string | undefined
+    for (const label of listing.labels)
+        if (label.address === target && label.kind !== 'block') name = label.fullName
+    return name
+}
