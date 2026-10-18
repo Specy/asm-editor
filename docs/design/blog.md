@@ -25,7 +25,7 @@ These launch topics are covered by the seven articles in `packages/asm-editor/sr
 6. **Beginner reverse engineering with an x86-64 executable**: a small, verified walkthrough of disassembly and debugging.
 7. **How ASM Editor runs assembly in the browser**: an accessible explanation of its internals.
 
-The security walkthrough describes disassembly and debugging. It must demonstrate supported behavior; it does not promise decompilation into higher-level source.
+The security walkthrough describes disassembly and debugging. It must demonstrate supported behavior. When it was written the editor had no decompiler, so it promised none; Decompile and the Pseudocode now exist ([the file views design](./file-views.md), decisions 5, 6, 10 and 11), and whether the walkthrough shows them is left to the owner.
 
 ## Tags
 
