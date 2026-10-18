@@ -279,6 +279,26 @@ describe('the Pseudocode client without a Worker', () => {
         client.dispose()
     })
 
+    it('drops nothing else when a request no longer queued is aborted', async () => {
+        const { counts, load } = counting()
+        const client = new PseudocodeClient(undefined, { load })
+        const file = crackmeFile()
+        const listing = listingOf(file)
+        const start = listing.functions.find((fn) => fn.name === '_start')!.address
+        const abort = new AbortController()
+        const dropped = client.decompile('crackme', file, listing, MAIN, { signal: abort.signal })
+        client.dispose()
+        expect(await dropped).toEqual({ address: MAIN, error: 'The decompiler was closed' })
+        // Requests queued after it, one of them waiting its turn, are still answered.
+        const first = client.decompile('crackme', file, listing, MAIN)
+        const second = client.decompile('crackme', file, listing, start)
+        abort.abort(new DOMException('The function changed', 'AbortError'))
+        expect(text(await first).name).toBe('main')
+        expect(text(await second).name).toBe('_start')
+        expect(counts.decompiles).toBe(2)
+        client.dispose()
+    })
+
     it('answers what waits when disposed, and starts again for a later request', async () => {
         const { counts, load } = counting()
         const client = new PseudocodeClient(undefined, { load })

@@ -188,9 +188,12 @@ export class PseudocodeClient {
                     waiting.callers.delete(caller)
                     reject(signal.reason)
                     // Nobody waits for it any more: unless it has started, it is not asked for.
-                    if (!waiting.started && !waiting.callers.size) {
+                    // One no longer queued (answered, or dropped with the client) takes nothing
+                    // else with it.
+                    const queued = this.queue.indexOf(waiting)
+                    if (!waiting.started && !waiting.callers.size && queued >= 0) {
                         this.jobs.delete(waiting.key)
-                        this.queue.splice(this.queue.indexOf(waiting), 1)
+                        this.queue.splice(queued, 1)
                         this.heard()
                     }
                 }
