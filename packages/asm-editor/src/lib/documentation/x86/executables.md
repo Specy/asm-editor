@@ -105,7 +105,7 @@ Like the Listing, the Pseudocode is generated from the File's current bytes and 
 
 ## Reading the Pseudocode {#pseudocode}
 
-The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`. Functions and data have the names the [Listing](#names) gives them, invented ones included, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`.
+The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`. Functions and data have the names the [Listing](#names) gives them, invented ones included, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, a library variable the Listing names with its version, such as `stdin@GLIBC_2.2.5`, reads as `stdin`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`, and the types of library variables such as `stdin`.
 
 The decompiler names everything else itself:
 

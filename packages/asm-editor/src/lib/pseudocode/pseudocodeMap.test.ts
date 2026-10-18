@@ -238,7 +238,8 @@ describe('the names in a Pseudocode', () => {
             (token) => token.kind === 'constant' && token.target !== undefined
         )!
         expect(rows[listingLineOfTarget(listing, string.target!)]).toMatch(/^s_hunter2:/)
-        const stdin = lines[row('stdin@GLIBC') - FIRST].tokens.find(
+        //printed without its version, which the Listing's name for it keeps
+        const stdin = lines[row('0x80,stdin)') - FIRST].tokens.find(
             (token) => token.target !== undefined && token.kind === 'variable'
         )!
         expect(listingNameOfTarget(listing, stdin.target!)).toBe('stdin@GLIBC_2.2.5')

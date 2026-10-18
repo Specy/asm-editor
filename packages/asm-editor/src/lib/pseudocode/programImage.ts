@@ -1,5 +1,6 @@
 import type { ProgramData, ProgramImage, ProgramPointer, ProgramRegion } from '@specy/decompiler'
 import type { ElfAnalysis } from '#lib/listing/decoder.ts'
+import { versionedName } from '#lib/listing/elfModel.ts'
 import type { Listing, ListingLabel } from '#lib/listing/listing.ts'
 import { printableSymbolName } from '#lib/listing/names.ts'
 
@@ -50,7 +51,9 @@ export function stubFunctionName(name: string): string {
  * - its functions: the Listing's, by the names operands use, a PLT stub's by the function it
  *   jumps to (`strcmp@plt` as `strcmp`, IRELATIVE ones in a static binary too);
  * - its data: every data and string label at its address, a named object with its size, a
- *   string with its length; and its strings, the Listing's named ones;
+ *   string with its length, an object of a library's at a version other than its default without
+ *   that version (`stdin@GLIBC_2.2.5` as `stdin`, so glibc's `extern FILE *stdin;` binds by name);
+ *   and its strings, the Listing's named ones;
  * - its pointers: each GOT slot of a function the dynamic linker fills (a `GLOB_DAT` or
  *   `JUMP_SLOT` relocation of a symbol that is no object), so a call through
  *   `__libc_start_main@got` reads as a call of `__libc_start_main`. An IRELATIVE slot stays data:
@@ -65,7 +68,7 @@ export function programImage(input: ProgramImageInput): ProgramImage {
             address: fn.address + base,
             name: stubFunctionName(fn.name)
         })),
-        data: dataNames(listing, base),
+        data: dataNames(listing, analysis, base),
         strings: stringRanges(listing, base),
         pointers: functionSlots(listing, analysis, base),
         prototypes: input.prototypes
@@ -123,9 +126,35 @@ function pairLengths(pairs: Float64Array | undefined): Map<number, number> {
     return lengths
 }
 
-function dataNames(listing: Listing, base: number): ProgramData[] {
+/**
+ * The plain names of the dynamic objects the Listing names with a version, `stdin` for its
+ * `stdin@GLIBC_2.2.5` (a program copies a library's object into its own `.bss`, under the version
+ * it was linked against): the name the prototypes declare it by, which they bind by exactly. A
+ * plain name the Listing gives something else too stays versioned.
+ */
+function unversionedObjects(
+    listing: Listing,
+    analysis: ProgramImageInput['analysis']
+): Map<string, string> {
+    const labels = new Set(listing.labels.map((label) => label.name))
+    const names = new Map<string, string>()
+    for (const symbol of analysis.dynamicSymbols) {
+        if (!OBJECT_TYPES.has(symbol.type)) continue
+        const versioned = printableSymbolName(versionedName(symbol))
+        const plain = printableSymbolName(symbol.name)
+        if (versioned !== plain && !labels.has(plain)) names.set(versioned, plain)
+    }
+    return names
+}
+
+function dataNames(
+    listing: Listing,
+    analysis: ProgramImageInput['analysis'],
+    base: number
+): ProgramData[] {
     const objects = pairLengths(listing.holders?.objects)
     const strings = pairLengths(listing.holders?.strings)
+    const unversioned = unversionedObjects(listing, analysis)
     const data: ProgramData[] = []
     for (const label of primaryLabels(listing).values()) {
         if (label.kind !== 'data' && label.kind !== 'string') continue
@@ -135,7 +164,7 @@ function dataNames(listing: Listing, base: number): ProgramData[] {
                 : (objects.get(label.address) ?? strings.get(label.address))
         data.push({
             address: label.address + base,
-            name: label.name,
+            name: unversioned.get(label.name) ?? label.name,
             ...(size ? { size } : {})
         })
     }

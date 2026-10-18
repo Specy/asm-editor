@@ -420,7 +420,7 @@ describe('the Pseudocode beside its Listing', () => {
         const main = listing.functions.find((fn) => fn.name === 'main')!
         pane.followFunction('crackme', main.address)
         const back = await decompiled(pane)
-        const fgets = lineWith(back, 'stdin@GLIBC_2.2.5')
+        const fgets = lineWith(back, 'fgets(acStack_98,0x80,stdin)')
         const stdin = pseudocodeTargetAt(
             back.lines,
             back.firstLine,

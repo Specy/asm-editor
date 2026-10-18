@@ -150,20 +150,19 @@ describe("crackme-stripped's image", () => {
                 printed.add(text)
                 // A function is named by its label, a PLT stub without `@plt`, and one called
                 // through its GOT slot (`__libc_start_main`) by its slot's label without `@got`,
-                // its name pointing at the slot.
-                const label = [text, `${text}@plt`, ...(kind === 'function' ? [`${text}@got`] : [])]
+                // its name pointing at the slot; a library's object copied in at a version
+                // other than its default (`stdin@GLIBC_2.2.5`) by its label without the version.
+                const label = [
+                    text,
+                    `${text}@plt`,
+                    ...(kind === 'function' ? [`${text}@got`] : [`${text}@GLIBC_2.2.5`])
+                ]
                     .map((name) => labels.get(name))
                     .find((address) => address !== undefined)
                 expect(label, `${text} in ${fn.name}`).toBe(target)
             }
         }
-        for (const name of [
-            'FUN_moonlit_vole',
-            'strcmp',
-            '__libc_start_main',
-            'main',
-            'stdin@GLIBC_2.2.5'
-        ])
+        for (const name of ['FUN_moonlit_vole', 'strcmp', '__libc_start_main', 'main', 'stdin'])
             expect(printed).toContain(name)
     })
 
@@ -185,8 +184,37 @@ describe("crackme's image", () => {
         const main = decompileNamed(opened, 'main')
         expect(main.lines[0].text).toBe('undefined8 main(void)')
         expect(main.text).toContain('printf("Enter password: ");')
-        expect(main.text).toContain('pcVar2 = fgets(acStack_98,0x80,stdin@GLIBC_2.2.5);')
+        expect(main.text).toContain('pcVar2 = fgets(acStack_98,0x80,stdin);')
         expect(main.text).toContain('puts("Correct!");')
+    })
+
+    it("names stdin as glibc.h declares it, so it is a FILE *, its Listing's label versioned", () => {
+        const { bytes, analysis, listing } = opened
+        const label = listing.labels.find((candidate) => candidate.name.startsWith('stdin'))!
+        expect(label.name).toBe('stdin@GLIBC_2.2.5')
+        const image = programImage({ bytes, listing, analysis, prototypes: glibc })
+        const stdin = label.address + listing.base
+        expect(image.data).toContainEqual({ address: stdin, name: 'stdin', size: 8 })
+        // A function that returns stdin, past crackme's memory, takes its type: a FILE *, which
+        // a name glibc.h does not declare (the label's) would leave undefined8.
+        const at = listing.base + 0x100000
+        const code = Uint8Array.of(0x48, 0x8b, 0x05, 0, 0, 0, 0, 0xc3) // mov rax, [rel stdin]; ret
+        new DataView(code.buffer).setInt32(3, stdin - (at + 7), true)
+        const probe = decompiler.openProgram({
+            ...image,
+            regions: [
+                ...image.regions,
+                { address: at, bytes: code, readOnly: true, executable: true }
+            ],
+            functions: [...image.functions, { address: at, name: 'probe' }]
+        })
+        try {
+            const text = decompiled(probe.decompile(at)).text
+            expect(text).toMatch(/^FILE \* probe\(void\)\n/)
+            expect(text).toContain('return stdin;')
+        } finally {
+            probe.dispose()
+        }
     })
 
     it("gives _start's call through __libc_start_main@got glibc's prototype", () => {
