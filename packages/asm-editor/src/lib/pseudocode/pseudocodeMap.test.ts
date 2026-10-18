@@ -8,7 +8,7 @@ import glibc from '@specy/decompiler/prototypes/glibc'
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { loadDecoder } from '../listing/decoder'
 import { generateListing } from '../listing/generateListing'
-import { lineOfAddress, type Listing, type ListingFunction } from '../listing/listing'
+import { LINE_KIND, lineOfAddress, type Listing, type ListingFunction } from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
 import { programImage } from './programImage'
 import {
@@ -18,6 +18,9 @@ import {
     listingLineOfTarget,
     listingLinesOfLocations,
     listingNameOfTarget,
+    pseudocodeBreakpointAddresses,
+    pseudocodeBreakpointLines,
+    pseudocodeBreakpointsOn,
     pseudocodeLineOfAddress,
     pseudocodeLinesOf,
     pseudocodeLocationsOf,
@@ -149,6 +152,65 @@ describe('the Pseudocode map', () => {
         //one colour for each line with instructions
         const mapped = map.listingLines.filter((lines) => lines.length).length
         expect(coloring.assembly.colors).toHaveLength(mapped)
+    })
+})
+
+describe('Breakpoints on Pseudocode lines', () => {
+    /** The link-time address of the instruction on a Listing line of `main`. */
+    const addressOf = (text: string) => listing.lines.addresses[listingRow(text)]
+
+    it("go on the first instruction of the `if`'s block, its test", () => {
+        const branch = row('if (iVar1 == 0)')
+        expect(pseudocodeBreakpointAddresses(map, listing, branch)).toEqual([
+            addressOf('test eax, eax')
+        ])
+        //the call's line is the lea that loads its argument, then the call
+        expect(pseudocodeBreakpointAddresses(map, listing, row('strcmp(acStack_98'))).toEqual([
+            listing.lines.addresses[map.listingLines[row('strcmp(acStack_98')][0]]
+        ])
+        //a declaration, a brace and the header have no instructions
+        expect(pseudocodeBreakpointAddresses(map, listing, row('int iVar1;'))).toEqual([])
+        expect(pseudocodeBreakpointAddresses(map, listing, 0)).toEqual([])
+        expect(pseudocodeBreakpointAddresses(map, listing, -1)).toEqual([])
+    })
+
+    it('go on each block of a line whose instructions are apart, as a C line’s do', () => {
+        //made-up lines over main's instructions: the first line holds the test, the jne and the
+        //call of puts after them, the second the instruction between, the first's jne too
+        const test = listingRow('test eax, eax')
+        expect([...listing.lines.kinds.slice(test, test + 4)]).toEqual(
+            new Array(4).fill(LINE_KIND.instruction)
+        )
+        const at = (line: number) => listing.lines.addresses[line]
+        const made = pseudocodeMap(
+            listing,
+            main,
+            [
+                { text: 'a', tokens: [], addresses: [at(test), at(test + 1), at(test + 3)] },
+                { text: 'b', tokens: [], addresses: [at(test + 1), at(test + 2)] }
+            ],
+            FIRST
+        )
+        //the jne belongs to both, so it ends neither line's block; the instruction after it,
+        //on the second line only, ends the first's
+        expect(pseudocodeBreakpointAddresses(made, listing, FIRST)).toEqual([
+            at(test),
+            at(test + 3)
+        ])
+        expect(pseudocodeBreakpointAddresses(made, listing, FIRST + 1)).toEqual([at(test + 1)])
+    })
+
+    it('mark every line whose instructions carry one, wherever it was set', () => {
+        const branch = row('if (iVar1 == 0)')
+        const strcmp = row('strcmp(acStack_98')
+        const jne = addressOf('jne .LAB_2')
+        const call = addressOf('call strcmp@plt')
+        //the jne, set in the Listing, marks the `if`; a byte inside the call, its line
+        expect(pseudocodeBreakpointLines(map, listing, [jne, call + 1])).toEqual([strcmp, branch])
+        expect(pseudocodeBreakpointsOn(map, listing, branch, [jne, call])).toEqual([jne])
+        expect(pseudocodeBreakpointsOn(map, listing, row('int iVar1;'), [jne, call])).toEqual([])
+        //main's endbr64 is on no line, nor is an address outside the Listing
+        expect(pseudocodeBreakpointLines(map, listing, [main.address, 0])).toEqual([])
     })
 })
 

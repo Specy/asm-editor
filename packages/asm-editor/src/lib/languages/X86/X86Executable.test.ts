@@ -10,6 +10,13 @@ import { analyze } from '@specy/x86/elf'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { instructionAddressAt, LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import { PseudocodeClient } from '#lib/pseudocode/pseudocodeClient.ts'
+import { PSEUDOCODE_HEADER_LINES } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
+import {
+    pseudocodeBreakpointAddresses,
+    pseudocodeLineOfAddress,
+    pseudocodeMap
+} from '#lib/pseudocode/pseudocodeMap.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
 import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
@@ -134,6 +141,60 @@ describe('a Debug session of an Executable', () => {
         expect(main).toMatchObject({ file: 'crackme', line: lineOf(listing, 'main:') })
 
         // Run on from the Breakpoint: the program ends, having printed its verdict.
+        await emulator.run(0)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.stdOut).toContain('Wrong!')
+    })
+
+    it("stops on a Breakpoint set on the Pseudocode's `if (iVar1 == 0)`, before its test and jne", async () => {
+        const sources = executableSources()
+        const { emulator, listing } = await built(sources)
+        //main's Pseudocode as a pane shows it, from the Listing the debugger runs with
+        const main = listing.functions.find((fn) => fn.name === 'main')!
+        const client = new PseudocodeClient(undefined)
+        const result = await client.decompile(
+            'crackme',
+            sources.files.crackme,
+            listing,
+            main.address
+        )
+        client.dispose()
+        if ('error' in result) throw new Error(result.error)
+        const map = pseudocodeMap(listing, main, result.lines, PSEUDOCODE_HEADER_LINES)
+        const branch =
+            result.lines.findIndex((line) => line.text.trim() === 'if (iVar1 == 0) {') +
+            PSEUDOCODE_HEADER_LINES
+        expect(branch).toBeGreaterThan(PSEUDOCODE_HEADER_LINES)
+        //a gutter click on the line: an address Breakpoint on the first instruction of its block
+        const test = lineOf(listing, 'test eax, eax')
+        const addresses = pseudocodeBreakpointAddresses(map, listing, branch)
+        expect(addresses).toEqual([instructionAddressAt(listing, test)])
+        for (const address of addresses) emulator.toggleAddressBreakpoint(address, 'crackme')
+
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        await emulator.run(0)
+        //stopped before the test, strcmp's answer in eax and the Pseudocode on the `if`
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.currentFile).toBe('crackme')
+        expect(emulator.line).toBe(test)
+        expect(emulator.pc).toBe(BigInt(addresses[0] + PIE_LOAD_BASE))
+        const pcLine = () =>
+            pseudocodeLineOfAddress(map, listing, Number(emulator.pc) - listing.base)
+        expect(pcLine()).toBe(branch)
+        const rax = emulator.registers.find((register) => register.name === 'rax')!.value
+        expect(BigInt(rax) & 0xffffffffn).not.toBe(0n)
+        //a Step to the jne, the same line, then into the else branch
+        await emulator.step()
+        expect(emulator.line).toBe(test + 1)
+        expect(listing.text.split('\n')[test + 1].trim()).toBe('jne .LAB_2')
+        expect(pcLine()).toBe(branch)
+        await emulator.step()
+        const wrong =
+            result.lines.findIndex((line) => line.text.includes('puts("Wrong!")')) +
+            PSEUDOCODE_HEADER_LINES
+        expect(pcLine()).not.toBe(branch)
+        for (let i = 0; i < 10 && pcLine() !== wrong; i++) await emulator.step()
+        expect(pcLine()).toBe(wrong)
         await emulator.run(0)
         expect(emulator.terminated).toBe(true)
         expect(emulator.stdOut).toContain('Wrong!')

@@ -13,7 +13,10 @@ import type { ProjectFileKind } from '#lib/fileKinds.ts'
 import { overwritesOnly } from '#lib/projectFiles.ts'
 import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
-import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    isLineBreakpoint,
+    type SourceBreakpoint
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     LINE_KIND,
     lineOfAddress,
@@ -22,7 +25,10 @@ import {
 } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { PseudocodeDocument } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
-import { pseudocodeLineOfAddress } from '#lib/pseudocode/pseudocodeMap.ts'
+import {
+    pseudocodeBreakpointLines,
+    pseudocodeLineOfAddress
+} from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
@@ -480,8 +486,19 @@ export class EditorGroup {
     }
     get breakpointsEditable() {
         const s = this.session
-        //a Pseudocode line takes none yet: they come with the plan's E9
-        if (this.displayedView === 'pseudocode') return false
+        //a Pseudocode line's go on its instructions, in the Executable's Listing (decision 10): as
+        //the Listing's, none for the Build output, whose program the debugger follows in its source
+        if (this.displayedView === 'pseudocode')
+            return (
+                this.displayedPseudocode?.map !== undefined &&
+                !this.displayedLibraryListing &&
+                !this.displayedBuildOutput &&
+                canEditProjectBreakpoints(this.sourceSelection, {
+                    readonly: s.host.readonly,
+                    building: s.building,
+                    fileSystemLocked: s.fileSystemLocked
+                })
+            )
         //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
         //during a Debug session
         if (this.displayedEnvironmentHeader) return !s.host.readonly && !s.building
@@ -511,27 +528,50 @@ export class EditorGroup {
             })
         )
     }
-    get displayedBreakpoints(): number[] {
+    /**
+     * The displayed File's Breakpoints, as this pane draws them: during a Debug session only in
+     * the Build's version, where they apply.
+     */
+    get shownBreakpoints(): SourceBreakpoint[] {
         const s = this.session
-        if (this.displayedView === 'pseudocode') return []
-        //a Listing's Breakpoints are addresses, drawn on the line that holds them now
-        const listing = this.displayedListing?.listing
         return (
             this.sourceView === 'snapshot' || !s.fileSystemLocked || this.displayedEnvironmentHeader
                 ? s.emulator.breakpoints
                 : []
+        ).filter((item) => item.file === this.displayedPath)
+    }
+    /** The link-time addresses of those Breakpoints that are an Executable's. */
+    get shownAddressBreakpoints(): number[] {
+        return this.shownBreakpoints.flatMap((item) =>
+            isLineBreakpoint(item) ? [] : [item.address]
         )
-            .filter((item) => item.file === this.displayedPath)
-            .flatMap((item) => {
-                if (isLineBreakpoint(item)) return [item.line]
-                const line = listing ? lineOfAddress(listing, item.address) : -1
-                return line >= 0 ? [line] : []
-            })
+    }
+    get displayedBreakpoints(): number[] {
+        //a Pseudocode marks each line whose instructions carry one, wherever it was set
+        //(decision 10); its Build output's Listing takes none, so neither does it
+        if (this.displayedView === 'pseudocode') {
+            const document = this.displayedPseudocode
+            return document?.map && !this.displayedBuildOutput
+                ? pseudocodeBreakpointLines(
+                      document.map,
+                      document.listing,
+                      this.shownAddressBreakpoints
+                  )
+                : []
+        }
+        //a Listing's Breakpoints are addresses, drawn on the line that holds them now
+        const listing = this.displayedListing?.listing
+        return this.shownBreakpoints.flatMap((item) => {
+            if (isLineBreakpoint(item)) return [item.line]
+            const line = listing ? lineOfAddress(listing, item.address) : -1
+            return line >= 0 ? [line] : []
+        })
     }
     /** Lines of this assembly where a Breakpoint set on its C or C++ source stops. */
     get displayedMappedBreakpoints() {
         const s = this.session
         if (this.sourceView !== 'snapshot' && s.fileSystemLocked) return []
+        if (this.displayedView === 'pseudocode') return []
         const own = this.displayedBreakpoints
         return s.mappedBreakpoints
             .filter((item) => item.file === this.displayedPath && !own.includes(item.line))

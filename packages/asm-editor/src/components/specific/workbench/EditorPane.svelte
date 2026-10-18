@@ -107,10 +107,16 @@
             run: (line) => void session.showInHex(group, line)
         }
     ]
-    /** A Listing's Breakpoints go on its instructions, no other line. */
-    const listingBreakable = $derived.by(() => {
+    /**
+     * A Listing's Breakpoints go on its instructions, no other line, and a Pseudocode's on the
+     * lines the decompiler gave instructions.
+     */
+    const breakable = $derived.by(() => {
         const kinds = listingModel?.listing.lines.kinds
-        return kinds ? (line: number) => kinds[line] === LINE_KIND.instruction : undefined
+        if (kinds) return (line: number) => kinds[line] === LINE_KIND.instruction
+        const map =
+            group.displayedView === 'pseudocode' ? group.displayedPseudocode?.map : undefined
+        return map ? (line: number) => (map.listingLines[line]?.length ?? 0) > 0 : undefined
     })
 
     /** Whether the execution dock floats over the bottom of this pane. */
@@ -267,7 +273,7 @@
                 listing={listingModel}
                 pseudocode={pseudocodeModel}
                 on:cursorMove={(event) => session.cursorMoved(group, event.detail)}
-                canBreakAt={listingBreakable}
+                canBreakAt={breakable}
                 {patchedLines}
                 lineNote={group.runningWithin}
                 lineActions={listingModel && !listingModel.library ? listingActions : undefined}

@@ -237,7 +237,8 @@ describe('Decompile', () => {
         expect(pane.modelIdentity).toMatchObject({ path: 'crackme', view: 'pseudocode' })
         expect(pane.displayedCode).toBe(document.text)
         expect(pane.editorDisabled).toBe(true)
-        expect(pane.breakpointsEditable).toBe(false)
+        //read-only, but its lines take Breakpoints on their instructions (decision 10)
+        expect(pane.breakpointsEditable).toBe(true)
         expect(session.retainedModelKeys).toContain(pane.modelKey)
         //the Listing pane has the execution controls, the Pseudocode its switch
         expect(session.controlsGroup).toBe(listingPane)
@@ -454,6 +455,117 @@ describe('the Pseudocode beside its Listing', () => {
         pane.setView('crackme', 'hex')
         flushSync()
         expect(release).toHaveBeenCalledWith('crackme')
+    })
+})
+
+describe('Breakpoints on Pseudocode lines', () => {
+    /** crackme's main decompiled beside its Listing, and the lines of its `if` on the password. */
+    async function paired() {
+        const fixture = setup()
+        const { session } = fixture
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        const document = await decompiled(pane)
+        const listing = listingOf(pane)
+        const branch = lineWith(document, 'if (iVar1 == 0)')
+        const test = listingLine(listing, 'main', 'test eax, eax')
+        const jne = listingLine(listing, 'main', 'jne .LAB_2')
+        return { ...fixture, pane, listingPane, document, listing, branch, test, jne }
+    }
+
+    it("go on the `if`'s test in the Listing, and come off it there", async () => {
+        const { session, emulator, pane, listingPane, listing, branch, test } = await paired()
+        expect(pane.breakpointsEditable).toBe(true)
+        session.toggleBreakpoint(branch, pane)
+        flushSync()
+        //an ordinary Breakpoint of the Executable, at the link-time address of the test
+        expect(emulator.breakpoints).toEqual([
+            { file: 'crackme', address: listing.lines.addresses[test] }
+        ])
+        expect(listingPane.displayedBreakpoints).toEqual([test])
+        expect(pane.displayedBreakpoints).toEqual([branch])
+        //removed in the Listing, the Pseudocode's mark goes with it
+        session.toggleBreakpoint(test, listingPane)
+        flushSync()
+        expect(emulator.breakpoints).toEqual([])
+        expect(pane.displayedBreakpoints).toEqual([])
+    })
+
+    it('mark a line for any of its instructions, and a click there removes them all', async () => {
+        const { session, emulator, pane, listingPane, listing, branch, test, jne } = await paired()
+        session.toggleBreakpoint(jne, listingPane)
+        flushSync()
+        expect(pane.displayedBreakpoints).toEqual([branch])
+        //set at the jne, not at the block's first instruction: removed, and none placed
+        session.toggleBreakpoint(branch, pane)
+        flushSync()
+        expect(emulator.breakpoints).toEqual([])
+        session.toggleBreakpoint(test, listingPane)
+        session.toggleBreakpoint(jne, listingPane)
+        flushSync()
+        expect(pane.displayedBreakpoints).toEqual([branch])
+        session.toggleBreakpoint(branch, pane)
+        flushSync()
+        expect(emulator.breakpoints).toEqual([])
+        expect(listingPane.displayedBreakpoints).toEqual([])
+        //a line without instructions takes none
+        session.toggleBreakpoint(lineWith(pane.displayedPseudocode!, 'int iVar1;'), pane)
+        expect(emulator.breakpoints).toEqual([])
+        expect(listing.lines.addresses[test]).toBeLessThan(listing.lines.addresses[jne])
+    })
+
+    it('stay on their instructions when the function shown changes, and show again in it', async () => {
+        const { session, emulator, pane, listingPane, listing, branch } = await paired()
+        session.toggleBreakpoint(branch, pane)
+        session.cursorMoved(listingPane, listingLine(listing, '_start', 'hlt'))
+        flushSync()
+        await decompiled(pane)
+        expect(pane.displayedBreakpoints).toEqual([])
+        expect(emulator.breakpoints).toHaveLength(1)
+        session.cursorMoved(listingPane, listingLine(listing, 'main', 'call strcmp@plt'))
+        flushSync()
+        await decompiled(pane)
+        expect(pane.displayedBreakpoints).toEqual([branch])
+    })
+
+    it('show in a Debug session, where the Pseudocode of the Build takes them too', async () => {
+        const { session, emulator, pane, listingPane, branch, test } = await paired()
+        session.toggleBreakpoint(branch, pane)
+        await session.build()
+        await tick()
+        flushSync()
+        await decompiled(pane)
+        expect(pane.sourceSelection).toMatchObject({ sourceKind: 'build' })
+        expect(pane.breakpointsEditable).toBe(true)
+        expect(pane.displayedBreakpoints).toEqual([branch])
+        expect(listingPane.displayedBreakpoints).toEqual([test])
+        session.toggleBreakpoint(branch, pane)
+        flushSync()
+        expect(emulator.breakpoints).toEqual([])
+        expect(listingPane.displayedBreakpoints).toEqual([])
+    })
+
+    it('are not taken by the Build output’s Pseudocode', async () => {
+        const { session, emulator } = setup()
+        emulator.buildOutput = {
+            path: 'main',
+            bytes: new Uint8Array(crackmeBytes),
+            generation: 1,
+            sources: { entry: 'crackme', files: {} }
+        }
+        flushSync()
+        const pane = show(session, 'main')
+        expect(pane.displayedBuildOutput).toBe(true)
+        session.decompile(pane)
+        flushSync()
+        const document = await decompiled(pane)
+        expect(document.status).toBe('ready')
+        expect(pane.breakpointsEditable).toBe(false)
+        session.toggleBreakpoint(lineWith(document, 'if (iVar1 == 0)'), pane)
+        expect(emulator.breakpoints).toEqual([])
+        expect(pane.displayedBreakpoints).toEqual([])
     })
 })
 

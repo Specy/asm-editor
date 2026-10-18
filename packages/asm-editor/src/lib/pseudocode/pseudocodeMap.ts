@@ -1,6 +1,12 @@
 import type { DecompiledLine, DecompiledToken } from '@specy/decompiler'
-import { lineOfAddress, type Listing, type ListingFunction } from '#lib/listing/listing.ts'
+import {
+    instructionAddressAt,
+    lineOfAddress,
+    type Listing,
+    type ListingFunction
+} from '#lib/listing/listing.ts'
 import type { SourceLocation } from '#lib/sourceCompilation/records.ts'
+import { blockEntries } from '#lib/sourceCompilation/sourceBreakpoints.ts'
 import { sourceColor, type SourceMapColoring } from '#lib/sourceCompilation/sourceColoring.ts'
 import type { ColoredLineRange } from '#lib/monaco/lineColoring.ts'
 
@@ -85,6 +91,55 @@ export function pseudocodeLineOfAddress(
     address: number
 ): number {
     return pseudocodeLinesOf(map, lineOfAddress(listing, address))[0] ?? -1
+}
+
+/**
+ * Where a Breakpoint set on a Pseudocode line goes ([file-views.md](../../../../../docs/design/file-views.md),
+ * decision 10): the link-time address of the first instruction of each block of the function's
+ * Listing lines mapped to it, by the rule a C File's lines follow (`blockEntries`). A Listing line
+ * on several Pseudocode lines belongs to each of them; one on none neither starts nor ends a block.
+ */
+export function pseudocodeBreakpointAddresses(
+    map: PseudocodeMap,
+    listing: Listing,
+    line: number
+): number[] {
+    if (!map.listingLines[line]?.length) return []
+    const entries = blockEntries(map.listingStart, map.listingEnd, (listingLine) => {
+        const rows = map.pseudocodeLines[listingLine - map.listingStart]
+        return rows.length ? rows.includes(line) : undefined
+    })
+    return entries.flatMap((entry) => {
+        const address = instructionAddressAt(listing, entry)
+        return address === undefined ? [] : [address]
+    })
+}
+
+/**
+ * The Breakpoint addresses, of those given, on a Pseudocode line's instructions: what marks the
+ * line, and what a click on its mark removes, wherever they were set.
+ */
+export function pseudocodeBreakpointsOn(
+    map: PseudocodeMap,
+    listing: Listing,
+    line: number,
+    addresses: readonly number[]
+): number[] {
+    const lines = map.listingLines[line] ?? NONE
+    if (!lines.length) return []
+    return addresses.filter((address) => lines.includes(lineOfAddress(listing, address)))
+}
+
+/** The Pseudocode lines whose instructions carry a Breakpoint at one of these addresses, ascending. */
+export function pseudocodeBreakpointLines(
+    map: PseudocodeMap,
+    listing: Listing,
+    addresses: readonly number[]
+): number[] {
+    const rows = new Set<number>()
+    for (const address of addresses)
+        for (const row of pseudocodeLinesOf(map, lineOfAddress(listing, address))) rows.add(row)
+    return [...rows].sort((a, b) => a - b)
 }
 
 /** The Pseudocode lines behind Listing lines, deduplicated, as the pairing's Source locations. */

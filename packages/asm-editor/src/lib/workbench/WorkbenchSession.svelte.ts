@@ -49,6 +49,8 @@ import { PseudocodeDocuments } from '#lib/pseudocode/pseudocodeDocuments.svelte.
 import {
     defaultPseudocodeFunction,
     functionAt,
+    pseudocodeBreakpointAddresses,
+    pseudocodeBreakpointsOn,
     pseudocodeLinesOf
 } from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
@@ -2079,8 +2081,10 @@ export class WorkbenchSession {
     }
 
     toggleBreakpoint(line: number, group = this.groups[0]) {
-        //a Pseudocode line takes none yet (the plan's E9)
-        if (group.displayedView === 'pseudocode') return
+        if (group.displayedView === 'pseudocode') {
+            this.togglePseudocodeBreakpoint(line, group)
+            return
+        }
         const listing = group.displayedListing
         if (!listing) {
             this.emulator.toggleBreakpoint(line, group.displayedPath)
@@ -2093,6 +2097,30 @@ export class WorkbenchSession {
         const address = instructionAddressAt(listing.listing, line)
         if (address !== undefined)
             this.emulator.toggleAddressBreakpoint(address, group.displayedPath)
+    }
+
+    /**
+     * A Breakpoint on a line of the Pseudocode a pane shows ([file-views.md](../../../../../docs/design/file-views.md),
+     * decision 10): the Executable's own address Breakpoints, on the first instruction of each
+     * block mapped to the line, so the Listing beside it shows them; or, when any instruction of
+     * the line has one, wherever it was set, every one of those removed. Nothing else is kept, so
+     * they outlive the Pseudocode being printed differently.
+     */
+    private togglePseudocodeBreakpoint(line: number, group: EditorGroup) {
+        const document = group.displayedPseudocode
+        const map = document?.map
+        if (!map || !group.breakpointsEditable) return
+        const path = group.displayedPath
+        const set = pseudocodeBreakpointsOn(
+            map,
+            document.listing,
+            line,
+            group.shownAddressBreakpoints
+        )
+        const toggled = set.length
+            ? set
+            : pseudocodeBreakpointAddresses(map, document.listing, line)
+        for (const address of toggled) this.emulator.toggleAddressBreakpoint(address, path)
     }
 
     // ---- execution -----------------------------------------------------------------------------
