@@ -24,7 +24,7 @@ Not in scope: Decompile on a library's Listing (`@lib/…`), exporting the Pseud
 
 ## Where things are (2026-10-16)
 
-Since then (2026-10-18): D1.6, E8.1 and E8.2 are done on `feat/pseudocode`, the submodule at `eb01a67`, with `lib/pseudocode/programImage.ts` and a `PseudocodeClient` nothing creates yet; the design's implementation notes (D1.6, the package for E8, E8.1, E8.2) say how, and settle the carry-over notes on names, GOT slots, IRELATIVE stubs and slow functions below. The rest of this section is as it was written.
+Since then (2026-10-18): D1.6, E8.1 and E8.2 are done on `feat/pseudocode`, the submodule at `eb01a67`, with `lib/pseudocode/programImage.ts` and a `PseudocodeClient` nothing creates yet; the design's implementation notes (D1.6, the package for E8, E8.1, E8.2) say how, and settle the carry-over notes on names, GOT slots, IRELATIVE stubs and slow functions below. Later the same day E8.3 to E8.6 were done too (the design's E8 notes, through `172865cc`), settling the notes on the Listing behind a Pseudocode pane, model keys, the view switch, pairing and the debugger; for E9, the Pseudocode's seams are its `PseudocodeMap` (each line's addresses and Listing lines, each Listing line's Pseudocode lines) and the three places that refuse Breakpoints on a Pseudocode pane today (`breakpointsEditable`, `displayedBreakpoints`, `toggleBreakpoint`). The rest of this section is as it was written.
 
 - **The decompiler** is `https://github.com/Specy/decompiler-js`, `main` at `9ecde86` (pushed by the owner), with a local clone at `/home/dev/code/decompiler-js`. It builds Ghidra 12.1.4 (`8b6bbb8`), vendored by `scripts/vendor-ghidra.sh`.
     - The npm package is `@specy/decompiler` 0.0.0 in `js/`, and its API is the plan's decision 6:
