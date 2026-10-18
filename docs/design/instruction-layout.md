@@ -1,6 +1,6 @@
 # One instruction layout for every language
 
-Status: being decided on 2026-10-18 in a grill session. Terms are in [CONTEXT.md](../../CONTEXT.md) (**Documentation entry**, **Instruction form**, **Instruction tag**, **Instruction category**). It builds on [instruction-categories.md](./instruction-categories.md). The implementation plan, with the planning decisions 13-22 I made after the session, is [instruction-layout-plan.md](./instruction-layout-plan.md).
+Status: decided on 2026-10-18 in a grill session and implemented the same day. Terms are in [CONTEXT.md](../../CONTEXT.md) (**Documentation entry**, **Instruction form**, **Instruction tag**, **Instruction category**). It builds on [instruction-categories.md](./instruction-categories.md). The implementation plan, with the planning decisions 13-22 I made after the session, is [instruction-layout-plan.md](./instruction-layout-plan.md).
 
 ## What it is
 
