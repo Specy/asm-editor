@@ -1,10 +1,9 @@
-import type { DecompiledFunction, Decompiler } from '@specy/decompiler'
+import type { DecompiledFunction } from '@specy/decompiler'
 import PseudocodeWorker from './pseudocode.worker?worker'
 import { executableAnalysis } from '#lib/executables.ts'
 import type { Listing } from '#lib/listing/listing.ts'
 import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import { programImage } from './programImage'
-import { createPseudocodeService } from './pseudocodeService'
 import type { PseudocodeRequest, PseudocodeResponse } from './protocol'
 
 /**
@@ -44,14 +43,12 @@ export type PseudocodeOptions = {
 type ClientOptions = {
     silenceMs?: number
     idleMs?: number
-    /** How the decompiler is loaded where there is no Worker; the package's by default. */
-    load?: () => Promise<Decompiler>
     /** The prototypes passed with every program; glibc's from the package by default. */
     prototypes?: () => Promise<string>
 }
 
-/** What the client uses of a Worker, which the calling thread's stand-in has too. */
-type WorkerLike = {
+/** What the client uses of a Worker, which a stand-in on the calling thread has too. */
+export type PseudocodeWorkerLike = {
     postMessage(request: PseudocodeRequest, transfer: Transferable[]): void
     terminate(): void
     addEventListener(
@@ -60,10 +57,10 @@ type WorkerLike = {
     ): void
 }
 
-type WorkerConstructor = new () => WorkerLike
+export type PseudocodeWorkerConstructor = new () => PseudocodeWorkerLike
 
 type WorkerState = {
-    worker: WorkerLike
+    worker: PseudocodeWorkerLike
     /** Whether it has announced its listener; until then requests are held, in order. */
     ready: boolean
     held: [PseudocodeRequest, Transferable[]][]
@@ -109,10 +106,11 @@ type Job = {
  * failing.
  *
  * The decompiler package is loaded with the first request. A worker silent for
- * {@link PSEUDOCODE_WORKER_SILENCE_MS} while a request waits, or that errors, is ended and the
- * request answered with an error; the next request starts a new one. Where there is no `Worker`
- * (tests, prerendering), the requests are answered on the calling thread instead, through the
- * same messages.
+ * {@link PSEUDOCODE_WORKER_SILENCE_MS} while a request waits, or that errors or cannot start (where
+ * there is no `Worker`), is ended and the request answered with an error; the next request starts
+ * a new one. The tests, in Node and jsdom, pass a stand-in that answers the same messages on the
+ * calling thread (`InThreadWorker`), which the app never imports, so that its bundle holds the
+ * decompiler package once, in the worker's.
  */
 export class PseudocodeClient {
     private state?: WorkerState
@@ -140,7 +138,7 @@ export class PseudocodeClient {
     version: string | undefined
 
     constructor(
-        private readonly WorkerClass: WorkerConstructor | undefined = PseudocodeWorker,
+        private readonly WorkerClass: PseudocodeWorkerConstructor = PseudocodeWorker,
         private readonly options: ClientOptions = {}
     ) {
         this.silenceMs = options.silenceMs ?? PSEUDOCODE_WORKER_SILENCE_MS
@@ -273,7 +271,12 @@ export class PseudocodeClient {
             return
         }
         if (generation !== this.generation) return
-        const state = this.state ?? this.start()
+        let state: WorkerState
+        try {
+            state = this.state ?? this.start()
+        } catch (error) {
+            return this.finish(job, failed(job, error, 'The decompiler failed: '), false)
+        }
         this.stage(job, state.loaded ? 'decompiling' : 'loading')
         let program = this.programs.get(job.path)
         if (program?.key !== job.programKey) {
@@ -431,11 +434,9 @@ export class PseudocodeClient {
         else state.held.push([request, transfer])
     }
 
+    /** Starts a worker; throws where none can start, such as where there is no `Worker`. */
     private start(): WorkerState {
-        const worker =
-            typeof Worker !== 'undefined' && this.WorkerClass
-                ? new this.WorkerClass()
-                : new InThreadWorker(this.options.load)
+        const worker = new this.WorkerClass()
         const state: WorkerState = { worker, ready: false, held: [], loaded: false }
         this.state = state
         worker.addEventListener('message', (event) =>
@@ -467,34 +468,9 @@ export class PseudocodeClient {
     }
 }
 
-/**
- * The service on the calling thread, behind the messages a worker takes and sends, for where
- * there is no `Worker`. A decompilation then blocks the thread it runs on.
- */
-class InThreadWorker extends EventTarget implements WorkerLike {
-    private readonly service: ReturnType<typeof createPseudocodeService>
-
-    constructor(load?: () => Promise<Decompiler>) {
-        super()
-        const deliver = (response: PseudocodeResponse) =>
-            queueMicrotask(() =>
-                this.dispatchEvent(new MessageEvent('message', { data: response }))
-            )
-        this.service = createPseudocodeService(deliver, { load })
-        deliver({ type: 'ready' })
-    }
-
-    postMessage(request: PseudocodeRequest) {
-        void this.service.handle(request)
-    }
-
-    terminate() {
-        this.service.dispose()
-    }
-}
-
-function failed(job: Job, error: unknown): PseudocodeResult {
-    return { address: job.address, error: error instanceof Error ? error.message : String(error) }
+function failed(job: Job, error: unknown, prefix = ''): PseudocodeResult {
+    const message = error instanceof Error ? error.message : String(error)
+    return { address: job.address, error: `${prefix}${message}` }
 }
 
 /** The decompiler's message for a function past its time limit, which a less busy machine may beat. */

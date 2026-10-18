@@ -1,7 +1,7 @@
 /**
  * The Pseudocode client in Node, where there is no Worker, so its requests are answered on the
- * calling thread through the worker's messages, by the real decompiler package unless a test
- * passes a stand-in.
+ * calling thread through the worker's messages (`InThreadWorker`), by the real decompiler package
+ * unless a test passes a stand-in.
  */
 import { readFileSync } from 'node:fs'
 import {
@@ -17,6 +17,7 @@ import { generateListing } from '../listing/generateListing'
 import type { Listing } from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
 import { encodeBase64, fileBytes, type ProjectFile } from '../projectFiles'
+import { inThreadWorker } from './inThreadWorker'
 import { KEPT_PSEUDOCODE, PseudocodeClient, type PseudocodeStage } from './pseudocodeClient'
 
 const crackme = () =>
@@ -115,7 +116,7 @@ function text(result: DecompiledFunction) {
 describe('the Pseudocode client without a Worker', () => {
     it('decompiles a function of a Listing, at its link-time addresses', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const stages: PseudocodeStage[] = []
@@ -145,7 +146,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('keeps results, and decompiles a function asked for twice at once only once', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const [first, second] = await Promise.all([
@@ -169,7 +170,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('keeps only the last results', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const starts = listing.functions.map((fn) => fn.address)
@@ -182,7 +183,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('opens the program again for the bytes a Byte edit makes, closing the old one', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const before = text(await client.decompile('crackme', file, listingOf(file), MAIN))
         expect(before.text).toContain('puts("Correct!");')
@@ -198,7 +199,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('answers an address no function starts at with the decompiler’s error, kept', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const result = await client.decompile('crackme', file, listing, MAIN + 1)
@@ -213,7 +214,7 @@ describe('the Pseudocode client without a Worker', () => {
             address,
             error: 'main took longer than 30 seconds to decompile'
         }))
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const result = await client.decompile('crackme', file, listing, MAIN)
@@ -235,7 +236,7 @@ describe('the Pseudocode client without a Worker', () => {
             }
             return program.decompile(address)
         })
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         expect(await client.decompile('crackme', file, listing, MAIN)).toEqual({
@@ -252,7 +253,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('closes a released program and opens it again when asked', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const start = listing.functions.find((fn) => fn.name === '_start')!.address
@@ -265,7 +266,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('drops a waiting request whose signal aborts, never decompiling it', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const start = listing.functions.find((fn) => fn.name === '_start')!.address
@@ -281,7 +282,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('drops nothing else when a request no longer queued is aborted', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const start = listing.functions.find((fn) => fn.name === '_start')!.address
@@ -301,7 +302,7 @@ describe('the Pseudocode client without a Worker', () => {
 
     it('answers what waits when disposed, and starts again for a later request', async () => {
         const { counts, load } = counting()
-        const client = new PseudocodeClient(undefined, { load })
+        const client = new PseudocodeClient(inThreadWorker(load))
         const file = crackmeFile()
         const listing = listingOf(file)
         const waiting = client.decompile('crackme', file, listing, MAIN)
@@ -335,6 +336,16 @@ class SilentWorker extends EventTarget {
 }
 
 describe('the Pseudocode client with a Worker', () => {
+    it('answers with an error where its worker cannot start, as without a Worker', async () => {
+        expect(typeof Worker).toBe('undefined')
+        const client = new PseudocodeClient(undefined, { prototypes: async () => '' })
+        const file = crackmeFile()
+        const result = await client.decompile('crackme', file, listingOf(file), MAIN)
+        expect(result).toMatchObject({ address: MAIN })
+        expect('error' in result && result.error).toMatch(/^The decompiler failed: .*Worker/)
+        client.dispose()
+    })
+
     it('answers with an error once the worker falls silent, and starts a new one next', async () => {
         vi.stubGlobal('Worker', SilentWorker)
         SilentWorker.instances = []

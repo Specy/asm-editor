@@ -10,6 +10,7 @@ import { analyze } from '@specy/x86/elf'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { instructionAddressAt, LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import { InThreadWorker } from '#lib/pseudocode/inThreadWorker.ts'
 import { PseudocodeClient } from '#lib/pseudocode/pseudocodeClient.ts'
 import { PSEUDOCODE_HEADER_LINES } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
 import {
@@ -151,7 +152,7 @@ describe('a Debug session of an Executable', () => {
         const { emulator, listing } = await built(sources)
         //main's Pseudocode as a pane shows it, from the Listing the debugger runs with
         const main = listing.functions.find((fn) => fn.name === 'main')!
-        const client = new PseudocodeClient(undefined)
+        const client = new PseudocodeClient(InThreadWorker)
         const result = await client.decompile(
             'crackme',
             sources.files.crackme,

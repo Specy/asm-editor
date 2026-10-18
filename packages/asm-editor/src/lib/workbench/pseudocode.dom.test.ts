@@ -1,8 +1,8 @@
 /**
  * Decompile and the Pseudocode beside its Listing
  * ([file-views.md](../../../../../docs/design/file-views.md), decisions 5, 6 and 11; the plan's
- * E8.3 to E8.6): crackme's real Listing, decompiled by the real decompiler through the client's
- * path for where there is no Worker, as jsdom has none.
+ * E8.3 to E8.6): crackme's real Listing, decompiled by the real decompiler on the test's thread,
+ * as jsdom has no Worker.
  */
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
@@ -69,6 +69,11 @@ vi.mock('@specy/decompiler', async (importOriginal) => {
         }
     }
 })
+
+//jsdom has no Worker: the Pseudocode worker's service runs on the test's thread
+vi.mock('../pseudocode/pseudocode.worker?worker', async () => ({
+    default: (await import('#lib/pseudocode/inThreadWorker.ts')).InThreadWorker
+}))
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackmeBytes = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme')
