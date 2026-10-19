@@ -188,7 +188,7 @@
                 <button type="button" class="close" onclick={close}>Cancel</button>
             </div>
             {#if !query.trim()}
-                <p class="hint">An instruction, a directive, or a question in your own words.</p>
+                <p class="hint">Write the name of an instruction, directive or any question.</p>
             {:else}
                 <ul class="results" id="palette-results" role="listbox" bind:this={list}>
                     {#each results as result, index (result.key)}
