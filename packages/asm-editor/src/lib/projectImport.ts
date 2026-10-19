@@ -6,7 +6,7 @@ import { toast } from '#stores/toastStore.ts'
 
 /** What a file can be to be imported as a Project, as the pages that import them say it. */
 export const IMPORTABLE_FILES =
-    '.asmproj archives, assembly source files and x86-64 Linux executables'
+    '**Assembly source files**, **.asmproj** projects, and x86-64 Linux **ELF binaries**.'
 
 /**
  * Adds an imported Project to the store, asking before it replaces a different one with the same

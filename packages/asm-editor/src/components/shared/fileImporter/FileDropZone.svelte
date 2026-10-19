@@ -13,7 +13,7 @@
 
     interface Props {
         title: string
-        /** What can be dropped, in the overlay and as the area's tooltip. */
+        /** Supported files, shown below the title and in the drag overlay; **bold** marks keywords. */
         hint?: string
         /** What the overlay says while files are dragged over the page. */
         dropLabel?: string
@@ -73,6 +73,12 @@
     }
 </script>
 
+{#snippet hintContent()}
+    {#each (hint ?? '').split('**') as part, index}
+        {#if index % 2 === 1}<strong>{part}</strong>{:else}{part}{/if}
+    {/each}
+{/snippet}
+
 <svelte:window
     ondragstart={() => (draggingFromPage = true)}
     ondragend={() => (draggingFromPage = false)}
@@ -85,13 +91,18 @@
     type="button"
     class="drop-zone"
     class:dragging
-    title={hint}
+    title={hint?.replaceAll('**', '')}
     onclick={() => (onBrowse ? onBrowse() : input?.click())}
 >
-    <Icon size={0.9}>
+    <Icon size={1.8}>
         <FaUpload />
     </Icon>
-    <span>{title}, or <span class="browse">browse</span></span>
+    <span class="drop-zone-copy">
+        <span>{title}, or <span class="browse">browse</span></span>
+        {#if hint}
+            <span class="drop-zone-hint">{@render hintContent()}</span>
+        {/if}
+    </span>
 </button>
 {#if !onBrowse}
     <input type="file" multiple hidden bind:this={input} onchange={picked} />
@@ -110,28 +121,27 @@
             </Icon>
             <div class="drop-overlay-title">{dropLabel}</div>
             {#if hint}
-                <div class="drop-overlay-hint">{hint}</div>
+                <div class="drop-overlay-hint">{@render hintContent()}</div>
             {/if}
         </div>
     </div>
 {/if}
 
 <style lang="scss">
-    /* a quiet line: the drop is a shortcut for Import, not the page's purpose */
     .drop-zone {
         display: flex;
-        justify-content: center;
+        justify-content: flex-start;
         align-items: center;
-        gap: 0.5rem;
+        gap: 1rem;
         width: 100%;
-        padding: 0.5rem 0.8rem;
+        padding: 1rem;
         border: 1px dashed color-mix(in srgb, var(--hint) 35%, transparent);
         border-radius: 0.5rem;
         background-color: transparent;
         color: var(--hint);
         font: inherit;
         font-size: 0.85rem;
-        text-align: center;
+        text-align: left;
         cursor: pointer;
         transition:
             border-color 0.2s,
@@ -147,6 +157,21 @@
             outline: 2px solid var(--accent);
             outline-offset: 2px;
         }
+    }
+
+    .drop-zone-copy {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        gap: 0.25rem;
+        min-width: 0;
+        line-height: 1.4;
+    }
+
+    .drop-zone-hint {
+        font-size: 0.8rem;
+        line-height: 1.5;
+        opacity: 0.8;
     }
 
     .browse {
