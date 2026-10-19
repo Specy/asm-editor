@@ -106,12 +106,14 @@
     @media (max-width: 600px) {
         .instructions {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .instruction {
+            min-width: 0;
             width: 100%;
             justify-content: center;
-            padding-right: 2rem;
+            padding: 1rem 0.5rem;
+            overflow-wrap: anywhere;
         }
         .arrow {
             display: none;

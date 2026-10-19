@@ -122,6 +122,10 @@
         flex-direction: column;
     }
     @media (max-width: 480px) {
+        .footer-justify {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
         .footer-inner {
             padding: 1rem;
             padding-top: 2rem;

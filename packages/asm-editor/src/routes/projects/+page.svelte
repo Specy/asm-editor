@@ -295,6 +295,9 @@
     }
 
     @media screen and (max-width: 650px) {
+        .import-drop {
+            display: none;
+        }
         .top-row {
             margin-top: 0.5rem;
             margin-bottom: 1rem;
