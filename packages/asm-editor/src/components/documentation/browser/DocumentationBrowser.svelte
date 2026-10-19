@@ -102,6 +102,10 @@
         return groupByCategory(chapter.entries, (entry) => entry.category)
     }
 
+    const groupsByChapter = $derived(
+        new Map((chapters ?? []).map((chapter) => [chapter.id, categoryGroups(chapter)]))
+    )
+
     /** Clip the slide without creating a new scroll container for sticky category headings. */
     function slideChapter(node: HTMLElement, options: { duration: number }) {
         const transition = slide(node, options)
@@ -383,7 +387,7 @@
         <div class="scroll" bind:this={scroller}>
             {#each chapters as chapter (chapter.id)}
                 {@const isFolded = !unfolded.has(chapter.id)}
-                {@const groups = categoryGroups(chapter)}
+                {@const groups = groupsByChapter.get(chapter.id) ?? null}
                 <section
                     class="chapter"
                     class:folded={isFolded}
@@ -541,10 +545,14 @@
         border-top: none;
         border-radius: 0.5rem;
     }
+    .chapter.folded {
+        border-bottom: none;
+    }
     .chapter-title {
         position: sticky;
         top: 0;
         z-index: 2;
+        will-change: transform;
         margin: 0 calc(-1 * var(--chapter-border-width));
         font-size: 0.95rem;
         background-color: var(--wb-section-header, var(--tertiary));
@@ -552,13 +560,10 @@
         border: var(--chapter-border-width) solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-radius: 0.5rem 0.5rem 0 0;
-        border-bottom: 1px solid
-            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
     }
     .chapter.folded .chapter-title {
         border-radius: 0.5rem;
-        border-bottom: none;
         box-shadow: none;
     }
     .chapter.categorized .chapter-title {
@@ -589,6 +594,7 @@
         position: sticky;
         top: var(--chapter-title-height, 2.2rem);
         z-index: 1;
+        will-change: transform;
         margin: 0 -0.5rem;
         padding: 0.35rem 1rem;
         font-size: 0.72rem;

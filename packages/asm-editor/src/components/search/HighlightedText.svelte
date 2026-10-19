@@ -9,8 +9,9 @@
     let { text, terms }: Props = $props()
 </script>
 
-{#each highlight(text, terms) as part, index (index)}{#if part.match}<mark>{part.text}</mark
-        >{:else}{part.text}{/if}{/each}
+{#if terms.length === 0}{text}{:else}{#each highlight(text, terms) as part, index (index)}{#if part.match}<mark
+                >{part.text}</mark
+            >{:else}{part.text}{/if}{/each}{/if}
 
 <style>
     mark {

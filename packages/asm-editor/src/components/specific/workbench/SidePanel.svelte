@@ -268,6 +268,7 @@
 
         /* The Explorer seldom scrolls; Testcases and Documentation reserve their own gutter. */
         &.gutterless {
+            overflow-y: hidden;
             scrollbar-gutter: auto;
         }
     }

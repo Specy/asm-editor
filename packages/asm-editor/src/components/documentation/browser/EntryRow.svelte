@@ -40,7 +40,12 @@
     }: Props = $props()
 </script>
 
-<div class="entry-row" class:expanded={expanded && entry.kind !== 'prose'} data-entry-id={entry.id}>
+<div
+    class="entry-row"
+    class:expanded={expanded && entry.kind !== 'prose'}
+    class:prose-row={entry.kind === 'prose'}
+    data-entry-id={entry.id}
+>
     {#if entry.kind === 'prose'}
         <div class="prose">
             <h4 class="prose-title"><HighlightedText text={entry.title} {terms} /></h4>
@@ -91,10 +96,24 @@
 <!-- svelte-ignore css_unused_selector -->
 <style>
     .entry-row {
-        /* Keep positioned entry content beneath the sticky chapter and category headings. */
-        isolation: isolate;
         border-radius: 0.45rem;
         min-width: 0;
+    }
+    .entry-row:not(.expanded):not(.prose-row) {
+        content-visibility: auto;
+        contain-intrinsic-block-size: auto 3.1rem;
+        contain: content;
+    }
+    .entry-row.prose-row {
+        content-visibility: auto;
+        contain-intrinsic-block-size: auto 6rem;
+    }
+    @media print {
+        .entry-row:not(.expanded):not(.prose-row),
+        .entry-row.prose-row {
+            content-visibility: visible;
+            contain: none;
+        }
     }
     .entry-row + .entry-row {
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));

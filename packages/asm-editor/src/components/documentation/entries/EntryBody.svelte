@@ -134,6 +134,8 @@
 
 <style>
     .entry-body {
+        /* Keep positioned entry content beneath the sticky chapter and category headings. */
+        isolation: isolate;
         display: flex;
         flex-direction: column;
         gap: 0.6rem;
