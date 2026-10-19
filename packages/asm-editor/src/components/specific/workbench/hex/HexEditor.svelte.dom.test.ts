@@ -20,6 +20,7 @@ import {
     type ProjectFiles
 } from '#lib/projectFiles.ts'
 import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.svelte.ts'
+import * as hexSearch from './hexSearch'
 
 //`#lib/utils.ts`, which the data inspector reads numbers through, reaches the projects store and
 //its IndexedDB, which jsdom does not have
@@ -297,6 +298,11 @@ describe('selecting and copying', () => {
     })
 })
 
+function findStatus(target: HTMLElement) {
+    const status = target.querySelector('.hex-find-bar [role="status"]')
+    return status ? [...status.children].map((child) => child.textContent).join(' · ') : ''
+}
+
 describe('going to an offset and finding', () => {
     it('goes to an offset typed in hex or in decimal', () => {
         const hex = setup()
@@ -314,15 +320,14 @@ describe('going to an offset and finding', () => {
         again.dispatchEvent(new Event('input', { bubbles: true }))
         again.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
         flushSync()
-        expect(hex.target.querySelector('.hex-find-bar [role="status"]')!.textContent).toBe(
-            '0x40 is past the end, at 0x1f'
-        )
+        expect(findStatus(hex.target)).toBe('0x40 is past the end, at 0x1f')
     })
 
     it('finds hex bytes with wildcards, next and previous, wrapping round', () => {
         const hex = setup({ bytes: Uint8Array.from([0, 0x4c, 9, 0x46, 0, 0x4c, 8, 0x46, 0]) })
         hex.key('f', { ctrlKey: true })
         const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+        expect(hex.target.querySelector('.hex-find-bar [role="status"]')).toBeNull()
         input.value = '4c ?? 46'
         input.dispatchEvent(new Event('input', { bubbles: true }))
         const enter = (shiftKey = false) => {
@@ -334,13 +339,19 @@ describe('going to an offset and finding', () => {
         enter()
         expect(hex.status()).toContain('Offset 0x0001')
         expect(hex.status()).toContain('3 bytes selected')
+        expect(findStatus(hex.target)).toBe('Offset 0x0001 · 1 of 2')
+        expect(
+            hex.target.querySelector('[aria-label^="Previous match"]')!.getAttribute('title')
+        ).toBe('Previous match (Shift+Enter)')
         enter()
         expect(hex.status()).toContain('Offset 0x0005')
+        expect(findStatus(hex.target)).toBe('Offset 0x0005 · 2 of 2')
+        expect(hex.target.querySelector('[aria-label^="Next match"]')!.getAttribute('title')).toBe(
+            'Next match (Enter)'
+        )
         enter()
         expect(hex.status()).toContain('Offset 0x0001')
-        expect(hex.target.querySelector('.hex-find-bar [role="status"]')!.textContent).toBe(
-            '0x0001, wrapped'
-        )
+        expect(findStatus(hex.target)).toBe('Offset 0x0001 · 1 of 2')
         enter(true)
         expect(hex.status()).toContain('Offset 0x0005')
         //text finds the characters
@@ -348,9 +359,121 @@ describe('going to an offset and finding', () => {
         input.dispatchEvent(new Event('input', { bubbles: true }))
         hex.target.querySelector<HTMLButtonElement>('.hex-find-bar [aria-pressed="false"]')!.click()
         enter()
-        expect(hex.target.querySelector('.hex-find-bar [role="status"]')!.textContent).toBe(
-            'No results'
-        )
+        expect(findStatus(hex.target)).toBe('No results')
+    })
+
+    it('counts text matches and keeps the arrow buttons for a single result', () => {
+        const hex = setup({ bytes: Uint8Array.of(0x61, 0x62, 0x61) })
+        hex.key('f', { ctrlKey: true })
+        const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+        input.value = 'b'
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        flushSync()
+        expect(hex.target.querySelector('.hex-find-bar input.failed')).not.toBeNull()
+        hex.target.querySelector<HTMLButtonElement>('.hex-find-bar [aria-pressed="false"]')!.click()
+        flushSync()
+        expect(findStatus(hex.target)).toBe('')
+        expect(hex.target.querySelector('.hex-find-bar input.failed')).toBeNull()
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        flushSync()
+        expect(findStatus(hex.target)).toBe('Offset 0x0001 · 1 of 1')
+        for (const direction of ['Previous', 'Next']) {
+            const button = hex.target.querySelector<HTMLButtonElement>(
+                `[aria-label^="${direction} match"]`
+            )!
+            expect(button.title).toBe(
+                direction === 'Previous' ? 'Previous match (Shift+Enter)' : 'Next match (Enter)'
+            )
+            button.click()
+            flushSync()
+            expect(findStatus(hex.target)).toBe('Offset 0x0001 · 1 of 1')
+        }
+    })
+
+    it('reuses counts on navigation and recounts after editing bytes and undoing', () => {
+        const count = vi.spyOn(hexSearch, 'countMatches')
+        try {
+            const hex = setup({ bytes: Uint8Array.of(0xff, 0, 0xff, 0, 0xff) })
+            hex.key('f', { ctrlKey: true })
+            const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+            const search = () => {
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+                flushSync()
+            }
+            const message = () => findStatus(hex.target)
+            input.value = 'ff'
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+            search()
+            expect(message()).toBe('Offset 0x0000 · 1 of 3')
+            search()
+            search()
+            search()
+            expect(message()).toBe('Offset 0x0000 · 1 of 3')
+            expect(count).toHaveBeenCalledTimes(1)
+            hex.type('00')
+            expect(message()).toBe('')
+            search()
+            expect(message()).toBe('Offset 0x0002 · 1 of 2')
+            expect(count).toHaveBeenCalledTimes(2)
+            hex.key('z', { ctrlKey: true })
+            expect(message()).toBe('')
+            search()
+            expect(message()).toBe('Offset 0x0000 · 1 of 3')
+            expect(count).toHaveBeenCalledTimes(3)
+            // A manually moved caret starts from its actual position, rather than the old rank.
+            hex.key('ArrowRight')
+            search()
+            expect(message()).toBe('Offset 0x0002 · 2 of 3')
+        } finally {
+            count.mockRestore()
+        }
+    })
+
+    it('keeps navigation during a large-file count and discards stale results', async () => {
+        vi.useFakeTimers()
+        const count = vi.spyOn(hexSearch, 'countMatchesAsync')
+        try {
+            const bytes = new Uint8Array(256 * 1024 + 8)
+            bytes[0] = bytes[2] = bytes[4] = 0xff
+            const hex = setup({ bytes })
+            hex.key('f', { ctrlKey: true })
+            const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+            const search = (shiftKey = false) => {
+                input.dispatchEvent(
+                    new KeyboardEvent('keydown', { key: 'Enter', shiftKey, bubbles: true })
+                )
+                flushSync()
+            }
+            const message = () => findStatus(hex.target)
+            input.value = 'ff'
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+            search()
+            expect(message()).toBe('Offset 0x00000')
+            search(true)
+            search(true)
+            expect(message()).toBe('Offset 0x00002')
+            await vi.runAllTimersAsync()
+            flushSync()
+            expect(message()).toBe('Offset 0x00002 · 2 of 3')
+            expect(count).toHaveBeenCalledTimes(1)
+            // A query change while counting must never display the previous query's total.
+            input.value = '00'
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+            search()
+            input.value = 'ff'
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+            flushSync()
+            await vi.runAllTimersAsync()
+            flushSync()
+            expect(message()).toBe('')
+            search()
+            await vi.runAllTimersAsync()
+            flushSync()
+            expect(message()).toBe('Offset 0x00004 · 3 of 3')
+        } finally {
+            count.mockRestore()
+        }
     })
 })
 

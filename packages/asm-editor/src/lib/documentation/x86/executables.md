@@ -48,7 +48,7 @@ These changes are **Byte edits**. The project saves them with the File and keeps
 
 For example, to change the message `Wrong!`, [find](#finding) it as text and type over its letters in the text column. Disassemble then shows the new text in the Listing's data and in the comment beside each instruction that reads it.
 
-During a Debug session, the Files are read-only, so the Hex editor takes no typing until you Stop. Over an Executable, it notes "The File's bytes. Patches and the program's writes are in memory: see the memory view." A [Patch](#patching) changes the running program's memory, never the File, and is gone at the next Build. To keep one, note the bytes its preview shows, Stop, choose **Show in Hex** on its line, and type them.
+During a Debug session, the Files are read-only, so the Hex editor takes no typing until you Stop. The **Hex** button's tooltip explains that it shows the File's bytes; changes made while debugging appear in the Memory view. A [Patch](#patching) changes the running program's memory, never the File, and is gone at the next Build. To keep one, note the bytes its preview shows, Stop, choose **Show in Hex** on its line, and type them.
 
 ## Parts of the ELF file {#elf-parts}
 

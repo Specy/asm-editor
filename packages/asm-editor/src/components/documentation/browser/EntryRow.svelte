@@ -1,7 +1,8 @@
 <script lang="ts">
     /**
      * A Documentation entry as one compact row: its name, what follows the name and one line of
-     * summary. Clicking it expands the entry in place ([the design record](../../../../../../docs/design/documentation-search.md),
+     * summary. Prose entries show their full text directly; clicking any other entry expands it
+     * in place ([the design record](../../../../../../docs/design/documentation-search.md),
      * The Documentation panel).
      */
     import { prefersReducedMotion } from 'svelte/motion'
@@ -39,39 +40,49 @@
     }: Props = $props()
 </script>
 
-<div class="entry-row" class:expanded data-entry-id={entry.id}>
-    <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>
-        <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
-        <span class="line">
-            <span class="name" class:code={hasCodeName(entry)}
-                ><HighlightedText text={entry.title} {terms} /></span
-            >
-            {#if entry.signature}
-                <span class="signature">{entry.signature}</span>
-            {/if}
-            {#if showCategory && entry.category}
-                <span class="category">{categoryLabel(entry.category)}</span>
-            {/if}
-        </span>
-        {#if !expanded}
-            <span
-                class="summary"
-                transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
-                ><HighlightedText text={entry.summary} {terms} /></span
-            >
-        {/if}
-    </button>
-    {#if expanded}
-        <div class="body" transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}>
+<div class="entry-row" class:expanded={expanded && entry.kind !== 'prose'} data-entry-id={entry.id}>
+    {#if entry.kind === 'prose'}
+        <div class="prose">
+            <h4 class="prose-title"><HighlightedText text={entry.title} {terms} /></h4>
             <EntryBody {entry} {disableLinks} />
-            {#if pageLink}
-                <a class="page-link" href={entry.href}>
-                    {entry.kind === 'instruction'
-                        ? 'Open its page, with an example to run'
-                        : 'Open its page'}
-                </a>
-            {/if}
         </div>
+    {:else}
+        <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>
+            <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
+            <span class="line">
+                <span class="name" class:code={hasCodeName(entry)}
+                    ><HighlightedText text={entry.title} {terms} /></span
+                >
+                {#if entry.signature}
+                    <span class="signature">{entry.signature}</span>
+                {/if}
+                {#if showCategory && entry.category}
+                    <span class="category">{categoryLabel(entry.category)}</span>
+                {/if}
+            </span>
+            {#if !expanded}
+                <span
+                    class="summary"
+                    transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+                    ><HighlightedText text={entry.summary} {terms} /></span
+                >
+            {/if}
+        </button>
+        {#if expanded}
+            <div
+                class="body"
+                transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+            >
+                <EntryBody {entry} {disableLinks} />
+                {#if pageLink}
+                    <a class="page-link" href={entry.href}>
+                        {entry.kind === 'instruction'
+                            ? 'Open its page, with an example to run'
+                            : 'Open its page'}
+                    </a>
+                {/if}
+            </div>
+        {/if}
     {/if}
 </div>
 
@@ -80,6 +91,8 @@
 <!-- svelte-ignore css_unused_selector -->
 <style>
     .entry-row {
+        /* Keep positioned entry content beneath the sticky chapter and category headings. */
+        isolation: isolate;
         border-radius: 0.45rem;
         min-width: 0;
     }
@@ -88,6 +101,19 @@
     }
     .entry-row.expanded {
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+    }
+    .prose {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.5rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .prose-title {
+        margin: 0;
+        font-size: inherit;
+        font-weight: 600;
     }
     .head {
         display: grid;

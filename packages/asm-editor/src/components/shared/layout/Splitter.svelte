@@ -130,10 +130,31 @@
             position: absolute;
         }
 
+        &::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 2px;
+            border-radius: 50%;
+            background-color: currentColor;
+            color: var(--background-text);
+            opacity: 0.4;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: opacity 0.15s;
+        }
+
         &:hover,
         &.dragging,
         &:focus-visible {
             background-color: var(--accent);
+
+            &::after {
+                color: var(--accent-text);
+                opacity: 1;
+            }
         }
     }
 
@@ -144,6 +165,12 @@
         &::before {
             inset: 0 -0.2rem;
         }
+
+        &::after {
+            box-shadow:
+                0 -5px 0 currentColor,
+                0 5px 0 currentColor;
+        }
     }
 
     .horizontal {
@@ -152,6 +179,12 @@
 
         &::before {
             inset: -0.2rem 0;
+        }
+
+        &::after {
+            box-shadow:
+                -5px 0 0 currentColor,
+                5px 0 0 currentColor;
         }
     }
 </style>

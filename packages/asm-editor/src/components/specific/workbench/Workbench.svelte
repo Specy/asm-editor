@@ -56,24 +56,26 @@
 </script>
 
 <div class="workbench-host">
-    <EmulatorLoader
-        code={project.code}
-        source={{ files: project.files, entry: project.entry }}
-        language={project.language}
-        {loading}
-        settings={{
-            automaticChecking: false,
-            display: project.display,
-            screenHistoryBudgetMb: effective.screenHistoryBudgetMb,
-            fileSystemHistoryBudgetMb: effective.fileSystemHistoryBudgetMb,
-            programArguments: effective.programArguments,
-            peripherals: { fileSystem: project.fileSystem }
-        }}
-    >
-        {#snippet children(emulator)}
-            <WorkbenchShell {project} {emulator} bind:activePanel {...shell} />
-        {/snippet}
-    </EmulatorLoader>
+    {#key project.language}
+        <EmulatorLoader
+            code={project.code}
+            source={{ files: project.files, entry: project.entry }}
+            language={project.language}
+            {loading}
+            settings={{
+                automaticChecking: false,
+                display: project.display,
+                screenHistoryBudgetMb: effective.screenHistoryBudgetMb,
+                fileSystemHistoryBudgetMb: effective.fileSystemHistoryBudgetMb,
+                programArguments: effective.programArguments,
+                peripherals: { fileSystem: project.fileSystem }
+            }}
+        >
+            {#snippet children(emulator)}
+                <WorkbenchShell {project} {emulator} bind:activePanel {...shell} />
+            {/snippet}
+        </EmulatorLoader>
+    {/key}
 </div>
 
 <style>

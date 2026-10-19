@@ -1,9 +1,8 @@
 ; avx
 ; ELF64 x86-64 position-independent executable (PIE), loaded at 0x555555554000
 ; Dynamically linked: interpreter /lib64/ld-linux-x86-64.so.2; needs libc.so.6
-; Not stripped: names come from its symbol table, with invented words (v1) for the rest
+; Not stripped: names come from its symbol table
 ; Entry point: 0x5555555550a0 (_start)
-; Generated from the file, read-only and never saved: nothing builds from this Listing.
 
 section .init
 

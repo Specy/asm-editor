@@ -394,14 +394,18 @@ describe('the Listing notice', () => {
         const host = document.createElement('div')
         const program = mount(ListingNotice, { target: host, props: { document: listing } })
         flushSync()
-        expect(host.textContent?.trim()).toBe('Generated Listing of crackme: read-only.')
+        expect(host.textContent?.trim()).toBe('read-only')
+        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
+            'Generated Listing of crackme: read-only.'
+        )
         unmount(program)
         const library = mount(ListingNotice, {
             target: host,
             props: { document: listing, library: true }
         })
         flushSync()
-        expect(host.textContent?.trim()).toBe(
+        expect(host.textContent?.trim()).toBe('read-only')
+        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
             'Generated Listing of crackme, a library the program loaded: read-only.'
         )
         unmount(library)

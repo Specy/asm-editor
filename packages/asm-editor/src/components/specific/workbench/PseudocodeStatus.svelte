@@ -33,7 +33,7 @@
                     ? 'Loading the decompiler'
                     : `Decompiling ${fn.name}`}
             </p>
-            <progress aria-label="Decompiling"></progress>
+            <progress aria-label="Decompiling" value="10" max="100"></progress>
         </div>
     {/if}
 {/if}
@@ -48,6 +48,7 @@
         align-items: center;
         justify-content: center;
         flex-direction: column;
+        gap: 0.6rem;
         padding: 2rem;
         color: var(--secondary-text);
         background: var(--secondary);
@@ -60,7 +61,23 @@
     }
     progress {
         width: min(16rem, 80%);
-        accent-color: var(--accent);
+        height: 0.5em;
+        appearance: none;
+        overflow: hidden;
+        border-radius: 0.2rem;
+        background: color-mix(in srgb, var(--secondary-text) 20%, var(--secondary));
+    }
+    progress::-webkit-progress-bar {
+        background: color-mix(in srgb, var(--secondary-text) 20%, var(--secondary));
+        border-radius: inherit;
+    }
+    progress::-webkit-progress-value {
+        background: var(--accent);
+        border-radius: inherit;
+    }
+    progress::-moz-progress-bar {
+        background: var(--accent);
+        border-radius: inherit;
     }
     button {
         margin-top: 0.75rem;

@@ -8,11 +8,10 @@
 
     interface Props {
         notice: string
-        rightAligned?: boolean
         recompile?: { busy: boolean; disabled: boolean; onClick: () => void }
     }
 
-    let { notice, rightAligned = false, recompile }: Props = $props()
+    let { notice, recompile }: Props = $props()
 </script>
 
 {#if notice}
@@ -20,7 +19,6 @@
         <button
             type="button"
             class="compilation-notice clickable"
-            class:right-aligned={rightAligned}
             disabled={recompile.disabled}
             aria-busy={recompile.busy}
             title="Recompile the source to restore its mapping"
@@ -44,14 +42,12 @@
         position: absolute;
         z-index: 4;
         top: 0.5rem;
-        left: 0.75rem;
         right: 1.5rem;
         display: flex;
         align-items: center;
         gap: 0.5rem;
         width: fit-content;
         max-width: calc(100% - 2.25rem);
-        margin: 0 auto;
         padding: 0.5rem 0.8rem;
         border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
         border-radius: 0.5rem;
@@ -62,12 +58,6 @@
         font: inherit;
         font-size: 0.8rem;
         text-align: left;
-    }
-
-    .right-aligned {
-        left: auto;
-        margin-right: 0;
-        margin-left: auto;
     }
 
     .clickable {

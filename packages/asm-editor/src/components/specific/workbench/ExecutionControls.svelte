@@ -121,7 +121,18 @@
         if (!showViews) return undefined
         const options = pane.viewSwitch.flatMap((view) => {
             const button = VIEW_BUTTONS[view]
-            return button ? [{ id: view, ...button }] : []
+            return button
+                ? [
+                      {
+                          id: view,
+                          ...button,
+                          title:
+                              view === 'hex' && pane.displayedKind === 'executable'
+                                  ? "Show the file's bytes in Hex. Changes made while debugging appear in the Memory view."
+                                  : button.title
+                      }
+                  ]
+                : []
         })
         if (options.length < 2) return undefined
         return {

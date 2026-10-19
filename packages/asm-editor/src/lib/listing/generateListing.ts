@@ -838,8 +838,8 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         } else lines.push('; Statically linked: no dynamic linker, no shared libraries')
         lines.push(
             analysis.stripped
-                ? `; Stripped: no symbol table; other names come from dynamic symbols, relocations and invented words (${version})`
-                : `; Not stripped: names come from its symbol table, with invented words (${version}) for the rest`
+                ? '; Stripped: no symbol table; other names come from dynamic symbols and relocations'
+                : '; Not stripped: names come from its symbol table'
         )
         if (model.fromSegments)
             lines.push('; No usable section headers: code and data are listed by load segment')
@@ -849,9 +849,6 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             )
         if (main !== undefined && namesAt.get(main)?.[0].origin === 'main')
             lines.push(`; main: ${hex(main)}, the address _start passes to __libc_start_main`)
-        lines.push(
-            '; Generated from the file, read-only and never saved: nothing builds from this Listing.'
-        )
         return lines
     }
 

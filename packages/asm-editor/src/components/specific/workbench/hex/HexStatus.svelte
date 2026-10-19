@@ -49,7 +49,7 @@
     <div class="facts" aria-label="Status">
         {#if offset !== undefined}
             <span
-                class="fact"
+                class="fact offset"
                 title="The caret's offset, in decimal: {offset.toLocaleString('en-US')}"
                 >Offset <b>0x{offsetHex(offset, digits)}</b></span
             >
@@ -57,10 +57,10 @@
         {#if selection > 0}
             <span class="fact">{count(selection)} selected</span>
         {/if}
+        <span class="fact">{count(size)}</span>
         {#if region}
             <span class="fact region">{region}</span>
         {/if}
-        <span class="fact">{count(size)}</span>
         {#if edited}
             <span
                 class="fact badge"
@@ -120,6 +120,11 @@
             font-weight: normal;
             opacity: 1;
         }
+    }
+    .offset b {
+        display: inline-block;
+        /* The 0x prefix and six hex digits, without padding the displayed offset. */
+        min-width: 8ch;
     }
     .region {
         font-family: monospace;

@@ -230,20 +230,6 @@
                 </section>
             {/if}
         {/each}
-        {#each document.omitted as omitted (omitted.reason)}
-            <details class="omitted">
-                <summary
-                    >{omitted.count}
-                    {omitted.count === 1 ? 'more form' : 'more forms'}
-                    {omitted.reason}.</summary
-                >
-                <ul class="omitted-forms">
-                    {#each omitted.forms as form (form)}
-                        <li><code>{form}</code></li>
-                    {/each}
-                </ul>
-            </details>
-        {/each}
     </div>
 
     {#if document.operands.length > 0}
@@ -439,29 +425,6 @@
     }
     .show-all:hover {
         background-color: color-mix(in srgb, var(--accent) 25%, var(--tertiary));
-    }
-    .omitted {
-        max-width: 80ch;
-        margin: 0;
-        font-size: 0.88rem;
-        color: var(--background-text-muted);
-    }
-    .omitted summary {
-        cursor: pointer;
-    }
-    .omitted-forms {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.2rem 1.2rem;
-        margin: 0.4rem 0 0;
-        padding-left: 1rem;
-        list-style: none;
-    }
-    .omitted-forms code {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.82rem;
-        font-variant-ligatures: none;
-        white-space: pre;
     }
     /* set apart from the reference above it and the example below it */
     .description {

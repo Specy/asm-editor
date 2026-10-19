@@ -220,8 +220,8 @@ export function resolveProjectSettings(
 /**
  * Decisions read back from storage, a shared link or an imported file, which can be anything: an
  * unknown key is dropped, a value the Setting cannot use is dropped, and what remains is kept as
- * decided, whether or not it applies to the language (it is harmless there, and a language never
- * changes after creation).
+ * decided, whether or not it applies to the language, so changing the Project's ISA and back keeps
+ * its previous choices.
  */
 export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
     validateProfileSetting(raw)

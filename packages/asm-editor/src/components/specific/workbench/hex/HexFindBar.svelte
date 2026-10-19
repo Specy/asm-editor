@@ -20,6 +20,7 @@
         query = $bindable(''),
         kind = $bindable<FindKind>('hex'),
         message,
+        matchCount,
         failed = false,
         onSubmit,
         onClose
@@ -29,6 +30,7 @@
         kind?: FindKind
         /** What the last search or go to found, or why it could not. */
         message?: string
+        matchCount?: string
         failed?: boolean
         /** Find the next match, or with `backwards` the previous one; go to the offset typed. */
         onSubmit: (backwards: boolean) => void
@@ -69,60 +71,73 @@
     role="search"
     aria-label={mode === 'find' ? 'Find in the File' : 'Go to offset'}
 >
-    {#if mode === 'find'}
-        <SegmentedControl
-            ariaLabel="Find as"
-            options={KINDS}
-            selected={kind}
-            onSelect={(id) => {
-                kind = id as FindKind
-                input?.focus()
-            }}
-            style="flex-shrink: 0"
+    <div class="controls">
+        {#if mode === 'find'}
+            <SegmentedControl
+                ariaLabel="Find as"
+                options={KINDS}
+                selected={kind}
+                onSelect={(id) => {
+                    kind = id as FindKind
+                    input?.focus()
+                }}
+                style="flex-shrink: 0"
+            />
+        {/if}
+        <input
+            bind:this={input}
+            bind:value={query}
+            class:failed
+            aria-label={mode === 'find'
+                ? kind === 'hex'
+                    ? 'Hex bytes to find'
+                    : 'Text to find'
+                : 'Offset to go to'}
+            placeholder={mode === 'find'
+                ? kind === 'hex'
+                    ? '7f 45 ?? 46'
+                    : 'Text'
+                : 'Offset: 1f40, 0x1f40 or #8000'}
+            spellcheck="false"
+            autocomplete="off"
+            onkeydown={onKeydown}
         />
-    {/if}
-    <input
-        bind:this={input}
-        bind:value={query}
-        class:failed
-        aria-label={mode === 'find'
-            ? kind === 'hex'
-                ? 'Hex bytes to find'
-                : 'Text to find'
-            : 'Offset to go to'}
-        placeholder={mode === 'find'
-            ? kind === 'hex'
-                ? '7f 45 ?? 46'
-                : 'Text'
-            : 'Offset: 1f40, 0x1f40 or #8000'}
-        spellcheck="false"
-        autocomplete="off"
-        onkeydown={onKeydown}
-    />
-    {#if message}
-        <span class="message" class:failed role="status">{message}</span>
-    {/if}
-    {#if mode === 'find'}
+        {#if mode === 'find'}
+            <button
+                type="button"
+                class="icon"
+                title="Previous match (Shift+Enter)"
+                aria-label="Previous match"
+                onclick={() => onSubmit(true)}
+            >
+                <FaArrowUp />
+            </button>
+            <button
+                type="button"
+                class="icon"
+                title="Next match (Enter)"
+                aria-label="Next match"
+                onclick={() => onSubmit(false)}
+            >
+                <FaArrowDown />
+            </button>
+        {:else}
+            <button type="button" class="go" onclick={() => onSubmit(false)}>Go</button>
+        {/if}
         <button
             type="button"
             class="icon"
-            title="Previous match (Shift+Enter)"
-            aria-label="Previous match"
-            onclick={() => onSubmit(true)}><FaArrowUp /></button
+            title="Close (Escape)"
+            aria-label="Close"
+            onclick={onClose}><FaTimes /></button
         >
-        <button
-            type="button"
-            class="icon"
-            title="Next match (Enter)"
-            aria-label="Next match"
-            onclick={() => onSubmit(false)}><FaArrowDown /></button
-        >
-    {:else}
-        <button type="button" class="go" onclick={() => onSubmit(false)}>Go</button>
+    </div>
+    {#if message || matchCount}
+        <div class="message" class:failed role="status">
+            <span class="message-text">{message ?? ''}</span>
+            {#if matchCount}<span class="match-count">{matchCount}</span>{/if}
+        </div>
     {/if}
-    <button type="button" class="icon" title="Close (Escape)" aria-label="Close" onclick={onClose}
-        ><FaTimes /></button
-    >
 </div>
 
 <style lang="scss">
@@ -132,8 +147,9 @@
         top: 0.3rem;
         right: 1.2rem;
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 0.25rem;
+        width: 28rem;
         max-width: calc(100% - 1.6rem);
         padding: 0.3rem;
         border: 1px solid var(--wb-line, var(--tertiary));
@@ -142,6 +158,12 @@
         color: var(--secondary-text);
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.3);
         font-size: 0.8rem;
+    }
+    .controls {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        width: 100%;
     }
     input {
         flex: 1 1 10rem;
@@ -162,18 +184,27 @@
         }
     }
     .message {
-        flex: 0 1 auto;
-        min-width: min-content;
-        max-width: 12rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        display: flex;
+        gap: 0.75rem;
+        align-self: stretch;
+        padding: 0 0.2rem;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
         opacity: 0.8;
 
         &.failed {
             color: var(--red);
             opacity: 1;
         }
+    }
+    .message-text {
+        min-width: 0;
+    }
+    .match-count {
+        margin-left: auto;
+        flex-shrink: 0;
+        white-space: nowrap;
+        text-align: right;
     }
     button {
         &:focus-visible {

@@ -74,7 +74,7 @@
 </script>
 
 {#snippet hintContent()}
-    {#each (hint ?? '').split('**') as part, index}
+    {#each (hint ?? '').split('**') as part, index (index)}
         {#if index % 2 === 1}<strong>{part}</strong>{:else}{part}{/if}
     {/each}
 {/snippet}

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { findNext, findPrevious, parseHexPattern, parseOffset, textPattern } from './hexSearch'
+import {
+    countMatches,
+    countMatchesAsync,
+    findNext,
+    findPrevious,
+    parseHexPattern,
+    parseOffset,
+    textPattern
+} from './hexSearch'
 
 const pattern = (text: string) => {
     const parsed = parseHexPattern(text)
@@ -39,6 +47,45 @@ describe('find', () => {
 
     //   0  1  2  3  4  5  6  7  8  9
     const bytes = Uint8Array.from([1, 2, 3, 9, 1, 2, 4, 9, 1, 2])
+
+    it('counts matches in file order, including overlapping patterns and wildcards', () => {
+        expect(countMatches(bytes, pattern('01 02'), 4)).toEqual({ index: 2, total: 3 })
+        expect(countMatches(bytes, pattern('?? 09'), 6)).toEqual({ index: 2, total: 2 })
+        expect(countMatches(bytes, pattern('?? ??'), 8)).toEqual({ index: 9, total: 9 })
+        expect(countMatches(Uint8Array.of(1, 1, 1), pattern('01 01'), 1)).toEqual({
+            index: 2,
+            total: 2
+        })
+        expect(countMatches(bytes, pattern('ff'), 0)).toEqual({ index: 0, total: 0 })
+        expect(countMatches(bytes, new Int16Array(), 0)).toEqual({ index: 0, total: 0 })
+        expect(countMatches(Uint8Array.of(1), pattern('01 02'), 0)).toEqual({ index: 0, total: 0 })
+    })
+
+    it('counts across chunk boundaries without missing or duplicating overlapping matches', async () => {
+        const bytes = new Uint8Array(256 * 1024 + 4).fill(1)
+        const offset = 256 * 1024
+        expect(
+            await countMatchesAsync(
+                bytes,
+                pattern('?? 01 01'),
+                offset,
+                new AbortController().signal
+            )
+        ).toEqual({ index: offset + 1, total: bytes.length - 2 })
+    })
+
+    it('cancels a count between chunks', async () => {
+        const controller = new AbortController()
+        const count = countMatchesAsync(
+            new Uint8Array(512 * 1024),
+            pattern('00'),
+            0,
+            controller.signal
+        )
+        setTimeout(() => controller.abort(), 0)
+        expect(await count).toBeUndefined()
+        expect(await countMatchesAsync(bytes, pattern('??'), 0, controller.signal)).toBeUndefined()
+    })
 
     it('finds the next match at or after an offset, wrapping round', () => {
         expect(findNext(bytes, pattern('01 02'), 0)).toEqual({ offset: 0, wrapped: false })

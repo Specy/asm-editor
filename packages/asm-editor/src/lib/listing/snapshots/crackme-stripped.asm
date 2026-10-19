@@ -1,10 +1,9 @@
 ; crackme-stripped
 ; ELF64 x86-64 position-independent executable (PIE), loaded at 0x555555554000
 ; Dynamically linked: interpreter /lib64/ld-linux-x86-64.so.2; needs libc.so.6
-; Stripped: no symbol table; other names come from dynamic symbols, relocations and invented words (v1)
+; Stripped: no symbol table; other names come from dynamic symbols and relocations
 ; Entry point: 0x555555555100 (_start)
 ; main: 0x5555555551e9, the address _start passes to __libc_start_main
-; Generated from the file, read-only and never saved: nothing builds from this Listing.
 
 section .init
 

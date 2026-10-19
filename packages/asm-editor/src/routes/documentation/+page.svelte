@@ -16,7 +16,7 @@
 />
 
 <Page cropped hasNavbar contentStyle="padding: 1rem">
-    <Header>Languages</Header>
+    <Header>Instruction Sets</Header>
     <div class="langs">
         {#each langs as lang (lang)}
             <NavigationLinkButton

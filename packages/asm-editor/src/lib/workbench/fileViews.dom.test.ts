@@ -312,7 +312,7 @@ describe('the Hex editor in a session', () => {
         run.stop()
     })
 
-    it('says why the bytes are read-only, and over an Executable in a Debug session why', () => {
+    it('says why the bytes are read-only without a persistent executable notice', () => {
         const { session, emulator, project } = setup()
         const group = session.groups[0]
         session.selectFile('blob.bin')
@@ -327,9 +327,7 @@ describe('the Hex editor in a session', () => {
         emulator.canExecute = true
         flushSync()
         expect(group.bytesReadOnly).toMatch(/Debug session/)
-        expect(group.bytesNotice).toBe(
-            "The File's bytes. Patches and the program's writes are in memory: see the memory view."
-        )
+        expect(group.bytesNotice).toBeUndefined()
         session.selectFile('blob.bin')
         flushSync()
         expect(group.bytesNotice).toBeUndefined()

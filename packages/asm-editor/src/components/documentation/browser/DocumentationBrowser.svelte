@@ -102,8 +102,17 @@
         return groupByCategory(chapter.entries, (entry) => entry.category)
     }
 
-    /** How tall each Chapter's pinned heading is, so its category headings pin just under it. */
-    const titleHeights = $state<Record<string, number>>({})
+    /** Clip the slide without creating a new scroll container for sticky category headings. */
+    function slideChapter(node: HTMLElement, options: { duration: number }) {
+        const transition = slide(node, options)
+        return {
+            ...transition,
+            css: (t: number, u: number) => `${transition.css?.(t, u) ?? ''}; overflow: clip;`
+        }
+    }
+
+    /** Exact border-box sizes, including fractional pixels, so pinned headings meet without a gap. */
+    const titleSizes = $state<Record<string, ResizeObserverSize[]>>({})
 
     const byId = $derived(
         new Map(
@@ -378,12 +387,13 @@
                 <section
                     class="chapter"
                     class:folded={isFolded}
+                    class:categorized={!!groups}
                     data-chapter={chapter.id}
-                    style:--chapter-title-height={titleHeights[chapter.id]
-                        ? `${titleHeights[chapter.id]}px`
+                    style:--chapter-title-height={titleSizes[chapter.id]?.[0]
+                        ? `${titleSizes[chapter.id][0].blockSize}px`
                         : undefined}
                 >
-                    <h3 class="chapter-title" bind:offsetHeight={titleHeights[chapter.id]}>
+                    <h3 class="chapter-title" bind:borderBoxSize={titleSizes[chapter.id]}>
                         <button
                             type="button"
                             class="chapter-toggle"
@@ -399,7 +409,10 @@
                     {#if !isFolded}
                         <div
                             class="chapter-entries"
-                            transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+                            class:categorized={!!groups}
+                            transition:slideChapter={{
+                                duration: prefersReducedMotion.current ? 0 : 200
+                            }}
                             onintroend={() => finishChapterScroll(chapter.id)}
                         >
                             {#if groups}
@@ -505,6 +518,7 @@
         flex: 1;
         min-height: 0;
         overflow-y: auto;
+        scrollbar-gutter: stable;
         padding: 0 var(--documentation-spacing) 0.8rem;
     }
     .page .scroll {
@@ -517,27 +531,38 @@
         gap: 0.3rem;
     }
     .chapter {
+        --chapter-border-width: 0.1rem;
         display: flex;
         flex-direction: column;
         margin-bottom: var(--documentation-spacing);
-        border: 0.1rem solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        border: var(--chapter-border-width) solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        /* The sticky heading carries the top border so it stays visible while scrolling. */
+        border-top: none;
         border-radius: 0.5rem;
     }
     .chapter-title {
         position: sticky;
         top: 0;
         z-index: 2;
-        margin: 0;
+        margin: 0 calc(-1 * var(--chapter-border-width));
         font-size: 0.95rem;
         background-color: var(--wb-section-header, var(--tertiary));
         color: var(--secondary-text);
-        border-radius: 0.4rem 0.4rem 0 0;
+        border: var(--chapter-border-width) solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        border-radius: 0.5rem 0.5rem 0 0;
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
     }
     .chapter.folded .chapter-title {
-        border-radius: 0.4rem;
+        border-radius: 0.5rem;
         border-bottom: none;
+        box-shadow: none;
+    }
+    .chapter.categorized .chapter-title {
+        box-shadow: none;
     }
     .chapter-entries {
         display: flex;
@@ -545,6 +570,9 @@
         gap: 0.05rem;
         padding: 0.5rem;
         min-width: 0;
+    }
+    .chapter-entries.categorized {
+        padding-top: 0;
     }
     .category-group {
         display: flex;
@@ -568,7 +596,7 @@
         letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--secondary-text);
-        background-color: var(--wb-surface, var(--background));
+        background-color: var(--wb-section-header, var(--tertiary));
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));

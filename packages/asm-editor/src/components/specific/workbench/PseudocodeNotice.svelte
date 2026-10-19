@@ -5,6 +5,7 @@
      * without being meant to compile ([ADR 0048](../../../../../docs/adr/0048-decompiled-code-is-a-view-not-a-file.md)).
      */
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
+    import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
     let { group }: { group: EditorGroup } = $props()
     /** The Executable's File name. */
@@ -19,19 +20,4 @@
     const fn = $derived(group.pseudocodeFunction?.name)
 </script>
 
-<div class="pseudocode-notice" role="status">
-    Pseudocode of {fn ?? 'a function'}, decompiled from {name}{group.displayedBuildOutput
-        ? ', the program the Build linked,'
-        : ''} by Ghidra: read-only, and not meant to compile.
-</div>
-
-<style lang="scss">
-    .pseudocode-notice {
-        padding: 0.45rem 0.75rem;
-        color: var(--secondary-text);
-        border-bottom: 1px solid var(--wb-line);
-        background: color-mix(in srgb, var(--accent2, var(--accent)) 10%, var(--secondary));
-        font-size: 0.8rem;
-        overflow-wrap: anywhere;
-    }
-</style>
+<ReadOnlyNotice label={`Pseudocode of ${fn ?? 'a function'} in ${name}, read-only`} />

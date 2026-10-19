@@ -405,7 +405,7 @@
                                     />
                                 </div>
                                 <div class="share-settings">
-                                    <span>Language</span>
+                                    <span>Instruction Set</span>
                                     <Select
                                         onChange={changeLanguage}
                                         style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"

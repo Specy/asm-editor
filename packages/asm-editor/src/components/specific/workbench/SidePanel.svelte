@@ -122,7 +122,9 @@
         <div
             class="panel-body"
             class:shown
-            class:gutterless={entry.id === 'explorer' || entry.id === 'testcases'}
+            class:gutterless={entry.id === 'explorer' ||
+                entry.id === 'testcases' ||
+                entry.id === 'documentation'}
         >
             <div
                 class="panel-content"
@@ -264,7 +266,7 @@
             display: flex;
         }
 
-        /* the Explorer seldom scrolls; Testcases reserves room on its own scrolling list */
+        /* The Explorer seldom scrolls; Testcases and Documentation reserve their own gutter. */
         &.gutterless {
             scrollbar-gutter: auto;
         }

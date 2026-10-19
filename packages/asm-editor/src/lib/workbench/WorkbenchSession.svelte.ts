@@ -25,7 +25,7 @@ import {
     type BuildOutput
 } from '#lib/buildOutput.ts'
 import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
-import type { Project, TestcaseResult } from '#lib/Project.svelte.ts'
+import type { AvailableLanguages, Project, TestcaseResult } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
@@ -1115,6 +1115,26 @@ export class WorkbenchSession {
     }
 
     // ---- Settings, Display configuration -------------------------------------------------------
+
+    get languageEditable() {
+        return (
+            !this.host.readonly &&
+            !this.fileSystemLocked &&
+            !this.debugSession &&
+            !this.building &&
+            !this.running &&
+            !this.compiling &&
+            !this.testing
+        )
+    }
+
+    /** The Workbench recreates its Emulator and session for the new ISA. Files keep their paths. */
+    setLanguage(language: AvailableLanguages) {
+        if (!this.languageEditable || language === this.project.language) return
+        this.flushTyping()
+        this.project.language = language
+        this.changed()
+    }
 
     /** A decision or a reset from the panel; it takes effect at the next Build. */
     applySettings(next: ProjectSettingsDecisions) {

@@ -104,6 +104,73 @@ function scanBackward(bytes: Uint8Array, pattern: BytePattern, start: number, st
 
 export type Match = { offset: number; wrapped: boolean }
 
+/** Count a range of match starts; a matching pattern may extend beyond that range. */
+function countRange(
+    bytes: Uint8Array,
+    pattern: BytePattern,
+    offset: number,
+    start: number,
+    stop: number,
+    anchor: number
+) {
+    let index = 0
+    let total = 0
+    const value = pattern[anchor]
+    const candidates = bytes.subarray(start + anchor, stop + anchor)
+    for (let found = candidates.indexOf(value); found !== -1;) {
+        const at = start + found
+        if (matchesAt(bytes, pattern, at)) {
+            total++
+            if (at === offset) index = total
+        }
+        found = candidates.indexOf(value, found + 1)
+    }
+    return { index, total }
+}
+
+/** Count overlapping matches and the 1-based position of a known match, without keeping offsets. */
+export function countMatches(bytes: Uint8Array, pattern: BytePattern, offset: number) {
+    if (!pattern.length || pattern.length > bytes.length) return { index: 0, total: 0 }
+    const limit = bytes.length - pattern.length + 1
+    const anchor = anchorOf(pattern)
+    // Every start fits an all-wildcard pattern; even a huge File needs no scan in this case.
+    if (anchor < 0) return { index: offset >= 0 && offset < limit ? offset + 1 : 0, total: limit }
+    return countRange(bytes, pattern, offset, 0, limit, anchor)
+}
+
+/** Large Files yield between chunks so typing, navigation and cancellation can still run. */
+export async function countMatchesAsync(
+    bytes: Uint8Array,
+    pattern: BytePattern,
+    offset: number,
+    signal: AbortSignal
+) {
+    if (signal.aborted) return undefined
+    const anchor = anchorOf(pattern)
+    if (!pattern.length || pattern.length > bytes.length || anchor < 0)
+        return countMatches(bytes, pattern, offset)
+    const chunk = 256 * 1024
+    const limit = bytes.length - pattern.length + 1
+    let index = 0
+    let total = 0
+    for (let start = 0; start < limit; start += chunk) {
+        // Yield before the first chunk too, so the found offset can paint immediately.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+        if (signal.aborted) return undefined
+        const counts = countRange(
+            bytes,
+            pattern,
+            offset,
+            start,
+            Math.min(start + chunk, limit),
+            anchor
+        )
+        if (counts.index) index = total + counts.index
+        total += counts.total
+    }
+    return { index, total }
+}
+
 /** The first match at or after `from`, wrapping round to the start; undefined when there is none. */
 export function findNext(bytes: Uint8Array, pattern: BytePattern, from: number): Match | undefined {
     if (!pattern.length || pattern.length > bytes.length) return undefined

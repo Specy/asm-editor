@@ -182,32 +182,31 @@
     onfocusin={() => session.focusEditorGroup(group)}
 >
     <FileTabs {group} />
-    {#if group.displayedListing}
-        <ListingNotice
-            document={group.displayedListing}
-            library={group.displayedLibraryListing}
-            built={group.displayedBuildOutput}
-            patchable={!group.displayedLibraryListing &&
-                !group.displayedBuildOutput &&
-                session.emulator.patcher !== undefined &&
-                group.sourceView === 'snapshot' &&
-                session.debugSession}
-            touch={!ui.viewport.canHover}
-        />
-    {:else if group.displayedView === 'pseudocode' && group.displayedFile}
-        <PseudocodeNotice {group} />
-    {:else if group.displayedLibraryMember && group.displayedFile}
-        <LibraryMemberNotice
-            path={group.displayedPath}
-            onShowSource={group.libraryMemberSourceAvailable
-                ? () => session.showRuntimeSource(group)
-                : undefined}
-        />
-    {/if}
     <div class="code-area">
+        {#if group.displayedListing}
+            <ListingNotice
+                document={group.displayedListing}
+                library={group.displayedLibraryListing}
+                built={group.displayedBuildOutput}
+                patchable={!group.displayedLibraryListing &&
+                    !group.displayedBuildOutput &&
+                    session.emulator.patcher !== undefined &&
+                    group.sourceView === 'snapshot' &&
+                    session.debugSession}
+                touch={!ui.viewport.canHover}
+            />
+        {:else if group.displayedView === 'pseudocode' && group.displayedFile}
+            <PseudocodeNotice {group} />
+        {:else if group.displayedLibraryMember && group.displayedFile}
+            <LibraryMemberNotice
+                path={group.displayedPath}
+                onShowSource={group.libraryMemberSourceAvailable
+                    ? () => session.showRuntimeSource(group)
+                    : undefined}
+            />
+        {/if}
         <CompilationNotice
             notice={group.compilationNotice}
-            rightAligned={group.sourceMappingLost}
             recompile={group.sourceMappingLost
                 ? {
                       busy: session.compiling && session.compilingGroupId === group.id,

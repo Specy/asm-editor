@@ -209,8 +209,7 @@ function extensions(): Chapter {
         language: 'x86',
         title: 'Extensions',
         href,
-        description:
-            'Extension mnemonics grouped under NASM’s headings, with a short summary. NASM accepting an instruction does not guarantee emulator execution.',
+        description: 'Extension mnemonics grouped under NASM’s headings, with a short summary.',
         entries: [
             ...proseEntries({
                 language: 'x86',

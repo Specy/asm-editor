@@ -13,6 +13,8 @@
     import ShortcutsSection from '#cmp/specific/project/settings/ShortcutsSection.svelte'
     import ThemeEditor from '#cmp/specific/project/settings/ThemeEditor.svelte'
     import DisplayConfigurationForm from '#cmp/specific/project/screen/DisplayConfigurationForm.svelte'
+    import Select from '#cmp/shared/input/Select.svelte'
+    import { AVAILABLE_LANGUAGES } from '#lib/Project.svelte.ts'
     import {
         isProjectSettingDecided,
         type ProjectSettingId,
@@ -40,6 +42,7 @@
     const { session, ui } = useWorkbench()
     const project = session.project
     const language = $derived(project.language)
+    const languageOptions = AVAILABLE_LANGUAGES.map((value) => ({ key: value, value }))
     const declarations = $derived(projectSettingsFor(language))
     const effective = $derived(resolveProjectSettings(language, project.settings))
     const sections: Partial<Record<SettingsSectionId, HTMLElement>> = $state({})
@@ -88,6 +91,24 @@
         bind:element={sections.project}
     >
         <div class="rows">
+            <div class="instruction-set">
+                <span>Instruction set</span>
+                <Select
+                    options={languageOptions}
+                    value={language}
+                    ariaLabel="Instruction set"
+                    disabled={readonly || !session.languageEditable}
+                    style="padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)"
+                    wrapperStyle="min-width: 9rem; max-width: 12rem"
+                    onChange={(next) => {
+                        if (!readonly) session.setLanguage(next)
+                    }}
+                />
+            </div>
+
+            {#if session.debugSession || session.fileSystemLocked}
+                <p class="hint">Stop the Debug session to change the instruction set.</p>
+            {/if}
             {#each declarations as declaration (declaration.id)}
                 <ProjectSetting
                     {declaration}
@@ -205,6 +226,16 @@
         font-size: 0.75rem;
         color: var(--hint);
         line-height: 1.4;
+    }
+
+    .instruction-set {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.4rem;
+        min-height: calc(2rem + 0.4rem);
+        padding: 0.2rem 0.4rem;
+        font-size: 0.9rem;
     }
 
     .theme {

@@ -14,7 +14,7 @@
 </script>
 
 <script lang="ts">
-    import { onMount, tick, untrack } from 'svelte'
+    import { onDestroy, onMount, tick, untrack } from 'svelte'
     import type { ProjectFileKind } from '#lib/fileKinds.ts'
     import { executableAnalysis } from '#lib/executables.ts'
     import { plannedLoadBase } from '#lib/listing/listingPaths.ts'
@@ -61,7 +61,16 @@
         type HexColumn,
         type HexViewState
     } from './hexGrid'
-    import { findNext, findPrevious, parseHexPattern, parseOffset, textPattern } from './hexSearch'
+    import {
+        countMatches,
+        countMatchesAsync,
+        findNext,
+        findPrevious,
+        parseHexPattern,
+        parseOffset,
+        textPattern,
+        type BytePattern
+    } from './hexSearch'
 
     /**
      * The **Hex editor** ([file-views.md](../../../../../../../docs/design/file-views.md), decisions
@@ -79,7 +88,7 @@
         kind: ProjectFileKind
         /** Why the bytes take no Byte edits now, or undefined when they do. */
         readOnly?: string
-        /** A notice above the bytes: an Executable's during a Debug session (decision 8). */
+        /** A notice above the bytes when the browser could not preview the File. */
         notice?: string
         /** Shared by every pane, so that a File's Undo is the same whichever pane typed. */
         history?: ByteEditHistory
@@ -562,17 +571,21 @@
     //the byte under the pointer, for its hover card
     let hovered = $state<{ offset: number; left: number; top: number } | undefined>()
     let root = $state<HTMLDivElement>()
+    let area = $state<HTMLDivElement>()
     function hover(event: PointerEvent) {
         const cell = (event.target as HTMLElement | null)?.closest?.<HTMLElement>('[data-offset]')
-        if (!cell || !root) {
+        if (!cell || !area) {
             hovered = undefined
             return
         }
         const offset = Number(cell.dataset.offset)
-        if (hovered?.offset === offset) return
         const box = cell.getBoundingClientRect()
-        const frame = root.getBoundingClientRect()
-        hovered = { offset, left: box.left - frame.left, top: box.bottom - frame.top + 2 }
+        // The card is positioned inside the byte panel, below the status and any notice.
+        const frame = area.getBoundingClientRect()
+        const left = box.left - frame.left
+        const top = box.bottom - frame.top + 2
+        if (hovered?.offset === offset && hovered.left === left && hovered.top === top) return
+        hovered = { offset, left, top }
     }
     /** What a byte's hover card says: the region it is in, or nothing outside every region. */
     function hoverText(offset: number): string | undefined {
@@ -650,6 +663,47 @@
     let findKind = $state<FindKind>('hex')
     let gotoQuery = $state('')
     let barMessage = $state<{ text: string; failed: boolean } | undefined>()
+    let findResult = $state.raw<{
+        bytes: Uint8Array
+        query: string
+        kind: FindKind
+        offset: number
+        length: number
+        index: number
+        total?: number
+        /** Navigation since counting began, folded into its starting rank once ready. */
+        delta: number
+    }>()
+    let countController: AbortController | undefined
+    onDestroy(() => countController?.abort())
+    // A query, byte edit, or manually moved selection invalidates the displayed result. Counting
+    // happens on submission only; navigation through the same results reuses the count and rank.
+    const currentFindResult = $derived(
+        findResult &&
+            findResult.bytes === bytes &&
+            findResult.query === findQuery &&
+            findResult.kind === findKind &&
+            !pending.size &&
+            selection?.start === findResult.offset &&
+            selection.end === findResult.offset + findResult.length
+            ? findResult
+            : undefined
+    )
+    const findMessage = $derived(
+        currentFindResult ? `Offset 0x${offsetHex(currentFindResult.offset, digits)}` : undefined
+    )
+    const findCount = $derived(
+        currentFindResult?.total === undefined
+            ? undefined
+            : `${currentFindResult.index} of ${currentFindResult.total}`
+    )
+    function clearFindResult() {
+        countController?.abort()
+        findResult = undefined
+    }
+    $effect(() => {
+        if (findResult && !currentFindResult) clearFindResult()
+    })
     function openBar(mode: 'find' | 'goto') {
         flush()
         //a short selection is what to look for, as Monaco's Find starts from the selected text
@@ -663,12 +717,14 @@
             }
         }
         barMessage = undefined
+        clearFindResult()
         if (bar === mode) findBar?.focus()
         bar = mode
     }
     function closeBar() {
         bar = undefined
         barMessage = undefined
+        clearFindResult()
         focusBytes()
     }
     function submitBar(backwards: boolean) {
@@ -689,6 +745,7 @@
             barMessage = { text: parsed.reason, failed: true }
             return
         }
+        const previous = currentFindResult
         const from = selection ? selection.start : caret.offset
         const match = backwards
             ? findPrevious(bytes, parsed.pattern, from - 1)
@@ -697,14 +754,51 @@
             barMessage = { text: 'No results', failed: true }
             return
         }
+        const counts =
+            previous?.total !== undefined
+                ? {
+                      total: previous.total,
+                      index: backwards
+                          ? previous.index === 1
+                              ? previous.total
+                              : previous.index - 1
+                          : previous.index === previous.total
+                            ? 1
+                            : previous.index + 1
+                  }
+                : { index: 0 }
         const end = match.offset + parsed.pattern.length - 1
         anchor = end
         caret = { offset: match.offset, nibble: 0, column: findKind }
         revealCaret(true)
-        barMessage = {
-            text: `0x${offsetHex(match.offset, digits)}${match.wrapped ? ', wrapped' : ''}`,
-            failed: false
+        barMessage = undefined
+        findResult = {
+            bytes,
+            query: findQuery,
+            kind: findKind,
+            offset: match.offset,
+            length: parsed.pattern.length,
+            delta:
+                previous && previous.total === undefined
+                    ? previous.delta + (backwards ? -1 : 1)
+                    : 0,
+            ...counts
         }
+        if (!previous) countFindMatches(parsed.pattern, match.offset)
+    }
+    function countFindMatches(pattern: BytePattern, offset: number) {
+        countController?.abort()
+        const controller = new AbortController()
+        countController = controller
+        const finishCount = (counts: { index: number; total: number } | undefined) => {
+            const current = currentFindResult
+            if (!counts || !current || controller.signal.aborted) return
+            const position = counts.index - 1 + current.delta
+            const index = (((position % counts.total) + counts.total) % counts.total) + 1
+            findResult = { ...current, ...counts, index, delta: 0 }
+        }
+        if (bytes.length <= 256 * 1024) finishCount(countMatches(bytes, pattern, offset))
+        else void countMatchesAsync(bytes, pattern, offset, controller.signal).then(finishCount)
     }
 
     //Show in Hex: the bytes asked for, selected and in sight, with the keyboard on them
@@ -816,7 +910,7 @@
         onToggleInspector={() => workbenchLayout.setCollapsed('hex:inspector', inspectorOpen)}
     />
     <div class="hex-body" class:side={inspectorSide}>
-        <div class="hex-area">
+        <div class="hex-area" bind:this={area}>
             {#if bar}
                 <HexFindBar
                     bind:this={findBar}
@@ -827,10 +921,19 @@
                             if (bar === 'find') findQuery = value
                             else gotoQuery = value
                             barMessage = undefined
+                            clearFindResult()
                         }
                     }
-                    bind:kind={findKind}
-                    message={barMessage?.text}
+                    bind:kind={
+                        () => findKind,
+                        (value) => {
+                            findKind = value
+                            barMessage = undefined
+                            clearFindResult()
+                        }
+                    }
+                    message={barMessage?.text ?? (bar === 'find' ? findMessage : undefined)}
+                    matchCount={bar === 'find' && !barMessage ? findCount : undefined}
                     failed={barMessage?.failed}
                     onSubmit={submitBar}
                     onClose={closeBar}

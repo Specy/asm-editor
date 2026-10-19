@@ -1,9 +1,10 @@
 <script lang="ts">
     import { X86_START_UNIT_PATH, X86_SUPPORT_UNIT_PATH } from '#lib/languages/X86/x86StartUnit.ts'
     import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
+    import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
     /**
-     * Above a Runtime library member: what it is, and its C source beside it. The library is not
+     * Over a Runtime library member: what it is, and its C source beside it. The library is not
      * the Project's, so nothing here can be edited.
      */
     let {
@@ -14,42 +15,22 @@
         /** Opens the C source in the other pane; absent when the member has none or it is open. */
         onShowSource?: () => void
     } = $props()
+    const label = $derived(
+        path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH
+            ? 'Start code of compiled programs, read-only.'
+            : isEnvironmentHeaderPath(path)
+              ? 'Environment library, <sim.h>, read-only.'
+              : `${path.endsWith('.s') ? 'Runtime library code' : 'Runtime library source'}, read-only.`
+    )
 </script>
 
-<div class="library-notice" class:with-action={onShowSource} role="status">
-    <span>
-        {#if path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH}
-            <!-- the start code x86 programs compiled before x86 had a Runtime library link -->
-            Start code of compiled programs, read-only.
-        {:else if isEnvironmentHeaderPath(path)}
-            <!-- compiled into the program's own Generated assembly, so it is no library code -->
-            Environment library, &lt;sim.h&gt;, read-only.
-        {:else}
-            {path.endsWith('.s') ? 'Runtime library code' : 'Runtime library source'}, read-only.
-        {/if}
-    </span>
-    {#if onShowSource}
-        <button onclick={onShowSource}>Show C source</button>
-    {/if}
-</div>
+{#snippet showSource()}
+    <button onclick={onShowSource}>Show C source</button>
+{/snippet}
+
+<ReadOnlyNotice {label} action={onShowSource ? showSource : undefined} />
 
 <style lang="scss">
-    .library-notice {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        padding: 0.45rem 0.75rem;
-        color: var(--secondary-text);
-        border-bottom: 1px solid var(--wb-line);
-        background: color-mix(in srgb, var(--accent2, var(--accent)) 10%, var(--secondary));
-        font-size: 0.8rem;
-    }
-
-    .library-notice.with-action {
-        padding-block: 0.25rem;
-    }
-
     button {
         padding: 0.2rem 0.6rem;
         border: 0;

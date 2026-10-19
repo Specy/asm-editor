@@ -391,8 +391,6 @@ export class EditorGroup {
     get compilationNotice() {
         const record = this.displayedCompilation
         if (!record) return ''
-        if (this.unsupportedRuntimeAbi)
-            return `Compiled against Runtime ABI ${record.runtimeAbi}, which this editor does not provide. Recompile to build it.`
         const status = compilationStatus(
             record,
             this.session.project.files,
@@ -710,20 +708,11 @@ export class EditorGroup {
             return 'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
         return undefined
     }
-    /**
-     * The Hex editor's notice: why a File the browser could not preview is shown as bytes, and
-     * over an Executable during a Debug session (decision 8) that its bytes are the File's, not
-     * memory's, so a Patch missing from them does not read as a failed one.
-     */
+    /** Why a File the browser could not preview is shown in the Hex editor instead. */
     get bytesNotice(): string | undefined {
         if (this.displayedView === 'hex' && Object.hasOwn(this.previewNotes, this.displayedPath))
             return this.previewNotes[this.displayedPath]
-        //the Build output is the program as linked, which no Patch was ever made to
-        return this.displayedKind === 'executable' &&
-            this.session.debugSession &&
-            !this.displayedBuildOutput
-            ? "The File's bytes. Patches and the program's writes are in memory: see the memory view."
-            : undefined
+        return undefined
     }
     get editorDisabled() {
         const s = this.session

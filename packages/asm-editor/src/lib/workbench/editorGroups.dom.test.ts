@@ -546,7 +546,7 @@ describe('independent editor groups', () => {
         flushSync()
         expect(second.unsupportedRuntimeAbi).toBe(true)
         expect(second.recompilationNeeded).toBe(true)
-        expect(second.compilationNotice).toContain('Runtime ABI v9')
+        expect(second.compilationNotice).toBe('')
     })
     it('links x86 assembly compiled against Runtime ABI v1, and offers Recompile for one it lacks', () => {
         const fixture = setup('X86'),
@@ -569,7 +569,7 @@ describe('independent editor groups', () => {
         flushSync()
         expect(second.unsupportedRuntimeAbi).toBe(true)
         expect(second.recompilationNeeded).toBe(true)
-        expect(second.compilationNotice).toContain('which this editor does not provide')
+        expect(second.compilationNotice).toBe('')
         //and the Build is refused for the same reason
         expect(session.sourceInput.entrySymbol).toBeUndefined()
         expect(session.sourceInput.assemblyError).toContain('Recompile its source')

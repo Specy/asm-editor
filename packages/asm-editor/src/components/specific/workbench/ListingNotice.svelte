@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+    import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
     /**
      * Above a Listing: what it is. It is generated from the Executable, or from a library the
@@ -29,34 +30,19 @@
         /** A screen without a pointer that hovers, where a long press opens the context menu. */
         touch?: boolean
     } = $props()
+    const description = $derived.by(() => {
+        if (document.status === 'failed')
+            return `The Listing of ${document.name} could not be generated.`
+        if (library)
+            return `Generated Listing of ${document.name}, a library the program loaded: read-only.`
+        if (built)
+            return `Generated Listing of ${document.name}, the program the Build linked: read-only. The debugger follows it in its source.`
+        if (patchable && touch)
+            return `Generated Listing of ${document.name}: read-only. While the program is paused, a long press on a line offers to patch its instruction, in memory only.`
+        if (patchable)
+            return `Generated Listing of ${document.name}: read-only. While the program is paused, Space or the context menu patches the instruction on a line, in memory only.`
+        return `Generated Listing of ${document.name}: read-only.`
+    })
 </script>
 
-<div class="listing-notice" role="status">
-    {#if document.status === 'failed'}
-        The Listing of {document.name} could not be generated.
-    {:else if library}
-        Generated Listing of {document.name}, a library the program loaded: read-only.
-    {:else if built}
-        Generated Listing of {document.name}, the program the Build linked: read-only. The debugger
-        follows it in its source.
-    {:else if patchable && touch}
-        Generated Listing of {document.name}: read-only. While the program is paused, a long press
-        on a line offers to patch its instruction, in memory only.
-    {:else if patchable}
-        Generated Listing of {document.name}: read-only. While the program is paused, Space or the
-        context menu patches the instruction on a line, in memory only.
-    {:else}
-        Generated Listing of {document.name}: read-only.
-    {/if}
-</div>
-
-<style lang="scss">
-    .listing-notice {
-        padding: 0.45rem 0.75rem;
-        color: var(--secondary-text);
-        border-bottom: 1px solid var(--wb-line);
-        background: color-mix(in srgb, var(--accent2, var(--accent)) 10%, var(--secondary));
-        font-size: 0.8rem;
-        overflow-wrap: anywhere;
-    }
-</style>
+<ReadOnlyNotice label={document.status === 'failed' ? description : 'read-only'} {description} />

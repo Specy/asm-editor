@@ -118,7 +118,7 @@
         >
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
-            <Select title="Language" options={languageOptions} bind:value={language}>
+            <Select title="Instruction Set" options={languageOptions} bind:value={language}>
                 {#snippet item(option)}
                     <span class="language-option">
                         <span>{option.key}</span>

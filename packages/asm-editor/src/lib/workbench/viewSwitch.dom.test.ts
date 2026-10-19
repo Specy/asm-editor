@@ -162,11 +162,14 @@ describe('the view switch', () => {
             'Decompile'
         ])
         expect(read().pressed).toEqual(['Disassemble'])
-        //the bytes, read-only, under the notice that they are the File's and not memory's
+        //The file/memory distinction lives in Hex's tooltip rather than a persistent notice.
         press('Hex')
         expect(group.displayedView).toBe('hex')
         expect(group.bytesReadOnly).toMatch(/Debug session/)
-        expect(group.bytesNotice).toMatch(/^The File's bytes/)
+        expect(group.bytesNotice).toBeUndefined()
+        expect(
+            read().views?.querySelector('button[aria-label="Hex"]')?.getAttribute('title')
+        ).toContain('Changes made while debugging appear in the Memory view.')
     })
 
     it("gives a pane showing such a File a dock with the switch on every device's layout", () => {

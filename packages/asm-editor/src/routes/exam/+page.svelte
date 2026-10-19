@@ -390,7 +390,7 @@
                             {#if section.type === ExamSectionType.AssemblyCoding}
                                 {@const assemblySection = section as AssemblyCodingSection}
                                 <Select
-                                    title="Assembly language"
+                                    title="Instruction Set"
                                     wrapperStyle="max-width: 14rem; gap: 0.3rem;"
                                     style="padding: 0.8rem"
                                     value={assemblySection.language}

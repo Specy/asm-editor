@@ -364,18 +364,16 @@ describe('the Pseudocode beside its Listing', () => {
         const notice = mount(PseudocodeNotice, { target: host, props: { group: pane } })
         disposers.push(() => unmount(notice))
         flushSync()
-        expect(host.textContent?.trim()).toBe(
-            'Pseudocode of main, decompiled from crackme by Ghidra: read-only, and not meant to compile.'
-        )
+        expect(host.textContent?.trim()).toBe('Pseudocode of main in crackme, read-only')
         //main's Pseudocode stays in view while _start's is decompiled, under the name of _start
         session.cursorMoved(listingPane, listingLine(listing, '_start', 'hlt'))
         flushSync()
         expect(pane.requestedPseudocode?.status).toBe('decompiling')
         expect(pane.displayedPseudocode?.fn.name).toBe('main')
-        expect(host.textContent).toContain('Pseudocode of _start,')
+        expect(host.textContent).toContain('Pseudocode of _start in crackme,')
         await decompiled(pane)
         flushSync()
-        expect(host.textContent).toContain('Pseudocode of _start,')
+        expect(host.textContent).toContain('Pseudocode of _start in crackme,')
     })
 
     it('gives each function’s Pseudocode a model of its own, which two panes never share', async () => {
