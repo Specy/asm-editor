@@ -15,6 +15,8 @@ import { x86InstructionDocument } from '../x86/instructionDocument'
 import { chapters as m68kChapters } from '../m68k/m68k'
 import { chapters as mipsChapters } from '../mips/mips'
 import { chapters as riscvChapters } from '../riscv/riscv'
+import { chapters as x86Chapters } from '../x86/x86'
+import { chapters as z80Chapters } from '../z80/z80'
 import { mipsInstructionContent } from '../mips/instructionContent'
 import { riscvInstructionContent } from '../riscv/instructionContent'
 import { load as loadM68k } from '../../../routes/documentation/m68k/instruction/[instructionName]/+page.server'
@@ -130,6 +132,24 @@ describe('instruction content integration', () => {
         if (name === 'ld' || name === 'addw') {
             expect(result.props.content?.example?.target).toBe('RISC-V-64')
         }
+    })
+
+    it.each([
+        ['M68K', 'directives', m68kChapters],
+        ['MIPS', 'runtime-library', mipsChapters],
+        ['RISC-V', 'runtime-library', riscvChapters],
+        ['x86', 'runtime-library', x86Chapters],
+        ['Z80', 'input-output', z80Chapters]
+    ])('highlights a %s %s example as the entry’s own assembly', (_language, id, chapters) => {
+        const entry = chapters()
+            .find((chapter) => chapter.id === id)!
+            .entries.find(
+                (candidate) => candidate.view.type === 'fields' && candidate.view.example
+            )!
+        if (entry.view.type !== 'fields') throw new Error(`${entry.id} has no example`)
+        const sample = renderBody(entry).querySelector('.code-sample')!
+        expect(sample.querySelector('code')?.textContent).toBe(entry.view.example)
+        expect(sample.querySelector('[class^="asm-"]')).not.toBeNull()
     })
 
     it('names an instruction’s long name in the header of its expanded body, not its category', () => {

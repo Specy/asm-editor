@@ -73,8 +73,8 @@
             </button>
         {/each}
         <Button
-            bg="var(--secondary)"
-            color="var(--secondary-text)"
+            bg="var(--tertiary)"
+            color="var(--tertiary-text)"
             onClick={async () => {
                 const name = await Prompt.askText('Write the name of the theme')
                 if (name === null) return

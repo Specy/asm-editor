@@ -94,7 +94,8 @@ describe('the generated instruction table', () => {
 
 describe('descriptions', () => {
     it('takes the condition families from the entry that documents them', () => {
-        expect(describeX86Instruction('jnz')).toContain('conditional jump')
+        expect(describeX86Instruction('jnz')).toMatch(/conditional jumps?/i)
+        expect(describeX86Instruction('jnz')).toBe(describeX86Instruction('jne'))
         expect(describeX86Instruction('setne')).toContain('condition')
     })
 
@@ -102,13 +103,16 @@ describe('descriptions', () => {
         // `Jcc` expands over the condition list, so it can reach `jz` and never `jmp` or `jecxz`,
         // both of which are their own instructions with their own entries.
         expect(describeX86Instruction('jmp')).not.toContain('conditional jump')
-        expect(describeX86Instruction('jecxz')).toContain('CX')
-        expect(describeX86Instruction('movsb')).toContain('copies the byte')
+        expect(describeX86Instruction('jecxz')).toContain('`ecx`')
+        expect(describeX86Instruction('movsb')).toMatch(/copies.*\[rsi\].*\[rdi\]/i)
     })
 
-    it('follows the size suffix aliases', () => {
+    it('shares return aliases while keeping string element widths distinct', () => {
         expect(describeX86Instruction('retq')).toBe(describeX86Instruction('ret'))
-        expect(describeX86Instruction('stosq')).toBe(describeX86Instruction('stosb'))
+        expect(describeX86Instruction('stosq')).toContain('`rax`')
+        expect(describeX86Instruction('stosq')).toContain('8 bytes')
+        expect(describeX86Instruction('stosb')).toContain('`al`')
+        expect(describeX86Instruction('stosb')).toContain('1 byte')
         expect(describeX86Instruction('pushf')).toContain('flags')
     })
 
@@ -116,7 +120,7 @@ describe('descriptions', () => {
         const syscall = describeX86Instruction('syscall')
         expect(syscall).toContain('rax')
         expect(syscall).toContain('/documentation/x86/syscall')
-        expect(describeX86Instruction('movabs')).toContain('64 bit immediate')
+        expect(describeX86Instruction('movabs')).toContain('64-bit immediate')
     })
 
     it('falls back to the summary, and says so', () => {

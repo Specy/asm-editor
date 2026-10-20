@@ -37,7 +37,7 @@ Hand-written assembly can call the library too. In the Workbench's **Settings** 
 
 The setting is off by default, so an unresolved call can still report an undefined symbol; the diagnostic identifies names supplied by the library.
 
-```asm
+```x86
 default rel
 global _start
 extern printf

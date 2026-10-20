@@ -528,17 +528,21 @@
     }
     const codeBlocksPlugin = codeBlocks()
 
+    /**
+     * Shiki's highlighting. Carta loads a grammar only for a fence whose info is the bare language
+     * name, so a C playground's `c|playground|…` or a named file's `c|file=…` stayed plain unless
+     * another fence had already loaded C: `lazy` loads the grammar each block names when Shiki
+     * reaches it. A name Shiki has no grammar for reads as plain `text` rather than failing the
+     * render.
+     */
+    const shikiCode = () => code({ theme, lazy: true, fallbackLanguage: 'text' })
+
     const cartaNormal = $derived(
         new Carta({
             sanitizer: (html) => {
                 return sanitizeMarkdownHtml(html)
             },
-            extensions: [
-                ext,
-                customPlaygroundPlugin,
-                code({ theme, langs: ['asm', 'c', 'cpp'] }),
-                codeBlocksPlugin
-            ],
+            extensions: [ext, customPlaygroundPlugin, shikiCode(), codeBlocksPlugin],
             rehypeOptions: {
                 allowDangerousHtml: true
             },
@@ -555,7 +559,7 @@
             extensions: [
                 extWithExternalLins,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                shikiCode(),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -571,12 +575,7 @@
             sanitizer: (html) => {
                 return sanitizeMarkdownHtml(html, true)
             },
-            extensions: [
-                extWithoutLinks,
-                customPlaygroundPlugin,
-                code({ theme, langs: ['asm', 'c', 'cpp'] }),
-                codeBlocksPlugin
-            ],
+            extensions: [extWithoutLinks, customPlaygroundPlugin, shikiCode(), codeBlocksPlugin],
             rehypeOptions: {
                 allowDangerousHtml: true
             },
@@ -595,7 +594,7 @@
                 ext,
                 headingIdsPlugin,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                shikiCode(),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -615,7 +614,7 @@
             extensions: [
                 extWithExternalLins,
                 plainPlaygroundsPlugin,
-                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                shikiCode(),
                 codeBlocksPlugin
             ],
             rehypeOptions: {
@@ -678,7 +677,7 @@
                 extWithExternalLins,
                 strippedStylesPlugin,
                 plainPlaygroundsPlugin,
-                code({ theme, langs: ['asm', 'c', 'cpp'] }),
+                shikiCode(),
                 codeBlocksPlugin
             ],
             rehypeOptions: {

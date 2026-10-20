@@ -347,6 +347,7 @@
                         {terms}
                         {disableLinks}
                         showCategory
+                        clampProse
                     />
                 {:else if result.kind === 'entry'}
                     {@const entry = byId.get(result.entry.id) ?? fromIndex(result.entry)}
@@ -357,6 +358,7 @@
                         {terms}
                         {disableLinks}
                         showCategory
+                        clampProse
                     />
                 {:else}
                     <LectureSectionCard
@@ -432,6 +434,7 @@
                                                 ontoggle={() => toggle(entry.id)}
                                                 {disableLinks}
                                                 pageLink={variant === 'page'}
+                                                clampProse={variant === 'panel'}
                                             />
                                         {/each}
                                     </div>
@@ -444,6 +447,7 @@
                                         ontoggle={() => toggle(entry.id)}
                                         {disableLinks}
                                         pageLink={variant === 'page'}
+                                        clampProse={variant === 'panel'}
                                     />
                                 {/each}
                             {/if}
@@ -535,10 +539,14 @@
         gap: 0.3rem;
     }
     .chapter {
-        --chapter-border-width: 0.1rem;
+        --chapter-border-width: 1px;
         display: flex;
         flex-direction: column;
         margin-bottom: var(--documentation-spacing);
+        /* an open Chapter is a well darker than the panel, like an open Settings section; its edge
+           is drawn over the panel, as a card's is, or it would sink into the well and vanish */
+        background-color: var(--background);
+        background-clip: padding-box;
         border: var(--chapter-border-width) solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         /* The sticky heading carries the top border so it stays visible while scrolling. */
@@ -607,6 +615,10 @@
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+    }
+    /* a prose entry's title, brought back into view by Show less, lands below the pinned heading */
+    .chapter :global(.prose-title) {
+        scroll-margin-top: calc(var(--chapter-title-height, 2.2rem) + 0.5rem);
     }
     /* a row brought into view lands below both pinned headings */
     .category-group :global(.entry-row) {

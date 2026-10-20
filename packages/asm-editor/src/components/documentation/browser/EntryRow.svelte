@@ -1,14 +1,16 @@
 <script lang="ts">
     /**
      * A Documentation entry as one compact row: its name, what follows the name and one line of
-     * summary. Prose entries show their full text directly; clicking any other entry expands it
-     * in place ([the design record](../../../../../../docs/design/documentation-search.md),
+     * summary. Prose entries show their text directly, in the Workbench cut with a Show all when it
+     * runs long, so the rows after it stay a glance away; clicking any other entry expands it in
+     * place ([the design record](../../../../../../docs/design/documentation-search.md),
      * The Documentation panel).
      */
     import { prefersReducedMotion } from 'svelte/motion'
     import { slide } from 'svelte/transition'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import HighlightedText from '#cmp/search/HighlightedText.svelte'
+    import ClampedContent from '#cmp/shared/layout/ClampedContent.svelte'
     import { hasCodeName, type DocumentationEntry } from '#lib/documentation/entries.ts'
     import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
     import EntryBody from '../entries/EntryBody.svelte'
@@ -27,6 +29,11 @@
          * where no category heading is left to say it.
          */
         showCategory?: boolean
+        /**
+         * Cut a long prose entry with a Show all: in the Workbench's panel, where the rows after it
+         * are what a person mostly comes for. A page shows it whole, to be read through.
+         */
+        clampProse?: boolean
     }
 
     let {
@@ -36,8 +43,11 @@
         terms = [],
         disableLinks = false,
         pageLink = false,
-        showCategory = false
+        showCategory = false,
+        clampProse = false
     }: Props = $props()
+
+    let proseTitle = $state<HTMLElement>()
 </script>
 
 <div
@@ -48,8 +58,16 @@
 >
     {#if entry.kind === 'prose'}
         <div class="prose">
-            <h4 class="prose-title"><HighlightedText text={entry.title} {terms} /></h4>
-            <EntryBody {entry} {disableLinks} />
+            <h4 class="prose-title" bind:this={proseTitle}>
+                <HighlightedText text={entry.title} {terms} />
+            </h4>
+            {#if clampProse}
+                <ClampedContent {expanded} {ontoggle} anchor={proseTitle}>
+                    <EntryBody {entry} {disableLinks} />
+                </ClampedContent>
+            {:else}
+                <EntryBody {entry} {disableLinks} />
+            {/if}
         </div>
     {:else}
         <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>

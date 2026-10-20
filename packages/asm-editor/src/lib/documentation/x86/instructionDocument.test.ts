@@ -58,6 +58,61 @@ describe('x86 instruction documents', () => {
         expect(rows('loop')[0]).toBe('loop imm8')
     })
 
+    it('keeps 32-bit stack register operands out of the 64-bit forms', () => {
+        for (const name of ['push', 'pop']) {
+            const document = x86InstructionDocument(x86InstructionMap.get(name)!)
+            const shown = documentPatterns(document).flatMap((pattern) =>
+                pattern.forms.map((form) => form.code)
+            )
+            expect(shown).toContain(`${name} reg16`)
+            expect(shown).toContain(`${name} reg64`)
+            expect(shown).not.toContain(`${name} reg32`)
+            expect(shown).not.toContain(`${name} r/m32`)
+            expect(document.omitted.flatMap((group) => group.forms)).toContain(`${name} reg32`)
+        }
+    })
+
+    it('marks dword flags and frame-stack aliases unavailable in 64-bit mode', () => {
+        for (const name of ['pushfd', 'popfd', 'enterd', 'leaved']) {
+            const document = x86InstructionDocument(x86InstructionMap.get(name)!)
+            expect(document.headerFacts, name).toContain('Not available in 64-bit mode')
+        }
+    })
+
+    it('keeps the legacy equal-dword zero-extension alias out of the 64-bit forms', () => {
+        for (const name of ['movzx', 'movzxd']) {
+            const document = x86InstructionDocument(x86InstructionMap.get(name)!)
+            const shown = documentPatterns(document).flatMap((pattern) =>
+                pattern.forms.map((form) => form.code)
+            )
+            expect(shown).not.toContain(`${name} reg32, r/m32`)
+            expect(shown).toContain(`${name} reg64, r/m32`)
+            expect(document.omitted.flatMap((group) => group.forms)).toContain(
+                `${name} reg32, r/m32`
+            )
+        }
+    })
+
+    it('distinguishes a 64-bit call target from its encoded displacement', () => {
+        const document = x86InstructionDocument(x86InstructionMap.get('call')!)
+        const target = document.operands.find((operand) => operand.symbol === 'imm64')!
+        expect(target.meaning).toContain('label or address')
+        expect(target.meaning).toContain('end of the instruction')
+        expect(target.meaning).toContain('signed 32-bit')
+    })
+
+    it('does not advertise lock for a comparison that does not write memory', () => {
+        const document = x86InstructionDocument(x86InstructionMap.get('cmp')!)
+        const facts = [
+            ...document.headerFacts,
+            ...documentPatterns(document).flatMap((pattern) => [
+                ...pattern.facts,
+                ...pattern.forms.flatMap((form) => form.facts)
+            ])
+        ]
+        expect(facts).not.toContain('takes `lock`')
+    })
+
     it('explains every symbol its rows use, on every page', () => {
         for (const instruction of x86DocumentedInstructions) {
             const document = x86InstructionDocument(instruction)

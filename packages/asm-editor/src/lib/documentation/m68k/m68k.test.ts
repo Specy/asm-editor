@@ -65,7 +65,7 @@ describe('the M68K Documentation', () => {
         )
         expect(counts).toEqual({
             instructions: 69,
-            'addressing-modes': 9,
+            'addressing-modes': 10,
             //the explanation's two sections, then the 16 codes
             'condition-codes': 18,
             'shift-directions': 1,
@@ -163,7 +163,13 @@ describe('the M68K Documentation', () => {
         }
         const increments = entry('addressing-modes', 'indirect-post-pre-increment')
         expect(increments.names).toEqual(['(an)+', '-(an)'])
-        expect(markdownOf(increments).join('\n')).toContain('`-(An)`: Pre decrement')
+        expect(markdownOf(increments).join('\n')).toContain('`-(An)`: Predecrement')
+        const overview = entry('addressing-modes', 'overview')
+        expect(overview.signature).toBe('<ea>')
+        expect(markdownOf(overview).join('\n')).toContain('supported addressing modes')
+        const absolute = entry('addressing-modes', 'effective-address')
+        expect(absolute.names).toContain('abs')
+        expect(absolute.names).not.toContain('<ea>')
     })
 
     it('fills in every list and table it generates', () => {

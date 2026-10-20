@@ -19,7 +19,10 @@
 
     const view = $derived(entry.view)
 
-    /** The language an instruction's own example program is highlighted as. */
+    /**
+     * The language an entry's example is highlighted as: an instruction's program, a directive in
+     * use, a port's program or a library function's call are all assembly of the entry's language.
+     */
     const EXAMPLE_LANGUAGES = {
         m68k: 'M68K',
         mips: 'MIPS',
@@ -27,15 +30,6 @@
         x86: 'X86',
         z80: 'Z80'
     } as const
-    const codeLanguage = $derived(
-        entry.chapter !== 'runtime-library'
-            ? undefined
-            : entry.language === 'mips'
-              ? 'MIPS'
-              : entry.language === 'risc-v'
-                ? 'RISC-V'
-                : undefined
-    )
 </script>
 
 <div class="entry-body">
@@ -94,7 +88,11 @@
             </dl>
         {/if}
         {#if view.example}
-            <CodeSample code={view.example} label="Example" language={codeLanguage} />
+            <CodeSample
+                code={view.example}
+                label="Example"
+                language={EXAMPLE_LANGUAGES[entry.language]}
+            />
         {/if}
         {#if view.after && view.after.length > 0}
             <dl class="fields">

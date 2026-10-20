@@ -359,9 +359,7 @@ describe('the x86 Documentation', () => {
         }
         // a summary the whole row can show, not the appendix's long first sentence
         expect(find('instructions', 'loop').summary.length).toBeLessThanOrEqual(140)
-        expect(find('instructions', 'movabs').summary).toBe(
-            'Moves a full 64 bit immediate into a register.'
-        )
+        expect(find('instructions', 'movabs').summary).toMatch(/immediate.*absolute memory offset/)
     })
 
     it("shows an instruction's first Form patterns, general ones first", () => {

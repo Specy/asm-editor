@@ -69,7 +69,7 @@
         padding: 0.6rem 1rem;
         border-radius: 0.4rem;
         width: 7rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
     }
 </style>

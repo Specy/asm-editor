@@ -7,6 +7,7 @@
      */
     import { tick, untrack, type Snippet } from 'svelte'
     import FaAngleRight from '~icons/fa-solid/angle-right'
+    import FaChevronRight from '~icons/fa-solid/chevron-right'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
 
     interface Props {
@@ -24,8 +25,9 @@
         /** Let the body take the room left in a column. */
         fill?: boolean
         /**
-         * `card` sits on the panel's surface, like the debug column's sections; `outlined` sits on
-         * the page's background, framed by its header's colour, like the Settings sections.
+         * `card` sits on the panel's surface, like the debug column's sections; `outlined` is drawn
+         * like a Documentation Chapter, framed, its open body darker than the panel and its header
+         * pinned while that body scrolls, like the Settings sections.
          */
         variant?: 'card' | 'outlined'
         style?: string
@@ -117,7 +119,9 @@
 >
     <div class="section-header">
         <button class="toggle" aria-expanded={!collapsed} onclick={toggle}>
-            <span class="chevron" class:open={!collapsed}><FaAngleRight /></span>
+            <span class="chevron" class:open={!collapsed}>
+                {#if variant === 'outlined'}<FaChevronRight />{:else}<FaAngleRight />{/if}
+            </span>
             <span class="ellipsis">{title}</span>
             {#if info}
                 <span class="info">{@render info()}</span>
@@ -154,10 +158,62 @@
         overflow: hidden;
     }
 
+    /* a Documentation Chapter's look (DocumentationBrowser.svelte), kept in step with it so that
+       Settings and the Documentation read as one: the open body is a well darker than the panel,
+       and the header carries the top edge, so the frame stays closed while the header is pinned
+       over the body scrolling under it. The edge is drawn over the panel, as a card's is, or it
+       would sink into the well and vanish */
     .outlined {
+        --outline-edge: 1px solid var(--wb-line, var(--tertiary));
         background-color: var(--background);
-        border: 1px solid var(--wb-line, var(--tertiary));
-        border-radius: 0.4rem;
+        background-clip: padding-box;
+        border: var(--outline-edge);
+        border-top: none;
+        border-radius: 0.5rem;
+        /* clipping would also clip the header's edge, and stop it from being pinned */
+        overflow: visible;
+
+        &.collapsed {
+            border-bottom: none;
+        }
+
+        .section-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            will-change: transform;
+            min-height: 0;
+            margin: 0 -1px;
+            border: var(--outline-edge);
+            border-radius: 0.5rem 0.5rem 0 0;
+            box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+        }
+
+        &.collapsed .section-header {
+            border-radius: 0.5rem;
+            box-shadow: none;
+        }
+
+        .toggle {
+            padding: 0.45rem 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+
+            &:hover {
+                background-color: transparent;
+            }
+
+            &:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: -2px;
+            }
+        }
+
+        .chevron {
+            width: 0.6rem;
+            height: 0.6rem;
+            opacity: 0.6;
+        }
     }
 
     .fill:not(.collapsed) {

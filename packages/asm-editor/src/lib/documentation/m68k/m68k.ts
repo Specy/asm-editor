@@ -66,11 +66,20 @@ function prose(
     chapter: string,
     chapterHref: string,
     markdown: string,
-    kind?: EntryKind
+    kind?: EntryKind,
+    openingTitle?: string
 ): DocumentationEntry[] {
-    return proseEntries({ language: 'm68k', chapter, chapterHref, markdown, kind }).map(
-        (entry) => ({ ...entry, summary: summaryOf(entry.searchText.replace(/^\s*>\s?/gm, '')) })
-    )
+    return proseEntries({
+        language: 'm68k',
+        chapter,
+        chapterHref,
+        markdown,
+        kind,
+        openingTitle
+    }).map((entry) => ({
+        ...entry,
+        summary: summaryOf(entry.searchText.replace(/^\s*>\s?/gm, ''))
+    }))
 }
 
 function instructions(): Chapter {
@@ -119,12 +128,13 @@ function instructions(): Chapter {
  * addressing-modes.md: the row's signature, and the spellings an exact search finds it by.
  */
 const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
+    overview: ['<ea>'],
     direct: ['Dn', 'An'],
     indirect: ['(An)'],
     'address-register-displacement': ['d(An)'],
     'indirect-post-pre-increment': ['(An)+', '-(An)'],
-    immediate: ['Im', '#<num>'],
-    'effective-address': ['Ea/<label>', '<ea>'],
+    immediate: ['#imm', 'Im', '#<num>'],
+    'effective-address': ['abs', 'Ea/<label>'],
     'address-register-indexed': ['d(An,Xn)'],
     'program-counter-relative': ['d(PC)', 'd(PC,Xn)'],
     'status-registers': ['sr', 'ccr']
@@ -132,12 +142,16 @@ const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
 
 function addressingModes(): Chapter {
     const href = `${BASE}/addressing-mode`
-    const entries = prose('addressing-modes', href, addressingModesMarkdown, 'addressing-mode').map(
-        (entry): DocumentationEntry => {
-            const syntax = ADDRESSING_MODE_SYNTAX[entry.anchor] ?? []
-            return { ...entry, names: names(...syntax), signature: syntax.join(', ') || undefined }
-        }
-    )
+    const entries = prose(
+        'addressing-modes',
+        href,
+        addressingModesMarkdown,
+        'addressing-mode',
+        'Effective addresses'
+    ).map((entry): DocumentationEntry => {
+        const syntax = ADDRESSING_MODE_SYNTAX[entry.anchor] ?? []
+        return { ...entry, names: names(...syntax), signature: syntax.join(', ') || undefined }
+    })
     return {
         id: 'addressing-modes',
         language: 'm68k',

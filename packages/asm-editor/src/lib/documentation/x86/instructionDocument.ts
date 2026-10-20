@@ -50,6 +50,53 @@ const NOTE_FACTS: Record<string, string> = {
     OBSOLETE: 'removed from the architecture'
 }
 
+// These NASM operand-size restrictions are not carried by the table's NOLONG flag.
+const LEGACY_32_BIT_STACK_INSTRUCTIONS = new Set(['pushfd', 'popfd', 'enterd', 'leaved'])
+
+function availableIn64BitMode(name: string, form: X86InstructionForm): boolean {
+    if (form.notes.includes('NOLONG') || LEGACY_32_BIT_STACK_INSTRUCTIONS.has(name)) return false
+    if (name === 'push' || name === 'pop') {
+        return !form.operands.some((operand) => /^(?:reg|r\/m|mem)32$/.test(operand))
+    }
+    if (
+        (name === 'movzx' || name === 'movzxd') &&
+        form.operands[0] === 'reg32' &&
+        form.operands[1] === 'r/m32'
+    ) {
+        return false
+    }
+    return true
+}
+
+function operandMeaning(name: string, symbol: string): string | undefined {
+    const branch = /^(?:call|jmp|j[a-z]+|loop[a-z]*)$/.test(name)
+    if (branch && /^imm(?:8|16|32|64)?$/.test(symbol)) {
+        const target =
+            'A branch target, written as a label or address. NASM calculates the displacement from the end of the instruction.'
+        if (symbol === 'imm8')
+            return `${target} The displacement must fit a signed byte, \`-128\` to \`127\`.`
+        if (symbol === 'imm16')
+            return `${target} This legacy encoding uses a signed 16-bit displacement.`
+        if (symbol === 'imm32' || symbol === 'imm64') {
+            return `${target} In 64-bit mode the encoded displacement is signed 32-bit, \`-2147483648\` to \`2147483647\`, even though the target address is 64-bit.`
+        }
+        return `${target} NASM selects a short or near encoding according to the target’s reach and any size constraint.`
+    }
+    if (/^mov(?:sx|zx)/.test(name)) {
+        if (symbol === 'reg')
+            return 'The destination register. Its width is selected independently of the source width; widening uses a larger destination.'
+        if (symbol === 'r/m')
+            return 'The source register or memory value, whose width may differ from the destination’s. For example, a byte source can be extended to a 64-bit register. High-byte registers such as `ah` cannot be used with a REX prefix.'
+    }
+    if (name === 'push' && symbol === 'imm') {
+        return 'A value to push. A default 64-bit push encodes a signed 8-bit or 32-bit immediate and sign-extends it to 64 bits. Use `word` for a 16-bit push. A full 64-bit immediate cannot be encoded.'
+    }
+    if (/^ret(?:n|f)?[wdq]?$/.test(name) && symbol === 'imm16') {
+        return 'An unsigned 16-bit byte count, `0` to `65535`, added to the stack pointer after the return address is popped.'
+    }
+    return X86_OPERAND_MEANINGS[symbol]
+}
+
 function operandParts(operand: string): InputPart[] {
     // `{near|short}` offers either, which is the same as writing neither: only a lone keyword is
     // part of what a program writes.
@@ -104,7 +151,14 @@ function formInput(name: string, form: X86InstructionForm): FormInput {
         : name
     const facts = [
         ...(form.cpu ? [`${formatX86Cpu(form.cpu)} and later`] : []),
-        ...[...new Set(form.notes.map((note) => NOTE_FACTS[note]).filter(Boolean))]
+        ...[
+            ...new Set(
+                form.notes
+                    .filter((note) => !(name === 'cmp' && (note === 'LOCK' || note === 'LOCK1')))
+                    .map((note) => NOTE_FACTS[note])
+                    .filter(Boolean)
+            )
+        ]
     ]
     return { code, parts, tags: x86FormTags(form), facts }
 }
@@ -160,10 +214,11 @@ function omittedForms(instruction: X86Instruction, dropped: X86InstructionForm[]
     const legacy = dropped.filter((form) => form.features.length === 0)
     if (extension.length > 0) {
         const features = [...new Set(extension.flatMap((form) => form.features))]
-        const named = features.length <= 3 ? features.join(', ') : 'extensions'
+        const named =
+            features.length <= 3 ? features.join(', ') : 'additional instruction-set extensions'
         omitted.push({
             count: extension.length,
-            reason: `need ${named}, which this emulator does not run`,
+            reason: `require ${named}`,
             forms: [...new Set(extension.map(written))]
         })
     }
@@ -180,7 +235,7 @@ function omittedForms(instruction: X86Instruction, dropped: X86InstructionForm[]
 export function x86InstructionDocument(instruction: X86Instruction): InstructionDocument {
     const name = instruction.name
     const base = instruction.forms.filter((form) => form.features.length === 0)
-    const sixtyFour = base.filter((form) => !form.notes.includes('NOLONG'))
+    const sixtyFour = base.filter((form) => availableIn64BitMode(name, form))
     // A mnemonic long mode dropped keeps its forms: they are all there is to say about it.
     const shown = sixtyFour.length > 0 ? sixtyFour : base
     const dropped = instruction.forms.filter((form) => !shown.includes(form))
@@ -228,7 +283,7 @@ export function x86InstructionDocument(instruction: X86Instruction): Instruction
         }
     }
     const operands: OperandSymbol[] = [...symbols].flatMap((symbol) => {
-        const meaning = X86_OPERAND_MEANINGS[symbol]
+        const meaning = operandMeaning(name, symbol)
         return meaning ? [{ symbol, meaning }] : []
     })
 

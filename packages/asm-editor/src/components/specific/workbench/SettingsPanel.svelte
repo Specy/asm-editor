@@ -210,11 +210,12 @@
 </div>
 
 <style lang="scss">
+    /* spaced like the Documentation panel's Chapters, which the sections are drawn like */
     .settings-panel {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
-        padding: 0.5rem;
+        gap: 0.35rem;
+        padding: 0.5rem 0.35rem 0.8rem;
         flex: 1;
     }
 
@@ -222,7 +223,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.2rem;
-        padding: 0.4rem 0.4rem 0.6rem;
+        padding: 0.5rem;
     }
 
     .hint {
@@ -243,6 +244,6 @@
     }
 
     .theme {
-        padding: 0.6rem;
+        padding: 0.5rem;
     }
 </style>

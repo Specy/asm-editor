@@ -336,7 +336,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         div: {
             longName: 'Unsigned divide',
             summary:
-                'Divides the unsigned value in rdx:rax by the operand, leaving the quotient in rax and the remainder in rdx.'
+                'Divides the implicit unsigned dividend selected by the operand width, producing a quotient and remainder.'
         },
         enter: {
             longName: 'Create stack frame',
@@ -345,8 +345,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         enterd: {
             longName: 'Create 32-bit stack frame',
-            summary:
-                'Creates a 32-bit stack frame for a procedure call: pushes ebp, sets ebp to esp, and reserves the local bytes.'
+            summary: 'Creates a frame with 32-bit frame pointers; unavailable in 64-bit mode.'
         },
         enterq: {
             longName: 'Create 64-bit stack frame',
@@ -355,8 +354,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         enterw: {
             longName: 'Create 16-bit stack frame',
-            summary:
-                'Creates a 16-bit stack frame for a procedure call: pushes bp, sets bp to sp, and reserves the local bytes.'
+            summary: 'Creates a frame with 16-bit frame pointers and reserves local storage.'
         },
         ibts: {
             longName: 'Insert bit string',
@@ -370,12 +368,12 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         idiv: {
             longName: 'Signed divide',
             summary:
-                'Divides the signed value in rdx:rax by the operand, leaving the quotient in rax and the remainder in rdx.'
+                'Divides the implicit signed dividend selected by the operand width, producing a quotient and remainder.'
         },
         imul: {
             longName: 'Signed multiply',
             summary:
-                'Performs signed integer multiplication, leaving the product in rdx:rax with one operand, or in the first operand with two or three.'
+                'Multiplies signed integers, producing a full implicit product with one operand or a destination-width result with two or three.'
         },
         inc: {
             longName: 'Increment by 1',
@@ -466,7 +464,8 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         jcxz: {
             longName: 'Jump if cx register is 0',
-            summary: 'Jumps a short distance (up to 128 bytes) if and only if the cx register is 0.'
+            summary:
+                'Jumps a short distance when the selected counter is zero; the cx form is unavailable in 64-bit mode.'
         },
         je: {
             longName: 'Jump if equal (ZF == 1)',
@@ -475,7 +474,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         jecxz: {
             longName: 'Jump if ecx register is 0',
             summary:
-                'Jumps to the short target when ecx is zero; the jump reaches at most 128 bytes.'
+                'Jumps when ecx is zero, using an 8-bit displacement from the end of the instruction.'
         },
         jg: {
             longName: 'Jump if greater (ZF == 0 and SF == OF)',
@@ -586,7 +585,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         jrcxz: {
             longName: 'Jump if rcx register is 0',
             summary:
-                'Jumps to the short target when rcx is zero; the jump reaches at most 128 bytes.'
+                'Jumps when rcx is zero, using an 8-bit displacement from the end of the instruction.'
         },
         js: {
             longName: 'Jump if sign (SF == 1)',
@@ -609,8 +608,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         leaved: {
             longName: 'Destroy 32-bit stack frame',
-            summary:
-                'Releases a 32-bit stack frame by setting esp to ebp and popping the saved ebp, undoing enter.'
+            summary: 'Dismantles a 32-bit frame; unavailable in 64-bit mode.'
         },
         leaveq: {
             longName: 'Destroy 64-bit stack frame',
@@ -619,8 +617,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         leavew: {
             longName: 'Destroy 16-bit stack frame',
-            summary:
-                'Releases a 16-bit stack frame by setting sp to bp and popping the saved bp, undoing enter.'
+            summary: 'Dismantles a frame using a 16-bit saved frame pointer.'
         },
         lodsb: { longName: 'Load byte from string', summary: 'Loads the byte at [rsi] into al.' },
         lodsd: {
@@ -666,7 +663,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         loopew: {
             longName: 'Loop while equal, cx as the counter',
             summary:
-                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 1.'
+                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 1; unavailable in 64-bit mode.'
         },
         loopne: {
             longName: 'Loop while not equal',
@@ -686,7 +683,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         loopnew: {
             longName: 'Loop while not equal, cx as the counter',
             summary:
-                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 0.'
+                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 0; unavailable in 64-bit mode.'
         },
         loopnz: {
             longName: 'Loop while not zero',
@@ -706,7 +703,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         loopnzw: {
             longName: 'Loop while not zero, cx as the counter',
             summary:
-                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 0.'
+                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 0; unavailable in 64-bit mode.'
         },
         loopq: {
             longName: 'Loop with rcx as the counter',
@@ -716,7 +713,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         loopw: {
             longName: 'Loop with cx as the counter',
             summary:
-                'Decrements cx by one and jumps to the short target if the counter is non-zero.'
+                'Decrements cx by one and jumps to the short target if the counter is non-zero; unavailable in 64-bit mode.'
         },
         loopz: {
             longName: 'Loop while zero',
@@ -736,7 +733,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         loopzw: {
             longName: 'Loop while zero, cx as the counter',
             summary:
-                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 1.'
+                'Decrements cx by one and jumps to the short target if the counter is non-zero and ZF is 1; unavailable in 64-bit mode.'
         },
         mov: {
             longName: 'Move',
@@ -744,8 +741,9 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
                 'Copies the contents of the source (second) operand into the destination (first) operand.'
         },
         movabs: {
-            longName: 'Move full 64-bit immediate',
-            summary: 'Moves a full 64 bit immediate into a register.'
+            longName: 'Move with explicit immediate or absolute offset',
+            summary:
+                'Copies a full-width immediate into a register, or transfers accumulator data using an absolute memory offset.'
         },
         movbe: {
             longName: 'Move data after swapping bytes',
@@ -771,7 +769,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         movsx: {
             longName: 'Move with sign extension',
             summary:
-                'Sign-extends the source (second) operand to the width of the destination (first) operand and copies the result there.'
+                'Copies a source into a register, sign-extending when the destination is wider.'
         },
         movsxb: {
             longName: 'Move byte with sign extension',
@@ -780,17 +778,18 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         movsxd: {
             longName: 'Move doubleword with sign extension',
-            summary: 'Copies a 32-bit source into a 64-bit register, sign-extending it.'
+            summary:
+                'Copies a 32-bit source into a register, sign-extending for a 64-bit destination.'
         },
         movsxw: {
             longName: 'Move word with sign extension',
             summary:
-                'Sign-extends the word source to the width of the destination register and copies the result there.'
+                'Copies a word source into a register, sign-extending when the destination is wider.'
         },
         movzx: {
             longName: 'Move with zero extension',
             summary:
-                'Zero-extends the byte or word source to the width of the destination register, filling the high bits with zero.'
+                'Copies a source into a register, filling added high bits with zeros when the destination is wider.'
         },
         movzxb: {
             longName: 'Move byte with zero extension',
@@ -805,12 +804,12 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         movzxw: {
             longName: 'Move word with zero extension',
             summary:
-                'Zero-extends the word source to the width of the destination register, filling the high bits with zero.'
+                'Copies a word source into a register, filling added high bits with zeros when the destination is wider.'
         },
         mul: {
             longName: 'Unsigned multiply',
             summary:
-                'Performs unsigned integer multiplication, multiplying rax by the operand and leaving the product in rdx:rax.'
+                'Multiplies unsigned integers into the full implicit product in the one-operand form.'
         },
         neg: {
             longName: "Two's complement negation",
@@ -851,7 +850,8 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         pop: {
             longName: 'Pop a value from the stack',
-            summary: 'Pops the 8-byte value at [rsp] into the operand and adds 8 to rsp.'
+            summary:
+                'Pops a 64-bit value using rsp by default, or a 16-bit value when a word operand is selected.'
         },
         popa: {
             longName: 'Pop all general-purpose registers (default size)',
@@ -870,19 +870,28 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         popf: {
             longName: 'Pop flags (default size)',
-            summary: 'Pops an 8-byte value from the stack into rflags and adds 8 to rsp.'
+            summary:
+                'Consumes an 8-byte stack value to restore writable flags, subject to privilege restrictions.'
         },
-        popfd: { longName: 'Pop eflags', summary: 'Pops a doubleword from the stack into eflags.' },
-        popfq: { longName: 'Pop rflags', summary: 'Pops a quadword from the stack into rflags.' },
+        popfd: {
+            longName: 'Pop eflags',
+            summary:
+                'Restores writable flags from a 32-bit stack value; unavailable in 64-bit mode.'
+        },
+        popfq: {
+            longName: 'Pop rflags',
+            summary:
+                'Consumes an 8-byte stack value to restore writable flags, subject to privilege restrictions.'
+        },
         popfw: {
             longName: 'Pop flags, 16-bit',
             summary:
-                'Pops a 16-bit word from the stack into the low 16 bits of rflags and adds 2 to rsp.'
+                'Consumes a 2-byte stack value to restore writable low flags, subject to privilege restrictions.'
         },
         push: {
             longName: 'Push value onto the stack',
             summary:
-                'Pushes the operand onto the stack, decrementing rsp by 8 and storing it at [rsp].'
+                'Pushes a 64-bit value using rsp by default, or a 16-bit value when a word operand is selected.'
         },
         pusha: {
             longName: 'Push all general-purpose registers (default size)',
@@ -905,7 +914,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         pushfd: {
             longName: 'Push eflags',
-            summary: 'Pushes the 32-bit eflags register onto the stack, lowering esp by 4.'
+            summary: 'Pushes a 32-bit flags image; unavailable in 64-bit mode.'
         },
         pushfq: {
             longName: 'Push rflags',
@@ -933,17 +942,17 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         retd: {
             longName: 'Return, 32-bit',
-            summary:
-                'Pops a 32-bit return address into eip and jumps there, then adds the optional imm16 to esp.'
+            summary: 'Returns to a 32-bit near offset; unavailable in 64-bit mode.'
         },
         retf: {
             longName: 'Far return',
-            summary: 'Makes a far return: pops rip, then cs, then adds the optional imm16 to rsp.'
+            summary:
+                'Returns across a code-segment boundary, using a 32-bit offset by default in 64-bit mode.'
         },
         retfd: {
             longName: 'Far return, 32-bit',
             summary:
-                'Makes a 32-bit far return: pops eip, then cs, then adds the optional imm16 to esp.'
+                'Makes a far return using a 32-bit offset and an optional unsigned cleanup byte count.'
         },
         retfq: {
             longName: 'Far return, 64-bit',
@@ -953,7 +962,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         retfw: {
             longName: 'Far return, 16-bit',
             summary:
-                'Makes a 16-bit far return: pops ip, then cs, then adds the optional imm16 to sp.'
+                'Makes a far return using a 16-bit offset and an optional unsigned cleanup byte count.'
         },
         retn: {
             longName: 'Near return, default size',
@@ -962,8 +971,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         retnd: {
             longName: 'Near return, 32-bit',
-            summary:
-                'Pops a 32-bit near return address into eip and jumps there, then adds the optional imm16 to esp.'
+            summary: 'Returns to a 32-bit near offset; unavailable in 64-bit mode.'
         },
         retnq: {
             longName: 'Near return, 64-bit',
@@ -973,7 +981,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         retnw: {
             longName: 'Near return, 16-bit',
             summary:
-                'Pops a 16-bit near return address into ip and jumps there, then adds the optional imm16 to sp.'
+                'Requests the 16-bit near-return encoding, with an optional unsigned cleanup byte count.'
         },
         retq: {
             longName: 'Return, 64-bit',
@@ -983,7 +991,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         retw: {
             longName: 'Return, 16-bit',
             summary:
-                'Pops a 16-bit return address into ip and jumps there, then adds the optional imm16 to sp.'
+                'Requests the 16-bit near-return encoding, with an optional unsigned cleanup byte count.'
         },
         rol: {
             longName: 'Rotate left',
