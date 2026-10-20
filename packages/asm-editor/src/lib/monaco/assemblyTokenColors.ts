@@ -1,14 +1,15 @@
 /**
- * The colours of the tokens the assembly grammars emit, for a dark and a light editor surface. The
- * editor's theme (`./editorTheme.ts`) makes its rules for them from this table, and the static code
- * blocks that stand in for an editor (`#lib/content/assemblyPalette.ts`) paint with the same one,
- * so a block reads as the editor that replaces it.
+ * The colours of the tokens the assembly grammars and Monaco's C/C++ grammar emit, for a dark and a
+ * light editor surface. The editor's theme (`./editorTheme.ts`) makes its rules for them from this
+ * table, and the static code blocks that stand in for an editor (`#lib/content/assemblyPalette.ts`)
+ * paint with the same one, so a block reads as the editor that replaces it.
  *
  * Monaco matches a rule to a token by its leading segments, so `number` also colours
- * `number.float` and `keyword` colours `keyword.instruction`, while `keyword.size` is its own.
- * `number`, `number.hex`, `string` and the light `variable.predefined` are the colours Monaco's own
- * `vs-dark` and `vs` themes give them, and `invalid` theirs for it, spelled out here because a code
- * block cannot read a theme it has not loaded.
+ * `number.float` and `keyword` colours `keyword.instruction` and C's `keyword.int`, while
+ * `keyword.size` is its own. `number`, `number.hex`, `string`, the light `variable.predefined` and
+ * `annotation`, a C++ attribute's names (`[[nodiscard]]`), are the colours Monaco's own `vs-dark`
+ * and `vs` themes give them, and `invalid` theirs for it, spelled out here because a code block
+ * cannot read a theme it has not loaded.
  */
 export const ASSEMBLY_TOKEN_COLORS = {
     dark: {
@@ -24,6 +25,7 @@ export const ASSEMBLY_TOKEN_COLORS = {
         'number.hex': '#5bb498',
         'number.immediate': '#47d3a8',
         string: '#ce9178',
+        annotation: '#cc6666',
         invalid: '#f44747'
     },
     light: {
@@ -39,6 +41,7 @@ export const ASSEMBLY_TOKEN_COLORS = {
         'number.hex': '#3030c0',
         'number.immediate': '#006d4c',
         string: '#a31515',
+        annotation: '#808080',
         invalid: '#cd3131'
     }
 } as const

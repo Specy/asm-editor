@@ -147,7 +147,7 @@
     onclick={follow}
     onauxclick={follow}
 >
-    <MarkdownRenderer {source} untrusted live centered={false} {prepare} />
+    <MarkdownRenderer {source} untrusted monacoColors centered={false} {prepare} />
 </div>
 
 <style lang="scss">

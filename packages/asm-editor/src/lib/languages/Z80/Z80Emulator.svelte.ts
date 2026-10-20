@@ -736,8 +736,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 file: line.fileInfo.pathname,
                 note: 'Expanded macro',
                 belowLine: line.lineNumber,
-                //shiki has no z80 grammar, `asm` is the closest thing that highlights mnemonics
-                md: `\`\`\`asm\n${expanded.join('\n')}\n\`\`\``
+                md: `\`\`\`z80\n${expanded.join('\n')}\n\`\`\``
             })
         }
         //Z80 has no generated code panel, only the per line expansion decorations

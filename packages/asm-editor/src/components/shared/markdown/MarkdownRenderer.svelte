@@ -1,698 +1,19 @@
-<script lang="ts" module>
-    import type { Plugin } from 'carta-md'
-    import { Carta } from 'carta-md'
-    import DOMPurify from 'isomorphic-dompurify'
-    import rehypeRaw from 'rehype-raw'
-    import remarkGfm from 'remark-gfm'
-    import rehypeExternalLinks from 'rehype-external-links'
-    import '@cartamd/plugin-code/default.css'
-    import { code } from '@cartamd/plugin-code'
-    import type { Element, Parent, Root, RootContent } from 'hast'
-    import { visit } from 'unist-util-visit'
-    import type { Testcase } from '#lib/Project.svelte.ts'
-    import lzstring from 'lz-string'
-    import { ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { serializer } from '#lib/json.ts'
-    import {
-        isTestcaseFence,
-        parsePlaygroundFence,
-        parseTestcaseFence,
-        playgroundFileName,
-        namedPlaygroundProgram,
-        type PlaygroundFence,
-        type PlaygroundSettings
-    } from '#lib/content/playgrounds.ts'
-    import { codeBlocks, highlightedAssemblyCode } from '#lib/content/codeBlocks.ts'
-    import './codeBlocks.css'
-    import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
-    import { HeadingSlugger } from '#lib/content/headings.ts'
-    import { toString as hastToString } from 'hast-util-to-string'
-    import {
-        encodePlaygroundProgram,
-        type PlaygroundProgram
-    } from '#lib/content/playgroundProgram.ts'
-    let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
-
-    let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
-
-    /**
-     * The colours of the code block a prerendered playground carries, the ones the editor's theme
-     * is made from (`#lib/monaco/assemblyTokenColors.ts`), so the block reads as the thing it is
-     * about to become.
-     * It follows the reader's chosen secondary surface, the same one the editor draws on.
-     */
-    let asmPalette = $derived(
-        assemblyPaletteStyle(ThemeStore.isColorDark(ThemeStore.theme.secondary.color))
-    )
-
-    type Settings = PlaygroundSettings
-
-    function createCodeUrl(
-        code: string,
-        settings: Settings,
-        testcases: Testcase[],
-        program?: PlaygroundProgram
-    ) {
-        const showMemory = settings.showMemory ? 'showMemory=true&' : ''
-        const showConsole = settings.showConsole ? 'showConsole=true&' : ''
-        const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
-        const showPc = settings.showPc ? 'showPc=true&' : ''
-        const showRegisters = settings.showRegisters
-            ? 'showRegisters=true&'
-            : 'showRegisters=false&'
-        const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
-        const showScreen = settings.showScreen ? 'showScreen=true&' : ''
-        const openScreen = settings.openScreen ? 'openScreen=true&' : ''
-        const showOpenButton = settings.openButton ? 'openButton=true&' : ''
-        const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
-        const props = [
-            showMemory,
-            showConsole,
-            showTests,
-            showPc,
-            showRegisters,
-            showFlags,
-            showScreen,
-            openScreen,
-            showOpenButton,
-            registerFile
-        ].join('')
-        const lang = `language=${settings.language}&`
-        const compressed = lzstring.compressToEncodedURIComponent(code)
-        const tests =
-            testcases.length > 0
-                ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
-                : ''
-        return `/embed?${lang}${props}${tests}${program ? `program=${encodePlaygroundProgram(program)}` : `code=${compressed}`}`
-    }
-
-    /** The fence info string of a `<pre><code class="language-...">`, when it has one. */
-    function fenceInfoOf(node: RootContent): string | undefined {
-        if (node.type !== 'element' || node.tagName !== 'pre') return undefined
-        const codeNode = node.children?.find(
-            (child): child is Element => child.type === 'element' && child.tagName === 'code'
-        )
-        if (!codeNode?.properties || !Array.isArray(codeNode.properties.className)) return undefined
-        const langClass = codeNode.properties.className.find(
-            (cls): cls is string => typeof cls === 'string' && cls.startsWith('language-')
-        )
-        return langClass?.substring('language-'.length)
-    }
-
-    function textOf(node: RootContent): string {
-        if (node.type === 'text') return node.value
-        if ('children' in node && Array.isArray(node.children)) {
-            return (node.children as RootContent[]).map(textOf).join('')
-        }
-        return ''
-    }
-
-    /** The next node that is not whitespace between two blocks. */
-    function nextBlock(
-        children: RootContent[],
-        from: number
-    ): { node: RootContent; index: number } | undefined {
-        for (let cursor = from + 1; cursor < children.length; cursor++) {
-            const node = children[cursor]
-            if (node.type === 'comment') continue
-            if (node.type === 'text' && node.value.trim().length === 0) continue
-            return { node, index: cursor }
-        }
-        return undefined
-    }
-
-    /**
-     * The testcases of a `testcase` fence attached to a playground. A malformed one is an authoring
-     * mistake, so it is announced in the console and the playground renders without it rather than
-     * taking the page down with it. The console line carries what the renderer can see of the page:
-     * the fence, the JSON and, in the browser, the lecture's own address.
-     */
-    function attachedTestcases(node: RootContent, info: string): Testcase[] {
-        const raw = textOf(node)
-        try {
-            const parsed = parseTestcaseFence(raw)
-            return parsed.hasTestcase ? [parsed.testcase] : []
-        } catch (e) {
-            const where = typeof window === 'undefined' ? '' : ` on ${window.location.pathname}`
-            console.error(
-                `Malformed testcase fence${where}, after the "${info}" playground: ${(e as Error).message}\n${raw}`
-            )
-            return []
-        }
-    }
-
-    /**
-     * The box a playground occupies. Shared by the two passes below so the code block the
-     * prerendered page carries and the iframe that replaces it on mount are the same size: the swap
-     * has to move nothing around it. `details` is a collapsed block (an Exercise's solution), which
-     * is itself the centered column and the frame, so a playground inside one fills it instead of
-     * placing itself, and a large one widens the block.
-     */
-    function playgroundBox(fence: PlaygroundFence, parent: Parent) {
-        const details =
-            parent.type === 'element' && (parent as Element).tagName === 'details'
-                ? (parent as Element)
-                : undefined
-        if (details && fence.large) {
-            const className = details.properties?.className
-            details.properties = {
-                ...details.properties,
-                className: [...(Array.isArray(className) ? className : []), 'wide']
-            }
-        }
-        const placement =
-            details || fence.large
-                ? ''
-                : 'max-width: 70ch; margin: 1.5rem var(--md-inline-margin, auto);'
-        const height = fence.tall
-            ? 'height: 80dvh;'
-            : fence.settings.showScreen
-              ? 'height: min(40rem, 85vh);'
-              : ''
-        return {
-            className: details ? ['code-playground', 'in-details'] : ['code-playground'],
-            //a fence that asks for no height of its own leaves it to the stylesheet, which gives the
-            //code block the same one as the iframe's min-height
-            style: `${placement} ${height}`.trim()
-        }
-    }
-
-    /**
-     * Marks a playground fence as one, in place, leaving it an ordinary code block. This is the
-     * whole of what a prerendered page carries: the iframe is built from these marks on the client,
-     * by the async pass below. A lecture's playgrounds are its worked examples, so a page that
-     * shipped only its prose was hiding the code it was written about from anything that does not
-     * run scripts, and every `/embed?code=...` in the static HTML was another URL for a crawler to
-     * find and discard against the canonical.
-     *
-     * The settings and testcases travel on the element rather than being re-derived later, because
-     * the fence info string is the one thing the async pass cannot recover: the class it leaves
-     * behind names the language alone. DOMPurify keeps `data-*` attributes by default.
-     */
-    function markPlayground(
-        node: Element,
-        fence: PlaygroundFence,
-        info: string,
-        testcases: Testcase[],
-        parent: Parent
-    ): Element {
-        const codeNode = node.children?.find(
-            (child): child is Element => child.type === 'element' && child.tagName === 'code'
-        )
-        if (codeNode) {
-            //`language-m68k|playground|memory` is not a language; the fence's first entry is
-            codeNode.properties = {
-                ...codeNode.properties,
-                className: [`language-${info.split('|')[0].trim().toLowerCase()}`]
-            }
-            //the trailing newline a fence leaves behind would render as an empty last line, and the
-            //embed URL is built from these same children, so both are trimmed once, here
-            const text = textOf(codeNode).trimEnd()
-            codeNode.children = fence.sourceLanguage
-                ? [{ type: 'text', value: text }]
-                : highlightedAssemblyCode(text, fence.settings.language)
-        }
-        node.properties = {
-            ...node.properties,
-            ...playgroundBox(fence, parent),
-            'data-playground': info,
-            ...(testcases.length > 0
-                ? { 'data-testcases': serializer.stringify(testcases) }
-                : undefined)
-        }
-        return node
-    }
-
-    /**
-     * Marks every playground fence and drops the `testcase` fences, which are instructions to the
-     * embed and to the verification test and are never shown to a reader. The children of a block
-     * are rebuilt rather than patched in place, so a testcase and the blank line before it leave
-     * together.
-     */
-    function transformPlaygrounds(parent: Parent): void {
-        const children = parent.children as RootContent[]
-        const result: RootContent[] = []
-        for (let index = 0; index < children.length; index++) {
-            const node = children[index]
-            const info = fenceInfoOf(node)
-            const fence = info === undefined ? undefined : parsePlaygroundFence(info)
-            if (fence && node.type === 'element') {
-                let testcases: Testcase[] = []
-                const fileNodes = [
-                    { node, info: info as string, code: textOf(node).replace(/\n$/, '') }
-                ]
-                if (fence.file) {
-                    for (;;) {
-                        const next = nextBlock(children, index)
-                        const nextInfo = next && fenceInfoOf(next.node)
-                        if (
-                            !next ||
-                            nextInfo === undefined ||
-                            !playgroundFileName(nextInfo) ||
-                            parsePlaygroundFence(nextInfo) ||
-                            next.node.type !== 'element'
-                        )
-                            break
-                        fileNodes.push({
-                            node: next.node,
-                            info: nextInfo,
-                            code: textOf(next.node).replace(/\n$/, '')
-                        })
-                        index = next.index
-                    }
-                }
-                const following = nextBlock(children, index)
-                const followingInfo = following && fenceInfoOf(following.node)
-                if (following && followingInfo !== undefined && isTestcaseFence(followingInfo)) {
-                    testcases = attachedTestcases(following.node, info as string)
-                    //the testcase block and the whitespace before it go with the playground
-                    index = following.index
-                }
-                const marked = markPlayground(node, fence, info as string, testcases, parent)
-                if (fence.file) {
-                    const program = namedPlaygroundProgram(fence, fileNodes)
-                    const properties = marked.properties
-                    //Keep each source visible with its filename in the prerendered page. Only
-                    //the wrapper becomes an iframe, so all files share one emulator.
-                    marked.properties = { 'data-playground-file': true }
-                    result.push({
-                        type: 'element',
-                        tagName: 'div',
-                        properties: { ...properties, 'data-program': JSON.stringify(program) },
-                        children: fileNodes.flatMap(({ node: fileNode, info: fileInfo }) => {
-                            const codeNode = fileNode.children.find(
-                                (child): child is Element =>
-                                    child.type === 'element' && child.tagName === 'code'
-                            )
-                            if (codeNode)
-                                codeNode.properties.className = [
-                                    `language-${fileInfo.split('|')[0]}`
-                                ]
-                            return [
-                                {
-                                    type: 'element' as const,
-                                    tagName: 'div',
-                                    properties: { className: ['playground-filename'] },
-                                    children: [
-                                        {
-                                            type: 'text' as const,
-                                            value: playgroundFileName(fileInfo)!
-                                        }
-                                    ]
-                                },
-                                fileNode
-                            ]
-                        })
-                    })
-                } else result.push(marked)
-                continue
-            }
-            //a testcase fence that attached to nothing is still not something a reader should read
-            if (info !== undefined && isTestcaseFence(info)) continue
-            if (node.type === 'element') transformPlaygrounds(node)
-            result.push(node)
-        }
-        parent.children = result
-    }
-
-    /** The testcases the sync pass left on a marked playground, if it left any. */
-    function markedTestcases(node: Element): Testcase[] {
-        const raw = node.properties?.['data-testcases']
-        if (typeof raw !== 'string') return []
-        try {
-            return serializer.parse<Testcase[]>(raw)
-        } catch (e) {
-            console.error(`Unreadable testcases on a playground: ${(e as Error).message}\n${raw}`)
-            return []
-        }
-    }
-
-    /**
-     * Turns each marked playground into its embed iframe. Client-only: this runs in `carta.render`,
-     * which `Markdown.svelte` calls on mount, and not in the `carta.renderSSR` that produces the
-     * prerendered file. Registered before `code()` in the extension list, so it replaces the block
-     * before shiki is asked to highlight one that is about to be thrown away.
-     */
-    function playgroundIframe(node: Element, fence: PlaygroundFence): Element {
-        const codeNode = node.children?.find(
-            (child): child is Element => child.type === 'element' && child.tagName === 'code'
-        )
-        const rawProgram = node.properties?.['data-program']
-        const program =
-            typeof rawProgram === 'string'
-                ? (JSON.parse(rawProgram) as PlaygroundProgram)
-                : undefined
-        return {
-            type: 'element',
-            tagName: 'iframe',
-            properties: {
-                style: node.properties?.style,
-                className: node.properties?.className,
-                //each embed boots a whole editor, so a lecture with five of them would boot five
-                //before the reader has scrolled to the second; `loading` is in DOMPurify's default
-                //attribute list, so the sanitizer keeps it
-                loading: 'lazy',
-                src: createCodeUrl(
-                    textOf(codeNode ?? node).trimEnd(),
-                    fence.settings,
-                    markedTestcases(node),
-                    program
-                )
-            },
-            children: []
-        }
-    }
-
-    const rehypePlaygroundMarker = () => (tree: Root) => {
-        transformPlaygrounds(tree)
-    }
-
-    const rehypePlaygroundIframes = () => (tree: Root) => {
-        visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
-            const info = node.properties?.['data-playground']
-            if (typeof info !== 'string' || typeof index !== 'number' || !parent) return
-            const fence = parsePlaygroundFence(info)
-            if (!fence) return
-            parent.children.splice(index, 1, playgroundIframe(node, fence))
-        })
-    }
-
-    const customPlaygroundPlugin: Plugin = {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(rehypePlaygroundMarker)
-                }
-            },
-            {
-                execution: 'async',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(rehypePlaygroundIframes)
-                }
-            }
-        ]
-    }
-
-    /**
-     * Gives every second- and third-level heading its id, the slug that the search index links a
-     * **Lecture section** to ([headings.ts](../../../lib/content/headings.ts)). Synchronous, so the
-     * ids are in the prerendered page: SvelteKit fails the prerender on a `#` link with no target.
-     */
-    const rehypeHeadingIds = () => (tree: Root) => {
-        const slugger = new HeadingSlugger()
-        visit(tree, 'element', (node: Element) => {
-            if (node.tagName !== 'h2' && node.tagName !== 'h3') return
-            node.properties = { ...node.properties, id: slugger.slug(hastToString(node)) }
-        })
-    }
-
-    const headingIdsPlugin: Plugin = {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(rehypeHeadingIds)
-                }
-            }
-        ]
-    }
-
-    /**
-     * Playgrounds as plain code, for a Lecture section read inside the Documentation panel, where an
-     * embedded editor with an Emulator of its own does not belong. The marking pass highlights them
-     * and drops their testcases; what makes them a playground's box is then taken off again, and so
-     * is the `language-` class, so that shiki leaves the editor's own colours alone.
-     */
-    const rehypePlainPlaygrounds = () => (tree: Root) => {
-        transformPlaygrounds(tree)
-        visit(tree, 'element', (node: Element) => {
-            if (typeof node.properties?.['data-playground'] !== 'string') return
-            node.properties = { className: ['plain-playground'] }
-            for (const child of node.children) {
-                if (child.type === 'element' && child.tagName === 'code') {
-                    child.properties = { className: ['asm-code'] }
-                }
-            }
-        })
-    }
-
-    const plainPlaygroundsPlugin: Plugin = {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(rehypePlainPlaygrounds)
-                }
-            }
-        ]
-    }
-
-    /**
-     * Takes every link out and keeps its text. A link into the Documentation is kept as a mark
-     * instead (`span.doc-link`), which the Documentation panel follows to another of its own
-     * entries: that never leaves the page, so it is allowed where every other link is not, in an
-     * Exam. Anywhere else the mark reads as the plain text it replaced.
-     */
-    const rehypeDisableLinksTransformer = () => (tree: Root) => {
-        visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
-            if (node.tagName !== 'a' || typeof index !== 'number' || !parent) return
-            const href = node.properties?.href
-            if (typeof href === 'string' && href.startsWith('/documentation/')) {
-                parent.children.splice(index, 1, {
-                    type: 'element',
-                    tagName: 'span',
-                    properties: { className: ['doc-link'], 'data-doc-href': href },
-                    children: node.children
-                })
-                return
-            }
-            parent.children.splice(index, 1, ...node.children)
-        })
-    }
-
-    function sanitizeMarkdownHtml(html: string, disableLinks = false) {
-        return DOMPurify.sanitize(html, {
-            ADD_TAGS: ['iframe'],
-            ...(disableLinks ? { FORBID_TAGS: ['a'] } : {})
-        })
-    }
-
-    const ext: Plugin = {
-        transformers: [
-            {
-                execution: 'async',
-                type: 'rehype',
-                async transform({ carta }) {
-                    const highlighter = await carta.highlighter()
-                    if (!highlighter) return
-                    await highlighter.shikiHighlighter().loadTheme(theme)
-                }
-            },
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(remarkGfm).use(rehypeRaw)
-                }
-            }
-        ]
-    }
-    const extWithExternalLins: Plugin = {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(remarkGfm).use(rehypeRaw).use(rehypeExternalLinks, {
-                        target: '_blank'
-                    })
-                }
-            }
-        ]
-    }
-    const extWithoutLinks: Plugin = {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(remarkGfm).use(rehypeRaw).use(rehypeDisableLinksTransformer)
-                }
-            }
-        ]
-    }
-    const codeBlocksPlugin = codeBlocks()
-
-    /**
-     * Shiki's highlighting. Carta loads a grammar only for a fence whose info is the bare language
-     * name, so a C playground's `c|playground|…` or a named file's `c|file=…` stayed plain unless
-     * another fence had already loaded C: `lazy` loads the grammar each block names when Shiki
-     * reaches it. A name Shiki has no grammar for reads as plain `text` rather than failing the
-     * render.
-     */
-    const shikiCode = () => code({ theme, lazy: true, fallbackLanguage: 'text' })
-
-    const cartaNormal = $derived(
-        new Carta({
-            sanitizer: (html) => {
-                return sanitizeMarkdownHtml(html)
-            },
-            extensions: [ext, customPlaygroundPlugin, shikiCode(), codeBlocksPlugin],
-            rehypeOptions: {
-                allowDangerousHtml: true
-            },
-            shikiOptions: {
-                themes: [theme]
-            }
-        })
-    )
-    const cartaWithExternalLins = $derived(
-        new Carta({
-            sanitizer: (html) => {
-                return sanitizeMarkdownHtml(html)
-            },
-            extensions: [
-                extWithExternalLins,
-                customPlaygroundPlugin,
-                shikiCode(),
-                codeBlocksPlugin
-            ],
-            rehypeOptions: {
-                allowDangerousHtml: true
-            },
-            shikiOptions: {
-                themes: [theme]
-            }
-        })
-    )
-    const cartaWithoutLinks = $derived(
-        new Carta({
-            sanitizer: (html) => {
-                return sanitizeMarkdownHtml(html, true)
-            },
-            extensions: [extWithoutLinks, customPlaygroundPlugin, shikiCode(), codeBlocksPlugin],
-            rehypeOptions: {
-                allowDangerousHtml: true
-            },
-            shikiOptions: {
-                themes: [theme]
-            }
-        })
-    )
-    /** A Lecture: its headings carry the ids a search result opens it at. */
-    const cartaWithHeadingIds = $derived(
-        new Carta({
-            sanitizer: (html) => {
-                return sanitizeMarkdownHtml(html)
-            },
-            extensions: [
-                ext,
-                headingIdsPlugin,
-                customPlaygroundPlugin,
-                shikiCode(),
-                codeBlocksPlugin
-            ],
-            rehypeOptions: {
-                allowDangerousHtml: true
-            },
-            shikiOptions: {
-                themes: [theme]
-            }
-        })
-    )
-    /** A Lecture section inside the Documentation panel: playgrounds as plain code. */
-    const cartaWithPlainPlaygrounds = $derived(
-        new Carta({
-            sanitizer: (html) => {
-                return sanitizeMarkdownHtml(html)
-            },
-            extensions: [
-                extWithExternalLins,
-                plainPlaygroundsPlugin,
-                shikiCode(),
-                codeBlocksPlugin
-            ],
-            rehypeOptions: {
-                allowDangerousHtml: true
-            },
-            shikiOptions: {
-                themes: [theme]
-            }
-        })
-    )
-
-    /**
-     * Takes every `style` attribute off, before Shiki colours the code with its own: one written
-     * into a Project File's Markdown could restyle or cover the page around the preview.
-     */
-    const rehypeStripStyles = () => (tree: Root) => {
-        visit(tree, 'element', (node: Element) => {
-            delete node.properties.style
-        })
-    }
-
-    const strippedStylesPlugin: Plugin = {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(rehypeStripStyles)
-                }
-            }
-        ]
-    }
-
-    /** What a Project File's Markdown may not bring: stylesheets, frames, plugins and forms. */
-    function sanitizeUntrustedHtml(html: string) {
-        return DOMPurify.sanitize(html, {
-            FORBID_TAGS: [
-                'style',
-                'iframe',
-                'frame',
-                'object',
-                'embed',
-                'form',
-                'input',
-                'button',
-                'select',
-                'textarea'
-            ]
-        })
-    }
-
-    /**
-     * A Project File's Markdown, which whoever shared the Project wrote: playgrounds as plain
-     * code, links out in a new tab, and none of its own styles, frames or forms.
-     */
-    const cartaUntrusted = $derived(
-        new Carta({
-            sanitizer: sanitizeUntrustedHtml,
-            extensions: [
-                extWithExternalLins,
-                strippedStylesPlugin,
-                plainPlaygroundsPlugin,
-                shikiCode(),
-                codeBlocksPlugin
-            ],
-            rehypeOptions: {
-                allowDangerousHtml: true
-            },
-            shikiOptions: {
-                themes: [theme]
-            }
-        })
-    )
-</script>
-
 <script lang="ts">
-    import { Markdown } from 'carta-md'
+    /**
+     * Markdown as the app shows it: rendered once by [the pipeline](../../../lib/content/markdown.ts),
+     * the same way in the server render and in the browser, so the prerendered page is what its
+     * reader keeps. Once mounted, each **Playground** swaps its embed in for the code block the
+     * render left, and a host that asks colours the remaining code blocks with Monaco
+     * ([ADR 0053](../../../../../../docs/adr/0053-markdown-is-rendered-by-our-own-synchronous-pipeline.md)).
+     */
+    import { renderMarkdown, type MarkdownOptions } from '#lib/content/markdown.ts'
+    import { playgroundEmbedUrl } from '#lib/content/markdownPlaygrounds.ts'
+    import { colourCodeBlocksWithMonaco } from '#lib/content/monacoCodeBlocks.ts'
+    import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
+    import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
     import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
+    import { generateTheme } from '#lib/monaco/editorTheme.ts'
+    import './codeBlocks.css'
 
     interface Props {
         source: string
@@ -728,14 +49,14 @@
          */
         untrusted?: boolean
         /**
-         * Render again in place as `source` changes, keeping what is shown until the new render is
-         * ready, as a preview beside the text being typed has to, rather than starting over from
-         * the render without highlighting each time.
+         * Colour the code blocks in languages our own highlighters do not know (Python, JSON…)
+         * with Monaco, loading it if it is not yet: for the hosts Monaco belongs to anyway, the
+         * Workbench's Markdown Preview and the Exam's pages.
          */
-        live?: boolean
+        monacoColors?: boolean
         /**
-         * Called with each live render's content, still inert, before it is shown: where a host
-         * points images and links at things of its own. A new function renders again.
+         * Called with each render's content, still inert, before it is shown: where a host points
+         * images and links at things of its own. A new function renders again. Browser only.
          */
         prepare?: (content: DocumentFragment) => void
     }
@@ -753,23 +74,35 @@
         headingIds = false,
         playgrounds = 'embed',
         untrusted = false,
-        live = false,
+        monacoColors = false,
         prepare
     }: Props = $props()
 
-    const carta = $derived(
-        untrusted
-            ? cartaUntrusted
-            : playgrounds === 'code'
-              ? cartaWithPlainPlaygrounds
-              : disableLinks
-                ? cartaWithoutLinks
-                : headingIds
-                  ? cartaWithHeadingIds
-                  : linksInNewTab
-                    ? cartaWithExternalLins
-                    : cartaNormal
+    /**
+     * The colours of the code blocks, the ones the editor's theme is made from
+     * (`#lib/monaco/assemblyTokenColors.ts`), so a block reads as the editor would show it.
+     * It follows the secondary surface the page is drawn on, the same one the editor draws on:
+     * the theme a layout dresses its subtree in, or the reader's own.
+     */
+    const palette = $derived(
+        assemblyPaletteStyle(
+            ThemeStore.isColorDark(
+                ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
+            )
+        )
     )
+
+    const options = $derived<MarkdownOptions>({
+        //a Lecture section read in the Documentation panel opens its links beside the Workbench
+        links: disableLinks
+            ? 'disabled'
+            : linksInNewTab || playgrounds === 'code'
+              ? 'new-tab'
+              : undefined,
+        headingIds,
+        playgrounds,
+        untrusted
+    })
 
     /** A render's HTML as the host prepared it, parsed where nothing in it loads or runs. */
     function prepared(html: string, finish: typeof prepare): string {
@@ -780,52 +113,62 @@
         return template.innerHTML
     }
 
-    /** The newest live render that finished; until one has, the first one without highlighting. */
-    let liveHtml = $state<string>()
+    const html = $derived(prepared(renderMarkdown(source, options), prepare))
+
+    let content: HTMLDivElement | undefined = $state()
+
+    /**
+     * Each marked playground's embed, in place of the code block the render left: the same box,
+     * so nothing around it moves. Built here rather than in the render, so a page that runs no
+     * scripts, and a crawler, read the worked example as code.
+     */
     $effect(() => {
-        if (!live) return
-        const [value, current, finish] = [source, carta, prepare]
-        let replaced = false
-        current
-            .render(value)
-            .then((html) => {
-                if (!replaced) liveHtml = prepared(html, finish)
+        void html
+        if (!content) return
+        for (const marked of content.querySelectorAll<HTMLElement>('[data-playground]')) {
+            const src = playgroundEmbedUrl({
+                info: marked.dataset.playground ?? '',
+                code:
+                    marked.tagName === 'PRE'
+                        ? (marked.querySelector(':scope > code')?.textContent?.trimEnd() ?? '')
+                        : '',
+                testcases: marked.dataset.testcases,
+                program: marked.dataset.program
             })
-            .catch((error) => console.error('The Markdown could not be rendered', error))
-        return () => {
-            replaced = true
+            if (!src) continue
+            const iframe = document.createElement('iframe')
+            iframe.className = marked.className
+            const box = marked.getAttribute('style')
+            if (box !== null) iframe.setAttribute('style', box)
+            //each embed boots a whole editor, so a lecture with five of them would boot five
+            //before the reader has scrolled to the second
+            iframe.setAttribute('loading', 'lazy')
+            iframe.src = src
+            marked.replaceWith(iframe)
         }
     })
 
-    let wrapper: HTMLDivElement | undefined = $state()
-
-    /**
-     * The browser scrolls to a page's `#heading` on arrival, against the prerendered render. Carta
-     * then renders again on mount (shiki, the playground iframes), which moves things a little, so
-     * the page is scrolled to the heading once more after that, unless the reader has scrolled.
-     */
     $effect(() => {
-        if (!headingIds || !wrapper || !location.hash) return
-        const target = wrapper
-        const arrivedAt = window.scrollY
-        const observer = new MutationObserver(() => {
-            observer.disconnect()
-            if (Math.abs(window.scrollY - arrivedAt) > 2) return
-            const id = decodeURIComponent(location.hash.slice(1))
-            document.getElementById(id)?.scrollIntoView({ block: 'start' })
-        })
-        observer.observe(target, { childList: true, subtree: true })
-        return () => observer.disconnect()
+        void html
+        if (!monacoColors || !content) return
+        //read here, so the blocks are coloured again when the theme changes
+        const theme = generateTheme()
+        let current = true
+        colourCodeBlocksWithMonaco(content, theme, () => current).catch((error) =>
+            console.error('Monaco could not colour a code block', error)
+        )
+        return () => {
+            current = false
+        }
     })
 </script>
 
 <div
-    bind:this={wrapper}
     class="_markdown"
     class:heading-ids={headingIds}
     class:simple-code={simpleCode}
     class:code-gutter-spacing={gutterSpacing}
-    style={style ? `${asmPalette}; ${style}` : asmPalette}
+    style={style ? `${palette}; ${style}` : palette}
     style:--gap={spacing}
     style:--md-inline-margin={centered ? null : '0'}
     style:--code-block-gutter-display={lineNumbers ? 'block' : 'none'}
@@ -833,17 +176,11 @@
     style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
     style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
 >
-    {#if live}
-        <div class="carta-viewer carta-theme__default markdown-body">
-            <!-- sanitized by the Carta instance, as the Markdown component's own is -->
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            {@html liveHtml ?? prepared(carta.renderSSR(source), prepare)}
-        </div>
-    {:else}
-        {#key source + theme + disableLinks + playgrounds + headingIds + untrusted}
-            <Markdown value={source} {carta} />
-        {/key}
-    {/if}
+    <div class="markdown-body" bind:this={content}>
+        <!-- sanitized by the pipeline: DOMPurify, or its stricter rules for a Project File's -->
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        {@html html}
+    </div>
 </div>
 
 <style lang="scss">

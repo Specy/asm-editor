@@ -8,10 +8,10 @@ import { cleanPlaygroundProgram, type PlaygroundProgram } from './playgroundProg
  * fence in `src/content`. Both used to be free to disagree about what a flag means; now a flag is
  * spelled once, here.
  *
- * The renderer walks the hast tree Carta hands it and this module walks the markdown source, because
- * a test has no hast tree and the renderer has no source by the time the transformer runs. What the
- * two share is everything that decides meaning: the fence info string, the flags, and the JSON of an
- * attached `testcase` fence.
+ * The renderer walks the hast tree the Markdown pipeline builds and this module walks the markdown
+ * source, because a test has no hast tree and the renderer has no source by the time the
+ * transformer runs. What the two share is everything that decides meaning: the fence info string,
+ * the flags, and the JSON of an attached `testcase` fence.
  *
  * Plain TypeScript, no runes and no DOM, so the test can import it under node.
  */

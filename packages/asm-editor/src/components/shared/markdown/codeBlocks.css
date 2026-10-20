@@ -118,6 +118,9 @@ pre.code-block.code-block-fill {
 :is(pre.code-block, .asm-highlight) .asm-string {
     color: var(--asm-string);
 }
+:is(pre.code-block, .asm-highlight) .asm-annotation {
+    color: var(--asm-annotation);
+}
 :is(pre.code-block, .asm-highlight) .asm-invalid {
     color: var(--asm-invalid);
     text-decoration: line-through;

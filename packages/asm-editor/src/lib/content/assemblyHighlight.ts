@@ -3,16 +3,18 @@ import { X86_ASSEMBLER_REGISTERS } from '#lib/languages/X86/generated/x86Tokens.
 import { X86Directives, X86Prefixes, X86SizeSpecifiers } from '#lib/languages/X86/X86-keywords.ts'
 
 /**
- * The assembly highlighter for the code block a prerendered lecture carries in place of a
- * playground, before the client swaps the embed in
- * ([the renderer](../../components/shared/markdown/MarkdownRenderer.svelte)).
+ * The assembly highlighter for code blocks: a page's assembly fences, an instruction's examples,
+ * and the block a prerendered lecture carries in place of a playground, before the client swaps the
+ * embed in ([the code blocks](./codeBlocks.ts)).
  *
- * Monaco does the real highlighting once the editor is there, and shiki does it for the ordinary
- * fences around it, but neither can run here: Monaco is the editor being replaced, and shiki's
- * highlighter is asynchronous, while this block is built in Carta's synchronous pass. Pulling
- * shiki's grammars and themes in synchronously would move ~128KB of them onto the critical path of
- * every lecture to colour a block that is about to be thrown away, so this reads the structure
- * instead of the language: what a line is made of, not which mnemonics an architecture has.
+ * Monaco does the real highlighting once the editor is there, but it cannot run here: it is the
+ * editor being replaced, and it loads asynchronously, while these blocks are built synchronously,
+ * in the server render as in the browser. Its assembly grammars run on its tokenizer, so using them
+ * would move the editor onto the critical path of every lecture to colour a block that is about to
+ * be thrown away; this reads the structure instead of the language: what a line is made of, not
+ * which mnemonics an architecture has. C and C++ have a highlighter of their own beside this one
+ * (`./cppHighlight.ts`), which follows Monaco's one grammar for both; a fence in any other language
+ * is plain, or coloured by Monaco where a host asks for it.
  *
  * That is enough for the six languages, because they differ mostly in what a comment starts with
  * and what a `$` means. The word lists it does keep are each language's registers, since every

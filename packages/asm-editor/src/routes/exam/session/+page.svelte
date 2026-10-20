@@ -864,7 +864,7 @@
                     style="margin:0.5rem; flex:1; min-height:0; overflow:auto;"
                 >
                     <Header type="h2">Instructions</Header>
-                    <MarkdownRenderer source={loadedExam.instructions} disableLinks />
+                    <MarkdownRenderer source={loadedExam.instructions} disableLinks monacoColors />
                     <Row style="justify-content:flex-end; margin-top: auto">
                         <Button onClick={goToNextSection}>Start first section</Button>
                     </Row>
@@ -885,6 +885,7 @@
                                     <MarkdownRenderer
                                         source={assemblySection.prompt}
                                         disableLinks
+                                        monacoColors
                                     />
                                 {/snippet}
                             </ExamAssemblySection>
@@ -892,7 +893,11 @@
                     {:else}
                         <div class="non-assembly-layout">
                             <div class="prompt-pane">
-                                <MarkdownRenderer source={activeSection.prompt} disableLinks />
+                                <MarkdownRenderer
+                                    source={activeSection.prompt}
+                                    disableLinks
+                                    monacoColors
+                                />
                             </div>
 
                             <div class="answer-pane">

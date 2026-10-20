@@ -579,20 +579,6 @@
         gap: 0.5rem;
     }
 
-    :global(.carta-editor) {
-        height: 100%;
-        flex: 1;
-    }
-
-    :global(.carta-theme__default) {
-        --border-color: var(--border-color-dark);
-        --selection-color: var(--selection-color-dark);
-        --focus-outline: var(--focus-outline-dark);
-        --hover-color: var(--hover-color-dark);
-        --caret-color: var(--caret-color-dark);
-        --text-color: var(--text-color-dark);
-    }
-
     @media (max-width: 980px) {
         .settings-grid,
         .section-body {

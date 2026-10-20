@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vite-plus/test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { ASSEMBLY_BRACKET_COLORS, ASSEMBLY_TOKEN_COLORS } from '#lib/monaco/assemblyTokenColors.ts'
 import { tokenizeAssembly } from './assemblyHighlight'
-import { assemblyPaletteStyle, assemblyTokenClass, assemblyTokenOf } from './assemblyPalette'
+import { tokenizeCpp } from './cppHighlight'
+import {
+    assemblyPaletteStyle,
+    assemblyTokenClass,
+    assemblyTokenOf,
+    cppTokenClass,
+    cppTokenOf
+} from './assemblyPalette'
 
 /** The editor token of the piece of a line whose text is exactly `text`. */
 function tokenOf(line: string, language: AvailableLanguages, text: string) {
@@ -85,6 +94,71 @@ describe('assemblyTokenClass', () => {
     })
 })
 
+/** The editor token of the piece of a C or C++ program whose text is exactly `text`. */
+function cppTokenAt(code: string, text: string) {
+    const token = tokenizeCpp(code)
+        .flat()
+        .find((t) => t.text === text)
+    if (!token) throw new Error(`no token "${text}" in "${code}"`)
+    return cppTokenOf(token)
+}
+
+describe('cppTokenOf', () => {
+    it('paints C and C++ as the editor was measured to', () => {
+        expect(cppTokenAt('return 0;', 'return')).toBe('keyword')
+        expect(cppTokenAt('#define N 4', '#define')).toBe('directive')
+        expect(cppTokenAt('#include <stdio.h>', '<')).toBe('directive')
+        expect(cppTokenAt('#include <stdio.h>', 'stdio.h')).toBe('string')
+        expect(cppTokenAt('/** doc */', '/** doc */')).toBe('comment')
+        expect(cppTokenAt('[[nodiscard]] int f();', 'nodiscard')).toBe('annotation')
+        //a string's escapes, valid or not, and an unterminated string are all the string colour
+        expect(cppTokenAt('"a\\n"', '\\n')).toBe('string')
+        expect(cppTokenAt('"a\\e"', '\\e')).toBe('string')
+        expect(cppTokenAt('"open', '"open')).toBe('string')
+        expect(cppTokenAt('R"(raw)"', 'R"(raw)"')).toBe('string')
+        //every number but a hex one alike
+        expect(cppTokenAt('x = 017;', '017')).toBe('number')
+        expect(cppTokenAt('x = 0b1;', '0b1')).toBe('number')
+        expect(cppTokenAt('x = 1.5f;', '1.5f')).toBe('number')
+        expect(cppTokenAt('x = 0x1F;', '0x1F')).toBe('number.hex')
+    })
+
+    it('leaves names, operators and punctuation to the text colour', () => {
+        expect(cppTokenAt('size_t n;', 'size_t')).toBeUndefined()
+        expect(cppTokenAt('a += b;', '+=')).toBeUndefined()
+        expect(cppTokenAt('p->x;', '->')).toBeUndefined()
+        expect(cppTokenAt('a, b', ',')).toBeUndefined()
+    })
+
+    it("paints a bracket by its level, an attribute's too, and a stray one as unexpected", () => {
+        const brackets = tokenizeCpp('[[a]] f((x)) )')
+            .flat()
+            .filter((t) => t.kind === 'bracket')
+        expect(brackets.map((t) => cppTokenOf(t))).toEqual([
+            'bracket-1',
+            'bracket-2',
+            'bracket-2',
+            'bracket-1',
+            'bracket-1',
+            'bracket-2',
+            'bracket-2',
+            'bracket-1',
+            'bracket-unexpected'
+        ])
+    })
+})
+
+describe('cppTokenClass', () => {
+    it('names the class after the token and gives plain text none', () => {
+        const [attribute] = tokenizeCpp('[[nodiscard]]')[0].filter((t) => t.kind === 'annotation')
+        expect(cppTokenClass(attribute)).toBe('asm-annotation')
+        const hex = tokenizeCpp('x = 0x1F;')[0].find((t) => t.text === '0x1F')!
+        expect(cppTokenClass(hex)).toBe('asm-number-hex')
+        const [name] = tokenizeCpp('value')[0]
+        expect(cppTokenClass(name)).toBeUndefined()
+    })
+})
+
 describe('assemblyPaletteStyle', () => {
     it("sets every editor token's colour for the surface", () => {
         const dark = assemblyPaletteStyle(true)
@@ -98,5 +172,21 @@ describe('assemblyPaletteStyle', () => {
         expect(dark).toContain(
             `--asm-bracket-unexpected: ${ASSEMBLY_BRACKET_COLORS.dark.unexpected}`
         )
+    })
+
+    it("has a rule in the code blocks' stylesheet for every token it sets", () => {
+        const stylesheet = readFileSync(
+            join(process.cwd(), 'src/components/shared/markdown/codeBlocks.css'),
+            'utf8'
+        )
+        const unpainted = Object.keys(ASSEMBLY_TOKEN_COLORS.dark)
+            .map((token) => token.replace('.', '-'))
+            .filter(
+                (name) =>
+                    !new RegExp(`\\.asm-${name}\\s*\\{[^}]*color:\\s*var\\(--asm-${name}\\)`).test(
+                        stylesheet
+                    )
+            )
+        expect(unpainted).toEqual([])
     })
 })

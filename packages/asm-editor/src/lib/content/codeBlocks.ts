@@ -1,11 +1,11 @@
-import type { Plugin } from 'carta-md'
 import type { Element, ElementContent, Root } from 'hast'
 import { toString } from 'hast-util-to-string'
 import { visit } from 'unist-util-visit'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { tokenizeAssembly } from './assemblyHighlight'
-import { assemblyTokenClass } from './assemblyPalette'
-import { parsePlaygroundLanguage } from './playgrounds'
+import { assemblyTokenClass, cppTokenClass } from './assemblyPalette'
+import { tokenizeCpp } from './cppHighlight'
+import { fenceLanguage } from './fenceLanguage'
 
 /** A terminal newline ends the last line rather than adding a line-number-only row. */
 export function codeLineNumbers(source: string): string {
@@ -13,15 +13,16 @@ export function codeLineNumbers(source: string): string {
     return Array.from({ length: count }, (_, index) => String(index + 1)).join('\n')
 }
 
-export function highlightedAssemblyCode(
-    source: string,
-    language: AvailableLanguages
+/** Lines of classed tokens as the children of a `<code>`, a span per coloured token. */
+function tokenChildren<T extends { text: string }>(
+    lines: T[][],
+    classOf: (token: T) => string | undefined
 ): ElementContent[] {
     const children: ElementContent[] = []
-    tokenizeAssembly(source, language).forEach((tokens, index) => {
+    lines.forEach((tokens, index) => {
         if (index > 0) children.push({ type: 'text', value: '\n' })
         for (const token of tokens) {
-            const className = assemblyTokenClass(token, language)
+            const className = classOf(token)
             children.push(
                 className
                     ? {
@@ -37,8 +38,21 @@ export function highlightedAssemblyCode(
     return children
 }
 
+export function highlightedAssemblyCode(
+    source: string,
+    language: AvailableLanguages
+): ElementContent[] {
+    return tokenChildren(tokenizeAssembly(source, language), (token) =>
+        assemblyTokenClass(token, language)
+    )
+}
+
+/** C or C++, coloured as the editor colours a `.c` or `.cpp` File. */
+export function highlightedCppCode(source: string): ElementContent[] {
+    return tokenChildren(tokenizeCpp(source), cppTokenClass)
+}
+
 function classes(node: Element): string[] {
-    // Shiki emits `class`; remark/rehype emit `className`.
     const value = node.properties.className ?? node.properties.class
     return Array.isArray(value)
         ? value.map(String)
@@ -47,7 +61,12 @@ function classes(node: Element): string[] {
           : []
 }
 
-/** Decorate source without putting the line numbers inside the code or the embed payload. */
+/**
+ * Colours each code block with the editor's own highlighters and adds its line numbers, without
+ * putting them inside the code or the embed payload. Assembly and C/C++ are coloured here; a block
+ * in any other language keeps its `language-` class, for Monaco to colour where the host asks for
+ * it, and stays plain everywhere else.
+ */
 function decorateCodeBlocks(tree: Root): void {
     visit(tree, 'element', (node: Element) => {
         if (node.tagName !== 'pre') return
@@ -58,26 +77,28 @@ function decorateCodeBlocks(tree: Root): void {
 
         const names = new Set(classes(node))
         const languageName = classes(code).find((name) => name.startsWith('language-'))
-        const language =
-            languageName && parsePlaygroundLanguage(languageName.slice(9).split('|')[0])
-        // Playground marking owns its language class and source-to-iframe handoff.
-        if (language && typeof node.properties['data-playground'] !== 'string') {
-            code.children = highlightedAssemblyCode(toString(code).replace(/\n$/, ''), language)
-            delete code.properties.class
-            code.properties = { ...code.properties, className: ['asm-code'] }
-            names.add('asm-block')
+        // Playground marking owns its block's language class and the source the embed is built from.
+        if (languageName && typeof node.properties['data-playground'] !== 'string') {
+            const language = fenceLanguage(languageName.slice('language-'.length))
+            const source = toString(code).replace(/\n$/, '')
+            if (language.kind === 'assembly' || language.kind === 'c-cpp') {
+                code.children =
+                    language.kind === 'assembly'
+                        ? highlightedAssemblyCode(source, language.language)
+                        : highlightedCppCode(source)
+                code.properties = { className: ['asm-code'] }
+                names.add('asm-block')
+            }
         }
         names.add('code-block')
         if (typeof node.properties['data-playground'] === 'string') {
             names.add('code-gutter-spacing')
         }
-        // Serializing both names produces duplicate class attributes; HTML keeps only the first.
-        delete node.properties.class
         node.properties = { ...node.properties, className: [...names] }
         node.children = node.children.filter(
             (child) => child.type !== 'element' || !classes(child).includes('code-gutter')
         )
-        // Keep code first: Shiki's pre handler expects it there. CSS places the gutter first.
+        // CSS places the gutter before the code.
         node.children.push({
             type: 'element',
             tagName: 'span',
@@ -87,25 +108,5 @@ function decorateCodeBlocks(tree: Root): void {
     })
 }
 
-/** Add after Carta's code plugin so its async pass also decorates Shiki's replacement blocks. */
-export function codeBlocks(): Plugin {
-    return {
-        transformers: [
-            {
-                execution: 'sync',
-                type: 'rehype',
-                transform({ processor }) {
-                    processor.use(() => decorateCodeBlocks)
-                }
-            },
-            {
-                execution: 'async',
-                type: 'rehype',
-                transform({ processor }) {
-                    // A distinct attacher runs after Shiki even though the sync pass runs first.
-                    processor.use(() => decorateCodeBlocks)
-                }
-            }
-        ]
-    }
-}
+/** The rehype plugin of the [Markdown pipeline](./markdown.ts) that decorates code blocks. */
+export const rehypeCodeBlocks = () => decorateCodeBlocks

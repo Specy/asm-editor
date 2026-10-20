@@ -283,7 +283,7 @@ Write a target label or address. NASM calculates a signed 8-bit displacement fro
 
 In 64-bit code, \`enter 32, 0\` has the frame-building effect of:
 
-\`\`\`asm
+\`\`\`x86
 push rbp
 mov rbp, rsp
 sub rsp, 32
