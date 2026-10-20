@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import InteractiveEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import { type AvailableLanguages } from '#lib/Project.svelte.ts'
     import InstructionPreview from './InstructionPreview.svelte'
@@ -47,8 +48,8 @@
      */
     function openInEditor() {
         const project = makeProject({
-            name: `${instructionKey.toUpperCase()} - ${language} example`,
-            description: `Example for the ${language} ${instructionKey} instruction`,
+            name: `${instructionKey.toUpperCase()} - ${languageLabel(language)} example`,
+            description: `Example for the ${languageLabel(language)} ${instructionKey} instruction`,
             language,
             code
         })

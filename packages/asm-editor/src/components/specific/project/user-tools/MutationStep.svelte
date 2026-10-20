@@ -18,9 +18,11 @@
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
+        /** Contrast with the section surface when shown in a docked History panel. */
+        docked?: boolean
     }
 
-    let { step, flags, language, canUndoToHere = true }: Props = $props()
+    let { step, flags, language, canUndoToHere = true, docked = false }: Props = $props()
     //each Core records its own status register, so the bits are read with the Target's own layout
     let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
@@ -178,7 +180,7 @@
     }>()
 </script>
 
-<div class="column step">
+<div class="column step" class:docked>
     <div class="step-header column">
         <button
             title={canUndoToHere && step.undoable !== false
@@ -373,6 +375,13 @@
         padding: 0.4rem;
         background-color: var(--secondary);
         color: var(--secondary-text);
+    }
+
+    .step.docked {
+        padding: 0.3rem;
+        background-color: var(--primary);
+        color: var(--primary-text);
+        border: 1px solid var(--wb-line, var(--tertiary));
     }
 
     .flags {

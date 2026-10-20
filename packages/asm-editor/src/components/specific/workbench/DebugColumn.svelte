@@ -156,7 +156,7 @@
                                 id="debug:{tool.id}"
                                 title={tool.title}
                                 style={toolSectionStyle(tool)}
-                                bodyStyle={toolBodyStyle(tool, '24rem')}
+                                bodyStyle={toolBodyStyle('24rem')}
                             >
                                 <DebugToolContent {tool} />
                             </CollapsibleSection>

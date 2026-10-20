@@ -1,4 +1,5 @@
 import type { SearchResult } from '#lib/search/engine.ts'
+import { languageLabel } from '#lib/languages/languageLabel.ts'
 import {
     documentationLanguageOf,
     scopeForAgent,
@@ -18,7 +19,7 @@ const TEXT_BUDGET = 1600
 
 function describe(scope: SearchScope): string {
     if (scope.kind === 'courses') return 'every course'
-    const name = scope.language.toUpperCase()
+    const name = languageLabel(scope.language.toUpperCase())
     return scope.lectures
         ? `the ${name} documentation, its course and the general course`
         : `the ${name} documentation`
@@ -34,7 +35,7 @@ function hitOf(result: SearchResult): DocumentationSearchHit {
         return {
             kind: 'documentation',
             title: entry.signature ? `${entry.title} ${entry.signature}` : entry.title,
-            where: `${entry.language.toUpperCase()} documentation › ${entry.chapterTitle}`,
+            where: `${languageLabel(entry.language.toUpperCase())} documentation › ${entry.chapterTitle}`,
             summary: entry.summary,
             text: cut(entry.text),
             href: entry.href

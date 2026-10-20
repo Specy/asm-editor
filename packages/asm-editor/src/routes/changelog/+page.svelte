@@ -11,11 +11,11 @@
     <title>Changelog | Asm Editor</title>
     <meta
         name="description"
-        content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
+        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta
         property="og:description"
-        content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
+        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta property="og:title" content="Asm Editor" />
 </svelte:head>

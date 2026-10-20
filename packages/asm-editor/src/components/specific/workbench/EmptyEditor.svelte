@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import { executableKind } from '#lib/executables.ts'
     import {
@@ -105,7 +106,9 @@
         {#if !compact}
             <header>
                 <h1>Asm Editor</h1>
-                <p class="tagline">{project.language} · {project.name || 'Project'}</p>
+                <p class="tagline">
+                    {languageLabel(project.language)} · {project.name || 'Project'}
+                </p>
             </header>
         {/if}
         <p class="status">

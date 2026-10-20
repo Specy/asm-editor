@@ -21,13 +21,11 @@ export function toolSectionStyle(tool: DebugTool): string {
 }
 
 /**
- * A Debug tool's section body, at most `maxHeight` tall and scrolling inside: the Stack pointer pads
- * its own controls and page, which are ruled apart from edge to edge of the section, and the others
- * are inset by 0.4rem.
+ * A Debug tool's section body, at most `maxHeight` tall and scrolling inside. Each tool fills the
+ * section from edge to edge and pads its own content.
  */
-export function toolBodyStyle(tool: DebugTool, maxHeight: string): string {
-    const padding = tool.kind === 'memory' ? '0' : '0.4rem'
-    return `padding: ${padding}; max-height: ${maxHeight}; overflow: auto;`
+export function toolBodyStyle(maxHeight: string): string {
+    return `padding: 0; max-height: ${maxHeight}; overflow: auto;`
 }
 
 export function debugTools(memoryTabs: readonly MemoryTab[]): DebugTool[] {

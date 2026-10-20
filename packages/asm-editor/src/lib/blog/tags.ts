@@ -37,7 +37,7 @@ export const BLOG_TAGS: Record<BlogTagId, { label: string; description: string }
             'Run and debug 32-bit and 64-bit RISC-V assembly with the RARS-based simulator.'
     },
     x86: {
-        label: 'x86',
+        label: 'x86-64',
         description: 'Write x86-64 assembly, import executables, and inspect registers and memory.'
     },
     'c-cpp': {

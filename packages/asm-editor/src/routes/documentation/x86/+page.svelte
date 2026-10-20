@@ -21,7 +21,7 @@
 />
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">x86-64 Documentation</h1>
-    <SearchLauncher size="full" placeholder="Search the x86 docs and courses" />
+    <SearchLauncher size="full" placeholder="Search the x86-64 docs and courses" />
     <p class="intro">
         x86-64 is the instruction set most desktop and server processors run. It has sixteen 64 bit
         general purpose registers, memory addressed as one flat space, and an instruction for almost

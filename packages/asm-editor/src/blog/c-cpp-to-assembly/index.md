@@ -75,7 +75,7 @@ Editing generated assembly removes its reliable source mapping. Recompiling asks
 
 ## Targets and libraries
 
-Supported targets are **MIPS**, **RISC-V**, **RISC-V-64**, and **X86**. MIPS and RISC-V offer GCC or Clang; x86 uses GCC. The supplied `<stdio.h>` runtime connects `printf` to Terminal.
+Supported targets are **MIPS**, **RISC-V**, **RISC-V-64**, and **x86-64**. MIPS and RISC-V offer GCC or Clang; x86 uses GCC. The supplied `<stdio.h>` runtime connects `printf` to Terminal.
 
 For C++17, create `main.cpp` with this program, select it, then Compile, Build, and Run:
 

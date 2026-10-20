@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { Project } from '#lib/Project.svelte.ts'
     import timeAgo from 's-ago'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
@@ -71,7 +72,7 @@
     </div>
     <div class="project-footer">
         <div style="margin-left: 0.4rem">
-            {project.language.toUpperCase()}
+            {languageLabel(project.language)}
         </div>
         <div style="display: flex; gap: 0.2rem; align-items: center;">
             <button class="trash-icon" onclick={deleteProject} title="Delete this project">

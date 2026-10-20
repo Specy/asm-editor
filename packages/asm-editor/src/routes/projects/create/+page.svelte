@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
 
@@ -30,15 +31,34 @@
 
     let name = $state('')
     let description = $state('')
-    let language: AvailableLanguages = $state('M68K')
-    const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
+    let language: AvailableLanguages = $state('RISC-V-64')
+    const languageOptions: Array<{ key: string; value: AvailableLanguages }> = [
         { key: 'M68K', value: 'M68K' },
         { key: 'MIPS', value: 'MIPS' },
-        { key: 'X86', value: 'X86' },
+        { key: languageLabel('X86'), value: 'X86' },
         { key: 'RISC-V', value: 'RISC-V' },
         { key: 'RISC-V-64', value: 'RISC-V-64' },
         { key: 'Z80', value: 'Z80' }
     ]
+
+    const LANGUAGE_STORAGE_KEY = 'asm-editor_new-project-isa'
+    onMount(() => {
+        try {
+            const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY)
+            const option = languageOptions.find((option) => option.value === stored)
+            if (option) language = option.value
+        } catch {
+            // Project creation still works when browser storage is unavailable.
+        }
+    })
+
+    function rememberLanguage(value: AvailableLanguages) {
+        try {
+            localStorage.setItem(LANGUAGE_STORAGE_KEY, value)
+        } catch {
+            // Keep the selected ISA for this form even if it cannot be saved.
+        }
+    }
 
     const BAREBONES = 'barebones'
     let templateId = $state(BAREBONES)
@@ -118,7 +138,12 @@
         >
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
-            <Select title="Instruction Set" options={languageOptions} bind:value={language}>
+            <Select
+                title="Instruction Set"
+                options={languageOptions}
+                bind:value={language}
+                onChange={rememberLanguage}
+            >
                 {#snippet item(option)}
                     <span class="language-option">
                         <span>{option.key}</span>

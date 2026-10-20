@@ -218,7 +218,7 @@
                                 id="compact:{tool.id}"
                                 title={tool.title}
                                 style="flex: 1 1 16rem; min-width: min(16rem, 100%);"
-                                bodyStyle={toolBodyStyle(tool, '22rem')}
+                                bodyStyle={toolBodyStyle('22rem')}
                             >
                                 <DebugToolContent {tool} />
                             </CollapsibleSection>

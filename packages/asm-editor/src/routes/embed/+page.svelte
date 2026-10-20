@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { onMount } from 'svelte'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import {
@@ -49,12 +50,12 @@
         registerFile?: string
     }
 
-    const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
+    const languageOptions: Array<{ key: string; value: AvailableLanguages }> = [
         { key: 'M68K', value: 'M68K' },
         { key: 'MIPS', value: 'MIPS' },
         { key: 'RISC-V', value: 'RISC-V' },
         { key: 'RISC-V-64', value: 'RISC-V-64' },
-        { key: 'X86', value: 'X86' },
+        { key: languageLabel('X86'), value: 'X86' },
         { key: 'Z80', value: 'Z80' }
     ]
     const defaultLanguage: AvailableLanguages = 'M68K'

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -51,10 +52,10 @@
     const sectionTypeOptions: Array<{ key: ExamSectionType; value: ExamSectionType }> =
         Object.values(ExamSectionType).map((value) => ({ key: value, value }))
     const assemblyLanguageOptions: Array<{
-        key: AvailableLanguages
+        key: string
         value: AvailableLanguages
     }> = (Object.keys(BASE_CODE) as AvailableLanguages[]).map((value) => ({
-        key: value,
+        key: languageLabel(value),
         value
     }))
 

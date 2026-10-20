@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     /**
      * Settings, as the Workbench's side panel: the Project's Settings, the Display configuration of
      * a MARS or RARS Project, the person's Preferences, the layout Preferences, the shortcuts and the
@@ -42,7 +43,10 @@
     const { session, ui } = useWorkbench()
     const project = session.project
     const language = $derived(project.language)
-    const languageOptions = AVAILABLE_LANGUAGES.map((value) => ({ key: value, value }))
+    const languageOptions = AVAILABLE_LANGUAGES.map((value) => ({
+        key: languageLabel(value),
+        value
+    }))
     const declarations = $derived(projectSettingsFor(language))
     const effective = $derived(resolveProjectSettings(language, project.settings))
     const sections: Partial<Record<SettingsSectionId, HTMLElement>> = $state({})

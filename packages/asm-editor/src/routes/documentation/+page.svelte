@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -11,7 +12,7 @@
 
 <DefaultNavbar />
 <PageMeta
-    title="Documentation - M68K, MIPS, RISC-V, x86 and Z80 assembly reference | Asm Editor"
+    title="Documentation - M68K, MIPS, RISC-V, x86-64 and Z80 assembly reference | Asm Editor"
     description="Instruction references, registers, directives, syscalls and runtime library docs for M68K, MIPS, RISC-V, x86-64 and Z80 assembly in the Asm Editor."
 />
 
@@ -24,7 +25,7 @@
                 color={languageAccent(lang)}
             >
                 <div>
-                    {lang}
+                    {languageLabel(lang)}
                 </div>
             </NavigationLinkButton>
         {/each}

@@ -78,14 +78,14 @@
 
     <Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
         <Column padding="0 1rem">
-            <SearchLauncher placeholder="Search the x86 docs and courses" />
+            <SearchLauncher placeholder="Search the x86-64 docs and courses" />
         </Column>
 
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
                     href="/documentation/x86"
-                    title="x86"
+                    title="x86-64"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
@@ -164,7 +164,7 @@
         {/snippet}
     </Sidebar>
 
-    <SearchPalette {scope} placeholder="Search the x86 docs and courses" />
+    <SearchPalette {scope} placeholder="Search the x86-64 docs and courses" />
 </ThemeScope>
 
 <style lang="scss">
