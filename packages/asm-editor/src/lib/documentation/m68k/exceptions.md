@@ -1,6 +1,6 @@
 ## Exceptions on a real 68000
 
-> **None of this is implemented in this editor.** The 68000's exception machinery is described here because it is part of the processor and you will meet it in real code, but the emulator has no vector table, no supervisor mode and no exception handlers. The bottom of memory is ordinary memory: writing to it changes nothing about how a program runs. Each section below ends with what the editor does instead.
+> **This editor does not dispatch exceptions to program handlers.** The 68000's exception machinery is described here because it is part of the processor and you will meet it in real code, but the emulator has no vector table or exception handlers. Every program runs with supervisor access; there is no user-mode privilege checking or separate user stack. The bottom of memory is ordinary memory: writing to it changes nothing about how a program runs. Each section below ends with what the editor does instead.
 
 On a real 68000, `trap #15` is one of sixteen trap instructions, and the traps are a few of 256 causes that can take the program counter away from your program. All of them work the same way, through a table at the bottom of memory.
 
@@ -42,7 +42,7 @@ The steps are the same for every cause, and this is what handling an exception m
 
 > **In this editor:** the three instructions that exist only to serve this machinery are recognised by the assembler but refuse to build, each with its own reason.
 >
-> - `rte` is not implemented: every program runs in supervisor mode and no exception state is kept.
+> - `rte` is not implemented: no exception frames are kept to return from.
 > - `stop` is not implemented: there are no interrupts to wake a stopped processor.
 > - `reset` is not implemented: there is no external hardware to reset.
 >

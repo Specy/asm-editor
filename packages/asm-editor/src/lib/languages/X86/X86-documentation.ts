@@ -628,7 +628,7 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     exit: 'Ends the program with the status in `rdi`. It never returns, and a program that reaches the end of its code without calling it runs into whatever bytes follow.',
     exit_group:
         'Ends every thread of the program with the status in `rdi`. For a program with one thread it is `exit`.',
-    mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to.',
+    mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a Project File copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of a Project File returns `-ENODEV`.',
     mprotect:
         'Changes the read, write, or execute permissions of the `rsi` bytes starting at the page-aligned address in `rdi`.',
     munmap: 'Unmaps the mapping of `rsi` bytes at the address in `rdi`.',
@@ -636,26 +636,42 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     pipe: 'Creates a pair of connected file descriptors and writes both integers to the two-element array at `rdi`; reads from one end receive bytes written to the other.',
     dup: 'Returns a new file descriptor that refers to the same open file description as the descriptor in `rdi`.',
     dup2: 'Makes descriptor `rsi` refer to the same open file description as `rdi`, closing the old `rsi` first if needed.',
-    readv: 'Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read.',
-    writev: 'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written.',
+    readv: 'Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read. An error in a later buffer can be returned after earlier buffers have already changed, rather than returning the earlier partial byte count. Check those buffers before retrying after an error.',
+    writev: 'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written. The buffers are gathered into one payload before writing. If a capacity limit refuses the write, none of that payload is written.',
+    pwritev:
+        'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi` at the offset in `r10`; returns the total bytes written without changing the descriptor’s position. The buffers are gathered into one payload before writing. If a capacity limit refuses the write, none of that payload is written.',
     nanosleep: 'Sleeps for the interval at `rdi`, a pair of seconds and nanoseconds.',
     getpid: 'Returns the process id.',
-    clock_gettime:
-        'Writes the current run’s elapsed program time to the `timespec` structure at `rsi` (seconds and nanoseconds). This is simulator time, not calendar time.',
-    time: 'Returns the current run’s elapsed program time in whole seconds, and also stores it at the address in `rdi` unless `rdi` is 0.',
+    clock_gettime: `Writes the clock selected by \`rdi\` to the \`timespec\` structure at \`rsi\` (seconds and nanoseconds).
+
+\`CLOCK_REALTIME\`, \`CLOCK_REALTIME_COARSE\` and \`CLOCK_TAI\` report Unix epoch time: host calendar time interactively, and 2000-01-01 UTC plus virtual elapsed time in Testcases. \`CLOCK_TAI\` shares realtime without a leap-second offset.
+
+\`CLOCK_PROCESS_CPUTIME_ID\` and \`CLOCK_THREAD_CPUTIME_ID\` count executed instructions at nominal 100 MHz, exclude waiting time, and rewind with Undo. Monotonic clocks and \`CLOCK_BOOTTIME\` report elapsed time; virtual elapsed time advances only through waits.`,
+    time: 'Returns calendar time in whole seconds since the Unix epoch, and also stores it at the address in `rdi` unless `rdi` is 0. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time.',
+    getitimer:
+        'Writes the remaining delay and repeat interval of the timer selected by `rdi` to the `itimerval` structure at `rsi`. Only `ITIMER_REAL` is supported. `ITIMER_VIRTUAL` and `ITIMER_PROF` return `-EOPNOTSUPP`.',
+    setitimer:
+        'Sets the timer selected by `rdi` from the `itimerval` structure at `rsi`, and writes the previous settings at `rdx` when that pointer is nonzero. Only `ITIMER_REAL` is supported; it sends `SIGALRM` when its delay expires. `ITIMER_VIRTUAL` and `ITIMER_PROF` return `-EOPNOTSUPP`.',
+    wait4: 'Returns `-ECHILD` immediately because this environment has no child processes.',
     ioctl: 'Asks a device the descriptor in `rdi` refers to for something outside the ordinary read and write interface, chosen by the request in `rsi`.',
     sendfile:
         'Copies up to `r10` bytes from the input descriptor in `rsi` to the output descriptor in `rdi`, optionally updating the input position through the pointer in `rdx`.',
     getcwd: 'Writes the current working directory as a NUL-terminated path to the buffer at `rdi`, up to `rsi` bytes.',
     chdir: 'Changes the program’s current working directory to the path at `rdi`.',
     fchdir: 'Changes the program’s current working directory to the directory referred to by descriptor `rdi`.',
-    rename: 'Renames or moves the path at `rdi` to the path at `rsi`.',
-    mkdir: 'Creates a directory at the path in `rdi`; `rsi` supplies its permission mode.',
-    rmdir: 'Removes the empty directory named by the path at `rdi`.',
-    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor.',
+    rename: 'Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+    renameat:
+        'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+    renameat2:
+        'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`.',
+    mkdir: 'Requests a directory at the path in `rdi`, with the mode in `rsi`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths.',
+    mkdirat:
+        'Requests a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths.',
+    rmdir: 'Requests removal of the empty directory named by the path at `rdi`. Project directories cannot be removed this way: they exist only as prefixes of File paths and disappear when their last File is removed.',
+    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last File also removes that implicit directory.',
     uname: 'Writes system name and version fields to the Linux `struct utsname` buffer at `rdi`.',
     gettimeofday:
-        'Writes the current run’s elapsed program time, in seconds and microseconds, to the `timeval` structure at `rdi`; this is not calendar time.',
+        'Writes calendar time since the Unix epoch, in seconds and microseconds, to the `timeval` structure at `rdi`. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time.',
     getrusage:
         'Writes resource-usage counters for the selected process or children to the `rusage` structure at `rsi`.',
     sysinfo:

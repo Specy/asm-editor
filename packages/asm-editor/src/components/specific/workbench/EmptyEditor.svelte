@@ -10,7 +10,7 @@
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import FaFileMedical from '~icons/fa-solid/file-medical'
-    import FaFolderOpen from '~icons/fa-solid/folder-open'
+    import FaCopy from '~icons/fa-solid/copy'
     import FaBook from '~icons/fa-solid/book'
     import FaFileAlt from '~icons/fa-solid/file-alt'
     import { useWorkbench } from './workbenchContext'
@@ -134,7 +134,7 @@
                     {#if explorer}
                         <li>
                             <button class="link" onclick={() => ui.open('explorer')}>
-                                <FaFolderOpen /> Open Explorer
+                                <FaCopy /> Open Explorer
                             </button>
                         </li>
                     {/if}

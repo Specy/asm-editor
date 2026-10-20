@@ -20,6 +20,12 @@ Check `argc > 1` before using `argv[1]`. For example, `if (argc > 1) printf("%s\
 
 Programs have no environment variables; `getenv` always returns NULL.
 
+### Memory and allocation
+
+Compiled C and C++ programs reserve 4,128,768 bytes for static data from `0x10010000` through `0x103FFFFF` (exclusive end `0x10400000`). Constants, globals, and a `SIM_SCREEN` grid share this range. The heap moves to the first 4 KiB page after static data when needed. Assembly programs retain the assembler’s memory layout.
+
+The Runtime library’s allocation service 1100 returns -1 on heap exhaustion; the assembly service 9 stops execution with a runtime error. See [`malloc`](#malloc) for allocation results and alignment.
+
 ## From hand-written assembly {#from-assembly}
 
 Hand-written assembly can call the library too. In the Workbench's **Settings** panel, open **Project Settings** and set **Link Runtime library** to **Runtime ABI v1**. For ordinary fixed-argument calls, integer and pointer arguments use `a0` to `a7`, and floating-point arguments use `fa0` to `fa7`; each register sequence is assigned independently. Arguments that do not fit in registers go on the stack. Variadic arguments (the arguments represented by `...`, as in `printf`) use the integer argument registers and then the stack, including floating-point values. Integer or pointer results return in `a0`; floating-point results return in `fa0`. Follow the RISC-V psABI for aggregate arguments and other special cases. The setting is off by default, so an unresolved call can still report an undefined symbol; the diagnostic identifies names supplied by the library.
@@ -50,6 +56,6 @@ The **Explorer** is the file list for the current Build. It includes linked libr
 
 ## Stepping {#stepping}
 
-By default, **Step** over `call printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. For programs compiled in the editor, enabling this Preference begins execution in Runtime startup at `_start`, so you can step through startup too.
+A runtime error stops execution. Undo reverses recorded program state and keeps the Terminal transcript visible; Stop or Build ends the run.
 
-`malloc` follows the compiler's `max_align_t` alignment and returns NULL with ENOMEM on exhaustion. `clock()` counts executed instructions at nominal 100 MHz and excludes waiting time; Undo rewinds that counter. `time()` reports calendar time, with 2000-01-01 UTC as the fixed Testcase epoch. Library calendar conversions use UTC. Input buffering requests fail; default input remains unbuffered.
+By default, **Step** over `call printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. For programs compiled in the editor, enabling this Preference begins execution in Runtime startup at `_start`, so you can step through startup too.

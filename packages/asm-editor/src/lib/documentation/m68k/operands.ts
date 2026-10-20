@@ -80,7 +80,7 @@ export type M68KOperandLine = { meaning: string; href?: string }
 export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = {
     '<ea>': {
         meaning:
-            'An effective address: an operand in any of the addressing modes the row lists when it is opened, such as `d0`, `(a0)+` or `4(a1)`.',
+            'An operand using one of the instruction’s supported addressing modes, such as `d0`, `(a0)+` or `4(a1)`. It may name a register, memory or an immediate value.',
         href: MODES
     },
     Dn: { meaning: 'A data register, `d0` to `d7`.', href: `${MODES}#direct` },
@@ -89,64 +89,67 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
         href: `${MODES}#direct`
     },
     '(An)': {
-        meaning: 'The memory at the address an address register holds: `(a0)`.',
+        meaning: 'Memory at the address stored in an address register, for example `(a0)`.',
         href: `${MODES}#indirect`
     },
     '(An)+': {
         meaning:
-            'The memory at the address an address register holds, which then grows by the size of the operation: `(a0)+`.',
+            'Memory at the address stored in an address register, for example `(a0)+`. After access, the simulator increases the register by the operation’s size in bytes.',
         href: `${MODES}#indirect-post-pre-increment`
     },
     '-(An)': {
         meaning:
-            'An address register shrunk first by the size of the operation, then the memory at its new address: `-(sp)`.',
+            'The simulator first decreases the address register by the operation’s size in bytes, then accesses memory at the new address, for example `-(sp)`.',
         href: `${MODES}#indirect-post-pre-increment`
     },
     'd(An)': {
-        meaning: 'The memory at an address register plus a signed 16-bit displacement: `4(a0)`.',
+        meaning:
+            'Memory at the address stored in an address register plus a signed 16-bit displacement, for example `4(a0)`.',
         href: `${MODES}#address-register-displacement`
     },
     'd(An,Xn)': {
         meaning:
-            'The memory at an address register plus an index register and a signed 8-bit displacement: `4(a0,d1.w)`.',
+            'Memory at the sum of an address register, an index register and a signed 8-bit displacement, for example `4(a0,d1.w)`. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` uses its full long value.',
         href: `${MODES}#address-register-indexed`
     },
     abs: {
-        meaning: 'An absolute address, a number or a label: `$1000`, `buffer`, `buffer.w`.',
+        meaning:
+            'An absolute memory address, written as a number or label: `$1000`, `buffer` or `buffer.w`.',
         href: `${MODES}#effective-address`
     },
     label: {
         meaning:
-            'Where to branch: a label, or an address, which the assembler turns into a distance from this instruction.',
+            'A branch target, written as a label or address. The assembler calculates the relative displacement.',
         href: `${MODES}#effective-address`
     },
     'd(PC)': {
         meaning:
-            'The memory at this instruction plus a signed 16-bit displacement, usually written with a label: `table(pc)`. It can be read but not written.',
+            'Memory addressed relative to the program counter, based two bytes after the instruction’s start. Write the target label or address, as in `table(pc)`; the assembler computes a signed 16-bit displacement. This addressing mode cannot write memory.',
         href: `${MODES}#program-counter-relative`
     },
     'd(PC,Xn)': {
         meaning:
-            'The memory at this instruction plus an index register and a signed 8-bit displacement: `4(pc,d0.w)`. It can be read but not written.',
+            'Memory at a target address plus an index register, for example `4(pc,d0.w)`. The assembler computes a signed 8-bit displacement from two bytes after the instruction’s start to the target. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` its full long value. This addressing mode cannot write memory.',
         href: `${MODES}#program-counter-relative`
     },
     '#imm': {
         meaning:
-            "An immediate: a number, a character or a label written after `#`, such as `#10`, `#$FF` or `#'a'`, in the size of the operation.",
+            "An immediate value written after `#`: a number, character or label, such as `#10`, `#$FF` or `#'a'`. It must fit the operation’s size: byte `-128` to `255`, word `-32768` to `65535`, or long `-2147483648` to `4294967295`; signed and unsigned spellings are accepted.",
         href: `${MODES}#immediate`
     },
     sr: {
         meaning:
-            'The 16-bit status register: the system byte and, in its low byte, the condition codes.',
+            'The 16-bit status register. Its upper byte contains system flags; its lower byte contains the condition codes.',
         href: `${MODES}#status-registers`
     },
     ccr: {
-        meaning: 'The condition-code register, the low byte of `sr`, which holds X N Z V C.',
+        meaning:
+            'The condition-code register: the low byte of `sr`, containing the `X`, `N`, `Z`, `V` and `C` flags.',
         href: `${MODES}#status-registers`
     },
     '<register list>': {
         meaning:
-            'Registers joined by `/`, a range written with `-`: `d0-d2/a0` is `d0 d1 d2 a0`. One `Dn` or `An` is a list of one.'
+            'A register list using `/` to separate registers and `-` for ranges. For example, `d0-d2/a0` selects `d0`, `d1`, `d2` and `a0`. A single data or address register is also valid.'
     }
 }
 
@@ -155,19 +158,19 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
  * that a family's members (`asl`, `asr`) share their family's (`asd`).
  */
 const IMMEDIATE_MEANINGS: Readonly<Record<string, string>> = {
-    moveq: 'An immediate from `-128` to `255`, sign-extended to 32 bits: `#-1`, `#$7F`. `128` to `255` are the unsigned spellings of `-128` to `-1`.',
-    addq: 'An immediate from `1` to `8`: `#1`.',
-    subq: 'An immediate from `1` to `8`: `#1`.',
-    asd: 'The shift count as an immediate, `1` to `8`: `#3`.',
-    lsd: 'The shift count as an immediate, `1` to `8`: `#3`.',
-    rod: 'The rotate count as an immediate, `1` to `8`: `#3`.',
-    roxd: 'The rotate count as an immediate, `1` to `8`: `#3`.',
-    btst: 'An immediate; as the first operand, the bit number: `0` to `31` in a data register, `0` to `7` in memory.',
-    bset: 'An immediate; as the first operand, the bit number: `0` to `31` in a data register, `0` to `7` in memory.',
-    bclr: 'An immediate; as the first operand, the bit number: `0` to `31` in a data register, `0` to `7` in memory.',
-    bchg: 'An immediate; as the first operand, the bit number: `0` to `31` in a data register, `0` to `7` in memory.',
-    trap: 'The trap vector, `0` to `15`; `#15` is the simulator’s service handler.',
-    link: 'The signed 16-bit displacement added to the stack pointer, negative to reserve space: `#-16`.'
+    moveq: 'An 8-bit immediate, `-128` to `255`, sign-extended to 32 bits, for example `#-1` or `#$7F`. Values `128` to `255` represent `-128` to `-1`.',
+    addq: 'An immediate from `1` to `8`, for example `#1`.',
+    subq: 'An immediate from `1` to `8`, for example `#1`.',
+    asd: 'An immediate shift count from `1` to `8`, for example `#3`.',
+    lsd: 'An immediate shift count from `1` to `8`, for example `#3`.',
+    rod: 'An immediate rotate count from `1` to `8`, for example `#3`.',
+    roxd: 'An immediate rotate count from `1` to `8`, for example `#3`.',
+    btst: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
+    bset: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
+    bclr: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
+    bchg: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
+    trap: 'A trap vector from `0` to `15`. Use `#15` to call the simulator’s service handler.',
+    link: 'A signed 16-bit displacement added to the stack pointer. Use a negative value to reserve stack space, for example `#-16`.'
 }
 
 /** A symbol's legend line on one instruction's page; `entry` is its Documentation entry. */

@@ -49,6 +49,7 @@ import usingCProse from './using-c.md?raw'
 import executablesProse from './executables.md?raw'
 import runtimeProse from './runtime-library.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
+import { runtimeFunctionDocumentation } from '../runtimeFunctions'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { x86CallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
@@ -466,7 +467,13 @@ function syscallEntry(syscall: X86Syscall, href: string): DocumentationEntry {
         { label: 'Out', value: [output, ...outputBuffers].join(' ') }
     ]
     if (syscall.blocking) {
-        fields.push({ label: 'Waits', value: 'This call can wait for the outside world.' })
+        fields.push({
+            label: 'Waits',
+            value:
+                syscall.name === 'wait4'
+                    ? 'Returns immediately with ECHILD; this environment has no child processes.'
+                    : 'This call can wait for the outside world.'
+        })
     }
     //searched as MIPS's and RISC-V's are, without the C prototype
     const searchText = [description, ...fields.map((field) => `${field.label}: ${field.value}`)]
@@ -581,10 +588,7 @@ function runtimeLibrary(): Chapter {
         }),
         ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
             const convention = x86CallingConvention(entry.prototype)
-            const doc =
-                entry.name === 'getenv'
-                    ? 'Always returns NULL; this Runtime library does not expose environment variables.'
-                    : entry.doc
+            const doc = runtimeFunctionDocumentation(entry.name, entry.doc)
             return {
                 id: `x86/runtime-library/${entry.name}`,
                 language: 'x86',

@@ -52,6 +52,6 @@
     {visible}
     {interactive}
     {escapes}
-    placeholder="What the program writes appears here."
+    placeholder="Console output appears here"
     style="--terminal-padding: var(--wb-output-padding);"
 />

@@ -44,7 +44,7 @@ static inline void sim_print_double(double value) {
     __asm__ volatile("syscall" : : "r"(v0), "f"(f12) : "memory");
 }
 
-/** Print string, service 4. Takes $a0, address of null-terminated string to print. */
+/** Print string, service 4. Takes $a0, address of NUL-terminated UTF-8 string to print. */
 static inline void sim_print_string(const char *text) {
     register int v0 __asm__("$2") = 4;
     register const char *a0 __asm__("$4") = text;
@@ -74,7 +74,7 @@ static inline double sim_read_double(void) {
     return f0;
 }
 
-/** Read string, service 8. Takes $a0, address of input buffer; $a1, maximum number of characters to read. */
+/** Read string, service 8. Takes $a0, address of input buffer; $a1, size of input buffer in bytes. */
 static inline void sim_read_string(char *buffer, int size) {
     register int v0 __asm__("$2") = 8;
     register char *a0 __asm__("$4") = buffer;
@@ -112,7 +112,7 @@ static inline int sim_read_char(void) {
     return v0;
 }
 
-/** Open file, service 13. Takes $a0, address of null-terminated string containing filename; $a1, flags; $a2, mode. Returns $v0, contains file descriptor (negative if error). */
+/** Open file, service 13. Takes $a0, address of NUL-terminated UTF-8 path in Project Files; $a1, flags; $a2, mode. Returns $v0, contains file descriptor (-1 if error). */
 static inline int sim_open(const char *path, int flags, int mode) {
     register int v0 __asm__("$2") = 13;
     register const char *a0 __asm__("$4") = path;
@@ -122,7 +122,7 @@ static inline int sim_open(const char *path, int flags, int mode) {
     return v0;
 }
 
-/** Read from file, service 14. Takes $a0, file descriptor; $a1, address of input buffer; $a2, maximum number of characters to read. Returns $v0, contains number of characters read (0 if end-of-file, negative if error). */
+/** Read from file, service 14. Takes $a0, file descriptor; $a1, address of input buffer; $a2, maximum number of bytes to read. Returns $v0, contains number of bytes read (0 if end-of-file, -1 if error). */
 static inline int sim_read(int fd, void *buffer, int length) {
     register int v0 __asm__("$2") = 14;
     register int a0 __asm__("$4") = fd;
@@ -132,7 +132,7 @@ static inline int sim_read(int fd, void *buffer, int length) {
     return v0;
 }
 
-/** Write to file, service 15. Takes $a0, file descriptor; $a1, address of output buffer; $a2, number of characters to write. Returns $v0, contains number of characters written (negative if error). */
+/** Write to file, service 15. Takes $a0, file descriptor; $a1, address of output buffer; $a2, number of bytes to write. Returns $v0, contains number of bytes written (-1 if error). */
 static inline int sim_write(int fd, const void *buffer, int length) {
     register int v0 __asm__("$2") = 15;
     register int a0 __asm__("$4") = fd;
@@ -237,7 +237,7 @@ static inline double sim_random_double(int generator) {
     return f0;
 }
 
-/** ConfirmDialog, service 50. Takes $a0, address of null-terminated string that is the message to user. Returns $a0, contains value of user-chosen option, 0: Yes, 1: No, 2: Cancel. */
+/** ConfirmDialog, service 50. Takes $a0, address of NUL-terminated UTF-8 string that is the message to user. Returns $a0, contains value of user-chosen option, 0: Yes, 1: No, 2: Cancel. */
 static inline int sim_confirm_dialog(const char *message) {
     register int v0 __asm__("$2") = 50;
     register const char *a0 __asm__("$4") = message;
@@ -246,7 +246,7 @@ static inline int sim_confirm_dialog(const char *message) {
     return result;
 }
 
-/** InputDialogInt, service 51. Takes $a0, address of null-terminated string that is the message to user. Returns $a0, contains int read; $a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
+/** InputDialogInt, service 51. Takes $a0, address of NUL-terminated UTF-8 string that is the message to user. Returns $a0, contains int read; $a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
 static inline int sim_input_dialog_int(const char *message, int *status) {
     register int v0 __asm__("$2") = 51;
     register const char *a0 __asm__("$4") = message;
@@ -257,7 +257,7 @@ static inline int sim_input_dialog_int(const char *message, int *status) {
     return result;
 }
 
-/** InputDialogFloat, service 52. Takes $a0, address of null-terminated string that is the message to user. Returns $f0, contains the floating-point value parsed from the input line; $a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
+/** InputDialogFloat, service 52. Takes $a0, address of NUL-terminated UTF-8 string that is the message to user. Returns $f0, contains the floating-point value parsed from the input line; $a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
 static inline float sim_input_dialog_float(const char *message, int *status) {
     register int v0 __asm__("$2") = 52;
     register const char *a0 __asm__("$4") = message;
@@ -268,7 +268,7 @@ static inline float sim_input_dialog_float(const char *message, int *status) {
     return f0;
 }
 
-/** InputDialogDouble, service 53. Takes $a0, address of null-terminated string that is the message to user. Returns $f0, contains the double-precision value parsed from the input line; $a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
+/** InputDialogDouble, service 53. Takes $a0, address of NUL-terminated UTF-8 string that is the message to user. Returns $f0, contains the double-precision value parsed from the input line; $a1, contains status value, 0: OK status, -1: input data cannot be correctly parsed, -2: Cancel was chosen, -3: OK was chosen but no data had been input into field. */
 static inline double sim_input_dialog_double(const char *message, int *status) {
     register int v0 __asm__("$2") = 53;
     register const char *a0 __asm__("$4") = message;
@@ -279,7 +279,7 @@ static inline double sim_input_dialog_double(const char *message, int *status) {
     return f0;
 }
 
-/** InputDialogString, service 54. Takes $a0, address of null-terminated string that is the message to user; $a1, address of input buffer; $a2, maximum number of characters to read. Returns $a1, contains status value, 0: OK status. Buffer contains the input string. -2: Cancel was chosen. No change to buffer. -3: OK was chosen but no data had been input into field. No change to buffer. -4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null. */
+/** InputDialogString, service 54. Takes $a0, address of NUL-terminated UTF-8 string that is the message to user; $a1, address of input buffer; $a2, size of input buffer in bytes. Returns $a1, contains status value, 0: OK status. Buffer contains the input string. -2: Cancel was chosen. No change to buffer. -3: OK was chosen but no data had been input into field. No change to buffer. -4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null. */
 static inline int sim_input_dialog_string(const char *message, char *buffer, int size) {
     register int v0 __asm__("$2") = 54;
     register const char *a0 __asm__("$4") = message;
@@ -290,7 +290,7 @@ static inline int sim_input_dialog_string(const char *message, char *buffer, int
     return result;
 }
 
-/** MessageDialog, service 55. Takes $a0, address of null-terminated string that is the message to user; $a1, the type of message to be displayed: 0: error message, indicated by Error icon, 1: information message, indicated by Information icon, 2: warning message, indicated by Warning icon, 3: question message, indicated by Question icon, other: plain message (no icon displayed). */
+/** MessageDialog, service 55. Takes $a0, address of NUL-terminated UTF-8 string that is the message to user; $a1, the type of message to be displayed: 0: error message, indicated by Error icon, 1: information message, indicated by Information icon, 2: warning message, indicated by Warning icon, 3: question message, indicated by Question icon, other: plain message (no icon displayed). */
 static inline void sim_message_dialog(const char *message, int type) {
     register int v0 __asm__("$2") = 55;
     register const char *a0 __asm__("$4") = message;
@@ -298,7 +298,7 @@ static inline void sim_message_dialog(const char *message, int type) {
     __asm__ volatile("syscall" : : "r"(v0), "r"(a0), "r"(a1) : "memory");
 }
 
-/** MessageDialogInt, service 56. Takes $a0, address of null-terminated string that is an information-type message to user; $a1, int value to display in string form after the first string. */
+/** MessageDialogInt, service 56. Takes $a0, address of NUL-terminated UTF-8 string that is an information-type message to user; $a1, int value to display in string form after the first string. */
 static inline void sim_message_dialog_int(const char *message, int value) {
     register int v0 __asm__("$2") = 56;
     register const char *a0 __asm__("$4") = message;
@@ -306,7 +306,7 @@ static inline void sim_message_dialog_int(const char *message, int value) {
     __asm__ volatile("syscall" : : "r"(v0), "r"(a0), "r"(a1) : "memory");
 }
 
-/** MessageDialogFloat, service 57. Takes $a0, address of null-terminated string that is an information-type message to user; $f12, float value to display in string form after the first string. */
+/** MessageDialogFloat, service 57. Takes $a0, address of NUL-terminated UTF-8 string that is an information-type message to user; $f12, float value to display in string form after the first string. */
 static inline void sim_message_dialog_float(const char *message, float value) {
     register int v0 __asm__("$2") = 57;
     register const char *a0 __asm__("$4") = message;
@@ -314,7 +314,7 @@ static inline void sim_message_dialog_float(const char *message, float value) {
     __asm__ volatile("syscall" : : "r"(v0), "r"(a0), "f"(f12) : "memory");
 }
 
-/** MessageDialogDouble, service 58. Takes $a0, address of null-terminated string that is an information-type message to user; $f12, double value to display in string form after the first string. */
+/** MessageDialogDouble, service 58. Takes $a0, address of NUL-terminated UTF-8 string that is an information-type message to user; $f12, double value to display in string form after the first string. */
 static inline void sim_message_dialog_double(const char *message, double value) {
     register int v0 __asm__("$2") = 58;
     register const char *a0 __asm__("$4") = message;
@@ -322,7 +322,7 @@ static inline void sim_message_dialog_double(const char *message, double value) 
     __asm__ volatile("syscall" : : "r"(v0), "r"(a0), "f"(f12) : "memory");
 }
 
-/** MessageDialogString, service 59. Takes $a0, address of null-terminated string that is an information-type message to user; $a1, address of null-terminated string to display after the first string. */
+/** MessageDialogString, service 59. Takes $a0, address of NUL-terminated UTF-8 string that is an information-type message to user; $a1, address of NUL-terminated UTF-8 string to display after the first string. */
 static inline void sim_message_dialog_string(const char *message, const char *text) {
     register int v0 __asm__("$2") = 59;
     register const char *a0 __asm__("$4") = message;

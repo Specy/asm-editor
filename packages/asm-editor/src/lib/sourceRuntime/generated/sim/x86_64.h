@@ -116,7 +116,7 @@ static inline long sim_lseek(long fd, long offset, long whence) {
     return rax;
 }
 
-/** mmap, syscall 9. Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. */
+/** mmap, syscall 9. Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a Project File copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of a Project File returns `-ENODEV`. */
 static inline long sim_mmap(void *address, long size, long prot, long flags, long fd, long offset) {
     register long rax __asm__("rax") = 9;
     register void *rdi __asm__("rdi") = address;
@@ -210,7 +210,7 @@ static inline long sim_pwrite64(long fd, const void *buffer, long count, long of
     return rax;
 }
 
-/** readv, syscall 19. Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read. */
+/** readv, syscall 19. Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read. An error in a later buffer can be returned after earlier buffers have already changed, rather than returning the earlier partial byte count. Check those buffers before retrying after an error. */
 static inline long sim_readv(long fd, const void *iov, long count) {
     register long rax __asm__("rax") = 19;
     register long rdi __asm__("rdi") = fd;
@@ -220,7 +220,7 @@ static inline long sim_readv(long fd, const void *iov, long count) {
     return rax;
 }
 
-/** writev, syscall 20. Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written. */
+/** writev, syscall 20. Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written. The buffers are gathered into one payload before writing. If a capacity limit refuses the write, none of that payload is written. */
 static inline long sim_writev(long fd, const void *iov, long count) {
     register long rax __asm__("rax") = 20;
     register long rdi __asm__("rdi") = fd;
@@ -331,7 +331,7 @@ static inline long sim_nanosleep(const void *request, void *remaining) {
     return rax;
 }
 
-/** getitimer, syscall 36. */
+/** getitimer, syscall 36. Writes the remaining delay and repeat interval of the timer selected by `rdi` to the `itimerval` structure at `rsi`. Only `ITIMER_REAL` is supported. `ITIMER_VIRTUAL` and `ITIMER_PROF` return `-EOPNOTSUPP`. */
 static inline long sim_getitimer(long which, void *current) {
     register long rax __asm__("rax") = 36;
     register long rdi __asm__("rdi") = which;
@@ -348,7 +348,7 @@ static inline long sim_alarm(long number) {
     return rax;
 }
 
-/** setitimer, syscall 38. */
+/** setitimer, syscall 38. Sets the timer selected by `rdi` from the `itimerval` structure at `rsi`, and writes the previous settings at `rdx` when that pointer is nonzero. Only `ITIMER_REAL` is supported; it sends `SIGALRM` when its delay expires. `ITIMER_VIRTUAL` and `ITIMER_PROF` return `-EOPNOTSUPP`. */
 static inline long sim_setitimer(long which, const void *value, void *oldvalue) {
     register long rax __asm__("rax") = 38;
     register long rdi __asm__("rdi") = which;
@@ -384,7 +384,7 @@ static inline __attribute__((__noreturn__)) void sim_exit(long status) {
     __builtin_unreachable();
 }
 
-/** wait4, syscall 61. */
+/** wait4, syscall 61. Returns `-ECHILD` immediately because this environment has no child processes. */
 static inline long sim_wait4(long pid, void *wstatus, long options, void *rusage) {
     register long rax __asm__("rax") = 61;
     register long rdi __asm__("rdi") = pid;
@@ -490,7 +490,7 @@ static inline long sim_fchdir(long fd) {
     return rax;
 }
 
-/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. */
+/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`. */
 static inline long sim_rename(const void *path1, const void *path2) {
     register long rax __asm__("rax") = 82;
     register const void *rdi __asm__("rdi") = path1;
@@ -499,7 +499,7 @@ static inline long sim_rename(const void *path1, const void *path2) {
     return rax;
 }
 
-/** mkdir, syscall 83. Creates a directory at the path in `rdi`; `rsi` supplies its permission mode. */
+/** mkdir, syscall 83. Requests a directory at the path in `rdi`, with the mode in `rsi`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths. */
 static inline long sim_mkdir(const void *path, long mode) {
     register long rax __asm__("rax") = 83;
     register const void *rdi __asm__("rdi") = path;
@@ -508,7 +508,7 @@ static inline long sim_mkdir(const void *path, long mode) {
     return rax;
 }
 
-/** rmdir, syscall 84. Removes the empty directory named by the path at `rdi`. */
+/** rmdir, syscall 84. Requests removal of the empty directory named by the path at `rdi`. Project directories cannot be removed this way: they exist only as prefixes of File paths and disappear when their last File is removed. */
 static inline long sim_rmdir(const void *path) {
     register long rax __asm__("rax") = 84;
     register const void *rdi __asm__("rdi") = path;
@@ -534,7 +534,7 @@ static inline long sim_link(const void *path1, const void *path2) {
     return rax;
 }
 
-/** unlink, syscall 87. Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. */
+/** unlink, syscall 87. Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last File also removes that implicit directory. */
 static inline long sim_unlink(const void *path) {
     register long rax __asm__("rax") = 87;
     register const void *rdi __asm__("rdi") = path;
@@ -617,7 +617,7 @@ static inline long sim_umask(long mode) {
     return rax;
 }
 
-/** gettimeofday, syscall 96. Writes the current run’s elapsed program time, in seconds and microseconds, to the `timeval` structure at `rdi`; this is not calendar time. */
+/** gettimeofday, syscall 96. Writes calendar time since the Unix epoch, in seconds and microseconds, to the `timeval` structure at `rdi`. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time. */
 static inline long sim_gettimeofday(void *timeval, void *timezone) {
     register long rax __asm__("rax") = 96;
     register void *rdi __asm__("rdi") = timeval;
@@ -943,7 +943,7 @@ static inline long sim_tkill(long pid, long sig) {
     return rax;
 }
 
-/** time, syscall 201. Returns the current run’s elapsed program time in whole seconds, and also stores it at the address in `rdi` unless `rdi` is 0. */
+/** time, syscall 201. Returns calendar time in whole seconds since the Unix epoch, and also stores it at the address in `rdi` unless `rdi` is 0. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time. */
 static inline long sim_time(void *buffer) {
     register long rax __asm__("rax") = 201;
     register void *rdi __asm__("rdi") = buffer;
@@ -1003,7 +1003,7 @@ static inline long sim_fadvise64(long value1, long value2, long value3, long val
     return rax;
 }
 
-/** clock_gettime, syscall 228. Writes the current run’s elapsed program time to the `timespec` structure at `rsi` (seconds and nanoseconds). This is simulator time, not calendar time. */
+/** clock_gettime, syscall 228. Writes the clock selected by `rdi` to the `timespec` structure at `rsi` (seconds and nanoseconds). `CLOCK_REALTIME`, `CLOCK_REALTIME_COARSE` and `CLOCK_TAI` report Unix epoch time: host calendar time interactively, and 2000-01-01 UTC plus virtual elapsed time in Testcases. `CLOCK_TAI` shares realtime without a leap-second offset. `CLOCK_PROCESS_CPUTIME_ID` and `CLOCK_THREAD_CPUTIME_ID` count executed instructions at nominal 100 MHz, exclude waiting time, and rewind with Undo. Monotonic clocks and `CLOCK_BOOTTIME` report elapsed time; virtual elapsed time advances only through waits. */
 static inline long sim_clock_gettime(long clockid, void *tp) {
     register long rax __asm__("rax") = 228;
     register long rdi __asm__("rdi") = clockid;
@@ -1070,7 +1070,7 @@ static inline long sim_openat(long dirfd, const void *string, long flags, long m
     return rax;
 }
 
-/** mkdirat, syscall 258. */
+/** mkdirat, syscall 258. Requests a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths. */
 static inline long sim_mkdirat(long dirfd, const void *path, long mode) {
     register long rax __asm__("rax") = 258;
     register long rdi __asm__("rdi") = dirfd;
@@ -1123,7 +1123,7 @@ static inline long sim_unlinkat(long dirfd, const void *path, long flags) {
     return rax;
 }
 
-/** renameat, syscall 264. */
+/** renameat, syscall 264. Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`. */
 static inline long sim_renameat(long dirfd1, const void *path1, long dirfd2, const void *path2) {
     register long rax __asm__("rax") = 264;
     register long rdi __asm__("rdi") = dirfd1;
@@ -1272,7 +1272,7 @@ static inline long sim_preadv(long fd, const void *iov, long count, long offset)
     return rax;
 }
 
-/** pwritev, syscall 296. */
+/** pwritev, syscall 296. Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi` at the offset in `r10`; returns the total bytes written without changing the descriptor’s position. The buffers are gathered into one payload before writing. If a capacity limit refuses the write, none of that payload is written. */
 static inline long sim_pwritev(long fd, const void *iov, long count, long offset) {
     register long rax __asm__("rax") = 296;
     register long rdi __asm__("rdi") = fd;
@@ -1294,7 +1294,7 @@ static inline long sim_prlimit64(long pid, long resource, const void *rlim1, voi
     return rax;
 }
 
-/** renameat2, syscall 316. */
+/** renameat2, syscall 316. Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`. */
 static inline long sim_renameat2(long dirfd1, const void *path1, long dirfd2, const void *path2, long flags) {
     register long rax __asm__("rax") = 316;
     register long rdi __asm__("rdi") = dirfd1;

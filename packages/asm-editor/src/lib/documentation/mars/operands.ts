@@ -15,36 +15,36 @@ export type MarsLanguage = 'mips' | 'risc-v'
 export const MIPS_OPERAND_MEANINGS: Readonly<Record<string, string>> = {
     imm16: 'A signed 16-bit immediate, `-32768` to `32767`.',
     uimm16: 'An unsigned 16-bit immediate, `0` to `65535`.',
-    imm32: 'Any 32-bit value, `-2147483648` to `4294967295`; the assembler builds it in `$at` first.',
-    imm5: 'An unsigned 5-bit number, `0` to `31`, such as a shift amount.',
-    cc: 'One of the eight FP condition flags, `0` to `7`, which the comparisons set and `bc1t` and `bc1f` read.',
-    label: 'A label: the name of an address in the program, such as the start of a loop or a variable in `.data`.',
-    $8: 'A coprocessor 0 register, by number: `$8` (vaddr), `$12` (status), `$13` (cause) or `$14` (epc).'
+    imm32: 'A 32-bit immediate, `-2147483648` to `4294967295`. Pseudoinstruction expansion may overwrite `$at`, losing its previous value.',
+    imm5: 'An unsigned 5-bit immediate, `0` to `31`, used for values such as a shift count.',
+    cc: 'A floating-point condition flag number, `0` to `7`. Comparisons set these flags; `bc1t` and `bc1f` test them.',
+    label: 'A named address in the program, such as the start of a loop or a variable in `.data`.',
+    $8: 'A coprocessor 0 register, written by number: `$8` (`vaddr`), `$12` (`status`), `$13` (`cause`) or `$14` (`epc`).'
 }
 
 /** The immediates and other value symbols of a RISC-V row. */
 export const RISCV_OPERAND_MEANINGS: Readonly<Record<string, string>> = {
     imm12: 'A signed 12-bit immediate, `-2048` to `2047`.',
-    imm20: 'A 20-bit immediate, `0` to `1048575` (`0xFFFFF`), which lands in the upper 20 bits of the register.',
-    imm32: 'Any 32-bit value, `-2147483648` to `4294967295`.',
-    imm64: 'Any 64-bit value.',
-    imm5: 'An unsigned 5-bit number, `0` to `31`, such as a shift amount or a CSR immediate.',
-    imm6: 'An unsigned 6-bit shift amount or bit number, `0` to `63`; RV32 takes only `0` to `31`.',
-    label: 'A label: the name of an address in the program, such as the start of a loop or a variable in `.data`.',
-    csr: 'A control and status register, by name or number: `fcsr`, `fflags`, `frm`, `cycle`, `time`, `instret`, `ustatus`, `uepc`, `ucause`, `utval`….',
-    rm: 'A rounding mode: `rne` (to nearest, ties to even), `rtz` (toward zero), `rdn` (down), `rup` (up), `rmm` (to nearest, ties away from zero) or `dyn`, the mode `fcsr` holds.'
+    imm20: 'A 20-bit immediate, `0` to `1048575` (`0xFFFFF`), placed in bits 31–12.',
+    imm32: 'A 32-bit immediate, `-2147483648` to `4294967295`.',
+    imm64: 'A 64-bit immediate for RV64: decimal `-9223372036854775808` to `9223372036854775807`, or a hexadecimal bit pattern up to `0xFFFFFFFFFFFFFFFF`.',
+    imm5: 'An unsigned 5-bit immediate, `0` to `31`, used for values such as a shift count or a CSR immediate.',
+    imm6: 'An unsigned shift count or bit number: `0` to `63` in RV64, or `0` to `31` in RV32.',
+    label: 'A named address in the program, such as the start of a loop or a variable in `.data`.',
+    csr: 'A control and status register, written by name or number, such as `fcsr`, `fflags`, `frm`, `cycle`, `time`, `instret`, `ustatus`, `uepc`, `ucause` or `utval`. See the [supported registers](/documentation/risc-v/registers).',
+    rm: 'A rounding mode: `rne` (nearest, ties to even), `rtz` (toward zero), `rdn` (toward negative infinity), `rup` (toward positive infinity), `rmm` (nearest, ties away from zero) or `dyn` (use the rounding mode in `fcsr`).'
 }
 
 /** How a merged `imm` row's widths read in its legend line, in the order they are listed. */
 const IMMEDIATE_PHRASES: Readonly<Record<string, string>> = {
-    imm5: 'an unsigned 5-bit one (`0` to `31`)',
-    imm6: 'an unsigned 6-bit one (`0` to `63`)',
-    imm12: 'a signed 12-bit one (`-2048` to `2047`)',
-    imm16: 'a signed 16-bit one (`-32768` to `32767`)',
-    uimm16: 'an unsigned 16-bit one (`0` to `65535`)',
-    imm20: 'a 20-bit one (`0` to `1048575`)',
-    imm32: 'any 32-bit value',
-    imm64: 'any 64-bit value'
+    imm5: 'an unsigned 5-bit value (`0` to `31`)',
+    imm6: 'an unsigned 6-bit value (`0` to `63` in RV64, `0` to `31` in RV32)',
+    imm12: 'a signed 12-bit value (`-2048` to `2047`)',
+    imm16: 'a signed 16-bit value (`-32768` to `32767`)',
+    uimm16: 'an unsigned 16-bit value (`0` to `65535`)',
+    imm20: 'a 20-bit value (`0` to `1048575`)',
+    imm32: 'a 32-bit value (`-2147483648` to `4294967295`)',
+    imm64: 'a 64-bit value in RV64 (signed decimal or a hexadecimal bit pattern up to `0xFFFFFFFFFFFFFFFF`)'
 }
 
 /**
@@ -58,8 +58,8 @@ export function immediateMeaning(widths: readonly string[]): string {
     const listed =
         phrases.length > 1
             ? `${phrases.slice(0, -1).join(', ')} or ${phrases[phrases.length - 1]}`
-            : (phrases[0] ?? 'any value its forms take')
-    return `A number: ${listed}. The assembler picks the form by the value, and the expanded row lists each one.`
+            : (phrases[0] ?? 'a value accepted by the instruction')
+    return `An immediate value: ${listed}. The assembler chooses a supported encoding for the value and other operands; a pseudoinstruction may expand into several instructions.`
 }
 
 export type RegisterKind = 'general' | 'float' | 'double' | 'fcsr'
@@ -85,27 +85,29 @@ export function registerKind(
 
 const RANGES: Record<MarsLanguage, Record<Exclude<RegisterKind, 'fcsr'>, string>> = {
     mips: {
-        general: 'Any general-purpose register, `$zero` to `$ra` (`$0` to `$31`).',
-        float: 'Any floating point register, `$f0` to `$f31`.',
-        double: 'An even floating point register, `$f0` to `$f30`, which holds a double together with the odd register above it.'
+        general:
+            'Any general-purpose register, `$0` to `$31`, using its numeric or named spelling, such as `$8` or `$t0` (`$zero` is `$0`; `$ra` is `$31`).',
+        float: 'Any floating-point register, `$f0` to `$f31`.',
+        double: 'An even-numbered floating-point register, `$f0` to `$f30`. A double-precision value uses this register and the next odd-numbered register.'
     },
     'risc-v': {
-        general: 'Any integer register, `zero` to `t6` (`x0` to `x31`).',
-        float: 'Any floating point register, `ft0` to `ft11` (`f0` to `f31`).',
-        double: 'Any floating point register, `ft0` to `ft11` (`f0` to `f31`).'
+        general:
+            'Any integer register, `x0` to `x31`, or its named alias, such as `zero`, `t0` or `t6`.',
+        float: 'Any floating-point register, `f0` to `f31`, or its named alias, such as `ft0`, `fa0` or `ft11`.',
+        double: 'Any floating-point register, `f0` to `f31`, or its named alias, such as `ft0`, `fa0` or `ft11`.'
     }
 }
 
 const ANOTHER: Record<MarsLanguage, Record<Exclude<RegisterKind, 'fcsr'>, string>> = {
     mips: {
-        general: 'Another general-purpose register',
-        float: 'Another floating point register',
-        double: 'Another even floating point register, holding a double'
+        general: 'A general-purpose register',
+        float: 'A floating-point register',
+        double: 'An even-numbered floating-point register holding a double'
     },
     'risc-v': {
-        general: 'Another integer register',
-        float: 'Another floating point register',
-        double: 'Another floating point register'
+        general: 'An integer register',
+        float: 'A floating-point register',
+        double: 'A floating-point register'
     }
 }
 
@@ -120,10 +122,10 @@ export function registerMeaning(
     first: string | undefined
 ): string {
     if (kind === 'fcsr') {
-        return '`$f31` here names the FPU control and status register (FCSR), which holds the rounding mode and the exception flags.'
+        return '`$f31` here names the floating-point control and status register (FCSR), containing the rounding mode and exception flags.'
     }
     if (first === undefined || first === symbol) {
-        return `${RANGES[language][kind]} The forms' sentences call the one written here \`${symbol}\`.`
+        return RANGES[language][kind]
     }
-    return `${ANOTHER[language][kind]}, which may be the same one as \`${first}\`.`
+    return `${ANOTHER[language][kind]}. It may be the same register as \`${first}\`.`
 }

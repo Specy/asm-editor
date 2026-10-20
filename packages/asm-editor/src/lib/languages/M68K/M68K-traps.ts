@@ -28,31 +28,31 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'text',
         title: 'Text I/O',
         description:
-            'Printing and reading. Everything printed is appended to the terminal transcript **and** drawn on the screen at the text cursor. Testcases compare the transcript. Typed input is echoed to both, unless task 12 turned echo off. Text uses Windows-1252, a single-byte character encoding: each character takes one byte, including `€` and curly quotes.'
+            'Printed text is appended to the console transcript and drawn on the screen at the text cursor. Testcases compare the transcript. Typed input is echoed to both unless task 12 turns echo off. Text uses Windows-1252, a single-byte encoding: each character takes one byte, including `€` (`$80`) and curly quotes. The screen uses fixed 8 by 16 pixel cells and draws ASCII glyphs only; other Windows-1252 characters appear in the transcript but leave blank screen cells.'
     },
     {
         group: 'graphics',
         title: 'Graphics',
         description:
-            'Drawing on the screen. The origin is the top left, coordinates are signed pixels, so a shape may start off the left or the top, and whatever falls outside the screen is clipped. Colors are `$00BBGGRR` longs. Rectangles and ellipses exclude their right and bottom edges.'
+            'The origin is the top left, coordinates are signed pixels, and drawing outside the screen is clipped. Colors are `$00BBGGRR` longs. Rectangles and ellipses exclude their right and bottom edges. These tasks select [screen input](/documentation/m68k/traps#differences), except for task 33’s windowed and full-screen requests.'
     },
     {
         group: 'input',
         title: 'Keyboard and mouse',
         description:
-            'Polled input from the focused screen. There are no input interrupts: a program asks for the state it wants when it wants it (tasks 60 and 62 are therefore not supported).'
+            'Keyboard and mouse state is polled from the focused screen; there are no input interrupts, so tasks 60 and 62 are unsupported. Tasks 7, 19, and 61 also select [screen input](/documentation/m68k/traps#differences) for subsequent interactive reads.'
     },
     {
         group: 'time',
         title: 'Program time',
         description:
-            'Waiting and reading the clock. A delay suspends the program without blocking the editor, so Stop still answers and the screen still repaints while it runs. Testcases run on a virtual clock, where a delay completes at once and the clock starts at zero.'
+            'Reading the clock and delaying execution. Both tasks count in hundredths of a second.'
     },
     {
         group: 'files',
         title: 'Files',
         description:
-            'Reading and writing the Project’s Files. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. Undo restores changes made by a file task, and each testcase works on its own copy of the Files.'
+            'Reading and writing the Project’s Files. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. A reported file error leaves execution running. Undo restores changes made by a file task, and each testcase works on its own copy of the Files.'
     }
 ]
 
@@ -97,9 +97,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'A1 = buffer address',
         output: 'The NUL terminated string at (A1), D1.L = its length',
         description:
-            'Reads a line of input, typed in the console, or on the screen once the program has used it, and ended with Enter; a testcase answers it from its scripted input. Its first 79 characters are stored, then a NUL (zero byte). Text is converted to Windows-1252, a single-byte encoding; a character it cannot represent is stored as `?`.',
-        deviation:
-            'Only the first 79 characters are stored. Additional typed characters are dropped.'
+            'Reads a line ended with Enter from the current [input source](/documentation/m68k/traps#differences); a testcase supplies its next scripted input. Stores the first 79 characters followed by a NUL (zero byte), dropping any additional characters. Text is converted to Windows-1252; a character it cannot represent is stored as `?`.'
     },
     {
         task: 3,
@@ -114,7 +112,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Read number',
         output: 'D1.L = number',
         description:
-            'Reads a line and converts it by skipping leading spaces, reading an optional sign, then taking digits up to the first other character. `12abc` is 12, and a line with no number, an empty one included, is 0, never an error.',
+            'Reads a line ended with Enter from the current [input source](/documentation/m68k/traps#differences), keeping its first 79 characters and dropping the rest. Skips leading whitespace, reads an optional sign, then takes decimal digits up to the first other character. `12abc` is 12, and a line with no number, an empty one included, is 0, never an error.',
         deviation: 'A number too long for 32 bits keeps its low 32 bits.'
     },
     {
@@ -123,7 +121,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Read character',
         output: 'D1.B = the character, $0D for Enter',
         description:
-            'Reads one key as soon as it is typed, without waiting for Enter, in the console or on the screen once the program has used it. Enter is `$0D`. Check task 7 first to poll instead of waiting.'
+            'Reads one key from the current [input source](/documentation/m68k/traps#differences) as soon as it is typed, without waiting for Enter. Enter is `$0D`. Check task 7 first to poll instead of waiting.'
     },
     {
         task: 6,
@@ -138,16 +136,17 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Check for keyboard input',
         output: 'D1.B = 1 when a character is waiting, 0 otherwise',
         description:
-            'Polls without consuming anything: the character it reports is the one task 5 or task 2 reads next. A testcase reports its remaining scripted input the same way.'
+            'Selects [screen input](/documentation/m68k/traps#differences) and polls without consuming anything: the character it reports is the one task 5 or task 2 reads next. A testcase reports its remaining scripted input the same way.'
     },
     {
         task: 8,
         group: 'time',
         title: 'Get time',
         output: 'D1.L = hundredths of a second',
-        description: 'The time the program has been running, in hundredths of a second.',
+        description:
+            'Returns hundredths of a second since local midnight. The value wraps at midnight.',
         deviation:
-            'Returns hundredths since local midnight; Testcases use UTC midnight at 2000-01-01. The value wraps at midnight.'
+            'A testcase uses a virtual clock starting at 2000-01-01 midnight UTC. Task 23 advances that clock.'
     },
     {
         task: 9,
@@ -162,7 +161,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.W = $FF00 to clear, $00FF to get, otherwise column in the high byte and row in the low byte',
         output: 'For $00FF, D1.W = column in the high byte, row in the low byte',
         description:
-            'The text cursor is where printed text lands, in character cells counted from the top left. Clearing with $FF00 clears text and graphics together, since they share one image, and homes the cursor. Positions outside the screen are clamped to it.'
+            'The text cursor is where printed text lands, in character cells counted from the top left. Clearing with $FF00 clears text and graphics together, since they share one image, and homes the cursor. Positions outside the screen are clamped to it. All three operations select [screen input](/documentation/m68k/traps#differences).'
     },
     {
         task: 12,
@@ -217,7 +216,8 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Display string and read number',
         input: 'A1 = string address',
         output: 'D1.L = number',
-        description: 'Task 14 then task 4: the NUL terminated string as a prompt, then a number.'
+        description:
+            'Task 14 then task 4: the NUL terminated string as a prompt, then a number from the current [input source](/documentation/m68k/traps#differences). The input limit and parsing rules of task 4 apply.'
     },
     {
         task: 19,
@@ -332,9 +332,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'A1 = NUL terminated path',
         output: 'D0.W = 0, or 2 when there is no File there',
         description:
-            'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.',
-        deviation:
-            'A file can be deleted while it is open and remains readable through its file number until closed.'
+            'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.'
     },
     {
         task: 58,
@@ -487,7 +485,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Draw text at a pixel position',
         input: 'A1 = NUL terminated string, D1.W = X, D2.W = Y',
         description:
-            'Draws the string in the pen color with its top left corner at X, Y, over whatever is already there, so a label can sit on a drawing. Control characters are ignored. Text printed with the text tasks lands at the text cursor instead (task 11).'
+            'Draws the string in the pen color with its top left corner at X, Y, over whatever is already there, so a label can sit on a drawing. Control characters are ignored. The encoding and fixed font described under [Text I/O](/documentation/m68k/traps#text) apply. Text printed with the text tasks lands at the text cursor instead (task 11).'
     },
     {
         task: 96,

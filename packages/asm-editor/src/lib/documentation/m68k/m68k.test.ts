@@ -191,7 +191,7 @@ describe('the M68K Documentation', () => {
         expect(lines.find((line) => line.includes('`70`'))).toContain('`77`')
         expect(lines.find((line) => line.includes('`70`'))).toContain('audio output')
         expect(text).not.toMatch(/`(?:12|16|5[0-9])`/)
-        expect(markdownOf(entry('trap-tasks', 'differences')).join('\n')).toContain('Windows-1252')
+        expect(markdownOf(entry('trap-tasks', 'text')).join('\n')).toContain('Windows-1252')
     })
 
     it('links only to pages that exist', () => {

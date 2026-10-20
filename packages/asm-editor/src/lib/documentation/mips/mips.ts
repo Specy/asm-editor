@@ -21,6 +21,7 @@ import registersIntro from './registers.md?raw'
 import runtimeIntro from './runtime-library.md?raw'
 import usingCIntro from './using-c.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
+import { runtimeFunctionDocumentation } from '../runtimeFunctions'
 import { mipsCallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import syscallsIntro from './syscalls.md?raw'
@@ -240,6 +241,7 @@ function runtimeLibrary(): Chapter {
         }),
         ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
             const convention = mipsCallingConvention(entry.prototype)
+            const doc = runtimeFunctionDocumentation(entry.name, entry.doc)
             return {
                 id: `mips/runtime-library/${entry.name}`,
                 language: 'mips',
@@ -248,12 +250,12 @@ function runtimeLibrary(): Chapter {
                 title: entry.name,
                 names: names(entry.name),
                 signature: `<${entry.header}>`,
-                summary: summaryOf(entry.doc),
+                summary: summaryOf(doc),
                 href: `${href}#${entry.name}`,
                 anchor: entry.name,
                 view: {
                     type: 'fields',
-                    markdown: entry.doc,
+                    markdown: doc,
                     fields: [
                         { label: 'Declaration', value: `\`${entry.prototype}\`` },
                         { label: 'Header', value: `\`<${entry.header}>\`` },
@@ -261,7 +263,7 @@ function runtimeLibrary(): Chapter {
                     ],
                     example: `jal ${entry.name}`
                 },
-                searchText: `${entry.prototype}. ${entry.doc}`
+                searchText: `${entry.prototype}. ${doc}`
             }
         })
     ]

@@ -15,7 +15,7 @@
     import WorkbenchDesktop from './WorkbenchDesktop.svelte'
     import WorkbenchCompact from './WorkbenchCompact.svelte'
     import DebugToolsFloating from './DebugToolsFloating.svelte'
-    import FaFolderOpen from '~icons/fa-solid/folder-open'
+    import FaCopy from '~icons/fa-solid/copy'
     import FaFlask from '~icons/fa-solid/flask'
     import FaBook from '~icons/fa-solid/book'
     import FaShareAlt from '~icons/fa-solid/share-alt'
@@ -178,7 +178,7 @@
                 })
             }
         }
-        builtin('explorer', 'Explorer', FaFolderOpen, 'top')
+        builtin('explorer', 'Explorer', FaCopy, 'top')
         builtin('testcases', 'Testcases', FaFlask, 'top', true, testcasesDot)
         builtin('documentation', 'Documentation', FaBook, 'top', true)
         host('top')

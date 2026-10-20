@@ -239,7 +239,7 @@ export const Z80_PORT_GROUP_DOCS: {
         title: 'Console',
         range: '0x10 - 0x14',
         description:
-            'The Terminal: one port per output format, and the input reads that pause the program until a line (or a keystroke on the Screen) is available. What is printed here is also drawn at the Screen’s text cursor, in 8 by 8 cells.'
+            'One port per output format. Console output goes to the Terminal and, in drawing mode, to the Screen’s text cursor in 8 by 8 cells. In TRS-80 mode it goes only to the Terminal.'
     },
     {
         group: 'screen',
@@ -253,7 +253,7 @@ export const Z80_PORT_GROUP_DOCS: {
         title: 'Keyboard',
         range: '0x30 - 0x33',
         description:
-            'Input from the focused Screen, polled: whether a typed character is waiting (read it from the character port), whether a given key is held, and the last key pressed and released. Key codes are EASy68K’s, the same table every environment here uses: letters and digits are the ASCII code of their capital, 0x25 to 0x28 are the arrows left, up, right and down, 0x20 is the space bar and 0x0D is Enter.'
+            'Input from the focused Screen, polled: whether a typed character is waiting (read it from the character port), whether a given key is held, and the last key pressed and released. Key codes are EASy68K’s, the same table every environment here uses: letters and digits are the ASCII code of their capital, 0x25 to 0x28 are the arrows left, up, right and down, 0x20 is the space bar and 0x0D is Enter. The Enter key code is distinct from the newline character 0x0A returned by CHAR.'
     },
     {
         group: 'mouse',
@@ -267,7 +267,7 @@ export const Z80_PORT_GROUP_DOCS: {
         title: 'Program time',
         range: '0x50 - 0x52',
         description:
-            'Waiting and elapsed time. A wait and a frame sync are reads that suspend the program without blocking the editor: the machine re-executes the `in` when the time has passed, so Stop still answers and the Screen still repaints. Testcases run on a virtual clock, where waits complete at once and time starts at zero.'
+            'Delay the program, synchronize animation frames, or read elapsed time. Waits leave the editor responsive: Stop still works and the Screen can repaint.'
     }
 ]
 
@@ -387,7 +387,7 @@ export const Z80_SCREEN_COMMAND_DOCS: {
         name: 'MODE_CELLS',
         command: Z80_SCREEN_COMMANDS.MODE_CELLS,
         description:
-            "The TRS-80's memory-mapped display: the Screen becomes 64 by 16 character cells and shows the kilobyte of memory at 0x3C00, one byte per cell. Characters 128 to 191 are 2 by 3 blocks, for 128 by 48 chunky pixels, and the keyboard matrix at 0x3800 answers reads. The drawing commands above are not available in this mode; a program draws by storing bytes. The same mode a `; @screen trs80` comment asks for before the program starts."
+            'Switches to the [TRS-80 display](/documentation/z80/io#the-trs-80-display). Draw by storing bytes in video memory; see that section for the memory map, character encoding and keyboard matrix.'
     },
     {
         name: 'MODE_DRAWING',
@@ -476,8 +476,8 @@ export const Z80_PORT_DOCS: Z80PortDoc[] = [
         port: Z80_PORTS.CHAR,
         group: 'console',
         title: 'Character',
-        write: 'Prints the byte as a character (Latin-1) and draws it at the Screen’s text cursor. 0x0A prints a newline.',
-        read: 'Returns the next character of the input line, pausing for input when the line has been consumed. The line ends with a newline character (0x0A). Once the program has touched a Screen, Keyboard or Mouse port the characters come from the focused Screen instead, one keystroke at a time, and are echoed at the text cursor.',
+        write: 'Prints the byte as a Latin-1 character to the Terminal and, in drawing mode, at the Screen’s text cursor. 0x0A prints a newline. At the bottom, text scrolls the whole Screen up one cell row, graphics included. In TRS-80 mode output goes only to the Terminal.',
+        read: 'Reads a Terminal line one character at a time, pausing when no input is buffered. Pressing Enter ends the line with newline 0x0A. Using a Screen, Keyboard or Mouse port in drawing mode, other than a display-mode command, switches character input to the Screen for the rest of the run. Click the Screen to focus it before typing. Each read then takes one keystroke; Enter still returns 0x0A. Typed characters are echoed at the text cursor while in drawing mode.',
         example: `        .org 0x8000
         ld hl, msg
 loop:   ld a, (hl)
@@ -735,7 +735,7 @@ msg:    .asciz "HELLO"`,
         group: 'screen',
         title: 'Text cursor row',
         write: 'Moves the text cursor to a row, in 8 by 8 character cells: 0 to 23 on the default Screen. Out of range values are clamped.',
-        read: 'The row the text cursor is on. Text scrolls the whole Screen up one cell row at the bottom, graphics included.'
+        read: 'The row the text cursor is on.'
     },
     {
         name: 'KEY_AVAILABLE',
@@ -851,7 +851,7 @@ wait:   in a, (c)
         group: 'time',
         title: 'Wait',
         write: 'Ignored.',
-        read: 'Waits B hundredths of a second, then answers 0. The editor stays responsive and Stop still works: the machine simply re-executes the `in` when the time is up. In a testcase the wait completes at once.',
+        read: 'Waits B hundredths of a second, then answers 0. In a testcase the wait completes at once and advances the virtual clock by the requested duration.',
         example: `        .org 0x8000
         ld c, 0x50
         ld b, 25        ; a quarter of a second
@@ -867,7 +867,7 @@ wait:   in a, (c)
         group: 'time',
         title: 'Frame sync',
         write: 'Ignored.',
-        read: 'Waits for the next animation frame, then answers 0. One read per frame is how an animation runs at the display’s own pace instead of as fast as the host can go; with double buffering, present the frame first and sync afterwards.',
+        read: 'Waits for the next animation frame, then answers 0. One read per frame is how an animation runs at the display’s own pace instead of as fast as the host can go; with double buffering, present the frame first and sync afterwards. In a testcase the wait completes at once and advances the virtual clock.',
         example: `        .org 0x8000
         ld b, 10        ; ten frames
 loop:   push bc
@@ -885,7 +885,7 @@ loop:   push bc
         group: 'time',
         title: 'Elapsed time',
         write: 'Ignored.',
-        read: 'One byte of the number of hundredths of a second since the run started, selected by B: 0 the lowest byte, 3 the highest. A testcase reads a virtual clock that starts at zero and only moves when the program waits, so a test is reproducible.',
+        read: 'One byte of the number of hundredths of a second since the run started, selected by B: 0 the lowest byte, 3 the highest. This is elapsed time, not a calendar clock. A testcase reads a virtual clock that starts at zero and only moves when the program waits, so a test is reproducible.',
         example: `        .org 0x8000
         ld c, 0x50
         ld b, 10        ; wait a tenth of a second
