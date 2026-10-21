@@ -15,10 +15,10 @@ packages:
 # and the root's `vp` runs the editor's tests, so a second instance would hand SvelteKit a second Vite.
 catalog:
     typescript: ^6.0.3
-    vite-plus: 1.1.0
+    vite-plus: 1.3.0
 
 overrides:
-    vite@*: npm:@voidzero-dev/vite-plus-core@1.1.0
+    vite@*: npm:@voidzero-dev/vite-plus-core@1.3.0
 
 allowBuilds:
     # Checks that the platform binary package was installed.
