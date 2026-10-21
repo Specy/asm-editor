@@ -58,7 +58,7 @@ Each trip through `frame` does these jobs:
 The helpers have interface comments immediately above their labels. Those comments identify their
 inputs and the registers they change.
 
-```riscv|playground|open-screen|console|no-registers|allow-open
+```riscv|playground|open-screen|hide-until-built|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
 .eqv MMIO, 0xffff0000
 .eqv SIDE, 32

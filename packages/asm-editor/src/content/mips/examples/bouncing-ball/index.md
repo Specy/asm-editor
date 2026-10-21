@@ -11,7 +11,7 @@ coloured cell. With 8 display pixels per cell and a 256 by 256 display, the grid
 the address of `display` from `$s1`. It returns immediately for a nonpositive width or height; for
 a positive size, the caller must keep the whole rectangle inside the grid.
 
-```mips|playground|open-screen|no-registers|allow-open
+```mips|playground|open-screen|hide-until-built|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE 32                # words across and down
 .eqv BALL 4                 # the ball, in words

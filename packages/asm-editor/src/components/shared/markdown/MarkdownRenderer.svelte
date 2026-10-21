@@ -8,6 +8,7 @@
      */
     import { renderMarkdown, type MarkdownOptions } from '#lib/content/markdown.ts'
     import { playgroundEmbedUrl } from '#lib/content/markdownPlaygrounds.ts'
+    import { isEmbedBuiltMessage } from '#lib/content/embedMessages.ts'
     import { colourCodeBlocksWithMonaco } from '#lib/content/monacoCodeBlocks.ts'
     import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
     import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
@@ -140,12 +141,34 @@
             iframe.className = marked.className
             const box = marked.getAttribute('style')
             if (box !== null) iframe.setAttribute('style', box)
+            if (marked.dataset.builtHeight) iframe.dataset.builtHeight = marked.dataset.builtHeight
             //each embed boots a whole editor, so a lecture with five of them would boot five
             //before the reader has scrolled to the second
             iframe.setAttribute('loading', 'lazy')
             iframe.src = src
             marked.replaceWith(iframe)
         }
+    })
+
+    /**
+     * A playground whose panels wait for a Build starts as short as its code, and its frame takes
+     * the height its fence asked for (`data-built-height`) while its embed says the program is
+     * built ([embedMessages.ts](../../../lib/content/embedMessages.ts)).
+     */
+    $effect(() => {
+        if (!content) return
+        const frames = content
+        const resize = (event: MessageEvent) => {
+            if (!isEmbedBuiltMessage(event.data)) return
+            for (const iframe of frames.querySelectorAll<HTMLIFrameElement>(
+                'iframe[data-built-height]'
+            )) {
+                if (iframe.contentWindow !== event.source) continue
+                iframe.style.height = event.data.built ? (iframe.dataset.builtHeight ?? '') : ''
+            }
+        }
+        window.addEventListener('message', resize)
+        return () => window.removeEventListener('message', resize)
     })
 
     $effect(() => {

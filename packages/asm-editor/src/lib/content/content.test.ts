@@ -334,6 +334,21 @@ describe('the register file fence flag', () => {
     })
 })
 
+describe('the hide-until-built fence flag', () => {
+    it('is off unless a fence asks for it', () => {
+        expect(parsePlaygroundFence('mips|playground|open-screen')?.settings.hideUntilBuilt).toBe(
+            false
+        )
+    })
+
+    it('is read beside the other flags', () => {
+        const parsed = parsePlaygroundFence('m68k|playground|open-screen|hide-until-built|console')
+        expect(parsed?.settings.hideUntilBuilt).toBe(true)
+        expect(parsed?.settings.showScreen).toBe(true)
+        expect(parsed?.settings.showConsole).toBe(true)
+    })
+})
+
 for (const page of pages) {
     const skipped = page.playgrounds.filter(
         (playground) => UNRUNNABLE[playground.settings.language] !== undefined

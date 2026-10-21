@@ -15,7 +15,7 @@ Command 11 turns on **double buffering**, so drawing goes to an off-screen image
 presents that image. The viewer sees complete pictures instead of the clear and the partly drawn
 ball.
 
-```z80|playground|open-screen|no-registers|no-flags|allow-open
+```z80|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
 P_PEN   equ 0x20
 P_FILL  equ 0x21
 P_X     equ 0x23

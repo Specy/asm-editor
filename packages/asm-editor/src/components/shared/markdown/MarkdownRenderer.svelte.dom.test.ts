@@ -5,6 +5,7 @@ import MarkdownRenderer from './MarkdownRenderer.svelte'
 import { renderMarkdown } from '#lib/content/markdown.ts'
 import { decodePlaygroundProgram } from '#lib/content/playgroundProgram.ts'
 import { extractPlaygrounds } from '#lib/content/playgrounds.ts'
+import { EMBED_BUILT_MESSAGE } from '#lib/content/embedMessages.ts'
 
 //the renderer reaches `#lib/Project.svelte.ts`, which reaches the projects store, which opens its
 //IndexedDB because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's
@@ -186,6 +187,49 @@ describe('playground embeds', () => {
             expect(program.entry).toBe('src/main.c')
             expect(Object.keys(program.files)).toEqual(['src/main.c', 'src/value.h'])
             expect(url.searchParams.has('testcases')).toBe(true)
+        } finally {
+            cleanup()
+        }
+    })
+
+    it('start a Screen that waits for its Build as short as the code, and grow on Build', () => {
+        const screen = [
+            '```mips|playground|open-screen|hide-until-built',
+            '    nop',
+            '```',
+            ''
+        ].join('\n')
+        const { target, cleanup } = render(`${screen}\n${screen}`)
+        try {
+            const [first, second] = target.querySelectorAll('iframe')
+            expect(embedUrl(first).searchParams.get('hideUntilBuilt')).toBe('true')
+            expect(first.style.height).toBe('')
+            expect(first.dataset.builtHeight).toBe('min(40rem, 85vh)')
+            const tell = (built: boolean) =>
+                window.dispatchEvent(
+                    new MessageEvent('message', {
+                        data: { type: EMBED_BUILT_MESSAGE, built },
+                        source: first.contentWindow
+                    })
+                )
+            tell(true)
+            expect(first.style.height).toBe('min(40rem, 85vh)')
+            //only the frame whose embed was built
+            expect(second.style.height).toBe('')
+            tell(false)
+            expect(first.style.height).toBe('')
+        } finally {
+            cleanup()
+        }
+    })
+
+    it('keep a Screen that shows from the start at its height', () => {
+        const { target, cleanup } = render('```mips|playground|open-screen\n    nop\n```\n')
+        try {
+            const iframe = target.querySelector('iframe')!
+            expect(embedUrl(iframe).searchParams.has('hideUntilBuilt')).toBe(false)
+            expect(iframe.style.height).toBe('min(40rem, 85vh)')
+            expect(iframe.dataset.builtHeight).toBeUndefined()
         } finally {
             cleanup()
         }

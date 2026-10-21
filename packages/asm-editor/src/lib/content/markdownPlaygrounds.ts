@@ -99,16 +99,22 @@ function playgroundBox(fence: PlaygroundFence, parent: Parent) {
         details || fence.large
             ? ''
             : 'max-width: 70ch; margin: 1.5rem var(--md-inline-margin, auto);'
+    const screenHeight = fence.settings.showScreen ? 'min(40rem, 85vh)' : undefined
+    //a Screen that waits for a Build (`hide-until-built`) is not there to make room for until then:
+    //the frame starts at the stylesheet's height and the renderer grows it once the embed says it
+    //is built. A `tall` fence asked for its height whatever it shows
+    const grows = !fence.tall && fence.settings.hideUntilBuilt && screenHeight !== undefined
     const height = fence.tall
         ? 'height: 80dvh;'
-        : fence.settings.showScreen
-          ? 'height: min(40rem, 85vh);'
+        : screenHeight && !grows
+          ? `height: ${screenHeight};`
           : ''
     return {
         className: details ? ['code-playground', 'in-details'] : ['code-playground'],
         //a fence that asks for no height of its own leaves it to the stylesheet, which gives the
         //code block the same one as the iframe's min-height
-        style: `${placement} ${height}`.trim()
+        style: `${placement} ${height}`.trim(),
+        ...(grows ? { 'data-built-height': screenHeight } : undefined)
     }
 }
 
@@ -303,6 +309,7 @@ function embedQuery(settings: PlaygroundSettings): string {
     const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
     const showScreen = settings.showScreen ? 'showScreen=true&' : ''
     const openScreen = settings.openScreen ? 'openScreen=true&' : ''
+    const hideUntilBuilt = settings.hideUntilBuilt ? 'hideUntilBuilt=true&' : ''
     const showOpenButton = settings.openButton ? 'openButton=true&' : ''
     const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
     return [
@@ -314,6 +321,7 @@ function embedQuery(settings: PlaygroundSettings): string {
         showFlags,
         showScreen,
         openScreen,
+        hideUntilBuilt,
         showOpenButton,
         registerFile
     ].join('')

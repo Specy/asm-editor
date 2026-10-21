@@ -25,7 +25,7 @@ Pixels occupy consecutive words: left to right across a row, then the next row. 
 16 words in each row, so `.space 1024` reserves its 256 words. Run the program and inspect the
 Screen panel.
 
-```riscv|playground|open-screen|memory
+```riscv|playground|open-screen|hide-until-built|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
 display: .space 1024        # 16 * 16 words, four bytes each
@@ -85,7 +85,7 @@ blue-and-green ramp can use `x << 4` for the blue byte and `y << 12` for the gre
 This program calculates the address for one chosen pixel. Change `x`, `y`, or `colour`, build, and
 run it to place a different pixel.
 
-```riscv|playground|open-screen|memory
+```riscv|playground|open-screen|hide-until-built|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
 display: .space 1024
@@ -158,7 +158,7 @@ through transmitter data and ends when it receives `q`.
 
 Click the Screen panel before typing so that it has keyboard focus.
 
-```riscv|playground|open-screen|console|no-registers
+```riscv|playground|open-screen|hide-until-built|console|no-registers
 .eqv MMIO, 0xffff0000
 .data
 banner: .asciz "Click the screen, then type. q ends the program.\n"
@@ -206,7 +206,7 @@ The Screen panel is a 16-by-16 word grid whose base label is `display`. Put whit
 the supplied `x` and `y` values. Derive the row-and-column offset, convert it to bytes, and store
 `0x00FFFFFF` at the resulting address.
 
-```riscv|playground|open-screen|memory|exercise
+```riscv|playground|open-screen|hide-until-built|memory|exercise
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE, 16
 .data
@@ -231,7 +231,7 @@ main:
 <details>
 <summary>Show solution</summary>
 
-```riscv|playground|open-screen|memory|solution
+```riscv|playground|open-screen|hide-until-built|memory|solution
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE, 16
 .data

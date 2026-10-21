@@ -1,3 +1,15 @@
+<script lang="ts" module>
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+
+    /**
+     * Whether there is a built program to look at: one being debugged, or a Test's result, which
+     * keeps its last Core readable. The dock's Build turns into Stop on the same condition.
+     */
+    export function hasBuiltProgram(emulator: Emulator) {
+        return emulator.canExecute || !!emulator.compiledCode
+    }
+</script>
+
 <script lang="ts">
     import Editor from '#cmp/specific/project/Editor.svelte'
     import { toast } from '#stores/toastStore.ts'
@@ -34,7 +46,6 @@
     } from '#lib/sourceCompilation/records.ts'
     import { createProjectLanguageSessionId } from '#lib/languages/service/uri.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
-    import { type Emulator } from '#lib/languages/Emulator.ts'
     import StdOutRenderer from '#cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '#cmp/specific/project/testcases/TestcasesEditor.svelte'
     import type monaco from 'monaco-editor'
@@ -86,6 +97,12 @@
         showScreen?: boolean
         /** Whether the Screen panel starts unfolded; the small layout folds it away by default. */
         openScreen?: boolean
+        /**
+         * Whether the memory, the registers, the flags, the PC and the Screen wait for a built
+         * program, leaving the code (and the console and Testcases) alone until then. Off by
+         * default: every panel asked for is there from the start.
+         */
+        hideUntilBuilt?: boolean
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
@@ -120,6 +137,7 @@
         showPc: showPcProp,
         showScreen: showScreenProp,
         openScreen = false,
+        hideUntilBuilt = false,
         testcases = $bindable([]),
         embedded = false,
         emulator = $bindable(),
@@ -225,19 +243,23 @@
               }
             : undefined
     )
-    let showMemory = $derived(showMemoryProp ?? true)
-    let showFlags = $derived(showFlagsProp ?? true)
-    let showRegisters = $derived(showRegistersProp ?? true)
+    const built = $derived(hasBuiltProgram(emulator))
+    //with `hideUntilBuilt` the machine's panels have nothing to say before a Build, so they leave
+    //the room to the code until there is a program in them, and leave again on Stop
+    const revealed = $derived(!hideUntilBuilt || built)
+    let showMemory = $derived((showMemoryProp ?? true) && revealed)
+    let showFlags = $derived((showFlagsProp ?? true) && revealed)
+    let showRegisters = $derived((showRegistersProp ?? true) && revealed)
     //a read in a host that hides the console opens it, and it stays open for the rest of the page
     //(the plan's decision 10, docs/design/environment-library-plan.md): there is nowhere else to
     //type the answer
     let consoleRevealed = $state(false)
     let showConsole = $derived((showConsoleProp ?? layout === 'fullscreen') || consoleRevealed)
     let showTestcases = $derived(showTestcasesProp ?? false)
-    let showPc = $derived(showPcProp ?? layout === 'fullscreen')
+    let showPc = $derived((showPcProp ?? layout === 'fullscreen') && revealed)
     //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
     //derive that explicit request from their `screen` fence flag; x86 has no graphics device.
-    let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language))
+    let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language) && revealed)
     //no Project here, so a Playground runs on the language's default Settings
     const settings = $derived(resolveProjectSettings(language, undefined))
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
@@ -560,7 +582,7 @@
             <ExecutionDock
                 attached
                 fill={viewport.deviceClass === 'phone'}
-                debugging={emulator.canExecute || !!emulator.compiledCode}
+                debugging={built}
                 building={building || compiling}
                 {running}
                 {buildDisabled}
@@ -849,7 +871,7 @@
                         {#if showRegsColumn}
                             {@render fullscreenRegsColumn()}
                         {/if}
-                        {#if showMemory && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
+                        {#if showMemory && (!children || !(!running && !built))}
                             {@render fullscreenMemoryPanel()}
                         {:else if !running && children}
                             <Card

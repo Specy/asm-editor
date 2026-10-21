@@ -1,7 +1,11 @@
 <script lang="ts">
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { onMount } from 'svelte'
-    import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import InteractiveInstructionEditor, {
+        hasBuiltProgram
+    } from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import { EMBED_BUILT_MESSAGE, type EmbedBuiltMessage } from '#lib/content/embedMessages.ts'
     import {
         type AvailableLanguages,
         cleanTestcases,
@@ -45,6 +49,8 @@
         showFlags: boolean
         showScreen: boolean
         openScreen: boolean
+        /** Whether the memory, registers, flags, PC and Screen wait for the program to be built. */
+        hideUntilBuilt: boolean
         openButton: boolean
         /** The Register file the panel opens on, from a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag. */
         registerFile?: string
@@ -70,12 +76,14 @@
         showFlags: false,
         showScreen: false,
         openScreen: false,
+        hideUntilBuilt: false,
         openButton: false,
         registerFile: undefined
     })
     let inIframe = $state(true)
     let code = $state(BASE_CODE[defaultLanguage])
     let project = $state<Project>()
+    let loadedEmulator = $state<Emulator | null>(null)
     let ready = $state(false)
     let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
@@ -176,6 +184,7 @@
         const openScreen = searchParams.get('openScreen') === 'true'
         //asking for the Screen open is asking for one, so a link needs only the one parameter
         const showScreen = openScreen || searchParams.get('showScreen') === 'true'
+        const hideUntilBuilt = searchParams.get('hideUntilBuilt') === 'true'
         const openButton = searchParams.get('openButton') === 'true'
         //the panel itself decides what to do with a file this language has not got, which is to
         //open on the CPU one
@@ -191,6 +200,7 @@
             showFlags,
             showScreen,
             openScreen,
+            hideUntilBuilt,
             openButton,
             registerFile
         } satisfies Settings
@@ -207,6 +217,7 @@
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
         const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const openScreen = settings.openScreen ? 'openScreen=true&' : ''
+        const hideUntilBuilt = settings.hideUntilBuilt ? 'hideUntilBuilt=true&' : ''
         const openButton = settings.openButton ? 'openButton=true&' : ''
         const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
         const props = [
@@ -218,6 +229,7 @@
             showFlags,
             showScreen,
             openScreen,
+            hideUntilBuilt,
             openButton,
             registerFile
         ].join('')
@@ -254,6 +266,17 @@
             void project.compilations
         }
         generateCodeUrl(code, settings, testcases)
+    })
+
+    //a frame whose panels wait for a Build tells the page around it when they come and go, so a
+    //lecture can keep the frame as short as the code until then (`embedMessages.ts`)
+    $effect(() => {
+        if (!inIframe || !settings.hideUntilBuilt) return
+        const built = !!loadedEmulator && hasBuiltProgram(loadedEmulator)
+        window.parent.postMessage(
+            { type: EMBED_BUILT_MESSAGE, built } satisfies EmbedBuiltMessage,
+            '*'
+        )
     })
 </script>
 
@@ -296,6 +319,7 @@
                         {#key settings.language}
                             <EmulatorLoader
                                 bind:code
+                                bind:emulator={loadedEmulator}
                                 source={project ? playgroundBuildSources(project) : undefined}
                                 language={settings.language}
                                 settings={{
@@ -320,6 +344,7 @@
                                         showScreen={settings.showScreen &&
                                             languageHasScreen(settings.language)}
                                         openScreen={settings.openScreen}
+                                        hideUntilBuilt={settings.hideUntilBuilt}
                                         initialRegisterFile={settings.registerFile}
                                         language={settings.language}
                                         forceMemoryRight={true}
@@ -396,6 +421,13 @@
                                     <Switch
                                         bind:checked={settings.openScreen}
                                         title="Screen open"
+                                    />
+                                </div>
+                                <div class="share-settings">
+                                    <span>Hide panels until built</span>
+                                    <Switch
+                                        bind:checked={settings.hideUntilBuilt}
+                                        title="Show the memory, registers and screen only once the code is built"
                                     />
                                 </div>
                                 <div class="share-settings">
