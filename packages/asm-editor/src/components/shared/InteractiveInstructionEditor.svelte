@@ -12,6 +12,8 @@
 
 <script lang="ts">
     import Editor from '#cmp/specific/project/Editor.svelte'
+    import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import ExecutionDock, {
         type DockAction,
@@ -184,6 +186,33 @@
         (session && !!sourceLanguage(session.project.entry)) || emulator.compilerErrors.length > 0
     )
     const selectedIsSource = $derived(!!selectedFile && !!sourceLanguage(selectedFile))
+    const displayedAssemblyFile = $derived(
+        selectedFile ?? emulator.buildSources?.entry ?? emulator.entry
+    )
+    const buildArtifacts = $derived(
+        emulator.buildArtifacts.filter((artifact) => artifact.file === displayedAssemblyFile)
+    )
+    const viewZones = $derived(
+        preferencesStore.values.showPseudoInstructions.value
+            ? emulator.decorations
+                  .filter(
+                      (decoration) =>
+                          (decoration.file ?? emulator.buildSources?.entry ?? emulator.entry) ===
+                          displayedAssemblyFile
+                  )
+                  .map((decoration) => ({
+                      afterLineNumber: decoration.belowLine,
+                      content: BelowLineContent,
+                      props: {
+                          md: decoration.md,
+                          note: decoration.note ?? '',
+                          instructions: decoration.instructions,
+                          language: editorLanguage.toLowerCase(),
+                          isCurrent: (address: bigint) => emulator.pc === address
+                      }
+                  }))
+            : []
+    )
     const selectedLine = $derived.by(() => {
         if (!session || !selectedFile) return emulator.line
         if (emulator.currentFile === selectedFile) return emulator.line
@@ -559,6 +588,8 @@
                 source={fileSource}
                 retainedModelKeys={session ? Object.keys(session.project.files) : undefined}
                 codeOverride={session ? undefined : emulator.compiledCode}
+                {buildArtifacts}
+                {viewZones}
                 breakpointsEditable={!selectedIsSource}
                 breakpoints={emulator.breakpoints
                     .filter(isLineBreakpoint)

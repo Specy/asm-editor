@@ -1,11 +1,12 @@
 {
-    "title": "Prepare and share an assembly exercise",
-    "description": "Configure register testcases, distribute a shared MIPS project, and embed the exercise in a lesson page.",
+    "title": "Teach assembly with ASM Editor",
+    "description": "Prepare shareable projects, check programs with testcases, embed runnable examples, and use ASM Editor's classroom and assessment tools.",
     "tags": ["guide", "use-case", "teaching"],
     "status": "published",
     "datePublished": "2026-10-13",
     "image": {
         "src": "/images/blog/teach-assembly/testcases.webp",
         "alt": "A MIPS exercise showing Actual and Expected register values in Testcases"
-    }
+    },
+    "dateUpdated": "2026-10-16"
 }

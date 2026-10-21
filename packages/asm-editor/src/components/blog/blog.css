@@ -321,12 +321,15 @@
 }
 @media (min-width: 1100px) {
     .blog-post-layout {
-        grid-template-columns: minmax(15rem, 1fr) minmax(0, 70ch) minmax(15rem, 1fr);
+        grid-template-columns: 15rem minmax(1.25rem, 1fr) minmax(0, 70ch) minmax(1.25rem, 1fr);
+    }
+    .blog-article {
+        grid-column: 3;
     }
     .blog-outline {
         grid-column: 1;
         grid-row: 1;
-        justify-self: center;
+        justify-self: end;
         width: 13rem;
         position: sticky;
         /* Match the navbar offset and page padding to stay still from the first scroll. */
@@ -337,6 +340,11 @@
         gap: 1.5rem;
         max-height: calc(100dvh - 6.7rem);
         padding-top: 1rem;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    html:has(.blog-post-layout) {
+        scroll-behavior: smooth;
     }
 }
 @media (max-width: 600px) {
