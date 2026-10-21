@@ -3,7 +3,8 @@
      * The Workbench on a desktop: the icon rail, with Back and Save, and its panel; the editor with
      * the execution controls floating over it, above the bottom panel; and while a Debug session
      * exists, the debug column. There is no top bar. Every split drags, and the sizes are
-     * remembered per person ([the design record](../../../../../../docs/design/workbench.md)).
+     * remembered per person ([the design record](../../../../../../docs/design/workbench.md)); the
+     * debug column's splitter also drags it down to its strip and back.
      */
     import { untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
@@ -13,12 +14,14 @@
     import SidePanel from './SidePanel.svelte'
     import EditorArea from './EditorArea.svelte'
     import BottomPanel from './BottomPanel.svelte'
-    import DebugColumn from './DebugColumn.svelte'
+    import DebugColumn, { DEBUG_STRIP_WIDTH } from './DebugColumn.svelte'
     import { useWorkbench } from './workbenchContext'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
     /** Below this, the editor beside an open panel and the debug column is too narrow to use. */
     const EDITOR_MIN_WIDTH = 360
+    /** A drag of the debug column's splitter below this collapses the column to its strip. */
+    const DEBUG_COLLAPSE_BELOW = LAYOUT_LIMITS.debugWidth.min / 2
     /**
      * The debug column's width left to itself, measured per language and rounded up: its registers
      * beside a row of memory, for the first Build, before the column has been shown and measured.
@@ -71,9 +74,10 @@
         if (debugging && !wasDebugging && !session.testing) {
             untrack(() => {
                 if (!ui.activePanel) return
-                const debugColumn =
-                    layout.debugWidth ??
-                    (debugWidth || AUTOMATIC_DEBUG_WIDTH[session.project.language])
+                const debugColumn = layout.debugCollapsed
+                    ? DEBUG_STRIP_WIDTH
+                    : (layout.debugWidth ??
+                      (debugWidth || AUTOMATIC_DEBUG_WIDTH[session.project.language]))
                 if (bodyWidth - railWidth - panelWidth - debugColumn < EDITOR_MIN_WIDTH) ui.close()
             })
         }
@@ -141,8 +145,14 @@
                     min={LAYOUT_LIMITS.debugWidth.min}
                     max={Math.max(LAYOUT_LIMITS.debugWidth.min, bodyWidth - 480)}
                     label="Resize the debugger"
+                    collapsed={layout.debugCollapsed}
+                    collapseBelow={DEBUG_COLLAPSE_BELOW}
+                    onCollapse={(collapsed) => workbenchLayout.setDebugCollapsed(collapsed)}
                     onResize={(size) => workbenchLayout.setDebugWidth(size)}
-                    onReset={() => workbenchLayout.setDebugWidth(null)}
+                    onReset={() => {
+                        workbenchLayout.setDebugCollapsed(false)
+                        workbenchLayout.setDebugWidth(null)
+                    }}
                 />
                 <DebugColumn bind:measuredWidth={debugWidth} />
             </div>

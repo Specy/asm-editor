@@ -30,6 +30,12 @@ export class WorkbenchUi {
      * is given; each request is a new token, which the panel answers once.
      */
     documentationRequest = $state<{ token: number; query?: string } | null>(null)
+    /**
+     * The address a pointer menu or a register's name last moved the memory view to, which the
+     * view marks on its page until it is moved by hand. `build` is the Build it was read in, as the
+     * next Build's memory belongs to another run (`markedMemoryAddress` in `pointerMenu.ts`).
+     */
+    memoryMark = $state.raw<{ address: bigint; build: unknown } | null>(null)
 
     constructor(viewport: Viewport, access: ActivePanelAccess) {
         this.viewport = viewport

@@ -7,6 +7,7 @@
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import { createEventDispatcher } from 'svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import type { ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
 
     const dispatcher = createEventDispatcher<{
         registerClick: Register
@@ -30,6 +31,8 @@
         systemSize: RegisterSize
         /** The Target, passed straight through: it names the widths of the grouping strip. */
         language: AvailableLanguages
+        /** The menu a right click on a register's value opens, see `RegisterFileRows`. */
+        valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
     }
 
     let {
@@ -42,7 +45,8 @@
         hiddenRegistersNames = [],
         position = 'top',
         systemSize,
-        language
+        language,
+        valueMenu
     }: Props = $props()
 
     //no layout: every register here is an integer of the width it was built with, which is what the
@@ -71,4 +75,5 @@
     {align}
     bind:size
     onRegisterClick={(register) => dispatcher('registerClick', register)}
+    {valueMenu}
 />

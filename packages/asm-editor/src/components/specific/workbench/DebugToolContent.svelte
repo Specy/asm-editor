@@ -6,6 +6,7 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
     import { makeColorizedLabels } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { DebugTool } from './debugTools'
+    import { memoryCellMenu } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -14,7 +15,7 @@
 
     let { tool }: Props = $props()
 
-    const { session } = useWorkbench()
+    const { session, ui } = useWorkbench()
     const emulator = session.emulator
     const language = $derived(session.project.language)
 </script>
@@ -58,6 +59,7 @@
         callStackAddresses={makeColorizedLabels(emulator.callStack)}
         pokeable={session.pokeable}
         onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
+        cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
         controlsVar="secondary"
     />
 {/if}

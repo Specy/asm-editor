@@ -106,6 +106,13 @@ export function goesNextLineBy(index: number, length: number, rowLength: number)
 /** How the memory panel is reading the selected bytes, which is how a Poke typed into it is read back. */
 export type MemoryReading = 'hex' | 'char' | 'decimal'
 
+/**
+ * A memory cell a right click was made on, for its host's menu: its address, and what it reads as,
+ * which is the selection's number in the panel's byte order when the click lands in the selection,
+ * else the byte. `value` is undefined when a byte of it cannot be read.
+ */
+export type MemoryCell = { address: bigint; value: bigint | undefined; bytes: number }
+
 export type ParsedMemoryPoke = { ok: true; bytes: Uint8Array } | { ok: false; reason: string }
 
 /**

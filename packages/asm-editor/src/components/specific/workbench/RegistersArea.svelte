@@ -1,7 +1,8 @@
 <script lang="ts">
     /**
      * The registers of a Debug session: the CPU's Status flags and the PC on top, then the Register
-     * files with their tabs, one register per row. A click on a register moves memory to its value.
+     * files with their tabs, one register per row. A click on a register's name moves memory to its
+     * value, and a right click on a value, the PC's too, opens its pointer menu (`pointerMenu.ts`).
      * A rule from edge to edge of the card separates the flags from the PC. The PC has no padding
      * of its own and lines up with the registers under it, and the Register files reach the card's
      * edges, square and with nothing around them; only the flags are inset.
@@ -10,8 +11,7 @@
     import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import StatusCodesVisualiser from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import { MEMORY_SIZE } from '#lib/Config.ts'
-    import { clampBigInt } from '#lib/utils.ts'
+    import { registerValueMenu, showInMemory } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -22,9 +22,10 @@
 
     let { style = '', size = $bindable(RegisterSize.Word) }: Props = $props()
 
-    const { session } = useWorkbench()
+    const { session, ui } = useWorkbench()
     const emulator = session.emulator
     const language = $derived(session.project.language)
+    const valueMenu = (value: bigint, bytes: number) => registerValueMenu(session, ui, value, bytes)
 </script>
 
 <div class="registers-area" {style}>
@@ -45,6 +46,7 @@
         registers={[session.pc]}
         withoutHeader
         position="bottom"
+        {valueMenu}
     />
     <div class="files">
         <RegisterFilesPanel
@@ -56,11 +58,8 @@
             pokeable={session.pokeable}
             canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
             onPoke={(fileId, writes) => session.pokeRegisters(fileId, writes)}
-            onRegisterClick={(register) => {
-                const value = register.value
-                const page = value - (value % BigInt(emulator.memory.global.pageSize))
-                emulator.setGlobalMemoryAddress(clampBigInt(page, 0n, MEMORY_SIZE[language]))
-            }}
+            onRegisterClick={(register) => showInMemory(session, ui, register.value)}
+            {valueMenu}
         />
     </div>
 </div>

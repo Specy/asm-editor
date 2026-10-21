@@ -33,6 +33,7 @@
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle } from './debugTools'
+    import { markedMemoryAddress, memoryCellMenu, moveMemoryView } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
 
@@ -147,7 +148,7 @@
                                         inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                                         currentAddress={emulator.memory.global.address}
                                         onAddressChange={(address) =>
-                                            emulator.setGlobalMemoryAddress(address)}
+                                            moveMemoryView(session, ui, address)}
                                     />
                                 </div>
                                 <MemoryVisualiser
@@ -167,6 +168,8 @@
                                     callStackAddresses={makeColorizedLabels(emulator.callStack)}
                                     pokeable={session.pokeable}
                                     onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
+                                    cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
+                                    markedAddress={markedMemoryAddress(session, ui)}
                                 />
                             </div>
                         </div>

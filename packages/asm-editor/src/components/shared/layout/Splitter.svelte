@@ -4,6 +4,12 @@
      * the arrow keys once focused. The size it changes belongs to one pane, the one this handle
      * borders; `direction` says whether moving the handle towards the end (right, or down) grows
      * that pane (`1`, a pane before the handle) or shrinks it (`-1`, a pane after it).
+     *
+     * Given `onCollapse`, the pane can also collapse to a strip of its own. A drag that takes it
+     * below `collapseBelow` collapses it, back at the size it had when the drag began, so opening it
+     * again restores that; a drag from the strip past `collapseBelow` opens it at the pointer.
+     * Enter collapses or opens it from the keyboard, as the WAI-ARIA window splitter's does, and
+     * the arrow that grows the pane opens it too. A collapsed pane reads as size 0.
      */
     interface Props {
         /** `vertical` sits between side-by-side panes; `horizontal` between stacked ones. */
@@ -23,6 +29,12 @@
         onCommit?: (size: number) => void
         /** A double click, for going back to the automatic size. */
         onReset?: () => void
+        /** Whether the pane is collapsed to its strip; only read with `onCollapse`. */
+        collapsed?: boolean
+        /** The size a drag collapses the pane below, which defaults to half of `min`. */
+        collapseBelow?: number
+        /** The pane collapsing (`true`) or opening again (`false`). */
+        onCollapse?: (collapsed: boolean) => void
         style?: string
     }
 
@@ -37,12 +49,16 @@
         onResize,
         onCommit,
         onReset,
+        collapsed = false,
+        collapseBelow,
+        onCollapse,
         style = ''
     }: Props = $props()
 
     let dragging = $state(false)
     let origin = 0
     let startSize = 0
+    const isCollapsed = $derived(!!onCollapse && collapsed)
 
     function clamp(value: number) {
         return Math.round(Math.min(max, Math.max(min, value)))
@@ -57,14 +73,25 @@
         event.preventDefault()
         dragging = true
         origin = position(event)
-        startSize = size
+        startSize = isCollapsed ? 0 : size
         //capture keeps the drag going over Monaco and over panes that would take the events
         ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
     }
 
     function onpointermove(event: PointerEvent) {
         if (!dragging) return
-        const next = clamp(startSize + (position(event) - origin) * direction)
+        const pointed = startSize + (position(event) - origin) * direction
+        if (onCollapse) {
+            if (pointed < (collapseBelow ?? min / 2)) {
+                if (isCollapsed) return
+                //the sizes the drag went through on its way down are not the pane's to keep
+                if (startSize && size !== startSize) onResize(startSize)
+                onCollapse(true)
+                return
+            }
+            if (isCollapsed) onCollapse(false)
+        }
+        const next = clamp(pointed)
         if (next !== size) onResize(next)
     }
 
@@ -78,6 +105,17 @@
     function onkeydown(event: KeyboardEvent) {
         const [before, after] =
             orientation === 'vertical' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown']
+        if (onCollapse) {
+            //collapsed, the handle only opens the pane again: with Enter, or the arrow that grows it
+            const grows = event.key === (direction === 1 ? after : before)
+            if (event.key === 'Enter' || (isCollapsed && grows)) {
+                event.preventDefault()
+                event.stopPropagation()
+                onCollapse(!isCollapsed)
+                return
+            }
+            if (isCollapsed) return
+        }
         let next: number | undefined
         if (event.key === before) next = clamp(size - step * direction)
         else if (event.key === after) next = clamp(size + step * direction)
@@ -101,8 +139,8 @@
     role="separator"
     aria-orientation={orientation}
     aria-label={label}
-    aria-valuenow={Math.round(size)}
-    aria-valuemin={min}
+    aria-valuenow={isCollapsed ? 0 : Math.round(size)}
+    aria-valuemin={onCollapse ? 0 : min}
     aria-valuemax={max}
     tabindex="0"
     {style}

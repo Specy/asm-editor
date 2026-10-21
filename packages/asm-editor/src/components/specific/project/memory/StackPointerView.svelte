@@ -15,6 +15,8 @@
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
     import type { Emulator } from '#lib/languages/Emulator.ts'
+    import type { ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
+    import type { MemoryCell } from '#cmp/specific/project/memory/memoryTabUtils.ts'
 
     interface Props {
         emulator?: Emulator
@@ -30,6 +32,8 @@
         pokeable?: boolean
         /** One commit of the selection, which is one Poke however many bytes it holds. */
         onPoke?: (address: bigint, bytes: Uint8Array) => void
+        /** The menu a right click on a byte opens, see `MemoryRenderer`. */
+        cellMenu?: (cell: MemoryCell) => ContextMenuEntry[]
         style?: string
         /** The colour of the address controls' buttons, see `MemoryControls`. */
         controlsVar?: ThemeKeys
@@ -47,6 +51,7 @@
         onAddressChange,
         pokeable = false,
         onPoke,
+        cellMenu,
         style = '',
         controlsVar = 'primary'
     }: Props = $props()
@@ -87,6 +92,7 @@
             {callStackAddresses}
             {pokeable}
             {onPoke}
+            {cellMenu}
         />
     </div>
 </div>

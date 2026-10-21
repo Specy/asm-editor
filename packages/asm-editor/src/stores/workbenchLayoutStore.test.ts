@@ -11,6 +11,7 @@ describe('readStoredLayout', () => {
             panelWidths: { explorer: 300, prompt: 500 },
             bottomHeight: 240,
             debugWidth: 900,
+            debugCollapsed: true,
             debugTopHeight: 480,
             collapsed: { screen: true, history: false },
             floating: { history: { open: true, left: 420, top: 60 } }
@@ -40,6 +41,16 @@ describe('readStoredLayout', () => {
             })
         )
         expect(layout).toEqual(defaultLayout())
+    })
+
+    it('opens the debug column expanded from a layout stored before it could collapse', () => {
+        const layout = readStoredLayout(JSON.stringify({ bottomHeight: 200, debugWidth: 700 }))
+        expect(layout.debugCollapsed).toBe(false)
+        //the width it collapsed from is kept apart, for opening it again
+        expect(layout.debugWidth).toBe(700)
+        expect(readStoredLayout(JSON.stringify({ debugCollapsed: 'yes' })).debugCollapsed).toBe(
+            false
+        )
     })
 
     it('survives junk', () => {

@@ -12,6 +12,7 @@
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import { registerFileWidth } from '#lib/languages/registerFormats.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import type { ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
 
     /**
      * The Register file panel ([the design record](../../../../../../../docs/design/register-files.md)):
@@ -46,6 +47,8 @@
         pokeable?: boolean
         canPokeRegister?: (fileId: string, register: string) => boolean
         onPoke?: (fileId: string, writes: RegisterPoke[]) => void
+        /** The menu a right click on an integer register's value opens, see `RegisterFileRows`. */
+        valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
     }
 
     let {
@@ -63,7 +66,8 @@
         onRegisterClick,
         pokeable = false,
         canPokeRegister,
-        onPoke
+        onPoke,
+        valueMenu
     }: Props = $props()
 
     const FORMAT_LABELS: Record<RegisterFormat, string> = {
@@ -213,6 +217,7 @@
                     ? (register) => canPokeRegister(file.id, register)
                     : undefined}
                 onPoke={onPoke ? (writes) => onPoke(file.id, writes) : undefined}
+                {valueMenu}
             />
         </div>
     {/if}

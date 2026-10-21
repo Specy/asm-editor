@@ -21,6 +21,8 @@ export type WorkbenchLayout = {
     bottomHeight: number
     /** Width of the debug column; `null` until dragged, when it fits the registers and memory. */
     debugWidth: number | null
+    /** Whether the debug column is collapsed to its strip, which keeps `debugWidth` for opening. */
+    debugCollapsed: boolean
     /** Height of the registers and memory above the Screen and the Debug tools; `null` is automatic. */
     debugTopHeight: number | null
     /** Whether each collapsible section is collapsed, by section id; missing ones use their default. */
@@ -57,6 +59,7 @@ export function defaultLayout(): WorkbenchLayout {
         panelWidths: {},
         bottomHeight: DEFAULT_BOTTOM_HEIGHT,
         debugWidth: null,
+        debugCollapsed: false,
         debugTopHeight: null,
         collapsed: {},
         floating: {}
@@ -109,6 +112,8 @@ export function readStoredLayout(json: string | null): WorkbenchLayout {
         layout.bottomHeight
     )
     layout.debugWidth = readOptionalSize(stored.debugWidth, LAYOUT_LIMITS.debugWidth)
+    //a layout stored before the column could collapse has no flag, and opens expanded
+    if (typeof stored.debugCollapsed === 'boolean') layout.debugCollapsed = stored.debugCollapsed
     layout.debugTopHeight = readOptionalSize(stored.debugTopHeight, LAYOUT_LIMITS.debugTopHeight)
     if (isRecord(stored.collapsed)) {
         for (const [id, collapsed] of Object.entries(stored.collapsed)) {
@@ -176,6 +181,10 @@ function createWorkbenchLayoutStore() {
         },
         setDebugWidth(width: number | null) {
             data.debugWidth = width === null ? null : clamp(width, LAYOUT_LIMITS.debugWidth)
+            store()
+        },
+        setDebugCollapsed(collapsed: boolean) {
+            data.debugCollapsed = collapsed
             store()
         },
         setDebugTopHeight(height: number | null) {

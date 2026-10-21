@@ -1,4 +1,5 @@
 <script lang="ts">
+    import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
     import {
         defaultRegisterKind,
@@ -56,6 +57,12 @@
         canPokeRegister?: (register: string) => boolean
         /** One commit, which is one Poke: usually one write, a MIPS paired double two. */
         onPoke?: (writes: RegisterPoke[]) => void
+        /**
+         * The menu a right click on an integer register's value opens, the Debug session's
+         * pointer menu, given the value unsigned at the register's width and that width in bytes.
+         * A click on the value still pokes it.
+         */
+        valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
     }
 
     let {
@@ -71,7 +78,8 @@
         onRegisterClick,
         pokeable = false,
         canPokeRegister,
-        onPoke
+        onPoke,
+        valueMenu
     }: Props = $props()
 
     const fileKind = $derived(defaultRegisterKind(file.formats))
@@ -283,6 +291,25 @@
         editedRegister = null
     })
 
+    /** Whether a row's value has a menu: an integer, which names an address, with a value to read. */
+    function hasValueMenu(row: Row): boolean {
+        return !!valueMenu && row.integer && !row.rendered.blank && row.rendered.chunks.length > 0
+    }
+
+    //the pointer menu, at the pointer, or under the value when the keyboard opened it
+    let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    function openValueMenu(event: MouseEvent, row: Row) {
+        //the input being typed into keeps the browser's own menu, for pasting into it
+        if (!valueMenu || (event.target as Element | null)?.closest?.('input')) return
+        event.preventDefault()
+        const bits = registerWidthBits(file, row.register, row.index)
+        const items = valueMenu(BigInt.asUintN(bits, row.register.value), bits / 8)
+        if (event.button === -1 || (event.clientX === 0 && event.clientY === 0)) {
+            const rect = (event.currentTarget as Element).getBoundingClientRect()
+            contextMenu = { x: rect.left, y: rect.bottom, items }
+        } else contextMenu = { x: event.clientX, y: event.clientY, items }
+    }
+
     function onChunkKey(event: KeyboardEvent) {
         if (event.key === 'Enter') {
             event.preventDefault()
@@ -360,7 +387,12 @@
                 </span>
             {/if}
         </div>
-        <div class="register-hex">
+        <!-- the keyboard opens the menu from a focused value, with Shift+F10 or the Menu key -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+            class="register-hex"
+            oncontextmenu={hasValueMenu(row) ? (event) => openValueMenu(event, row) : undefined}
+        >
             {#if row.rendered.chunks.length === 0}
                 <!-- the odd row of a paired-doubles file, which MARS leaves empty too -->
                 <div class="blank-register">-</div>
@@ -404,6 +436,15 @@
         </div>
     {/each}
 </div>
+{#if contextMenu}
+    <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={contextMenu.items}
+        label="Register value"
+        onClose={() => (contextMenu = null)}
+    />
+{/if}
 
 <style lang="scss">
     .registers {
