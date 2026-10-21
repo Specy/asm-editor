@@ -22,16 +22,43 @@ const instances = {
     Z80: null as Promise<typeof Z80Emulator> | null
 }
 
+/**
+ * Whether the user turned the WebAssembly builds of the MIPS and RISC-V Cores off, which is the way
+ * to compare them with the JavaScript ones or to work around an engine that mishandles them:
+ * `localStorage.setItem('core-backend', 'javascript')`.
+ */
+function webAssemblyCoresAllowed(): boolean {
+    try {
+        return globalThis.localStorage?.getItem('core-backend') !== 'javascript'
+    } catch {
+        return true
+    }
+}
+
+/**
+ * Moves a Core to its WebAssembly build, about twice as fast as the JavaScript one, before the first
+ * program is made. It stays on JavaScript, without an error, in an engine that cannot run it.
+ */
+async function preferWebAssembly(useWebAssembly: () => Promise<string>): Promise<void> {
+    if (webAssemblyCoresAllowed()) await useWebAssembly().catch(() => undefined)
+}
+
 function loadEmulator(type: AvailableLanguages) {
     if (instances[type] === null) {
         if (type === 'M68K') {
             instances[type] = import('./M68K/M68KEmulator.svelte').then((i) => i.M68KEmulator)
         } else if (type === 'MIPS') {
-            instances[type] = import('./MIPS/MIPSEmulator.svelte').then((i) => i.MIPSEmulator)
+            instances[type] = (async () => {
+                await preferWebAssembly(() => import('@specy/mips').then((m) => m.useWebAssembly()))
+                return (await import('./MIPS/MIPSEmulator.svelte')).MIPSEmulator
+            })()
         } else if (type === 'RISC-V' || type === 'RISC-V-64') {
-            instances['RISC-V'] = import('./RISC-V/RISC-VEmulator.svelte').then(
-                (i) => i.RISCVEmulator
-            )
+            instances['RISC-V'] = (async () => {
+                await preferWebAssembly(() =>
+                    import('@specy/risc-v').then((m) => m.useWebAssembly())
+                )
+                return (await import('./RISC-V/RISC-VEmulator.svelte')).RISCVEmulator
+            })()
             instances['RISC-V-64'] = instances['RISC-V']
         } else if (type === 'X86') {
             instances[type] = import('./X86/X86Emulator.svelte').then((i) => i.X86Emulator)
