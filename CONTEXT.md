@@ -272,6 +272,16 @@ _Avoid_: disassembly (the decoding that produces it), dump, decompilation (see *
 The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
 _Avoid_: decompiled C, decompilation (when the text is meant), source, C code
 
+## Symbols panel
+
+The **Workbench** side panel that lists the functions and the strings of an **Executable**, read from its **Listing**: the Executable shown in the focused editor pane, or else the **Selected program**'s **Entry file** when it is one. A function's row shows its name, run-time address and size, a string's its text and address. A row reveals its line in the Listing, which a **Pseudocode** beside it follows, and the jump goes into the pane's **Navigation history**. Its rail entry is offered only in an x86 **Project** that has an Executable. Distinct from Monaco's Go to Symbol, which lists one Listing's labels inside the editor, and from the Explorer, which lists **Files**.
+_Avoid_: symbol table (the ELF's own, which a stripped program lacks), outline, functions window
+
+## Navigation history
+
+The places an editor pane jumped from in a **Listing** or a **Pseudocode**, kept per pane as a browser keeps its history: a line of a Listing, or the function a Pseudocode showed, in the version of the **File** it was shown in. Every jump records the place it leaves, in each pane it moves: a double-click on a name, Go to Definition, Go to Symbol, Show in Listing, a row of the **Symbols panel**. Go Back and Go Forward (Alt+← and Alt+→, the mouse's back and forward buttons, the context menu) move through it, past places that no longer exist. It lives as long as the open **Project** and is never saved. Distinct from the History of the **Debug tools**, which records the steps instruction Undo can take back.
+_Avoid_: history (alone, which is the Debug tools' History), back stack, breadcrumbs, jump list
+
 ## Invented name
 
 A name the **Listing** gives an address its **Executable** names nowhere: `FUN_<adjective>_<animal>` for a function, `DAT_<adjective>_<animal>` for data. It is derived from the address in the file, so it is the same on every open and for everyone, from word lists that are never edited once released. Distinct from the names the bytes give (symbols, `name@plt`, an `s_` string's text) and from the numbered `.LAB_n` of a jump target. See [ADR 0045](./docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
@@ -302,7 +312,7 @@ _Avoid_: a.out, binary, compiled program, artifact (the Core's build artifacts a
 
 ## Debug session
 
-The lifetime of a built program retained for execution, inspection, and instruction Undo, from a successful Build until Stop or disposal. Program exit does not itself end the session or return host editing access to the **Files**.
+The lifetime of a built program retained for execution, inspection, and instruction Undo, from a successful Build until Stop or disposal. Program exit does not itself end the session or return host editing access to the **Files**. An **Executable** whose program exits is shown on no line, so its **Listing** and **Pseudocode** stay where they were read; one ended by a signal is shown where the signal struck, and an assembled program where it ended.
 
 ## Workbench
 
@@ -319,6 +329,11 @@ _Avoid_: embed editor, small editor, playground editor, inline editor (for the c
 The three views of a **Debug session** that follow execution step by step: the Stack pointer (the memory around the stack pointer), the History (the steps instruction Undo can take back, **Pokes** included) and the Call stack. In the **Workbench** they are floating windows or sections of the debug column, as a **Preference** chooses. Registers, memory and the **Screen** are not debug tools.
 _Avoid_: inspectors, trackers, user tools, floating panels
 
+## Pointer menu
+
+The menu a right click on a register's value or on a memory byte opens during a **Debug session**, which reads the value as an address: Show in memory, which moves the memory view to it and marks the byte until the view is moved by hand; Show in Listing, while the program is an **Executable** and the address is in its own code; Copy as hex and Copy as decimal; and for a byte, Follow pointer, which reads the address stored there at the **Target**'s register width and in its byte order. A click still edits the value, as a **Poke**.
+_Avoid_: context menu (any right-click menu), address menu, value menu
+
 ## Memory region
 
 A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack, the program's **Arguments** and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. The Arguments region sits above the stack and holds what the program was started with, as the Core wrote it at the start: the `argv` array and its strings ("Arguments" on MIPS and RISC-V), or on x86 the whole Linux process-start block with the environment and the auxiliary vector ("Arguments and environment"), its parts named like data labels (`argv`, `argv[1]`). A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. The memory view draws a data or reserved region in chunks, one for each data label in it, so the variables of a section read apart. Distinct from a page, which is the fixed-size window the memory view shows at a time.
@@ -326,7 +341,7 @@ _Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zon
 
 ## Log
 
-The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it), followed by notes on what the program met that the **Emulator** lacks, such as a system call it does not implement or an instruction it cannot run. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+The **Workbench**'s record of what it did for the person: each Build with its result, a failed Build's with the reason its **Diagnostics** do not give, such as a download that failed or stalled, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it; an x86 AVX-512 instruction's illegal-instruction signal reads as "AVX-512 instructions are not currently supported"), followed by notes on what the program met that the **Emulator** lacks, such as a system call it does not implement or an instruction it cannot run. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
 _Avoid_: output, build output, console
 
 ## Settings

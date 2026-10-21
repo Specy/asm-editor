@@ -2,6 +2,8 @@
 
 Plan for [the design](./reverse-engineering-ux.md), written 2026-10-21. `E/` means `packages/asm-editor/src/` and `X/` means `packages/x86/blink-js/src/`. Line numbers are from `feat/pseudocode` at `4b40f6e2` and will drift.
 
+Status on 2026-10-22: W1 to W6 are done, each one commit on `feat/pseudocode`: W1 `b9f55b97`, W2 `b9af4ea8`, W3 `e3e09398` (with the x86 Core's `4631b16`, unreleased), W4 `f83962ed`, W5 `d5f7e0ea`, W6 `da8d6091`. W7 is in progress. W8's documentation for W1 to W6 is done; W7's documentation, the code review and the browser check remain. What each group did differently from this plan is in [the design's Implementation section](./reverse-engineering-ux.md#implementation).
+
 ## Order
 
 Seven work groups and a closing pass. Each lands as one commit on `feat/pseudocode`, with no Co-Authored-By trailer and nothing pushed. Groups that share files run one after another. At most two run at once, and only when their files don't overlap:

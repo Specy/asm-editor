@@ -147,6 +147,22 @@
             "query": "decompiling takes too long",
             "top": 3,
             "expect": "x86/executables/decompile-time"
+        },
+        {
+            "query": "symbols panel",
+            "top": 3,
+            "expect": "x86/executables/symbols"
+        },
+        {
+            "query": "back and forward in the listing",
+            "top": 3,
+            "expect": "x86/executables/navigation"
+        },
+        {
+            "query": "type a function name in the memory view",
+            "top": 3,
+            "expect": "x86/executables/memory",
+            "meaning": true
         }
     ]
 }

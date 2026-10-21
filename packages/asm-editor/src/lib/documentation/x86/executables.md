@@ -30,6 +30,8 @@ Dynamically linked programs use five bundled libraries from Ubuntu 26.04. The ed
 
 A program that needs another library, such as `libcrypto.so.3`, does not start. The **Log** names the missing library, and the Terminal shows the dynamic linker's error. A program requiring a newer glibc version also stops, with an error such as `version 'GLIBC_2.xx' not found`.
 
+The first Build that needs a library downloads it, and later Builds reuse it. While it downloads, Build names it, as in **Downloading libc.so.6…**. A download that fails, or receives nothing for 20 seconds, ends the Build: the Terminal, the Log and a message say what could not be downloaded, such as "Could not download libc.so.6: no data for 20 s. Check the connection and Build again.", and **Build** is available again.
+
 These Linux libraries are separate from the editor's [Runtime library](/documentation/x86/runtime-library). That reference describes programs compiled in the editor and assembly programs that explicitly link the Runtime library; its function list and C++ restrictions do not describe the libraries used by an imported Executable. Conversely, compiling in the editor does not give a program the bundled glibc or C++ standard library. A statically linked Executable uses the library code already inside its file.
 
 ## The Hex editor {#hex-editor}
@@ -52,7 +54,7 @@ During a Debug session, the Files are read-only, so the Hex editor takes no typi
 
 ## Parts of the ELF file {#elf-parts}
 
-For an Executable, the Hex editor tints the parts of the ELF file as the memory view tints its regions: the ELF header, the program header table, the section header table, and each section with bytes in the file. Code sections such as `.text` share one tint, data sections such as `.rodata` and `.data` another, and the ELF's own headers and tables, such as `.symtab` and `.strtab`, a third. Hover over a byte for its part's name, its offsets in the File and the addresses the program has it at when it runs, such as `.text · offset 0x1100–0x12ba · address 0x555555555100–0x5555555552ba`. The status line names the part the caret is in, so a touch screen shows it too. A program without section headers is tinted by its load segments instead, named `load.2`, `load.3`, … as in the Listing.
+For an Executable, the Hex editor tints the parts of the ELF file as the memory view tints its regions: the ELF header, the program header table, the section header table, and each section with bytes in the file. Code sections such as `.text` share one tint, data sections such as `.rodata` and `.data` another, and the ELF's own headers and tables, such as `.symtab` and `.strtab`, a third. Hover over a byte for its part's name, its offsets in the File and the addresses the program has it at when it runs, such as `.text · offset 0x1100–0x12ba · address 0x555555555100–0x5555555552ba`. The card hides while you drag across bytes, open the context menu or Find, or press a key, and comes back when the pointer moves. The status line names the part the caret is in, so a touch screen shows it too. A program without section headers is tinted by its load segments instead, named `load.2`, `load.3`, … as in the Listing.
 
 **Show in Listing**, in the Hex editor's context menu (a long press on a touch screen), goes from a byte of a code section to its instruction in the Listing. The pane switches to Disassemble, unless the other pane shows the Listing already. **Show in Hex**, in a Listing line's context menu, selects that line's bytes in the Hex editor, for an instruction or a line of data.
 
@@ -60,7 +62,7 @@ For an Executable, the Hex editor tints the parts of the ELF file as the memory 
 
 The buttons above the bytes open **Find**, **Go to** and the [data inspector](#data-inspector).
 
-**Find** (Ctrl+F) looks for hexadecimal bytes or for text. Hex bytes can be written with or without spaces, and `??` matches any byte, as in `7f 45 ?? 46`. Text is matched exactly, letter case included. **Enter** goes to the next match and **Shift+Enter** to the previous one, wrapping at the end of the File. Selected bytes, up to 64 of them, fill the search box.
+**Find** (Ctrl+F) looks for hexadecimal bytes or for text. Hex bytes can be written with or without spaces, and `??` matches any byte, as in `7f 45 ?? 46`. Text is matched exactly, letter case included. Find starts on **Hex**, and typing anything other than hexadecimal digits, spaces, commas and `?` switches it to **Text**, so `Wrong!` and `0x7f` are looked for as text. A word made only of hexadecimal digits, such as `cafe`, is looked for as bytes until you choose **Text**. **Enter** goes to the next match and **Shift+Enter** to the previous one, wrapping at the end of the File. Selected bytes, up to 64 of them, fill the search box.
 
 **Go to** (Ctrl+G) moves the caret to an offset, written in hexadecimal with or without `0x` (`1f40`, `0x1f40`) or in decimal after `#` (`#8000`).
 
@@ -74,9 +76,13 @@ The **Inspector** button above the bytes shows or hides it. In a wide pane it si
 
 ## The Listing {#listing}
 
-**Disassemble** shows an Executable's **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. The Listing is generated from the File's current bytes when shown and is never saved. It is read-only; to change the program, [edit its bytes](#byte-edits) in the Hex editor. The gutter shows an address for each line. Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name. **Go to Definition** on a label opens its location; **Go to References** lists the lines that name it.
+**Disassemble** shows an Executable's **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. The Listing is generated from the File's current bytes when shown and is never saved. It is read-only, as the notice at the top right says; to change the program, [edit its bytes](#byte-edits) in the Hex editor. The notice's **?** opens this section in the Documentation panel, and the notice hides while Find (Ctrl+F) is open in the pane. The gutter shows an address for each line.
 
 Data sections follow the code: strings appear as `s_Enter_password: db "Enter password: ", 0`, other bytes as `db` or `dq`, and uninitialized space as `resb`. An instruction that reads data through `[rel …]` names the data, with the string as a comment. Searching for a printed message can therefore help you find instructions that use it.
+
+Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name. Hover over a number for its value in decimal, hexadecimal and binary. When the number's bytes, in the order x86 keeps them in memory, are at least two printable characters, the card adds a **Text** line: `0x4c75257240343a41` reads `A:4@r%uL`, as a string the program builds from it does.
+
+**Go to Definition** (F12, or Ctrl+click) on a label opens its location, and so does a double-click on a label or on the target of a call or jump; such a name is underlined while the pointer is over it. **Go to References** lists the lines that name it. [Back and forward](#navigation) returns to where you were.
 
 If execution stops inside a shared library after a crash, a **Pause**, or a **Step** with **Step into library code** enabled, the editor opens that library's read-only Listing, such as `@lib/libc.so.6`. It is generated on first use, which takes about a second for libc. Large Listings, including libc's and libstdc++'s, are shown without syntax highlighting.
 
@@ -92,6 +98,12 @@ A **symbol** is a saved name for a function or data address. **Stripping** a pro
 - `s_` followed by text for a string, such as `s_Enter_password`.
 
 The invented words do not describe what the code does. They depend on its address in the file, so the same program gets the same names on every open and for every reader. You can use those names in shared notes.
+
+## The Symbols panel {#symbols}
+
+The **Symbols** panel, the tags icon in the rail, lists the functions and strings of an Executable: the one shown in the editor pane you used last, or else the project's Entry file when it is an Executable. The rail offers it only in a project that has an Executable. Choose **Functions** for each function's [name](#names), address and size in bytes, up to the next function, or **Strings** for each string the Listing labels, with its text and address. The addresses are the ones the program has when it runs, as in the Listing's gutter. If no pane shows the Listing yet, the panel generates it first.
+
+Click a row to show its line in the Listing; a [Pseudocode](#decompile) beside the Listing follows it to that function. The row the Listing's cursor is in is marked. The filter box keeps the rows whose name or text contains what you type, or whose address contains it as hexadecimal digits, with or without `0x`. **Enter** shows the first row that matches, and the arrow keys move from the filter down through the rows.
 
 ## Decompile {#decompile}
 
@@ -112,10 +124,15 @@ The decompiler names everything else itself:
 - Local variables by type and number: `iVar1` is an `int`, `pcVar2` a `char *`, `uVar3` a value of unsigned or unknown type. Parameters are `param_1`, `param_2`, …
 - Stack variables by their offset in the stack frame, such as the array `acStack_98`.
 - Types it cannot determine by their size: `undefined8` is 8 bytes and `undefined4` 4 bytes of unknown type.
+- Values that reach the function other than through its parameters and return values, by where they come from: `in_FS_OFFSET` is where the FS segment starts, which holds the stack canary at `in_FS_OFFSET + 0x28`; `unaff_RBX` is `rbx` as the caller left it; `extraout_RAX` is a value a call left in `rax` although its prototype returns none there.
 
-A comment starting with `WARNING:` is a note from the decompiler about code it could not fully recover, such as a jump through a table. A name with an extra leading `_`, such as `_DAT_epic_cicada`, refers to more bytes than the Listing's label for that address covers.
+Hover over one of these words for a short explanation of it, with a link back to this section. A comment starting with `WARNING:` is a note from the decompiler about code it could not fully recover, such as a jump through a table. A name with an extra leading `_`, such as `_DAT_epic_cicada`, refers to more bytes than the Listing's label for that address covers.
 
-**Go to Definition**: Ctrl+click (Cmd+click on a Mac) a called function or a data name to show it in the Listing. For a called function, the Pseudocode then shows that function. Hover over the name to see the Listing's name and address for it.
+Hover over a number for the card the [Listing](#listing) shows: its value in decimal, hexadecimal and binary, and a **Text** line when its bytes are printable. A constant written into a local variable is often part of a string built 8 bytes at a time: `0x4c75257240343a41` reads `A:4@r%uL`.
+
+**Go to Definition**: press F12 on a called function or a data name, Ctrl+click it (Cmd+click on a Mac) or double-click it to show it in the Listing. For a called function, the Pseudocode then shows that function. Such a name is underlined while the pointer is over it. Hover over the name to see the Listing's name and address for it; for an [invented name](#names), the hover also says where the name comes from.
+
+The notice at the top right names the function shown. Its **?** opens this section in the Documentation panel, and the notice hides while Find (Ctrl+F) is open in the pane.
 
 ## When decompiling takes long {#decompile-time}
 
@@ -123,11 +140,19 @@ Most functions decompile in well under a second. A large function can take much 
 
 The decompiler stops working on a function after 30 seconds. The pane then shows **No Pseudocode** with the reason, such as "printf_positional took longer than 30 seconds to decompile". **Try again** starts again; on a less busy device, the function may finish within the limit. A function the decompiler cannot handle shows **No Pseudocode** with the decompiler's reason.
 
+## Back and forward {#navigation}
+
+Each editor pane keeps a history of the places it jumped from in a Listing or a Pseudocode, as a browser keeps the pages you visited. A jump is a double-click on a name, **Go to Definition**, **Go to Symbol**, **Show in Listing** in the Hex editor, or a row of the [Symbols panel](#symbols). **Alt+←** goes back and **Alt+→** forward, and so do the mouse's back and forward buttons over the pane and **Go Back** and **Go Forward** in its context menu.
+
+A place in the Listing is a line; a place in the Pseudocode is its function, and going back to one moves the Listing beside it into that function. A jump that moves both panes, such as following a call in the Pseudocode, leaves a place in each. A pane keeps up to 50 places behind it and 50 ahead, and skips a place that no longer exists, such as a library's Listing after the Debug session ends.
+
 ## Building and stepping {#stepping}
 
 **Build** loads the Executable and runs its startup code, including the dynamic linker, toward the first instruction of detected `main`. When no `main` is found, the target is the executable entry point: the address recorded in the ELF file where program execution starts. This startup advance happens even when **Step into library code** is enabled.
 
-Startup can stop earlier at one of your Breakpoints or when you press **Pause**. If the program asks for Terminal input, type an answer and press **Enter**; startup continues toward the target after receiving it. If the program exits or encounters an error first, the editor shows where it stopped. After 50,000,000 startup instructions without reaching the target, execution pauses at the current instruction and the **Log** shows a warning. The loaded program remains available for inspection; use **Run** or **Step** to continue.
+While Build works, its button says what it is waiting for: **Downloading libc.so.6…** for each [library](#libraries) not downloaded yet, **Loading the program…**, then **Starting the program…** during the startup advance. **Cancel** beside it ends the Build at once and returns to editing. A Build started right after a Cancel may first say **Waiting for the cancelled Build to end…**, for up to 20 seconds while an unfinished download gives up.
+
+Startup can stop earlier at one of your Breakpoints. If the program asks for Terminal input, type an answer and press **Enter**; startup continues toward the target after receiving it. If the program ends on a signal or an error first, the editor shows where it stopped; if it exits, as a program missing a library does, no line is highlighted. After 50,000,000 startup instructions without reaching the target, execution pauses at the current instruction and the **Log** shows a warning. The loaded program remains available for inspection; use **Run** or **Step** to continue.
 
 Instructions executed during Build's startup advance are outside Undo history. New steps are recorded from the point where Build stops.
 
@@ -136,6 +161,8 @@ By default, **Step** over a shared-library call such as `call printf@plt` runs t
 To step through shared-library instructions, enable **Step into library code** in **Preferences**. For a statically linked Executable, the library code is already part of the Executable, so Step enters those functions like other program functions. Programs [compiled in the editor](/documentation/x86/runtime-library#stepping) use different startup handling: enabling this Preference begins their execution at `_start`.
 
 A crash inside a library, such as invalid data reaching `strlen`, is shown on that library's instruction. The **Call stack** includes the program's own frames; choose a frame to see its line.
+
+When the program exits, the Listing and the Pseudocode stay where you were reading, and no line is highlighted. Its last instructions run in the C library, and the only line of its own code involved is `_start`'s call of `__libc_start_main`. A program that ends on a signal, such as a crash, is still shown where it stopped. **Undo** takes the last step back and shows its line again.
 
 ## Breakpoints {#breakpoints}
 
@@ -150,6 +177,20 @@ During a Debug session, a pane showing the Pseudocode stays on it. The Pseudocod
 Click beside a Pseudocode line to set a Breakpoint on it. The editor places a Breakpoint on the first instruction of each block of instructions the line came from. These are ordinary Breakpoints of the Listing, which shows them too. For example, in crackme, a Breakpoint on `if (iVar1 == 0) {` goes on `test eax, eax`, so **Run** stops after `strcmp` returns and before the program branches. A Pseudocode line is marked when any of its instructions has a Breakpoint, wherever you set it. Clicking the mark removes all of those Breakpoints, and removing them in the Listing removes the mark. Lines without instructions, such as declarations and braces, take none.
 
 The Breakpoints belong to instructions, not to the text: they stay where they are when the Pseudocode is generated again, for example after a Byte edit. The Pseudocode of a [Build output](#build-output) takes no Breakpoints and highlights no line, like its Listing.
+
+## Addresses in registers and memory {#memory}
+
+During a Debug session, the memory view's address box takes the Listing's [names](#names) as well as addresses: `main`, `FUN_brave_otter`, `DAT_misty_tanager`, `s_Enter_password` or `strcmp@plt`, and an offset after one, as in `DAT_misty_tanager+8`. Each goes to the address the name has while the program runs. A `.LAB_` name is not taken, since it names a place only inside its function. The `0x` before the box shows only while it holds a number.
+
+Right-click a register's value, the program counter's included, or a byte in the memory view for a menu that reads the value as an address:
+
+- **Show in memory** moves the memory view to the address and rings its byte until you move the view yourself.
+- **Show in Listing** shows the instruction at the address, when it is in the Executable's own code rather than a library's.
+- **Copy as hex** and **Copy as decimal** copy the value.
+
+A byte's menu also has **Follow pointer**, which reads the 8 bytes there as an address, least significant byte first as x86-64 stores a pointer, and shows that address in the memory view. Right-click inside a selection of bytes to use the number they make together. A click on a value still edits it.
+
+The **»** button at the end of the memory view's controls collapses the registers and memory to a narrow strip at the right edge, which leaves the editor more room; dragging the splitter beside them far to the right does the same. Click the strip to open them again at the width they had. The choice is kept with your layout.
 
 ## The Command line and Arguments {#arguments}
 
@@ -189,7 +230,7 @@ A patch changes memory only. The Executable File keeps its bytes, and the next B
 
 ## The Build output {#build-output}
 
-When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, in Hex, Disassemble and Decompile, and it is read-only. Its Listing and Pseudocode take no Breakpoints; the debugger follows the program in your source.
+When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, in Hex, Disassemble and Decompile, and it is read-only. Its Listing and Pseudocode take no Breakpoints; the debugger follows the program in your source. While Build works, its button says what it is doing, such as **Downloading the assembler…** the first time, **Assembling…** and **Linking…**, and **Cancel** ends it as it ends [an Executable's](#stepping).
 
 The running program finds it in its working directory: it can open `./main` and read its bytes, but writing it fails with `ETXTBSY`, and renaming or deleting it fails with `EBUSY`. Each Testcase's program finds its own copy.
 
@@ -202,7 +243,8 @@ If a File or folder of the project already has the Build output's path, the Buil
 The **Log** reports unsupported operations once per run:
 
 - An unimplemented system call: "`getcpu` (syscall 309) is not implemented; the call returned ENOSYS". The program receives `ENOSYS`, Linux's error for an unavailable call.
-- An unsupported instruction, often AVX or a later extension: "The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support". Execution ends with `SIGILL`, the illegal-instruction signal. The Listing still decodes the instruction.
+- An unsupported instruction: "The program ran `aesenc xmm0, xmm1` at `0x555555555195`, which the emulator does not support". Execution ends with `SIGILL`, the illegal-instruction signal. The Listing still decodes the instruction. [Vector instructions](/documentation/x86/vector-instructions) lists the extensions that run.
+- An AVX-512 instruction: "The program ran `vaddps zmm0, zmm1, zmm2` at `0x555555555195`. AVX-512 instructions are not currently supported." The run's line in the Log ends with the same sentence instead of "Illegal instruction (signal 4)". Nothing warns before a run, because a program can contain AVX-512 code it never reaches: glibc chooses its functions by what the processor reports.
 - A library that is not bundled: "libcrypto.so.3 is not one of the bundled libraries".
 - Startup that reaches the 50,000,000-instruction budget. Execution pauses and remains inspectable, as described under [Building and stepping](#stepping).
 

@@ -74,12 +74,15 @@ describe('the x86 Documentation', () => {
             'data-inspector',
             'listing',
             'names',
+            'symbols',
             'decompile',
             'pseudocode',
             'decompile-time',
+            'navigation',
             'stepping',
             'breakpoints',
             'pseudocode-debugging',
+            'memory',
             'arguments',
             'testcases',
             'patching',
@@ -132,6 +135,10 @@ describe('the x86 Documentation', () => {
         expect(text('decompile-time')).toContain('30 seconds')
         expect(text('pseudocode-debugging')).toContain('`if (iVar1 == 0) {`')
         expect(text('build-output')).toContain('Decompile')
+        // finding the way round: the Symbols panel, back and forward, and the pointer menus
+        expect(text('symbols')).toContain('**Strings**')
+        expect(text('navigation')).toContain('**Alt+←**')
+        expect(text('memory')).toContain('**Follow pointer**')
     })
 
     it('has an instruction entry for every instruction page, alphabetically', () => {
