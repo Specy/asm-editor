@@ -281,3 +281,29 @@ they were before this work.
 - The x86 course, which is what would define the taught set that deserves hand written prose. Five
   instructions have it today (`syscall`, `movabs`, `cdqe`, `cqo`, `movsxd`), chosen because the
   appendix predates them or because they mean something particular here.
+
+## Vector instructions and what the Core runs (2026-10-22)
+
+The Core runs AVX, AVX2, FMA, BMI and the `v` forms of SSE4, AES and PCLMULQDQ, but the pages
+started out assuming it ran nothing with an extension flag. What changed:
+
+- `x86Support.ts` states, for each form, whether the Core runs it (no extension, or only
+  extensions it runs), is known not to (AVX-512, AVX10, APX, MMX, 3DNow!, XOP, SHA and the other
+  families listed there), runs it only as its `v` form (SSE4, AES, PCLMULQDQ), or is not known
+  either way. Nothing is claimed about the last: CET, VMX, TSX and the rest say nothing.
+- Each Extensions group begins with what the Core does about it: "This emulator does not support
+  AVX-512." for a group it stops at throughout, a sentence naming the forms it leaves out for a
+  group it runs in part, and for SSE4 the instruction to write instead. A mnemonic in a group that
+  runs in part but is itself not run is marked on its line. The same facts reach the hover, the
+  completion detail and the snippets: a snippet offers a form that runs, since the widest form of a
+  vector instruction is its AVX-512 one.
+- A group of vector instructions the Core runs is split under labels by the work they do
+  (`vectorCategories.ts`): NASM files them by the year they arrived. The labels are separate from
+  the shared Instruction categories, which name scalar work; the vector mnemonics have no page of
+  their own, so no Instruction category would show anywhere.
+- The `cmp<predicate>`, FMA order and `qq` aliases NASM adds have the summary of what they stand
+  for (`x86AliasSummaries.ts`); the Opcodes data lists none of them.
+- The "Vector instructions" Chapter explains the registers, the upper-half rules, lanes, memory
+  operands and alignment, and FMA, and the lecture "AVX and 256-bit vectors" teaches them. The
+  Instructions Chapter's per-form "omitted" line is still not drawn (the owner removed it in
+  539d69db); the integer pages show what runs and say nothing of the rest.

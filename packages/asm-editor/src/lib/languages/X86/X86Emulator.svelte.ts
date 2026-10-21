@@ -59,6 +59,7 @@ import {
     RegisterSize as CoreRegisterSize,
     X86_REGISTER_NAMES,
     X86_SSE_REGISTERS,
+    X86_YMM_REGISTERS,
     X86_X87_REGISTERS,
     type ExecutionStep as CoreExecutionStep,
     type MonacoError as CoreMonacoError,
@@ -128,6 +129,15 @@ const X86_REGISTER_FILES: RegisterFileDescriptor[] = [
         ]
     },
     {
+        //the upper halves of these are the only part not already in the SSE file, but a row reads
+        //as one 256 bit value because that is what a 256 bit instruction wrote
+        id: 'avx',
+        label: 'AVX',
+        size: RegisterSize.Oct,
+        formats: ['double', 'single', 'hex'],
+        registers: Array.from({ length: 16 }, (_, i) => ({ name: `ymm${i}` }))
+    },
+    {
         id: 'x87',
         label: 'x87',
         //Blink keeps the stack as 64 bit doubles rather than as 80 bit extended values, so a row is
@@ -161,23 +171,24 @@ const SIGILL = 4
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
 
 /**
- * What a program that ended on an AVX instruction is told, in place of "Illegal instruction"
+ * What a program that ended on an AVX-512 instruction is told, in place of "Illegal instruction"
  * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
- * 1): the Core runs none of them, and a real processor would.
+ * 1): the Core runs AVX and AVX2 but not the EVEX encoding AVX-512 uses, and a real processor
+ * with AVX-512 would.
  */
-const AVX_UNSUPPORTED = 'AVX instructions are not currently supported'
+const AVX_UNSUPPORTED = 'AVX-512 instructions are not currently supported'
 
-/** The prefixes a VEX or EVEX prefix may follow: the segment overrides and the address size. */
-const PREFIXES_BEFORE_VEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
+/** The prefixes an EVEX prefix may follow: the segment overrides and the address size. */
+const PREFIXES_BEFORE_EVEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
 
 /**
- * Whether an instruction is encoded as AVX and its successors are: in 64-bit mode, the first byte
- * after its segment and address-size prefixes is `C4` or `C5` (VEX) or `62` (EVEX), which outside
- * 64-bit mode can also be `les`, `lds` and `bound`.
+ * Whether an instruction is encoded as AVX-512: in 64-bit mode, the first byte after its segment
+ * and address-size prefixes is `62` (EVEX), which outside 64-bit mode is `bound`. A VEX
+ * instruction (`C4`, `C5`) that reaches SIGILL is an encoding the processor refuses too, so it is
+ * told nothing special.
  */
 function isAvxEncoding(bytes: Uint8Array): boolean {
-    const first = bytes.find((byte) => !PREFIXES_BEFORE_VEX.has(byte))
-    return first === 0xc4 || first === 0xc5 || first === 0x62
+    return bytes.find((byte) => !PREFIXES_BEFORE_EVEX.has(byte)) === 0x62
 }
 
 /** What the dock says while a Build waits on each of the Core's phases. */
@@ -1084,8 +1095,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     /**
-     * One block read per file rather than one shared by both: the Core copies the whole 356 byte
-     * block over the bridge in a single call, so a refresh costs two of them, and sharing one read
+     * One block read per file rather than one shared by both: the Core copies the whole 612 byte
+     * block over the bridge in a single call, so a refresh costs one per file, and sharing one read
      * would mean caching a block without being told when a refresh begins. The raw block is
      * decoded here instead of asking for `getFpuState`, because the x87 tag word that says which
      * stack slots hold a value is read from the very same bytes, and the blanks are wanted on
@@ -1589,6 +1600,8 @@ function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {
             return CoreRegisterSize.Long
         case RegisterSize.Quad:
             return CoreRegisterSize.Quad
+        case RegisterSize.Oct:
+            return CoreRegisterSize.Oct
         case RegisterSize.Double:
         default:
             return CoreRegisterSize.Double
@@ -1607,6 +1620,9 @@ function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
         //wide, so the width has to survive the crossing
         case CoreRegisterSize.Quad:
             return RegisterSize.Quad
+        //an AVX register write: the undo history names it `ymm<n>` and the panel shows it 32 bytes wide
+        case CoreRegisterSize.Oct:
+            return RegisterSize.Oct
         case CoreRegisterSize.Double:
         default:
             return RegisterSize.Double
@@ -1633,6 +1649,7 @@ function isEmptyStTag(tag: number): boolean {
 const WORD_MASK = 0xffffn
 const LONG_MASK = 0xffffffffn
 const QUAD_MASK = (1n << 128n) - 1n
+const OCT_MASK = (1n << 256n) - 1n
 
 //one buffer for the module: an x87 row is a double on the way out and a bit pattern on the way in,
 //and the panel converts eight of them on every refresh
@@ -1640,6 +1657,7 @@ const doubleBits = new DataView(new ArrayBuffer(8))
 
 function registerFileNames(id: string): readonly string[] {
     if (id === 'sse') return X86_SSE_REGISTERS
+    if (id === 'avx') return X86_YMM_REGISTERS
     if (id === 'x87') return X86_X87_REGISTERS
     throw new Error(`Unknown X86 register file: ${id}`)
 }
@@ -1650,6 +1668,7 @@ function registerFileNames(id: string): readonly string[] {
  */
 function fpuStateValues(id: string, state: X86FpuState): bigint[] {
     if (id === 'sse') return [...state.xmm, BigInt(state.mxcsr >>> 0)]
+    if (id === 'avx') return [...state.ymm]
     if (id === 'x87') {
         return [
             ...state.st.map(toDoubleBits),
@@ -1674,6 +1693,11 @@ function withFpuRegisterValue(
         const xmm = [...state.xmm]
         xmm[index] = value & QUAD_MASK
         return { ...state, xmm }
+    }
+    if (id === 'avx') {
+        const ymm = [...state.ymm]
+        ymm[index] = value & OCT_MASK
+        return { ...state, ymm }
     }
     //the first eight names of the x87 file are the stack and the last three the control words
     if (index < 8) {

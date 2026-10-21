@@ -46,12 +46,13 @@ function markdownOf(entry: DocumentationEntry): string {
 }
 
 describe('the x86 Documentation', () => {
-    it('has its eight Chapters at their pages', () => {
+    it('has its nine Chapters at their pages', () => {
         expect(chapters().map((chapter) => [chapter.id, chapter.href])).toEqual([
             ['instructions', '/documentation/x86/instruction'],
             ['extensions', '/documentation/x86/extensions'],
             ['directives', '/documentation/x86/directive'],
             ['registers-and-flags', '/documentation/x86/registers'],
+            ['vector-instructions', '/documentation/x86/vector-instructions'],
             ['syscalls', '/documentation/x86/syscall'],
             ['using-c', '/documentation/x86/using-c'],
             ['runtime-library', '/documentation/x86/runtime-library'],
@@ -171,11 +172,54 @@ describe('the x86 Documentation', () => {
 
         const jumps = find('extensions', 'Jumps (extensions)')
         expect(jumps).toMatchObject({ names: ['jmpabs'], anchor: 'jumps-extensions' })
-        expect(markdownOf(jumps)).toBe('- `jmpabs` (APX)')
+        expect(markdownOf(jumps)).toBe(
+            '**This emulator does not support APX.** A program that reaches one of these instructions stops with SIGILL, an illegal instruction.\n\n- `jmpabs` (APX)'
+        )
         expect(hasCodeName(jumps)).toBe(false)
         // Only an integer section's group names the extension: the others' headings do already.
         expect(markdownOf(find('extensions', 'Intel AES instructions'))).toContain(
             '- `aesenc` — Perform One Round of an AES Encryption Flow\n'
+        )
+    })
+
+    it('says which vector instructions the emulator does not run', () => {
+        const fp16 = markdownOf(find('extensions', 'AVX512 Bit Algorithms'))
+        expect(fp16.startsWith('**This emulator does not support AVX-512.**')).toBe(true)
+        expect(fp16).not.toContain('not supported:')
+        // a section that shares mnemonics with AVX runs in part, and marks the ones that do not
+        const avx512 = markdownOf(find('extensions', 'AVX-512 instructions'))
+        expect(avx512).toContain('forms of these instructions are not supported by this emulator')
+        expect(avx512).toContain(
+            '- `vmovdqa32` — Move Aligned Doubleword Values *(not supported: AVX-512)*'
+        )
+        // SSE4 and AES run as their v forms only, and the page says what to write instead
+        const sse4 = markdownOf(find('extensions', 'Penryn New Instructions (SSE4.1)'))
+        expect(sse4).toContain('SSE4 instructions run only in their `v` form')
+        expect(sse4).toContain(
+            '- `dppd` — Dot Product of Packed Double Precision Floating-Point Values *(runs only as `vdppd`)*'
+        )
+        // AVX runs, with the AVX-512 forms of its instructions left out
+        const avx = markdownOf(find('extensions', 'Intel AVX instructions'))
+        expect(avx).toContain(
+            'forms of these instructions are not supported by this emulator; the other forms run.'
+        )
+        expect(avx).not.toContain('**This emulator does not support')
+    })
+
+    it('files the vector instructions the emulator runs by the work they do', () => {
+        const avx = markdownOf(find('extensions', 'Intel AVX instructions'))
+        for (const label of [
+            'Moves, loads and stores',
+            'Arithmetic',
+            'Shuffles, permutes and blends'
+        ]) {
+            expect(avx).toContain(`**${label}**\n\n- `)
+        }
+        const [, afterShuffles] = avx.split('**Shuffles, permutes and blends**')
+        expect(afterShuffles.split('\n\n**')[0]).toContain('- `vblendpd`')
+        // a group the emulator runs none of is one list
+        expect(markdownOf(find('extensions', 'AVX512 Bit Algorithms'))).not.toContain(
+            '**Arithmetic**'
         )
     })
 
@@ -312,7 +356,7 @@ describe('the x86 Documentation', () => {
             ])
         )
         expect(anchors('registers-and-flags')).toEqual(
-            expect.arrayContaining(['registers', 'flags', 'condition-codes', 'sse', 'x87'])
+            expect.arrayContaining(['registers', 'flags', 'condition-codes', 'sse', 'avx', 'x87'])
         )
         expect(anchors('syscalls')).toEqual(expect.arrayContaining(['common', 'all']))
     })
@@ -323,7 +367,7 @@ describe('the x86 Documentation', () => {
             (entry) => entry.kind === 'register' && entry.anchor.startsWith('register-')
         )
         expect(general.map((entry) => entry.title)).toEqual(X86_REGISTERS.map((r) => r.name))
-        expect(entries.filter((entry) => entry.kind === 'register')).toHaveLength(11 + 6)
+        expect(entries.filter((entry) => entry.kind === 'register')).toHaveLength(11 + 7)
         expect(entries.filter((entry) => entry.kind === 'flag')).toHaveLength(7)
         expect(entries.filter((entry) => entry.kind === 'condition-code')).toHaveLength(16)
 

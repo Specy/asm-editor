@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vite-plus/test'
-import { X86_SSE_REGISTERS, X86_X87_REGISTERS } from '@specy/x86'
+import { X86_SSE_REGISTERS, X86_X87_REGISTERS, X86_YMM_REGISTERS } from '@specy/x86'
 import { Prompt } from '#stores/promptStore.svelte.ts'
 import {
     type Register,
@@ -221,11 +221,19 @@ describe('x86 register files', () => {
         const sources = programSources(SSE_PROGRAM)
         const emulator = await X86Emulator(sources, { automaticChecking: false })
         try {
-            expect(emulator.registerFiles.map((file) => file.id)).toEqual(['cpu', 'sse', 'x87'])
+            expect(emulator.registerFiles.map((file) => file.id)).toEqual([
+                'cpu',
+                'sse',
+                'avx',
+                'x87'
+            ])
             //the values arrive as flat arrays, so a descriptor that names them in another order
             //would label every row wrongly and nothing else would notice
             expect(fileOf(emulator, 'sse').layout.map((register) => register.name)).toEqual([
                 ...X86_SSE_REGISTERS
+            ])
+            expect(fileOf(emulator, 'avx').layout.map((register) => register.name)).toEqual([
+                ...X86_YMM_REGISTERS
             ])
             expect(fileOf(emulator, 'x87').layout.map((register) => register.name)).toEqual([
                 ...X86_X87_REGISTERS
@@ -388,6 +396,77 @@ describe('x86 register files', () => {
             //the write names one register, so the rest of the block comes back as it was
             expect(sse[0]).toBe(0n)
             expect(emulator._getRegisterFileValues!('x87')[0]).toBe(0x3ff0000000000000n)
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+const AVX_PROGRAM = [
+    'bits 64',
+    'global _start',
+    'section .data',
+    'align 32',
+    'v: dq 1, 2, 3, 4',
+    'section .text',
+    '_start:',
+    '    vmovdqu ymm0, [rel v]',
+    '    vpaddq ymm0, ymm0, ymm0',
+    '    mov rax, 60',
+    '    xor rdi, rdi',
+    '    syscall'
+].join('\n')
+
+describe('x86 AVX register file', () => {
+    const WIDE = (4n << 192n) | (3n << 128n) | (2n << 64n) | 1n
+
+    it('reads the 256 bit registers, names their writes and gives them back on undo', async () => {
+        const sources = programSources(AVX_PROGRAM)
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            expect(emulator.errors).toEqual([])
+            const ymm0 = registerOf(fileOf(emulator, 'avx'), 'ymm0')
+            expect(Number(ymm0.size)).toBe(RegisterSize.Oct)
+            await emulator.step()
+            expect(ymm0.value).toBe(WIDE)
+            //the SSE file holds the lower half of the same register
+            expect(registerOf(fileOf(emulator, 'sse'), 'xmm0').value).toBe(
+                WIDE & ((1n << 128n) - 1n)
+            )
+            await emulator.step()
+            expect(ymm0.value).toBe(WIDE * 2n)
+            expect(ymm0.prev).toBe(WIDE)
+            const writes = emulator.latestSteps.flatMap((step) =>
+                step.mutations.filter(
+                    (mutation) =>
+                        mutation.type === 'WriteRegister' && mutation.value.register === 'ymm0'
+                )
+            )
+            expect(writes).toContainEqual({
+                type: 'WriteRegister',
+                value: { register: 'ymm0', old: WIDE, new: WIDE * 2n, size: RegisterSize.Oct }
+            })
+            emulator.undo()
+            expect(ymm0.value).toBe(WIDE)
+            emulator.undo()
+            expect(ymm0.value).toBe(0n)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('writes a whole register, and a low half alone keeps the upper half', async () => {
+        const sources = programSources(AVX_PROGRAM)
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            await emulator.step()
+            emulator._setRegisterFileValue?.('avx', 'ymm3', WIDE)
+            expect(emulator._getRegisterFileValues!('avx')[3]).toBe(WIDE)
+            expect(emulator._getRegisterFileValues!('sse')[3]).toBe(WIDE & ((1n << 128n) - 1n))
+            emulator._setRegisterFileValue?.('sse', 'xmm3', 7n)
+            expect(emulator._getRegisterFileValues!('avx')[3]).toBe(((WIDE >> 128n) << 128n) | 7n)
         } finally {
             emulator.dispose()
         }

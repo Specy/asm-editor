@@ -45,9 +45,9 @@ export type PlaygroundSettings = {
  * The Register files a fence can open a Playground on, which are the lower-case labels of the tabs
  * the panel shows ([the design record](../../../../../docs/design/register-files.md)).
  */
-export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'x87'
+export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'avx' | 'x87'
 
-const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = ['fpu', 'cp0', 'csr', 'sse', 'x87']
+const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = ['fpu', 'cp0', 'csr', 'sse', 'avx', 'x87']
 
 export type PlaygroundFence = {
     settings: PlaygroundSettings

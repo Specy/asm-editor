@@ -13,10 +13,11 @@
  */
 
 import {
-    X86_INSTRUCTIONS,
+    X86_INSTRUCTIONS as GENERATED_INSTRUCTIONS,
     type X86Instruction,
     type X86InstructionForm
 } from './generated/x86Instructions'
+import { withAliasSummaries } from './x86AliasSummaries'
 import { X86_SIM_ARGUMENT_OVERRIDES } from '../../documentation/x86/syscallBinding'
 import { X86_DESCRIPTIONS } from './generated/x86Descriptions'
 import { X86_SYSCALLS, type X86Syscall } from './generated/x86Syscalls'
@@ -30,11 +31,13 @@ import {
     X86_SIZE_SPECIFIERS
 } from './generated/x86Tokens'
 
+/** NASM's table, with a summary on the spellings that are an alias of another instruction. */
+export const X86_INSTRUCTIONS: X86Instruction[] = withAliasSummaries(GENERATED_INSTRUCTIONS)
+
 export {
     X86_ADDRESS_KEYWORDS,
     X86_DIRECTIVES,
     X86_FLAG_MEANINGS,
-    X86_INSTRUCTIONS,
     X86_PREFIXES,
     X86_PREPROCESSOR_DIRECTIVES,
     X86_PSEUDO_OPS,
@@ -803,6 +806,19 @@ export const X86_DOCUMENTED_REGISTER_FILES: X86RegisterFileDoc[] = [
                 bits: 32,
                 description:
                     'The control and status register of the unit. It holds the rounding mode, the masks that decide whether an invalid operation raises an exception or quietly produces a NaN, and the flags that record which of those conditions has happened since the flags were last cleared. `ldmxcsr` and `stmxcsr` move it to and from memory.'
+            }
+        ]
+    },
+    {
+        id: 'avx',
+        title: 'AVX registers',
+        intro: 'AVX doubles the width of the vector registers. `ymm0` to `ymm15` are 256 bits wide, and the `xmm` registers of the SSE file are their low halves: writing `xmm3` with an SSE instruction changes the lower half of `ymm3` and leaves the upper half alone, while the AVX forms of the same instructions, which are written with a `v` in front (`vaddps`, `vmovdqu`), say how much of the register they mean. A **128 bit** AVX instruction writes the lower half and **clears the upper half**; a **256 bit** one, written with `ymm` operands, writes both. That is why AVX code that mixes the two forms often ends with `vzeroupper`, which clears every upper half so that the next SSE instruction does not pay for them.\n\nAVX instructions take a separate destination: `vaddps ymm0, ymm1, ymm2` adds `ymm1` and `ymm2` and writes `ymm0`, leaving both sources as they were. Most of them work on the two 128 bit halves independently, which is why a shuffle such as `vpshufb` cannot move a byte from one half to the other; the few that cross, such as `vperm2f128`, `vpermd` and `vinsertf128`, say so in their names.\n\nThe emulator runs AVX, AVX2, FMA, BMI and the rest of the instructions a compiler emits with `-mavx2`, but not the 512 bit AVX-512 registers.',
+        registers: [
+            {
+                name: 'ymm0 to ymm15',
+                bits: 256,
+                description:
+                    'Sixteen 256 bit registers. Read as doubles they are four lanes, read as singles eight, and read as raw bits thirty-two bytes. The lower 128 bits are the register of the same number in the SSE file, so a value shown there is the lower half of the row shown here.'
             }
         ]
     },

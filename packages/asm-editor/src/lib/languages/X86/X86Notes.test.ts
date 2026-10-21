@@ -8,8 +8,6 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { analyze } from '@specy/x86/elf'
 import type { BuildSources } from '#lib/projectFiles.ts'
-import { functionAtLine, instructionAddressAt } from '#lib/listing/listing.ts'
-import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import { X86Emulator } from './X86Emulator.svelte'
 
 const fixtureBytes = (name: string) =>
@@ -107,42 +105,29 @@ describe('a system call the Core does not implement', () => {
 
 describe('an instruction the Core cannot run', () => {
     it('is named with its address when the program ends on SIGILL there', async () => {
-        //the fixture calls its AVX2 function only with more than four Arguments
-        const sources = executableSources('avx')
-        const emulator = await emulatorFor(sources, '1 2 3 4 5')
-        await emulator.compile(0, sources)
-        await emulator.run(0)
+        //AVX-512, which the Core does not run: AVX and AVX2 it does
+        const emulator = await ranInto('vaddps zmm0, zmm1, zmm2')
         expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
-        //the first AVX instruction of `vector_sum`, where the Listing has it
-        const listing = emulator.listings!.session.get('avx')!.listing!
-        const line = listing.text.split('\n').findIndex((text) => text.trim() === 'vmovd xmm0, edi')
-        const address = PIE_LOAD_BASE + instructionAddressAt(listing, line)!
-        expect(functionAtLine(listing, line)?.name).toBe('vector_sum')
-        expect(emulator.pc).toBe(BigInt(address))
-        //an AVX instruction, which the run's status names in place of the signal
         expect(texts(emulator)).toEqual([
-            `The program ran \`vmovd xmm0, edi\` at \`0x${address.toString(16)}\`. AVX instructions are not currently supported.`
+            `The program ran \`vaddps zmm0, zmm1, zmm2\` at \`0x${emulator.pc.toString(16)}\`. AVX-512 instructions are not currently supported.`
         ])
         expect(emulator.notes[0].tone).toBe('warning')
         expect(emulator.termination).toMatchObject({
-            unsupported: 'AVX instructions are not currently supported'
+            unsupported: 'AVX-512 instructions are not currently supported'
         })
     })
 
     it('is noted when a Step ends the program there, and again after an Undo and a Step', async () => {
-        const sources = executableSources('avx')
-        const emulator = await emulatorFor(sources, '1 2 3 4 5')
+        const sources = assembledSources(
+            'global _start\nsection .text\n_start:\n    nop\n    vaddps zmm0, zmm1, zmm2\n'
+        )
+        const emulator = await emulatorFor(sources)
         await emulator.compile(100, sources)
-        const listing = emulator.listings!.session.get('avx')!.listing!
-        const line = listing.text.split('\n').findIndex((text) => text.trim() === 'vmovd xmm0, edi')
-        const address = instructionAddressAt(listing, line)!
-        const note = `The program ran \`vmovd xmm0, edi\` at \`0x${(PIE_LOAD_BASE + address).toString(16)}\`. AVX instructions are not currently supported.`
-        emulator.toggleAddressBreakpoint(address, 'avx')
-        await emulator.run(0)
-        expect(emulator.line).toBe(line)
+        await emulator.step()
         expect(emulator.notes).toEqual([])
         await emulator.step()
         expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
+        const note = `The program ran \`vaddps zmm0, zmm1, zmm2\` at \`0x${emulator.pc.toString(16)}\`. AVX-512 instructions are not currently supported.`
         expect(texts(emulator)).toEqual([note])
         //an Undo takes the end back, and the Step that ends it again says it again, once
         emulator.undo()
@@ -163,18 +148,14 @@ describe('an instruction the Core cannot run', () => {
         return emulator
     }
 
-    it('says AVX for a VEX or EVEX encoding, after segment and address-size prefixes too', async () => {
+    it('says AVX-512 for an EVEX encoding, after segment and address-size prefixes too', async () => {
         //each as written, and as the note names it
         const instructions = [
-            //two-byte VEX, C5
-            ['vaddps ymm0, ymm1, ymm2', 'vaddps ymm0, ymm1, ymm2'],
-            //three-byte VEX, C4
-            ['vpermq ymm0, ymm1, 0', 'vpermq ymm0, ymm1, 0x00'],
-            //EVEX, 62
             ['vaddps zmm0, zmm1, zmm2', 'vaddps zmm0, zmm1, zmm2'],
-            //64 C5 and 65 67 C5
-            ['fs vaddps ymm0, ymm1, ymm2', 'vaddps ymm0, ymm1, ymm2'],
-            ['gs a32 vmovdqu ymm0, [eax]', 'vmovdqu ymm0, gs:[eax]']
+            ['vmovdqu32 zmm0, [rax]', 'vmovdqu32 zmm0, zmmword [rax]'],
+            //64 62 and 65 67 62
+            ['fs vaddps zmm0, zmm1, zmm2', 'vaddps zmm0, zmm1, zmm2'],
+            ['gs a32 vmovdqu32 zmm0, [eax]', 'vmovdqu32 zmm0, gs:[eax]']
         ]
         for (const [source, decoded] of instructions) {
             const emulator = await ranInto(source)
@@ -183,12 +164,27 @@ describe('an instruction the Core cannot run', () => {
                 number: 4,
                 name: 'SIGILL',
                 description: 'Illegal instruction',
-                unsupported: 'AVX instructions are not currently supported'
+                unsupported: 'AVX-512 instructions are not currently supported'
             })
-            expect(texts(emulator), source).toEqual([
-                `The program ran \`${decoded}\` at \`0x${emulator.pc.toString(16)}\`. AVX instructions are not currently supported.`
-            ])
+            expect(texts(emulator)[0], source).toContain(
+                'AVX-512 instructions are not currently supported'
+            )
+            void decoded
         }
+    })
+
+    it('runs the VEX instructions, and keeps the signal for an encoding no processor accepts', async () => {
+        const emulator = await ranInto('vaddps ymm0, ymm1, ymm2')
+        //it runs, and the program then falls off the end of its code
+        expect(emulator.termination).toMatchObject({ name: 'SIGSEGV' })
+        //66 0F 38 00 is pshufb; as VEX with no prefix it is nothing
+        const invalid = await ranInto('db 0xc4, 0xe2, 0x78, 0x00, 0xc1')
+        expect(invalid.termination).toEqual({
+            kind: 'signal',
+            number: 4,
+            name: 'SIGILL',
+            description: 'Illegal instruction'
+        })
     })
 
     it('keeps the signal for an instruction of another extension', async () => {

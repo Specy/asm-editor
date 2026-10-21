@@ -19,7 +19,7 @@ scratch now that all of them are written.
     NASM and nothing else (`mode: 'NASM_trunk'`, hardcoded in the adapter), and the documentation pages
     landed on 2026-09-12 (`docs/design/x86-documentation.md`). Slug `x86`, name "x86 assembly",
     order 5. It is x86-64 in long mode, run by blink as a Linux process, so the outside-world module is
-    about the Linux ABI and not about a bare machine. The course is 37 pages: 18 lectures and 19
+    about the Linux ABI and not about a bare machine. The course is 38 pages: 19 lectures and 19
     Examples, the ladder minus the six programs the environment cannot run (below).
 
 2. The General course grows from 10 to 18 lectures in three modules (skeleton below). The ten existing
@@ -44,7 +44,7 @@ scratch now that all of them are written.
 9. The **General course**'s outside-world module carries no Playgrounds at all: a reader who has not
    yet studied a language cannot run a program that prints without first being taught a convention
    that course does not teach. Full scale as built, counting Lectures and Examples: Assembly
-   basics 18, M68K 42, MIPS 43, RISC-V 44, Z80 42, x86 38, so 227 pages.
+   basics 18, M68K 42, MIPS 43, RISC-V 44, Z80 42, x86 39, so 228 pages.
 10. Playgrounds get a `screen` flag (off by default) so the Screen peripheral can be shown inline.
 11. Work happens in a git worktree at `/home/dev/code/asm-editor-courses` on branch `feat/courses`
     cut from `feat/screen-peripherals`; it becomes a pull request after PR #71 merges. Content under
@@ -157,7 +157,7 @@ on the Register file that holds the answer, with the `fpu`, `sse`, `x87` or `csr
 every Exercise moves its answer into a general register first, because a Testcase still reads the CPU
 file only (`docs/design/register-files.md`).
 
-### The x86 course (`x86`), 18 lectures and 19 Examples
+### The x86 course (`x86`), 19 lectures and 19 Examples
 
 | module                         | slug                                         | title                                       | topic               |
 | ------------------------------ | -------------------------------------------- | ------------------------------------------- | ------------------- |
@@ -177,6 +177,7 @@ file only (`docs/design/register-files.md`).
 | `think-in-assembly`            | `call-ret-and-the-system-v-convention`       | call, ret and the System V convention       | `subroutines`       |
 | `think-in-assembly`            | `floating-point-and-the-x87-stack`           | Floating point and the x87 stack            | `floating-point`    |
 | `think-in-assembly`            | `sse-and-packed-arithmetic`                  | SSE and packed arithmetic                   | `sse`               |
+| `think-in-assembly`            | `avx-and-wider-vectors`                      | AVX and 256-bit vectors                     | `avx`               |
 | `talking-to-the-outside-world` | `syscall-and-the-linux-abi`                  | syscall and the Linux ABI                   | `syscalls`          |
 | `talking-to-the-outside-world` | `ports-devices-and-the-kernel`               | Ports, devices and the kernel in between    | `mmio`              |
 | `talking-to-the-outside-world` | `interrupts-exceptions-and-signals`          | Interrupts, exceptions and signals          | `interrupts`        |
@@ -454,6 +455,12 @@ RARS is a port of MARS, so the RISC-V course re-checked these rather than assumi
 - Addresses are fixed as long as the code is under a page: `.text` at `0x401000`, `.data` then
   `.bss` at `0x402000`, `rsp` starting at `0x4FFFFFFFFED0` with `argc` at the top of the stack.
   `rdx` is **not** zero at `_start`; Linux leaves an address in it.
+- **AVX runs, but `cpuid` does not report it.** VEX instructions (AVX, AVX2, FMA, BMI, `v` forms of
+  SSE4 and AES) run; AVX-512 stops with SIGILL. A page may not show a `cpuid` test choosing the AVX
+  path. `align 32` aligns a label in `.data`; `vmovdqa ymm` on a label that is not a multiple of 32
+  ends the run with SIGSEGV and changes no register. The `avx` fence flag opens the registers panel
+  on the `ymm` rows. Legacy `addps xmm0, [m]` with a misaligned `m` runs here and faults on a
+  processor, while `movaps`, `movdqa` and `paddd` fault here too.
 - `faddp st1, st0` is not a form in NASM 3.00; write `faddp`. `fistp` rounds to nearest rather
   than truncating, so the square root of 7 stores as 3.
 - The Register file fence flags (`sse`, `x87`, `fpu`, `csr`) are how a floating point Playground

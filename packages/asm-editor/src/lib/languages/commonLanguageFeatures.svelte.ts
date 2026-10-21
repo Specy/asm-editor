@@ -122,7 +122,9 @@ export enum RegisterSize {
     Long = 4,
     Double = 8,
     /** 128 bits, the width of an x86 SSE register. */
-    Quad = 16
+    Quad = 16,
+    /** 256 bits, the width of an x86 AVX register. */
+    Oct = 32
 }
 
 export type RegisterChunk = {

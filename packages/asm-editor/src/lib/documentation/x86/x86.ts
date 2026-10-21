@@ -27,6 +27,7 @@ import {
     type X86TokenDoc
 } from '#lib/languages/X86/X86-documentation.ts'
 import { capitalize } from '#lib/utils.ts'
+import { x86IsUnsupported, x86List, x86Support } from '#lib/languages/X86/x86Support.ts'
 import {
     fillPlaceholders,
     names,
@@ -37,6 +38,7 @@ import {
     type EntryField
 } from '../entries'
 import { x86InstructionCategories } from './categories'
+import { VECTOR_CATEGORIES, vectorCategory } from './vectorCategories'
 import { x86FormTags } from '../instructions/formTags'
 import { withInstructionCategory } from '../instructions/resolve'
 import { documentSignature } from '../instructions/document'
@@ -47,6 +49,7 @@ import registersProse from './registers.md?raw'
 import syscallsProse from './syscalls.md?raw'
 import usingCProse from './using-c.md?raw'
 import executablesProse from './executables.md?raw'
+import vectorProse from './vector-instructions.md?raw'
 import runtimeProse from './runtime-library.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
 import { runtimeFunctionDocumentation } from '../runtimeFunctions'
@@ -152,16 +155,105 @@ function memberSummary(members: X86Instruction[]): string {
 /**
  * `` - `aadd` — Atomically ADD ``: the mnemonic and its one line. In an integer section's group the
  * line names the extension too, `` - `jmpabs` (APX) ``, because that is the reason the instruction
- * is listed here; every other group's heading already names its extension.
+ * is listed here; every other group's heading already names its extension. A mnemonic of a group
+ * that runs in part and has no form the Core runs says so on its line.
  */
-function memberLine(member: X86Instruction, withFeatures: boolean): string {
+function memberLine(member: X86Instruction, withFeatures: boolean, notRun?: string): string {
     const text =
         X86_SUMMARY_OVERRIDES[member.name.toLowerCase()] ??
         member.summary.replaceAll('Singed', 'Signed')
     const summary = text ? ` — ${text}` : ''
     const features =
         withFeatures && member.features.length > 0 ? ` (${member.features.join(', ')})` : ''
-    return `- ${code(member.name)}${summary}${features}`
+    const unsupported = notRun ? ` *(${notRun})*` : ''
+    return `- ${code(member.name)}${summary}${features}${unsupported}`
+}
+
+/** The extensions of the forms the Core is known not to run, without repeats. */
+function missingFamilies(members: X86Instruction[], kind: 'family' | 'v-form'): string[] {
+    return [
+        ...new Set(
+            members.flatMap((member) =>
+                x86Support(member)
+                    .missing.filter((reason) => reason.kind === kind)
+                    .map((reason) => reason.family)
+            )
+        )
+    ]
+}
+
+/**
+ * What a group says first about the Core and its instructions: nothing when it is not known to
+ * stop at any of them, the extension that is missing when it stops at all of them, and what is
+ * left out when only some forms or mnemonics are.
+ */
+function supportNote(members: X86Instruction[]): string | undefined {
+    const supports = members.map(x86Support)
+    const families = missingFamilies(members, 'family')
+    const vForms = missingFamilies(members, 'v-form')
+    if (families.length === 0 && vForms.length === 0) return undefined
+    if (members.every(x86IsUnsupported)) {
+        if (families.length === 0) {
+            const [first] = members
+            return `**This emulator runs ${x86List(vForms)} only in its \`v\` form.** Write \`v${first.name}\`, not \`${first.name}\`: the encodings without the \`v\` prefix stop the program with SIGILL, an illegal instruction.`
+        }
+        return `**This emulator does not support ${x86List(families)}.** A program that reaches one of these instructions stops with SIGILL, an illegal instruction.`
+    }
+    // only where every other form is known to run can the note say that they do
+    const rest = supports.every((support) => support.unknown === 0) ? ' the other forms run' : ''
+    const sentences: string[] = []
+    if (vForms.length > 0) {
+        sentences.push(
+            `${x86List(vForms)} instructions run only in their \`v\` form: a legacy encoding stops the program with SIGILL.`
+        )
+    }
+    if (families.length > 0) {
+        sentences.push(
+            `The ${x86List(families)} forms of these instructions are not supported by this emulator${rest ? `;${rest}` : ''}.`
+        )
+    }
+    return sentences.join(' ')
+}
+
+/**
+ * The markdown of an Extensions group: its support note, then its mnemonics, under a label per kind
+ * of work when the group is vector instructions the Core runs. A mnemonic of a partly supported
+ * group that the Core is known not to run is marked on its line.
+ */
+function groupMarkdown(members: X86Instruction[], integer: boolean): string {
+    const supports = new Map(members.map((member) => [member, x86Support(member)]))
+    const mixed =
+        members.some((member) => supports.get(member)!.any) && members.some(x86IsUnsupported)
+    const line = (member: X86Instruction) => {
+        const reasons = supports.get(member)!.missing
+        let notRun: string | undefined
+        if (mixed && x86IsUnsupported(member)) {
+            notRun = reasons.every((reason) => reason.kind === 'v-form')
+                ? `runs only as \`v${member.name}\``
+                : `not supported: ${x86List([...new Set(reasons.map((reason) => reason.family))])}`
+        }
+        return memberLine(member, integer, notRun)
+    }
+    const note = supportNote(members)
+    const vector =
+        !integer &&
+        members.some(
+            (member) => supports.get(member)!.any && vectorCategory(member.name) !== undefined
+        )
+    const parts: string[] = note ? [note] : []
+    if (!vector) {
+        parts.push(members.map(line).join('\n'))
+        return parts.join('\n\n')
+    }
+    const labelled = [
+        ...VECTOR_CATEGORIES.map((category) => ({ label: category.label, id: category.id })),
+        { label: 'Other', id: undefined }
+    ]
+    for (const { label, id } of labelled) {
+        const inCategory = members.filter((member) => vectorCategory(member.name) === id)
+        if (inCategory.length > 0) parts.push(`**${label}**\n\n${inCategory.map(line).join('\n')}`)
+    }
+    return parts.join('\n\n')
 }
 
 /**
@@ -186,7 +278,7 @@ function extensions(): Chapter {
     groups.sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
     const entries = groups.map(({ title, members, integer }): DocumentationEntry => {
         const anchor = headingSlug(title)
-        const markdown = members.map((member) => memberLine(member, integer)).join('\n')
+        const markdown = groupMarkdown(members, integer)
         const features = [...new Set(members.flatMap((member) => member.features))].map((feature) =>
             [feature, X86_FLAG_MEANINGS[feature]].filter(Boolean).join(': ')
         )
@@ -551,6 +643,26 @@ function usingC(): Chapter {
     }
 }
 
+/** The vector registers and the instructions that use them, and what this emulator runs of them. */
+function vectorInstructions(): Chapter {
+    const href = `${BASE}/vector-instructions`
+    return {
+        id: 'vector-instructions',
+        language: 'x86',
+        title: 'Vector instructions',
+        href,
+        description:
+            'The ymm registers and the AVX, AVX2, FMA and BMI instructions: which run here, how they treat the upper half of a register, which cross between 128-bit lanes, and how memory operands are sized and aligned.',
+        entries: proseEntries({
+            language: 'x86',
+            chapter: 'vector-instructions',
+            chapterHref: href,
+            markdown: vectorProse,
+            openingTitle: 'Vector instructions'
+        })
+    }
+}
+
 /**
  * Running a program built outside the editor: an **Executable**, shown in the **Hex editor** and
  * as its **Listing** ([binary-import.md](../../../../../../docs/design/binary-import.md),
@@ -634,6 +746,7 @@ export function chapters(): Chapter[] {
         extensions(),
         directives(),
         registersAndFlags(),
+        vectorInstructions(),
         syscalls(),
         usingC(),
         runtimeLibrary(),

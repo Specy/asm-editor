@@ -52,6 +52,9 @@
         <NavigationLinkButton href={resolve('/documentation/x86/registers')}>
             <div>Registers & Flags</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href={resolve('/documentation/x86/vector-instructions')}>
+            <div>Vector instructions</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href={resolve('/documentation/x86/syscall')}>
             <div>Syscalls</div>
         </NavigationLinkButton>

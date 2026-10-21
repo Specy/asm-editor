@@ -99,6 +99,11 @@
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
+                    href={resolve('/documentation/x86/vector-instructions')}
+                    title="Vector instructions"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
                     href={resolve('/documentation/x86/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}

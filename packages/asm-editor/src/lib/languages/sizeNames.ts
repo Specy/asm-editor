@@ -25,7 +25,8 @@ const MOTOROLA: Record<RegisterSize, SizeName> = {
     [RegisterSize.Word]: { short: 'W', long: 'Word' },
     [RegisterSize.Long]: { short: 'L', long: 'Long' },
     [RegisterSize.Double]: { short: 'D', long: 'Double' },
-    [RegisterSize.Quad]: { short: 'Q', long: 'Quad' }
+    [RegisterSize.Quad]: { short: 'Q', long: 'Quad' },
+    [RegisterSize.Oct]: { short: 'O', long: 'Oct' }
 }
 
 //MIPS and RISC-V share one set of names, and their load/store mnemonics are where the letters come
@@ -39,12 +40,13 @@ const MIPS_LIKE: Record<RegisterSize, SizeName> = {
 
 //x86 keeps byte and word where the 68000 has them and renames everything above: the names are the
 //operand-size keywords NASM and MASM write, so 16 bytes is the SSE file's `xmmword` rather than
-//NASM's rarer `oword` spelling of it
+//NASM's rarer `oword` spelling of it, and 32 bytes the AVX file's `ymmword`
 const INTEL: Record<RegisterSize, SizeName> = {
     ...MOTOROLA,
     [RegisterSize.Long]: { short: 'D', long: 'Dword' },
     [RegisterSize.Double]: { short: 'Q', long: 'Qword' },
-    [RegisterSize.Quad]: { short: 'X', long: 'Xmmword' }
+    [RegisterSize.Quad]: { short: 'X', long: 'Xmmword' },
+    [RegisterSize.Oct]: { short: 'Y', long: 'Ymmword' }
 }
 
 const SIZE_NAMES = {
@@ -63,7 +65,8 @@ export const REGISTER_SIZES: readonly RegisterSize[] = [
     RegisterSize.Word,
     RegisterSize.Long,
     RegisterSize.Double,
-    RegisterSize.Quad
+    RegisterSize.Quad,
+    RegisterSize.Oct
 ]
 
 /**

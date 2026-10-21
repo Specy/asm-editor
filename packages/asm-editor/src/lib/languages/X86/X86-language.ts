@@ -7,6 +7,7 @@ import {
     splitAssemblyComment,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { x86FormFails, x86IsUnsupported, x86SupportNote } from './x86Support'
 import { X86Directives, X86Instructions, X86Registers, X86SizeSpecifiers } from './X86-grammar'
 import {
     describeX86Instruction,
@@ -66,7 +67,10 @@ function widthOf(operands: string[]): number {
 /** The forms signature help and the snippets offer, widest first and without repeats. */
 function formsOf(instruction: X86Instruction): X86Form[] {
     const seen = new Set<string>()
-    return [...instruction.forms]
+    // a snippet of a form the Core does not run would be a program that stops with SIGILL, and an
+    // AVX-512 form is the widest an AVX instruction has: offer what runs, unless nothing does
+    const running = instruction.forms.filter((form) => !x86FormFails(instruction.name, form))
+    return [...(running.length > 0 ? running : instruction.forms)]
         .sort((left, right) => widthOf(right.operands) - widthOf(left.operands))
         .filter((form) => {
             const key = form.operands.join(',')
@@ -79,6 +83,14 @@ function formsOf(instruction: X86Instruction): X86Form[] {
             operands: form.operands,
             description: instruction.summary || formatX86Form(instruction.name, form)
         }))
+}
+
+/** What completion says beside a mnemonic: its summary, and that the Core stops at it if it does. */
+function completionDetail(instruction: X86Instruction | undefined): string {
+    const summary = instruction?.summary || 'NASM instruction'
+    return instruction && x86IsUnsupported(instruction)
+        ? `${summary} (not supported by this emulator)`
+        : summary
 }
 
 /** Built once: the editor asks for these on every keystroke. */
@@ -170,7 +182,7 @@ export function createX86CompletionProvider(
                             item(
                                 instruction,
                                 monacoInstance.languages.CompletionItemKind.Function,
-                                x86InstructionMap.get(instruction)?.summary || 'NASM instruction',
+                                completionDetail(x86InstructionMap.get(instruction)),
                                 `010${instruction}`
                             )
                         )
@@ -404,12 +416,15 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
                     : ''
                 // Only the documented mnemonics have a category; the tags come from every form
                 // NASM lists, not just the few the hover shows.
+                const unsupported = x86SupportNote(instruction)
                 const kind = instructionHoverLine(
                     x86InstructionCategories[word],
                     mnemonicTags(instruction.forms.map(x86FormTags)),
                     since ? `${since}${extensions}` : ''
                 )
-                contents.push({ value: kind ? `${heading}\n\n${kind}` : heading })
+                contents.push({
+                    value: [heading, kind, unsupported].filter(Boolean).join('\n\n')
+                })
                 if (shapes) contents.push({ value: shapes })
                 // The first paragraph only: a hover is a reminder, and the page it links to is the
                 // place for the rest.

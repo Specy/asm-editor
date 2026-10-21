@@ -184,9 +184,11 @@ describe('condition codes', () => {
 })
 
 describe('the register files', () => {
-    it('describes the two the registers panel shows beside the general registers', () => {
-        expect(X86_DOCUMENTED_REGISTER_FILES.map((file) => file.id)).toEqual(['sse', 'x87'])
-        const [sse, x87] = X86_DOCUMENTED_REGISTER_FILES
+    it('describes the three the registers panel shows beside the general registers', () => {
+        expect(X86_DOCUMENTED_REGISTER_FILES.map((file) => file.id)).toEqual(['sse', 'avx', 'x87'])
+        const [sse, avx, x87] = X86_DOCUMENTED_REGISTER_FILES
+        expect(avx.registers.map((register) => register.name)).toEqual(['ymm0 to ymm15'])
+        expect(avx.registers.map((register) => register.bits)).toEqual([256])
         expect(sse.registers.map((register) => register.name)).toEqual(['xmm0 to xmm15', 'mxcsr'])
         expect(x87.registers.map((register) => register.name)).toEqual([
             'st0 to st7',
