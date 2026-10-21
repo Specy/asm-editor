@@ -6,11 +6,12 @@
     "sourcePath": "src/main.c",
     "source": "#include <sim.h>\n\nSIM_SCREEN(screen, 1024, 1024, 1);\n\nint main(void) {\n    screen[0] = sim_rgb(255, 255, 255);\n    return 0;\n}\n",
     "compilerId": "rv64-cclang2110",
-    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-addrsig -nostdinc -isystem sysroot/include -march=rv64imfd -mabi=lp64d -iquote 'src' -iquote . -std=c17",
-    "captured": "2026-10-06",
+    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-addrsig -mllvm -use-unknown-locations=Enable -nostdinc -isystem sysroot/include -march=rv64imfd -mabi=lp64d -iquote 'project/src' -iquote project -include 'project/src/main.c' -std=c17",
+    "captured": "2026-10-21",
     "response": {
         "code": 1,
         "stderr": [
+            { "text": "In file included from <built-in>:1:" },
             {
                 "text": "src/main.c:3:1: error: static assertion failed due to requirement '(1024) / (1) * ((1024) / (1)) * 4 <= 4128768': SIM_SCREEN: the grid does not fit in the 4128768 bytes of static data a RISC-V-64 program has, which its other global variables and constants share; use a larger unit or a smaller display"
             },

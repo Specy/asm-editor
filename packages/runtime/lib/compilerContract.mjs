@@ -55,9 +55,12 @@ export function compilerCodeFlags(compiler, optimization, sourceAnnotations = fa
             ...profile.flags.locations
         ].join(' ')
     const annotations = compiler === 'clang' && sourceAnnotations
+    // Clang -O0 leaves the constant a statement starts with without a source line, which then reads
+    // as the line before it; line 0 marks it instead, for the Source map to give it the next line.
+    const unknownLocations = optimization === '0' ? ' -mllvm -use-unknown-locations=Enable' : ''
     const options =
         compiler === 'clang'
-            ? `-fno-addrsig${annotations ? ' -fno-discard-value-names' : ''}`
+            ? `-fno-addrsig${unknownLocations}${annotations ? ' -fno-discard-value-names' : ''}`
             : '-fno-section-anchors'
     return `-O${optimization} -g1 -fdiagnostics-color=never ${annotations ? '-fverbose-asm' : '-fno-verbose-asm'} -fno-stack-protector -fno-pie ${options}`
 }

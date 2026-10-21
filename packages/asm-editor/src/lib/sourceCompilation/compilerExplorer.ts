@@ -345,19 +345,20 @@ export function createCompilerRequest(
  * include; `definesMain` says whether a global `main` was among the lines kept.
  */
 export function prepareAssembly(
-    lines: readonly AssemblyLine[],
+    output: readonly AssemblyLine[],
     request: CompilationRequest,
     readOnly: ReadOnlySources = {}
 ) {
+    const lines = restoreDroppedLocations(output)
     const text: string[] = []
     const mapping: (SourceLocation | null)[] = []
     let globalMain = false
     let mainLabel = false
     const lineCounts = new Map<string, number>()
-    const sourceAnnotations =
-        (request.compiler ?? defaultSourceCompiler(request.target)) === 'clang' &&
-        request.sourceAnnotations
-    for (const prepared of prepareCompilerLines(lines, request.target, !!sourceAnnotations)) {
+    const clang = (request.compiler ?? defaultSourceCompiler(request.target)) === 'clang'
+    const sourceAnnotations = clang && request.sourceAnnotations
+    const kept = prepareCompilerLines(lines, request.target, !!sourceAnnotations)
+    for (const prepared of kept) {
         const line = lines[prepared.index]
         //Clang follows both with a comment (`# -- Begin function main`, `# @main`)
         if (/^\s*\.globa?l\s+main\s*(?:#|$)/.test(prepared.text)) globalMain = true
@@ -379,11 +380,140 @@ export function prepareAssembly(
                 : null
         )
     }
+    if (clang && request.optimization === '0')
+        placeUnlocatedInstructions(kept, lines, mapping, request.target)
     return {
         assembly: text.join('\n') + '\n',
         lines: [...mapping, null],
         definesMain: globalMain && mainLabel
     }
+}
+
+/** What Compiler Explorer takes for the end of a block, anywhere in a line. */
+const EXPLORER_BLOCK_END = /\.(cfi_endproc|data|text|section)\b/
+
+/**
+ * Compiler Explorer ends the source location at any line its block end matches, an instruction's
+ * too, and leaves the lines after it without one up to the next `.loc`. Clang names a function's
+ * static local `next.data` and a local array's initializer `__const.main.text`, so an instruction
+ * that refers to either loses its line, and the `.loc` right before it with it. Those lines take
+ * the location the compiler's own `.file` and `.loc` give them.
+ */
+function restoreDroppedLocations(lines: readonly AssemblyLine[]): readonly AssemblyLine[] {
+    const files = new Map<number, string>()
+    let location: AssemblyLine['source'] = null
+    let dropped = false
+    return lines.map((line) => {
+        const text = line.text
+        const file = /^\s*\.file\s+(\d+)\s+"([^"]*)"(?:\s+"([^"]*)")?/.exec(text)
+        const loc = /^\s*\.loc\s+(\d+)\s+(\d+)/.exec(text)
+        if (file) {
+            const [, number, first, second] = file
+            files.set(
+                Number(number),
+                second === undefined || second.startsWith('/')
+                    ? (second ?? first)
+                    : `${first}/${second}`
+            )
+        } else if (loc) {
+            const name = files.get(Number(loc[1]))
+            location =
+                name === undefined
+                    ? null
+                    : {
+                          file: name,
+                          line: Number(loc[2]),
+                          mainsource: /<stdin>|^-$|example\.[^/]+$|<source>/.test(name)
+                      }
+            dropped = false
+        } else if (/^\s*\./.test(text) && !LABEL.test(text)) {
+            if (EXPLORER_BLOCK_END.test(text)) location = null
+        } else if (!LABEL.test(text) && !/^\s*(?:#|\S+\s*=)/.test(text) && !line.source) {
+            dropped ||= EXPLORER_BLOCK_END.test(text)
+            if (dropped && location) return { ...line, source: location }
+        }
+        return line
+    })
+}
+
+/** Labels only the line table refers to, which separate no blocks. */
+const DEBUG_LABEL = /^\s*(?:\.Ltmp|\$tmp)\d+:/
+const LABEL = /^\s*[^\s#:]+:/
+const STORE = /^(?:s[bhwd]|fs[hwd]|sc(?:\.[wd])?|amo[\w.]*|sw[lr]|s[wd]x?c1|s\.[sd])$/
+const CONTROL = /^(?:b\w*|j\w*|call|tail|ret|ecall|ebreak|syscall|nop|fence[\w.]*|[ems]ret|wfi)$/
+
+/**
+ * Clang at `-O0` puts the constant or address an instruction needs right before it and gives it no
+ * source line, so it would read as the line before: the previous statement's, or the function's
+ * opening one for the first statement. `-use-unknown-locations` marks the first kind with line 0;
+ * a run of them takes the line of the instruction after it, within its block, and one that ends its
+ * block, such as a spill and the jump after it, keeps the line before it. The first statement's
+ * stay on the opening line up to `prologue_end`, so the run of them before it moves to that
+ * instruction's line: what writes a register, back to a store or to the frame's own setup.
+ */
+function placeUnlocatedInstructions(
+    kept: readonly { index: number; text: string }[],
+    lines: readonly AssemblyLine[],
+    mapping: (SourceLocation | null)[],
+    target: CompilationTarget
+) {
+    const frame = target === 'MIPS' ? /\$(?:sp|fp|s8|29|30)\b/ : /\b(?:sp|s0|fp|x2|x8)\b/
+    const kind = (text: string) =>
+        /^\s*#/.test(text) || DEBUG_LABEL.test(text)
+            ? 'transparent'
+            : LABEL.test(text)
+              ? 'label'
+              : /^\s*\./.test(text) || /^\s*\S+\s*=/.test(text)
+                ? 'directive'
+                : 'instruction'
+    //writes a register without touching memory, control flow or the frame
+    const materializes = (text: string) => {
+        const [, mnemonic = '', operands = ''] = /^\s*([\w.]+)\s*([^#]*)/.exec(text) ?? []
+        return !STORE.test(mnemonic) && !CONTROL.test(mnemonic) && !frame.test(operands)
+    }
+    let pending: number[] = []
+    let located: number | undefined
+    const endBlock = () => {
+        if (located !== undefined)
+            for (const unlocated of pending) mapping[unlocated] = mapping[located]
+        pending = []
+        located = undefined
+    }
+    let prologueEnd = false
+    for (let at = 0; at < kept.length; at++) {
+        const from = at === 0 ? 0 : kept[at - 1].index + 1
+        for (let index = from; index < kept[at].index; index++)
+            if (/^\s*\.loc\b.*\bprologue_end\b/.test(lines[index].text)) prologueEnd = true
+        const lineKind = kind(kept[at].text)
+        if (lineKind === 'label') endBlock()
+        if (lineKind !== 'instruction') continue
+        if (lines[kept[at].index].source?.line === 0) {
+            pending.push(at)
+            continue
+        }
+        for (const unlocated of pending) mapping[unlocated] = mapping[at]
+        pending = []
+        located = at
+        if (!prologueEnd) continue
+        prologueEnd = false
+        let opening: SourceLocation | null | undefined
+        for (let before = at - 1; before >= 0 && mapping[at]; before--) {
+            const text = kept[before].text
+            const beforeKind = kind(text)
+            if (beforeKind === 'transparent') continue
+            opening ??= mapping[before]
+            if (
+                beforeKind !== 'instruction' ||
+                !materializes(text) ||
+                !opening ||
+                mapping[before]?.path !== opening.path ||
+                mapping[before]?.line !== opening.line
+            )
+                break
+            mapping[before] = mapping[at]
+        }
+    }
+    endBlock()
 }
 
 /**
