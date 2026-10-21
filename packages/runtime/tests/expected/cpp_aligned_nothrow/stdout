@@ -1,0 +1,7 @@
+nothrow aligned=1 array aligned=1 value=7
+~Wide 7
+~Wide 9
+~Wide 7
+~Wide 7
+operator new aligned=1
+operator new[] aligned=1
