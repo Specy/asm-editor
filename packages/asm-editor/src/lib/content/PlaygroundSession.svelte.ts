@@ -1,5 +1,5 @@
 import { untrack } from 'svelte'
-import type { Project } from '#lib/Project.svelte.ts'
+import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
@@ -15,6 +15,13 @@ import {
 import { playgroundBuildSources } from './playgroundProgram'
 import { registerLanguageSession } from '#lib/languages/service/sessionRegistry.ts'
 
+/**
+ * What live checking and Build say while the Playground has no Program, which only the chat page's
+ * agent leaves it with, by deleting the one Entry; a File it writes then makes the next.
+ */
+export const PLAYGROUND_NO_PROGRAM_MESSAGE =
+    'This playground has no program. Write an assembly file to make one.'
+
 /** A transient Project gives embeds the same files and compilation lifecycle as the Workbench. */
 export class PlaygroundSession {
     readonly project: Project
@@ -29,13 +36,22 @@ export class PlaygroundSession {
 
     constructor(project: Project) {
         this.project = project
-        this.selected = project.entry
+        this.selected = project.selectedProgram ?? ''
         this.compiler = defaultSourceCompiler(project.language)
         this.sources = $derived.by(() => {
+            //the Emulator and live checking always have sources, as in the Workbench: with no
+            //Program, the default Entry path's, and why nothing builds
+            const entry = project.selectedProgram
+            if (entry === undefined)
+                return {
+                    files: project.files,
+                    entry: defaultEntryPath(project.language),
+                    assemblyError: PLAYGROUND_NO_PROGRAM_MESSAGE
+                }
             try {
                 return playgroundBuildSources(project)
             } catch (error) {
-                return { files: project.files, entry: project.entry, assemblyError: String(error) }
+                return { files: project.files, entry, assemblyError: String(error) }
             }
         })
         // A C/C++ entry leaves the emulator idle, but its source files still need editor help.
@@ -92,23 +108,22 @@ export class PlaygroundSession {
     async compile(confirm: (question: string, signal: AbortSignal) => Promise<boolean | null>) {
         const path = this.sourcePath
         if (!path || this.compiling) return false
-        const originalEntry = this.project.entry
         const controller = new AbortController()
         this.controller = controller
         this.compiling = true
         this.diagnostics = []
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)])
         try {
+            //A Playground has exactly one Program, its authored entry (programs.md, decision 12),
+            //and a Compile makes no other: a C entry moves to its Generated assembly, and a
+            //companion of an assembly entry leaves that entry alone
             const result = await compileProjectSource(this.project, path, this.optimization, {
                 compiler: this.compiler,
                 signal,
-                confirm: (question) => confirm(question, signal)
+                confirm: (question) => confirm(question, signal),
+                newProgram: 'none'
             })
             if (!result) return false
-            //A hand-authored assembly entry may include generated code. Keep that entry when
-            //compiling a companion source file instead of replacing the caller's program.
-            if (!sourceLanguage(originalEntry) && originalEntry !== result.record.outputPath)
-                this.project.entry = originalEntry
             this.diagnostics = result.diagnostics
             this.selected = result.record.outputPath
             return true

@@ -43,7 +43,13 @@ describe('assembler profile ownership', () => {
             ])
             await expect(emulator.compile(200, broken)).rejects.toThrow(/Conflicting/)
             expect(emulator.compilerErrors[0].message).toContain('Conflicting')
-            expect(() => analyzeMarsProject(broken, 'profile', 1, 'RISC-V')).toThrow(/Conflicting/)
+            //live checking says it as its one Problem, rather than failing the analysis
+            expect(analyzeMarsProject(broken, 'profile', 1, 'RISC-V').diagnostics).toEqual([
+                expect.objectContaining({
+                    severity: 'error',
+                    message: expect.stringContaining('Conflicting')
+                })
+            ])
         } finally {
             emulator.dispose()
         }
@@ -88,9 +94,9 @@ describe('assembler profile ownership', () => {
         ]) {
             expect(
                 resolveAssemblyProfile(
-                    { files: reopened.files, entry: reopened.entry },
+                    { files: reopened.files, entry: reopened.selectedProgram! },
                     reopened.compilations,
-                    reopened.settings
+                    reopened.selected?.settings
                 )
             ).toBe('gnu-compiler-v1')
             expect(reopened.sourceMaps).toEqual({})
@@ -226,7 +232,7 @@ describe('x86 start code', () => {
         ]) {
             expect(
                 resolveX86Start(
-                    { files: reopened.files, entry: reopened.entry },
+                    { files: reopened.files, entry: reopened.selectedProgram! },
                     reopened.compilations
                 )
             ).toEqual({ x86Support: true })

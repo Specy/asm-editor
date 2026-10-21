@@ -90,7 +90,7 @@ it('imports an extensionless ELF as an x86 Project before trying a zip or text',
         input.dispatchEvent(new Event('change', { bubbles: true }))
         const project = await projectNamed('chall')
         expect(project.language).toBe('X86')
-        expect(project.entry).toBe('chall')
+        expect(project.selectedProgram).toBe('chall')
         expect(fileBytes(project.files.chall)).toEqual(crackme())
     } finally {
         await dispose()

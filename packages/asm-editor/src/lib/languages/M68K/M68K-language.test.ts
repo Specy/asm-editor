@@ -324,7 +324,7 @@ describe('M68K v2 language tooling', () => {
     it('formats every new runtime exception for a learner', () => {
         expect(
             getM68kErrorMessage({ type: 'ChkOutOfBounds', value: { value: -1, bound: 9 } })
-        ).toBe(' CHK exception: -1 is outside 0..9')
+        ).toBe('CHK exception: -1 is outside 0..9')
         expect(getM68kErrorMessage({ type: 'OverflowException' })).toContain('TRAPV')
         expect(getM68kErrorMessage({ type: 'IllegalInstruction' })).toContain('Illegal instruction')
         expect(
@@ -333,7 +333,7 @@ describe('M68K v2 language tooling', () => {
                 value: { address: 4096, write: true }
             })
         ).toBe(
-            ' Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
+            'Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
         )
         expect(
             getM68kErrorMessage({
@@ -341,5 +341,16 @@ describe('M68K v2 language tooling', () => {
                 value: { address: 4098, write: false }
             })
         ).toContain('Cannot read from an instruction: address $1002')
+    })
+
+    //a caller follows its own sentence with a space ("Error compiling code. Entry file not found")
+    it('starts a message without a line at its first word, and one with a line after the colon', () => {
+        expect(getM68kErrorMessage(new Error('Entry file not found: gone.s'))).toBe(
+            'Entry file not found: gone.s'
+        )
+        expect(getM68kErrorMessage({ type: 'DivisionByZero' }, 3)).toBe(
+            'Error at line 3: Division by zero'
+        )
+        expect(getM68kErrorMessage('refused', 2)).toBe('Error at line 2: refused')
     })
 })

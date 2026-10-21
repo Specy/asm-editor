@@ -1,12 +1,16 @@
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import type { Project } from '#lib/Project.svelte.ts'
 import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
+import type { NewProgram } from '#lib/sourceCompilation/compileProjectSource.ts'
 
 export const SUPPORTED_LANGUAGES = ['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64', 'Z80'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
 export const DEFAULT_TAKE_LINES = 400
 export const MAX_TAKE_LINES = 800
+
+/** What the tools say while a Project has no Program, where the host has no wording of its own. */
+export const DEFAULT_NO_PROGRAM_MESSAGE = 'This Project has no program.'
 
 export const DEFAULT_CODING_AGENT_TOOL_NAMES = [
     'view_file',
@@ -82,15 +86,27 @@ export type DefaultCodingAgentToolContext = {
     getProject?: () => Project | undefined
     getBuildSources?: () => BuildSources
     confirmSourceOverwrite?: (question: string) => Promise<boolean | null>
+    /**
+     * What `compile_source` does with a source that defines `main` and has no Program: `create`
+     * (the default) makes one, `move` moves the Selected program there, for a host with exactly one
+     * Program ([programs.md](../../../../../../../docs/design/programs.md), decision 12).
+     */
+    newProgram?: NewProgram
 
     // Multi-file support
     getFiles?: () => Record<string, string> | ProjectFiles
     getFile?: (path: string) => string | null
     setFile?: (path: string, code: string) => void
     deleteFile?: (path: string) => void
-    getEntryPath?: () => string
-    getActivePath?: () => string
+    /**
+     * The Entry the tools build: a Project's Selected program's, undefined while that Project has
+     * no Program ([programs.md](../../../../../../../docs/design/programs.md), decision 7).
+     */
+    getEntryPath?: () => string | undefined
+    getActivePath?: () => string | undefined
     setActivePath?: (path: string) => void
+    /** What the tools say while the Project has no Program, `DEFAULT_NO_PROGRAM_MESSAGE` if absent. */
+    noProgramMessage?: string
 
     // Single-file legacy fallbacks
     getEditorCode?: () => string

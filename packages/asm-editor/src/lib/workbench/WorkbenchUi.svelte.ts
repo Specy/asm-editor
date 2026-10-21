@@ -1,7 +1,7 @@
 import { SvelteSet } from 'svelte/reactivity'
 import { canFloat } from './deviceClass'
 import type { Viewport } from './viewport.svelte'
-import type { SettingsSectionId } from './hostApi'
+import type { SettingsTarget } from './hostApi'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
 /** Reads and writes the open panel where the host keeps it, so a host can bind it. */
@@ -23,8 +23,8 @@ export class WorkbenchUi {
     maximized = $state(false)
     /** The phone's drawer, which holds the rail and the open panel. */
     drawerOpen = $state(false)
-    /** The Settings section to bring into view when Settings is opened for it. */
-    settingsSection = $state<SettingsSectionId | null>(null)
+    /** The Settings section, or part of one, to bring into view when Settings is opened for it. */
+    settingsSection = $state<SettingsTarget | null>(null)
     /**
      * A request for the Documentation panel to focus its search box (Ctrl+K), with a query when one
      * is given; each request is a new token, which the panel answers once.
@@ -95,7 +95,7 @@ export class WorkbenchUi {
         this.documentationRequest = { token: (this.documentationRequest?.token ?? 0) + 1, query }
     }
 
-    openSettings(section: SettingsSectionId) {
+    openSettings(section: SettingsTarget) {
         this.settingsSection = section
         this.open('settings')
     }

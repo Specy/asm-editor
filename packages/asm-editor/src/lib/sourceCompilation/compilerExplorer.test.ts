@@ -111,6 +111,8 @@ describe('real Compiler Explorer output', () => {
                 vi.fn(async () => new Response(JSON.stringify(fixture.response)))
             )
             expect(result.map.lines.length).toBe(result.assembly.split('\n').length)
+            //C++ leaves `main` unmangled, so a .cpp program defines it as a .c one does
+            expect(result.definesMain).toBe(true)
             const assembly = result.assembly.split('\n')
             if (fixture.target === 'X86') {
                 //NASM translated from GCC's output, whose header and labels come from no source line
@@ -220,17 +222,17 @@ describe('Compiler Explorer failures', () => {
             ]
         })
     })
-    it('rejects missing main rather than injecting a call to an absent function', async () => {
-        await expect(
-            compileSource(
-                request(),
-                undefined,
-                async () =>
-                    new Response(
-                        JSON.stringify({ code: 0, asm: [{ text: 'helper:' }, { text: 'ret' }] })
-                    )
-            )
-        ).rejects.toThrow('must define int main')
+    it('compiles a source without main, rather than injecting a call to an absent function', async () => {
+        const result = await compileSource(
+            request(),
+            undefined,
+            async () =>
+                new Response(
+                    JSON.stringify({ code: 0, asm: [{ text: 'helper:' }, { text: 'ret' }] })
+                )
+        )
+        expect(result.assembly).toBe('helper:\nret\n')
+        expect(result.definesMain).toBe(false)
     })
     it('handles service errors, malformed responses and truncated output', async () => {
         await expect(
@@ -247,7 +249,7 @@ describe('Compiler Explorer failures', () => {
             )
         ).rejects.toThrow('truncated')
     })
-    it('limits submitted text and enforces the main signature without shifting source line numbers', () => {
+    it('limits submitted text without shifting source line numbers', () => {
         const current = request()
         const body = createCompilerRequest(current).body
         expect(body.files).toContainEqual({
@@ -465,14 +467,73 @@ describe('hosted compilation', () => {
         expect(result.record).toEqual(
             expect.objectContaining({ runtimeAbi: 'v1', assemblerProfile: 'gnu-compiler-v1' })
         )
-        await expect(
-            compileSource(
-                hosted(),
-                undefined,
-                async () => new Response(JSON.stringify({ code: 0, asm: [{ text: 'helper:' }] }))
-            )
-        ).rejects.toThrow('int main(void) or int main(int argc')
+        expect(result.definesMain).toBe(true)
     })
+
+    // A companion File defines what another File includes, and no `main` of its own (programs.md,
+    // decision 9): it compiles all the same, and says it defines none.
+    it.each(['MIPS', 'RISC-V', 'RISC-V-64'] as const)(
+        'compiles a %s companion File that defines no main',
+        async (target) => {
+            const companion = (...lines: string[]) =>
+                compileSource(
+                    {
+                        sourcePath: 'add.c',
+                        outputPath: generatedAssemblyPath('add.c', target),
+                        files: {
+                            'add.c': {
+                                encoding: 'plain',
+                                content: 'int add(int a, int b) {\n    return a + b;\n}\n'
+                            }
+                        },
+                        target,
+                        optimization: '2',
+                        compiler: 'gcc'
+                    },
+                    undefined,
+                    async () =>
+                        new Response(
+                            JSON.stringify({
+                                code: 0,
+                                asm: [
+                                    '\t.text',
+                                    '\t.align\t2',
+                                    ...lines,
+                                    '\t.ident\t"GCC: (crosstool-NG UNKNOWN) 14.2.0"'
+                                ].map((text) => ({ text }))
+                            })
+                        )
+                )
+            const [add, ret] =
+                target === 'MIPS' ? ['\taddu\t$2,$4,$5', '\tjr\t$31'] : ['\tadd\ta0,a0,a1', '\tret']
+            const result = await companion(
+                '\t.globl\tadd',
+                '\t.type\tadd, @function',
+                'add:',
+                add,
+                ret,
+                '\t.size\tadd, .-add'
+            )
+            expect(result.definesMain).toBe(false)
+            expect(result.assembly).toContain(`add:\n${add}\n`)
+            expect(result.record).toEqual(
+                expect.objectContaining({ sourcePath: 'add.c', target, runtimeAbi: 'v1' })
+            )
+            //a `main` label is the program's only together with its `.globl`
+            expect((await companion('main:', ret)).definesMain).toBe(false)
+            expect((await companion('\t.globl\tmain', 'helper:', ret)).definesMain).toBe(false)
+            //Clang follows each with a comment
+            expect(
+                (
+                    await companion(
+                        '\t.globl\tmain                            # -- Begin function main',
+                        'main:                                   # @main',
+                        ret
+                    )
+                ).definesMain
+            ).toBe(true)
+        }
+    )
 
     it('drops MIPS debug sections, their .previous and their labels, and keeps the rest', async () => {
         const response = {
@@ -663,7 +724,7 @@ describe('x86 compilation', () => {
         expect(result.diagnostics).toEqual([])
     })
 
-    it('requires main among the global definitions rather than any label of that name', async () => {
+    it('finds main among the global definitions rather than any label of that name', async () => {
         const result = await compileSource(
             x86(),
             undefined,
@@ -672,12 +733,39 @@ describe('x86 compilation', () => {
         expect(result.assembly).toBe(
             '    default rel\n    section .text\n    global main\nmain:\n    xor eax, eax\n    ret\n'
         )
-        for (const unit of [output('helper:', '\tret'), output('main:', '\tret')]) {
-            const error = await failure(x86(), unit)
-            expect(error.message).toBe(
-                'The program must define int main(void) or int main(int argc, char **argv).'
+        expect(result.definesMain).toBe(true)
+        for (const unit of [
+            output('helper:', '\tret'),
+            output('main:', '\tret'),
+            output('\t.weak\tmain', 'main:', '\tret')
+        ])
+            expect((await compileSource(x86(), undefined, respond(unit))).definesMain).toBe(false)
+    })
+
+    // A companion File defines functions a hand-written `main.asm` links as needed (ADR 0033), and
+    // no `main` of its own (programs.md, decision 9): it compiles all the same, and says so.
+    it('compiles a companion File that defines no main', async () => {
+        const result = await compileSource(
+            x86('int sum(int a, int b) {\n    return a + b;\n}\n', 'sum.c'),
+            undefined,
+            respond(
+                output(
+                    '\t.p2align 4',
+                    '\t.globl\tsum',
+                    '\t.type\tsum, @function',
+                    'sum:',
+                    '\tlea\teax, [rdi+rsi]',
+                    '\tret',
+                    '\t.size\tsum, .-sum'
+                )
             )
-        }
+        )
+        expect(result.definesMain).toBe(false)
+        expect(result.assembly).toContain('    global sum\nsum:\n')
+        expect(result.record).toEqual(
+            expect.objectContaining({ sourcePath: 'sum.c', outputPath: 'sum.c.asm' })
+        )
+        expect(result.diagnostics).toEqual([])
     })
 
     it('rejects inline assembly it cannot translate on the line of its asm statement, in its own words', async () => {

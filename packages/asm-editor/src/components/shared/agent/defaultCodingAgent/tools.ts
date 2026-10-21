@@ -15,9 +15,12 @@ import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { delay } from '#lib/utils.ts'
 import { compilationStatus, sourceLanguage } from '#lib/sourceCompilation/records.ts'
 import { createCompileSourceTool, isSourceFile } from './sourceTools'
-import { defaultEntryPath } from '#lib/Project.svelte.ts'
-import { fileText, type ProjectFile } from '#lib/projectFiles.ts'
+import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
+import { fileText, type BuildSources, type ProjectFile } from '#lib/projectFiles.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
+import { firstProgramEntry, startsProgram } from '#lib/workbench/firstProgram.ts'
 import {
+    DEFAULT_NO_PROGRAM_MESSAGE,
     DEFAULT_TAKE_LINES,
     MAX_TAKE_LINES,
     SUPPORTED_LANGUAGES,
@@ -190,9 +193,74 @@ function pokeNote(changed: boolean, recorded: boolean): string | undefined {
     return undefined
 }
 
-export function getEffectiveEntry(context: DefaultCodingAgentToolContext): string {
+/**
+ * The Entry the tools build and default to: the host's, which for a Project is its Selected
+ * program's and undefined while it has none, never a `main.<ext>` made up for it
+ * ([programs.md](../../../../../../../docs/design/programs.md), decision 7). A host that names no
+ * Entry at all holds one file, which goes by the language's default name.
+ */
+export function getEffectiveEntry(context: DefaultCodingAgentToolContext): string | undefined {
+    if (context.getEntryPath) return context.getEntryPath()
     const lang = context.getEditorLanguage()
-    return context.getEntryPath?.() ?? (lang ? defaultEntryPath(lang) : 'main.s')
+    return lang ? defaultEntryPath(lang) : 'main.s'
+}
+
+/**
+ * The File a Breakpoint or a location that names none is in: the Entry, or with no Program the one
+ * the Emulator was last given.
+ */
+function emulatorEntry(context: DefaultCodingAgentToolContext, emulator: Emulator): string {
+    return getEffectiveEntry(context) ?? emulator.entry
+}
+
+/**
+ * What the agent builds in a host backed by a Project: the Selected program, or with none what a
+ * Workbench session gives its Emulator then, the default Entry path and why nothing builds.
+ */
+export function projectAgentBuildSources(
+    project: Project,
+    noProgramMessage = DEFAULT_NO_PROGRAM_MESSAGE
+): BuildSources {
+    if (project.selectedProgram === undefined)
+        return {
+            files: project.files,
+            entry: defaultEntryPath(project.language),
+            assemblyError: noProgramMessage
+        }
+    return programBuildSources(project)
+}
+
+/**
+ * Files an agent's write added: while the Project has no Program, they make its first one
+ * ([programs.md](../../../../../../../docs/design/programs.md), decision 8). The agent's writes
+ * and deletions are host actions (programs-plan.md, decision 13), which a Workbench session
+ * applies through its hooks; this applies the same to a Project with no session around it, as on
+ * the chat page, whose deletions remove the Program of the File themselves.
+ */
+export function projectFilesAdded(project: Project, paths: readonly string[]) {
+    if (Object.keys(project.programs).length) return
+    const { files, language } = project
+    const entry = firstProgramEntry(
+        paths,
+        (path) => Object.hasOwn(files, path) && startsProgram(path, files[path], language)
+    )
+    if (entry !== undefined) project.createProgram(entry)
+}
+
+/**
+ * What a tool that needs the Entry answers while the Project has no Program, by default how to
+ * make one: a new assembly File the agent writes then becomes it (decision 8).
+ */
+function noProgram(
+    context: DefaultCodingAgentToolContext,
+    toolRun: ToolRunContext,
+    nextAction = 'Tell the user, or write a new assembly file with write_to_file: while the project has no program, a new assembly file becomes its program.'
+) {
+    return toolRun.failure(
+        'execution_state',
+        context.noProgramMessage ?? DEFAULT_NO_PROGRAM_MESSAGE,
+        { retryable: false, nextAction }
+    )
 }
 
 export function getAllProjectFiles(context: DefaultCodingAgentToolContext): Record<string, string> {
@@ -215,6 +283,7 @@ export function getAllProjectFiles(context: DefaultCodingAgentToolContext): Reco
         }
     }
     const entry = getEffectiveEntry(context)
+    if (entry === undefined) return {}
     const code = context.getEditorCode?.() ?? ''
     return { [entry]: code }
 }
@@ -225,6 +294,7 @@ export function getFile(
 ): { path: string; content: string } | null {
     const entry = getEffectiveEntry(context)
     const targetPath = path ?? context.getActivePath?.() ?? entry
+    if (targetPath === undefined) return null
     if (context.getFile) {
         const content = context.getFile(targetPath)
         if (content !== null && content !== undefined) {
@@ -235,7 +305,7 @@ export function getFile(
     if (targetPath in all) {
         return { path: targetPath, content: all[targetPath] }
     }
-    if (!path && context.getEditorCode) {
+    if (!path && entry !== undefined && context.getEditorCode) {
         return { path: entry, content: context.getEditorCode() }
     }
     return null
@@ -307,8 +377,9 @@ export function syncEmulator(context: DefaultCodingAgentToolContext, emulator: E
         emulator.setSources(context.getBuildSources())
         return
     }
-    const all = getAllProjectFiles(context)
     const entry = getEffectiveEntry(context)
+    if (entry === undefined) return
+    const all = getAllProjectFiles(context)
     const projectFiles: Record<string, ProjectFile> = {}
     for (const [p, c] of Object.entries(all)) {
         projectFiles[p] = { encoding: 'plain', content: c }
@@ -689,6 +760,8 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
                 const allFiles = getAllProjectFiles(context)
                 const entryPath = getEffectiveEntry(context)
                 const targetPath = path ?? context.getActivePath?.() ?? entryPath
+                if (targetPath === undefined)
+                    return noProgram(context, toolRun, 'Call view_file with a path.')
 
                 const fileEntry = getFile(context, targetPath)
                 if (!fileEntry) {
@@ -723,7 +796,7 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
                     hasMore: preview.hasMore,
                     nextStartLine: preview.nextStartLine,
                     files: Object.keys(allFiles),
-                    entry: entryPath
+                    entry: entryPath ?? null
                 })
             })
     })
@@ -767,6 +840,8 @@ function createReplaceFileContentTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, target_content, replacement_content, start_line, end_line }) =>
             runAgentTool(async (toolRun) => {
                 const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+                if (targetPath === undefined)
+                    return noProgram(context, toolRun, 'Call replace_file_content with a path.')
                 const existing = getFile(context, targetPath)
                 if (!existing) {
                     const allFiles = getAllProjectFiles(context)
@@ -842,6 +917,8 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
                         ? 'RISC-V'
                         : undefined)
                 const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+                if (targetPath === undefined)
+                    return noProgram(context, toolRun, 'Call write_to_file with a path.')
 
                 const previousLanguage = context.getEditorLanguage()
                 const previousEmulator = context.getEmulator()
@@ -892,7 +969,7 @@ function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
                     })
                 }
 
-                const entry = getEffectiveEntry(context)
+                const entry = emulatorEntry(context, emulator)
                 const filteredBreakpoints = (emulator.breakpoints ?? []).filter((breakpoint) => {
                     if (!path) return true
                     const bpFile = breakpoint.file ?? entry
@@ -1011,7 +1088,7 @@ function resolveBreakpointLocation(
             ? emulator.getSourceLocationFromAddress(parsedAddress)
             : null
 
-        const entry = getEffectiveEntry(context)
+        const entry = emulatorEntry(context, emulator)
         let resolvedFile = path ?? sourceLoc?.file ?? emulator.currentFile ?? entry
         let resolvedLine: number | null = null
 
@@ -1050,7 +1127,10 @@ function resolveBreakpointLocation(
     // Determine target file
     const allFiles = getAllProjectFiles(context)
     const targetPath =
-        path ?? context.getActivePath?.() ?? emulator.currentFile ?? getEffectiveEntry(context)
+        path ??
+        context.getActivePath?.() ??
+        emulator.currentFile ??
+        emulatorEntry(context, emulator)
     const fileObj = fileOf(context, emulator, targetPath)
     if (!fileObj) {
         return {
@@ -1214,7 +1294,10 @@ function createSetBreakpointTool(context: DefaultCodingAgentToolContext) {
                 }
 
                 const alreadySet = (emulator.breakpoints ?? []).some((b) =>
-                    sameBreakpoint({ ...b, file: b.file ?? getEffectiveEntry(context) }, breakpoint)
+                    sameBreakpoint(
+                        { ...b, file: b.file ?? emulatorEntry(context, emulator) },
+                        breakpoint
+                    )
                 )
 
                 if (!alreadySet) {
@@ -1281,7 +1364,7 @@ function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
                     })
                 }
 
-                const entry = getEffectiveEntry(context)
+                const entry = emulatorEntry(context, emulator)
 
                 if (all) {
                     const toRemove = [...emulator.breakpoints].filter((b) => {
@@ -1432,22 +1515,24 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
 
                     return toolRun.success({
                         files,
-                        entry,
-                        language: context.getEditorLanguage()
+                        entry: entry ?? null,
+                        language: context.getEditorLanguage(),
+                        ...(entry === undefined
+                            ? { note: context.noProgramMessage ?? DEFAULT_NO_PROGRAM_MESSAGE }
+                            : {})
                     })
                 })
         }),
         delete_file: tool({
             name: 'delete_file',
             description:
-                'Deletes a file from the project. Cannot delete the entry file if it is the only file.',
+                "Deletes a file from the project. Deleting a program's entry file deletes that program too, with its settings and testcases.",
             schema: z.object({
                 path: z.string().describe('The file path to delete.')
             }),
             execute: async ({ path }) =>
                 runAgentTool(async (toolRun) => {
                     const allFiles = getAllProjectFiles(context)
-                    const entry = getEffectiveEntry(context)
 
                     if (!(path in allFiles)) {
                         return toolRun.failure('invalid_input', `File "${path}" does not exist.`, {
@@ -1456,19 +1541,19 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
                         })
                     }
 
-                    if (path === entry && Object.keys(allFiles).length <= 1) {
-                        return toolRun.failure(
-                            'invalid_input',
-                            `Cannot delete "${path}" because it is the sole entry file.`,
-                            {
-                                retryable: false,
-                                nextAction:
-                                    'Create another file or edit the existing file instead of deleting it.'
-                            }
-                        )
-                    }
-
+                    //a host deletion, so an Entry file takes its Program with it and nothing is
+                    //asked, as nothing was asked before (programs-plan.md, decision 13)
+                    const project = context.getProject?.()
+                    const hadProgram = project?.program(path) !== undefined
                     deleteFile(context, path)
+                    const deletedProgram = hadProgram && project?.program(path) === undefined
+                    const deleted = {
+                        deleted: path,
+                        ...(deletedProgram
+                            ? { deletedProgram: true, note: `Deleted ${path} and its program.` }
+                            : {}),
+                        remainingFiles: Object.keys(getAllProjectFiles(context))
+                    }
 
                     const emulator = context.getEmulator()
                     if (emulator) {
@@ -1477,18 +1562,10 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
                         const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
                         const errors = collectEmulatorErrors(emulator, checkDiagnostics)
 
-                        return toolRun.success({
-                            deleted: path,
-                            remainingFiles: Object.keys(getAllProjectFiles(context)),
-                            diagnostics,
-                            errors
-                        })
+                        return toolRun.success({ ...deleted, diagnostics, errors })
                     }
 
-                    return toolRun.success({
-                        deleted: path,
-                        remainingFiles: Object.keys(getAllProjectFiles(context))
-                    })
+                    return toolRun.success(deleted)
                 })
         }),
         list_breakpoints: listBreakpointsTool,
@@ -1703,7 +1780,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
 
                     const location = emulator.getSourceLocationFromAddress?.(parsedAddress)
                     const targetFile =
-                        location?.file ?? emulator.currentFile ?? getEffectiveEntry(context)
+                        location?.file ?? emulator.currentFile ?? emulatorEntry(context, emulator)
                     const lineIndex = location
                         ? location.line
                         : emulator.getLineFromAddress(parsedAddress)
@@ -1738,9 +1815,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         })
                     }
 
+                    //the Selected program's Entry, which compile_source may have just made or
+                    //selected
+                    const entry = getEffectiveEntry(context)
+                    if (entry === undefined) return noProgram(context, toolRun)
                     const project = context.getProject?.()
                     const generated = project?.compilations.find(
-                        (record) => record.outputPath === project.entry
+                        (record) => record.outputPath === entry
                     )
                     if (
                         project &&
@@ -1761,7 +1842,6 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     let thrownError: unknown = null
                     try {
                         const all = getAllProjectFiles(context)
-                        const entry = getEffectiveEntry(context)
                         const projectFiles: Record<string, ProjectFile> = {}
                         for (const [p, c] of Object.entries(all)) {
                             projectFiles[p] = { encoding: 'plain', content: c }
@@ -1786,7 +1866,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
 
                     const errors = collectEmulatorErrors(emulator)
                     const diagnostics = collectEmulatorDiagnostics(emulator)
-                    const currentFile = emulator.currentFile ?? getEffectiveEntry(context)
+                    const currentFile = emulator.currentFile ?? entry
                     const currentFileContent = getFile(context, currentFile)?.content ?? ''
 
                     if (errors.length > 0) {
@@ -1796,6 +1876,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                 ? 'Fix the assembler errors with replace_file_content or write_to_file, then compile or run again.'
                                 : 'Report the assembler errors. Editing is not available in this context.',
                             details: {
+                                entry,
                                 errors,
                                 diagnostics,
                                 canExecute: emulator.canExecute,
@@ -1827,6 +1908,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     }
 
                     return toolRun.success({
+                        entry,
                         errors: [],
                         diagnostics,
                         canExecute: emulator.canExecute,

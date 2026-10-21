@@ -130,6 +130,39 @@ export function compiledEntrySource(
     return compilations?.filter((record) => record.outputPath === entry).at(-1)?.sourcePath
 }
 
+/**
+ * What the picker calls a Program: a compiled one by the source File its Generated assembly was
+ * compiled from while that File exists (`sort.c` for `sort.c.mips`), any other by its Entry path,
+ * so `main.c` and `main.s` stay apart and the label matches the Command line's `./sort`
+ * ([programs.md](../../../../docs/design/programs.md), decision 9).
+ */
+export function programLabel(
+    entry: string,
+    compilations: readonly { sourcePath: string; outputPath: string }[] | undefined,
+    files: Readonly<Record<string, unknown>>
+): string {
+    const source = compiledEntrySource(entry, compilations)
+    return source !== undefined && Object.hasOwn(files, source) ? source : entry
+}
+
+/**
+ * A Project's Programs in the picker's order, by label and then by Entry path, whatever order they
+ * were saved in; the first is "the first one left" when the Selected program is removed
+ * ([programs.md](../../../../docs/design/programs.md), decisions 7 and 13).
+ */
+export function programsByLabel(project: {
+    programs: Readonly<Record<string, unknown>>
+    files: Readonly<Record<string, unknown>>
+    compilations?: readonly { sourcePath: string; outputPath: string }[]
+}): { entry: string; label: string }[] {
+    return Object.keys(project.programs)
+        .map((entry) => ({
+            entry,
+            label: programLabel(entry, project.compilations, project.files)
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label) || a.entry.localeCompare(b.entry))
+}
+
 /** `argv[0]` for a program: its name as typed in a shell, `./crackme`. */
 export function programArgv0(entry: string, executable: boolean, compiledFrom?: string): string {
     return `./${commandLineProgram(entry, executable, compiledFrom)}`

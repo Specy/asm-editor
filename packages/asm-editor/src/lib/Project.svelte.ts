@@ -23,6 +23,7 @@ import {
     type CompilationRecord,
     type CompilationSourceMap
 } from './sourceCompilation/records'
+import { programsByLabel } from './commandLine'
 
 export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' | 'Z80'
 
@@ -38,29 +39,43 @@ export const AVAILABLE_LANGUAGES: readonly AvailableLanguages[] = [
 export type AvailableProgrammingLanguages = 'c' | 'cpp'
 
 /**
- * A Project as stored and shared: a record of typed parts, of which only `files` is visible to the
- * assembler and the program ([ADR 0013](../../../../docs/adr/0013-project-is-a-record.md)). `entry` is a
- * canonical path and may deliberately name a missing File; `settings` holds only what was decided
- * for this Project
+ * One runnable unit of a Project: an Entry file and what it runs with
+ * ([ADR 0054](../../../../docs/adr/0054-a-project-holds-programs-identified-by-their-entry-file.md)).
+ * It has no name of its own: its Entry path is the key it is stored under in
+ * `ProjectData.programs`, not a part of it. `settings` holds only what was decided for this Program
  * ([ADR 0014](../../../../docs/adr/0014-settings-split-by-effect.md)).
+ */
+export type Program = {
+    settings: ProjectSettingsDecisions
+    testcases: Testcase[]
+    display?: ProjectDisplay
+}
+
+/**
+ * A Project as stored and shared: a record of typed parts, of which only `files` is visible to the
+ * assembler and the program ([ADR 0013](../../../../docs/adr/0013-project-is-a-record.md)).
  */
 export interface ProjectData {
     files: ProjectFiles
-    entry: string
-    settings: ProjectSettingsDecisions
+    /**
+     * The Programs by Entry path, a canonical path that may deliberately name a missing File, so two
+     * Programs over one Entry cannot be written down. A plain object, unlike the null-prototype
+     * `files`: Svelte proxies only plain objects, and Testcases are edited in place.
+     */
+    programs: Record<string, Program>
+    /** The Entry path of the Selected program, there exactly when the Project has a Program. */
+    selectedProgram?: string
     createdAt: number
     updatedAt: number
     name: string
     description: string
     id: string
     language: AvailableLanguages
-    testcases: Testcase[]
     exam?: Exam
-    display?: ProjectDisplay
     compilations?: CompilationRecord[]
     /** Open editor paths in tab order; an empty array deliberately leaves the editor empty. */
     openTabs?: string[]
-    /** The last selected editor path, independent of the Entry file. */
+    /** The last selected editor path, independent of any Entry file. */
     activeTab?: string
     /**
      * The view each File was last shown in, where it is not its default (Hex for an image, say),
@@ -70,20 +85,20 @@ export interface ProjectData {
 }
 
 /**
- * Anything a Project may come back as: the current shape, the version 1 shape whose whole program
- * was one `code` string, or a partial of either, straight out of JSON. `normalizeProjectData` is the
- * one place that turns it into a `ProjectData`, so a project stored, exported or shared before the
- * files map existed loads through the same path as a current one.
+ * Anything a Project may come back as: the current shape, the shape before Programs whose one
+ * Program was the top-level `entry`, `settings`, `testcases` and `display`, the version 1 shape whose
+ * whole program was one `code` string, or a partial of any, straight out of JSON.
+ * `normalizeProjectData` is the one place that turns it into a `ProjectData`, so a project stored,
+ * exported or shared before the files map or the Programs existed loads through the same path as a
+ * current one.
  */
 export type StoredProject = Partial<
     Omit<
         ProjectData,
         | 'files'
-        | 'entry'
-        | 'settings'
+        | 'programs'
+        | 'selectedProgram'
         | 'language'
-        | 'testcases'
-        | 'display'
         | 'openTabs'
         | 'activeTab'
         | 'fileViews'
@@ -93,6 +108,12 @@ export type StoredProject = Partial<
     code?: string
     language?: string
     files?: unknown
+    programs?: unknown
+    selectedProgram?: unknown
+    /**
+     * The one Program before Programs existed, read only when `programs` is absent (ADR 0054), and
+     * the convenience for creating a one-Program project.
+     */
     entry?: unknown
     settings?: unknown
     testcases?: Testcase[]
@@ -113,7 +134,7 @@ export function isAvailableLanguage(value: unknown): value is AvailableLanguages
     return typeof value === 'string' && (AVAILABLE_LANGUAGES as string[]).includes(value)
 }
 
-/** The one File a new Project starts with, which is also its Entry file. */
+/** The one File a new Project starts with, which is also the Entry file of its one Program. */
 export function defaultEntryPath(language: AvailableLanguages): string {
     return `main.${LANGUAGE_EXTENSIONS[language]}`
 }
@@ -161,10 +182,60 @@ function cleanFileViews(
 }
 
 /**
+ * Saved Programs: an Entry path is checked as strictly as a File's path but may name a missing File,
+ * which a running program's own removal or old saved data leave
+ * ([programs.md](../../../../docs/design/programs.md), decision 7). The Selected program is kept
+ * while it is one of them, else it is the first by label, as the picker lists them.
+ */
+function cleanPrograms(
+    raw: unknown,
+    selected: unknown,
+    files: ProjectFiles,
+    compilations: readonly CompilationRecord[] | undefined
+): Pick<ProjectData, 'programs' | 'selectedProgram'> {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        throw new ProjectFormatError('Programs must be an Entry-path-to-program map')
+    const programs = Object.fromEntries(
+        Object.entries(raw).map(([entry, program]) => {
+            if (!isValidFilePath(entry))
+                throw new ProjectFormatError(`Invalid entry path: ${entry}`)
+            return [entry, cleanProgram(program)]
+        })
+    )
+    const selectedProgram =
+        typeof selected === 'string' && Object.hasOwn(programs, selected)
+            ? selected
+            : programsByLabel({ programs, files, compilations })[0]?.entry
+    return { programs, ...(selectedProgram !== undefined ? { selectedProgram } : {}) }
+}
+
+/**
+ * A Program's parts, as tolerantly as they were read when they were the Project's own: what cannot
+ * be used is dropped, so a Program always loads. An earlier Project's top-level fields are these
+ * same parts.
+ */
+function cleanProgram(raw: unknown): Program {
+    const parts = (raw && typeof raw === 'object' ? raw : {}) as {
+        settings?: unknown
+        testcases?: unknown
+        display?: Partial<ProjectDisplay>
+    }
+    return {
+        settings: cleanProjectSettings(parts.settings),
+        testcases: cleanTestcases(Array.isArray(parts.testcases) ? parts.testcases : []),
+        ...(parts.display ? { display: cleanDisplay(parts.display) } : {})
+    }
+}
+
+/**
  * Every stored, exported or shared shape into the current one. A version 1 `code` becomes the
  * default Entry file; a project without any program gets the language's empty one; a missing Entry
- * remains missing so the editor and assembler can report it. Throws a `ProjectFormatError` for
- * files this version cannot read, which is the one thing a project is not silently repaired from.
+ * remains missing so the editor and assembler can report it. Data with `programs` is read by them
+ * alone, and an empty map stays a Project without a Program; data without them, from before
+ * Programs, becomes one Program from its top-level fields, which is selected
+ * ([ADR 0054](../../../../docs/adr/0054-a-project-holds-programs-identified-by-their-entry-file.md)).
+ * Throws a `ProjectFormatError` for files this version cannot read, which is the one thing a
+ * project is not silently repaired from.
  */
 export function normalizeProjectData(raw: StoredProject | undefined): ProjectData {
     const language = isAvailableLanguage(raw?.language) ? raw.language : 'M68K'
@@ -175,24 +246,65 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
     }
     const now = Date.now()
     const compilations = cleanCompilationRecords(raw?.compilations)
-    const entry = pickEntry(raw?.entry, files, language)
+    let programs: Pick<ProjectData, 'programs' | 'selectedProgram'>
+    if (raw?.programs !== undefined) {
+        programs = cleanPrograms(raw.programs, raw.selectedProgram, files, compilations)
+    } else {
+        const entry = pickEntry(raw?.entry, files, language)
+        programs = { programs: { [entry]: cleanProgram(raw) }, selectedProgram: entry }
+    }
     return {
         id: raw?.id ?? '',
         files: cleanFiles(files),
-        entry,
-        settings: cleanProjectSettings(raw?.settings),
+        ...programs,
         createdAt: raw?.createdAt ?? now,
         updatedAt: raw?.updatedAt ?? now,
         name: raw?.name ?? 'Untitled',
         language,
         description: raw?.description ?? '',
-        testcases: cleanTestcases(Array.isArray(raw?.testcases) ? raw.testcases : []),
         exam: raw?.exam,
-        display: raw?.display ? cleanDisplay(raw.display) : undefined,
         ...(compilations ? { compilations } : {}),
         ...cleanEditorTabs(raw, files)
     }
 }
+
+/** The Program at an Entry path, read as an own key so that no path names an inherited one. */
+export function programAt(
+    project: Pick<ProjectData, 'programs'>,
+    entry: string | undefined
+): Program | undefined {
+    return entry !== undefined && Object.hasOwn(project.programs, entry)
+        ? project.programs[entry]
+        : undefined
+}
+
+/**
+ * A Project in the shape written before Programs existed, its one Program's parts at the top level,
+ * which editors older than Programs still read; undefined unless it has exactly one Program, since
+ * that shape cannot say none or several. Archives, the exported file and share links are written in
+ * it whenever it holds the Project
+ * ([programs-plan.md](../../../../docs/design/programs-plan.md), decisions 3 and 4).
+ */
+export function legacyProjectShape(snapshot: ProjectData): LegacyProjectData | undefined {
+    const entries = Object.entries(snapshot.programs)
+    if (entries.length !== 1) return undefined
+    const [[entry, program]] = entries
+    const legacy: LegacyProjectData & Partial<Pick<ProjectData, 'programs' | 'selectedProgram'>> = {
+        ...snapshot,
+        entry,
+        settings: program.settings,
+        testcases: program.testcases
+    }
+    delete legacy.programs
+    delete legacy.selectedProgram
+    if (program.display) legacy.display = program.display
+    return legacy
+}
+
+/** What `legacyProjectShape` gives: a `ProjectData` before Programs. */
+export type LegacyProjectData = Omit<ProjectData, 'programs' | 'selectedProgram'> & {
+    entry: string
+} & Program
 
 /**
  * Whether two projects hold the same content, which is what "unsaved changes" means: every part
@@ -202,9 +314,15 @@ export function projectContentEquals(a: ProjectData, b: ProjectData): boolean {
     return contentKey(a) === contentKey(b)
 }
 
-/** The Entry file's text, which is what a Build assembles and what an exported file's body is. */
-export function entryFileContent(project: ProjectData): string {
-    const file = project.files[project.entry]
+/**
+ * A Program's Entry file text, the Selected program's unless another Entry is named, which is what
+ * a Build assembles and what an exported file's body is; empty with no such File.
+ */
+export function entryFileContent(
+    project: ProjectData,
+    entry: string | undefined = project.selectedProgram
+): string {
+    const file = entry === undefined ? undefined : project.files[entry]
     return file ? fileText(file) : ''
 }
 
@@ -214,10 +332,8 @@ function contentKey(project: ProjectData): string {
         description: project.description,
         language: project.language,
         files: project.files,
-        entry: project.entry,
-        settings: project.settings,
-        testcases: project.testcases,
-        display: project.display,
+        programs: project.programs,
+        selectedProgram: project.selectedProgram,
         exam: project.exam,
         compilations: project.compilations,
         openTabs: project.openTabs,
@@ -250,7 +366,7 @@ export type Testcase = {
     name?: string
     /**
      * x86 only: the program's Arguments for this Testcase, as typed on a Command line; without
-     * them (or with an empty field) it runs with the Project's
+     * them (or with an empty field) it runs with its Program's
      * ([binary-import.md](../../../../docs/design/binary-import.md), decision 12).
      */
     arguments?: string
@@ -323,7 +439,8 @@ const CODE_SEPARATOR = '---METADATA---'
 /**
  * The metadata block of an exported file, version 2: the Entry file's text is the file's body and
  * everything else is here, other Files included. Complete multi-file export uses an archive;
- * this representation remains for compatible legacy linked source files.
+ * this representation remains for compatible legacy linked source files. It is the shape before
+ * Programs, so only a Project with exactly one Program has an exported file (`legacyProjectShape`).
  * Version 1 had `code` as the body and no `entry`, `settings` or `files`.
  */
 type ProjectMetadata = {
@@ -441,28 +558,44 @@ export function makeProject(data?: StoredProject) {
     })
 
     function toObject(): ProjectData {
-        return $state.snapshot({
-            files: state.files,
-            entry: state.entry,
-            settings: state.settings,
-            createdAt: state.createdAt,
-            updatedAt: state.updatedAt,
-            name: state.name,
-            language: state.language,
-            description: state.description,
-            testcases: state.testcases,
-            id: state.id,
-            exam: state.exam,
-            display: state.display,
-            ...(state.compilations ? { compilations: state.compilations } : {}),
-            ...(state.openTabs !== undefined ? { openTabs: state.openTabs } : {}),
-            ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {}),
-            ...(state.fileViews !== undefined ? { fileViews: state.fileViews } : {})
-        }) as ProjectData
+        //the maps keyed by path are rebuilt from their own entries, each value snapshot on its own:
+        //a snapshot of a plain map assigns every key into a new object, which a path named
+        //`__proto__` would turn into the copy's prototype, losing that Program or view on save
+        const programs = Object.fromEntries(
+            Object.entries(state.programs).map(([entry, program]) => [
+                entry,
+                $state.snapshot(program) as Program
+            ])
+        )
+        const fileViews = state.fileViews && Object.fromEntries(Object.entries(state.fileViews))
+        //each snapshot is taken where it is returned: the server build of a `.svelte.ts` drops a
+        //`$state.snapshot` that is a declaration's whole value, which would hand out the state
+        return {
+            files: $state.snapshot(state.files),
+            programs,
+            ...$state.snapshot({
+                ...(state.selectedProgram !== undefined
+                    ? { selectedProgram: state.selectedProgram }
+                    : {}),
+                createdAt: state.createdAt,
+                updatedAt: state.updatedAt,
+                name: state.name,
+                language: state.language,
+                description: state.description,
+                id: state.id,
+                exam: state.exam,
+                ...(state.compilations ? { compilations: state.compilations } : {}),
+                ...(state.openTabs !== undefined ? { openTabs: state.openTabs } : {}),
+                ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {})
+            }),
+            ...(fileViews !== undefined ? { fileViews } : {})
+        } as ProjectData
     }
 
     function toExternal() {
-        const snapshot = toObject()
+        const snapshot = legacyProjectShape(toObject())
+        if (!snapshot)
+            throw new Error('Only a Project with exactly one program can be exported as one file')
         const files = Object.fromEntries(
             Object.entries(snapshot.files).filter(([path]) => path !== snapshot.entry)
         )
@@ -495,8 +628,24 @@ export function makeProject(data?: StoredProject) {
         return `${getCode()}\n\n\n${separator}\n${commentedJson}`
     }
 
+    function selected(): Program | undefined {
+        return programAt(state, state.selectedProgram)
+    }
+
+    function selectedEntry(): string {
+        if (state.selectedProgram === undefined) throw new Error('This Project has no program')
+        return state.selectedProgram
+    }
+
+    function existingProgram(entry: string): Program {
+        const program = programAt(state, entry)
+        if (!program) throw new Error(`${entry} is the Entry of no program`)
+        return program
+    }
+
     function getCode(): string {
-        const file = state.files[state.entry]
+        const entry = state.selectedProgram
+        const file = entry === undefined ? undefined : state.files[entry]
         //Compatibility for the remaining single-code bindings. Multi-file consumers use `files`
         //directly; a missing or binary Entry has no editable text value and must still render so
         //the sidebar can expose it without decoding storage bytes into the editor.
@@ -504,32 +653,134 @@ export function makeProject(data?: StoredProject) {
     }
 
     function setCode(code: string) {
-        fileSystem.writeText(state.entry, code)
+        fileSystem.writeText(selectedEntry(), code)
     }
 
     /**
      * Merges any stored shape into this project. A `code` given without `files` is the version 1
      * shape (a legacy share link, say), so the files are rebuilt from it for the merged language
-     * rather than kept from before.
+     * rather than kept from before. Likewise an Entry, Settings, Testcases or Display given
+     * without `programs` is the shape before Programs, whose one Program replaces this project's
+     * ([programs-plan.md](../../../../docs/design/programs-plan.md), decision 5).
      */
     function set(data: Partial<StoredProject>) {
-        //Only a merge that actually touches Files or the Entry path is a host file edit. Taking the
+        const legacyCode = typeof data.code === 'string' && data.files === undefined
+        const legacyProgram =
+            data.programs === undefined &&
+            (legacyCode ||
+                data.entry !== undefined ||
+                data.settings !== undefined ||
+                data.testcases !== undefined ||
+                data.display !== undefined)
+        //Only a merge that actually touches Files or the Programs is a host file edit. Taking the
         //lock for every merge meant saving a shared Project after a Build threw instead of saving,
         //because a Debug session stays open through termination until Stop.
-        if (data.files !== undefined || data.code !== undefined || data.entry !== undefined) {
+        if (
+            data.files !== undefined ||
+            data.code !== undefined ||
+            data.programs !== undefined ||
+            data.selectedProgram !== undefined ||
+            legacyProgram
+        ) {
             fileSystem.assertEditable()
         }
-        const legacyCode = typeof data.code === 'string' && data.files === undefined
         const merged = normalizeProjectData({
             ...toObject(),
             ...data,
-            ...(legacyCode ? { files: undefined, entry: undefined } : {})
+            ...(legacyCode ? { files: undefined, entry: undefined } : {}),
+            ...(legacyProgram ? { programs: undefined, selectedProgram: undefined } : {})
         })
         Object.assign(state, merged)
+        state.selectedProgram = merged.selectedProgram
         state.openTabs = merged.openTabs
         state.activeTab = merged.activeTab
         state.fileViews = merged.fileViews
         reconcileSourceMaps()
+    }
+
+    //The Programs change as a whole map, never by assigning a key into it: a new map is seen by
+    //everything that read the old one, and an Entry named `__proto__` stays a key. A Program's own
+    //parts are assigned through it, so Testcases bound before stay the Program's.
+
+    /**
+     * Makes a Program with nothing decided and no Testcases, and selects it. A File is the Entry of
+     * at most one Program, so one that already is an Entry is refused; it need not exist yet.
+     */
+    function createProgram(entry: string) {
+        fileSystem.assertEditable()
+        if (!isValidFilePath(entry)) throw new ProjectFormatError(`Invalid entry path: ${entry}`)
+        if (Object.hasOwn(state.programs, entry))
+            throw new Error(`${entry} is already the Entry of a program`)
+        state.programs = Object.fromEntries([
+            ...Object.entries(state.programs),
+            [entry, { settings: {}, testcases: [] }]
+        ])
+        state.selectedProgram = entry
+    }
+
+    function selectProgram(entry: string) {
+        fileSystem.assertEditable()
+        existingProgram(entry)
+        state.selectedProgram = entry
+    }
+
+    /**
+     * Removes a Program and keeps its File. Removing the Selected program selects the first one
+     * left by label ([programs.md](../../../../docs/design/programs.md), decision 7), and the last
+     * leaves the Project without a Program. A path that is no Entry is left alone.
+     */
+    function removeProgram(entry: string) {
+        if (!Object.hasOwn(state.programs, entry)) return
+        fileSystem.assertEditable()
+        const programs = Object.fromEntries(
+            Object.entries(state.programs).filter(([path]) => path !== entry)
+        )
+        state.programs = programs
+        if (state.selectedProgram === entry) {
+            state.selectedProgram = programsByLabel({
+                programs,
+                files: state.files,
+                compilations: state.compilations
+            })[0]?.entry
+        }
+    }
+
+    /**
+     * Moves a Program, with its parts and its selection, to its Entry file's new path, as a host
+     * rename of the File does; a running program's rename of its own Entry does not, so the Program
+     * stays where instruction Undo brings the File back (decision 7). A path that is no Entry is
+     * left alone, as `renameCompilationFile` leaves one no record names.
+     */
+    function renameProgram(from: string, to: string) {
+        if (from === to || !Object.hasOwn(state.programs, from)) return
+        fileSystem.assertEditable()
+        if (!isValidFilePath(to)) throw new ProjectFormatError(`Invalid entry path: ${to}`)
+        if (Object.hasOwn(state.programs, to))
+            throw new Error(`${to} is already the Entry of a program`)
+        state.programs = Object.fromEntries(
+            Object.entries(state.programs).map(([path, program]) => [
+                path === from ? to : path,
+                program
+            ])
+        )
+        if (state.selectedProgram === from) state.selectedProgram = to
+    }
+
+    //A Program's parts take no lock, as they took none when they were the Project's: Settings apply
+    //at the next Build, and a Build reads the Display from a `@screen` comment during its session.
+
+    function setProgramSettings(entry: string, settings: ProjectSettingsDecisions) {
+        existingProgram(entry).settings = cleanProjectSettings(settings)
+    }
+
+    function setProgramTestcases(entry: string, testcases: Testcase[]) {
+        existingProgram(entry).testcases = testcases
+    }
+
+    function setProgramDisplay(entry: string, display: ProjectDisplay | undefined) {
+        const program = existingProgram(entry)
+        if (display) program.display = cleanDisplay(display)
+        else delete program.display
     }
 
     return {
@@ -537,19 +788,35 @@ export function makeProject(data?: StoredProject) {
         get id() {
             return state.id
         },
-        /** The Entry file's content. */
+        /** The Selected program's Entry file content, empty without one. */
         get code() {
             return getCode()
         },
         get files() {
             return state.files
         },
-        get entry() {
-            return state.entry
+        /** The Programs by Entry path, changed only through the methods below. */
+        get programs(): Readonly<Record<string, Program>> {
+            return state.programs
         },
-        get settings() {
-            return state.settings
+        /** The Selected program's Entry path, undefined exactly while the Project has none. */
+        get selectedProgram() {
+            return state.selectedProgram
         },
+        get selected() {
+            return selected()
+        },
+        /** The Program whose Entry file is at `entry`, if there is one. */
+        program(entry: string) {
+            return programAt(state, entry)
+        },
+        createProgram,
+        selectProgram,
+        removeProgram,
+        renameProgram,
+        setProgramSettings,
+        setProgramTestcases,
+        setProgramDisplay,
         get createdAt() {
             return state.createdAt
         },
@@ -565,14 +832,8 @@ export function makeProject(data?: StoredProject) {
         get description() {
             return state.description
         },
-        get testcases() {
-            return state.testcases
-        },
         get exam() {
             return state.exam
-        },
-        get display() {
-            return state.display
         },
         get compilations() {
             return state.compilations ?? []
@@ -647,14 +908,6 @@ export function makeProject(data?: StoredProject) {
         set files(v: ProjectFiles) {
             fileSystem.replace(v)
         },
-        set entry(v: string) {
-            fileSystem.assertEditable()
-            if (!isValidFilePath(v)) throw new ProjectFormatError(`Invalid entry path: ${v}`)
-            state.entry = v
-        },
-        set settings(v: ProjectSettingsDecisions) {
-            state.settings = cleanProjectSettings(v)
-        },
         set name(v: string) {
             state.name = v
         },
@@ -665,9 +918,6 @@ export function makeProject(data?: StoredProject) {
         },
         set description(v: string) {
             state.description = v
-        },
-        set testcases(v: Testcase[]) {
-            state.testcases = v
         },
         set id(v: string) {
             state.id = v
@@ -680,9 +930,6 @@ export function makeProject(data?: StoredProject) {
         },
         set exam(v: Exam | undefined) {
             state.exam = v
-        },
-        set display(v: ProjectDisplay | undefined) {
-            state.display = v ? cleanDisplay(v) : undefined
         },
         set,
         toObject,

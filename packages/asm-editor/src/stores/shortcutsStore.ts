@@ -32,7 +32,7 @@ const shortcutDefinitions = [
     createShortcut(ShortcutAction.ToggleDocs, 'ShiftLeft+KeyD', 'Toggle docs', 2),
     createShortcut(ShortcutAction.ToggleSettings, 'ShiftLeft+KeyP', 'Toggle settings', 3),
     createShortcut(ShortcutAction.RunCode, 'ShiftLeft+KeyR', 'Run code', 4),
-    createShortcut(ShortcutAction.BuildCode, 'ShiftLeft+KeyB', 'Build code', 5),
+    createShortcut(ShortcutAction.BuildCode, 'ShiftLeft+KeyB', 'Build the selected program', 5),
     createShortcut(ShortcutAction.ClearExecution, 'ShiftLeft+KeyC', 'Clear execution', 6),
     createShortcut(ShortcutAction.Step, 'ShiftLeft+ArrowDown', 'Step', 7),
     createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8),

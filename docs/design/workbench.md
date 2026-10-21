@@ -291,6 +291,8 @@ From the owner, after a grilling on the Entry path, which stays as it is: "Set f
 - **The controls prefer a pane that offers Build.** After a pane showing assembly or a Listing, `controlsGroup` takes one showing an Executable's bytes or a C File before one showing a document, so a split with a README never hides Build. The tablet's shared bar follows the same rule, and Shift+B builds from any File.
 - **The Interactive editor is unchanged** for now; its dock still reads "Build entry" on any File but the Entry file.
 
+Superseded on 2026-10-21 by [programs.md](./programs.md): a Project holds Programs, a pane has Build and Test only while it shows an Entry file and they run that Program (`offersBuild` gave way to `EditorGroup.displayedProgram`), "Set file as entry" and "Build entry" are gone, and the Interactive editor's Build is "Build" on every assembly tab.
+
 ## Preview tabs, 2026-10-18
 
 At the owner's request, the tabs work as in VS Code. This supersedes "There are no preview tabs" under File tabs.

@@ -37,11 +37,12 @@ function explorer() {
         files: fileSystem.files,
         fileSystem,
         language: 'X86' as const,
-        entry: 'main.asm',
+        programs: [{ entry: 'main.asm', label: 'main.asm', missing: false }],
+        selectedProgram: 'main.asm',
         selectedPath: 'main.asm',
         locked: false,
         onSelect: vi.fn(),
-        onEntryChange: vi.fn(),
+        onFilesAdded: vi.fn(),
         buildOutput: { path: 'main', bytes: program, stale: false } as
             | { path: string; bytes: Uint8Array; stale: boolean }
             | undefined
@@ -129,8 +130,9 @@ it('keeps it as a File stored as bytes, under a name that starts as its path', a
     const kept = view.fileSystem.files.main
     expect(kept.encoding).toBe('base64')
     expect(fileBytes(kept)).toEqual(program)
-    //an ordinary Executable of the Project now
+    //an ordinary Executable of the Project now, which a Project with no Program makes its first
     expect(executableKind(kept)).toBe('supported')
+    expect(view.props.onFilesAdded).toHaveBeenCalledWith(['main'])
     await tick()
     expect(view.props.onSelect).toHaveBeenCalledWith('main')
 })
@@ -144,6 +146,7 @@ it('refuses a name a File has, replacing nothing', async () => {
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('main.asm already exists'))
     expect(view.fileSystem.files['main.asm']).toEqual({ encoding: 'plain', content: 'nop' })
     expect(view.props.onSelect).not.toHaveBeenCalled()
+    expect(view.props.onFilesAdded).not.toHaveBeenCalled()
 })
 
 it('keeps nothing during a Debug session, when the Files cannot change', async () => {

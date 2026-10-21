@@ -20,7 +20,24 @@ type Dependencies = {
     signal?: AbortSignal
     sourceAnnotations?: boolean
     compiler?: SourceCompiler
+    /**
+     * What a Generated assembly that defines `main` and is no Entry does to the Programs: becomes a
+     * new one (`create`, the default), the Selected program's Entry (`move`, for a host with exactly
+     * one Program, such as /chat, which makes one only while it has none), or leaves them alone
+     * (`none`, a Playground's authored one; programs.md, decision 12).
+     */
+    newProgram?: NewProgram
 }
+
+export type NewProgram = 'create' | 'move' | 'none'
+
+/**
+ * What a Compile did to the Programs, in the order `publishProgram` tries each: selected the one
+ * whose Entry is the Generated assembly, moved there the one whose Entry was the source (or, with
+ * `newProgram: 'move'`, the Selected one), created one because the assembly defines `main`, or
+ * left them alone.
+ */
+export type CompiledProgram = 'selected' | 'moved' | 'created' | 'none'
 
 /** Remote work never owns live Files. Validate again after every await, then publish synchronously. */
 export async function compileProjectSource(
@@ -35,7 +52,7 @@ export async function compileProjectSource(
         throw new SourceCompilationError(
             'Source compilation is available for MIPS, RISC-V and x86 Projects.'
         )
-    const files = project.fileSystem.snapshot(project.entry).files
+    const files = project.fileSystem.snapshot(sourcePath).files
     const previous = project.compilations.find(
         (record) => record.sourcePath === sourcePath && record.target === target
     )
@@ -94,6 +111,46 @@ export async function compileProjectSource(
     ])
     project.fileSystem.writeText(outputPath, result.assembly)
     project.recordCompilation(result.record, result.map)
-    project.entry = outputPath
-    return result
+    const program = publishProgram(
+        project,
+        sourcePath,
+        outputPath,
+        result.definesMain ? (dependencies.newProgram ?? 'create') : 'none'
+    )
+    return { ...result, program }
+}
+
+/**
+ * Gives the Generated assembly its Program. A Program is identified by its Entry file
+ * ([ADR 0054](../../../../../docs/adr/0054-a-project-holds-programs-identified-by-their-entry-file.md)),
+ * so a recompile selects the one the assembly has, `main` or not. One whose Entry was the source
+ * itself (earlier data, a Playground's authored C entry) moves there with its Settings and
+ * Testcases (programs-plan.md, decision 2). Otherwise only a source that defines `main` makes one:
+ * a companion File leaves the Programs and the selection alone (programs.md, decision 9). A host
+ * with one Program moves it there instead, as the one Entry moved before Programs, and makes one
+ * only when it has none.
+ */
+function publishProgram(
+    project: Project,
+    sourcePath: string,
+    outputPath: string,
+    newProgram: NewProgram
+): CompiledProgram {
+    if (project.program(outputPath)) {
+        project.selectProgram(outputPath)
+        return 'selected'
+    }
+    if (project.program(sourcePath)) {
+        project.renameProgram(sourcePath, outputPath)
+        project.selectProgram(outputPath)
+        return 'moved'
+    }
+    if (newProgram === 'none') return 'none'
+    const selected = project.selectedProgram
+    if (newProgram === 'move' && selected !== undefined) {
+        project.renameProgram(selected, outputPath)
+        return 'moved'
+    }
+    project.createProgram(outputPath)
+    return 'created'
 }

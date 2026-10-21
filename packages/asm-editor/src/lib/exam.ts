@@ -4,6 +4,7 @@ import {
     type AvailableLanguages,
     entryFileContent,
     normalizeProjectData,
+    programAt,
     type StoredProject,
     type Testcase
 } from '#lib/Project.svelte.ts'
@@ -228,7 +229,9 @@ export function parseLegacyProjectExamPayload(projectParam: string): ExamPayload
         }
         const exam = stored.exam
         const parsed = normalizeProjectData(stored)
+        //an exam's Project has its one Program, whose Entry and Testcases are the coding section
         const code = entryFileContent(parsed)
+        const program = programAt(parsed, parsed.selectedProgram)
 
         const sectionId = createExamEntityId()
         const legacySection: AssemblyCodingSection = {
@@ -239,7 +242,7 @@ export function parseLegacyProjectExamPayload(projectParam: string): ExamPayload
             promptEncrypted: !!exam.accessPasswordHash,
             language: parsed.language,
             starterCode: code,
-            testcases: parsed.testcases
+            testcases: program?.testcases ?? []
         }
 
         const answers: Record<string, ExamSectionAnswer> = {}

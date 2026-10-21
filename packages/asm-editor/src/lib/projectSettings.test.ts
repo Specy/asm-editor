@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { makeProject } from '#lib/Project.svelte.ts'
 import {
     cleanProjectSettings,
+    hasDecidedSettings,
     PROJECT_SETTINGS,
     projectSettingsFor,
     resolveProjectSettings,
@@ -10,8 +11,8 @@ import {
 } from '#lib/projectSettings.ts'
 
 /**
- * The Settings of a Project are decisions only ([ADR 0014](../../../../docs/adr/0014-settings-split-by-effect.md)):
- * a Project stores what somebody chose for it and follows the language's default for the rest, so
+ * The Settings of a Program are decisions only ([ADR 0014](../../../../docs/adr/0014-settings-split-by-effect.md)):
+ * a Program stores what somebody chose for it and follows the language's default for the rest, so
  * resolving is where the two meet, and cleaning is what keeps a stored value from breaking a load.
  */
 
@@ -102,6 +103,17 @@ describe('cleanProjectSettings', () => {
     })
 })
 
+describe('hasDecidedSettings', () => {
+    it('says whether a Program decided anything, applying to its language or not', () => {
+        expect(hasDecidedSettings({})).toBe(false)
+        expect(hasDecidedSettings(undefined)).toBe(false)
+        expect(hasDecidedSettings({ programArguments: undefined })).toBe(false)
+        expect(hasDecidedSettings({ undoEnabled: true })).toBe(true)
+        //a RISC-V profile decided before the Project's ISA became M68K is still decided
+        expect(hasDecidedSettings({ riscvAssemblerProfile: 'rars' })).toBe(true)
+    })
+})
+
 describe('the Arguments Setting', () => {
     const declaration = PROJECT_SETTINGS.programArguments
 
@@ -146,7 +158,9 @@ describe('the Arguments Setting', () => {
         const project = makeProject({ language: 'X86', settings: { programArguments: 'hunter2' } })
         const stored = JSON.parse(JSON.stringify(project.toObject()))
         const reloaded = makeProject(stored)
-        expect(reloaded.settings).toEqual({ programArguments: 'hunter2' })
-        expect(resolveProjectSettings('X86', reloaded.settings).programArguments).toBe('hunter2')
+        expect(reloaded.selected?.settings).toEqual({ programArguments: 'hunter2' })
+        expect(resolveProjectSettings('X86', reloaded.selected?.settings).programArguments).toBe(
+            'hunter2'
+        )
     })
 })

@@ -23,15 +23,19 @@
 
     const explorer = $derived(context.rail.find((entry) => entry.id === 'explorer'))
     const hasDocumentation = $derived(context.rail.some((entry) => entry.id === 'documentation'))
+    //refused as the Explorer's are: during a Debug session and a test run
     const canCreate = $derived(
-        explorer !== undefined && explorer.access !== 'readonly' && !session.fileSystemLocked
+        explorer !== undefined && explorer.access !== 'readonly' && !session.filesLocked
     )
+    /** Where a File is listed: the Selected program's Entry first, then the other Entries. */
+    function rank(path: string) {
+        if (path === project.selectedProgram) return 0
+        return project.program(path) ? 1 : 2
+    }
     const files = $derived(
         Object.keys(project.files)
             .filter((path) => project.files[path]?.encoding === 'plain')
-            .sort((a, b) =>
-                a === project.entry ? -1 : b === project.entry ? 1 : a.localeCompare(b)
-            )
+            .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
             .slice(0, compact ? 4 : 6)
     )
 
@@ -45,6 +49,7 @@
                 fileLanguage ? sourceTemplate(project.language, fileLanguage) : '',
                 false
             )
+            session.filesAdded([path])
             session.selectFile(path, group)
         } catch (error) {
             console.error(error)
@@ -62,7 +67,11 @@
 
     let elfInput = $state<HTMLInputElement>()
 
-    /** Writes the chosen ELF into the root and shows it, offering it as the Entry file. */
+    /**
+     * Writes the chosen ELF into the root and shows it. A Project with no Program makes it its
+     * first; one with Programs is asked whether it gets one of its own, unless it is an Entry
+     * already ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 12).
+     */
     async function uploadElf() {
         const file = elfInput?.files?.[0]
         if (elfInput) elfInput.value = ''
@@ -75,17 +84,22 @@
             )
                 return
             const bytes = new Uint8Array(await file.arrayBuffer())
+            const hadProgram = session.programChoices.length > 0
             project.fileSystem.writeBytes(path, bytes, true)
+            session.filesAdded([path])
             session.selectFile(path, group)
             const kind = executableKind(bytes)
             if (kind !== 'supported') {
                 if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
                 return
             }
-            if (executableKind(project.files[project.entry]) === 'supported') return
+            if (!hadProgram || project.program(path)) return
             //a Debug session may have started while the question was open
-            if ((await Prompt.confirm(`Make ${path} the Entry file?`)) && !session.fileSystemLocked)
-                session.setEntry(path)
+            if (
+                (await Prompt.confirm(`Create a program for ${path}?`)) &&
+                !session.fileSystemLocked
+            )
+                session.createProgram(path)
         } catch (error) {
             console.error(error)
             toast.error(error instanceof Error ? error.message : 'File operation failed')

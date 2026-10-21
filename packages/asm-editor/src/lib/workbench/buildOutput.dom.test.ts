@@ -219,8 +219,27 @@ describe('the Build output in the Workbench', () => {
         project.fileSystem.writeText('main.asm', 'nop\nnop')
         flushSync()
         expect(session.buildOutputStale).toBe(false)
+        //a rename the host does not hear of, as a running program's own, leaves the Program with
+        //its Entry missing (programs.md, decision 7)
         project.fileSystem.rename('main.asm', 'start.asm')
         flushSync()
+        expect(session.buildOutputStale).toBe(true)
+        expect(project.selectedProgram).toBe('main.asm')
+        expect(session.programChoices).toEqual([
+            { entry: 'main.asm', label: 'main.asm', missing: true }
+        ])
+        //the Explorer's moves it, and its Build is another program's
+        project.fileSystem.rename('start.asm', 'main.asm')
+        flushSync()
+        expect(session.buildOutputStale).toBe(false)
+        project.fileSystem.rename('main.asm', 'start.asm')
+        session.fileRenamed('main.asm', 'start.asm')
+        flushSync()
+        expect(project.selectedProgram).toBe('start.asm')
+        expect(session.programChoices).toEqual([
+            { entry: 'start.asm', label: 'start.asm', missing: false }
+        ])
+        expect(session.sourceInput.entry).toBe('start.asm')
         expect(session.buildOutputStale).toBe(true)
     })
 

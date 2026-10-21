@@ -39,6 +39,7 @@ import type {
     ProjectFileAnalysisStatus
 } from '../protocol'
 import type { LanguageDiagnostic, RelatedLanguageDiagnostic } from '../sourceModel'
+import { unresolvedSnapshot, unresolvedSources } from './unresolved'
 
 type MarsTarget = Extract<ProjectAnalysisTarget, 'MIPS' | 'RISC-V' | 'RISC-V-64'>
 type MarsError = MIPSAssembleError | RISCVAssembleError
@@ -203,6 +204,18 @@ export function analyzeMarsProject(
     revision: number,
     target: MarsTarget
 ): ProjectAnalysisSnapshot {
+    //sources the Build refuses are not checked either: why they cannot be built is the one error,
+    //as a Project with no Program or a missing Entry gives, rather than a failure of the analysis
+    const unresolved = unresolvedSources(sources)
+    if (unresolved)
+        return unresolvedSnapshot(
+            sources,
+            unresolved,
+            sessionId,
+            revision,
+            target,
+            target === 'MIPS' ? 'mips' : 'risc-v'
+        )
     const files = textAssemblyFiles(sources)
     const profile = buildAssemblerProfile(sources)
     const link = runtimeLink(sources, target)

@@ -6,6 +6,7 @@ import type {
     ProjectFileAnalysisStatus
 } from '../protocol'
 import type { SourceLocation, SymbolKind, SymbolOccurrence } from '../sourceModel'
+import { unresolvedSnapshot, unresolvedSources } from './unresolved'
 
 function normalizedPath(path: string, sources: BuildSources): string {
     try {
@@ -90,6 +91,10 @@ export function analyzeZ80Project(
     sessionId: string,
     revision: number
 ): ProjectAnalysisSnapshot {
+    //sources the Build refuses are not checked either: why they cannot be built is the one error
+    const unresolved = unresolvedSources(sources)
+    if (unresolved)
+        return unresolvedSnapshot(sources, unresolved, sessionId, revision, 'Z80', 'z80')
     const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
     const reached = new Set(
         result.asm.assembledLines.map((line) => normalizedPath(line.fileInfo.pathname, sources))

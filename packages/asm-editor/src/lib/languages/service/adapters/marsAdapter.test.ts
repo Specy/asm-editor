@@ -91,4 +91,47 @@ describe('MIPS/RISC-V Project analysis adapter', () => {
             })
         )
     })
+
+    //a Project with no Program and a Program whose Entry is gone have sources a Build refuses:
+    //why is the one error, where the analysis used to fail and log it on every edit
+    it.each(['MIPS', 'RISC-V'] as const)(
+        'reports %s sources that cannot be resolved as the one error, as Build does',
+        (target) => {
+            const problem = 'This Project has no program.'
+            const none = analyzeMarsProject(
+                normalizeBuildInput({
+                    entry: 'main.mips',
+                    files: { 'notes.txt': { encoding: 'plain', content: 'notes' } },
+                    assemblyError: problem
+                }),
+                'no-program',
+                1,
+                target
+            )
+            expect(none.diagnostics).toEqual([
+                expect.objectContaining({
+                    severity: 'error',
+                    message: problem,
+                    location: expect.objectContaining({ path: 'main.mips' })
+                })
+            ])
+            expect(none.fileStatus).toEqual({ 'notes.txt': 'unknown' })
+            const missing = analyzeMarsProject(
+                normalizeBuildInput({
+                    entry: 'gone.s',
+                    files: { 'main.s': { encoding: 'plain', content: '.text\nnop' } }
+                }),
+                'missing-entry',
+                1,
+                target
+            )
+            expect(missing.diagnostics).toEqual([
+                expect.objectContaining({
+                    severity: 'error',
+                    message: 'Entry file not found: gone.s',
+                    location: expect.objectContaining({ path: 'gone.s' })
+                })
+            ])
+        }
+    )
 })

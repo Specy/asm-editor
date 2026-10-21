@@ -79,10 +79,13 @@ function inputFor(playground: ContentPlayground): Promise<BuildInput> {
                 ...playground.program,
                 language: playground.settings.language
             })
-            if (sourceLanguage(project.entry)) {
-                await compileProjectSource(project, project.entry, '2', {
+            const entry = playground.program.entry
+            if (sourceLanguage(entry)) {
+                //as `PlaygroundSession.compile` does: the one Program moves, and none is made
+                await compileProjectSource(project, entry, '2', {
                     confirm: async () => false,
-                    signal: AbortSignal.timeout(45_000)
+                    signal: AbortSignal.timeout(45_000),
+                    newProgram: 'none'
                 })
             }
             return playgroundBuildSources(project)

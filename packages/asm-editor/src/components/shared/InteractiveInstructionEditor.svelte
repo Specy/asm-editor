@@ -182,8 +182,12 @@
               )
             : diagnostics
     )
+    //a Playground has exactly one Program, its authored entry (programs.md, decision 12), which
+    //Build builds from whichever tab is shown; a C entry has to be compiled first
+    const programEntry = $derived(session?.project.selectedProgram)
     const buildDisabled = $derived(
-        (session && !!sourceLanguage(session.project.entry)) || emulator.compilerErrors.length > 0
+        (session && (programEntry === undefined || !!sourceLanguage(programEntry))) ||
+            emulator.compilerErrors.length > 0
     )
     const selectedIsSource = $derived(!!selectedFile && !!sourceLanguage(selectedFile))
     const displayedAssemblyFile = $derived(
@@ -381,7 +385,9 @@
     $effect(() => {
         //Tracked read outside `untrack`, so editing the playground keeps arming the live check.
         const source = session ? $state.snapshot(session.sources) : code
-        if (session && sourceLanguage(session.project.entry)) return
+        //nothing to check in a C entry, which is compiled first; with none (the chat's agent
+        //deleted it) the check reports why nothing builds
+        if (session && programEntry !== undefined && sourceLanguage(programEntry)) return
         untrack(() =>
             typeof source === 'string' ? emulator.setCode(source) : emulator.setSources(source)
         )
@@ -458,8 +464,8 @@
             if (typeof source === 'string') emulator.setCode(source)
             else emulator.setSources(source)
             await emulator.compile(undoHistorySize(settings), source)
-            if (session) {
-                session.selected = session.project.entry
+            if (session && programEntry !== undefined) {
+                session.selected = programEntry
                 activePath = session.selected
             }
         } catch (e) {
@@ -619,9 +625,6 @@
                 {buildDisabled}
                 {compilation}
                 compileOnly={selectedIsSource}
-                buildLabel={selectedFile && selectedFile !== session?.project.entry
-                    ? 'Build entry'
-                    : 'Build'}
                 executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
                 canUndo={emulator.canUndo}
                 hasTests={offersTest}
@@ -836,13 +839,16 @@
                         //what was chosen, as on the project page; a program without one keeps the
                         //choice for as long as the page lives
                         const source = session
-                            ? (session.project.files[session.project.entry]?.content ?? '')
+                            ? programEntry === undefined
+                                ? ''
+                                : (session.project.files[programEntry]?.content ?? '')
                             : code
                         const rewritten = rewriteScreenDirective(source, display, next)
                         const baseChanged = next.baseAddress !== display.baseAddress
                         if (rewritten !== null) {
-                            if (session) session.edit(session.project.entry, rewritten)
-                            else code = rewritten
+                            if (!session) code = rewritten
+                            else if (programEntry !== undefined)
+                                session.edit(programEntry, rewritten)
                         }
                         display = next
                         displayOrigin = rewritten !== null ? 'directive' : 'user'

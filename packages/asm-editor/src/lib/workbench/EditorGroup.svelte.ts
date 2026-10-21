@@ -13,7 +13,6 @@ import type { ProjectFileKind } from '#lib/fileKinds.ts'
 import { textFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
 import { overwritesOnly } from '#lib/projectFiles.ts'
 import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
-import { offersBuild } from './editorFileRouting'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
 import {
     isLineBreakpoint,
@@ -451,24 +450,34 @@ export class EditorGroup {
         return views.length > 1 ? views : []
     }
     /**
-     * Whether the pane offers Build outside a Debug session: not for a document or data such as
-     * text, Markdown, an image or a PDF, which Build has nothing to do with.
+     * The Entry path of the Program whose Entry file the pane shows, which its Build and Test act
+     * on ([programs.md](../../../../../docs/design/programs.md), decision 5): a File of the live
+     * Project, so no Runtime library member, library Listing or Build output, and never a
+     * Program whose Entry is missing, which there is nothing to show of. Undefined for any other
+     * File, which has no Build outside a Debug session.
      */
-    get offersBuild() {
-        return offersBuild(this.displayedPath, this.displayedKind)
+    get displayedProgram(): string | undefined {
+        const path = this.displayedPath
+        const project = this.session.project
+        if (!path || this.displayedLibraryMember || this.displayedLibraryListing) return undefined
+        return project.program(path) && Object.hasOwn(project.files, path) ? path : undefined
     }
     /**
      * Whether the execution dock floats over this pane. `controls` says whether the layout puts
      * the execution controls in a pane, as a desktop and a phone do; a tablet has one bar for
-     * them. The controls group has it, during a Debug session or where it offers Build, a source
-     * File its compile dock outside a Debug session, and on every device a File shown in more
-     * than one way its view switch.
+     * them. During a Debug session the controls group has it, and outside one every pane showing
+     * an Entry file, for its Program's Build ([programs-plan.md](../../../../../docs/design/programs-plan.md),
+     * decision 8); a source File its compile dock outside a Debug session, and on every device a
+     * File shown in more than one way its view switch.
      */
     hasDock(controls: boolean): boolean {
         const s = this.session
         if (!this.displayedPath) return false
         return (
-            (controls && s.controlsGroup === this && (s.debugSession || this.offersBuild)) ||
+            (controls &&
+                (s.debugSession
+                    ? s.controlsGroup === this
+                    : this.displayedProgram !== undefined)) ||
             ((!!sourceLanguage(this.displayedPath) || this.recompilationNeeded) &&
                 !s.debugSession) ||
             this.viewSwitch.length > 1

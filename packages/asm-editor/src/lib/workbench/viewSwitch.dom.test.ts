@@ -178,13 +178,15 @@ describe('the view switch', () => {
         //a split of a pane with one tab opens empty
         const right = show(session, 'crackme', session.splitEditor())
         expect(left.displayedPath).toBe('main.asm')
-        //a desktop and a phone put the controls in the panes, a tablet in one bar of its own
+        //main.asm is no Entry file, so its pane has no Build and no dock; the Executable's has its
+        //switch on every device, and on a desktop and a phone its Build, which a tablet puts in one
+        //bar of its own
         for (const controls of [true, false]) {
-            expect(left.hasDock(controls)).toBe(controls)
+            expect(left.hasDock(controls)).toBe(false)
             expect(right.hasDock(controls)).toBe(true)
         }
-        expect(session.controlsGroup).toBe(left)
-        //the pane that is not the controls group: its switch alone
+        expect(session.controlsGroup).toBe(right)
+        //a dock without the controls: its switch alone
         expect(dock(session, { group: right, execution: false }).read().buttons).toEqual([
             'Hex',
             'Disassemble',
@@ -194,7 +196,7 @@ describe('the view switch', () => {
         expect(
             dock(session, { group: right, fill: true, showViews: false }).read().buttons
         ).toEqual(['Build'])
-        //a phone's dock along the controls group's bottom edge, when it shows the Executable
+        //a phone's dock along the bottom edge of a pane showing the Executable
         show(session, 'crackme', left)
         expect(dock(session, { group: left, fill: true, attached: true }).read().buttons).toEqual([
             'Build',
@@ -292,7 +294,7 @@ describe('the views of a Debug session', () => {
 })
 
 describe('the execution dock', () => {
-    it('offers no Build or Test beside a document, only the controls of a Debug session', async () => {
+    it('offers Build and Test beside an Entry file alone, and the controls of a Debug session', async () => {
         const testcase = {
             input: [],
             expectedOutput: '',
@@ -312,14 +314,22 @@ describe('the execution dock', () => {
         expect(group.hasDock(true)).toBe(false)
         show(session, 'image.png')
         expect(read().buttons).toEqual(['Preview', 'Hex'])
-        //code a Build would not start from keeps them, and says what Build starts from
+        //nor has assembly that is no Entry file: a Build builds the Program whose Entry file the
+        //pane shows (programs.md, decision 5)
         show(session, 'main.asm')
+        expect(group.hasDock(true)).toBe(false)
+        expect(read().buttons).toEqual([])
+        //the Entry file's pane has its Program's Build, and its Test while it has Testcases
+        show(session, 'crackme')
         expect(group.hasDock(true)).toBe(true)
-        expect(read().buttons).toEqual(['Build entry', 'Set file as entry', 'Test'])
+        expect(read().buttons).toEqual(['Build', 'Hex', 'Disassemble', 'Decompile', 'Test'])
         await session.build()
         await tick()
         flushSync()
+        //during the Debug session the controls stay on the pane execution is followed in, whatever
+        //it shows, and Test is the session's Program's
         show(session, 'notes.txt')
+        expect(session.controlsGroup).toBe(group)
         expect(group.hasDock(true)).toBe(true)
         expect(read().buttons).toEqual(['Stop', 'Run', 'Undo', 'Step', 'Test'])
     })

@@ -58,6 +58,12 @@ export type CompilationResult = {
     record: CompilationRecord
     map: CompilationSourceMap
     diagnostics: Diagnostic[]
+    /**
+     * Whether the Generated assembly defines a global `main`, which a program needs and a
+     * companion File (an `add.c` that `main.asm` links or `main.s` includes) does not
+     * ([programs.md](../../../../../docs/design/programs.md), decision 9).
+     */
+    definesMain: boolean
 }
 type AssemblyLine = {
     text: string
@@ -335,6 +341,8 @@ export function createCompilerRequest(
 /**
  * Remove debug payloads and compose the Source map. Every other section stays as the compiler
  * wrote it. Library members use the same preparation; startup stays in the runtime library.
+ * A source without `main` prepares as well, since a companion File is compiled for another to
+ * include; `definesMain` says whether a global `main` was among the lines kept.
  */
 export function prepareAssembly(
     lines: readonly AssemblyLine[],
@@ -343,14 +351,17 @@ export function prepareAssembly(
 ) {
     const text: string[] = []
     const mapping: (SourceLocation | null)[] = []
-    let foundMain = false
+    let globalMain = false
+    let mainLabel = false
     const lineCounts = new Map<string, number>()
     const sourceAnnotations =
         (request.compiler ?? defaultSourceCompiler(request.target)) === 'clang' &&
         request.sourceAnnotations
     for (const prepared of prepareCompilerLines(lines, request.target, !!sourceAnnotations)) {
         const line = lines[prepared.index]
-        if (/^\s*main:/.test(prepared.text)) foundMain = true
+        //Clang follows both with a comment (`# -- Begin function main`, `# @main`)
+        if (/^\s*\.globa?l\s+main\s*(?:#|$)/.test(prepared.text)) globalMain = true
+        if (/^\s*main:/.test(prepared.text)) mainLabel = true
         text.push(prepared.text)
         const path = projectPath(
             line.source?.file,
@@ -368,21 +379,18 @@ export function prepareAssembly(
                 : null
         )
     }
-    if (!foundMain) throw mainRequired(request)
-    return { assembly: text.join('\n') + '\n', lines: [...mapping, null] }
-}
-
-function mainRequired(request: CompilationRequest, found: Diagnostic[] = []) {
-    return new SourceCompilationError(
-        'The program must define int main(void) or int main(int argc, char **argv).',
-        [...found, diagnostic('Define an int main() entry point.', request.sourcePath)]
-    )
+    return {
+        assembly: text.join('\n') + '\n',
+        lines: [...mapping, null],
+        definesMain: globalMain && mainLabel
+    }
 }
 
 /**
  * Translate GCC's x86 output to NASM, the assembler x86 Builds use, and compose the Source map from
  * the locations the translation reads from the compiler's own `.file` and `.loc`. What it cannot
- * translate is an error on the source line it came from, and leaves no output.
+ * translate is an error on the source line it came from, and leaves no output. A unit without a
+ * global `main` translates as well, for a hand-written `main.asm` to link as needed (ADR 0033).
  */
 export function prepareX86Assembly(
     lines: readonly AssemblyLine[],
@@ -428,12 +436,14 @@ export function prepareX86Assembly(
             'The compiler output uses something x86 cannot run yet.',
             diagnostics
         )
-    if (!translation.symbols.defined.some((symbol) => symbol.name === 'main'))
-        throw mainRequired(request, diagnostics)
     return {
         assembly: translation.text.endsWith('\n') ? translation.text : translation.text + '\n',
         lines: [...translation.lines.map((line) => locate(line.location)), null],
-        diagnostics
+        diagnostics,
+        //not a weak one, which is a default for another unit's `main` to replace
+        definesMain: translation.symbols.defined.some(
+            (symbol) => symbol.name === 'main' && symbol.binding === 'global'
+        )
     }
 }
 
@@ -582,6 +592,7 @@ export async function compileSource(
             outputFingerprint
         },
         map: { sourcePath: request.sourcePath, outputFingerprint, lines: output.lines },
-        diagnostics: [...diagnostics, ...output.diagnostics]
+        diagnostics: [...diagnostics, ...output.diagnostics],
+        definesMain: output.definesMain
     }
 }

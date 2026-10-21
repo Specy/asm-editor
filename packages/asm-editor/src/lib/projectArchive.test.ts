@@ -3,8 +3,15 @@ import { unzipSync, zipSync } from 'fflate'
 import lzstring from 'lz-string'
 import { serializer } from '#lib/json.ts'
 import { createSharePayload } from '#lib/utils.ts'
-import { makeProject, makeProjectFromExternal } from '#lib/Project.svelte.ts'
 import {
+    makeProject,
+    makeProjectFromExternal,
+    type Program,
+    type StoredProject
+} from '#lib/Project.svelte.ts'
+import {
+    isLegacyLinkedFileCompatible,
+    isSingleSourceProject,
     looksLikeZip,
     makeProjectFromArchive,
     projectArchiveName,
@@ -45,11 +52,11 @@ describe('Project archives', () => {
         const archive = projectToArchive(project)
         const imported = makeProjectFromArchive(archive).project
         expect(looksLikeZip(archive)).toBe(true)
-        expect(imported.entry).toBe('src/main.mips')
+        expect(imported.selectedProgram).toBe('src/main.mips')
         expect(imported.openTabs).toEqual(['src/lib.mips', 'src/main.mips'])
         expect(imported.activeTab).toBe('src/lib.mips')
         expect(imported.code).toBe('include "lib.mips"\n\n')
-        expect(imported.testcases[0]?.expectedRegisters.v0).toBe(12n)
+        expect(imported.selected?.testcases[0]?.expectedRegisters.v0).toBe(12n)
         expect(imported.files['data/raw.bin']?.encoding).toBe('base64')
         expect(fileBytes(imported.files['data/raw.bin']!)).toEqual(
             new Uint8Array([0xff, 0x00, 0x01])
@@ -60,7 +67,8 @@ describe('Project archives', () => {
         const project = makeProject({ language: 'Z80', files: {}, entry: 'missing.z80' })
         const imported = makeProjectFromArchive(projectToArchive(project)).project
         expect(imported.files).toEqual({})
-        expect(imported.entry).toBe('missing.z80')
+        expect(Object.keys(imported.programs)).toEqual(['missing.z80'])
+        expect(imported.selectedProgram).toBe('missing.z80')
     })
 
     it('rejects non-project ZIPs and traversal paths instead of treating them as source', () => {
@@ -152,7 +160,7 @@ describe('the single Project download', () => {
         expect(reimported.name).toBe('My / Project')
         expect(reimported.description).toBe('a description')
         expect(reimported.language).toBe('MIPS')
-        expect(reimported.testcases[0]?.expectedRegisters.v0).toBe(12n)
+        expect(reimported.selected?.testcases[0]?.expectedRegisters.v0).toBe(12n)
         //The text format has always trimmed the code's trailing whitespace, since the metadata
         //block follows it; everything else comes back byte for byte.
         expect(reimported.code).toBe('li $v0, 10')
@@ -187,6 +195,238 @@ describe('the single Project download', () => {
         )
         expect(download.kind).toBe('archive')
         expect(download.fileName).toBe('Binary.asmproj')
+    })
+})
+
+/**
+ * A Project holds Programs since ADR 0054, and archives keep the oldest-version rule they already
+ * followed: a Project with one Program is written in the shape before Programs, as version 1 or 2,
+ * which older editors read, and only one with several or none takes version 3
+ * ([programs-plan.md](../../../../docs/design/programs-plan.md), decisions 3 and 4).
+ */
+describe('Programs in an archive', () => {
+    const testcase = {
+        input: [],
+        expectedOutput: 'sorted',
+        startingRegisters: {},
+        expectedRegisters: { a0: 3n },
+        startingMemory: [],
+        expectedMemory: []
+    }
+    const files = {
+        'main.s': { encoding: 'plain', content: 'nop' },
+        'sort.s': { encoding: 'plain', content: 'nop' }
+    }
+    //the second byte overwritten with `A`
+    const edits = [{ offset: 1, remove: 1, insert: 'QQ==' }]
+    function several(): StoredProject {
+        return {
+            language: 'RISC-V',
+            files,
+            programs: {
+                'main.s': { settings: { undoEnabled: false }, testcases: [] },
+                'sort.s': {
+                    settings: { programArguments: '3 1 2' },
+                    testcases: [testcase],
+                    display: { unitWidth: 4 }
+                },
+                'gone.s': { settings: {}, testcases: [] }
+            },
+            selectedProgram: 'sort.s'
+        }
+    }
+    type Manifest = {
+        version: number
+        project: { entry?: string; programs?: Record<string, Program>; selectedProgram?: string }
+        files: Record<string, { edits?: unknown[] }>
+    }
+    //through the serializer, since Testcases with bigints are written by superjson
+    const manifestOf = (archive: Uint8Array) =>
+        serializer.parse<Manifest>(new TextDecoder().decode(unzipSync(archive)['project.json']))
+
+    it('writes one Program in the shape before Programs, as version 1, or 2 with Byte edits', () => {
+        const one = makeProject({ language: 'RISC-V', files, entry: 'sort.s' })
+        const manifest = manifestOf(projectToArchive(one))
+        expect(manifest.version).toBe(1)
+        expect(manifest.project).toMatchObject({ entry: 'sort.s', settings: {}, testcases: [] })
+        expect(manifest.project).not.toHaveProperty('programs')
+        expect(manifest.project).not.toHaveProperty('selectedProgram')
+        const edited = makeProject({
+            language: 'RISC-V',
+            files: { ...files, 'data.bin': { encoding: 'base64', content: '/wAB', edits } },
+            entry: 'sort.s'
+        })
+        expect(manifestOf(projectToArchive(edited)).version).toBe(2)
+        expect(manifestOf(projectToArchive(edited)).project.entry).toBe('sort.s')
+    })
+
+    it('round trips several Programs, a missing Entry and the selection through version 3', () => {
+        const project = makeProject(several())
+        const archive = projectToArchive(project)
+        const manifest = manifestOf(archive)
+        expect(manifest.version).toBe(3)
+        expect(Object.keys(manifest.project.programs ?? {})).toEqual(['main.s', 'sort.s', 'gone.s'])
+        expect(manifest.project.selectedProgram).toBe('sort.s')
+        for (const field of ['entry', 'settings', 'testcases', 'display'])
+            expect(manifest.project).not.toHaveProperty(field)
+        const imported = makeProjectFromArchive(archive).project
+        expect(imported.programs).toEqual(project.programs)
+        expect(imported.selectedProgram).toBe('sort.s')
+        expect(imported.program('sort.s')?.testcases[0]?.expectedRegisters.a0).toBe(3n)
+        expect(imported.program('sort.s')?.display?.unitWidth).toBe(4)
+    })
+
+    it('round trips a Project without a Program through version 3, still without one', () => {
+        const project = makeProject({ ...several(), programs: {} })
+        const archive = projectToArchive(project)
+        expect(manifestOf(archive).version).toBe(3)
+        const imported = makeProjectFromArchive(archive).project
+        expect(imported.programs).toEqual({})
+        expect(imported.selectedProgram).toBeUndefined()
+        expect(Object.keys(imported.files)).toEqual(['main.s', 'sort.s'])
+    })
+
+    it('keeps Byte edits in a version 3 archive', () => {
+        const project = makeProject({
+            ...several(),
+            files: { ...files, 'data.bin': { encoding: 'base64', content: '/wAB', edits } }
+        })
+        const archive = projectToArchive(project)
+        expect(manifestOf(archive).version).toBe(3)
+        expect(manifestOf(archive).files['data.bin'].edits).toEqual(edits)
+        expect([...fileBytes(makeProjectFromArchive(archive).project.files['data.bin'])]).toEqual([
+            0xff, 0x41, 1
+        ])
+    })
+
+    it('reads each version by its own shape, and refuses one that does not match it', () => {
+        const metadata = {
+            id: '',
+            name: 'Versions',
+            description: '',
+            language: 'MIPS',
+            createdAt: 0,
+            updatedAt: 0
+        }
+        const legacy = { entry: 'main.s', settings: {}, testcases: [] }
+        const programs = { 'main.s': { settings: {}, testcases: [] } }
+        const archive = (version: number, project: Record<string, unknown>) =>
+            zipSync({
+                'project.json': encoder.encode(
+                    JSON.stringify({
+                        version,
+                        project: { ...metadata, ...project },
+                        files: { 'main.s': { encoding: 'plain' } }
+                    })
+                ),
+                'files/main.s': encoder.encode('nop')
+            })
+        for (const version of [1, 2])
+            expect(makeProjectFromArchive(archive(version, legacy)).project.programs).toEqual(
+                programs
+            )
+        expect(makeProjectFromArchive(archive(3, { programs })).project.programs).toEqual(programs)
+        expect(() => makeProjectFromArchive(archive(3, legacy))).toThrow('Malformed Project')
+        expect(() => makeProjectFromArchive(archive(2, { programs }))).toThrow('Malformed Project')
+        for (const broken of [
+            { programs: { 'main.s': { testcases: [] } } },
+            { programs: { 'main.s': { settings: {}, testcases: {} } } },
+            { programs: { 'main.s': { settings: {}, testcases: [], display: 3 } } },
+            { programs: { '../main.s': { settings: {}, testcases: [] } } },
+            { programs: { 'main.s': 'main' } },
+            { programs: [] },
+            { programs, selectedProgram: 7 }
+        ])
+            expect(
+                () => makeProjectFromArchive(archive(3, broken)),
+                JSON.stringify(broken)
+            ).toThrow(/Malformed (Program|Project)/)
+    })
+
+    it('offers the single-file export only for one Program whose Entry is the only File', () => {
+        const one = makeProject({ files: { 'main.s': files['main.s'] }, entry: 'main.s' })
+        expect(isSingleSourceProject(one)).toBe(true)
+        expect(isLegacyLinkedFileCompatible(one.toObject())).toBe(true)
+        expect(projectDownload(one).kind).toBe('source')
+        const elsewhere = makeProject({ files: { 'main.s': files['main.s'] }, entry: 'gone.s' })
+        expect(isSingleSourceProject(elsewhere)).toBe(false)
+        const two = makeProject({ files: { 'main.s': files['main.s'] }, entry: 'main.s' })
+        two.createProgram('gone.s')
+        expect(isSingleSourceProject(two)).toBe(false)
+        expect(isLegacyLinkedFileCompatible(two.toObject())).toBe(false)
+        expect(projectDownload(two).kind).toBe('archive')
+        two.removeProgram('gone.s')
+        two.removeProgram('main.s')
+        expect(isSingleSourceProject(two)).toBe(false)
+        expect(projectDownload(two).kind).toBe('archive')
+    })
+})
+
+/**
+ * Share links follow the archives' rule: one Program travels in the shape before Programs, which a
+ * cached older app still opens, and several or none in the new one
+ * ([programs-plan.md](../../../../docs/design/programs-plan.md), decision 4).
+ */
+describe('Programs in a share link', () => {
+    const shared = (payload: string) =>
+        serializer.parse<StoredProject & Record<string, unknown>>(
+            lzstring.decompressFromEncodedURIComponent(payload)
+        )
+    const files = {
+        'main.s': { encoding: 'plain', content: 'nop' },
+        'sort.s': { encoding: 'plain', content: 'nop' }
+    }
+
+    it('carries one Program as the earlier shape, which opens as the same Program', () => {
+        const project = makeProject({
+            language: 'MIPS',
+            files,
+            entry: 'sort.s',
+            settings: { programArguments: '3 1 2' },
+            testcases: [
+                {
+                    input: [],
+                    expectedOutput: '1 2 3',
+                    startingRegisters: {},
+                    expectedRegisters: { v0: 10n },
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ]
+        })
+        const payload = shared(createSharePayload(project))
+        expect(payload.entry).toBe('sort.s')
+        expect(payload).not.toHaveProperty('programs')
+        const opened = makeProject()
+        opened.set({ ...payload, id: 'share' })
+        expect(opened.programs).toEqual(project.programs)
+        expect(opened.selectedProgram).toBe('sort.s')
+        expect(opened.selected?.testcases[0]?.expectedRegisters.v0).toBe(10n)
+    })
+
+    it('carries several Programs, or none, as Programs with the selection', () => {
+        const project = makeProject({
+            language: 'MIPS',
+            files,
+            programs: {
+                'main.s': { settings: {}, testcases: [] },
+                'sort.s': { settings: { undoEnabled: false }, testcases: [] }
+            },
+            selectedProgram: 'main.s'
+        })
+        const payload = shared(createSharePayload(project))
+        expect(payload).not.toHaveProperty('entry')
+        const opened = makeProject()
+        opened.set({ ...payload, id: 'share' })
+        expect(opened.programs).toEqual(project.programs)
+        expect(opened.selectedProgram).toBe('main.s')
+
+        project.removeProgram('main.s')
+        project.removeProgram('sort.s')
+        const none = makeProject()
+        none.set({ ...shared(createSharePayload(project)), id: 'share' })
+        expect(none.programs).toEqual({})
+        expect(none.selectedProgram).toBeUndefined()
     })
 })
 
@@ -311,7 +551,7 @@ describe('Byte edits in an archive', () => {
         expect(() => makeProjectFromArchive(archive(1, edits))).toThrow('Malformed manifest')
         expect(() => makeProjectFromArchive(archive(2, 'edits'))).toThrow('Malformed manifest')
         expect(() => makeProjectFromArchive(archive(2, edits))).toThrow('past the end')
-        expect(() => makeProjectFromArchive(archive(3, edits))).toThrow('Unsupported')
+        expect(() => makeProjectFromArchive(archive(4, edits))).toThrow('Unsupported')
     })
 
     it('travels in a share link', () => {

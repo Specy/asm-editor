@@ -146,8 +146,18 @@ The **Port map**'s group for the **Terminal**. A Z80 has no system calls: progra
 
 ## Project
 
-The unit of work the editor saves, opens and shares: one **Target**, its **Files**, its **Settings**, its **Testcases**, its **Display configuration**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
+The unit of work the editor saves, opens and shares: one **Target**, its **Files**, its **Programs**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
 _Avoid_: workspace, folder, program
+
+## Program
+
+One runnable unit of a **Project**: an **Entry file** and the **Settings**, **Display configuration** and **Testcases** it runs with. It is identified by its Entry file, which is the Entry of no other Program, and has no name of its own. A Project's Programs share its **Target** and its **Files**, and a Build builds one Program.
+_Avoid_: project (for this unit), run configuration, launch configuration
+
+## Selected program
+
+The **Program** a **Workbench** currently works on: whose **Settings** and **Testcases** its panels show, which the Build shortcut and the Testcases panel's Run use, and which the **Debug session** belongs to. Building or testing from a pane that shows an Entry file selects that File's Program. Chosen independently of the **Displayed file**.
+_Avoid_: active program, current project, entry (for the Program)
 
 ## Target
 
@@ -223,7 +233,7 @@ The correspondence between lines of **Generated assembly** and the higher-level 
 
 ## Project archive
 
-A portable copy of a **Project**, containing all its named **Files**, its **Entry path**, and its configuration and metadata. Distinct from downloading an individual File; it does not contain a running **Debug session**.
+A portable copy of a **Project**, containing all its named **Files**, its **Programs**, and its configuration and metadata. Distinct from downloading an individual File; it does not contain a running **Debug session**.
 
 ## File
 
@@ -240,11 +250,11 @@ A grouping of a **Project**'s **Files** under a shared path prefix. It exists wh
 
 ## Entry path
 
-The **Project**'s configured path from which a Build begins, `main.<ext>` by default. It can temporarily name a missing File; choosing another Entry path is separate from choosing which File the editor shows.
+The path of a **Program**'s **Entry file**, from which its Build begins; a new Project's one Program has `main.<ext>`. It can name a missing File, after the running program removed it or in old saved data; choosing which File the editor shows never changes it.
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing.
+The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing.
 _Avoid_: main file, active file, selected file, open file
 
 ## Executable
@@ -321,7 +331,7 @@ _Avoid_: output, build output, console
 
 ## Settings
 
-Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86, MIPS or RISC-V program's **Arguments**. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+Per-**Program** configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86, MIPS or RISC-V program's **Arguments**. They belong to one **Program**, are edited through the editor's GUI and are never a file the program can see. A Program records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
 _Avoid_: preferences, options, config, global settings
 
 ## Preferences
@@ -331,7 +341,7 @@ _Avoid_: settings, global settings, user settings
 
 ## Display configuration
 
-The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Project**: unit size, display size and base address, distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Project's chosen display; included Files do not supply display configuration.
+The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Program**: unit size, display size and base address, distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Program's chosen display; included Files do not supply display configuration.
 _Avoid_: display settings, screen settings, screen config
 
 ## Exam
@@ -340,7 +350,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input (and, on x86, MIPS and RISC-V, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a **Program**: starting registers/memory/input (and, on x86, MIPS and RISC-V, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 

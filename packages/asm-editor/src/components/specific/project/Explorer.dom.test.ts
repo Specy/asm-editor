@@ -8,8 +8,13 @@ import { Prompt } from '#stores/promptStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import { executableKind } from '#lib/executables.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+import type { ProgramChoice } from '#lib/workbench/WorkbenchSession.svelte.ts'
 
 const fixture = () => new Uint8Array(readFileSync('../x86/blink-js/tests/fixtures/elf/crackme'))
+
+/** The Programs of a Project whose Entries are `entries`, each labelled by its path. */
+const programsAt = (...entries: string[]): ProgramChoice[] =>
+    entries.map((entry) => ({ entry, label: entry, missing: false }))
 
 it.each<AvailableLanguages>(['X86', 'M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'Z80'])(
     'renders hints on the first open and keeps them on reopen for %s',
@@ -21,11 +26,11 @@ it.each<AvailableLanguages>(['X86', 'M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'Z80'
             files: fileSystem.files,
             fileSystem,
             language,
-            entry: 'main.asm',
+            programs: programsAt('main.asm'),
+            selectedProgram: 'main.asm',
             selectedPath: 'main.asm',
             hints: true,
-            onSelect: vi.fn(),
-            onEntryChange: vi.fn()
+            onSelect: vi.fn()
         }
         let component: ReturnType<typeof mount> | undefined
         try {
@@ -48,11 +53,13 @@ it.each<AvailableLanguages>(['X86', 'M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'Z80'
     }
 )
 
-async function upload(bytes: Uint8Array, confirm = true) {
+/** Uploads `chall` into an x86 Project whose Programs are `programs`. */
+async function upload(bytes: Uint8Array, confirm = true, programs = programsAt('main.asm')) {
     const fileSystem = new FileSystem({ 'main.asm': { encoding: 'plain', content: 'nop' } })
     const target = document.createElement('div')
     document.body.append(target)
     const choose = vi.fn()
+    const added = vi.fn()
     const prompt = vi.spyOn(Prompt, 'confirm').mockResolvedValue(confirm)
     const warn = vi.spyOn(toast, 'warn').mockImplementation(() => undefined)
     const component = mount(Explorer, {
@@ -61,10 +68,12 @@ async function upload(bytes: Uint8Array, confirm = true) {
             files: fileSystem.files,
             fileSystem,
             language: 'X86',
-            entry: 'main.asm',
+            programs,
+            selectedProgram: programs[0]?.entry,
             selectedPath: 'main.asm',
             onSelect: vi.fn(),
-            onEntryChange: choose
+            onNewProgram: choose,
+            onFilesAdded: added
         }
     })
     flushSync()
@@ -79,6 +88,7 @@ async function upload(bytes: Uint8Array, confirm = true) {
     return {
         fileSystem,
         choose,
+        added,
         prompt,
         warn,
         dispose: async () => {
@@ -90,12 +100,35 @@ async function upload(bytes: Uint8Array, confirm = true) {
     }
 }
 
-it('uploads an extensionless Executable and offers to make it the Entry file', async () => {
+it('uploads an extensionless Executable and offers it a program of its own', async () => {
     const result = await upload(fixture())
     try {
         expect(executableKind(result.fileSystem.files.chall)).toBe('supported')
-        expect(result.prompt).toHaveBeenCalledWith('Make chall the Entry file?')
+        expect(result.added).toHaveBeenCalledWith(['chall'])
+        expect(result.prompt).toHaveBeenCalledWith('Create a program for chall?')
         expect(result.choose).toHaveBeenCalledWith('chall')
+    } finally {
+        await result.dispose()
+    }
+})
+
+it('asks nothing when the Project has no program, whose first the upload makes', async () => {
+    const result = await upload(fixture(), true, [])
+    try {
+        //the host's first-Program rule makes it from the Files added
+        expect(result.added).toHaveBeenCalledWith(['chall'])
+        expect(result.prompt).not.toHaveBeenCalled()
+        expect(result.choose).not.toHaveBeenCalled()
+    } finally {
+        await result.dispose()
+    }
+})
+
+it('asks nothing when the Executable is an Entry already', async () => {
+    const result = await upload(fixture(), true, programsAt('chall', 'main.asm'))
+    try {
+        expect(result.prompt).not.toHaveBeenCalled()
+        expect(result.choose).not.toHaveBeenCalled()
     } finally {
         await result.dispose()
     }
@@ -131,10 +164,10 @@ it('downloads a File as its exact bytes under its name, typed so no extension is
             files: fileSystem.files,
             fileSystem,
             language: 'X86',
-            entry: 'main.asm',
+            programs: programsAt('main.asm'),
+            selectedProgram: 'main.asm',
             selectedPath: 'main.asm',
-            onSelect: vi.fn(),
-            onEntryChange: vi.fn()
+            onSelect: vi.fn()
         }
     })
     const saved: { name: string; blob: Blob }[] = []
@@ -197,11 +230,11 @@ it("opens a File's row in preview with a click, or selects it when the host has 
             props: {
                 files: fileSystem.files,
                 fileSystem,
-                entry: 'main.asm',
+                programs: programsAt('main.asm'),
+                selectedProgram: 'main.asm',
                 selectedPath: 'main.asm',
                 onSelect,
-                ...(preview ? { onPreview } : {}),
-                onEntryChange: vi.fn()
+                ...(preview ? { onPreview } : {})
             }
         })
         flushSync()

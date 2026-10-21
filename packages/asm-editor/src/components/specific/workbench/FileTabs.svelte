@@ -4,9 +4,11 @@
      * ([the design record](../../../../../../docs/design/workbench.md), File tabs). The row also carries
      * "Live file" while a Debug
      * session shows a File's current contents rather than the Build's own, and a dimmed tab for a
-     * File the language service does not reach from the Entry file. The preview tab, a File opened
-     * with a single click in the Explorer that the next one takes the place of, is named in
-     * italics, as an IDE names it; a double click on it keeps it open.
+     * File the language service does not reach from the Selected program's Entry file. Every Entry
+     * file's tab is marked as its Explorer row is, the Selected program's in the accent colour
+     * ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 11). The preview
+     * tab, a File opened with a single click in the Explorer that the next one takes the place of,
+     * is named in italics, as an IDE names it; a double click on it keeps it open.
      */
     import FaTimes from '~icons/fa-solid/times'
     import FaColumns from '~icons/fa-solid/columns'
@@ -53,8 +55,9 @@
                 class:active
                 class:unreached
                 class:preview
-                title={(unreached ? `${path}: not analyzed from the Entry file` : path) +
-                    (preview ? ' (preview: double-click to keep it open)' : '')}
+                title={(unreached
+                    ? `${path}: not analyzed from the selected program's Entry file`
+                    : path) + (preview ? ' (preview: double-click to keep it open)' : '')}
             >
                 <button
                     class="tab-select"
@@ -70,8 +73,15 @@
                     }}
                 >
                     <span class="ellipsis">{labels[index]}</span>
-                    {#if path === session.project.entry}
-                        <span class="entry-mark" title="The Entry file">ENTRY</span>
+                    {#if session.project.program(path)}
+                        {@const selected = path === session.project.selectedProgram}
+                        <span
+                            class="entry-mark"
+                            class:selected
+                            title={selected
+                                ? 'Entry of the selected program'
+                                : 'Entry of a program'}>ENTRY</span
+                        >
                     {/if}
                 </button>
                 <button
@@ -220,16 +230,22 @@
         }
     }
 
+    /* every Entry file's, neutral; the Selected program's in the accent colour */
     .entry-mark {
         flex: none;
         padding: 0 0.3rem;
-        color: var(--accent);
-        border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+        color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
+        border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
         border-radius: 999px;
         font-size: 0.5rem;
         font-weight: 700;
         line-height: 0.8rem;
         letter-spacing: 0.04em;
+
+        &.selected {
+            color: var(--accent);
+            border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+        }
     }
 
     .version {

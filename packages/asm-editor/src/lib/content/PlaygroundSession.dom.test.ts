@@ -3,7 +3,8 @@ import { flushSync } from 'svelte'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { compilerExplorerDriver, compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
 import fixture from '#lib/sourceCompilation/fixtures/risc-v-c-O0.json'
-import { PlaygroundSession } from './PlaygroundSession.svelte'
+import { PLAYGROUND_NO_PROGRAM_MESSAGE, PlaygroundSession } from './PlaygroundSession.svelte'
+import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { decodePlaygroundProgram, encodePlaygroundProgram } from './playgroundProgram'
 import type monaco from 'monaco-editor'
 import { resolveSourceHelpContext } from '#lib/sourceLanguageHelp/context.ts'
@@ -99,15 +100,19 @@ describe('playground compilation lifecycle', () => {
         )
         expect(compile.mock.calls[0][0].optimization).toBe('0')
         expect(session.selected).toBe('src/main.c.riscv')
-        expect(session.project.entry).toBe(session.selected)
+        //the authored C entry's Program moved to its Generated assembly
+        expect(Object.keys(session.project.programs)).toEqual([session.selected])
+        expect(session.project.selectedProgram).toBe(session.selected)
         expect(session.sources.assemblerProfile).toBe('gnu-compiler-v1')
         expect(session.sources.entrySymbol).toBe('_start')
         expect(session.sources.runtimeAbi).toBe('v1')
         expect(session.needsCompilation).toBe(false)
         expect(session.recompilationNeeded).toBe(false)
+        const { files, selectedProgram, compilations } = session.project
         const reopened = decodePlaygroundProgram(
-            encodePlaygroundProgram(session.project.toObject())
+            encodePlaygroundProgram({ files, entry: selectedProgram!, compilations })
         )
+        expect(reopened.entry).toBe('src/main.c.riscv')
         expect(reopened.compilations).toEqual(session.project.compilations)
         expect(Object.keys(reopened.files)).toEqual([
             'src/main.c',
@@ -128,6 +133,7 @@ describe('playground compilation lifecycle', () => {
         expect(session.sourcePath).toBe('src/main.c')
     })
 
+    //a Playground's one Program stays its authored entry, though the C file defines main
     it('keeps a hand-authored assembly entry when compiling a companion C file', async () => {
         const session = setup(true)
         session.selected = 'src/main.c'
@@ -140,9 +146,24 @@ describe('playground compilation lifecycle', () => {
         )
         await session.compile(vi.fn())
         flushSync()
-        expect(session.project.entry).toBe('driver.s')
+        expect(session.selected).toBe('src/main.c.riscv')
+        expect(Object.keys(session.project.programs)).toEqual(['driver.s'])
+        expect(session.project.selectedProgram).toBe('driver.s')
         expect(session.sources.entrySymbol).toBe('_start')
         expect(session.sources.assemblerProfile).toBe('gnu-compiler-v1')
+    })
+
+    //only the chat page's agent can delete the one Entry, and the Emulator must still take the sources
+    it('gives live checking a valid Entry path and the reason without a program', () => {
+        const session = setup(true)
+        session.project.removeProgram('driver.s')
+        flushSync()
+        expect(session.sources).toMatchObject({
+            entry: 'main.riscv',
+            assemblyError: PLAYGROUND_NO_PROGRAM_MESSAGE
+        })
+        expect(Object.keys(session.sources.files)).toContain('driver.s')
+        expect(normalizeBuildInput(session.sources).entry).toBe('main.riscv')
     })
 
     it('cancels an in-flight compile without publishing generated files', async () => {

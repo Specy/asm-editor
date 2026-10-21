@@ -12,7 +12,7 @@ Open [Projects](/projects), choose **Import**, and select an x86-64 Linux ELF ex
 
 The executable opens as a **Listing**: readable assembly instructions with their addresses and bytes. Disassembly decodes the program's machine instructions into this assembly view.
 
-In an existing x86 project, upload an executable through the file explorer and accept the offer to make it the entry file. A filename extension is not required.
+In an existing x86 project, upload an executable through the file explorer and accept the offer to create a program for it. A filename extension is not required.
 
 ## Debug without the original source
 

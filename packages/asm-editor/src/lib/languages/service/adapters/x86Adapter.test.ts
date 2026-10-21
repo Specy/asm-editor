@@ -176,4 +176,21 @@ describe('x86 Project analysis adapter', () => {
         ])
         expect(snapshot.fileStatus).toEqual({ 'main.asm': 'unknown' })
     })
+
+    it('reports a missing Entry file as the one error, rather than failing', async () => {
+        const snapshot = await analyzeX86Project(
+            normalizeBuildInput({
+                entry: 'gone.asm',
+                files: { 'main.asm': { encoding: 'plain', content: 'nop' } }
+            }),
+            'missing-entry',
+            1
+        )
+        expect(snapshot.diagnostics).toEqual([
+            expect.objectContaining({
+                message: 'Entry file not found: gone.asm',
+                location: expect.objectContaining({ path: 'gone.asm' })
+            })
+        ])
+    })
 })

@@ -43,11 +43,31 @@ function setup(data: Parameters<typeof editorGroupsFixture>[1] = {}) {
 
 describe('the Command line', () => {
     it('names an Executable by its Entry path and an assembled program without the extension', () => {
-        const { session, project } = setup()
+        const { session } = setup()
         expect(session.commandLine).toMatchObject({ program: 'crackme', text: '', locked: false })
-        project.entry = 'main.asm'
+        session.createProgram('main.asm')
         flushSync()
         expect(session.commandLine?.program).toBe('main')
+    })
+
+    it("is the Selected program's, and there is none without a Program", () => {
+        const { session, project } = setup()
+        session.setProgramArguments('hunter2')
+        session.createProgram('main.asm')
+        flushSync()
+        //each Program has its own Arguments
+        expect(session.commandLine).toMatchObject({ program: 'main', text: '' })
+        session.setProgramArguments('swordfish')
+        session.selectProgram('crackme')
+        flushSync()
+        expect(session.commandLine).toMatchObject({ program: 'crackme', text: 'hunter2' })
+        expect(project.program('main.asm')?.settings).toEqual({ programArguments: 'swordfish' })
+        session.removeProgram('crackme')
+        session.removeProgram('main.asm')
+        flushSync()
+        expect(session.commandLine).toBeUndefined()
+        session.setProgramArguments('ignored')
+        expect(project.programs).toEqual({})
     })
 
     it('names a compiled program after the source File its Generated assembly came from', () => {
@@ -125,12 +145,12 @@ describe('the Command line', () => {
         const { session, project, emulator } = setup()
         session.setProgramArguments('hunter2 "two words"')
         flushSync()
-        expect(project.settings).toEqual({ programArguments: 'hunter2 "two words"' })
+        expect(project.selected?.settings).toEqual({ programArguments: 'hunter2 "two words"' })
         expect(emulator.programArguments).toBe('hunter2 "two words"')
         expect(session.commandLine?.parsed).toEqual({ args: ['hunter2', 'two words'] })
         session.setProgramArguments('')
         flushSync()
-        expect(project.settings).toEqual({})
+        expect(project.selected?.settings).toEqual({})
         expect(session.commandLine?.text).toBe('')
     })
 
@@ -147,12 +167,12 @@ describe('the Command line', () => {
         })
         //typing is refused, and a change from the Settings panel waits for the next Build
         session.setProgramArguments('swordfish')
-        expect(project.settings.programArguments).toBe('hunter2')
+        expect(project.selected?.settings.programArguments).toBe('hunter2')
         session.applySettings({ programArguments: 'swordfish' })
         flushSync()
         expect(session.commandLine).toMatchObject({ text: 'hunter2', locked: true })
-        //so does renaming the Entry, which a Build snapshot keeps
-        project.entry = 'main.asm'
+        //so does moving the Program, which a Build snapshot keeps
+        project.renameProgram('crackme', 'main.asm')
         flushSync()
         expect(session.commandLine?.program).toBe('crackme')
 
@@ -174,7 +194,7 @@ describe('the Command line', () => {
         disposers.push(fixture.dispose)
         expect(fixture.session.commandLine?.locked).toBe(true)
         fixture.session.setProgramArguments('b')
-        expect(fixture.project.settings.programArguments).toBe('a')
+        expect(fixture.project.selected?.settings.programArguments).toBe('a')
     })
 
     it('shows a Build its Arguments stopped in the Problems until they are typed again', async () => {

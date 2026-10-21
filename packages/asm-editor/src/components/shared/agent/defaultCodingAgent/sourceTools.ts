@@ -7,7 +7,7 @@ import {
     OPTIMIZATIONS,
     sourceLanguage
 } from '#lib/sourceCompilation/records.ts'
-import type { DefaultCodingAgentToolContext } from './types'
+import { DEFAULT_NO_PROGRAM_MESSAGE, type DefaultCodingAgentToolContext } from './types'
 import { runAgentTool } from './toolResults'
 
 export function isSourceFile(path: string) {
@@ -15,10 +15,14 @@ export function isSourceFile(path: string) {
 }
 
 export function createCompileSourceTool(context: DefaultCodingAgentToolContext) {
+    //a host with exactly one Program moves it to the assembly rather than make a second
+    const becomes =
+        context.newProgram === 'move'
+            ? 'the program moves to the generated assembly, with its settings and testcases'
+            : 'the generated assembly becomes a program and is selected'
     return tool({
         name: 'compile_source',
-        description:
-            'Compiles one C/C++ source file and local headers through Compiler Explorer into assembly. Sets the generated assembly as the project entry and preserves compilation records and source maps. Requires internet access. Call compile afterwards to build for execution. Recompile after source or header edits.',
+        description: `Compiles one C/C++ source file and local headers through Compiler Explorer into assembly. When the source defines main, ${becomes}; a recompile selects the program it already is, and a source without main (a companion file) leaves the programs alone. Preserves compilation records and source maps. Requires internet access. Call compile afterwards to build the selected program. Recompile after source or header edits.`,
         schema: z.object({
             path: z
                 .string()
@@ -60,10 +64,10 @@ export function createCompileSourceTool(context: DefaultCodingAgentToolContext) 
                             nextAction: 'Use a MIPS, RISC-V, RISC-V-64 or X86 project for C/C++.'
                         }
                     )
-                const active = context.getActivePath?.() ?? project.entry
+                const active = context.getActivePath?.() ?? project.selectedProgram
                 const sourcePath =
                     path ??
-                    (sourceLanguage(active)
+                    (active === undefined || sourceLanguage(active)
                         ? active
                         : project.compilations.find((record) => record.outputPath === active)
                               ?.sourcePath)
@@ -84,6 +88,7 @@ export function createCompileSourceTool(context: DefaultCodingAgentToolContext) 
                         optimization ?? '0',
                         {
                             compiler,
+                            newProgram: context.newProgram,
                             signal: AbortSignal.timeout(45_000),
                             confirm: (question) =>
                                 context.confirmSourceOverwrite?.(question) ?? Promise.resolve(false)
@@ -99,16 +104,30 @@ export function createCompileSourceTool(context: DefaultCodingAgentToolContext) 
                             }
                         )
                     context.setActivePath?.(sourcePath)
+                    //the Compile gave the assembly its Program, or left the Programs alone for a
+                    //source without `main` (programs.md, decision 9), so compile builds whatever
+                    //is selected now
+                    const entry = project.selectedProgram
                     return toolRun.success({
                         sourcePath,
                         outputPath: result.record.outputPath,
-                        entry: project.entry,
+                        entry: entry ?? null,
+                        program: result.program,
                         language: project.language,
                         sourceLanguage: result.record.language,
                         diagnostics: result.diagnostics,
                         canExecute: false,
+                        ...(result.program === 'none'
+                            ? {
+                                  note: `${sourcePath} defines no main, so no program was made for it.`
+                              }
+                            : {}),
                         nextAction:
-                            'Call compile to build the generated assembly, then run or step if requested.'
+                            entry === undefined
+                                ? `${context.noProgramMessage ?? DEFAULT_NO_PROGRAM_MESSAGE} Give ${sourcePath} a main and compile it again, or write a new assembly file.`
+                                : result.program === 'none'
+                                  ? `Call compile to build the selected program, ${entry}, then run or step if requested.`
+                                  : 'Call compile to build the generated assembly, then run or step if requested.'
                     })
                 } catch (error) {
                     if (!(error instanceof SourceCompilationError)) throw error

@@ -111,10 +111,24 @@
         return () => clearTimeout(timeoutId)
     })
 
+    /**
+     * The Project the editor opens: the files, or the code, with the embed's Testcases, which are
+     * its one Program's (programs.md, decision 12); a Project's own `programs` would win over
+     * Testcases given beside them.
+     */
+    function editorProject() {
+        if (!project) return makeProject({ code, language: settings.language, testcases })
+        const data = project.toObject()
+        const entry = data.selectedProgram
+        if (entry === undefined) return makeProject(data)
+        return makeProject({
+            ...data,
+            programs: { ...data.programs, [entry]: { ...data.programs[entry], testcases } }
+        })
+    }
+
     function openInEditor() {
-        const opened = project
-            ? makeProject({ ...project.toObject(), testcases })
-            : makeProject({ code, language: settings.language, testcases })
+        const opened = editorProject()
         try {
             window.open(createShareLink(opened), '_blank')
         } catch (error) {
@@ -127,12 +141,13 @@
         code = BASE_CODE[language]
         if (project) {
             const previous = project
+            const entry = previous.selectedProgram
             const source = previous.compilations.find(
-                (record) => record.outputPath === previous.entry
+                (record) => record.outputPath === entry
             )?.sourcePath
             project = makeProject({
                 files: previous.files,
-                entry: source ?? previous.entry,
+                entry: source ?? entry,
                 language
             })
         }
@@ -239,13 +254,15 @@
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
                 : ''
-        const program = project
-            ? encodePlaygroundProgram({
-                  files: $state.snapshot(project.files),
-                  entry: project.entry,
-                  compilations: project.compilations
-              })
-            : undefined
+        const entry = project?.selectedProgram
+        const program =
+            project && entry !== undefined
+                ? encodePlaygroundProgram({
+                      files: $state.snapshot(project.files),
+                      entry,
+                      compilations: project.compilations
+                  })
+                : undefined
         return `${window.location.origin}/embed?${lang}${props}${tests}${program ? `program=${program}` : `code=${compressed}`}`
     }
 
@@ -262,7 +279,7 @@
         //Include file edits and generated assembly in standalone embed/share URLs too.
         if (project) {
             void project.files
-            void project.entry
+            void project.selectedProgram
             void project.compilations
         }
         generateCodeUrl(code, settings, testcases)
@@ -323,7 +340,8 @@
                                 source={project ? playgroundBuildSources(project) : undefined}
                                 language={settings.language}
                                 settings={{
-                                    automaticChecking: !project || !sourceLanguage(project.entry),
+                                    automaticChecking:
+                                        !project || !sourceLanguage(project.selectedProgram ?? ''),
                                     globalPageElementsPerRow: 4,
                                     globalPageSize: 4 * 8
                                 }}

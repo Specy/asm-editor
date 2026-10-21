@@ -21,6 +21,15 @@ async function createVersionOneDatabase(rows: Record<string, unknown>[]): Promis
     legacy.close()
 }
 
+const testcase = {
+    input: [],
+    expectedOutput: '1',
+    startingRegisters: {},
+    expectedRegisters: {},
+    startingMemory: [],
+    expectedMemory: []
+}
+
 const legacyRow = {
     id: 'abcdefg',
     code: '    move.l #1, d0',
@@ -38,21 +47,26 @@ describe('the version 2 upgrade', () => {
         Dexie.dependencies.indexedDB = new IDBFactory()
     })
 
-    it('rewrites a version 1 row into files, an entry and no decisions', async () => {
-        await createVersionOneDatabase([legacyRow])
+    it('rewrites a version 1 row into files and one Program with no decisions', async () => {
+        await createVersionOneDatabase([
+            { ...legacyRow, testcases: [testcase], display: { unitWidth: 2 } }
+        ])
         const db = new Db()
         const project = await db.getProject('abcdefg')
         expect(project.files).toEqual({
             'main.m68k': { encoding: 'plain', content: '    move.l #1, d0' }
         })
-        expect(project.entry).toBe('main.m68k')
-        expect(project.settings).toEqual({})
+        expect(project.selectedProgram).toBe('main.m68k')
+        expect(project.selected?.settings).toEqual({})
+        expect(project.selected?.testcases[0]?.expectedOutput).toBe('1')
         expect(project.name).toBe('Before the files map')
         expect(project.updatedAt).toBe(2)
-        //the row itself no longer carries the old field
+        //the row itself no longer carries the old fields, which its one Program took over
         const row = (await db.projects.get('abcdefg')) as unknown as Record<string, unknown>
-        expect(row.code).toBeUndefined()
-        expect(row.entry).toBe('main.m68k')
+        for (const field of ['code', 'entry', 'settings', 'testcases', 'display'])
+            expect(row, field).not.toHaveProperty(field)
+        expect(Object.keys(row.programs as object)).toEqual(['main.m68k'])
+        expect(row.selectedProgram).toBe('main.m68k')
         db.close()
     })
 
@@ -64,7 +78,9 @@ describe('the version 2 upgrade', () => {
         ])
         const db = new Db()
         const projects = await db.getProjects()
-        expect(projects.map((project) => [project.id, project.entry, project.code])).toEqual([
+        expect(
+            projects.map((project) => [project.id, project.selectedProgram, project.code])
+        ).toEqual([
             ['abcdefg', 'main.m68k', '    move.l #1, d0'],
             ['hijklmn', 'main.riscv', 'li a7, 10\necall'],
             ['opqrstu', 'main.z80', 'halt']
@@ -146,6 +162,36 @@ describe('the version 2 upgrade', () => {
         }
     })
 
+    it('reads a row saved before Programs as one Program, and saves it with Programs', async () => {
+        const db = new Db()
+        try {
+            //how a version 2 row looked until a Project held Programs (ADR 0054)
+            await db.projects.add({
+                ...legacyRow,
+                id: 'before1',
+                code: undefined,
+                files: { 'main.m68k': { encoding: 'plain', content: 'nop' } },
+                entry: 'main.m68k',
+                settings: { undoEnabled: false },
+                testcases: [testcase]
+            } as never)
+            const project = await db.getProject('before1')
+            expect(project.programs['main.m68k']?.settings).toEqual({ undoEnabled: false })
+            expect(project.selected?.testcases).toHaveLength(1)
+            project.createProgram('second.m68k')
+            await db.updateProject(project)
+            const row = (await db.projects.get('before1')) as unknown as Record<string, unknown>
+            for (const field of ['entry', 'settings', 'testcases', 'display'])
+                expect(row, field).not.toHaveProperty(field)
+            const again = await db.getProject('before1')
+            expect(Object.keys(again.programs)).toEqual(['main.m68k', 'second.m68k'])
+            expect(again.selectedProgram).toBe('second.m68k')
+            expect(again.program('main.m68k')?.testcases[0]?.expectedOutput).toBe('1')
+        } finally {
+            db.close()
+        }
+    })
+
     it('skips, and keeps, a row this version cannot read', async () => {
         Dexie.dependencies.indexedDB = new IDBFactory()
         const db = new Db()
@@ -165,7 +211,7 @@ describe('the version 2 upgrade', () => {
         } as never)
         const projects = await db.getProjects()
         expect(projects.map((project) => project.id)).toEqual(['plain12'])
-        expect(projects[0]?.settings).toEqual({ fileSystemHistoryBudgetMb: 7 })
+        expect(projects[0]?.selected?.settings).toEqual({ fileSystemHistoryBudgetMb: 7 })
         expect(await db.projects.count()).toBe(2)
         db.close()
     })

@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { makeProject, normalizeProjectData, projectContentEquals } from '#lib/Project.svelte.ts'
+import {
+    makeProject,
+    normalizeProjectData,
+    projectContentEquals,
+    type Program,
+    type Testcase
+} from '#lib/Project.svelte.ts'
 import { makeProjectFromArchive, projectToArchive } from '#lib/projectArchive.ts'
 import { BASE_CODE } from '#lib/Config.ts'
 import { compileProjectSource } from './compileProjectSource'
@@ -18,54 +24,72 @@ import {
 } from './compilerExplorer'
 
 const text = (content: string) => ({ encoding: 'plain' as const, content })
+const OUTPUT = 'src/main.c.riscv'
+const FILES = {
+    'src/main.c': text('#include "value.h"\nint main(void) { return VALUE; }'),
+    'src/add.c': text('int add(int a, int b) { return a + b; }'),
+    'src/value.h': text('#define VALUE 42'),
+    'original.riscv': text('li a7, 10\necall')
+}
 function project() {
-    return makeProject({
-        language: 'RISC-V',
-        entry: 'original.riscv',
-        files: {
-            'src/main.c': text('#include "value.h"\nint main(void) { return VALUE; }'),
-            'src/value.h': text('#define VALUE 42'),
-            'original.riscv': text('li a7, 10\necall')
-        }
-    })
+    return makeProject({ language: 'RISC-V', entry: 'original.riscv', files: FILES })
 }
-function compile(request: CompilationRequest): Promise<CompilationResult> {
-    const assembly = '.text\nmain:\nli a0, 42\nli a7, 93\necall\n'
-    const hash = fileFingerprint(text(assembly))!
-    return Promise.resolve({
-        assembly,
-        diagnostics: [],
-        record: {
-            assemblerProfile: 'gnu-compiler-v1',
-            sourcePath: request.sourcePath,
-            outputPath: request.outputPath,
-            target: request.target,
-            language: 'c',
-            compilerId: 'rv32-cgcc1420',
-            optimization: request.optimization,
-            inputs: {
-                [request.sourcePath]: fileFingerprint(request.files[request.sourcePath])!,
-                'src/value.h': fileFingerprint(request.files['src/value.h'])!
+/** A Compiler driver whose every compile outputs `assembly`. */
+function driver(assembly: string) {
+    return (request: CompilationRequest): Promise<CompilationResult> => {
+        const hash = fileFingerprint(text(assembly))!
+        return Promise.resolve({
+            assembly,
+            diagnostics: [],
+            definesMain: /^\.globl main$/m.test(assembly),
+            record: {
+                assemblerProfile: 'gnu-compiler-v1',
+                sourcePath: request.sourcePath,
+                outputPath: request.outputPath,
+                target: request.target,
+                language: 'c',
+                compilerId: 'rv32-cgcc1420',
+                optimization: request.optimization,
+                inputs: {
+                    [request.sourcePath]: fileFingerprint(request.files[request.sourcePath])!,
+                    'src/value.h': fileFingerprint(request.files['src/value.h'])!
+                },
+                outputFingerprint: hash
             },
-            outputFingerprint: hash
-        },
-        map: {
-            sourcePath: request.sourcePath,
-            outputFingerprint: hash,
-            lines: [null, null, { path: request.sourcePath, line: 1 }, null, null, null]
-        }
-    })
+            map: {
+                sourcePath: request.sourcePath,
+                outputFingerprint: hash,
+                lines: assembly
+                    .split('\n')
+                    .map((_, index) => (index === 3 ? { path: request.sourcePath, line: 1 } : null))
+            }
+        })
+    }
 }
+const compile = driver('.text\n.globl main\nmain:\nli a0, 42\nli a7, 93\necall\n')
+//a companion File's, which another includes and which defines no `main` (programs.md, decision 9)
+const COMPANION = '.text\n.globl add\nadd:\nadd a0, a0, a1\nret\n'
+const companion = driver(COMPANION)
 async function initial(p = project()) {
     await compileProjectSource(p, 'src/main.c', '0', { compile, confirm: vi.fn() })
     return p
 }
+function testcase(expectedOutput: string): Testcase {
+    return {
+        input: [],
+        expectedOutput,
+        startingRegisters: {},
+        expectedRegisters: {},
+        startingMemory: [],
+        expectedMemory: []
+    }
+}
 
 describe('Source compilation lifecycle', () => {
-    it('publishes one output as Entry and saves provenance through reopening/archives without the map', async () => {
+    it('publishes one output as a selected Program and saves provenance through reopening/archives without the map', async () => {
         const p = await initial()
-        expect(p.entry).toBe('src/main.c.riscv')
-        expect(p.sourceMaps[p.entry]).toBeDefined()
+        expect(p.selectedProgram).toBe(OUTPUT)
+        expect(p.sourceMaps[OUTPUT]).toBeDefined()
         expect(p.toObject()).not.toHaveProperty('sourceMaps')
         for (const reopened of [
             makeProject(p.toObject()),
@@ -79,7 +103,7 @@ describe('Source compilation lifecycle', () => {
         }
         // Metadata-only autosaving must not throw away a working map.
         p.set({ updatedAt: Date.now() })
-        expect(p.sourceMaps[p.entry]).toBeDefined()
+        expect(p.sourceMaps[OUTPUT]).toBeDefined()
     })
     it('invalidates on source/header edits and deletion while retaining stale detection; Undo does not resurrect a map', async () => {
         for (const path of ['src/main.c', 'src/value.h']) {
@@ -96,7 +120,7 @@ describe('Source compilation lifecycle', () => {
     })
     it('confirms edited output even after reopening and respects cancellation', async () => {
         const p = await initial()
-        p.fileSystem.writeText(p.entry, p.code + '# manually edited\n')
+        p.fileSystem.writeText(OUTPUT, p.code + '# manually edited\n')
         const reopened = makeProject(p.toObject())
         const before = reopened.toObject()
         const confirm = vi.fn(async (_question: string) => false)
@@ -109,11 +133,11 @@ describe('Source compilation lifecycle', () => {
             confirm: async () => true
         })
         expect(reopened.compilations[0].optimization).toBe('2')
-        expect(reopened.sourceMaps[reopened.entry]).toBeDefined()
+        expect(reopened.sourceMaps[OUTPUT]).toBeDefined()
     })
     it('asks for unowned collisions, and overwrites untouched generated output without asking', async () => {
         const p = project()
-        p.fileSystem.writeText('src/main.c.riscv', 'handwritten assembly')
+        p.fileSystem.writeText(OUTPUT, 'handwritten assembly')
         const confirm = vi.fn(async () => true)
         await compileProjectSource(p, 'src/main.c', '0', { compile, confirm })
         expect(confirm).toHaveBeenCalledOnce()
@@ -124,7 +148,7 @@ describe('Source compilation lifecycle', () => {
     it('failed compilation preserves all existing output and provenance', async () => {
         const p = await initial()
         const before = p.toObject(),
-            map = p.sourceMaps[p.entry]
+            map = p.sourceMaps[OUTPUT]
         await expect(
             compileProjectSource(p, 'src/main.c', '2', {
                 compile: async () => {
@@ -134,7 +158,7 @@ describe('Source compilation lifecycle', () => {
             })
         ).rejects.toThrow('Compiler failed')
         expect(projectContentEquals(before, p.toObject())).toBe(true)
-        expect(p.sourceMaps[p.entry]).toBe(map)
+        expect(p.sourceMaps[OUTPUT]).toBe(map)
     })
     it('discards responses if source/header/destination changes or a Debug session begins while compiling', async () => {
         for (const change of ['source', 'header', 'destination', 'debug']) {
@@ -153,7 +177,8 @@ describe('Source compilation lifecycle', () => {
                 confirm: vi.fn()
             })
             await expect(operation).rejects.toThrow()
-            expect(p.entry).toBe('original.riscv')
+            expect(Object.keys(p.programs)).toEqual(['original.riscv'])
+            expect(p.selectedProgram).toBe('original.riscv')
             expect(p.compilations).toEqual([])
             expect(p.sourceMaps).toEqual({})
             p.fileSystem.stop()
@@ -161,12 +186,12 @@ describe('Source compilation lifecycle', () => {
     })
     it('rechecks after overwrite confirmation and honours cancellation signals', async () => {
         const p = await initial()
-        p.fileSystem.writeText(p.entry, 'manual')
+        p.fileSystem.writeText(OUTPUT, 'manual')
         await expect(
             compileProjectSource(p, 'src/main.c', '0', {
                 compile,
                 confirm: async () => {
-                    p.fileSystem.writeText(p.entry, 'new manual edit')
+                    p.fileSystem.writeText(OUTPUT, 'new manual edit')
                     return true
                 }
             })
@@ -190,11 +215,16 @@ describe('Source compilation lifecycle', () => {
         p.fileSystem.rename('src/main.c', 'src/renamed.c')
         p.renameCompilationFile('src/main.c', 'src/renamed.c')
         expect(p.compilations[0].sourcePath).toBe('src/renamed.c')
-        expect(p.compilations[0].outputPath).toBe('src/main.c.riscv')
+        expect(p.compilations[0].outputPath).toBe(OUTPUT)
         expect(compilationStatus(p.compilations[0], p.files, p.language).stale).toBe(true)
-        await compileProjectSource(p, 'src/renamed.c', '0', { compile, confirm: vi.fn() })
-        expect(p.entry).toBe('src/main.c.riscv')
-        expect(p.sourceMaps[p.entry]).toBeDefined()
+        p.selectProgram('original.riscv')
+        const result = await compileProjectSource(p, 'src/renamed.c', '0', {
+            compile,
+            confirm: vi.fn()
+        })
+        expect(result?.program).toBe('selected')
+        expect(p.selectedProgram).toBe(OUTPUT)
+        expect(p.sourceMaps[OUTPUT]).toBeDefined()
     })
     it('rejects invalid saved provenance and leaves older Projects compatible', async () => {
         expect(normalizeProjectData({ code: 'nop' })).not.toHaveProperty('compilations')
@@ -210,6 +240,171 @@ describe('Source compilation lifecycle', () => {
     })
 })
 
+// A Program is identified by its Entry file (ADR 0054), and a Compile gives the Generated assembly
+// one only when it is a program (programs.md, decision 9).
+describe('the Programs a Compile leaves', () => {
+    const confirm = vi.fn(async () => true)
+    const withPrograms = (
+        programs: Record<string, Program>,
+        selectedProgram?: string,
+        files: Record<string, ReturnType<typeof text>> = {}
+    ) =>
+        makeProject({
+            language: 'RISC-V',
+            files: { ...FILES, ...files },
+            programs,
+            ...(selectedProgram ? { selectedProgram } : {})
+        })
+
+    it('creates and selects a Program for a source that defines main, the others kept as they were', async () => {
+        for (const p of [project(), withPrograms({})]) {
+            const others = p.toObject().programs
+            const result = await compileProjectSource(p, 'src/main.c', '0', { compile, confirm })
+            expect(result).toMatchObject({ program: 'created', definesMain: true })
+            expect(p.selectedProgram).toBe(OUTPUT)
+            expect(p.toObject().programs).toEqual({
+                ...others,
+                [OUTPUT]: { settings: {}, testcases: [] }
+            })
+        }
+    })
+
+    it("selects the Generated assembly's Program on a recompile, main or not", async () => {
+        const p = await initial()
+        p.setProgramTestcases(OUTPUT, [testcase('42')])
+        for (const recompile of [compile, companion]) {
+            p.selectProgram('original.riscv')
+            const result = await compileProjectSource(p, 'src/main.c', '2', {
+                compile: recompile,
+                confirm
+            })
+            expect(result?.program).toBe('selected')
+            expect(p.selectedProgram).toBe(OUTPUT)
+            expect(p.program(OUTPUT)?.testcases).toEqual([testcase('42')])
+        }
+        expect(Object.keys(p.programs).sort()).toEqual(['original.riscv', OUTPUT])
+    })
+
+    // Earlier data and a Playground's authored C entry can have one (programs-plan.md, decision 2).
+    it('moves a Program whose Entry is the source to its Generated assembly, main or not, and selects it', async () => {
+        for (const [recompile, selected] of [
+            [compile, 'src/main.c'],
+            [companion, 'original.riscv']
+        ] as const) {
+            const p = withPrograms(
+                {
+                    'src/main.c': {
+                        settings: { programArguments: 'one two' },
+                        testcases: [testcase('42')]
+                    },
+                    'original.riscv': { settings: {}, testcases: [] }
+                },
+                selected
+            )
+            const testcases = p.program('src/main.c')!.testcases
+            const result = await compileProjectSource(p, 'src/main.c', '0', {
+                compile: recompile,
+                confirm
+            })
+            expect(result?.program).toBe('moved')
+            expect(p.selectedProgram).toBe(OUTPUT)
+            expect(p.program('src/main.c')).toBeUndefined()
+            expect(p.program(OUTPUT)?.settings).toEqual({ programArguments: 'one two' })
+            expect(p.program(OUTPUT)?.testcases).toBe(testcases)
+            expect(p.program('original.riscv')).toBeDefined()
+        }
+    })
+
+    it("selects the Generated assembly's own Program before moving the source's", async () => {
+        const p = withPrograms(
+            {
+                'src/main.c': { settings: {}, testcases: [testcase('source')] },
+                [OUTPUT]: { settings: {}, testcases: [testcase('assembly')] }
+            },
+            'src/main.c',
+            { [OUTPUT]: text('') }
+        )
+        const result = await compileProjectSource(p, 'src/main.c', '0', { compile, confirm })
+        expect(result?.program).toBe('selected')
+        expect(p.selectedProgram).toBe(OUTPUT)
+        expect(p.program('src/main.c')?.testcases).toEqual([testcase('source')])
+    })
+
+    it('leaves the Programs and the selection alone for a companion File without main', async () => {
+        for (const p of [await initial(), withPrograms({})]) {
+            if (p.selectedProgram) p.selectProgram('original.riscv')
+            const before = p.toObject()
+            const result = await compileProjectSource(p, 'src/add.c', '0', {
+                compile: companion,
+                confirm
+            })
+            expect(result).toMatchObject({ program: 'none', definesMain: false })
+            expect(p.toObject().programs).toEqual(before.programs)
+            expect(p.selectedProgram).toBe(before.selectedProgram)
+            //compiled all the same, for the File that includes it
+            expect(p.files['src/add.c.riscv']).toEqual(text(COMPANION))
+            expect(p.compilations.at(-1)?.sourcePath).toBe('src/add.c')
+        }
+    })
+
+    it('makes no Program when the caller says not to, and still selects or moves one', async () => {
+        const fixed = { compile, confirm, newProgram: 'none' } as const
+        const p = project()
+        expect(await compileProjectSource(p, 'src/main.c', '0', fixed)).toMatchObject({
+            program: 'none',
+            definesMain: true
+        })
+        expect(Object.keys(p.programs)).toEqual(['original.riscv'])
+        expect(p.selectedProgram).toBe('original.riscv')
+        const playground = withPrograms({ 'src/main.c': { settings: {}, testcases: [] } })
+        expect((await compileProjectSource(playground, 'src/main.c', '0', fixed))?.program).toBe(
+            'moved'
+        )
+        expect((await compileProjectSource(playground, 'src/main.c', '2', fixed))?.program).toBe(
+            'selected'
+        )
+        expect(Object.keys(playground.programs)).toEqual([OUTPUT])
+    })
+
+    // A host with exactly one Program, such as /chat, keeps it one: the old Entry's move.
+    it('moves the Selected program to a source that defines main when the caller has one Program', async () => {
+        const one = { compile, confirm, newProgram: 'move' } as const
+        const p = withPrograms(
+            {
+                'original.riscv': {
+                    settings: { programArguments: 'one two' },
+                    testcases: [testcase('42')]
+                }
+            },
+            'original.riscv'
+        )
+        const testcases = p.program('original.riscv')!.testcases
+        expect(await compileProjectSource(p, 'src/main.c', '0', one)).toMatchObject({
+            program: 'moved',
+            definesMain: true
+        })
+        expect(Object.keys(p.programs)).toEqual([OUTPUT])
+        expect(p.selectedProgram).toBe(OUTPUT)
+        expect(p.program(OUTPUT)?.settings).toEqual({ programArguments: 'one two' })
+        expect(p.program(OUTPUT)?.testcases).toBe(testcases)
+        //the File stays, as it stayed when the one Entry moved
+        expect(p.files['original.riscv']).toEqual(FILES['original.riscv'])
+        //a companion still leaves it, and a recompile selects it where it is
+        expect(
+            (await compileProjectSource(p, 'src/add.c', '0', { ...one, compile: companion }))
+                ?.program
+        ).toBe('none')
+        expect((await compileProjectSource(p, 'src/main.c', '2', one))?.program).toBe('selected')
+        expect(Object.keys(p.programs)).toEqual([OUTPUT])
+
+        //with no Program to move, the Compile makes the one
+        const empty = withPrograms({})
+        expect((await compileProjectSource(empty, 'src/main.c', '0', one))?.program).toBe('created')
+        expect(Object.keys(empty.programs)).toEqual([OUTPUT])
+        expect(empty.selectedProgram).toBe(OUTPUT)
+    })
+})
+
 describe('x86 Source compilation', () => {
     function x86Project(files: Record<string, ReturnType<typeof text>> = {}) {
         return makeProject({
@@ -222,12 +417,15 @@ describe('x86 Source compilation', () => {
             }
         })
     }
-    function compileX86(request: CompilationRequest) {
-        const assembly = '    global main\nmain:\n    ret\n'
+    function compileX86(
+        request: CompilationRequest,
+        assembly = '    global main\nmain:\n    ret\n'
+    ) {
         const hash = fileFingerprint(text(assembly))!
         return Promise.resolve<CompilationResult>({
             assembly,
             diagnostics: [],
+            definesMain: /^\s*global main$/m.test(assembly),
             record: {
                 sourcePath: request.sourcePath,
                 outputPath: request.outputPath,
@@ -255,8 +453,23 @@ describe('x86 Source compilation', () => {
             compile: (request) => compileX86(request),
             confirm: vi.fn()
         })
-        expect(p.entry).toBe('src/main.c.asm')
+        expect(result?.program).toBe('created')
+        expect(p.selectedProgram).toBe('src/main.c.asm')
         expect(result?.diagnostics).toEqual([])
+    })
+
+    //`main.asm` links what it calls from the companion's Generated assembly as needed (ADR 0033)
+    it('keeps a hand-written main.asm selected when compiling a companion File', async () => {
+        const p = x86Project({ 'src/sum.c': text('int sum(int a, int b) { return a + b; }\n') })
+        const result = await compileProjectSource(p, 'src/sum.c', '0', {
+            compile: (request) =>
+                compileX86(request, '    global sum\nsum:\n    lea eax, [rdi+rsi]\n    ret\n'),
+            confirm: vi.fn()
+        })
+        expect(result).toMatchObject({ program: 'none', definesMain: false })
+        expect(Object.keys(p.programs)).toEqual(['main.asm'])
+        expect(p.selectedProgram).toBe('main.asm')
+        expect(p.files['src/sum.c.asm']).toBeDefined()
     })
 
     it('records no assembler profile or Runtime ABI, and keeps the record through saving', async () => {

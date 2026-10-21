@@ -1,9 +1,7 @@
 import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
-import type { ProjectFileKind } from '#lib/fileKinds.ts'
 import { isLibraryListingPath } from '#lib/listing/listingPaths.ts'
 import type { ProjectFile } from '#lib/projectFiles.ts'
 import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
-import { textFileLanguage } from '#lib/textFileLanguages.ts'
 
 /** Which pane a File opens in: beside source, beside assembly, or as bytes, which are neither. */
 export type EditorFileKind = 'source' | 'assembly' | 'bytes'
@@ -24,18 +22,6 @@ export function editorFileKind(path: string, file?: ProjectFile): EditorFileKind
     const name = path.split('/').pop()!
     const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
     return !extension || assemblyExtensions.has(extension) ? 'assembly' : 'source'
-}
-
-/**
- * Whether a pane showing the File offers Build outside a Debug session: code, which the Target's
- * assembly, C and C++ and an Executable are, but not a document or data the program may only read,
- * such as text, Markdown, JSON, an image or a PDF. A text File whose extension names no known
- * format is taken for code, as an include File's extension is anyone's guess, and a path that names
- * nothing offers Build, which then says what is missing.
- */
-export function offersBuild(path: string, kind: ProjectFileKind | undefined): boolean {
-    if (kind === undefined || kind === 'executable') return true
-    return kind === 'text' && !textFileLanguage(path)
 }
 
 /** Matching panes win; ties and unrelated pairs use the left pane. Empty panes accept either kind. */

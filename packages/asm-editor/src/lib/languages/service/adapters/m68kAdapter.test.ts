@@ -34,4 +34,35 @@ describe('M68K Project analysis', () => {
             expect.arrayContaining(['start', 'unused'])
         )
     })
+
+    it('reports sources that cannot be resolved as the one error, as Build does', () => {
+        const problem = 'This Project has no program.'
+        const none = analyzeM68kProject(
+            normalizeBuildInput({
+                entry: 'main.m68k',
+                //a File that would assemble, which a Project with no Program does not check
+                files: { 'main.m68k': { encoding: 'plain', content: '    move.l #1, nope' } },
+                assemblyError: problem
+            }),
+            'no-program',
+            1
+        )
+        expect(none.diagnostics).toEqual([
+            expect.objectContaining({ severity: 'error', message: problem })
+        ])
+        const missing = analyzeM68kProject(
+            normalizeBuildInput({
+                entry: 'gone.m68k',
+                files: { 'main.m68k': { encoding: 'plain', content: '    simhalt' } }
+            }),
+            'missing-entry',
+            1
+        )
+        expect(missing.diagnostics).toEqual([
+            expect.objectContaining({
+                message: 'Entry file not found: gone.m68k',
+                location: expect.objectContaining({ path: 'gone.m68k' })
+            })
+        ])
+    })
 })

@@ -45,8 +45,14 @@ export type WorkbenchHostLink = {
 /** The sections of the Settings panel, in their order. */
 export type SettingsSectionId =
     | 'project'
-    | 'display'
+    | 'program'
     | 'preferences'
     | 'layout'
     | 'shortcuts'
     | 'theme'
+
+/**
+ * What Settings can be opened at: a section, or the Display configuration, a part of the Program
+ * section ([programs-plan.md](../../../../../docs/design/programs-plan.md), decision 14).
+ */
+export type SettingsTarget = SettingsSectionId | 'display'

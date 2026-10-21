@@ -123,6 +123,17 @@
 
     /** Whether the execution dock floats over the bottom of this pane. */
     const docked = $derived(group.hasDock(controls))
+    /**
+     * Whether its dock has the execution controls: outside a Debug session every pane showing an
+     * Entry file, for that Program's Build, and during one the controls group alone
+     * ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 8).
+     */
+    const execution = $derived(
+        controls &&
+            (session.debugSession
+                ? session.controlsGroup === group
+                : group.displayedProgram !== undefined)
+    )
     /** Where this pane was in a File's bytes, kept for as long as its tab is open. */
     function hexViewState(path: string): HexViewState {
         let state = group.hexViews.get(path)
@@ -381,12 +392,7 @@
         {/if}
         {#if docked}
             <div class="floating-controls">
-                <ExecutionControls
-                    {group}
-                    attached
-                    {fill}
-                    execution={controls && session.controlsGroup === group}
-                />
+                <ExecutionControls {group} attached {fill} {execution} />
             </div>
         {/if}
     </div>

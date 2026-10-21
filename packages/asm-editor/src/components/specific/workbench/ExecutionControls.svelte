@@ -3,12 +3,14 @@
      * The Workbench's execution dock: Build, and once built Stop, Run, Undo and Step, with Test at
      * the far end in both. The Workbench has no mode switch, the Build becoming Stop in its place is
      * what says a Debug session is on ([the design record](../../../../../../docs/design/workbench.md)).
-     * The Testcases run on the same Emulator, so Test during a Debug session ends it first. A pane
-     * showing a document or data, such as text, Markdown, an image or a PDF, has neither Build nor
-     * Test, only the session's controls once one is on. Edge to edge in the bottom corners of the
-     * editor on a desktop, along its bottom edge on a phone, and stuck under it on a tablet. A pane showing a File in more than one way carries the view
-     * switch, during a Debug session too ([file-views.md](../../../../../../docs/design/file-views.md),
-     * decisions 4 and 8).
+     * Build and Test act on the Program whose Entry file the pane shows, and select it; a pane
+     * showing any other File, a C or C++ one included, has neither, only the session's controls
+     * once one is on ([programs.md](../../../../../../docs/design/programs.md), decision 5). The
+     * Testcases run on the same Emulator, so Test during a Debug session ends it first, and tests
+     * the session's Program. Edge to edge in the bottom corners of the editor on a desktop, along
+     * its bottom edge on a phone, and stuck under it on a tablet. A pane showing a File in more
+     * than one way carries the view switch, during a Debug session too
+     * ([file-views.md](../../../../../../docs/design/file-views.md), decisions 4 and 8).
      */
     import ExecutionDock, {
         type DockCompilation,
@@ -30,7 +32,6 @@
     } from '#lib/sourceCompilation/records.ts'
     import { useWorkbench } from './workbenchContext'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
-    import { editorFileKind } from '#lib/workbench/editorFileRouting.ts'
 
     interface Props {
         fill?: boolean
@@ -72,9 +73,20 @@
     const { session } = useWorkbench()
     const emulator = session.emulator
     const pane = $derived(group ?? session.controlsGroup)
+    const source = $derived(!!sourceLanguage(pane.displayedPath))
+    /**
+     * The Program Build and Test act on: the one whose Entry the pane shows, which a C or C++ pane
+     * leaves to its Compile; during a Debug session, Test's is the session's.
+     */
+    const program = $derived(
+        session.debugSession
+            ? emulator.buildSources?.entry
+            : source
+              ? undefined
+              : pane.displayedProgram
+    )
     const compilation = $derived.by<DockCompilation | undefined>(() => {
         if (!showCompilation) return undefined
-        const source = !!sourceLanguage(pane.displayedPath)
         if (!source && !pane.recompilationNeeded) return undefined
         const supported = isCompilationTarget(session.project.language)
         const busy = session.compiling && session.compilingGroupId === pane.id
@@ -146,22 +158,11 @@
         }
     })
 
-    //an assembly File of the Project's own that Build would not start from
-    const entryCandidate = $derived.by(() => {
-        const path = pane.displayedPath
-        const file = session.project.files[path]
-        return (
-            !!file &&
-            path !== session.project.entry &&
-            editorFileKind(path, file) === 'assembly' &&
-            !pane.displayedLibraryMember &&
-            !session.fileSystemLocked
-        )
-    })
-
     function test() {
+        //the session's Program, read before Stop forgets which it was
+        const entry = program
         if (session.debugSession) session.stop()
-        void session.test()
+        void session.test(entry, pane)
     }
 </script>
 
@@ -172,22 +173,17 @@
     roundedEnd={session.groups.length > 1 && session.groups[0] === pane}
     {compilation}
     {views}
-    compileOnly={!execution ||
-        (!!sourceLanguage(pane.displayedPath) && session.groups.length === 1)}
-    showExecution={execution && (session.debugSession || pane.offersBuild)}
+    compileOnly={!execution || source}
+    showExecution={execution && (session.debugSession || program !== undefined)}
     debugging={session.debugSession}
     building={session.building}
     running={session.running}
-    buildDisabled={session.buildDisabled}
+    buildDisabled={session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}
     undoDisabled={session.undoDisabled}
     canUndo={emulator.canUndo}
-    hasTests={session.project.testcases.length > 0}
-    buildLabel={pane.displayedPath && pane.displayedPath !== session.project.entry
-        ? 'Build entry'
-        : 'Build'}
-    onBuild={() => session.build()}
-    onSetEntry={entryCandidate ? () => session.setEntry(pane.displayedPath) : undefined}
+    hasTests={program !== undefined && !!session.project.program(program)?.testcases.length}
+    onBuild={() => session.build(program, pane)}
     onStop={() => session.stop()}
     onRun={() => session.run()}
     onPause={() => session.pause()}

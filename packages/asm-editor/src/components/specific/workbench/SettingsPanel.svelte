@@ -1,10 +1,14 @@
 <script lang="ts">
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     /**
-     * Settings, as the Workbench's side panel: the Project's Settings, the Display configuration of
-     * a MARS or RARS Project, the person's Preferences, the layout Preferences, the shortcuts and the
-     * theme ([the design record](../../../../../../docs/design/workbench.md), Settings, Shortcuts and
-     * Theme). The Display configuration is listed here but is not a Setting
+     * Settings, as the Workbench's side panel: the Project's instruction set, the Selected program's
+     * Settings and, in a MARS or RARS Project, its Display configuration, the person's Preferences,
+     * the layout Preferences, the shortcuts and the theme
+     * ([the design record](../../../../../../docs/design/workbench.md), Settings, Shortcuts and
+     * Theme). The Program section is titled with the Program's label while the Project has two or
+     * more, and says how to make one while it has none
+     * ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 14). The Display
+     * configuration is listed there but is not a Setting
      * ([ADR 0014](../../../../../../docs/adr/0014-settings-split-by-effect.md)): it changes only outside a
      * Debug session, because a change rewrites the program's `@screen` comment.
      */
@@ -29,7 +33,8 @@
         type PreferenceValue
     } from '#stores/preferencesStore.svelte.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
-    import type { SettingsSectionId } from '#lib/workbench/hostApi.ts'
+    import type { SettingsTarget } from '#lib/workbench/hostApi.ts'
+    import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import { useWorkbench } from './workbenchContext'
 
@@ -48,20 +53,28 @@
         value
     }))
     const declarations = $derived(projectSettingsFor(language))
-    const effective = $derived(resolveProjectSettings(language, project.settings))
-    const sections: Partial<Record<SettingsSectionId, HTMLElement>> = $state({})
+    const decisions = $derived(project.selected?.settings ?? {})
+    const effective = $derived(resolveProjectSettings(language, decisions))
+    const programTitle = $derived.by(() => {
+        if (session.programChoices.length < 2) return 'Program'
+        const label = session.programChoices.find(
+            (choice) => choice.entry === project.selectedProgram
+        )?.label
+        return label ? `Program · ${label}` : 'Program'
+    })
+    const sections: Partial<Record<SettingsTarget, HTMLElement>> = $state({})
 
     function decide(
         id: ProjectSettingId,
         value: import('#lib/projectSettings.ts').ProjectSettingValues[ProjectSettingId]
     ) {
         if (readonly) return
-        session.applySettings({ ...project.settings, [id]: value })
+        session.applySettings({ ...decisions, [id]: value })
     }
 
     function reset(id: ProjectSettingId) {
         if (readonly) return
-        const next = { ...project.settings }
+        const next = { ...decisions }
         delete next[id]
         session.applySettings(next)
     }
@@ -75,13 +88,16 @@
         )
     }
 
-    //Settings opened for one section (the Screen's Display button): unfold it and bring it in view
+    //Settings opened for one section (the Screen's Display button): unfold it and bring it in view;
+    //the Display is a part of the Program section, which stands in for it with no Program
     $effect(() => {
-        const section = ui.settingsSection
-        if (!section || ui.activePanel !== 'settings') return
+        const target = ui.settingsSection
+        if (!target || ui.activePanel !== 'settings') return
+        const section = target === 'display' ? 'program' : target
         workbenchLayout.setCollapsed(`settings:${section}`, false)
         void tick().then(() => {
-            sections[section]?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+            const element = sections[target] ?? sections[section]
+            element?.scrollIntoView({ block: 'start', behavior: 'smooth' })
             ui.settingsSection = null
         })
     })
@@ -113,41 +129,48 @@
             {#if session.debugSession || session.fileSystemLocked}
                 <p class="hint">Stop the Debug session to change the instruction set.</p>
             {/if}
-            {#each declarations as declaration (declaration.id)}
-                <ProjectSetting
-                    {declaration}
-                    value={effective[declaration.id]}
-                    decided={isProjectSettingDecided(project.settings, declaration.id)}
-                    onDecide={(value) => decide(declaration.id, value)}
-                    onReset={() => reset(declaration.id)}
-                />
-            {/each}
-            <p class="hint">These belong to this Project and take effect at the next Build.</p>
         </div>
     </CollapsibleSection>
-    {#if session.configurableDisplay}
-        <CollapsibleSection
-            variant="outlined"
-            id="settings:display"
-            title="Display"
-            bind:element={sections.display}
-        >
-            <div class="rows">
-                <DisplayConfigurationForm
-                    display={session.currentDisplay}
-                    origin={session.displayOrigin}
-                    baseLabel={session.displayBaseLabel}
-                    disabled={readonly || !session.displayEditable}
-                    heading={false}
-                    panel
-                    onChange={(next) => session.applyDisplay(next)}
-                />
-                {#if session.fileSystemLocked}
-                    <p class="hint">Stop the Debug session to change the display.</p>
+    <CollapsibleSection
+        variant="outlined"
+        id="settings:program"
+        title={programTitle}
+        bind:element={sections.program}
+    >
+        <div class="rows">
+            {#if project.selected}
+                {#each declarations as declaration (declaration.id)}
+                    <ProjectSetting
+                        {declaration}
+                        value={effective[declaration.id]}
+                        decided={isProjectSettingDecided(decisions, declaration.id)}
+                        onDecide={(value) => decide(declaration.id, value)}
+                        onReset={() => reset(declaration.id)}
+                    />
+                {/each}
+                <p class="hint">These belong to this program and take effect at the next Build.</p>
+                {#if session.configurableDisplay}
+                    <div class="display" bind:this={sections.display}>
+                        <h3 class="part-title">Display</h3>
+                        <DisplayConfigurationForm
+                            display={session.currentDisplay}
+                            origin={session.displayOrigin}
+                            baseLabel={session.displayBaseLabel}
+                            disabled={readonly || !session.displayEditable}
+                            heading={false}
+                            panel
+                            onChange={(next) => session.applyDisplay(next)}
+                        />
+                        {#if session.fileSystemLocked}
+                            <p class="hint">Stop the Debug session to change the display.</p>
+                        {/if}
+                    </div>
                 {/if}
-            </div>
-        </CollapsibleSection>
-    {/if}
+            {:else}
+                <p class="hint">{NO_PROGRAM_MESSAGE}</p>
+            {/if}
+        </div>
+    </CollapsibleSection>
     <CollapsibleSection
         variant="outlined"
         id="settings:preferences"
@@ -231,6 +254,26 @@
         font-size: 0.75rem;
         color: var(--hint);
         line-height: 1.4;
+    }
+
+    /* the Display within the Program section, ruled off from its Settings */
+    .display {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--wb-line);
+    }
+
+    .part-title {
+        margin: 0;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--hint);
     }
 
     .instruction-set {

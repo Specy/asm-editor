@@ -73,7 +73,6 @@
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
     import FaSpinner from '~icons/fa-solid/spinner'
-    import FaFlag from '~icons/fa-solid/flag'
 
     interface Props {
         /** Built: Stop, Run, Undo and Step in place of Build. */
@@ -105,14 +104,7 @@
         compileOnly?: boolean
         /** Compilation-only docks in another pane share one project execution dock. */
         showExecution?: boolean
-        /** Build's label: "Build entry" where the displayed File is not the one it starts from. */
-        buildLabel?: string
         onBuild: () => void
-        /**
-         * Makes the displayed File the Entry path, offered beside Build when it is assembly that
-         * Build would not start from.
-         */
-        onSetEntry?: () => void
         onStop: () => void
         onRun: () => void
         onPause: () => void
@@ -139,9 +131,7 @@
         views,
         compileOnly = false,
         showExecution = true,
-        buildLabel = 'Build',
         onBuild,
-        onSetEntry,
         onStop,
         onRun,
         onPause,
@@ -184,7 +174,7 @@
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
                     title="Assemble the program and start debugging it"
-                    aria-label={buildLabel}
+                    aria-label="Build"
                 >
                     <Icon size={1}>
                         {#if building}
@@ -193,22 +183,8 @@
                             <FaWrench />
                         {/if}
                     </Icon>
-                    <span class="label">{buildLabel}</span>
+                    <span class="label">Build</span>
                 </button>
-                {#if onSetEntry}
-                    <button
-                        type="button"
-                        class="tool"
-                        onclick={onSetEntry}
-                        disabled={building || running}
-                        title="Build from this file instead of the current entry file"
-                    >
-                        <Icon size={0.85}>
-                            <FaFlag />
-                        </Icon>
-                        <span class="label">Set file as entry</span>
-                    </button>
-                {/if}
             {/if}
             {#if compilation}
                 <button
@@ -713,12 +689,12 @@
     /* The view switch drops its words first, then the rest go as above, Test's before the others'.
        Measured for a switch of two, as Hex · Disassemble was before Decompile joined it, and kept
        for Preview · Hex, which is narrower: Hex 4.7rem and Disassemble 8.7rem with their words,
-       2.45rem bare; beside them Build 5.3rem ("Build entry" 7.9rem), a Debug session's four 21.8rem
-       and Test 5.5rem. A pane's dock with the switch alone keeps its words down to 14rem, in a
-       Debug session too. A switch of three has its own steps below. These widths are the tool
-       buttons the switch was before it became the segmented control, which is narrower: Hex
-       4.3rem, Disassemble 8.3rem and Decompile 7.4rem with their words, 2.05rem bare, and no gap
-       between them, so each step comes a little before it has to */
+       2.45rem bare; beside them Build 5.3rem, a Debug session's four 21.8rem and Test 5.5rem. A
+       pane's dock with the switch alone keeps its words down to 14rem, in a Debug session too. A
+       switch of three has its own steps below. These widths are the tool buttons the switch was
+       before it became the segmented control, which is narrower: Hex 4.3rem, Disassemble 8.3rem
+       and Decompile 7.4rem with their words, 2.05rem bare, and no gap between them, so each step
+       comes a little before it has to */
     @container (max-width: 24rem) {
         .with-views:not(.switch-only) .view .label {
             display: none;
@@ -807,10 +783,10 @@
     }
 
     /* An Executable's switch has a third button, Decompile, 7.77rem with its word and 2.45rem
-       bare, so the same steps come later. Measured beside it: Build and the three views 28.31rem
-       (30.9rem with "Build entry"), 14.47rem with the views bare; a Debug session's four and the
-       views 44.17rem, 30.32rem with the views bare; Test's tray 5.51rem, 3.06rem bare, after a
-       0.4rem gap; the switch alone 22.16rem */
+       bare, so the same steps come later. Measured beside it: Build and the three views 28.31rem,
+       14.47rem with the views bare; a Debug session's four and the views 44.17rem, 30.32rem with
+       the views bare; Test's tray 5.51rem, 3.06rem bare, after a 0.4rem gap; the switch alone
+       22.16rem */
     @container (max-width: 32rem) {
         .with-wide-views:not(.switch-only) .view .label {
             display: none;

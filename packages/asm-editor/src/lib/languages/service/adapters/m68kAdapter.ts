@@ -7,6 +7,7 @@ import {
 import { fileText, type BuildSources } from '#lib/projectFiles.ts'
 import type { LanguageSymbol, M68kAnalysisSnapshot, M68kFileAnalysisStatus } from '../protocol'
 import type { SourceLocation, SymbolKind } from '../sourceModel'
+import { unresolvedSnapshot, unresolvedSources } from './unresolved'
 
 function lineAt(sources: BuildSources, path: string, line: number): string {
     const file = sources.files[path]
@@ -82,6 +83,10 @@ export function analyzeM68kProject(
     sessionId: string,
     revision: number
 ): M68kAnalysisSnapshot {
+    //sources the Build refuses are not checked either: why they cannot be built is the one error
+    const unresolved = unresolvedSources(sources)
+    if (unresolved)
+        return unresolvedSnapshot(sources, unresolved, sessionId, revision, 'M68K', 's68k')
     const reachable = m68kReachableFiles(sources)
     const fileStatus: Record<string, M68kFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {

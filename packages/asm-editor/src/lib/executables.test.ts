@@ -48,12 +48,13 @@ it('recognises every executable fixture regardless of file name', () => {
     })
 })
 
-it('imports an extensionless Executable as the sole File and Entry of an x86 Project', () => {
+it('imports an extensionless Executable as the sole File and Program of an x86 Project', () => {
     const bytes = fixture('crackme')
     const imported = makeProjectFromExecutable(bytes, 'chall')!
     expect(imported.project.language).toBe('X86')
     expect(imported.project.name).toBe('chall')
-    expect(imported.project.entry).toBe('chall')
+    expect(imported.project.programs).toEqual({ chall: { settings: {}, testcases: [] } })
+    expect(imported.project.selectedProgram).toBe('chall')
     expect(Object.keys(imported.project.files)).toEqual(['chall'])
     expect(makeProjectFromExecutable(new TextEncoder().encode('nop'), 'source.asm')).toBeUndefined()
     expect(() => makeProjectFromExecutable(bytes.subarray(0, 25), 'broken')).toThrow(/truncated/)
@@ -113,7 +114,7 @@ it('recognises an ELF from its first bytes, whatever the encoding, and only then
 it('reads an import as an Executable before a Project archive or text, by its bytes', async () => {
     const crackme = await importFile(fixture('crackme'), 'chall.zip')
     expect(crackme).toMatchObject({ executable: true, archive: false })
-    expect(crackme.imported.project.entry).toBe('chall.zip')
+    expect(crackme.imported.project.selectedProgram).toBe('chall.zip')
     const text = await importFile(new TextEncoder().encode('mov eax, 1'), 'main.asm')
     expect(text).toMatchObject({ executable: false, archive: false })
     await expect(importFile(fixture('crackme').subarray(0, 25), 'broken')).rejects.toThrow(
@@ -135,7 +136,7 @@ it('refuses an import that is no text, Project archive or Executable', async () 
     )
     //text that is not ASCII still imports
     const text = await importFile(new TextEncoder().encode('; héllo\nmov eax, 1'), 'main.asm')
-    expect(text.imported.project.files[text.imported.project.entry]).toMatchObject({
+    expect(text.imported.project.files[text.imported.project.selectedProgram!]).toMatchObject({
         encoding: 'plain'
     })
 })

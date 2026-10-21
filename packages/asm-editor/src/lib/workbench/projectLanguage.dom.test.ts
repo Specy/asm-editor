@@ -60,7 +60,7 @@ describe('changing a Project instruction set', () => {
 
         //Switching back keeps the previous profile and still-valid generated assembly.
         session.setLanguage('RISC-V')
-        expect(project.settings.riscvAssemblerProfile).toBe('gnu-compiler-v1')
+        expect(project.selected?.settings.riscvAssemblerProfile).toBe('gnu-compiler-v1')
         expect(compilationStatus(record, project.files, project.language).stale).toBe(false)
     })
 

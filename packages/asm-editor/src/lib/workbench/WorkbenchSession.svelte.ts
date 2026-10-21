@@ -1,5 +1,5 @@
 import { tick, untrack } from 'svelte'
-import { projectBuildSources } from '#lib/buildSources.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import {
     linksX86StartUnit,
@@ -25,7 +25,12 @@ import {
     type BuildOutput
 } from '#lib/buildOutput.ts'
 import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
-import type { AvailableLanguages, Project, TestcaseResult } from '#lib/Project.svelte.ts'
+import {
+    defaultEntryPath,
+    type AvailableLanguages,
+    type Project,
+    type TestcaseResult
+} from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
@@ -57,6 +62,7 @@ import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
+    hasDecidedSettings,
     type ProjectSettingsDecisions,
     resolveProjectSettings,
     undoHistorySize
@@ -112,6 +118,7 @@ import {
 import { sameLocations, type MappingSelection } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     editorFileLanguage,
+    sourceLanguage,
     type CompilationSourceMap,
     type SourceLocation
 } from '#lib/sourceCompilation/records.ts'
@@ -122,6 +129,7 @@ import {
     compiledEntrySource,
     languageTakesArguments,
     parseCommandLine,
+    programsByLabel,
     type CommandLineParse
 } from '#lib/commandLine.ts'
 import { executableKind } from '#lib/executables.ts'
@@ -159,6 +167,7 @@ import {
     type LinePairing
 } from './linePairing'
 import { editorGroupForFile, editorFileKind } from './editorFileRouting'
+import { firstProgramEntry, startsProgram } from './firstProgram'
 import {
     EDITOR_FILE_DRAG_TYPE,
     readEditorFileDrag,
@@ -168,6 +177,16 @@ import {
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
+
+/**
+ * What Build, Test and live checking say while the Project has no Program, which it may
+ * ([programs.md](../../../../../docs/design/programs.md), decision 7).
+ */
+export const NO_PROGRAM_MESSAGE =
+    'This Project has no program. Right-click an assembly File in the Explorer and choose New program from this file.'
+
+/** A Program a picker lists: its Entry path, the label it goes by, and whether its Entry is missing. */
+export type ProgramChoice = { entry: string; label: string; missing: boolean }
 
 /** `monaco.editor.ScrollType`'s values, named here so that the session never loads Monaco. */
 const SCROLL_TYPE = { smooth: 0, immediate: 1 } as const
@@ -385,20 +404,42 @@ export class WorkbenchSession {
             this.groups[this.groups.length - 1]
         )
     }
+    /**
+     * The pane that carries the execution controls where only one does
+     * ([programs-plan.md](../../../../../docs/design/programs-plan.md), decision 8): during a Debug
+     * session the pane execution is followed in, and otherwise, as a tablet's one bar builds its
+     * Program, the pane showing the Selected program's Entry file, else the last showing any
+     * Program's. Outside a session every pane showing an Entry has a dock of its own.
+     */
     get controlsGroup() {
+        if (this.debugSession) return this.executionGroup
+        //of the panes showing one Program, one showing it as code before its bytes or Pseudocode
+        const pick = (panes: EditorGroup[]) => {
+            const code = panes.filter((group) => group.showsInstructions)
+            return (
+                code.find((group) => group.id === this.executionGroupId) ??
+                code.at(-1) ??
+                panes.find((group) => group.id === this.executionGroupId) ??
+                panes.at(-1)
+            )
+        }
+        const selected = this.project.selectedProgram
+        //a C or C++ pane has Compile and no Build, even on an Entry from earlier data
+        const programs = this.groups.filter(
+            (group) => group.displayedProgram !== undefined && !sourceLanguage(group.displayedPath)
+        )
         //an Executable's Listing reads as assembly, and the program it shows is what runs
         const assembly = this.groups.filter(
             (group) =>
                 group.displayedView === 'listing' ||
                 editorFileKind(group.displayedPath, group.displayedFile) === 'assembly'
         )
-        const shown = [...this.groups].reverse().filter((group) => group.displayedPath)
         return (
+            pick(programs.filter((group) => group.displayedProgram === selected)) ??
+            pick(programs) ??
             assembly.find((group) => group.id === this.executionGroupId) ??
-            assembly[assembly.length - 1] ??
-            //an Executable's bytes or a C File before a document, whose pane offers no Build
-            shown.find((group) => group.offersBuild) ??
-            shown[0] ??
+            assembly.at(-1) ??
+            [...this.groups].reverse().find((group) => group.displayedPath) ??
             this.groups[this.groups.length - 1]
         )
     }
@@ -431,10 +472,11 @@ export class WorkbenchSession {
     private disposed = false
     /**
      * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
-     * program exit or a Build of the person's own. Not reactive: the effects that ask read it at the
-     * moment they run.
+     * program exit or a Build of the person's own. Reactive, as the picker and the Explorer are
+     * locked while it lasts; the effects that only ask about it at the moment they run read it
+     * untracked.
      */
-    testing = false
+    testing = $state(false)
     testcasesResult = $state<TestcaseResult[]>([])
 
     /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
@@ -465,38 +507,64 @@ export class WorkbenchSession {
     private readonly pressedKeys = new Map<string, boolean>()
     private readonly debouncedFileSave = createDebouncer(250)[0]
     private knownTestcases: string | undefined
+    /**
+     * The Selected program whose Settings and Display configuration the Emulator was last given,
+     * see `applySelection`; the Workbench made the Emulator with those of the one selected then.
+     */
+    private appliedSelection: string | undefined
 
     constructor(project: Project, emulator: Emulator, host: WorkbenchSessionHost) {
         this.project = project
         this.emulator = emulator
         this.host = host
         const start =
-            project.activeTab ?? project.openTabs?.[0] ?? (project.openTabs ? '' : project.entry)
+            project.activeTab ??
+            project.openTabs?.[0] ??
+            (project.openTabs ? '' : (project.selectedProgram ?? ''))
         const group = new EditorGroup(this, 'editor-1', start)
         if (project.openTabs) group.tabs = { paths: [...project.openTabs], active: start }
         this.groups = [group]
         this.models = new EditorModels((path, value) => this.fileEdited(path, value))
+        this.appliedSelection = project.selectedProgram
         this.effectiveSettings = $derived(
-            resolveProjectSettings(this.project.language, this.project.settings)
+            resolveProjectSettings(this.project.language, this.project.selected?.settings)
         )
         this.sourceInput = $derived.by<BuildSources>(() => {
             const files = $state.snapshot(this.project.files)
-            try {
-                return projectBuildSources({
+            const entry = this.project.selectedProgram
+            //the Emulator and live checking always have sources: with no Program, the default
+            //Entry path's, and why nothing builds
+            if (entry === undefined)
+                return {
                     files,
-                    entry: this.project.entry,
-                    language: this.project.language,
-                    compilations: this.project.compilations,
-                    settings: this.project.settings
-                })
+                    entry: defaultEntryPath(this.project.language),
+                    assemblyError: NO_PROGRAM_MESSAGE
+                }
+            try {
+                return programBuildSources(
+                    {
+                        files,
+                        programs: this.project.programs,
+                        language: this.project.language,
+                        compilations: this.project.compilations
+                    },
+                    entry
+                )
             } catch (error) {
                 return {
                     files,
-                    entry: this.project.entry,
+                    entry,
                     assemblyError: error instanceof Error ? error.message : String(error)
                 }
             }
         })
+        this.programChoices = $derived(
+            programsByLabel(this.project).map(({ entry, label }) => ({
+                entry,
+                label,
+                missing: !Object.hasOwn(this.project.files, entry)
+            }))
+        )
         this.buildOutput = $derived.by(() => {
             const output = this.emulator.buildOutput
             //a File or folder made at its path since the Build wins, as one there at the Build did
@@ -529,7 +597,9 @@ export class WorkbenchSession {
                     parsed: parseCommandLine(started.text),
                     locked: true
                 }
-            const entry = this.project.entry
+            const entry = this.project.selectedProgram
+            //no Program, no program to name nor Arguments to give it
+            if (entry === undefined) return undefined
             const executable = executableKind(this.project.files[entry]) === 'supported'
             const text = this.effectiveSettings.programArguments
             return {
@@ -647,7 +717,7 @@ export class WorkbenchSession {
         })
         this.configurableDisplay = $derived(this.emulator.setDisplay !== undefined)
         this.currentDisplay = $derived(
-            normalizeMarsDisplay(this.project.display ?? DEFAULT_PROJECT_DISPLAY)
+            normalizeMarsDisplay(this.project.selected?.display ?? DEFAULT_PROJECT_DISPLAY)
         )
         this.testcasesEditable = $derived(this.host.canEditTestcases && !this.host.readonly)
         this.pokeable = $derived(
@@ -666,9 +736,7 @@ export class WorkbenchSession {
             this.host.readonly || this.emulator.terminated || this.emulator.interrupt !== undefined
         )
         this.undoDisabled = $derived(this.host.readonly || this.emulator.interrupt !== undefined)
-        this.buildDisabled = $derived(
-            this.host.readonly || this.liveBuildHasErrors || this.compiling
-        )
+        this.buildDisabled = $derived(this.buildDisabledFor(this.project.selectedProgram))
         //a Debug session runs the Build's Files, so its Breakpoints expand through the maps that
         //describe those rather than the live Files
         const breakpointSourceMaps = $derived(
@@ -827,14 +895,27 @@ export class WorkbenchSession {
             })
         })
 
-        //Testcases are edited in place, so a change is noticed by watching their content; the first
-        //run only remembers what was loaded
+        //Testcases are edited in place, so a change to any Program's is noticed by watching their
+        //content; the first run only remembers what was loaded
         $effect(() => {
-            const current = serializer.stringify($state.snapshot(this.project.testcases))
+            const current = serializer.stringify(
+                $state.snapshot(
+                    Object.values(this.project.programs).map((program) => program.testcases)
+                )
+            )
             if (this.knownTestcases !== undefined && current !== this.knownTestcases) {
                 untrack(() => this.changed())
             }
             this.knownTestcases = current
+        })
+
+        //one place applies a change of the Selected program, whatever made it (planning decision
+        //10): the picker, a pane's Build or Test, Compile, a deletion, the first Program making
+        //itself. A Debug session runs with what its Build was given, so it waits for Stop
+        $effect(() => {
+            const entry = this.project.selectedProgram
+            if (entry === this.appliedSelection || this.debugSession) return
+            untrack(() => this.applySelection())
         })
 
         $effect(() => {
@@ -886,7 +967,7 @@ export class WorkbenchSession {
         //An input wait suspends Run or Step before its usual reveal. Show the waiting
         //instruction now, including when it is in another File, without taking focus.
         $effect(() => {
-            if (this.emulator.interrupt && !this.testing) {
+            if (this.emulator.interrupt && !untrack(() => this.testing)) {
                 untrack(() => this.revealCurrentInstruction())
             }
         })
@@ -923,9 +1004,18 @@ export class WorkbenchSession {
     // ---- derived state, assigned in the constructor once the Project and the Emulator are set
 
     // ---- derived state -------------------------------------------------------------------------
-    /** The values a Build and a Test run with: the Project's decisions, the language's defaults elsewhere. */
+    /**
+     * The values a Build and a Test run with: the Selected program's decisions, the language's
+     * defaults elsewhere.
+     */
     declare readonly effectiveSettings: ReturnType<typeof resolveProjectSettings>
+    /** What a Build of the Selected program reads, and what live checking checks. */
     declare readonly sourceInput: BuildSources
+    /**
+     * The Programs as a picker and the Explorer list them, by label
+     * ([programs.md](../../../../../docs/design/programs.md), decisions 9 and 10).
+     */
+    declare readonly programChoices: ProgramChoice[]
     /**
      * The program the last Build linked, listed beside the Project's Files and shown like an
      * Executable, read-only, until the next Build starts
@@ -941,7 +1031,10 @@ export class WorkbenchSession {
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
     declare readonly debugSession: boolean
-    /** The Command line of a Project whose programs take Arguments; undefined for the others. */
+    /**
+     * The Selected program's Command line, in a Project whose programs take Arguments; undefined
+     * for the others, and while the Project has no Program.
+     */
     declare readonly commandLine: CommandLineState | undefined
     /** The colours of the panes whose lines are linked, see `linePairing`. */
     declare readonly mappingColors: SourceMapColoring | undefined
@@ -985,6 +1078,7 @@ export class WorkbenchSession {
     declare readonly runInfo: string
     declare readonly executionDisabled: boolean
     declare readonly undoDisabled: boolean
+    /** Whether the Selected program's Build is refused as things stand, see `buildDisabledFor`. */
     declare readonly buildDisabled: boolean
 
     // ---- lifecycle -----------------------------------------------------------------------------
@@ -1136,10 +1230,19 @@ export class WorkbenchSession {
         this.changed()
     }
 
-    /** A decision or a reset from the panel; it takes effect at the next Build. */
+    /**
+     * A decision or a reset from the panel, for the Selected program; it takes effect at the next
+     * Build. Refused while the Project has no Program, whose Settings there are none of.
+     */
     applySettings(next: ProjectSettingsDecisions) {
-        const argumentsChanged = next.programArguments !== this.project.settings?.programArguments
-        this.project.settings = next
+        const entry = this.project.selectedProgram
+        if (entry === undefined) {
+            toast.warn(NO_PROGRAM_MESSAGE)
+            return
+        }
+        const argumentsChanged =
+            next.programArguments !== this.project.selected?.settings.programArguments
+        this.project.setProgramSettings(entry, next)
         const resolved = resolveProjectSettings(this.project.language, next)
         this.emulator.setScreenHistoryBudgetMb(resolved.screenHistoryBudgetMb)
         this.emulator.setFileSystemHistoryBudgetMb(resolved.fileSystemHistoryBudgetMb)
@@ -1156,12 +1259,13 @@ export class WorkbenchSession {
     }
 
     /**
-     * The Arguments typed on the Command line, saved as the Project's Setting: empty is none, which
-     * is the default, so nothing is recorded for it. Refused while the line is locked.
+     * The Arguments typed on the Command line, saved as the Selected program's Setting: empty is
+     * none, which is the default, so nothing is recorded for it. Refused while the line is locked,
+     * and with no Program, which has no Command line.
      */
     setProgramArguments(text: string) {
         if (this.commandLine?.locked !== false) return
-        const next = { ...this.project.settings }
+        const next = { ...this.project.selected?.settings }
         if (text === '') delete next.programArguments
         else next.programArguments = text
         this.applySettings(next)
@@ -1172,18 +1276,24 @@ export class WorkbenchSession {
         return !this.fileSystemLocked && !this.host.readonly
     }
 
+    /** The Screen popover's choice, for the Selected program. */
     applyDisplay(next: ProjectDisplay) {
         if (this.fileSystemLocked) {
             toast.warn('Stop execution before changing the display')
             return
         }
-        //a program that states its display in a @screen comment gets that comment rewritten to say
-        //what was chosen, so the code and the popover agree and the next Build reads it back; a
-        //program without one keeps the choice in the Project alone
+        const entry = this.project.selectedProgram
+        if (entry === undefined) {
+            toast.warn(NO_PROGRAM_MESSAGE)
+            return
+        }
+        //a program that states its display in its Entry file's @screen comment gets that comment
+        //rewritten to say what was chosen, so the code and the popover agree and the next Build
+        //reads it back; a program without one keeps the choice in its Program alone
         const rewritten = rewriteScreenDirective(this.project.code, this.currentDisplay, next)
         const baseChanged = next.baseAddress !== this.currentDisplay.baseAddress
-        if (rewritten !== null) this.project.code = rewritten
-        this.project.display = next
+        if (rewritten !== null) this.project.fileSystem.writeText(entry, rewritten)
+        this.project.setProgramDisplay(entry, next)
         this.displayOrigin = rewritten !== null ? 'directive' : 'user'
         if (rewritten === null || baseChanged) this.displayBaseLabel = undefined
         //applied at once and with a re-sync from memory, as MARS does
@@ -1193,18 +1303,170 @@ export class WorkbenchSession {
 
     /**
      * A Build reads the program's `@screen` directive, so the emulator may have configured itself
-     * from the source; the section and the saved project follow it. A program without a directive
-     * leaves everything as the user set it.
+     * from the source; the section and the built Program's saved display follow it. A program
+     * without a directive leaves everything as the user set it.
      */
-    private syncDisplay() {
+    private syncDisplay(sources: BuildSources) {
         const configured = this.emulator.getDisplay?.()
         if (!configured) return
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
         if (configured.origin !== 'directive') return
-        if (marsDisplayEquals(this.currentDisplay, configured.display)) return
-        this.project.display = configured.display
+        const program = this.project.program(sources.entry)
+        const saved = normalizeMarsDisplay(program?.display ?? DEFAULT_PROJECT_DISPLAY)
+        if (!program || marsDisplayEquals(saved, configured.display)) return
+        this.project.setProgramDisplay(sources.entry, configured.display)
         this.changed()
+    }
+
+    // ---- Programs ------------------------------------------------------------------------------
+
+    /**
+     * Gives the Emulator the Selected program's undo budgets, Arguments and Display configuration,
+     * which it reads at the next Build, and drops what was about the Program before: its test
+     * results and a failed Build's findings ([programs-plan.md](../../../../../docs/design/programs-plan.md),
+     * decision 10). The Screen shows the chosen display until a Build reads a `@screen` comment.
+     */
+    private applySelection() {
+        this.appliedSelection = this.project.selectedProgram
+        const settings = this.effectiveSettings
+        this.emulator.setScreenHistoryBudgetMb(settings.screenHistoryBudgetMb)
+        this.emulator.setFileSystemHistoryBudgetMb(settings.fileSystemHistoryBudgetMb)
+        this.emulator.setProgramArguments(settings.programArguments)
+        this.emulator.setDisplay?.(this.currentDisplay)
+        this.displayOrigin = 'user'
+        this.displayBaseLabel = undefined
+        this.testcasesResult = []
+        this.failedBuild = undefined
+    }
+
+    /**
+     * Why the Programs cannot change now, or undefined when they can: a Debug session holds the
+     * Files and belongs to its Program, so the picker is Stop, then switch
+     * ([programs.md](../../../../../docs/design/programs.md), decision 10), and a Build or a test
+     * run is reading them.
+     */
+    get programsLocked(): string | undefined {
+        if (this.fileSystemLocked || this.debugSession)
+            return 'Stop the Debug session before changing programs'
+        if (this.building || this.running || this.testing)
+            return 'Wait for the Build or the test run to end before changing programs'
+        return undefined
+    }
+
+    /** Says why the Programs cannot change now, when they cannot. */
+    private programsRefused(): boolean {
+        const reason = this.programsLocked
+        if (reason) toast.warn(reason)
+        return reason !== undefined
+    }
+
+    /** Makes a Program the Selected program, saved as the open tabs are: not on a read-only host. */
+    private select(entry: string) {
+        if (entry === this.project.selectedProgram) return
+        this.project.selectProgram(entry)
+        if (!this.host.readonly) this.changed()
+    }
+
+    /**
+     * The picker's choice (decision 10): the Program whose Settings and Testcases the panels show,
+     * which Shift+B builds. The panes stay as they are. False when it was refused or names no
+     * Program.
+     */
+    selectProgram(entry: string): boolean {
+        if (!this.project.program(entry) || this.programsRefused()) return false
+        this.select(entry)
+        return true
+    }
+
+    /**
+     * "New program from this file" (decision 6): a Program with nothing decided whose Entry is the
+     * File at `entry`, and selected. A File is the Entry of one Program at most (decision 2), so an
+     * Entry's own is selected instead.
+     */
+    createProgram(entry: string): boolean {
+        if (this.host.readonly) return false
+        if (this.project.program(entry)) return this.selectProgram(entry)
+        if (this.programsRefused()) return false
+        try {
+            this.project.createProgram(entry)
+        } catch (error) {
+            toast.error(getM68kErrorMessage(error))
+            return false
+        }
+        this.changed()
+        return true
+    }
+
+    /**
+     * "Remove program" (decision 11): the Program goes with its Settings and Testcases, its File
+     * stays. Removing the Selected program selects the first one left by label (decision 7).
+     */
+    removeProgram(entry: string): boolean {
+        if (this.host.readonly || !this.project.program(entry) || this.programsRefused())
+            return false
+        this.project.removeProgram(entry)
+        this.changed()
+        return true
+    }
+
+    /**
+     * What deleting or replacing the File at `path` would take with it, for the prompt that names
+     * it (decision 7): whether its Program has Settings decided and how many Testcases it has.
+     * Undefined for a File that is no Entry.
+     */
+    programLoss(path: string): { settings: boolean; testcases: number } | undefined {
+        const program = this.project.program(path)
+        return (
+            program && {
+                settings: hasDecidedSettings(program.settings),
+                testcases: program.testcases.length
+            }
+        )
+    }
+
+    /**
+     * Whether the Build of the Program at `entry` is refused as things stand
+     * ([programs-plan.md](../../../../../docs/design/programs-plan.md), decision 9): on a read-only
+     * host, during a Compile, and for the Selected program while live checking finds errors in it.
+     * Live checking follows the Selected program alone, so another Program's Build goes ahead and
+     * reports its own.
+     */
+    buildDisabledFor(entry: string | undefined): boolean {
+        return (
+            this.host.readonly ||
+            this.compiling ||
+            (entry === this.project.selectedProgram && this.liveBuildHasErrors)
+        )
+    }
+
+    /**
+     * Selects the Program a Build or a test run is for (decision 5): the one at `entry`, as a
+     * pane's Build and Test name theirs, else the Selected program, as Shift+B and the Testcases
+     * panel's Run use. Its Settings reach the Emulator before the run reads them, rather than when
+     * the effect that applies a selection runs. False, after saying why, when there is no such
+     * Program or it cannot be selected now.
+     */
+    private selectForRun(entry = this.project.selectedProgram): boolean {
+        if (entry === undefined) {
+            toast.warn(NO_PROGRAM_MESSAGE)
+            return false
+        }
+        if (!this.project.program(entry)) {
+            toast.warn(`${entry} is the Entry of no program`)
+            return false
+        }
+        if (entry !== this.project.selectedProgram) {
+            if (this.programsRefused()) return false
+            this.select(entry)
+        }
+        if (entry !== this.appliedSelection) this.applySelection()
+        return true
+    }
+
+    /** Makes a pane still open the one execution is followed in, as a pane's Build or Test asks. */
+    private followExecutionIn(group: EditorGroup | undefined) {
+        if (group && this.groups.includes(group)) this.executionGroupId = group.id
     }
 
     // ---- Pokes ---------------------------------------------------------------------------------
@@ -1674,7 +1936,7 @@ export class WorkbenchSession {
         const path =
             diagnostic.file ??
             this.emulator.buildSources?.entry ??
-            this.project.entry ??
+            this.project.selectedProgram ??
             this.displayedPath
         const group = this.groupForFile(path)
         const selection =
@@ -1744,16 +2006,29 @@ export class WorkbenchSession {
         else this.emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
     }
 
+    /**
+     * Whether a host's changes to the Files, the Explorer's create, rename, move, delete and upload,
+     * are refused now: during a Debug session, which locks the Project's FileSystem, and during a
+     * test run, which builds every Testcase on a FileSystem of its own and so locks none, although
+     * deleting or renaming the Entry of the Program it tests would take that Program away mid-run.
+     */
+    get filesLocked() {
+        return this.fileSystemLocked || this.running || this.testing
+    }
+
+    /** A host's rename of a File, as the Explorer makes one: what followed the File follows it. */
     fileRenamed(from: string, to: string) {
         this.project.renameCompilationFile(from, to)
+        let changed = this.programFileRenamed(from, to)
         this.moveFileBreakpoints(from, to)
         this.byteEditHistory.move(from, to)
         const view = this.project.fileViews?.[from]
         if (view) {
             this.project.setFileView(from, undefined)
             this.project.setFileView(to, view)
-            this.changed()
+            changed = true
         }
+        if (changed) this.changed()
         for (const group of this.groups) {
             group.tabs = renameTab(group.tabs, from, to)
             group.moveView(from, to)
@@ -1761,13 +2036,21 @@ export class WorkbenchSession {
         }
     }
 
+    /**
+     * A host's deletion of a File: the Explorer's, the Coding agent's, one before an upload. It
+     * deletes the Program the File is the Entry of (decision 7), and the Selected program's
+     * deletion selects the first one left by label; `programLoss` says beforehand what goes.
+     */
     fileDeleted(path: string) {
+        let changed = this.project.program(path) !== undefined
+        this.project.removeProgram(path)
         this.moveFileBreakpoints(path)
         this.byteEditHistory.move(path)
         if (this.project.fileViews?.[path]) {
             this.project.setFileView(path, undefined)
-            this.changed()
+            changed = true
         }
+        if (changed) this.changed()
         for (const group of this.groups) {
             group.tabs = removeTab(group.tabs, path, '')
             group.moveView(path)
@@ -1781,9 +2064,49 @@ export class WorkbenchSession {
         }
     }
 
-    setEntry(path: string) {
-        this.project.entry = path
-        this.changed()
+    /**
+     * Files a host action added: New file, an upload, a drop, Keep as File, the Coding agent's
+     * writes. While the Project has no Program, the first one makes itself from them and is
+     * selected ([programs.md](../../../../../docs/design/programs.md), decision 8); once it has
+     * one, new Files make none on their own. A running program's writes never come here.
+     */
+    filesAdded(paths: readonly string[]) {
+        if (this.makeFirstProgram(paths)) this.changed()
+    }
+
+    /** The first Program of a Project with none, from Files a host action added or renamed. */
+    private makeFirstProgram(paths: readonly string[]): boolean {
+        if (this.host.readonly || this.fileSystemLocked) return false
+        if (Object.keys(this.project.programs).length) return false
+        const files = this.project.files
+        const language = this.project.language
+        const entry = firstProgramEntry(
+            paths,
+            (path) => Object.hasOwn(files, path) && startsProgram(path, files[path], language)
+        )
+        if (entry === undefined) return false
+        this.project.createProgram(entry)
+        return true
+    }
+
+    /**
+     * A host rename moves the Program whose Entry the File is (decision 7). A running program's
+     * own rename never comes here, so its Program stays where instruction Undo brings the File
+     * back. A host deletes a File a move replaces first, its Program with it
+     * ([programs-plan.md](../../../../../docs/design/programs-plan.md), decision 6), so a Program
+     * still at `to` is one whose Entry was missing: it finds its File, unless a moved Program takes
+     * the path. A rename into a qualifying name makes the first Program of a Project with none;
+     * a File that qualified under its old name already, such as `main.s` whose Program was
+     * removed, is no new File and makes none.
+     */
+    private programFileRenamed(from: string, to: string): boolean {
+        if (from === to) return false
+        const moved = this.project.program(from) !== undefined
+        if (moved) this.project.removeProgram(to)
+        this.project.renameProgram(from, to)
+        //the File has moved already: what it was is its content under the old name
+        const qualified = startsProgram(from, this.project.files[to], this.project.language)
+        return (!qualified && this.makeFirstProgram([to])) || moved
     }
 
     /** Adds a Hex editor's save of its unsaved typing; the function returned removes it. */
@@ -2284,6 +2607,15 @@ export class WorkbenchSession {
             })
             if (!result) return
             this.sourceDiagnostics = result.diagnostics
+            //Compile makes a Program only of a source that defines `main` (programs-plan.md,
+            //decision 1), so a forgotten one still says something
+            if (result.program === 'none' && !result.definesMain)
+                this.appendLog(
+                    noteEntry({
+                        tone: 'info',
+                        text: `${path} defines no \`main\`, so no program was made for it.`
+                    })
+                )
             const originStillOpen = this.groups.includes(origin)
             const destinationClosed =
                 existingDestination && !this.groups.includes(existingDestination)
@@ -2338,7 +2670,14 @@ export class WorkbenchSession {
         this.log = appendLog(this.log, draft, ++this.logId, Date.now())
     }
 
-    async build() {
+    /**
+     * Builds the Program at `entry`, as a pane's Build does for the Entry file it shows, and
+     * selects it; with none, the Selected program, as Shift+B does
+     * ([programs.md](../../../../../docs/design/programs.md), decision 5). The pane whose Build was
+     * pressed, `group`, becomes the one execution is followed in, so the Debug session's controls
+     * and its first stop open there rather than in a pane that may show another Program.
+     */
+    async build(entry?: string, group?: EditorGroup) {
         if (this.host.readonly || this.building || this.running || this.compiling) return
         if (this.fileSystemLocked) {
             //The Build button is hidden in this state, but the shortcut is not, and returning here
@@ -2346,9 +2685,12 @@ export class WorkbenchSession {
             toast.warn('Stop the current Debug session before building again')
             return
         }
+        if (!this.selectForRun(entry)) return
+        this.followExecutionIn(group)
         //bytes typed into a Hex editor go into the Files this Build reads
         this.flushTyping()
         const started = performance.now()
+        //the Selected program's, read after selecting it: a derived is brought up to date as read
         const sources = this.sourceInput
         //the Build output this Build replaces, whose tabs it closes if it places none there
         const replaced = this.buildOutput?.path
@@ -2376,7 +2718,7 @@ export class WorkbenchSession {
         } finally {
             this.building = false
             //also after a failed build: the directive is read before the program is assembled
-            this.syncDisplay()
+            this.syncDisplay(sources)
             //Stop during the Build, in its run to `main` (an input wait before it, or a long start):
             //the person ended it, so it neither failed nor built, and the Log says nothing
             if (clears === this.executionClears)
@@ -2411,7 +2753,7 @@ export class WorkbenchSession {
                 errors: diagnostics.filter((d) => d.severity === 'error').length,
                 warnings: diagnostics.filter((d) => d.severity === 'warning').length,
                 durationMs: performance.now() - started,
-                entry: this.project.entry
+                entry: sources.entry
             })
         )
         this.bottomTab = ok ? 'terminal' : 'problems'
@@ -2506,8 +2848,15 @@ export class WorkbenchSession {
         this.testcasesResult = []
     }
 
-    async test() {
+    /**
+     * Runs the Testcases of the Program at `entry`, as a pane's Test does, and selects it; with
+     * none, the Selected program's, as the Testcases panel's Run does (decision 5). A pane's Test
+     * makes that pane, `group`, the one execution is followed in, as its Build does.
+     */
+    async test(entry?: string, group?: EditorGroup) {
         if (this.building || this.running || this.compiling) return
+        if (!this.selectForRun(entry)) return
+        this.followExecutionIn(group)
         this.flushTyping()
         this.running = true
         //a frame for the buttons to show the run before the Cores take the thread
@@ -2518,7 +2867,7 @@ export class WorkbenchSession {
         try {
             this.testcasesResult = await this.emulator.test(
                 this.sourceInput,
-                $state.snapshot(this.project.testcases),
+                $state.snapshot(this.project.selected?.testcases ?? []),
                 TESTCASE_INSTRUCTION_LIMIT,
                 undoHistorySize(this.effectiveSettings)
             )

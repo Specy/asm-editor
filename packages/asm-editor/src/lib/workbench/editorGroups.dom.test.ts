@@ -55,7 +55,15 @@ function result(
         lines: [null, { path, line: 0 }]
     }
     fixture.project.recordCompilation(record, map)
-    return { record, map, assembly: fixture.project.files['main.s'].content, diagnostics: [] }
+    return {
+        record,
+        map,
+        assembly: fixture.project.files['main.s'].content,
+        diagnostics: [],
+        //the Programs as a Compile that makes none leaves them
+        program: 'none' as const,
+        definesMain: true
+    }
 }
 afterEach(() => {
     disposers.splice(0).forEach((dispose) => dispose())
@@ -553,7 +561,7 @@ describe('independent editor groups', () => {
             { session } = fixture
         const second = openSecond(session, 'main.s')
         const { record, map } = result(fixture, 'main.c', 'X86')
-        session.setEntry('main.s')
+        session.createProgram('main.s')
         flushSync()
         expect(second.recompilationNeeded).toBe(false)
         //the Entry is Generated assembly, so the Build starts at the start code
@@ -780,7 +788,7 @@ describe('failed Build diagnostics', () => {
             { session } = fixture
         //Generated assembly as the Entry, so the Build links the start unit
         result(fixture, 'main.c', 'X86')
-        session.setEntry('main.s')
+        session.createProgram('main.s')
         //where it lands when the File with the other `_start` is linked first
         const clash = error(
             '@runtime/start.asm',
