@@ -52,6 +52,7 @@ Descriptors 0, 1 and 2 are the Terminal. Writes to 1 and 2 print. Reads from 0 h
 
 ## Notes for the Cores
 
+- **The stack** is 4 MiB in both Cores, from `0x7ffffffc` down; a native Linux program has 8 MiB. When the stack pointer has gone below that limit, an access outside every segment fails as "stack overflow: the program needs more than its 4 MiB of stack, at 0x…" instead of "address out of range", with the same exception cause.
 - **close** returns nothing in either Core; the library reports success.
 - **lseek** is needed by `fseek`, `ftell`, `rewind`, `fgetpos` and `fsetpos` only.
 - **Symbols named like registers.** C's `time` is also the name of a RISC-V CSR. The GNU profile must treat an identifier in a symbol position (`call time`, `%hi(time)`, `.word time`, a label `time:`) as a symbol; the GNU profile resolves these references, including user functions named `cycle`, `instret`, `fcsr` and so on.
