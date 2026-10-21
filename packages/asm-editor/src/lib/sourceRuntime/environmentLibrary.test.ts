@@ -219,11 +219,11 @@ describe('<sim.h> for x86_64', () => {
             const [index] = definitions
             const attribute = binding.noreturn ? '__attribute__((__noreturn__)) ' : ''
             expect(lines[index]).toBe(`static inline ${attribute}${x86SimPrototype(binding)} {`)
-            //its doc comment names the call and its number, then the Documentation's description
+            //its doc comment names the call and its number, then the Documentation's description on one line
             const comment = lines[index - 1]
             expect(comment).toMatch(/^\/\*\* .* \*\/$/)
             expect(comment).toContain(`/** ${syscall.name}, syscall ${syscall.number}.`)
-            expect(comment).toContain(describeX86Syscall(syscall.name))
+            expect(comment).toContain(describeX86Syscall(syscall.name).replace(/\s+/g, ' ').trim())
             //the number in rax, each argument in its register, one syscall naming them all
             const body = lines.slice(index + 1, lines.indexOf('}', index))
             expect(body[0]).toBe(`    register long rax __asm__("rax") = ${syscall.number};`)

@@ -336,7 +336,7 @@ const desc = {
     tst: 'Compares the operand with 0',
     cmp: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags. If the second operand is an address register, the [CMPA](/documentation/m68k/instruction/cmpa) instruction is used instead.',
     cmpa: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the first operand is sign extended to long and the second is read and written as a long.',
-    cmpm: 'Compares two memory regions, only valid operand is the post increment, it sets the flags accordingly which will be used by the branching instructions.',
+    cmpm: 'Compares two memory regions, only valid operand is the postincrement, it sets the flags accordingly which will be used by the branching instructions.',
     cmpi: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.',
     bcc: 'Branches to the specified address if {condition code}',
     scc: 'Sets the first byte of the destination operand to $FF (-1) if flags {condition code} is true, otherwise it sets it to 0',
