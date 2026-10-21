@@ -654,7 +654,10 @@ export class EditorGroup {
     /**
      * The program counter's line in a Pseudocode of the running Executable: the first whose
      * instructions hold it, by its link-time address; -1 when none does, and always for the Build
-     * output, whose program the debugger follows in its source (plan decision 15).
+     * output, whose program the debugger follows in its source (plan decision 15). None either
+     * while the program is on no line, as once it has exited
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 3).
      */
     get pseudocodeProgramLine() {
         const s = this.session
@@ -663,6 +666,7 @@ export class EditorGroup {
         if (
             !map ||
             this.displayedBuildOutput ||
+            s.emulator.line < 0 ||
             !isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
         )
             return -1

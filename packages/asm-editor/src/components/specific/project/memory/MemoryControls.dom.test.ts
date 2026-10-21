@@ -54,7 +54,11 @@ function render(
             ...extra.labels
         ],
         resolveMemoryLabel: (name: string) =>
-            name === 'buffer' ? 0x1003n : name === 'main' ? 0x2000n : undefined
+            new Map([
+                ['buffer', 0x1003n],
+                ['main', 0x2000n],
+                ['DAT_singing_perch', 0x3010n]
+            ]).get(name)
     } as unknown as Emulator
     const app = mount(MemoryControls, {
         target,
@@ -98,6 +102,23 @@ it('keeps partially typed labels valid during rendering and submits label offset
     ui.type('unknown')
     ui.search()
     expect(ui.target.querySelector('[role="alert"]')?.textContent).toContain('Unknown label')
+})
+it('writes 0x before the text only while it is hex digits, not before a name', () => {
+    const ui = render()
+    const prefix = () => ui.target.querySelector('.hex-address-label')?.textContent?.trim()
+    expect(prefix()).toBe('0x')
+    //an Invented name of an Executable's Listing, which used to read as 0xsinging_perch
+    ui.type('DAT_singing_perch')
+    expect(prefix()).toBeUndefined()
+    ui.search()
+    expect(ui.change).toHaveBeenLastCalledWith(0x3010n)
+    //the address it went to, which is a number again
+    expect(ui.input.value).toBe('00003010')
+    expect(prefix()).toBe('0x')
+    ui.type('buffer+16')
+    expect(prefix()).toBeUndefined()
+    ui.type('')
+    expect(prefix()).toBe('0x')
 })
 it('disables the picker before Build and reports why a label cannot resolve', () => {
     const ui = render(false)

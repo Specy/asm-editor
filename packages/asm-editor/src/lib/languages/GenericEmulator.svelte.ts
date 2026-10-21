@@ -867,7 +867,8 @@ export abstract class GenericEmulator<T, R extends string>
      * Where a program that ended is shown: its last instruction, or, when that is library code
      * Steps do not enter, its call into the library, as a stop there is shown (`stopInstruction`).
      * A crash is the adapter's `_getLastInstruction`, shown where it happened, inside a library
-     * too. `fallback` is the line when nothing says, read only then.
+     * too. A program the adapter keeps the place of (`_keepsPlaceAtExit`) is shown on no line, in
+     * the File it was in. `fallback` is the line when nothing says, read only then.
      */
     private selectLastExecuted(fallback: number | (() => number) = -1): void {
         const fallbackLine = () => {
@@ -878,6 +879,10 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         try {
+            if (this._keepsPlaceAtExit?.()) {
+                this.state.line = -1
+                return
+            }
             const instruction = this._getLastInstruction?.()
             if (instruction) {
                 this.selectInstruction(instruction)

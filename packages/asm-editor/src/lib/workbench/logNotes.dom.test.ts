@@ -121,19 +121,21 @@ describe('notes in the Log', () => {
             kind: 'signal',
             number: 4,
             name: 'SIGILL',
-            description: 'Illegal instruction'
+            description: 'Illegal instruction',
+            unsupported: 'AVX instructions are not currently supported'
         }
         emulator.notes = [
             ...emulator.notes,
             note(
-                'The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support'
+                'The program ran `vmovd xmm0, edi` at `0x555555555195`. AVX instructions are not currently supported.'
             )
         ]
         flushSync()
         expect(kinds(session.log).slice(-2)).toEqual([
-            'exit: Ran in 12ms, Illegal instruction (signal 4)',
-            'note: The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support'
+            'exit: Ran in 12ms, AVX instructions are not currently supported',
+            'note: The program ran `vmovd xmm0, edi` at `0x555555555195`. AVX instructions are not currently supported.'
         ])
+        expect(session.log.at(-2)?.tone).toBe('error')
         //each note once, also when the list is read again
         emulator.notes = [...emulator.notes]
         flushSync()

@@ -707,6 +707,44 @@ describe('the Pseudocode in a Debug session', () => {
         expect(pane.highlightedLine).toBe(-1)
     })
 
+    it('stays where it was when the program exits, drawing no program counter', async () => {
+        const { session, emulator } = setup()
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        await decompiled(pane)
+        await session.build()
+        await tick()
+        flushSync()
+        const document = await decompiled(pane)
+        const listing = listingPane.displayedListing!.listing!
+        const call = listingLine(listing, 'main', 'call strcmp@plt')
+        emulator.line = call
+        emulator.pc = BigInt(listing.lines.addresses[call] + BASE)
+        session.revealCurrentInstruction()
+        flushSync()
+        expect(pane.highlightedLine).toBe(lineWith(document, 'strcmp(acStack_98'))
+        //a Run to the end, which the Emulator shows on no line, its program counter still in
+        //the program's code as after an `exit` system call of its own
+        ;(emulator as unknown as { run: () => Promise<void> }).run = async () => {
+            emulator.terminated = true
+            ;(emulator as unknown as { termination: unknown }).termination = {
+                kind: 'exit',
+                code: 0
+            }
+            emulator.line = -1
+        }
+        await session.run()
+        await tick()
+        flushSync()
+        expect(listingPane.displayedPath).toBe('crackme')
+        expect(listingPane.displayedView).toBe('listing')
+        expect(listingPane.instructionLine).toBe(-1)
+        expect(pane.pseudocodeFunction?.name).toBe('main')
+        expect(pane.highlightedLine).toBe(-1)
+    })
+
     it("keeps the Build output's Pseudocode when a Step shows the program's source", async () => {
         const source = 'global _start\n_start:\n    mov rax, 60\n    syscall\n'
         const files = { 'main.asm': { encoding: 'plain' as const, content: source } }

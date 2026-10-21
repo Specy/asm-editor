@@ -232,6 +232,14 @@ export abstract class BaseEmulator<R extends string> {
     _libraryCallSite?(): Instruction | null
 
     /**
+     * Whether the program that just ended is shown on no line, so that what the person reads stays
+     * where it is: a loaded Executable that exited, rather than ended on a signal
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 3). Undefined, or false, shows where the program ended.
+     */
+    _keepsPlaceAtExit?(): boolean
+
+    /**
      * What the History calls a Step's stretch of library code, from the first library instruction
      * it ran (`puts in libc.so.6`); undefined to name it after that instruction's File.
      */

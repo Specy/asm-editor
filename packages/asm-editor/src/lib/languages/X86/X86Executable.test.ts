@@ -236,6 +236,31 @@ describe('a Debug session of an Executable', () => {
         expect(emulator.line).toBe(line)
     })
 
+    it("takes the Listing's names in the memory view, where they are at run time", async () => {
+        // stripped, so no symbol of the file names what the Listing does
+        const { emulator, listing } = await built(executableSources('crackme-stripped'))
+        const named = listing.labels.filter(
+            (label) => label.origin === 'invented' || label.origin === 'string'
+        )
+        expect(named.map((label) => label.name)).toEqual(
+            expect.arrayContaining([
+                expect.stringMatching(/^FUN_/),
+                expect.stringMatching(/^DAT_/),
+                's_hunter2'
+            ])
+        )
+        for (const label of named)
+            expect(emulator.resolveMemoryLabel(label.name), label.name).toBe(
+                BigInt(label.address + PIE_LOAD_BASE)
+            )
+        const password = emulator.resolveMemoryLabel('s_hunter2')!
+        expect(cString(emulator.readMemoryBytes(password, 16))).toBe('hunter2')
+        // a jump target's name is one only inside its function
+        const block = listing.labels.find((label) => label.kind === 'block')!
+        expect(emulator.resolveMemoryLabel(block.name)).toBeUndefined()
+        expect(emulator.resolveMemoryLabel(block.fullName)).toBeUndefined()
+    })
+
     it('drops the running Listings when the session ends', async () => {
         const { emulator } = await built(executableSources())
         // the Build ran to `main` without making a library's Listing: nothing showed one
@@ -501,11 +526,12 @@ describe('library code of an Executable', () => {
         expect([...emulator.listings!.session.keys()]).toEqual(['crackme'])
     })
 
-    it('shows a program that ended inside libc at its call into libc, making no Listing', async () => {
-        for (const how of ['run', 'step'] as const) {
+    it('shows a program that exited on no line, in the File it was in, making no Listing', async () => {
+        for (const how of ['run', 'step', 'run into library code'] as const) {
             const { emulator, listing } = await built(executableSources())
             emulator.peripherals.terminal.useScriptedInput(['hunter2'])
-            if (how === 'run') await emulator.run(0)
+            preferencesStore.values.stepIntoRuntimeLibrary.value = how === 'run into library code'
+            if (how !== 'step') await emulator.run(0)
             else {
                 // main returns into libc, which exits; on the way it calls back into the program's
                 // destructors, where a Step stops, as in any callback
@@ -523,22 +549,30 @@ describe('library code of an Executable', () => {
             }
             expect(emulator.terminated).toBe(true)
             expect(emulator.termination).toMatchObject({ kind: 'exit', code: 0 })
-            // the program's own code was inside `_start`'s call to __libc_start_main
-            expect(emulator.currentFile).toBe('crackme')
-            expect(emulator.line).toBe(lineOf(listing, 'call qword [rel __libc_start_main@got]'))
-            expect([...emulator.listings!.session.keys()]).toEqual(['crackme'])
+            // the Listing stays where the person was reading, rather than going to `_start`'s call
+            // of __libc_start_main, the program's own code its end in libc is inside
+            expect(emulator.currentFile, how).toBe('crackme')
+            expect(emulator.line, how).toBe(-1)
+            expect([...emulator.listings!.session.keys()], how).toEqual(['crackme'])
+            if (how === 'step') {
+                // an Undo takes the end back, and the program is on a line again
+                emulator.undo()
+                expect(emulator.terminated).toBe(false)
+                expect(emulator.currentFile).toBe('crackme')
+                expect(emulator.line).toBeGreaterThanOrEqual(0)
+            }
         }
     })
 
-    it('shows a C++ program that caught an exception ending at `_start`, not at its throw', async () => {
-        const { emulator, listing } = await built(executableSources('cpp'))
+    it('shows a C++ program that caught an exception on no line, not at its throw', async () => {
+        const { emulator } = await built(executableSources('cpp'))
         await emulator.run(0)
         expect(emulator.stdOut).toBe('hello\nC++\ncaught exception\n')
         expect(emulator.termination).toMatchObject({ kind: 'exit', code: 0 })
         // the unwinding left __cxa_throw's frames and main returned: only exit's frames remain
         expect(emulator.callStack.map((frame) => frame.name)).not.toContain('main')
         expect(emulator.currentFile).toBe('cpp')
-        expect(emulator.line).toBe(lineOf(listing, 'call qword [rel __libc_start_main@got]'))
+        expect(emulator.line).toBe(-1)
     })
 
     it('shows a crash inside libc on its line, with the program a click away', async () => {

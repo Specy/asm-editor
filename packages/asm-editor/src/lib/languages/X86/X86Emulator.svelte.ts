@@ -9,6 +9,7 @@ import {
     type Listing
 } from '#lib/listing/listing.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
+import { ListingIndex } from '#lib/listing/listingNavigation.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import { ListingPatcher } from '#lib/listing/listingPatcher.svelte.ts'
 import {
@@ -155,6 +156,26 @@ const SIGILL = 4
 
 /** Instructions whose only purpose is to raise SIGILL, which a real processor raises too. */
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
+
+/**
+ * What a program that ended on an AVX instruction is told, in place of "Illegal instruction"
+ * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
+ * 1): the Core runs none of them, and a real processor would.
+ */
+const AVX_UNSUPPORTED = 'AVX instructions are not currently supported'
+
+/** The prefixes a VEX or EVEX prefix may follow: the segment overrides and the address size. */
+const PREFIXES_BEFORE_VEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
+
+/**
+ * Whether an instruction is encoded as AVX and its successors are: in 64-bit mode, the first byte
+ * after its segment and address-size prefixes is `C4` or `C5` (VEX) or `62` (EVEX), which outside
+ * 64-bit mode can also be `les`, `lds` and `bound`.
+ */
+function isAvxEncoding(bytes: Uint8Array): boolean {
+    const first = bytes.find((byte) => !PREFIXES_BEFORE_VEX.has(byte))
+    return first === 0xc4 || first === 0xc5 || first === 0x62
+}
 
 export async function X86Emulator(source: BuildInput, options: EmulatorSettings = {}) {
     let wrapper: AsmEditorX86Emulator | null = null
@@ -345,29 +366,36 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * A program that ended on an instruction the Core cannot run, which a real processor would
      * (AVX and later, most often): SIGILL at an address whose bytes decode as an instruction. An
      * undefined instruction (`ud2`) raises SIGILL on any processor, and bytes that are no
-     * instruction at all are the program's own fault; the Log says nothing more about either.
+     * instruction at all are the program's own fault; the Log says nothing more about either. An
+     * AVX instruction is named with what the run's status says of it, and nothing more.
      */
     _terminationNotes(): { tone: 'warning'; text: string }[] {
-        const core = this.core
-        const reason = core?.stopReason
+        const illegal = this.illegalInstruction()
+        if (!illegal || !this.decoder) return []
+        const [decoded] = this.decoder.disassemble(illegal.bytes, illegal.address)
+        if (!decoded || decoded.isInvalid || UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
+        const ran = `The program ran \`${decoded.text}\` at \`0x${illegal.address.toString(16)}\``
+        return [
+            {
+                tone: 'warning',
+                text: isAvxEncoding(illegal.bytes)
+                    ? `${ran}. ${AVX_UNSUPPORTED}.`
+                    : `${ran}, which the emulator does not support`
+            }
+        ]
+    }
+
+    /** The instruction a program that ended on SIGILL stopped at, and its bytes. */
+    private illegalInstruction(): { address: bigint; bytes: Uint8Array } | undefined {
+        const reason = this.core?.stopReason
         if (
-            !core ||
-            !this.decoder ||
             reason?.kind !== 'signal' ||
             reason.signal?.number !== SIGILL ||
             reason.address === undefined
         )
-            return []
-        const read = core.getInstructionAt(reason.address)
-        if (!read?.bytes) return []
-        const [decoded] = this.decoder.disassemble(read.bytes, reason.address)
-        if (!decoded || decoded.isInvalid || UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
-        return [
-            {
-                tone: 'warning',
-                text: `The program ran \`${decoded.text}\` at \`0x${reason.address.toString(16)}\`, which the emulator does not support`
-            }
-        ]
+            return undefined
+        const bytes = this.core?.getInstructionAt(reason.address)?.bytes
+        return bytes ? { address: reason.address, bytes } : undefined
     }
 
     /**
@@ -901,6 +929,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return null
     }
 
+    /**
+     * A loaded Executable that exited leaves its Listing and Pseudocode where the person was
+     * reading ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 3): its last instructions are libc's, and its own code there is `_start`'s call of
+     * `__libc_start_main`, which `main` returned to and which says nothing. A signal is shown where
+     * it struck (`_getLastInstruction`), and an assembled program where it ended.
+     */
+    _keepsPlaceAtExit(): boolean {
+        return !!this.executable && this.core?.stopReason?.kind === 'exit'
+    }
+
     /** The instruction that ends where a return address begins, the call that pushed it. */
     private callBefore(returnAddress: bigint): Instruction | null {
         const located = this.locate(returnAddress - 1n)
@@ -1120,8 +1159,24 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             ]
         }
     }
+
+    /**
+     * Where a name the memory view's address box takes is at run time: a symbol the Core knows, or
+     * else a label of the running Executable's Listing, such as an Invented name (`FUN_…`, `DAT_…`)
+     * or an `s_` string ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 4). A jump target's `.LAB_n` names a place only inside its function, so it is none.
+     */
     _resolveMemoryLabel(name: string) {
-        return this.core?.resolveMemoryLabel(name)
+        const symbol = this.core?.resolveMemoryLabel(name)
+        if (symbol !== undefined) return symbol
+        const executable = this.executable
+        const listing = executable?.document.listing
+        if (!executable || !listing) return undefined
+        //on no line, a bare `.LAB_n` is no label
+        const label = ListingIndex.of(listing).label(name, -1)
+        return label && label.kind !== 'block'
+            ? BigInt(label.address) + this.programBase(executable)
+            : undefined
     }
 
     _getSp(): bigint {
@@ -1166,19 +1221,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.hasTerminated() ?? true
     }
 
-    /** The Core's stop reason: an exit with its status, or the signal that ended the program. */
+    /**
+     * The Core's stop reason: an exit with its status, or the signal that ended the program, which
+     * for an AVX instruction says that the emulator cannot run it.
+     */
     _getTermination(): Termination | undefined {
         const core = this.core
         if (!core?.hasTerminated()) return undefined
         const reason = core.stopReason
         if (reason?.kind === 'exit') return { kind: 'exit', code: reason.exitCode }
-        if (reason?.kind === 'signal' && reason.signal)
-            return {
-                kind: 'signal',
-                number: reason.signal.number,
-                name: reason.signal.name,
-                description: reason.signal.description
-            }
+        if (reason?.kind === 'signal' && reason.signal) {
+            const { number, name, description } = reason.signal
+            const illegal = this.illegalInstruction()
+            return illegal && isAvxEncoding(illegal.bytes)
+                ? { kind: 'signal', number, name, description, unsupported: AVX_UNSUPPORTED }
+                : { kind: 'signal', number, name, description }
+        }
         return { kind: 'end' }
     }
 

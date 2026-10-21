@@ -53,6 +53,8 @@
     }: Props = $props()
 
     let hexAddress = $derived(currentAddress.toString(16))
+    /** Whether the text is hex digits, which the `0x` before it reads with; a label is not. */
+    const numericAddress = $derived(/^[0-9a-f]*$/i.test(hexAddress.trim()))
     let inputRef = $state<HTMLInputElement | undefined>()
     let addressFocused = $state(false)
     let caretAtEnd = $state(false)
@@ -261,9 +263,9 @@
                 {#if !hideLabel}
                     <span class="address-caption"> Address </span>
                 {/if}
-                <span class="hex-address-label" class:hex-address-label-no-prefix={hideLabel}>
-                    0x
-                </span>
+                {#if numericAddress}
+                    <span class="hex-address-label"> 0x </span>
+                {/if}
                 <div class="hex-address-entry">
                     {#if completion}
                         <div class="address-completion" aria-hidden="true">
@@ -482,14 +484,12 @@
         color: var(--red);
         font-size: 0.8rem;
     }
+    .address-caption {
+        margin-right: 0.35rem;
+    }
     .hex-address-label {
-        margin-left: 0.35rem;
         padding: 0.3rem 0;
         opacity: 0.6;
-    }
-    .hex-address-label-no-prefix {
-        margin-left: 0;
-        padding: 0.3rem 0;
     }
     .address-search {
         display: flex;
@@ -579,9 +579,6 @@
         }
         .address-caption {
             display: none;
-        }
-        .hex-address-label {
-            margin-left: 0;
         }
         .region-picker {
             grid-column: 3;
