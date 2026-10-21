@@ -4,15 +4,21 @@
     let {
         label = 'read-only',
         description,
-        action
+        action,
+        findOpen = false
     }: {
         label?: string
         description?: string
         action?: Snippet
+        /**
+         * Whether the editor's find widget is open: it opens in the same corner, where the notice
+         * would cover it, so the notice hides until Find closes.
+         */
+        findOpen?: boolean
     } = $props()
 </script>
 
-<div class="read-only-notice" role="status" title={description ?? label}>
+<div class="read-only-notice" class:find-open={findOpen} role="status" title={description ?? label}>
     <span class="label">{label}</span>
     {#if action}<span class="action">{@render action()}</span>{/if}
 </div>
@@ -38,6 +44,15 @@
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
         font-size: 0.8rem;
         overflow-wrap: anywhere;
+        transition:
+            opacity 0.2s,
+            visibility 0.2s;
+
+        /* gone while the find widget slides in over the same corner */
+        &.find-open {
+            opacity: 0;
+            visibility: hidden;
+        }
     }
     .label {
         min-width: 0;

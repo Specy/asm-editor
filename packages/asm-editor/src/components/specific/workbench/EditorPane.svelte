@@ -13,6 +13,7 @@
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
     import type { EditorLineAction } from '#lib/monaco/editorLineActions.ts'
+    import { watchFindWidget } from '#lib/monaco/findWidget.ts'
     import PatchPromptView from './PatchPrompt.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
@@ -121,6 +122,21 @@
         return map ? (line: number) => (map.listingLines[line]?.length ?? 0) > 0 : undefined
     })
 
+    /**
+     * Whether the pane's find widget is open, in the top right corner where a read-only notice
+     * sits, which hides for it.
+     */
+    let findOpen = $state(false)
+    $effect(() => {
+        const editor = group.editor
+        if (!editor) return
+        const watch = watchFindWidget(editor, (open) => (findOpen = open))
+        return () => {
+            watch.dispose()
+            findOpen = false
+        }
+    })
+
     /** Whether the execution dock floats over the bottom of this pane. */
     const docked = $derived(group.hasDock(controls))
     /**
@@ -205,15 +221,17 @@
                     group.sourceView === 'snapshot' &&
                     session.debugSession}
                 touch={!ui.viewport.canHover}
+                {findOpen}
             />
         {:else if group.displayedView === 'pseudocode' && group.displayedFile}
-            <PseudocodeNotice {group} />
+            <PseudocodeNotice {group} {findOpen} />
         {:else if group.displayedLibraryMember && group.displayedFile}
             <LibraryMemberNotice
                 path={group.displayedPath}
                 onShowSource={group.libraryMemberSourceAvailable
                     ? () => session.showRuntimeSource(group)
                     : undefined}
+                {findOpen}
             />
         {/if}
         <CompilationNotice

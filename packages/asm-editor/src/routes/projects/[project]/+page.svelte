@@ -255,12 +255,12 @@
     />
 </svelte:head>
 
+<!-- leaving asks first only while there are changes nothing will save on its own -->
 <svelte:window
     onbeforeunload={(e) => {
-        if (!page.url.hostname.includes('localhost')) {
-            e.preventDefault()
-            e.returnValue = 'You have unsaved changes'
-        }
+        if (!unsaved) return
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes'
     }}
 />
 

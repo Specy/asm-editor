@@ -533,6 +533,7 @@
         scroller?.focus({ preventScroll: true })
     }
     function onPointerDown(event: PointerEvent) {
+        hovered = undefined
         const cell = cellAt(event.target)
         if (event.pointerType === 'touch') {
             //a touch may be the start of a scroll: the caret moves when it ends without one
@@ -548,7 +549,7 @@
     }
     function onPointerMove(event: PointerEvent) {
         if (!dragging) {
-            if (event.pointerType !== 'touch') hover(event)
+            if (event.pointerType !== 'touch' && !contextMenu) hover(event)
             return
         }
         const cell = cellAt(document.elementFromPoint?.(event.clientX, event.clientY) ?? null)
@@ -568,7 +569,9 @@
         else focusBytes()
     }
 
-    //the byte under the pointer, for its hover card
+    //the byte under the pointer, for its hover card: gone while a press drags a selection or the
+    //context menu is open, and when Find opens or a key is pressed, so it never stays over the
+    //bytes being worked on; the pointer moving on brings it back
     let hovered = $state<{ offset: number; left: number; top: number } | undefined>()
     let root = $state<HTMLDivElement>()
     let area = $state<HTMLDivElement>()
@@ -622,6 +625,7 @@
     let contextMenu = $state<{ x: number; y: number } | null>(null)
     function onContextMenu(event: MouseEvent) {
         event.preventDefault()
+        hovered = undefined
         const cell = cellAt(event.target)
         if (cell && !(selection && cell.offset >= selection.start && cell.offset < selection.end))
             moveTo(cell.offset, cell.column)
@@ -706,6 +710,7 @@
     })
     function openBar(mode: 'find' | 'goto') {
         flush()
+        hovered = undefined
         //a short selection is what to look for, as Monaco's Find starts from the selected text
         if (mode === 'find' && selection && selection.end - selection.start <= 64) {
             const selected = copiedBytes()
@@ -833,6 +838,8 @@
         headerHeight + Math.floor(caret.offset / bytesPerRow) * rowHeight - virtualTop
     )
 </script>
+
+<svelte:window onkeydowncapture={() => (hovered = undefined)} />
 
 {#snippet hexCell(offset: number, column: number)}
     {@const byte = byteAt(offset)}

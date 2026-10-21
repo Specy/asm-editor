@@ -46,6 +46,15 @@ export function parseHexPattern(text: string): ParsedPattern {
     return { ok: true, pattern }
 }
 
+/**
+ * Whether a query reads as hex bytes, whole or still being typed: hex digits, `?` and what
+ * `parseHexPattern` skips between bytes. Anything else is text, which Find on Hex turns to Text for
+ * rather than refusing it as bytes.
+ */
+export function readsAsHex(text: string): boolean {
+    return /^[\s,0-9a-f?]*$/i.test(text)
+}
+
 const encoder = new TextEncoder()
 
 /** Text as the bytes it is stored as: its characters in ASCII, UTF-8 beyond it. */

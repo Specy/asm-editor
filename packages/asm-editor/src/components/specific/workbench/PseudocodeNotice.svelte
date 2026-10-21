@@ -7,7 +7,14 @@
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
-    let { group }: { group: EditorGroup } = $props()
+    let {
+        group,
+        findOpen = false
+    }: {
+        group: EditorGroup
+        /** Whether the editor's find widget is open, which the notice hides for. */
+        findOpen?: boolean
+    } = $props()
     /** The Executable's File name. */
     const name = $derived(
         group.pseudocodeListing?.name ??
@@ -20,4 +27,4 @@
     const fn = $derived(group.pseudocodeFunction?.name)
 </script>
 
-<ReadOnlyNotice label={`Pseudocode of ${fn ?? 'a function'} in ${name}, read-only`} />
+<ReadOnlyNotice label={`Pseudocode of ${fn ?? 'a function'} in ${name}, read-only`} {findOpen} />

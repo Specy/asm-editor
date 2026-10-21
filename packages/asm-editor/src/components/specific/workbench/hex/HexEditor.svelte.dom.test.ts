@@ -357,9 +357,34 @@ describe('going to an offset and finding', () => {
         //text finds the characters
         input.value = 'nothing'
         input.dispatchEvent(new Event('input', { bubbles: true }))
-        hex.target.querySelector<HTMLButtonElement>('.hex-find-bar [aria-pressed="false"]')!.click()
         enter()
         expect(findStatus(hex.target)).toBe('No results')
+    })
+
+    it('turns Find to Text when what is typed is not hex', () => {
+        const hex = setup()
+        hex.key('f', { ctrlKey: true })
+        const input = hex.target.querySelector<HTMLInputElement>('.hex-find-bar input')!
+        const kind = () =>
+            hex.target.querySelector('.hex-find-bar [aria-pressed="true"]')!.textContent!.trim()
+        const typeQuery = (text: string) => {
+            input.value = text
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+            flushSync()
+        }
+        //bytes, whole or still being typed, stay hex
+        for (const bytes of ['deadbeef', '4c ?', '4c ?? 46', '4142']) typeQuery(bytes)
+        expect(kind()).toBe('Hex')
+        //the first character no byte has turns it to text, which is then found as such
+        typeQuery('HIJ')
+        expect(kind()).toBe('Text')
+        expect(input.getAttribute('aria-label')).toBe('Text to find')
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        flushSync()
+        expect(findStatus(hex.target)).toBe('Offset 0x0007 · 1 of 1')
+        //and it stays text, even for what reads as hex, until Hex is picked again
+        typeQuery('ABC')
+        expect(kind()).toBe('Text')
     })
 
     it('counts text matches and keeps the arrow buttons for a single result', () => {
@@ -526,6 +551,49 @@ describe('an Executable', () => {
         //a File that is no Executable has no tints
         const bytes = setup({ bytes: crackme() })
         expect(bytes.cell('hex', 0x10)!.classList).not.toContain('tinted')
+    })
+
+    it('puts its hover card away while dragging, for the context menu and Find, and on a key', async () => {
+        const hex = setup({ bytes: crackme(), kind: 'executable' })
+        const card = () => hex.target.querySelector('.hex-hover[role="tooltip"]')
+        const pointer = (type: string, offset: number) => {
+            hex.cell('hex', offset)!.dispatchEvent(
+                new PointerEvent(type, { bubbles: true, pointerType: 'mouse' })
+            )
+            flushSync()
+        }
+        pointer('pointermove', 0x10)
+        expect(card()?.textContent).toContain('ELF header')
+        //a key, wherever it is pressed: the bytes take theirs before anything else sees them
+        hex.key('Shift')
+        expect(card()).toBeNull()
+        pointer('pointermove', 0x11)
+        expect(card()).not.toBeNull()
+        //a press that drags a selection
+        pointer('pointerdown', 0x11)
+        expect(card()).toBeNull()
+        pointer('pointermove', 0x14)
+        expect(card()).toBeNull()
+        pointer('pointerup', 0x14)
+        pointer('pointermove', 0x14)
+        expect(card()).not.toBeNull()
+        //the context menu, for as long as it is open
+        hex.cell('hex', 0x14)!.dispatchEvent(
+            new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+        )
+        await tick()
+        expect(card()).toBeNull()
+        pointer('pointermove', 0x15)
+        expect(card()).toBeNull()
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+        flushSync()
+        pointer('pointermove', 0x15)
+        expect(card()).not.toBeNull()
+        //Find, opened from the status bar
+        hex.target.querySelector<HTMLButtonElement>('.hex-status [title^="Find"]')!.click()
+        flushSync()
+        expect(hex.target.querySelector('.hex-find-bar')).not.toBeNull()
+        expect(card()).toBeNull()
     })
 
     it('shows a byte of its code in the Listing, from the context menu', async () => {

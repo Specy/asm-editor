@@ -8,12 +8,14 @@
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaTimes from '~icons/fa-solid/times'
+    import { readsAsHex } from './hexSearch'
 
     /**
      * The Hex editor's Find and Go to offset, in a small bar over the bytes like Monaco's find
      * widget ([file-views.md](../../../../../../../docs/design/file-views.md), decision 9). Enter
      * finds the next match, Shift+Enter the previous one, both wrapping round the File; Escape
-     * closes the bar and gives the keyboard back to the bytes.
+     * closes the bar and gives the keyboard back to the bytes. Text typed while Find is on Hex
+     * turns it to Text, as the strip shows, instead of being refused as bytes.
      */
     let {
         mode,
@@ -52,6 +54,11 @@
     export function focus() {
         input?.focus()
         input?.select()
+    }
+
+    function onInput(event: Event) {
+        const text = (event.currentTarget as HTMLInputElement).value
+        if (mode === 'find' && kind === 'hex' && !readsAsHex(text)) kind = 'text'
     }
 
     function onKeydown(event: KeyboardEvent) {
@@ -100,6 +107,7 @@
                 : 'Offset: 1f40, 0x1f40 or #8000'}
             spellcheck="false"
             autocomplete="off"
+            oninput={onInput}
             onkeydown={onKeydown}
         />
         {#if mode === 'find'}

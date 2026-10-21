@@ -12,7 +12,8 @@
         library = false,
         built = false,
         patchable = false,
-        touch = false
+        touch = false,
+        findOpen = false
     }: {
         document: ListingDocument
         /** A shared library's Listing, under `@lib/`, rather than the Executable's own. */
@@ -29,6 +30,8 @@
         patchable?: boolean
         /** A screen without a pointer that hovers, where a long press opens the context menu. */
         touch?: boolean
+        /** Whether the editor's find widget is open, which the notice hides for. */
+        findOpen?: boolean
     } = $props()
     const description = $derived.by(() => {
         if (document.status === 'failed')
@@ -45,4 +48,8 @@
     })
 </script>
 
-<ReadOnlyNotice label={document.status === 'failed' ? description : 'read-only'} {description} />
+<ReadOnlyNotice
+    label={document.status === 'failed' ? description : 'read-only'}
+    {description}
+    {findOpen}
+/>

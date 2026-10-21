@@ -6,6 +6,7 @@ import {
     findPrevious,
     parseHexPattern,
     parseOffset,
+    readsAsHex,
     textPattern
 } from './hexSearch'
 
@@ -43,6 +44,13 @@ describe('find', () => {
         expect(parseHexPattern('  ')).toMatchObject({ ok: false })
         const text = textPattern('flag')
         expect(text.ok && [...text.pattern]).toEqual([0x66, 0x6c, 0x61, 0x67])
+    })
+
+    it('tells hex bytes, whole or half typed, from text', () => {
+        for (const hex of ['', 'deadbeef', '7F 45 ?? 46', '7f, 45', '4c ?', 'abc'])
+            expect(readsAsHex(hex), hex).toBe(true)
+        for (const text of ['flag{', 'hello', '0x7f', 'de ad g', '%s'])
+            expect(readsAsHex(text), text).toBe(false)
     })
 
     //   0  1  2  3  4  5  6  7  8  9

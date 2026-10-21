@@ -9,11 +9,14 @@
      */
     let {
         path,
-        onShowSource
+        onShowSource,
+        findOpen = false
     }: {
         path: string
         /** Opens the C source in the other pane; absent when the member has none or it is open. */
         onShowSource?: () => void
+        /** Whether the editor's find widget is open, which the notice hides for. */
+        findOpen?: boolean
     } = $props()
     const label = $derived(
         path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH
@@ -28,7 +31,7 @@
     <button onclick={onShowSource}>Show C source</button>
 {/snippet}
 
-<ReadOnlyNotice {label} action={onShowSource ? showSource : undefined} />
+<ReadOnlyNotice {label} action={onShowSource ? showSource : undefined} {findOpen} />
 
 <style lang="scss">
     button {
