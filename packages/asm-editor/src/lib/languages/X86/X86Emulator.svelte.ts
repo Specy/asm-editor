@@ -19,6 +19,7 @@ import {
 } from '#lib/listing/listingPaths.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
+    BuildDownloadError,
     EmulatorStatus,
     type CompileResult,
     type Instruction
@@ -53,6 +54,7 @@ import {
     decodeFpuState,
     locateDiagnosticSpan,
     readLogicalStTags,
+    ResourceDownloadError,
     EmulatorStatus as CoreEmulatorStatus,
     RegisterSize as CoreRegisterSize,
     X86_REGISTER_NAMES,
@@ -67,6 +69,7 @@ import {
     type X86Emulator as CoreX86Emulator,
     type X86FpuState,
     type X86LoadedObject,
+    type X86Progress,
     type X86WaitRequest,
     type X86RegisterName
 } from '@specy/x86'
@@ -175,6 +178,20 @@ const PREFIXES_BEFORE_VEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
 function isAvxEncoding(bytes: Uint8Array): boolean {
     const first = bytes.find((byte) => !PREFIXES_BEFORE_VEX.has(byte))
     return first === 0xc4 || first === 0xc5 || first === 0x62
+}
+
+/** What the dock says while a Build waits on each of the Core's phases. */
+function buildPhaseText(progress: X86Progress): string {
+    switch (progress.phase) {
+        case 'download':
+            return `Downloading ${progress.resource}…`
+        case 'assemble':
+            return 'Assembling…'
+        case 'link':
+            return 'Linking…'
+        case 'load':
+            return 'Loading the program…'
+    }
 }
 
 export async function X86Emulator(source: BuildInput, options: EmulatorSettings = {}) {
@@ -415,9 +432,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core ?? null
     }
 
-    async compile(historySize: number, sourceOverride?: BuildInput): Promise<void> {
+    async compile(
+        historySize: number,
+        sourceOverride?: BuildInput,
+        signal?: AbortSignal
+    ): Promise<void> {
         const currentCompile = this.compileQueue.then(() =>
-            super.compile(historySize, sourceOverride)
+            super.compile(historySize, sourceOverride, signal)
         )
         this.compileQueue = currentCompile.catch(() => undefined)
         await currentCompile
@@ -546,6 +567,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.compiling = true
         try {
             return await this.compileSources(sources)
+        } catch (error) {
+            //a library or the assembler that could not be downloaded: Build again, and it is
+            //downloaded again
+            if (error instanceof ResourceDownloadError)
+                throw new BuildDownloadError(error.message, { cause: error })
+            throw error
         } finally {
             this.compiling = false
             if (this.clearAfterCompile) {
@@ -574,11 +601,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             //binary's takes seconds, and finds `main` by the Listing's own rules from `_start`
             const document = this._listings!.openExecutable(sources.entry, file)!
             const bytes = fileBytes(file)
+            this.reportBuildPhase('Loading the program…')
             const [info, start] = await Promise.all([
                 //the Executable's own File can be read but not written, deleted or renamed while
                 //it runs
                 core.loadExecutable(bytes, {
-                    protectedPath: '/project/' + sources.entry
+                    protectedPath: '/project/' + sources.entry,
+                    onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
                 }),
                 this.programStartOf(bytes)
             ])
@@ -605,7 +634,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const linked = linksX86StartUnit(sources)
-        const result = await core.compileProject(x86CoreProject(sources))
+        const result = await core.compileProject(x86CoreProject(sources), {
+            onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
+        })
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
         const diagnostics = result.diagnostics.map((diagnostic) =>

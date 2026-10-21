@@ -44,6 +44,11 @@ export type BuildReport = {
     durationMs: number
     /** The Entry path the Build started from. */
     entry?: string
+    /**
+     * Why a failed Build failed when its diagnostics do not say, such as a download that stalled:
+     * a line under the entry.
+     */
+    problem?: string
 }
 
 export function buildEntry(report: BuildReport): LogDraft {
@@ -55,7 +60,7 @@ export function buildEntry(report: BuildReport): LogDraft {
             kind: 'build',
             tone: 'error',
             text: `Build of${from} failed${took}${counts}`,
-            details: []
+            details: report.problem ? [{ tone: 'error', text: report.problem }] : []
         }
     }
     const warnings = report.warnings > 0 ? ` with ${plural(report.warnings, 'warning')}` : ''

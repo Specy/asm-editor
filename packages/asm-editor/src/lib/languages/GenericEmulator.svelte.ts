@@ -9,6 +9,7 @@ import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
     BaseEmulator,
+    BuildDownloadError,
     CompilationFailedError,
     type EmulatorConfig,
     type Instruction
@@ -285,6 +286,9 @@ export abstract class GenericEmulator<T, R extends string>
     /** The program the last Build linked, see `buildOutput`; a Testcase's Builds leave it alone. */
     private buildOutputState = $state.raw<BuildOutput | undefined>()
     private buildOutputs = 0
+    /** What the Build in progress waits for, see `buildPhase`, and the execution it belongs to. */
+    private phase = $state<string | undefined>()
+    private phaseExecution: ExecutionGeneration | undefined
     /** The Listings of an adapter whose Builds can load Executables, see `listings`. */
     protected _listings: ListingDocuments | undefined
     /** What Undo takes back next, newest last; see `UndoSegment`. */
@@ -1275,6 +1279,7 @@ export abstract class GenericEmulator<T, R extends string>
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        this.phase = undefined
         this._clearExecution?.()
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
@@ -1333,14 +1338,47 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateStatusRegisters()
     }
 
-    async compile(historySize: number, sourceOverride: BuildInput | undefined): Promise<void> {
+    /**
+     * Builds the program and runs it to where a Debug session starts. A Build `signal` aborted
+     * before its turn at the Core comes does not start: one queued behind another that is still
+     * finishing, as a cancelled Build whose download has not given up yet is. A Build already under
+     * way is ended by `clear()`, as Stop ends it.
+     */
+    async compile(
+        historySize: number,
+        sourceOverride: BuildInput | undefined,
+        signal?: AbortSignal
+    ): Promise<void> {
+        if (signal?.aborted) return
         //a Build replaces the Build output from the moment it starts, and a failed one leaves none
         this.buildOutputState = undefined
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
-        return this.duringCoreOperation(() =>
-            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem, true)
-        )
+        return this.duringCoreOperation(async () => {
+            if (signal?.aborted) return
+            await this.compileInternal(
+                historySize,
+                sourceOverride,
+                this._peripherals.fileSystem,
+                true
+            )
+        })
+    }
+
+    /**
+     * What the Build in progress is waiting for, in words for the dock to say while it lasts, such
+     * as "Downloading libc.so.6…" ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 2); undefined when there is nothing more to say than that it builds, which is all
+     * an adapter that reports nothing ever says.
+     */
+    get buildPhase(): string | undefined {
+        return this.phase
+    }
+
+    /** Says what the Build in progress waits for now; a Build that was cleared says nothing more. */
+    protected reportBuildPhase(phase: string | undefined): void {
+        if (this.phaseExecution && this.executionController.isCurrent(this.phaseExecution))
+            this.phase = phase
     }
 
     /**
@@ -1365,6 +1403,8 @@ export abstract class GenericEmulator<T, R extends string>
         this.semanticCheckId += 1
         this.debouncer[1]()
         const execution = this.executionController.capture()
+        this.phase = undefined
+        this.phaseExecution = execution
         let entry = this._sources.entry
         try {
             const sources =
@@ -1405,6 +1445,7 @@ export abstract class GenericEmulator<T, R extends string>
                 try {
                     const start = this._programStart?.()
                     if (start) {
+                        this.reportBuildPhase('Starting the program…')
                         const end = await this.runToProgramStart(
                             start.breakpoint,
                             execution,
@@ -1452,9 +1493,13 @@ export abstract class GenericEmulator<T, R extends string>
                 this.state.compilerDiagnostics = [diagnostic]
                 throw new CompilationFailedError(report, [diagnostic])
             }
-            this.addError(this._stringifyError(e))
+            //the Terminal says what could not be downloaded and to Build again, in every language's
+            //words alike
+            this.addError(e instanceof BuildDownloadError ? e.message : this._stringifyError(e))
             this.debouncer[1]()
             throw e
+        } finally {
+            if (this.executionController.isCurrent(execution)) this.phase = undefined
         }
     }
 

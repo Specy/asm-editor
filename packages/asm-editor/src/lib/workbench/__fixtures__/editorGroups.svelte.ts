@@ -41,11 +41,13 @@ export function editorGroupsFixture(
         currentFile: 'main.s',
         line: 0,
         compilerDiagnostics: [] as Diagnostic[],
-        errors: [],
+        errors: [] as string[],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
         buildOutput: undefined as BuildOutput | undefined,
         notes: [] as EmulatorNote[],
+        /** What the Build in progress says it waits for, as an adapter that reports one sets it. */
+        buildPhase: undefined as string | undefined,
         /** The Arguments the last Build or test run was given, as `setProgramArguments` passes them. */
         programArguments: '',
         setProgramArguments(text: string) {
@@ -66,7 +68,7 @@ export function editorGroupsFixture(
         },
         setSources: (_sources: BuildSources) => {},
         //a Build that changes nothing; a test that needs one to fail replaces it
-        compile: async (_historySize: number, _sources: BuildSources) => {},
+        compile: async (_historySize: number, _sources: BuildSources, _signal?: AbortSignal) => {},
         setBreakpointResolver: (resolver: typeof breakpointResolver) => {
             breakpointResolver = resolver
         },

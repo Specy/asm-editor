@@ -6,6 +6,7 @@ import {
     RUNNING_PANEL_REFRESH_MS
 } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
+    BuildDownloadError,
     EmulatorStatus,
     type CompileResult,
     type Instruction
@@ -109,8 +110,16 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return []
     }
 
-    _compile(): CompileResult {
-        return { ok: true }
+    /** What the fake Core's Build does; the default builds at once. */
+    compileBehavior: () => CompileResult | Promise<CompileResult> = () => ({ ok: true })
+
+    _compile(): CompileResult | Promise<CompileResult> {
+        return this.compileBehavior()
+    }
+
+    /** Says what the Build waits for, as an adapter does from inside `_compile`. */
+    reportPhase(phase: string): void {
+        this.reportBuildPhase(phase)
     }
 
     _initialize(): void {}
@@ -799,6 +808,83 @@ describe('slice scheduling', () => {
         await emulator.run(1000)
         expect(emulator.requests).toHaveLength(2)
         expect(emulator.requests[1].instructionBudget).toBe(990)
+    })
+})
+
+/** A Build the test lets finish, and how often the fake Core was asked to build. */
+function waitingBuild(emulator: FakeEmulator, failure?: Error) {
+    const build = { started: 0, finish: () => {} }
+    emulator.compileBehavior = async () => {
+        build.started += 1
+        emulator.reportPhase('Downloading libc.so.6…')
+        await new Promise<void>((resolve) => (build.finish = resolve))
+        if (failure) throw failure
+        return { ok: true }
+    }
+    return build
+}
+
+describe('a Build that waits', () => {
+    it('says what it waits for while it lasts, and nothing once it is done', async () => {
+        const emulator = new FakeEmulator()
+        const build = waitingBuild(emulator)
+        expect(emulator.buildPhase).toBeUndefined()
+        const done = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        expect(emulator.buildPhase).toBe('Downloading libc.so.6…')
+        build.finish()
+        await done
+        expect(emulator.buildPhase).toBeUndefined()
+        expect(emulator.canExecute).toBe(true)
+    })
+
+    it('says nothing more, and builds nothing, once cleared', async () => {
+        const emulator = new FakeEmulator()
+        const build = waitingBuild(emulator)
+        const done = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        emulator.clear()
+        expect(emulator.buildPhase).toBeUndefined()
+        //what the cleared Build's Core says afterwards is dropped
+        emulator.reportPhase('Downloading libm.so.6…')
+        expect(emulator.buildPhase).toBeUndefined()
+        build.finish()
+        await done
+        expect(emulator.canExecute).toBe(false)
+    })
+
+    it('does not start one whose signal was aborted while it waited for the Core', async () => {
+        const emulator = new FakeEmulator()
+        const build = waitingBuild(emulator)
+        const first = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        //Cancel: the first is cleared, and the one pressed meanwhile is aborted before its turn
+        emulator.clear()
+        const controller = new AbortController()
+        const second = emulator.compile(0, '', controller.signal)
+        controller.abort()
+        build.finish()
+        await Promise.all([first, second])
+        expect(build.started).toBe(1)
+        expect(emulator.canExecute).toBe(false)
+        //nor one aborted before it was asked for
+        await emulator.compile(0, '', controller.signal)
+        expect(build.started).toBe(1)
+    })
+
+    it('tells the Terminal what could not be downloaded and to Build again', async () => {
+        const emulator = new FakeEmulator()
+        const failure = new BuildDownloadError('Could not download libc.so.6: no data for 20 s')
+        const build = waitingBuild(emulator, failure)
+        const done = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        build.finish()
+        await expect(done).rejects.toBe(failure)
+        expect(emulator.errors).toEqual([
+            'Could not download libc.so.6: no data for 20 s. Check the connection and Build again.'
+        ])
+        expect(emulator.buildPhase).toBeUndefined()
+        expect(emulator.canExecute).toBe(false)
     })
 })
 

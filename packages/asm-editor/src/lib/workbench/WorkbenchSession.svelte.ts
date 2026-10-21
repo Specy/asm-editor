@@ -32,7 +32,7 @@ import {
     type TestcaseResult
 } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
-import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
+import { BuildDownloadError, CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     isLineBreakpoint,
     makeRegister,
@@ -468,6 +468,12 @@ export class WorkbenchSession {
     private failedBuild = $state.raw<{ sources: BuildSources; diagnostics: Diagnostic[] }>()
     mappingSelection = $state.raw<MappingSelection | undefined>()
     private compilationController: AbortController | undefined
+    /** Aborted by Cancel, which ends the Build in progress; see `cancelBuild`. */
+    private buildController: AbortController | undefined
+    /** The Emulator's work for the Build in progress, which Cancel leaves to finish unseen. */
+    private buildCompiling: Promise<void> | undefined
+    /** That work of a cancelled Build, until it settles: the next Build waits for it. */
+    private cancelledBuild = $state.raw<Promise<void> | undefined>()
     /** Set once the component or effect that made the session is gone, and its deriveds with it. */
     private disposed = false
     /**
@@ -2738,26 +2744,80 @@ export class WorkbenchSession {
         }
         this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         const clears = this.executionClears
+        const controller = new AbortController()
+        this.buildController = controller
+        //why a Build failed that its diagnostics do not say, such as a download that stalled
+        let problem: string | undefined
         try {
             this.running = false
             this.building = true
-            await this.emulator.compile(undoHistorySize(this.effectiveSettings), sources)
+            const compiling = this.emulator.compile(
+                undoHistorySize(this.effectiveSettings),
+                sources,
+                controller.signal
+            )
+            this.buildCompiling = compiling
+            await untilAborted(compiling, controller.signal)
         } catch (e) {
             console.error(e)
             //only a compilation failure carries this Build's own findings: any other error leaves the
             //emulator's list as an earlier Build or check left it
             if (e instanceof CompilationFailedError) failure = e.diagnostics
+            //what could not be downloaded, and to Build again, as the Terminal says it too
+            else problem = e instanceof BuildDownloadError ? e.message : getM68kErrorMessage(e)
             if (clears === this.executionClears)
-                toast.error('Error compiling code. ' + getM68kErrorMessage(e))
+                toast.error(
+                    e instanceof BuildDownloadError
+                        ? e.message
+                        : 'Error compiling code. ' + getM68kErrorMessage(e)
+                )
         } finally {
             this.building = false
+            if (this.buildController === controller) {
+                this.buildController = undefined
+                this.buildCompiling = undefined
+            }
             //also after a failed build: the directive is read before the program is assembled
             this.syncDisplay(sources)
-            //Stop during the Build, in its run to `main` (an input wait before it, or a long start):
-            //the person ended it, so it neither failed nor built, and the Log says nothing
+            //Stop or Cancel during the Build, in a download or its run to `main` (an input wait
+            //before it, or a long start): the person ended it, so it neither failed nor built, and
+            //the Log says nothing
             if (clears === this.executionClears)
-                this.finishBuild(sources, started, failure, replaced)
+                this.finishBuild(sources, started, failure, replaced, problem)
         }
+    }
+
+    /**
+     * What the Build in progress is waiting for, which the dock says in place of Build while it
+     * lasts: what the Emulator says it waits for, such as a download, or "Building…"
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision 2).
+     */
+    get buildPhase(): string {
+        return (
+            this.emulator.buildPhase ??
+            (this.cancelledBuild ? 'Waiting for the cancelled Build to end…' : 'Building…')
+        )
+    }
+
+    /**
+     * Cancel, while a Build goes on: it ends at once, whatever it waits for, even something that
+     * never answers, its result is discarded and the Workbench goes back to editing, with no Debug
+     * session begun, as Stop leaves it. A Core still busy with the cancelled Build finishes unseen,
+     * and a Build pressed meanwhile waits for it, saying so, which for a stalled download is until
+     * the Core gives the download up.
+     */
+    cancelBuild() {
+        if (!this.building) return
+        const unfinished = this.buildCompiling
+        if (unfinished) {
+            this.cancelledBuild = unfinished
+            const settled = () => {
+                if (this.cancelledBuild === unfinished) this.cancelledBuild = undefined
+            }
+            unfinished.then(settled, settled)
+        }
+        this.buildController?.abort()
+        this.clearExecution()
     }
 
     /**
@@ -2769,7 +2829,8 @@ export class WorkbenchSession {
         sources: BuildSources,
         started: number,
         failure: Diagnostic[] | undefined,
-        replaced: string | undefined
+        replaced: string | undefined,
+        problem: string | undefined
     ) {
         if (replaced && !this.buildOutputAt(replaced) && !this.project.files[replaced])
             for (const group of [...this.groups]) this.closeTab(replaced, group)
@@ -2787,10 +2848,12 @@ export class WorkbenchSession {
                 errors: diagnostics.filter((d) => d.severity === 'error').length,
                 warnings: diagnostics.filter((d) => d.severity === 'warning').length,
                 durationMs: performance.now() - started,
-                entry: sources.entry
+                entry: sources.entry,
+                problem: ok ? undefined : problem
             })
         )
-        this.bottomTab = ok ? 'terminal' : 'problems'
+        //a failure the Problems do not list is told in the Terminal, before the program's output
+        this.bottomTab = ok || !diagnostics.length ? 'terminal' : 'problems'
         if (ok) this.revealCurrentInstruction()
     }
 
@@ -3008,6 +3071,18 @@ export class WorkbenchSession {
             }
         }
     }
+}
+
+/**
+ * `promise`, or nothing as soon as `signal` aborts: a cancelled Build ends at once, even while what
+ * it waits for never settles, and how that settles later is dropped.
+ */
+function untilAborted(promise: Promise<void>, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (signal.aborted) return resolve()
+        signal.addEventListener('abort', () => resolve(), { once: true })
+        promise.then(resolve, reject)
+    })
 }
 
 /**

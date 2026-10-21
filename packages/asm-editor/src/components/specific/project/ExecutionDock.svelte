@@ -31,6 +31,17 @@
         onCancel: () => void
     }
 
+    /**
+     * A Build that says what it is waiting for and can be cancelled, as the Workbench's
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 2): while `building`, Build reads `phase` beside a spinner, and Cancel follows it.
+     */
+    export interface DockBuildProgress {
+        /** What the Build waits for, such as "Downloading libc.so.6…", or "Building…". */
+        phase: string
+        onCancel: () => void
+    }
+
     /** One button of the view switch: a way the pane can show its File. */
     export interface DockView {
         id: string
@@ -97,6 +108,8 @@
         /** Round the end tray's top-right corner when it sits beside another editor. */
         roundedEnd?: boolean
         actions?: DockAction[]
+        /** What a Build in progress waits for, and its Cancel; without it Build shows a clock. */
+        buildProgress?: DockBuildProgress
         compilation?: DockCompilation
         /** The pane's view switch, shown during a Debug session too. */
         views?: DockViews
@@ -127,6 +140,7 @@
         roundedStart = false,
         roundedEnd = false,
         actions = [],
+        buildProgress,
         compilation,
         views,
         compileOnly = false,
@@ -147,6 +161,7 @@
     )
     /** Whether the dock holds the view switch and nothing else, as a pane's beside the controls. */
     const switchOnly = $derived(!!views && !beforeViews && !hasEnd)
+    const progress = $derived(building ? buildProgress : undefined)
 </script>
 
 <div
@@ -171,20 +186,33 @@
                 <button
                     type="button"
                     class="tool primary"
+                    class:progress={!!progress}
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
-                    title="Assemble the program and start debugging it"
+                    title={progress?.phase ?? 'Assemble the program and start debugging it'}
                     aria-label="Build"
+                    aria-busy={building}
                 >
                     <Icon size={1}>
-                        {#if building}
+                        {#if progress}
+                            <span class="busy-spinner"><FaSpinner /></span>
+                        {:else if building}
                             <FaRegClock />
                         {:else}
                             <FaWrench />
                         {/if}
                     </Icon>
-                    <span class="label">Build</span>
+                    <span class="label">{progress?.phase ?? 'Build'}</span>
                 </button>
+                {#if progress}
+                    <button
+                        type="button"
+                        class="tool"
+                        title="Stop building and go back to editing"
+                        aria-label="Cancel the Build"
+                        onclick={progress.onCancel}>Cancel</button
+                    >
+                {/if}
             {/if}
             {#if compilation}
                 <button
@@ -480,6 +508,34 @@
 
     .label {
         margin-left: 0.45rem;
+    }
+
+    /* Build while it says what it waits for: busy rather than unavailable, so its words stay
+       legible, and the first thing to give way, cut short, when the bar is too narrow for them */
+    .progress {
+        flex-shrink: 1;
+        min-width: 0;
+        cursor: progress;
+
+        .label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+
+    .primary.progress:disabled {
+        color: color-mix(in srgb, var(--accent-text) 80%, var(--tray));
+    }
+
+    .toolbar:has(> .progress) {
+        min-width: 0;
+    }
+
+    /* in one tray across a phone's pane, beside an Executable's views, Build's equal share is too
+       narrow for what it waits for: the spinner says it builds, and the tooltip what for */
+    .fill.with-views .progress .label {
+        display: none;
     }
 
     /* the views, the editor's one control for a choice: a strip as tall as the tray's buttons,

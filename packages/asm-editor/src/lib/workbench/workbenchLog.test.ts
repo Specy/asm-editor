@@ -48,6 +48,24 @@ describe('buildEntry', () => {
             text: 'Build of a.s failed in 3ms with 1 error'
         })
     })
+
+    it('says under a failed Build why, when no diagnostic does', () => {
+        const problem =
+            'Could not download libc.so.6: no data for 20 s. Check the connection and Build again.'
+        const entry = buildEntry({
+            ok: false,
+            errors: 0,
+            warnings: 0,
+            durationMs: 20_000,
+            entry: 'crackme',
+            problem
+        })
+        expect(entry).toMatchObject({
+            tone: 'error',
+            text: 'Build of crackme failed in 20.000s',
+            details: [{ tone: 'error', text: problem }]
+        })
+    })
 })
 
 describe('testRunEntry', () => {

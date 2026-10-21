@@ -10,7 +10,10 @@
      * the session's Program. Edge to edge in the bottom corners of the editor on a desktop, along
      * its bottom edge on a phone, and stuck under it on a tablet. A pane showing a File in more
      * than one way carries the view switch, during a Debug session too
-     * ([file-views.md](../../../../../../docs/design/file-views.md), decisions 4 and 8).
+     * ([file-views.md](../../../../../../docs/design/file-views.md), decisions 4 and 8). While a
+     * Build goes on, its run to `main` included, Build says what it waits for and offers Cancel
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 2): the session's controls come once it is done.
      */
     import ExecutionDock, {
         type DockCompilation,
@@ -175,8 +178,9 @@
     {views}
     compileOnly={!execution || source}
     showExecution={execution && (session.debugSession || program !== undefined)}
-    debugging={session.debugSession}
+    debugging={session.debugSession && !session.building}
     building={session.building}
+    buildProgress={{ phase: session.buildPhase, onCancel: () => session.cancelBuild() }}
     running={session.running}
     buildDisabled={session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}

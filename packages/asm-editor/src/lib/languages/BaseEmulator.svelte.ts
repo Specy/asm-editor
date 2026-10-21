@@ -53,6 +53,20 @@ export class CompilationFailedError extends Error {
     }
 }
 
+/**
+ * Thrown by `compile()` when the Build could not download something it needs, such as one of the
+ * x86 Core's Bundled libraries or its assembler: the request failed, or nothing arrived for a while.
+ * Nothing is wrong with the program, so its message names what could not be downloaded and says
+ * to Build again ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+ * decision 2), in the Terminal, the Log and the toast alike.
+ */
+export class BuildDownloadError extends Error {
+    constructor(problem: string, options?: ErrorOptions) {
+        super(`${problem}. Check the connection and Build again.`, options)
+        this.name = 'BuildDownloadError'
+    }
+}
+
 export enum EmulatorStatus {
     Terminated = 0,
     Running = 1

@@ -585,6 +585,11 @@ export type BaseEmulatorDerivedState = {
     /** What the Log should say about the current program's run, oldest first; see `EmulatorNote`. */
     readonly notes: readonly EmulatorNote[]
     /**
+     * What the Build in progress is waiting for, in words, such as "Downloading libc.so.6…";
+     * undefined when there is nothing more to say than that it builds.
+     */
+    readonly buildPhase?: string
+    /**
      * x86 only: the Listings of Executables this Emulator generates, and in `session` those of the
      * running program and the libraries it loaded, under `@lib/`.
      */
@@ -713,7 +718,12 @@ export type EmulatorNote = {
 }
 
 export type BaseEmulatorActions = {
-    compile: (historySize: number, sourceOverride?: BuildInput) => Promise<void>
+    /** A Build whose `signal` is aborted before its turn at the Core comes does not start. */
+    compile: (
+        historySize: number,
+        sourceOverride?: BuildInput,
+        signal?: AbortSignal
+    ) => Promise<void>
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
