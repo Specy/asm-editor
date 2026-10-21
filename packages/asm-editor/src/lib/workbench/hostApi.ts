@@ -12,7 +12,14 @@ import type { Emulator } from '#lib/languages/Emulator.ts'
 /** A built-in panel is shown, shown but not editable, or not offered at all. */
 export type PanelAccess = 'on' | 'readonly' | 'off'
 
-export type BuiltinPanelId = 'explorer' | 'testcases' | 'documentation' | 'agent' | 'settings'
+/** `symbols` is offered only in a Project that has an Executable. */
+export type BuiltinPanelId =
+    | 'explorer'
+    | 'symbols'
+    | 'testcases'
+    | 'documentation'
+    | 'agent'
+    | 'settings'
 
 /** What a host panel's content is drawn with. */
 export type WorkbenchPanelContext = {

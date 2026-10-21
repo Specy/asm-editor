@@ -44,6 +44,7 @@ export const LAYOUT_LIMITS = {
 const DEFAULT_READING_PANEL_WIDTH = 448
 export const DEFAULT_PANEL_WIDTHS: Readonly<Record<string, number>> = {
     explorer: 256,
+    symbols: 320,
     testcases: DEFAULT_READING_PANEL_WIDTH,
     documentation: DEFAULT_READING_PANEL_WIDTH,
     agent: 448,

@@ -1,5 +1,11 @@
 import { analyze, type ElfAnalysis } from '@specy/x86/elf'
-import { byteEditsKey, fileBytes, fileHead, type ProjectFile } from './projectFiles'
+import {
+    byteEditsKey,
+    fileBytes,
+    fileHead,
+    type ProjectFile,
+    type ProjectFiles
+} from './projectFiles'
 
 export type ExecutableKind = 'none' | 'supported' | { unsupported: string }
 
@@ -49,4 +55,9 @@ export function executableKind(file: ProjectFile | Uint8Array | undefined): Exec
     return info.supported
         ? 'supported'
         : { unsupported: info.reason ?? 'an unsupported ELF program' }
+}
+
+/** Whether any of a Project's Files is an Executable, for which the Symbols panel is offered. */
+export function hasExecutable(files: ProjectFiles): boolean {
+    return Object.values(files).some((file) => executableKind(file) === 'supported')
 }

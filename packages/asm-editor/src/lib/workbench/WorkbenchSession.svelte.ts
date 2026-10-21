@@ -1583,6 +1583,11 @@ export class WorkbenchSession {
         if (this.groups.includes(group)) this.activeTabGroupId = group.id
     }
 
+    /** The pane the person worked in last, which keeps that place while a side panel has focus. */
+    get focusedGroup(): EditorGroup {
+        return this.groups.find((group) => group.id === this.activeTabGroupId) ?? this.groups[0]
+    }
+
     /**
      * Shows a version of a File, opening its tab, in the view the pane remembers for it or, with
      * `view`, in that one when the File offers it, as going to a definition in a Listing does.
@@ -2203,6 +2208,35 @@ export class WorkbenchSession {
         if (line < 0) return false
         //a pane that already showed the Listing scrolls to the line; one switched to it jumps
         return this.revealWhenShown(pane, line, { scroll: target ? 'smooth' : 'immediate' })
+    }
+
+    /**
+     * A line of the Listing of a version of an Executable, picked in the Symbols panel
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 18). When the focused pane shows that version's Pseudocode, the Listing beside it moves to the
+     * line, as following a name there does. Otherwise the line is revealed in a pane showing the
+     * Listing already, the focused one first, else in one showing the File's bytes, switched to the
+     * Listing as Show in Listing switches it, else in the focused pane. A Pseudocode beside the
+     * Listing follows its cursor. The keyboard stays in the panel.
+     */
+    async revealListingLine(selection: ProjectSourceSelection, line: number): Promise<boolean> {
+        const focused = this.focusedGroup
+        const showing = (candidate: EditorGroup, view: FileView) =>
+            candidate.displayedView === view &&
+            isSameProjectSourceSelection(candidate.sourceSelection, selection)
+        if (showing(focused, 'pseudocode')) return this.followPseudocodeTarget(focused, line)
+        const panes = [focused, ...this.groups.filter((candidate) => candidate !== focused)]
+        const shown = panes.find((candidate) => showing(candidate, 'listing'))
+        const bytes = panes.find((candidate) => showing(candidate, 'hex'))
+        const pane = shown ?? bytes ?? focused
+        if (bytes && !shown) bytes.setView(selection.path, 'listing')
+        else if (!shown) this.show(selection, pane, 'listing')
+        this.focusEditorGroup(pane)
+        await tick()
+        return this.revealWhenShown(pane, line, {
+            focus: false,
+            scroll: shown ? 'smooth' : 'immediate'
+        })
     }
 
     /**

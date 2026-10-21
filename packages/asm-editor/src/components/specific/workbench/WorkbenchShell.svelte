@@ -16,6 +16,7 @@
     import WorkbenchCompact from './WorkbenchCompact.svelte'
     import DebugToolsFloating from './DebugToolsFloating.svelte'
     import FaCopy from '~icons/fa-solid/copy'
+    import FaTags from '~icons/fa-solid/tags'
     import FaFlask from '~icons/fa-solid/flask'
     import FaBook from '~icons/fa-solid/book'
     import FaShareAlt from '~icons/fa-solid/share-alt'
@@ -23,6 +24,7 @@
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { documentationLanguageOf, languageScope } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import { hasExecutable } from '#lib/executables.ts'
     import './workbench.css'
 
     interface Props {
@@ -151,6 +153,13 @@
         return results.every((result) => result.passed) ? 'success' : 'error'
     })
 
+    /**
+     * The Symbols panel is offered only in a Project that has an Executable
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 18).
+     */
+    const symbolsOffered = $derived(project.language === 'X86' && hasExecutable(project.files))
+
     const rail = $derived.by<RailEntry[]>(() => {
         const entries: RailEntry[] = []
         const builtin = (
@@ -159,11 +168,12 @@
             icon: RailEntry['icon'],
             group: RailEntry['group'],
             maximizable = false,
-            dot?: RailEntry['dot']
+            dot?: RailEntry['dot'],
+            tooltip?: string
         ) => {
             const panelAccess = accessOf(id)
             if (panelAccess === 'off') return
-            entries.push({ id, title, icon, group, maximizable, access: panelAccess, dot })
+            entries.push({ id, title, tooltip, icon, group, maximizable, access: panelAccess, dot })
         }
         const host = (group: RailEntry['group']) => {
             for (const panel of hostPanels.filter((candidate) => candidate.group === group)) {
@@ -179,6 +189,16 @@
             }
         }
         builtin('explorer', 'Explorer', FaCopy, 'top')
+        if (symbolsOffered)
+            builtin(
+                'symbols',
+                'Symbols',
+                FaTags,
+                'top',
+                false,
+                undefined,
+                'Symbols: the functions and strings of the program'
+            )
         builtin('testcases', 'Testcases', FaFlask, 'top', true, testcasesDot)
         builtin('documentation', 'Documentation', FaBook, 'top', true)
         host('top')
@@ -208,6 +228,11 @@
         host('bottom')
         builtin('settings', 'Settings', FaCog, 'bottom')
         return entries
+    })
+
+    //the open Symbols panel goes with the Project's last Executable
+    $effect(() => {
+        if (activePanel === 'symbols' && !rail.some((entry) => entry.id === 'symbols')) ui.close()
     })
 
     setWorkbenchContext({
