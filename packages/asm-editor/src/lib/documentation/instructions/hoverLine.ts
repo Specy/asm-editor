@@ -37,10 +37,23 @@ export function formHoverLine(tags: readonly InstructionTag[]): string {
 export const HOVER_ROWS = 6
 
 /**
+ * Markdown whose links into the Documentation, `/documentation/mips/instruction/add`, are written
+ * with this page's origin, as a hover's must be: Monaco renders a link without a scheme as plain
+ * text. The editor's link opener (`openDocumentationLink`) takes them to a Workbench's
+ * Documentation panel. Left as paths where there is no page, as on the server.
+ */
+export function absoluteDocumentationLinks(markdown: string): string {
+    const origin = globalThis.location?.origin
+    if (!origin) return markdown
+    return markdown.replace(/\]\((\/documentation\/[^)\s]*)\)/g, `](${origin}$1)`)
+}
+
+/**
  * An instruction's hover from its shared document, block by block: the name and long name with the
  * italic line, the summary, the first Form patterns with their facts, and the page
  * ([the plan](../../../../../../docs/design/instruction-layout-plan.md), decision 22). A row in a
- * tagged section says its tags, since a hover has no section headings.
+ * tagged section says its tags, since a hover has no section headings. Its links into the
+ * Documentation are absolute, so the editor shows them as links.
  */
 export function documentHover(
     document: InstructionDocument,
@@ -74,7 +87,9 @@ export function documentHover(
         flagsLine(document),
         lines.join('  \n'),
         ...(options.href ? [`[Documentation](${options.href})`] : [])
-    ].filter(Boolean)
+    ]
+        .filter(Boolean)
+        .map(absoluteDocumentationLinks)
 }
 
 /** The flags strip as one line, `Flags: CF ● · ZF ● · OF –`; empty without one. */

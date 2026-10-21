@@ -11,6 +11,9 @@ import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { parseCommandLine } from '#lib/commandLine.ts'
 import CommandLine from '#cmp/specific/workbench/CommandLine.svelte'
+import TerminalView from '#cmp/specific/workbench/TerminalView.svelte'
+import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import type { CommandLineState } from './WorkbenchSession.svelte'
 
@@ -294,5 +297,66 @@ describe('the Command line component', () => {
         expect(target.querySelector('[title]')?.getAttribute('title')).toContain(
             'Stop the Debug session to change it.'
         )
+    })
+})
+
+describe('a read the program waits on, below the Command line', () => {
+    /** The Terminal tab of an x86 Project during a Debug session, its Command line locked. */
+    function terminalTab() {
+        const executionController = new ExecutionController(() => {})
+        const terminal = new Terminal({ executionController })
+        const target = document.createElement('div')
+        document.body.append(target)
+        const component = mount(TerminalView, {
+            target,
+            props: {
+                terminal,
+                interactive: true,
+                commandLine: {
+                    program: 'crackme',
+                    text: 'hunter2',
+                    parsed: parseCommandLine('hunter2'),
+                    locked: true
+                }
+            }
+        })
+        flushSync()
+        disposers.push(() => {
+            terminal.cancelPendingInput()
+            unmount(component)
+            target.remove()
+        })
+        return {
+            terminal,
+            execution: executionController.capture(),
+            arguments: target.querySelector('input')!,
+            console: target.querySelector('textarea')!,
+            ring: () =>
+                target.querySelector('.terminal-console')!.classList.contains('awaiting-input')
+        }
+    }
+
+    it('leaves the keyboard in the Command line, the console ringed to say where to type', () => {
+        //a tester typed the answer into the Arguments (reverse-engineering-ux.md, decision 12)
+        const tab = terminalTab()
+        tab.arguments.focus()
+        void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(tab.arguments)
+        expect(tab.ring()).toBe(true)
+    })
+
+    it('takes the keyboard from a Listing or a Pseudocode, as from any code', () => {
+        const tab = terminalTab()
+        const editor = document.createElement('div')
+        editor.className = 'monaco-editor'
+        const text = document.createElement('textarea')
+        editor.append(text)
+        document.body.append(editor)
+        disposers.push(() => editor.remove())
+        text.focus()
+        void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(tab.console)
     })
 })

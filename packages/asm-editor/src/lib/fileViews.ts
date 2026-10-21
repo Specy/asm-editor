@@ -15,10 +15,10 @@ export function isFileView(value: unknown): value is FileView {
 }
 
 /**
- * The views a kind of File can be shown in, its default first, in the order the view switch
- * offers them: an Executable opens in the Hex editor and can be switched to its Listing and its
- * Pseudocode, a File the browser can show opens as its Preview, and Markdown, which is written as
- * much as read, opens as its text and can be switched to its rendered Preview and to its bytes.
+ * The views a kind of File can be shown in, in the order the view switch offers them: an
+ * Executable's bytes in the Hex editor, its Listing and its Pseudocode; a File the browser can
+ * show as its Preview and its bytes; and Markdown, which is written as much as read, as its text,
+ * its rendered Preview and its bytes.
  */
 export function fileViewsOf(kind: ProjectFileKind | undefined): readonly FileView[] {
     if (kind === undefined || kind === 'text') return ['text']
@@ -28,8 +28,14 @@ export function fileViewsOf(kind: ProjectFileKind | undefined): readonly FileVie
     return ['preview', 'hex']
 }
 
+/**
+ * The view a kind of File opens in: the first it offers, except an Executable, which opens on its
+ * Listing, the view a person reading a program wants first, with its bytes and its Pseudocode a
+ * click away ([reverse-engineering-ux.md](../../../../docs/design/reverse-engineering-ux.md),
+ * decision 13).
+ */
 export function defaultFileView(kind: ProjectFileKind | undefined): FileView {
-    return fileViewsOf(kind)[0]
+    return kind === 'executable' ? 'listing' : fileViewsOf(kind)[0]
 }
 
 /** The view a File is shown in: the one asked for when its kind offers it, else its default. */
@@ -38,5 +44,7 @@ export function resolveFileView(
     ...chosen: (FileView | undefined)[]
 ): FileView {
     const offered = fileViewsOf(kind)
-    return chosen.find((view) => view !== undefined && offered.includes(view)) ?? offered[0]
+    return (
+        chosen.find((view) => view !== undefined && offered.includes(view)) ?? defaultFileView(kind)
+    )
 }

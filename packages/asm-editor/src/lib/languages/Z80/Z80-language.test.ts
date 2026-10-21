@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { Z80LanguageConfiguration } from './Z80-grammar'
@@ -53,6 +53,15 @@ async function formLine(line: string, at: string) {
 }
 
 describe('Z80 hovers', () => {
+    it("links the instruction's Documentation by the page's address", async () => {
+        //Monaco renders a link without a scheme as plain text, so a hover's are absolute
+        vi.stubGlobal('location', { origin: 'https://asm.example' })
+        onTestFinished(() => void vi.unstubAllGlobals())
+        expect((await hover('    add a,c', 'add')).join('\n')).toContain(
+            '[Documentation](https://asm.example/documentation/z80/instruction/add)'
+        )
+    })
+
     it('names the category and the tags every form has, right under the name', async () => {
         const [heading] = await hover('    add a,c', 'add')
         expect(heading).toMatch(/^\*\*add\*\*/)

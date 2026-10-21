@@ -92,15 +92,15 @@ describe('the Build output in the Workbench', () => {
         expect(group.displayedBuildOutput).toBe(true)
         expect(group.displayedFile?.encoding).toBe('base64')
         expect(group.displayedKind).toBe('executable')
-        expect(group.displayedView).toBe('hex')
-        //Hex · Disassemble · Decompile, like any Executable
+        //on its Listing, like any Executable, with Hex · Disassemble · Decompile
+        expect(group.displayedView).toBe('listing')
         expect(group.viewSwitch).toEqual(['hex', 'listing', 'pseudocode'])
+        //a view chosen for it is the pane's alone: there is no File to save it with
+        group.setView('main', 'hex')
+        flushSync()
+        expect(group.displayedView).toBe('hex')
         expect(group.bytesReadOnly).toMatch(/^The Build output is read-only/)
         expect(group.bytesNotice).toBeUndefined()
-        //a view chosen for it is the pane's alone: there is no File to save it with
-        group.setView('main', 'listing')
-        flushSync()
-        expect(group.displayedView).toBe('listing')
         expect(session.project.fileViews?.main).toBeUndefined()
         expect(session.project.openTabs ?? []).not.toContain('main')
     })

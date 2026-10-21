@@ -4,7 +4,8 @@
      * the execution controls floating over it, above the bottom panel; and while a Debug session
      * exists, the debug column. There is no top bar. Every split drags, and the sizes are
      * remembered per person ([the design record](../../../../../../docs/design/workbench.md)); the
-     * debug column's splitter also drags it down to its strip and back.
+     * debug column's splitter also drags it down to its strip and back. The bottom panel grows by
+     * itself for a program's input and output, until the person sizes it during that session.
      */
     import { untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
@@ -17,6 +18,7 @@
     import DebugColumn, { DEBUG_STRIP_WIDTH } from './DebugColumn.svelte'
     import { useWorkbench } from './workbenchContext'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { growForProgramIo } from '#lib/workbench/programIoGrowth.svelte.ts'
 
     /** Below this, the editor beside an open panel and the debug column is too narrow to use. */
     const EDITOR_MIN_WIDTH = 360
@@ -34,6 +36,9 @@
         'RISC-V-64': 765,
         X86: 800
     }
+
+    /** How much height the editor keeps above the bottom panel, however far it is dragged or grows. */
+    const EDITOR_MIN_HEIGHT = 160
 
     const { session, ui } = useWorkbench()
     const layout = workbenchLayout.values
@@ -83,6 +88,29 @@
         }
         wasDebugging = debugging
     })
+
+    //the bottom panel grows for the program's output and input; a compact layout's is tall already
+    const terminal = session.emulator.peripherals.terminal
+    const programIo = growForProgramIo({
+        get debugging() {
+            return session.debugSession && !session.testing
+        },
+        get talking() {
+            return terminal.output !== '' || terminal.pendingRead?.source === 'terminal'
+        },
+        get height() {
+            return layout.bottomHeight
+        },
+        get room() {
+            return mainHeight - EDITOR_MIN_HEIGHT
+        },
+        grow: (height) => workbenchLayout.setBottomHeight(height)
+    })
+
+    function resizeBottom(size: number) {
+        programIo.resized()
+        workbenchLayout.setBottomHeight(size)
+    }
 </script>
 
 <div class="desktop">
@@ -130,9 +158,9 @@
                 size={layout.bottomHeight}
                 direction={-1}
                 min={LAYOUT_LIMITS.bottomHeight.min}
-                max={Math.max(LAYOUT_LIMITS.bottomHeight.min, mainHeight - 160)}
+                max={Math.max(LAYOUT_LIMITS.bottomHeight.min, mainHeight - EDITOR_MIN_HEIGHT)}
                 label="Resize the terminal"
-                onResize={(size) => workbenchLayout.setBottomHeight(size)}
+                onResize={resizeBottom}
             />
             <BottomPanel style="height: {layout.bottomHeight}px; flex: none;" />
         </div>

@@ -426,6 +426,46 @@ describe('the keyboard', () => {
         terminal.cancelPendingInput()
     })
 
+    it("is taken from the code editor's text, but not from its Find box or a dialog", () => {
+        const { terminal, execution } = render()
+        const editor = document.createElement('div')
+        editor.className = 'monaco-editor'
+        editor.innerHTML =
+            '<textarea class="inputarea"></textarea><div class="monaco-inputbox"><textarea></textarea></div>'
+        const dialog = document.createElement('div')
+        dialog.setAttribute('role', 'dialog')
+        dialog.innerHTML = '<button>Patch</button>'
+        document.body.append(editor, dialog)
+        const [text, find] = editor.querySelectorAll('textarea')
+        const read = () => {
+            void terminal.readAsync('q', execution).catch(() => {})
+            flushSync()
+            const focused = document.activeElement
+            terminal.cancelPendingInput()
+            flushSync()
+            return focused
+        }
+        text.focus()
+        expect(read()).toBe(textarea())
+        find.focus()
+        expect(read()).toBe(find)
+        dialog.querySelector('button')!.focus()
+        expect(read()).toBe(dialog.querySelector('button'))
+    })
+
+    it('rings the console and marks the question while a read waits on a line', async () => {
+        const { terminal, execution } = render()
+        const console = document.querySelector('.terminal-console')!
+        expect(console.classList.contains('awaiting-input')).toBe(false)
+        const read = terminal.readAsync('q', execution)
+        flushSync()
+        expect(console.classList.contains('awaiting-input')).toBe(true)
+        expect(document.querySelector('.awaiting-input .hint')?.textContent).toContain('q')
+        await type('ok\n')
+        expect(await read).toBe('ok')
+        expect(console.classList.contains('awaiting-input')).toBe(false)
+    })
+
     it('is taken by a click on the console, and given back when the program ends', () => {
         const { props } = render()
         const console = document.querySelector<HTMLElement>('.terminal-console')!

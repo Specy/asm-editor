@@ -23,6 +23,12 @@ export type EditorSource = {
      * model is made whether it is too large to highlight.
      */
     generatedFrom?: object
+    /**
+     * The 0-based line an editor showing the model for the first time puts its cursor on, near
+     * the top of its view, rather than the first: an Executable's Listing opens at `main`. An
+     * editor that showed the model before goes back to where it left it instead.
+     */
+    opensAt?: number
 }
 
 /** The model bookkeeping `resolveEditorModel` drives, so the rule itself holds no Monaco types. */

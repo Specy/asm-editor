@@ -120,6 +120,12 @@
          * and forward buttons.
          */
         navigation?: EditorNavigation
+        /**
+         * Where each model was left, by key, kept by a host that outlives this editor: a pane
+         * that shows a File's bytes and then its Listing again mounts a new editor, which goes
+         * back to where the last one left the Listing. This editor's own by default.
+         */
+        viewStates?: Map<string, monaco.editor.ICodeEditorViewState | null>
     }
 
     let {
@@ -149,7 +155,8 @@
         patchedLines = [],
         lineNote,
         lineActions,
-        navigation
+        navigation,
+        viewStates
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -204,8 +211,9 @@
     //models both reads and writes them, which with reactive maps made it re-run on its own writes.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
     const models = new Map<string, monaco.editor.ITextModel>()
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
-    const modelViewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>()
+    const modelViewStates: Map<string, monaco.editor.ICodeEditorViewState | null> = untrack(
+        () => viewStates ?? new Map()
+    )
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
@@ -427,7 +435,35 @@
                 dispatcher('change', value)
             })
         )
+        //after the listeners, so the host hears where the cursor went
+        applyingExternalValue = true
+        try {
+            placeModel(mountedEditor, loadedMonaco, mounted)
+        } finally {
+            applyingExternalValue = false
+        }
     })
+
+    /**
+     * Puts a model the editor has just taken where an editor of this host last left it, or, shown
+     * for the first time, on the line its source opens at, near the top of the view.
+     */
+    function placeModel(
+        currentEditor: monaco.editor.IStandaloneCodeEditor,
+        currentMonaco: MonacoType,
+        shown: EditorSource
+    ) {
+        const viewState = modelViewStates.get(shown.key)
+        if (viewState) {
+            currentEditor.restoreViewState(viewState)
+            return
+        }
+        const opensAt = shown.opensAt
+        if (opensAt === undefined || opensAt < 0) return
+        const lineNumber = zeroBasedLineToMonaco(opensAt)
+        currentEditor.setPosition({ lineNumber, column: 1 })
+        currentEditor.revealLineNearTop(lineNumber, currentMonaco.editor.ScrollType.Immediate)
+    }
 
     function setModelValue(model: monaco.editor.ITextModel, value: string) {
         if (model.getValue() === value) return
@@ -514,8 +550,7 @@
             applyingExternalValue = true
             try {
                 currentEditor.setModel(model)
-                const viewState = modelViewStates.get(next.key)
-                if (viewState) currentEditor.restoreViewState(viewState)
+                placeModel(currentEditor, currentMonaco, next)
             } finally {
                 applyingExternalValue = false
             }
@@ -698,6 +733,9 @@
     })
     onDestroy(() => {
         destroyed = true
+        //for the next editor of a host that keeps them
+        if (viewStates && viewStateKey && ownEditor?.getModel())
+            viewStates.set(viewStateKey, ownEditor.saveViewState())
 
         toDispose.forEach((disposable) => {
             if (typeof disposable === 'function') return disposable()
@@ -711,7 +749,7 @@
         if (!sharedModels)
             for (const model of models.values()) if (!model.isDisposed()) model.dispose()
         models.clear()
-        modelViewStates.clear()
+        if (!viewStates) modelViewStates.clear()
     })
 
     let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()

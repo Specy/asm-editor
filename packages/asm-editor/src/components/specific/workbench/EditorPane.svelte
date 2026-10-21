@@ -12,7 +12,11 @@
     import { fileViewIdentity } from '#lib/languages/service/uri.ts'
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
-    import type { EditorLineAction, EditorNavigation } from '#lib/monaco/editorLineActions.ts'
+    import {
+        debuggingActions,
+        type EditorLineAction,
+        type EditorNavigation
+    } from '#lib/monaco/editorLineActions.ts'
     import {
         LISTING_DOCUMENTATION,
         PSEUDOCODE_DOCUMENTATION
@@ -154,6 +158,21 @@
     })
 
     /**
+     * Toggle Breakpoint on a line of a Listing or a Pseudocode that takes one, and during a Debug
+     * session Run to Cursor ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 11): to the line's instruction, a Pseudocode line's where a Breakpoint set on it
+     * would go, as a Breakpoint of its own that is gone once it stops, or to an earlier Breakpoint.
+     */
+    const debugActions = debuggingActions({
+        canToggleBreakpoint: (line) => group.breakpointsEditable && (breakable?.(line) ?? false),
+        toggleBreakpoint: (line) => session.toggleBreakpoint(line, group),
+        canRunToCursor: (line) => session.runToCursorTargets(group, line) !== undefined,
+        runToCursor: (line) => void session.runToCursor(group, line)
+    })
+    /** The Executable's own Listing's: Patch instruction… and Show in Hex too. */
+    const ownListingActions = [...listingActions, ...debugActions]
+
+    /**
      * Whether the pane's find widget is open, in the top right corner where a read-only notice
      * sits, which hides for it.
      */
@@ -291,7 +310,8 @@
                           //a Listing changes only where a Debug session patches a line; a
                           //new document is new text, with a model of its own, as is each
                           //function's Pseudocode
-                          generatedFrom: group.displayedListing ?? group.displayedPseudocode
+                          generatedFrom: group.displayedListing ?? group.displayedPseudocode,
+                          opensAt: group.listingStartLine
                       }
                     : undefined}
                 modelKey={group.modelKey}
@@ -338,7 +358,14 @@
                 canBreakAt={breakable}
                 {patchedLines}
                 lineNote={group.runningWithin}
-                lineActions={listingModel && !listingModel.library ? listingActions : undefined}
+                lineActions={listingModel
+                    ? listingModel.library
+                        ? undefined
+                        : ownListingActions
+                    : pseudocodeModel
+                      ? debugActions
+                      : undefined}
+                viewStates={group.editorViewStates}
                 bind:editor={group.editor}
                 code={group.displayedCode}
                 breakpoints={group.displayedBreakpoints}

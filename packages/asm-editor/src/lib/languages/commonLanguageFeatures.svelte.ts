@@ -728,6 +728,11 @@ export type BaseEmulatorActions = {
     ) => Promise<void>
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
+    /**
+     * A Run that also stops before any of `targets`, temporary Breakpoints kept only for it: Run
+     * to Cursor.
+     */
+    runTo: (targets: readonly SourceBreakpoint[], haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
     setGlobalMemorySize: (pageSize: number, rowSize: number) => void
     setCode: (code: string) => void

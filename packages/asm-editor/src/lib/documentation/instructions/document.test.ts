@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { plainText } from '../entries'
 import {
     descriptionAfterSummary,
@@ -81,5 +81,19 @@ describe('documentHover', () => {
             '`ret`  \n`ret imm16`  \n`ret x` · Privileged',
             '[Documentation](/documentation/x86/instruction/ret)'
         ])
+    })
+
+    it("writes its links into the Documentation with the page's origin, which Monaco needs", () => {
+        vi.stubGlobal('location', { origin: 'https://asm.example' })
+        onTestFinished(() => void vi.unstubAllGlobals())
+        const built = document([{ rows: ['ret'] }])
+        built.summary = 'Returns, as [`call`](/documentation/x86/instruction/call) went.'
+        const blocks = documentHover(built, { href: '/documentation/x86/instruction/ret' })
+        expect(blocks[1]).toBe(
+            'Returns, as [`call`](https://asm.example/documentation/x86/instruction/call) went.'
+        )
+        expect(blocks.at(-1)).toBe(
+            '[Documentation](https://asm.example/documentation/x86/instruction/ret)'
+        )
     })
 })

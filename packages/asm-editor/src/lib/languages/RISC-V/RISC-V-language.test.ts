@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { RISCVLanguageConfiguration } from './RISC-V-grammar'
@@ -63,6 +63,15 @@ async function hover(line: string, at: string, offset = 0, is64 = false) {
 }
 
 describe('RISC-V hovers', () => {
+    it("links the instruction's Documentation by the page's address", async () => {
+        //Monaco renders a link without a scheme as plain text, so a hover's are absolute
+        vi.stubGlobal('location', { origin: 'https://asm.example' })
+        onTestFinished(() => void vi.unstubAllGlobals())
+        expect(await hover('add a0, a1, a2', 'add')).toContain(
+            '[Documentation](https://asm.example/documentation/risc-v/instruction/add)'
+        )
+    })
+
     it('documents the whole dotted mnemonic wherever the pointer rests on it', async () => {
         const line = 'fcvt.w.s a0, fa0'
         expect(await hover(line, 'fcvt')).toMatch(/^\*\*fcvt\.w\.s\*\*/)

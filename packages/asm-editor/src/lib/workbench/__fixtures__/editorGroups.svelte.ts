@@ -2,6 +2,7 @@ import { makeProject, type AvailableLanguages, type StoredProject } from '#lib/P
 import type { BuildSources } from '#lib/projectFiles.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
+    InterpreterStatus,
     sameBreakpoint,
     type Diagnostic,
     type EmulatorNote,
@@ -67,6 +68,12 @@ export function editorGroupsFixture(
             else this.breakpoints.splice(index, 1)
         },
         setSources: (_sources: BuildSources) => {},
+        /** The targets of each Run to Cursor, which stops at once, as at one of them. */
+        runsTo: [] as SourceBreakpoint[][],
+        runTo(targets: readonly SourceBreakpoint[], _haltLimit: number) {
+            this.runsTo.push([...targets])
+            return Promise.resolve(InterpreterStatus.Running)
+        },
         //a Build that changes nothing; a test that needs one to fail replaces it
         compile: async (_historySize: number, _sources: BuildSources, _signal?: AbortSignal) => {},
         setBreakpointResolver: (resolver: typeof breakpointResolver) => {

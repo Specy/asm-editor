@@ -189,8 +189,10 @@ describe('the views of each kind', () => {
         expect(defaultFileView({ preview: 'pdf', mime: 'application/pdf' })).toBe('preview')
     })
 
-    it('opens an Executable in the Hex editor, offering its Listing and its Pseudocode', () => {
-        expect(defaultFileView('executable')).toBe('hex')
+    it('opens an Executable on its Listing, offering its bytes and its Pseudocode', () => {
+        expect(defaultFileView('executable')).toBe('listing')
+        expect(resolveFileView('executable', undefined)).toBe('listing')
+        expect(resolveFileView('executable', 'preview', 'hex')).toBe('hex')
         //the order the view switch offers them: Hex · Disassemble · Decompile
         expect(fileViewsOf('executable')).toEqual(['hex', 'listing', 'pseudocode'])
     })

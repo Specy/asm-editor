@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { X86LanguageConfiguration } from './X86-grammar'
@@ -59,5 +59,14 @@ describe('x86 hovers', () => {
         const [mov] = await hover('    mov rax, rbx', 'mov')
         expect(mov.split('\n\n')[1]).toMatch(/^\*Data movement · .+ and later\*$/)
         expect(mov).not.toContain('Privileged')
+    })
+
+    it("links the instruction's Documentation by the page's address", async () => {
+        //Monaco renders a link without a scheme as plain text, so a hover's are absolute
+        vi.stubGlobal('location', { origin: 'https://asm.example' })
+        onTestFinished(() => void vi.unstubAllGlobals())
+        expect(await hover('    mov rax, rbx', 'mov')).toContain(
+            '[Documentation](https://asm.example/documentation/x86/instruction/mov)'
+        )
     })
 })

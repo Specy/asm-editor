@@ -113,7 +113,8 @@ function addressItems(
             label: 'Show in Listing',
             icon: FaListOl,
             disabled: value === undefined || !inExecutableCode(session, value),
-            onSelect: () => void session.revealAddress(value!)
+            //a jump the navigation history keeps, as Show in Listing from the Hex editor is
+            onSelect: () => void session.revealAddress(value!, { jump: true })
         })
     return items
 }

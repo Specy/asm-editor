@@ -42,6 +42,17 @@
         onCancel: () => void
     }
 
+    /**
+     * What Build is called, and what its tooltip says it does: "Debug" for a program that is
+     * loaded rather than assembled, an Executable
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 10).
+     */
+    export interface DockBuildButton {
+        label: string
+        title: string
+    }
+
     /** One button of the view switch: a way the pane can show its File. */
     export interface DockView {
         id: string
@@ -110,6 +121,8 @@
         actions?: DockAction[]
         /** What a Build in progress waits for, and its Cancel; without it Build shows a clock. */
         buildProgress?: DockBuildProgress
+        /** Build's name and tooltip, which a Build in progress replaces with what it waits for. */
+        buildButton?: DockBuildButton
         compilation?: DockCompilation
         /** The pane's view switch, shown during a Debug session too. */
         views?: DockViews
@@ -141,6 +154,7 @@
         roundedEnd = false,
         actions = [],
         buildProgress,
+        buildButton = { label: 'Build', title: 'Assemble the program and start debugging it' },
         compilation,
         views,
         compileOnly = false,
@@ -189,8 +203,8 @@
                     class:progress={!!progress}
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
-                    title={progress?.phase ?? 'Assemble the program and start debugging it'}
-                    aria-label="Build"
+                    title={progress?.phase ?? buildButton.title}
+                    aria-label={buildButton.label}
                     aria-busy={building}
                 >
                     <Icon size={1}>
@@ -202,7 +216,7 @@
                             <FaWrench />
                         {/if}
                     </Icon>
-                    <span class="label">{progress?.phase ?? 'Build'}</span>
+                    <span class="label">{progress?.phase ?? buildButton.label}</span>
                 </button>
                 {#if progress}
                     <button

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
     getInstructionDocumentation,
@@ -282,6 +282,21 @@ describe('M68K v2 language tooling', () => {
         // Directives have no category.
         const [org] = await value('    org $1000', 6)
         expect(org).not.toContain('*')
+    })
+
+    it("links the instruction's Documentation by the page's address", async () => {
+        //Monaco renders a link without a scheme as plain text, so a hover's are absolute
+        vi.stubGlobal('location', { origin: 'https://asm.example' })
+        onTestFinished(() => void vi.unstubAllGlobals())
+        const hover = await createM68kHoverProvider(monacoStub).provideHover(
+            { getLineContent: () => '    move.w d0,d1' } as never,
+            { lineNumber: 1, column: 6 } as never,
+            {} as never
+        )
+        const text = hover?.contents.map((content) => content.value).join('\n\n') ?? ''
+        expect(text).toContain(
+            '[Documentation](https://asm.example/documentation/m68k/instruction/move)'
+        )
     })
 
     it('tracks the active operand in signature help without counting nested commas', async () => {

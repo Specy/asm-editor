@@ -13,9 +13,11 @@
      * ([file-views.md](../../../../../../docs/design/file-views.md), decisions 4 and 8). While a
      * Build goes on, its run to `main` included, Build says what it waits for and offers Cancel
      * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
-     * decision 2): the session's controls come once it is done.
+     * decision 2): the session's controls come once it is done. For an Executable, which is loaded
+     * rather than assembled, Build reads Debug (decision 10).
      */
     import ExecutionDock, {
+        type DockBuildButton,
         type DockCompilation,
         type DockView,
         type DockViews
@@ -73,6 +75,17 @@
         preview: { label: 'Preview', title: 'Show the File as the browser shows it', icon: FaEye }
     }
 
+    /**
+     * Build for a Program whose Entry file is an Executable, which nothing assembles: a Build
+     * loads it and starts debugging it
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 10).
+     */
+    const DEBUG_BUTTON: DockBuildButton = {
+        label: 'Debug',
+        title: 'Load the program and start debugging it'
+    }
+
     const { session } = useWorkbench()
     const emulator = session.emulator
     const pane = $derived(group ?? session.controlsGroup)
@@ -87,6 +100,9 @@
             : source
               ? undefined
               : pane.displayedProgram
+    )
+    const loadsExecutable = $derived(
+        program !== undefined && session.kindAt(program) === 'executable'
     )
     const compilation = $derived.by<DockCompilation | undefined>(() => {
         if (!showCompilation) return undefined
@@ -181,6 +197,7 @@
     debugging={session.debugSession && !session.building}
     building={session.building}
     buildProgress={{ phase: session.buildPhase, onCancel: () => session.cancelBuild() }}
+    buildButton={loadsExecutable ? DEBUG_BUTTON : undefined}
     running={session.running}
     buildDisabled={session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}

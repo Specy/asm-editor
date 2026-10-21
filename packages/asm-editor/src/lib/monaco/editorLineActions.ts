@@ -92,6 +92,48 @@ export function navigationActions(navigation: EditorNavigation): EditorLineActio
     ]
 }
 
+/**
+ * Breakpoints and Run to Cursor on the lines of the editor's Listing or Pseudocode, where its pane
+ * says they apply.
+ */
+export type EditorDebugging = {
+    canToggleBreakpoint: (line: number) => boolean
+    toggleBreakpoint: (line: number) => void
+    /** Whether Run to Cursor can start from a line now, which needs a Debug session. */
+    canRunToCursor: (line: number) => boolean
+    runToCursor: (line: number) => void
+}
+
+/**
+ * Toggle Breakpoint, and Run to Cursor while it can run
+ * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+ * 11): in a group of their own after the navigation, before "Patch instruction…", on F9 and
+ * Ctrl+F10 (⌘F10 on a Mac) as Visual Studio has them, which neither the Workbench's shortcuts nor
+ * Monaco's take.
+ */
+export function debuggingActions(debugging: EditorDebugging): EditorLineAction[] {
+    return [
+        {
+            id: 'asm-editor.toggleBreakpoint',
+            label: 'Toggle Breakpoint',
+            keybindings: (monaco) => [monaco.KeyCode.F9],
+            menuGroup: '1_debug',
+            menuOrder: 1,
+            available: (line) => debugging.canToggleBreakpoint(line),
+            run: (line) => debugging.toggleBreakpoint(line)
+        },
+        {
+            id: 'asm-editor.runToCursor',
+            label: 'Run to Cursor',
+            keybindings: (monaco) => [monaco.KeyMod.CtrlCmd | monaco.KeyCode.F10],
+            menuGroup: '1_debug',
+            menuOrder: 2,
+            available: (line) => debugging.canRunToCursor(line),
+            run: (line) => debugging.runToCursor(line)
+        }
+    ]
+}
+
 /** Where a key goes in the history: Alt+← back and Alt+→ forward, with no other modifier. */
 export function navigationKeyStep(
     event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>

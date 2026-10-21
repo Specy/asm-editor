@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import type { MonacoType } from './Monaco'
 import {
+    debuggingActions,
     lineActionContextKey,
     lineActionDescriptor,
     navigationActions,
@@ -73,5 +74,46 @@ describe('Go Back and Go Forward', () => {
             undefined,
             undefined
         ])
+    })
+})
+
+describe('Toggle Breakpoint and Run to Cursor', () => {
+    it('are on F9 and Ctrl+F10, in a group Monaco lists before Patch instruction…', () => {
+        const debugging = {
+            canToggleBreakpoint: (line: number) => line === 2,
+            toggleBreakpoint: vi.fn(),
+            canRunToCursor: (line: number) => line === 3,
+            runToCursor: vi.fn()
+        }
+        const monaco = {
+            KeyMod: { CtrlCmd: 2048 },
+            KeyCode: { F9: 67, F10: 68 }
+        } as unknown as MonacoType
+        const [toggle, runTo] = debuggingActions(debugging)
+        expect(lineActionDescriptor(toggle, monaco, () => {})).toMatchObject({
+            id: 'asm-editor.toggleBreakpoint',
+            label: 'Toggle Breakpoint',
+            keybindings: [67],
+            keybindingContext: 'editorTextFocus',
+            contextMenuGroupId: '1_debug',
+            contextMenuOrder: 1
+        })
+        expect(lineActionDescriptor(runTo, monaco, () => {})).toMatchObject({
+            id: 'asm-editor.runToCursor',
+            label: 'Run to Cursor',
+            keybindings: [2048 | 68],
+            contextMenuGroupId: '1_debug',
+            contextMenuOrder: 2
+        })
+        //offered on the lines the pane says, and run there
+        expect([1, 2, 3].map((line) => [toggle.available(line), runTo.available(line)])).toEqual([
+            [false, false],
+            [true, false],
+            [false, true]
+        ])
+        toggle.run(2)
+        runTo.run(3)
+        expect(debugging.toggleBreakpoint).toHaveBeenCalledWith(2)
+        expect(debugging.runToCursor).toHaveBeenCalledWith(3)
     })
 })

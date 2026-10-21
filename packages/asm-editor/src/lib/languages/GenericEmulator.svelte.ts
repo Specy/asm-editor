@@ -190,11 +190,17 @@ function argumentsProblem(error: CompilationFailedError): string | undefined {
 type SliceLoopEnd = 'stopped' | 'paused' | 'limit'
 
 /**
- * A sliced run other than a Run's: the Breakpoints it stops on instead of the person's, and
- * whether a Breakpoint on the instruction it starts at stops it before that instruction runs.
+ * How a sliced run differs from a plain Run: the Breakpoints it stops on instead of the person's
+ * or beside them, and whether a Breakpoint on the instruction it starts at stops it before that
+ * instruction runs.
  */
 type SliceLoopOptions = {
     breakpoints?: readonly SourceBreakpoint[]
+    /**
+     * Breakpoints a Run stops on besides the person's, which their list never holds: Run to
+     * Cursor's, resolved with theirs on every slice.
+     */
+    alsoBreakAt?: readonly SourceBreakpoint[]
     skipBreakpointAtStart?: boolean
     /** False for a run Pause does not stop, as no test run's does: a Testcase's run to `main`. */
     pausable?: boolean
@@ -1592,11 +1598,34 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
+        return this.runUntil(haltLimit)
+    }
+
+    /**
+     * Run to Cursor ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 11): a Run that also stops before any of `targets`, temporary Breakpoints that are
+     * gone once it returns, however it ends. It is a Run in every other way: sliced, paused and
+     * stopped as one ([ADR 0007](../../../../../docs/adr/0007-generic-emulator-run-scheduling.md)),
+     * stopping at the person's Breakpoints on the way, and running the instruction it starts on even
+     * when a target names it ([ADR 0023](../../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)),
+     * so from the cursor's own instruction it runs until the program comes back to it.
+     */
+    async runTo(
+        targets: readonly SourceBreakpoint[],
+        haltLimit: number
+    ): Promise<InterpreterStatus> {
+        return this.runUntil(haltLimit, [...targets])
+    }
+
+    private async runUntil(
+        haltLimit: number,
+        targets?: readonly SourceBreakpoint[]
+    ): Promise<InterpreterStatus> {
         if (!this.state.canExecute) return InterpreterStatus.Terminated
         const execution = this.executionController.capture()
         return this.duringCoreOperation(() =>
             this.executionController.isCurrent(execution)
-                ? this.runInternal(haltLimit)
+                ? this.runInternal(haltLimit, targets)
                 : Promise.resolve(InterpreterStatus.Terminated)
         )
     }
@@ -1675,8 +1704,7 @@ export abstract class GenericEmulator<T, R extends string>
                     //takes effect at the next slice
                     breakpoints: options.breakpoints
                         ? [...options.breakpoints]
-                        : (this.breakpointResolver?.(this.state.breakpoints) ??
-                          this.state.breakpoints),
+                        : this.runBreakpoints(options.alsoBreakAt),
                     skipBreakpointAtPc: firstSlice,
                     runInstructionLimit: haltLimit,
                     speedCorrection: this.speedCorrection
@@ -1881,12 +1909,26 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateStatusRegisters()
     }
 
-    private async runInternal(haltLimit: number): Promise<InterpreterStatus> {
+    /**
+     * The Breakpoints a Run's slice stops on: the person's, with `targets` beside them, resolved
+     * together so a target on a C or C++ line stops where a Breakpoint there would.
+     */
+    private runBreakpoints(targets: readonly SourceBreakpoint[] = []): SourceBreakpoint[] {
+        const breakpoints = targets.length
+            ? [...this.state.breakpoints, ...targets]
+            : this.state.breakpoints
+        return this.breakpointResolver?.(breakpoints) ?? breakpoints
+    }
+
+    private async runInternal(
+        haltLimit: number,
+        targets?: readonly SourceBreakpoint[]
+    ): Promise<InterpreterStatus> {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         const execution = this.executionController.capture()
         try {
-            await this.runSlices(haltLimit, execution)
+            await this.runSlices(haltLimit, execution, { alsoBreakAt: targets })
             this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
             if (terminated) this._peripherals.terminal.flushOutput()

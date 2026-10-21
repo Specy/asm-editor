@@ -218,7 +218,8 @@ describe('Decompile', () => {
     it("splits one pane: the Listing on the left, crackme's main Pseudocode beside it", async () => {
         const { session, project } = setup()
         const pane = show(session, 'crackme')
-        expect(pane.displayedView).toBe('hex')
+        pane.setView('crackme', 'hex', false)
+        flushSync()
         pressDecompile(session, pane)
         //the pressed pane shows the Pseudocode, and a new one on its left the Listing
         expect(session.groups).toHaveLength(2)
@@ -743,6 +744,49 @@ describe('Breakpoints on Pseudocode lines', () => {
         session.toggleBreakpoint(lineWith(document, 'if (iVar1 == 0)'), pane)
         expect(emulator.breakpoints).toEqual([])
         expect(pane.displayedBreakpoints).toEqual([])
+    })
+})
+
+describe('Run to Cursor', () => {
+    it("runs to a Pseudocode line's instructions or a Listing line's, during a Debug session", async () => {
+        const { session, emulator } = setup()
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        let document = await decompiled(pane)
+        const listing = listingOf(pane)
+        const branch = lineWith(document, 'if (iVar1 == 0)')
+        const test = listingLine(listing, 'main', 'test eax, eax')
+        //nothing runs outside a Debug session
+        expect(session.runToCursorTargets(pane, branch)).toBeUndefined()
+        expect(session.runToCursorTargets(listingPane, test)).toBeUndefined()
+
+        await session.build()
+        await tick()
+        flushSync()
+        document = await decompiled(pane)
+        //the `if`'s block starts at its test, where a Breakpoint on the line would go
+        const target = { file: 'crackme', address: listing.lines.addresses[test] }
+        expect(session.runToCursorTargets(pane, branch)).toEqual([target])
+        expect(session.runToCursorTargets(listingPane, test)).toEqual([target])
+        //a line without an instruction has nowhere to run to
+        expect(session.runToCursorTargets(pane, lineWith(document, 'int iVar1;'))).toBeUndefined()
+        const main = listing.functions.find((fn) => fn.name === 'main')!
+        expect(session.runToCursorTargets(listingPane, main.line)).toBeUndefined()
+
+        await session.runToCursor(pane, branch)
+        expect(emulator.runsTo).toEqual([[target]])
+        //a Breakpoint of the Run's own, which the person's list never holds
+        expect(emulator.breakpoints).toEqual([])
+        expect(session.running).toBe(false)
+        //nor while the program runs, nor once it has ended
+        session.running = true
+        expect(session.runToCursorTargets(pane, branch)).toBeUndefined()
+        session.running = false
+        emulator.terminated = true
+        flushSync()
+        expect(session.runToCursorTargets(listingPane, test)).toBeUndefined()
     })
 })
 

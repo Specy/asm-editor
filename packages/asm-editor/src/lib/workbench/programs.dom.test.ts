@@ -126,6 +126,8 @@ function dock(session: WorkbenchSession, group: EditorGroup) {
             [...target.querySelectorAll('button')].map(
                 (button) => button.getAttribute('aria-label') ?? button.textContent?.trim()
             ),
+        button: (label: string) =>
+            target.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`),
         press: (label: string) =>
             target.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click()
     }
@@ -346,6 +348,50 @@ describe("a pane's dock", () => {
         //during the Debug session only the pane execution is followed in has the controls
         expect(session.controlsGroup).toBe(right)
         expect([left, right].filter((group) => group.hasDock(true))).toEqual([right])
+    })
+
+    it('calls Build Debug for an Executable, which a Build loads, saying so until it builds', async () => {
+        //reverse-engineering-ux.md, decision 10
+        const { session, emulator } = setup('X86', {
+            files: { 'main.s': text('nop'), crackme: { encoding: 'base64', content: crackme } },
+            programs: {
+                'main.s': { settings: {}, testcases: [] },
+                crackme: { settings: {}, testcases: [] }
+            },
+            selectedProgram: 'main.s'
+        })
+        const left = show(session, 'main.s')
+        const right = show(session, 'crackme', session.splitEditor())
+        const assembly = dock(session, left)
+        const executable = dock(session, right)
+        expect(assembly.buttons()).toEqual(['Build'])
+        expect(assembly.button('Build')!.title).toBe('Assemble the program and start debugging it')
+        expect(executable.buttons()).toEqual(['Debug', 'Hex', 'Disassemble', 'Decompile'])
+        const debug = executable.button('Debug')!
+        expect(debug.textContent?.trim()).toBe('Debug')
+        expect(debug.title).toBe('Load the program and start debugging it')
+        //while it builds, the button says what the Build waits for, beside Cancel
+        let finish = () => {}
+        emulator.compile = (_historySize, sources) =>
+            new Promise<void>((resolve) => {
+                emulator.buildPhase = 'Loading the program…'
+                finish = () => {
+                    emulator.buildPhase = undefined
+                    emulator.buildSources = { ...sources }
+                    emulator.canExecute = true
+                    resolve()
+                }
+            })
+        executable.press('Debug')
+        flushSync()
+        expect(session.project.selectedProgram).toBe('crackme')
+        expect(debug.textContent?.trim()).toBe('Loading the program…')
+        expect(debug.title).toBe('Loading the program…')
+        expect(executable.button('Cancel the Build')).not.toBeNull()
+        finish()
+        await vi.waitFor(() => expect(session.building).toBe(false))
+        flushSync()
+        expect(executable.buttons().slice(0, 4)).toEqual(['Stop', 'Run', 'Undo', 'Step'])
     })
 
     it('makes the pane whose Build or Test was pressed the one execution is followed in', async () => {

@@ -95,11 +95,9 @@ describe('the view a File opens in', () => {
         expect(views('notes.txt')).toEqual(['text', true, false])
         expect(views('image.png')).toEqual(['preview', false, false])
         expect(views('blob.bin')).toEqual(['hex', false, false])
-        //an Executable opens in the Hex editor, and Disassemble generates its Listing
-        expect(views('crackme')).toEqual(['hex', false, false])
-        expect(orders).toHaveLength(0)
-        group.setView('crackme', 'listing')
-        flushSync()
+        //an Executable opens on its Listing, which it generates (reverse-engineering-ux.md,
+        //decision 13)
+        expect(views('crackme')).toEqual(['listing', true, true])
         expect(orders).toHaveLength(1)
         await settle(group.displayedListing)
         expect(group.modelIdentity).toMatchObject({ path: 'crackme', view: 'listing' })
@@ -122,7 +120,10 @@ describe('the view a File opens in', () => {
     })
 
     it('in the Hex editor generates no Listing for an Executable', () => {
-        const { session, orders } = setup(undefined, { openTabs: ['notes.txt'] })
+        const { session, orders } = setup(undefined, {
+            openTabs: ['notes.txt'],
+            fileViews: { crackme: 'hex' }
+        })
         const group = session.groups[0]
         session.selectFile('crackme')
         flushSync()
@@ -148,11 +149,11 @@ describe('one File in two panes', () => {
         const { session, orders } = setup()
         const left = session.groups[0]
         session.selectFile('crackme', left)
-        left.setView('crackme', 'listing', false)
         flushSync()
         await settle(left.displayedListing)
         const right = session.splitEditor()
         session.selectFile('crackme', right)
+        right.setView('crackme', 'hex', false)
         flushSync()
         expect(left.displayedView).toBe('listing')
         expect(right.displayedView).toBe('hex')
@@ -193,6 +194,7 @@ describe('one File in two panes', () => {
         const { session, emulator, project } = setup()
         const left = session.groups[0]
         session.selectFile('crackme', left)
+        left.setView('crackme', 'hex', false)
         const right = session.splitEditor()
         session.selectFile('crackme', right)
         right.setView('crackme', 'listing', false)
@@ -243,23 +245,25 @@ describe('the saved views', () => {
         session.selectFile('image.png')
         session.groups[0].setView('image.png', 'hex')
         session.selectFile('crackme')
-        session.groups[0].setView('crackme', 'listing')
+        session.groups[0].setView('crackme', 'hex')
         flushSync()
         const saved = project.toObject()
-        expect(saved.fileViews).toEqual({ 'image.png': 'hex', crackme: 'listing' })
+        expect(saved.fileViews).toEqual({ 'image.png': 'hex', crackme: 'hex' })
         expect(saved.openTabs).toEqual(['crackme', 'image.png'])
 
+        //a view saved for an Executable wins over its default, the Listing, which the Hex editor
+        //does not generate
         const restored = setup(undefined, saved)
         const group = restored.session.groups[0]
         expect(group.displayedPath).toBe('crackme')
-        expect(group.displayedView).toBe('listing')
+        expect(group.displayedView).toBe('hex')
+        expect(restored.orders).toHaveLength(0)
         restored.session.selectFile('image.png')
         flushSync()
         expect(group.displayedView).toBe('hex')
-        //a view saved before the Hex editor was an Executable's default still opens it there
-        const older = setup(undefined, { ...saved, fileViews: { crackme: 'hex' } })
-        expect(older.session.groups[0].displayedView).toBe('hex')
-        expect(older.orders).toHaveLength(0)
+        //one saved as the Listing, when it was no default, still opens it there
+        const listing = setup(undefined, { ...saved, fileViews: { crackme: 'listing' } })
+        expect(listing.session.groups[0].displayedView).toBe('listing')
     })
 
     it('moves with a renamed File and goes with a deleted one', () => {
@@ -485,6 +489,7 @@ describe('Show in Listing and Show in Hex', () => {
         await settle(left.displayedListing)
         const right = session.splitEditor()
         session.selectFile('crackme', right)
+        right.setView('crackme', 'hex', false)
         flushSync()
         const editor = fakeEditor(session)
         left.editor = editor as unknown as typeof left.editor

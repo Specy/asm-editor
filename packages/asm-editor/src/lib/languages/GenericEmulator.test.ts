@@ -1134,6 +1134,67 @@ describe('pause', () => {
     })
 })
 
+describe('run to cursor', () => {
+    it("stops at its targets or the person's Breakpoints, and keeps none of its own", async () => {
+        //a Run with temporary Breakpoints beside the person's, on every slice of it, which no Run
+        //after it has (reverse-engineering-ux.md, decision 11)
+        const emulator = new FakeEmulator()
+        emulator.toggleBreakpoint(3)
+        emulator.behavior = (_request, index) => {
+            //a Breakpoint set while it runs stops it as well, from the next slice
+            if (index === 0) emulator.toggleBreakpoint(5)
+            return { reason: index < 2 ? 'budget' : 'breakpoint', instructions: 10 }
+        }
+        const target = { file: 'main', address: 0x40 }
+        expect(await emulator.runTo([target], 0)).toBe(InterpreterStatus.Running)
+        expect(emulator.requests.map((request) => request.breakpoints)).toEqual([
+            [{ file: 'main', line: 3 }, target],
+            [{ file: 'main', line: 3 }, { file: 'main', line: 5 }, target],
+            [{ file: 'main', line: 3 }, { file: 'main', line: 5 }, target]
+        ])
+        //the instruction it starts on runs, whichever Breakpoint names it (ADR 0023)
+        expect(emulator.requests.map((request) => request.skipBreakpointAtPc)).toEqual([
+            true,
+            false,
+            false
+        ])
+        expect(emulator.breakpoints).toEqual([
+            { file: 'main', line: 3 },
+            { file: 'main', line: 5 }
+        ])
+        await emulator.run(0)
+        expect(emulator.requests.at(-1)?.breakpoints).toEqual([
+            { file: 'main', line: 3 },
+            { file: 'main', line: 5 }
+        ])
+    })
+
+    it('resolves its targets with the Breakpoints, as a C line is', async () => {
+        const emulator = new FakeEmulator()
+        emulator.setBreakpointResolver((breakpoints) =>
+            breakpoints.map((breakpoint) =>
+                breakpoint.file === 'main.c' ? { file: 'main', line: 9 } : breakpoint
+            )
+        )
+        emulator.behavior = () => ({ reason: 'breakpoint', instructions: 1 })
+        await emulator.runTo([{ file: 'main.c', line: 2 }], 0)
+        expect(emulator.requests[0].breakpoints).toEqual([{ file: 'main', line: 9 }])
+    })
+
+    it('pauses as a Run does, keeping no Breakpoint of its own', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = () => {
+            emulator.pause()
+            return { reason: 'budget', instructions: 10 }
+        }
+        expect(await emulator.runTo([{ file: 'main', line: 4 }], 1000)).toBe(
+            InterpreterStatus.Running
+        )
+        expect(emulator.paused).toBe(true)
+        expect(emulator.breakpoints).toEqual([])
+    })
+})
+
 describe('undo', () => {
     it('lets the adapter restore its Screen effects exactly once', () => {
         const emulator = new FakeEmulator()

@@ -201,6 +201,31 @@ describe('a Debug session of an Executable', () => {
         expect(emulator.stdOut).toContain('Wrong!')
     })
 
+    it('runs to the cursor, or an earlier Breakpoint, keeping no Breakpoint of its own', async () => {
+        const { emulator, listing } = await built(executableSources())
+        const call = lineOf(listing, 'call strcmp@plt')
+        const test = lineOf(listing, 'test eax, eax')
+        const at = (line: number) => ({
+            file: 'crackme',
+            address: instructionAddressAt(listing, line)!
+        })
+        emulator.toggleAddressBreakpoint(at(call).address, 'crackme')
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        //Run to Cursor on the test after strcmp stops first on the person's Breakpoint before it
+        await emulator.runTo([at(test)], 0)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.line).toBe(call)
+        //and again, at the cursor's instruction
+        await emulator.runTo([at(test)], 0)
+        expect(emulator.line).toBe(test)
+        expect(emulator.pc).toBe(BigInt(at(test).address + PIE_LOAD_BASE))
+        expect(emulator.breakpoints).toEqual([at(call)])
+        //from the cursor's own instruction it runs on, here to the program's end (ADR 0023)
+        await emulator.runTo([at(test)], 0)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.stdOut).toContain('Wrong!')
+    })
+
     it('keeps the History and Call stack on their lines when an instruction is unreadable', async () => {
         const { emulator, listing } = await built(executableSources())
         const line = lineOf(listing, 'call strcmp@plt')

@@ -38,6 +38,7 @@ import {
     isLineBreakpoint,
     makeRegister,
     sameBreakpoint,
+    type AddressBreakpoint,
     type Diagnostic,
     type LineBreakpoint,
     type RegisterPoke,
@@ -1920,11 +1921,19 @@ export class WorkbenchSession {
     }
 
     /**
-     * Shows an address of the running program, from the Call stack or the History: its line, or,
-     * in a Listing still being generated, that Listing with its progress and then the line.
+     * Shows an address of the running program, from the Call stack, the History or a pointer
+     * menu's Show in Listing: its line, or, in a Listing still being generated, that Listing with
+     * its progress and then the line. With `jump`, Show in Listing's, the panes showing the File
+     * keep where they were in their navigation history
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 8), as no reveal of the program counter's does.
      */
-    async revealAddress(address: bigint) {
+    async revealAddress(address: bigint, { jump = false }: { jump?: boolean } = {}) {
         let location = this.emulator.getSourceLocationFromAddress(address)
+        //before anything moves: a Listing's line, or a Pseudocode's function
+        if (jump && location)
+            for (const group of this.groups)
+                if (group.displayedPath === location.file) this.recordJump(group)
         if (location && location.line < 0) {
             const pending = this.emulator.listings?.session.get(location.file)
             if (pending?.status !== 'generating') return
@@ -2716,6 +2725,51 @@ export class WorkbenchSession {
         for (const address of toggled) this.emulator.toggleAddressBreakpoint(address, path)
     }
 
+    /**
+     * Where Run to Cursor from a line of a pane runs to
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 11): the instruction on a line of the running Executable's Listing, or on a line of its
+     * Pseudocode the first instruction of each block mapped to it, where a Breakpoint set there
+     * goes. Undefined while Run could not start, on a line without an instruction, and in any
+     * other File or version of it than the one running, a library's Listing and the Build
+     * output's included, where the program's Breakpoints never stop it.
+     */
+    runToCursorTargets(group: EditorGroup, line: number): AddressBreakpoint[] | undefined {
+        const selection = group.sourceSelection
+        const path = group.displayedPath
+        if (
+            !this.debugSession ||
+            this.building ||
+            this.running ||
+            this.compiling ||
+            this.executionDisabled ||
+            selection.sourceKind !== 'build' ||
+            selection.buildGeneration !== this.buildGeneration ||
+            path !== this.emulator.buildSources?.entry
+        )
+            return undefined
+        let addresses: number[] = []
+        const listing = group.displayedListing?.listing
+        const pseudocode =
+            group.displayedView === 'pseudocode' ? group.displayedPseudocode : undefined
+        if (listing) {
+            const address = instructionAddressAt(listing, line)
+            if (address !== undefined) addresses = [address]
+        } else if (pseudocode?.map) {
+            addresses = pseudocodeBreakpointAddresses(pseudocode.map, pseudocode.listing, line)
+        }
+        return addresses.length ? addresses.map((address) => ({ file: path, address })) : undefined
+    }
+
+    /**
+     * Run to Cursor: Run until the program reaches the instruction at a line of a pane, as
+     * `runToCursorTargets` finds it, or stops before, at a Breakpoint or its end.
+     */
+    async runToCursor(group: EditorGroup, line: number) {
+        const targets = this.runToCursorTargets(group, line)
+        if (targets) await this.run(targets)
+    }
+
     // ---- execution -----------------------------------------------------------------------------
 
     /** Select the source lines behind any set of lines in either pane of the mapped pair. */
@@ -2996,10 +3050,11 @@ export class WorkbenchSession {
         if (ok) this.revealCurrentInstruction()
     }
 
-    private async runCode() {
+    private async runCode(targets?: readonly SourceBreakpoint[]) {
         try {
             //no limit: a Run is sliced, so Pause and Stop answer even in an infinite loop (ADR 0007)
-            await this.emulator.run(0)
+            if (targets) await this.emulator.runTo(targets, 0)
+            else await this.emulator.run(0)
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
@@ -3009,14 +3064,15 @@ export class WorkbenchSession {
     /**
      * The whole run, from the button and from the shortcut alike: `running` has to be true for as
      * long as the program is in flight, because that is what turns the Run button into Pause and
-     * keeps Step and Undo out of a run they would re-enter the Core inside of.
+     * keeps Step and Undo out of a run they would re-enter the Core inside of. With `targets`, Run
+     * to Cursor's, it also stops before those.
      */
-    async run() {
+    async run(targets?: readonly SourceBreakpoint[]) {
         if (this.building || this.running || this.compiling) return
         this.running = true
         this.testcasesResult = []
         try {
-            await this.runCode()
+            await this.runCode(targets)
         } finally {
             this.running = false
             this.revealCurrentInstruction()

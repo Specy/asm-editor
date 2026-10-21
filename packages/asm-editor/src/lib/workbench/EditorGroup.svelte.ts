@@ -27,6 +27,7 @@ import {
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { PseudocodeDocument } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
 import {
+    defaultPseudocodeFunction,
     pseudocodeBreakpointLines,
     pseudocodeLineOfAddress
 } from '#lib/pseudocode/pseudocodeMap.ts'
@@ -67,6 +68,12 @@ export class EditorGroup {
      */
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read once when a Hex editor opens a File; nothing tracks it.
     readonly hexViews = new Map<string, HexViewState>()
+    /**
+     * Where this pane's code editor left each model, by key: the editor is made anew whenever the
+     * pane comes back to code from the bytes or a Preview, and goes back to where the last one was.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read when an editor takes a model; nothing tracks it.
+    readonly editorViewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>()
     /** The bytes Show in Hex asked this pane to select, until its Hex editor has. */
     hexReveal = $state.raw<{ path: string; offset: number; length: number } | undefined>()
     /**
@@ -357,6 +364,25 @@ export class EditorGroup {
     get displayedBuildOutput() {
         const output = this.session.buildOutputAt(this.displayedPath)
         return output !== undefined && this.displayedFile === output
+    }
+    /**
+     * The line this pane's editor puts the displayed Listing at when it shows it for the first time
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 13): the function of the Pseudocode beside it, which follows the Listing's cursor; else
+     * `main`, else the entry point's, as a Pseudocode chooses its function. A library's Listing
+     * opens at its top.
+     */
+    get listingStartLine(): number | undefined {
+        const document = this.displayedListing
+        const listing = document?.listing
+        if (!listing || this.displayedLibraryListing) return undefined
+        const beside = this.session.groups.find(
+            (other) =>
+                other !== this &&
+                other.displayedView === 'pseudocode' &&
+                other.pseudocodeListing === document
+        )
+        return (beside?.pseudocodeFunction ?? defaultPseudocodeFunction(listing))?.line
     }
     get displayedCode() {
         if (this.displayedListing) return this.displayedListingView?.text ?? ''

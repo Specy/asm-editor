@@ -128,13 +128,19 @@ describe('the view switch', () => {
         const { session, project } = setup()
         const group = show(session, 'crackme')
         const { read, press } = dock(session, { group })
-        expect(read().buttons).toEqual(['Build', 'Hex', 'Disassemble', 'Decompile'])
+        //an Executable opens on its Listing, its Build called Debug (reverse-engineering-ux.md,
+        //decisions 10 and 13)
+        expect(read().buttons).toEqual(['Debug', 'Hex', 'Disassemble', 'Decompile'])
+        expect(read().pressed).toEqual(['Disassemble'])
+        press('Hex')
+        expect(group.displayedView).toBe('hex')
         expect(read().pressed).toEqual(['Hex'])
+        //the person's choice, saved as the File's last view
+        expect(project.fileViews).toEqual({ crackme: 'hex' })
+        //and its default, which is no choice to save
         press('Disassemble')
         expect(group.displayedView).toBe('listing')
-        expect(read().pressed).toEqual(['Disassemble'])
-        //the person's choice, saved as the File's last view
-        expect(project.fileViews).toEqual({ crackme: 'listing' })
+        expect(project.fileViews).toBeUndefined()
 
         show(session, 'image.png')
         expect(read().buttons).toEqual(['Preview', 'Hex'])
@@ -195,11 +201,11 @@ describe('the view switch', () => {
         //a tablet's shared bar leaves the switch to the pane's own dock
         expect(
             dock(session, { group: right, fill: true, showViews: false }).read().buttons
-        ).toEqual(['Build'])
+        ).toEqual(['Debug'])
         //a phone's dock along the bottom edge of a pane showing the Executable
         show(session, 'crackme', left)
         expect(dock(session, { group: left, fill: true, attached: true }).read().buttons).toEqual([
-            'Build',
+            'Debug',
             'Hex',
             'Disassemble',
             'Decompile'
@@ -216,6 +222,8 @@ describe('the views of a Debug session', () => {
     it("moves a pane from an Executable's bytes to its Listing, on main, without saving it", async () => {
         const { session, project, build } = setup()
         const group = show(session, 'crackme')
+        group.setView('crackme', 'hex', false)
+        flushSync()
         expect(group.displayedView).toBe('hex')
         await session.build()
         await tick()
@@ -241,6 +249,7 @@ describe('the views of a Debug session', () => {
     it('reveals main once the pane moved to the Listing holds its model, keeping the focus', async () => {
         const { session, build } = setup()
         const group = show(session, 'crackme')
+        group.setView('crackme', 'hex', false)
         await session.build()
         await tick()
         //the editor the Listing mounts, holding the Build's model a moment later
@@ -270,7 +279,7 @@ describe('the views of a Debug session', () => {
         const { session, build } = setup()
         const left = show(session, 'crackme')
         const right = show(session, 'crackme', session.splitEditor())
-        right.setView('crackme', 'listing', false)
+        left.setView('crackme', 'hex', false)
         flushSync()
         await session.build()
         await tick()
@@ -322,7 +331,7 @@ describe('the execution dock', () => {
         //the Entry file's pane has its Program's Build, and its Test while it has Testcases
         show(session, 'crackme')
         expect(group.hasDock(true)).toBe(true)
-        expect(read().buttons).toEqual(['Build', 'Hex', 'Disassemble', 'Decompile', 'Test'])
+        expect(read().buttons).toEqual(['Debug', 'Hex', 'Disassemble', 'Decompile', 'Test'])
         await session.build()
         await tick()
         flushSync()

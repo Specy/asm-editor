@@ -113,7 +113,8 @@ describe("a register value's menu", () => {
         )
         expect(inCode.disabled).toBe(false)
         inCode.onSelect()
-        expect(session.revealAddress).toHaveBeenCalledWith(CODE.start + 0x10n)
+        //a jump the pane's navigation history keeps (reverse-engineering-ux.md, decision 8)
+        expect(session.revealAddress).toHaveBeenCalledWith(CODE.start + 0x10n, { jump: true })
         //the stack, and the byte just past the code
         for (const address of [0x7ffffffde000n, CODE.end])
             expect(
