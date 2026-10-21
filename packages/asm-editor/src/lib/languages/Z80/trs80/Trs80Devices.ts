@@ -119,6 +119,8 @@ export class Trs80Devices {
     /** Leaves the mode; the image stays until something draws on it, as leaving a framebuffer does. */
     disable(): void {
         if (!this.enabled) return
+        //the cells written since the last flush belong to the image that stays behind
+        this.flush()
         this.enabled = false
         this.dirtyFrom = -1
         this.dirtyTo = -1

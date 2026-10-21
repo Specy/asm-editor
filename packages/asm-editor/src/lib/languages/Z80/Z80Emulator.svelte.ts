@@ -117,6 +117,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * during a testcase run, rather than part way through.
      */
     private cellModeRequested = false
+    /**
+     * How many instructions the next chunk of a slice runs, kept across slices so that a program
+     * that wants a small chunk (one `out` can clear the Screen) is not rediscovered at every slice,
+     * whose first chunk would otherwise be the floor's worth of instructions.
+     */
+    private sliceChunk = MIN_SLICE_CHUNK
     private screenInstructions: ScreenInstructionHistory | null = null
     /** Echo is drawn while an IN is suspended; commit it with that IN when it succeeds. */
     private pendingEchoBefore: number | null = null
@@ -246,6 +252,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _initialize(undoSize: number): void {
+        this.sliceChunk = MIN_SLICE_CHUNK
         this.historyCapacity = normalizeUndoSize(undoSize)
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
@@ -457,43 +464,51 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const deadline = sliceDeadline(request)
         const chunkTargetMs = request.timeBudgetMs * CHUNK_TARGET_FRACTION
         const chunkCap = Math.floor(budget * CHUNK_TARGET_FRACTION)
-        let chunk = MIN_SLICE_CHUNK
-        while (instructions < budget) {
-            const startedAt = performance.now()
-            const result = machine.run({
-                maxInstructions: Math.min(chunk, budget - instructions),
-                breakpoints: stops
-            })
-            //the cells the chunk wrote, painted once rather than one store at a time; inside the
-            //measurement, because it is part of what the chunk cost the host
+        //the display is painted when the slice ends or the program waits for input, not after every
+        //chunk: a chunk ends wherever its instruction count does, which can be half way through the
+        //`ldir` that blits a frame, and painting there shows a half-drawn frame the program never
+        //meant anyone to see. A program that paces itself on the frame port ends its slice on that
+        //wait, so each frame is painted whole
+        try {
+            while (instructions < budget) {
+                const startedAt = performance.now()
+                const result = machine.run({
+                    maxInstructions: Math.min(this.sliceChunk, budget - instructions),
+                    breakpoints: stops
+                })
+                const spentMs = performance.now() - startedAt
+                //sized before any return: a chunk that overran the deadline is the one to shrink,
+                //and the size now outlives the slice
+                this.sliceChunk = nextSliceChunk(this.sliceChunk, chunkTargetMs, spentMs, chunkCap)
+                this.trackLastInstruction(result.instructions > 0, result.reason)
+                instructions += result.instructions
+                if (result.reason === StopReason.WAITING_FOR_INPUT) {
+                    //a stop on a time port is a program-requested wait, which the scheduler owns: it
+                    //awaits the clock through the execution generation so Stop still answers, and the
+                    //re-executed `in` finds the wait granted (ADR 0007, ADR 0010). Console input is
+                    //served here instead, because the program is suspended on the Terminal, not on time
+                    const wait = this.pendingWait()
+                    if (wait) return { reason: 'wait', instructions, wait }
+                    this.trs80?.flush()
+                    await this.provideInput(execution)
+                    continue
+                }
+                if (this._hasTerminated()) return { reason: 'terminated', instructions }
+                //anything else the machine stopped for is a breakpoint: the user's, or a cliff one that
+                //`_hasTerminated` did not recognize as the end of the program
+                if (result.reason !== StopReason.INSTRUCTIONS_EXHAUSTED) {
+                    return { reason: 'breakpoint', instructions }
+                }
+                //the slice ends on the clock as well as on the budget, but never without progress: a
+                //slice that ran nothing ends the whole run
+                if (instructions > 0 && performance.now() >= deadline) {
+                    return { reason: 'budget', instructions }
+                }
+            }
+            return { reason: 'budget', instructions }
+        } finally {
             this.trs80?.flush()
-            const spentMs = performance.now() - startedAt
-            this.trackLastInstruction(result.instructions > 0, result.reason)
-            instructions += result.instructions
-            if (result.reason === StopReason.WAITING_FOR_INPUT) {
-                //a stop on a time port is a program-requested wait, which the scheduler owns: it
-                //awaits the clock through the execution generation so Stop still answers, and the
-                //re-executed `in` finds the wait granted (ADR 0007, ADR 0010). Console input is
-                //served here instead, because the program is suspended on the Terminal, not on time
-                const wait = this.pendingWait()
-                if (wait) return { reason: 'wait', instructions, wait }
-                await this.provideInput(execution)
-                continue
-            }
-            if (this._hasTerminated()) return { reason: 'terminated', instructions }
-            //anything else the machine stopped for is a breakpoint: the user's, or a cliff one that
-            //`_hasTerminated` did not recognize as the end of the program
-            if (result.reason !== StopReason.INSTRUCTIONS_EXHAUSTED) {
-                return { reason: 'breakpoint', instructions }
-            }
-            //the slice ends on the clock as well as on the budget, but never without progress: a
-            //slice that ran nothing ends the whole run
-            if (instructions > 0 && performance.now() >= deadline) {
-                return { reason: 'budget', instructions }
-            }
-            chunk = nextSliceChunk(chunk, chunkTargetMs, spentMs, chunkCap)
         }
-        return { reason: 'budget', instructions }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
