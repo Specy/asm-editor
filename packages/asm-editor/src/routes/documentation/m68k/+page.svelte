@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
@@ -28,28 +29,28 @@
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">M68K Documentation</h1>
     <SearchLauncher size="full" placeholder="Search the M68K docs and courses" />
     <div class="links">
-        <NavigationLinkButton href="/documentation/m68k/instruction">
+        <NavigationLinkButton href={resolve('/documentation/m68k/instruction')}>
             <div>Instructions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/addressing-mode">
+        <NavigationLinkButton href={resolve('/documentation/m68k/addressing-mode')}>
             <div>Addressing Modes</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/condition-codes">
+        <NavigationLinkButton href={resolve('/documentation/m68k/condition-codes')}>
             <div>Condition Codes</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/shift-direction">
+        <NavigationLinkButton href={resolve('/documentation/m68k/shift-direction')}>
             <div>Shift directions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/traps">
+        <NavigationLinkButton href={resolve('/documentation/m68k/traps')}>
             <div>Trap tasks</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/directive">
+        <NavigationLinkButton href={resolve('/documentation/m68k/directive')}>
             <div>Directives</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/assembler-features">
+        <NavigationLinkButton href={resolve('/documentation/m68k/assembler-features')}>
             <div>Assembler Features</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/m68k/all">
+        <NavigationLinkButton href={resolve('/documentation/m68k/all')}>
             <div>Complete Documentation</div>
         </NavigationLinkButton>
     </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import PostCard from '#cmp/blog/PostCard.svelte'
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
@@ -11,7 +12,7 @@
     description={data.tag.description}
 />
 <header class="blog-intro">
-    <a href="/blog" class="blog-back">
+    <a href={resolve('/blog')} class="blog-back">
         <span class="blog-link-icon" aria-hidden="true"><FaArrowLeft /></span>
         All articles
     </a>

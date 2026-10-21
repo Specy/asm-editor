@@ -82,37 +82,37 @@
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/risc-v"
+                    href={resolve('/documentation/risc-v')}
                     title="RISC-V"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/directive"
+                    href={resolve('/documentation/risc-v/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/screen"
+                    href={resolve('/documentation/risc-v/screen')}
                     title="Screen and I/O"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/syscall"
+                    href={resolve('/documentation/risc-v/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/using-c"
+                    href={resolve('/documentation/risc-v/using-c')}
                     title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/runtime-library"
+                    href={resolve('/documentation/risc-v/runtime-library')}
                     title="Runtime library"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/registers"
+                    href={resolve('/documentation/risc-v/registers')}
                     title="Registers"
                     onClick={() => (menuOpen = false)}
                 />
@@ -128,7 +128,10 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/risc-v/instruction"
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/risc-v/instruction/[instructionName]', {
+                            instructionName
+                        })}
                     names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}

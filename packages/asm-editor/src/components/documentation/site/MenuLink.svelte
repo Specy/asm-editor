@@ -1,8 +1,9 @@
 <script lang="ts">
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaCircle from '~icons/fa-solid/circle'
+    import type { ResolvedPathname } from '$app/types'
     interface Props {
-        href: string
+        href: ResolvedPathname
         title: string
         onClick?: (e: MouseEvent) => void
     }

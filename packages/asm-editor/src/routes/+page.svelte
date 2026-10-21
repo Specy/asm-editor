@@ -157,7 +157,7 @@
         <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
         <div class="links-row-wrapper">
             <div class="links-row">
-                <MainPageLinkPreview href="/documentation" title="Documentation page">
+                <MainPageLinkPreview href={resolve('/documentation')} title="Documentation page">
                     {#snippet icon()}
                         <div>
                             <FaBook />
@@ -167,7 +167,10 @@
                         Documentation
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="#codeCompletion" title="Code completion section">
+                <MainPageLinkPreview
+                    href={resolve('/#codeCompletion')}
+                    title="Code completion section"
+                >
                     {#snippet icon()}
                         <div>
                             <FaSearch />
@@ -177,7 +180,7 @@
                         Code completion
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="#tools" title="Tools section">
+                <MainPageLinkPreview href={resolve('/#tools')} title="Tools section">
                     {#snippet icon()}
                         <div>
                             <FaTools />
@@ -187,7 +190,7 @@
                         <div>Tools</div>
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="/embed" title="Embed the app in your website">
+                <MainPageLinkPreview href={resolve('/embed')} title="Embed the app in your website">
                     {#snippet icon()}
                         <div>
                             <FaCode />
@@ -197,7 +200,7 @@
                         Embed
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="/exam" title="Create an exam for students">
+                <MainPageLinkPreview href={resolve('/exam')} title="Create an exam for students">
                     {#snippet icon()}
                         <div>
                             <FaDumbbell />
@@ -207,7 +210,7 @@
                         Exam
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="/chat" title="AI Chat">
+                <MainPageLinkPreview href={resolve('/chat')} title="AI Chat">
                     {#snippet icon()}
                         <div>
                             <SparklesIcon style="font-size: 1.8rem" />

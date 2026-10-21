@@ -18,13 +18,14 @@
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
+    import type { ResolvedPathname } from '$app/types'
     import Page from '#cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import { serializer } from '#lib/json.ts'
-    import { createExamSessionLink, parseLegacyProjectExamPayload } from '#lib/exam.ts'
+    import { examSessionPath, parseLegacyProjectExamPayload } from '#lib/exam.ts'
     import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
 
     let project = $state(makeProject())
@@ -61,7 +62,7 @@
                 return
             }
 
-            await goto(createExamSessionLink(migratedExam), { replace: true })
+            await goto(resolve(examSessionPath(migratedExam)), { replace: true })
             return
         }
 
@@ -212,7 +213,7 @@
         toast.logPill('Copied to clipboard')
     }
 
-    async function changePage(page: string) {
+    async function changePage(page: ResolvedPathname) {
         try {
             const stored = await ProjectStore.getProjectFromDb(project.id)
             if (!stored) {
@@ -295,9 +296,9 @@
                                 phone={ui.deviceClass === 'phone'}
                                 drawerOpen={ui.drawerOpen}
                                 onToggleMenu={() => (ui.drawerOpen = !ui.drawerOpen)}
-                                onHome={() => changePage('/')}
-                                onBack={() => changePage('/projects')}
-                                onDonate={() => changePage('/donate')}
+                                onHome={() => changePage(resolve('/'))}
+                                onBack={() => changePage(resolve('/projects'))}
+                                onDonate={() => changePage(resolve('/donate'))}
                                 onShare={() => share(project)}
                             />
                         {/snippet}

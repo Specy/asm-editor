@@ -1,6 +1,7 @@
 <script lang="ts">
+    import type { ResolvedPathname } from '$app/types'
     interface Props {
-        href: string
+        href: ResolvedPathname
         title: string
         icon?: import('svelte').Snippet
         description?: import('svelte').Snippet

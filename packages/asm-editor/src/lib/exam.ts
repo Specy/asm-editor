@@ -179,8 +179,13 @@ export function decodeExamPayload(encodedPayload: string): ExamPayload | null {
     }
 }
 
+/** The exam session page for `payload`, as a pathname without its leading slash, for `resolve()`. */
+export function examSessionPath(payload: ExamPayload) {
+    return `exam/session?exam=${encodeExamPayload(payload)}` as const
+}
+
 export function createExamSessionLink(payload: ExamPayload): string {
-    return `${window.location.origin}/exam/session?exam=${encodeExamPayload(payload)}`
+    return `${window.location.origin}/${examSessionPath(payload)}`
 }
 
 export function hasEncryptedLegacyPrompts(sections: ExamSection[]) {

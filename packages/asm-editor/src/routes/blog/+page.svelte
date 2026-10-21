@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import PostCard from '#cmp/blog/PostCard.svelte'
     import TagLink from '#cmp/blog/TagLink.svelte'
@@ -44,6 +45,6 @@
 {/if}
 {#if !data.featured.length && !data.recent.length}
     <p>
-        No articles published yet. <a href="/learn/courses">Assembly courses</a>.
+        No articles published yet. <a href={resolve('/learn/courses')}>Assembly courses</a>.
     </p>
 {/if}

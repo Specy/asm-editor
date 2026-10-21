@@ -127,8 +127,9 @@
         </div>
         {#if data.gettingStarted}
             <p style="margin: 0.8rem 0; line-height: 1.6">
-                New to ASM Editor? <a href={data.gettingStarted} style="color: var(--accent)"
-                    >Follow the getting-started guide</a
+                New to ASM Editor? <a
+                    href={resolve('/blog/posts/[slug]', { slug: data.gettingStarted })}
+                    style="color: var(--accent)">Follow the getting-started guide</a
                 >.
             </p>
         {/if}

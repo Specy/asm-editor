@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
@@ -42,25 +43,25 @@
         of its own code executes whatever bytes follow in memory.
     </p>
     <div class="links">
-        <NavigationLinkButton href="/documentation/x86/instruction">
+        <NavigationLinkButton href={resolve('/documentation/x86/instruction')}>
             <div>Instructions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/directive">
+        <NavigationLinkButton href={resolve('/documentation/x86/directive')}>
             <div>Directives</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/registers">
+        <NavigationLinkButton href={resolve('/documentation/x86/registers')}>
             <div>Registers & Flags</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/syscall">
+        <NavigationLinkButton href={resolve('/documentation/x86/syscall')}>
             <div>Syscalls</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/using-c">
+        <NavigationLinkButton href={resolve('/documentation/x86/using-c')}>
             <div>Using C and C++</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/executables">
+        <NavigationLinkButton href={resolve('/documentation/x86/executables')}>
             <div>Executables</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/all">
+        <NavigationLinkButton href={resolve('/documentation/x86/all')}>
             <div>Complete Documentation</div>
         </NavigationLinkButton>
     </div>

@@ -82,37 +82,37 @@
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/mips"
+                    href={resolve('/documentation/mips')}
                     title="MIPS"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/directive"
+                    href={resolve('/documentation/mips/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/screen"
+                    href={resolve('/documentation/mips/screen')}
                     title="Screen and I/O"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/syscall"
+                    href={resolve('/documentation/mips/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/using-c"
+                    href={resolve('/documentation/mips/using-c')}
                     title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/runtime-library"
+                    href={resolve('/documentation/mips/runtime-library')}
                     title="Runtime library"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/registers"
+                    href={resolve('/documentation/mips/registers')}
                     title="Registers"
                     onClick={() => (menuOpen = false)}
                 />
@@ -128,7 +128,10 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/mips/instruction"
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/mips/instruction/[instructionName]', {
+                            instructionName
+                        })}
                     names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}

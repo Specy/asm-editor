@@ -17,6 +17,7 @@
         createExamSessionLink,
         decodeExamPayload,
         ExamSectionType,
+        examSessionPath,
         parseLegacyProjectExamPayload,
         unlockExamSections,
         type AssemblyCodingAnswer,
@@ -559,7 +560,7 @@
                 if (legacyExam) {
                     const migratedPayload = parseLegacyProjectExamPayload(legacyExam)
                     if (migratedPayload) {
-                        await goto(createExamSessionLink(migratedPayload), { replace: true })
+                        await goto(resolve(examSessionPath(migratedPayload)), { replace: true })
                         return
                     }
                 }

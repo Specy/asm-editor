@@ -161,7 +161,8 @@
                             lectures={module.lectures}
                             lectureStyle="padding-left: 1rem"
                             onClick={() => (menuOpen = false)}
-                            hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}
+                            courseId={data.course.slug}
+                            moduleId={module.slug}
                         />
                     </Column>
                 </TogglableSection>

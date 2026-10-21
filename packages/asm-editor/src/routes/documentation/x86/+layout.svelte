@@ -84,42 +84,42 @@
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/x86"
+                    href={resolve('/documentation/x86')}
                     title="x86-64"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/directive"
+                    href={resolve('/documentation/x86/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/registers"
+                    href={resolve('/documentation/x86/registers')}
                     title="Registers & Flags"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/syscall"
+                    href={resolve('/documentation/x86/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/using-c"
+                    href={resolve('/documentation/x86/using-c')}
                     title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/runtime-library"
+                    href={resolve('/documentation/x86/runtime-library')}
                     title="Runtime library"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/executables"
+                    href={resolve('/documentation/x86/executables')}
                     title="Executables"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/all"
+                    href={resolve('/documentation/x86/all')}
                     title="Complete documentation"
                     onClick={() => (menuOpen = false)}
                 />
@@ -135,7 +135,10 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/x86/instruction"
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/x86/instruction/[instructionName]', {
+                            instructionName
+                        })}
                     names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}

@@ -53,9 +53,7 @@
             language,
             code
         })
-        const target = resolve('/projects/[project]', { project: 'share' })
-        // The route IS resolved, on the line above.
-        goto(`${target}?project=${createSharePayload(project)}`)
+        goto(resolve(`projects/share?project=${createSharePayload(project)}`))
     }
 </script>
 

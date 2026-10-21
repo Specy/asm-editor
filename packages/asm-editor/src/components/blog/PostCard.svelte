@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import type { BlogPostSummary } from '#lib/blog/catalog.ts'
     import { formatBlogDate } from '#lib/blog/date.ts'
     import TagLink from './TagLink.svelte'
@@ -13,7 +14,7 @@
         <time class="blog-date" datetime={post.datePublished}
             >{formatBlogDate(post.datePublished)}</time
         >
-        <h3><a href={post.pathname}>{post.title}</a></h3>
+        <h3><a href={resolve('/blog/posts/[slug]', { slug: post.slug })}>{post.title}</a></h3>
         <p>{post.description}</p>
         <div class="blog-tags">
             {#each post.tags as id (id)}<TagLink {id} />{/each}

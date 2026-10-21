@@ -15,6 +15,7 @@
      */
     import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
     import type { OperandSymbol } from '#lib/documentation/instructions/document.ts'
+    import { resolveHref } from '#lib/hrefs.ts'
 
     interface Props {
         operands: readonly OperandSymbol[]
@@ -55,7 +56,7 @@
                 <dd>
                     <InlineMarkdown source={operand.meaning} />
                     {#if operand.href && !disableLinks}
-                        <a class="more" href={operand.href}>More</a>
+                        <a class="more" href={resolveHref(operand.href)}>More</a>
                     {/if}
                 </dd>
             </div>

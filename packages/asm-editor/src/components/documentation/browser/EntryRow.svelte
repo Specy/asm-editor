@@ -13,6 +13,7 @@
     import ClampedContent from '#cmp/shared/layout/ClampedContent.svelte'
     import { hasCodeName, type DocumentationEntry } from '#lib/documentation/entries.ts'
     import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
+    import { resolveHref } from '#lib/hrefs.ts'
     import EntryBody from '../entries/EntryBody.svelte'
 
     interface Props {
@@ -98,7 +99,7 @@
             >
                 <EntryBody {entry} {disableLinks} />
                 {#if pageLink}
-                    <a class="page-link" href={entry.href}>
+                    <a class="page-link" href={resolveHref(entry.href)}>
                         {entry.kind === 'instruction'
                             ? 'Open its page, with an example to run'
                             : 'Open its page'}

@@ -1,21 +1,27 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import Column from '#cmp/shared/layout/Column.svelte'
     import type { Lecture } from '#lib/content/getters.ts'
     interface Props {
         currentLecture?: Lecture
         lectures: Lecture[]
-        hrefBase: string
+        courseId: string
+        moduleId: string
         onClick?: (e: MouseEvent) => void
         lectureStyle?: string
     }
 
-    let { currentLecture, lectures, hrefBase, onClick, lectureStyle }: Props = $props()
+    let { currentLecture, lectures, courseId, moduleId, onClick, lectureStyle }: Props = $props()
 </script>
 
 <Column>
     {#each lectures as lecture (lecture.slug)}
         <a
-            href="{hrefBase}/{lecture.slug}"
+            href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
+                courseId,
+                moduleId,
+                lectureId: lecture.slug
+            })}
             class="lecture-link"
             class:current-lecture={lecture.slug === currentLecture?.slug}
             onclick={onClick}

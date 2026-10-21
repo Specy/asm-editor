@@ -15,8 +15,10 @@
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import { goto } from '$app/navigation'
+    import type { ResolvedPathname } from '$app/types'
     import { hasCodeName } from '#lib/documentation/entries.ts'
     import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
+    import { resolveHref } from '#lib/hrefs.ts'
     import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
@@ -120,8 +122,8 @@
         opener?.focus?.()
     }
 
-    function hrefOf(result: SearchResult): string {
-        return result.kind === 'entry' ? result.entry.href : result.section.href
+    function hrefOf(result: SearchResult): ResolvedPathname {
+        return resolveHref(result.kind === 'entry' ? result.entry.href : result.section.href)
     }
 
     async function go(result: SearchResult) {

@@ -83,27 +83,27 @@
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/z80"
+                    href={resolve('/documentation/z80')}
                     title="Z80"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/z80/directive"
+                    href={resolve('/documentation/z80/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/z80/registers"
+                    href={resolve('/documentation/z80/registers')}
                     title="Registers & Flags"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/z80/io"
+                    href={resolve('/documentation/z80/io')}
                     title="Input/Output"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/z80/all"
+                    href={resolve('/documentation/z80/all')}
                     title="Complete documentation"
                     onClick={() => (menuOpen = false)}
                 />
@@ -119,7 +119,10 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/z80/instruction"
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/z80/instruction/[instructionName]', {
+                            instructionName
+                        })}
                     names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}

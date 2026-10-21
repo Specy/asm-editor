@@ -79,40 +79,44 @@
 
     <MaskedScroll>
         <Column gap="1rem" padding="0 1rem">
-            <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
+            <MenuLink
+                href={resolve('/documentation/m68k')}
+                title="M68K"
+                onClick={() => (menuOpen = false)}
+            />
 
             <MenuLink
-                href="/documentation/m68k/addressing-mode"
+                href={resolve('/documentation/m68k/addressing-mode')}
                 title="Addressing Modes"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/condition-codes"
+                href={resolve('/documentation/m68k/condition-codes')}
                 title="Condition Codes"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/shift-direction"
+                href={resolve('/documentation/m68k/shift-direction')}
                 title="Shifts & directions"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/traps"
+                href={resolve('/documentation/m68k/traps')}
                 title="Trap tasks"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/exceptions"
+                href={resolve('/documentation/m68k/exceptions')}
                 title="Exceptions"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/directive"
+                href={resolve('/documentation/m68k/directive')}
                 title="Directives"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/assembler-features"
+                href={resolve('/documentation/m68k/assembler-features')}
                 title="Assembler features"
                 onClick={() => (menuOpen = false)}
             />
@@ -129,7 +133,10 @@
             {/snippet}
             <InstructionsMenu
                 names={instructionNames}
-                hrefBase="/documentation/m68k/instruction"
+                hrefOf={(instructionName) =>
+                    resolve('/documentation/m68k/instruction/[instructionName]', {
+                        instructionName
+                    })}
                 onClick={() => (menuOpen = false)}
                 {currentInstructionName}
             />

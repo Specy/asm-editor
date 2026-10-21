@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import TagLink from '#cmp/blog/TagLink.svelte'
     import ArticleOutline from '#cmp/blog/ArticleOutline.svelte'
@@ -36,14 +37,16 @@
     <ArticleOutline sections={data.sections} article={articleElement} />
     <article class="blog-article" bind:this={articleElement}>
         <header class="blog-article-header">
-            <a href="/blog" class="blog-back">
+            <a href={resolve('/blog')} class="blog-back">
                 <span class="blog-link-icon" aria-hidden="true"><FaArrowLeft /></span>
                 All articles
             </a>
             <h1>{post.title}</h1>
             <p class="blog-lead">{post.description}</p>
             <div class="blog-byline">
-                <a href={AUTHOR.url}>{AUTHOR.alternateName}</a><span aria-hidden="true">·</span>
+                <a href={AUTHOR.url} rel="external">{AUTHOR.alternateName}</a><span
+                    aria-hidden="true">·</span
+                >
                 <time datetime={post.datePublished}>{formatBlogDate(post.datePublished)}</time>
                 {#if post.dateUpdated}<span
                         >Updated <time datetime={post.dateUpdated}
@@ -57,7 +60,7 @@
         </header>
         <MarkdownRenderer source={post.content} headingIds />
         <footer class="blog-article-footer">
-            <a href="/blog">
+            <a href={resolve('/blog')}>
                 All articles
                 <span class="blog-link-icon" aria-hidden="true"><FaArrowRight /></span>
             </a>
