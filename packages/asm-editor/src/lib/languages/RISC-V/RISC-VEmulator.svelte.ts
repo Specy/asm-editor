@@ -109,7 +109,9 @@ export {
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
  * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
- * history: about 5 400. The earlier estimate of 2 800 was taken while the Core kept the program
+ * history: about 4 800 (`npm run measure`, three runs of 4 700 to 5 000, after the undo recorder
+ * stopped counting in longs; the harness measured about 1 600 on the same loop before that). The
+ * estimate of 2 800 before that was taken while the Core kept the program
  * counter in a long Register and added one to the cycle and instret counters on every instruction -
  * TeaVM compiles long arithmetic into BigInt operations, each of which allocates - read the
  * self-modifying-code setting out of a map on every instruction fetch, fetched through four calls
@@ -124,7 +126,7 @@ export {
  * and exit calls on a Core that is single threaded; and the two counters recorded an undo entry
  * each, where one entry covers both.
  */
-const RISCV_INSTRUCTIONS_PER_MS = 5_432
+const RISCV_INSTRUCTIONS_PER_MS = 4_800
 
 /**
  * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
