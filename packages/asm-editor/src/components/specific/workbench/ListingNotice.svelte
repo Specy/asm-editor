@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+    import HelpButton from './HelpButton.svelte'
     import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
     /**
@@ -13,7 +14,8 @@
         built = false,
         patchable = false,
         touch = false,
-        findOpen = false
+        findOpen = false,
+        onHelp
     }: {
         document: ListingDocument
         /** A shared library's Listing, under `@lib/`, rather than the Executable's own. */
@@ -32,6 +34,8 @@
         touch?: boolean
         /** Whether the editor's find widget is open, which the notice hides for. */
         findOpen?: boolean
+        /** Opens the Documentation's section on the Listing, from the notice's "?". */
+        onHelp?: () => void
     } = $props()
     const description = $derived.by(() => {
         if (document.status === 'failed')
@@ -48,8 +52,13 @@
     })
 </script>
 
+{#snippet help()}
+    <HelpButton label="What is the Listing?" onclick={onHelp} />
+{/snippet}
+
 <ReadOnlyNotice
     label={document.status === 'failed' ? description : 'read-only'}
     {description}
+    action={onHelp ? help : undefined}
     {findOpen}
 />

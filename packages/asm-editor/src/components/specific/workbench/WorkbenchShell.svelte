@@ -25,6 +25,7 @@
     import { documentationLanguageOf, languageScope } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { hasExecutable } from '#lib/executables.ts'
+    import { registerDocumentationLinks } from '#lib/languages/service/navigation.ts'
     import './workbench.css'
 
     interface Props {
@@ -128,7 +129,17 @@
         // The Documentation panel is one click away, so its index and the model start loading
         // once the Workbench has settled ([ADR 0026](../../../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)).
         if (accessOf('documentation') !== 'off') searchClient.preload(searchScope)
-        return session.mount()
+        //a hover's link into the Documentation opens it in the panel, since the Workbench never
+        //navigates; with the panel off, as an Exam may have it, the link goes nowhere, not to a tab
+        const unregisterLinks = registerDocumentationLinks((href) => {
+            if (accessOf('documentation') !== 'off') ui.showDocumentation(href)
+            return true
+        })
+        const unmount = session.mount()
+        return () => {
+            unregisterLinks()
+            unmount()
+        }
     })
 
     /**

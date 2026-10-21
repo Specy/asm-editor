@@ -9,7 +9,7 @@ import htmlWorker from 'monaco-editor/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
 import type { AvailableLanguages, AvailableProgrammingLanguages } from '#lib/Project.svelte.ts'
 import { isTextFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
-import { openProjectResource } from '#lib/languages/service/navigation.ts'
+import { openDocumentationLink, openProjectResource } from '#lib/languages/service/navigation.ts'
 import { registerAssemblyLanguage } from './assemblyLanguageRegistry'
 
 export type MonacoType = typeof monaco
@@ -140,6 +140,12 @@ class MonacoLoader {
             }
         })
         this.toDispose.push(this.projectOpener)
+        //a hover's link into the Documentation opens the Workbench's Documentation panel
+        this.toDispose.push(
+            monacoInstance.editor.registerLinkOpener({
+                open: (resource) => openDocumentationLink(resource)
+            })
+        )
     }
 
     /** C's providers: its source help, and the navigation of Pseudocode, which reads as C. */

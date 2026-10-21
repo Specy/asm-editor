@@ -19,6 +19,7 @@ import {
     setModelListing
 } from './listingModels'
 import { createListingProviders, withoutListings } from './listingProviders'
+import { followableNameAt } from './followNames'
 
 class Range {
     constructor(
@@ -123,6 +124,45 @@ describe('go to definition in a Listing', () => {
         expect(registered.index.addressLine(address)).toBe(callLine)
         // A word inside a string is text, not a name.
         expect(listingTokenAt('s_hunter2: db "hunter2", 0', 16)).toBeUndefined()
+    })
+})
+
+describe('names a double-click follows in a Listing', () => {
+    it('follows a label an operand names and an address, not a label where it is defined', () => {
+        const main = lineOf('main:')
+        const call = lineOf('call strcmp@plt', main)
+        const column = lines[call].indexOf('strcmp@plt')
+        //where Go to Definition goes, drawn as a link over the whole name
+        expect(followableNameAt(monacoStub, model(), at(call, 'strcmp@plt'))).toMatchObject({
+            range: {
+                startLineNumber: call + 1,
+                startColumn: column + 1,
+                endLineNumber: call + 1,
+                endColumn: column + 1 + 'strcmp@plt'.length
+            },
+            line: lineOf('strcmp@plt:') + 1
+        })
+        const jump = lineOf('jne .LAB_1', main)
+        expect(followableNameAt(monacoStub, model(), at(jump, '.LAB_1'))?.line).toBe(
+            lineOf('.LAB_1:', main) + 1
+        )
+        const address = `0x${(listing.lines.addresses[call] + PIE_LOAD_BASE).toString(16)}`
+        const comment = `    nop ; ${address}`
+        const withAddress = {
+            ...model(),
+            getLineContent: (lineNumber: number) =>
+                lineNumber === main + 1 ? comment : lines[lineNumber - 1]
+        } as unknown as monaco.editor.ITextModel
+        expect(
+            followableNameAt(monacoStub, withAddress, {
+                lineNumber: main + 1,
+                column: comment.indexOf(address) + 2
+            })?.line
+        ).toBe(call + 1)
+        //a label's own definition goes nowhere, and a mnemonic or a register is no name
+        expect(followableNameAt(monacoStub, model(), at(main, 'main'))).toBeUndefined()
+        expect(followableNameAt(monacoStub, model(), at(call, 'call'))).toBeUndefined()
+        expect(followableNameAt(monacoStub, model('elsewhere'), at(call, 'strcmp'))).toBeUndefined()
     })
 })
 

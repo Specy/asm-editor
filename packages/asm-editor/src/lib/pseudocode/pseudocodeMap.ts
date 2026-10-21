@@ -249,6 +249,21 @@ export function pseudocodeTargetAt(
 }
 
 /**
+ * The token under a 0-based column of a line of the Pseudocode document, of any kind, for a
+ * hover: a constant, a type, a variable.
+ */
+export function pseudocodeTokenAt(
+    lines: readonly DecompiledLine[],
+    firstLine: number,
+    line: number,
+    column: number
+): DecompiledToken | undefined {
+    return lines[line - firstLine]?.tokens.find(
+        (token) => token.start <= column && column < token.end
+    )
+}
+
+/**
  * The Listing line a target is shown on: a function's label, else the label operands use for
  * the address (the last there, after its aliases), else the line holding it; -1 for none.
  */

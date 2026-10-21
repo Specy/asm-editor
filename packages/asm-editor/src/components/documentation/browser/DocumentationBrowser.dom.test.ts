@@ -5,7 +5,7 @@
  */
 import 'fake-indexeddb/auto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount } from 'svelte'
+import { flushSync, mount, tick, unmount } from 'svelte'
 import type { Chapter, DocumentationEntry } from '#lib/documentation/entries.ts'
 import type { InstructionCategory } from '#lib/documentation/instructions/categories.ts'
 import DocumentationBrowser from './DocumentationBrowser.svelte'
@@ -115,5 +115,43 @@ describe('the Instructions Chapter while browsing', () => {
         ])
         expect(target.querySelector('.category-group')).toBeNull()
         expect(titles(target)).toEqual(['add', 'mystery'])
+    })
+})
+
+describe('a link asked for from outside the panel', () => {
+    beforeAll(() => {
+        //jsdom scrolls nothing
+        HTMLElement.prototype.scrollTo ??= () => {}
+    })
+
+    it("shows its entry, with Back, and leaves the keyboard where it was, as a notice's ? asks", async () => {
+        const target = document.createElement('div')
+        document.body.append(target)
+        const app = mount(DocumentationBrowser, {
+            target,
+            props: {
+                language: 'mips',
+                chapters: [
+                    chapter('directives', [
+                        entry('directives', '.word'),
+                        entry('directives', '.data')
+                    ])
+                ],
+                request: { token: 1, href: '/directives#.data' }
+            }
+        })
+        dispose = () => {
+            unmount(app)
+            target.remove()
+        }
+        flushSync()
+        await tick()
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        const input = target.querySelector('input')!
+        expect(input.value).toBe('.data')
+        expect(titles(target)).toEqual(['.data'])
+        expect(target.querySelector('.entry-row .head')?.getAttribute('aria-expanded')).toBe('true')
+        expect(target.querySelector('button.back')).not.toBeNull()
+        expect(document.activeElement).not.toBe(input)
     })
 })

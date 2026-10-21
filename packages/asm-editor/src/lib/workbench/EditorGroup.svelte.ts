@@ -32,6 +32,7 @@ import {
 } from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
+import { NavigationHistory } from './navigationHistory.svelte'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
@@ -82,6 +83,12 @@ export class EditorGroup {
     pseudocodeFunctions = $state.raw<Readonly<Record<string, number>>>({})
     /** The 0-based line of the editor's cursor, in whatever the pane shows; -1 before it has one. */
     cursorLine = $state(-1)
+    /**
+     * The places in Listings and Pseudocode this pane jumped from, which Back and Forward return
+     * to ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 8).
+     */
+    readonly history = new NavigationHistory()
 
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
@@ -258,6 +265,8 @@ export class EditorGroup {
     /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
     moveView(from: string, to?: string) {
         this.forgetPreviewNote(from, to)
+        //a closed tab's places stay, and Back opens it again
+        if (to !== undefined) this.history.rename(from, to)
         if (Object.hasOwn(this.pseudocodeFunctions, from)) {
             const functions = Object.entries(this.pseudocodeFunctions).filter(
                 ([path]) => path !== from && path !== to

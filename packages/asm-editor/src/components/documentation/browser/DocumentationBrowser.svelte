@@ -42,10 +42,11 @@
         /** In an Exam: links into the Documentation still work, every other link is text. */
         disableLinks?: boolean
         /**
-         * A one-shot request from outside the panel (Ctrl+K): focus the search box, with a query if
-         * one is given. A new `token` is a new request.
+         * A one-shot request from outside the panel: focus the search box (Ctrl+K), with a query
+         * if one is given, or follow a link into the Documentation (`href`), as a notice's "?"
+         * asks. A new `token` is a new request.
          */
-        request?: { token: number; query?: string } | null
+        request?: { token: number; query?: string; href?: string } | null
     }
 
     let {
@@ -187,7 +188,7 @@
 
     $effect(() => {
         const current = request
-        if (!current) return
+        if (!current || current.href !== undefined) return
         untrack(() => {
             if (current.query !== undefined) setQuery(current.query)
             void tick().then(() =>
@@ -196,6 +197,22 @@
                     input?.select()
                 })
             )
+        })
+    })
+
+    /** The request whose link was followed, once the Chapters it needs had loaded. */
+    let followedRequest = -1
+    $effect(() => {
+        const current = request
+        const loaded = chapters
+        if (current?.href === undefined || !loaded || current.token === followedRequest) return
+        followedRequest = current.token
+        const href = current.href
+        untrack(() => {
+            const target = resolveDocumentationLink(href, loaded)
+            if (target) follow(target)
+            //another language's page, which this panel does not hold, as its own links do
+            else if (variant === 'panel' && !disableLinks) window.open(href, '_blank', 'noopener')
         })
     })
 

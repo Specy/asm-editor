@@ -22,6 +22,7 @@ import { createPseudocodeProviders } from '#lib/monaco/pseudocodeProviders.ts'
 import { setModelPseudocode } from '#lib/monaco/pseudocodeModels.ts'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { fileViewIdentity } from '#lib/languages/service/uri.ts'
+import { liveSource } from '#lib/monaco/projectSourceSelection.ts'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
 import PseudocodeNotice from '#cmp/specific/workbench/PseudocodeNotice.svelte'
@@ -512,6 +513,125 @@ describe('the Pseudocode beside its Listing', () => {
         pane.setView('crackme', 'hex')
         flushSync()
         expect(release).toHaveBeenCalledWith('crackme')
+    })
+})
+
+describe('the navigation history', () => {
+    /** crackme's main beside its Listing, whose editor moves its cursor as a reveal asks. */
+    async function paired() {
+        const fixture = setup()
+        const { session } = fixture
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        await decompiled(pane)
+        const listing = listingOf(pane)
+        const revealed = listingEditor(session, listingPane)
+        const rows = listing.text.split('\n')
+        const fn = (name: string) => listing.functions.find((item) => item.name === name)!
+        return { ...fixture, pane, listingPane, listing, revealed, rows, fn }
+    }
+
+    it('goes back and forward in the Pseudocode after following a call, the Listing with it', async () => {
+        const { session, pane, listingPane, listing, rows, fn } = await paired()
+        const call = listingLine(listing, 'main', 'call strcmp@plt')
+        session.cursorMoved(listingPane, call)
+        const stub = rows.indexOf('strcmp@plt:')
+        expect(await session.followPseudocodeTarget(pane, stub)).toBe(true)
+        expect(pane.pseudocodeFunction?.name).toBe('strcmp@plt')
+        //both panes moved, and each keeps the place it left
+        expect(pane.history.behind).toEqual([
+            {
+                selection: liveSource('crackme'),
+                view: 'pseudocode',
+                functionAddress: fn('main').address
+            }
+        ])
+        expect(listingPane.history.behind).toEqual([
+            { selection: liveSource('crackme'), view: 'listing', line: call }
+        ])
+        //Back: main's Pseudocode, and the Listing beside it on main
+        expect(await session.goBack(pane)).toBe(true)
+        expect(pane.pseudocodeFunction?.name).toBe('main')
+        expect(listingPane.cursorLine).toBe(fn('main').line)
+        expect(pane.history.canGoBack).toBe(false)
+        //Forward: the stub again
+        expect(await session.goForward(pane)).toBe(true)
+        expect(pane.pseudocodeFunction?.name).toBe('strcmp@plt')
+        expect(listingPane.cursorLine).toBe(stub)
+        expect(pane.history.canGoForward).toBe(false)
+        //Back in the Listing: the call it left, which the Pseudocode follows into main
+        expect(await session.goBack(listingPane)).toBe(true)
+        expect(listingPane.cursorLine).toBe(call)
+        expect(pane.pseudocodeFunction?.name).toBe('main')
+        expect(await session.goBack(listingPane)).toBe(false)
+    })
+
+    it("records the Listing's Go to Definition, Go to Symbol and the Symbols panel", async () => {
+        const { session, pane, listingPane, listing, rows, fn } = await paired()
+        const call = listingLine(listing, 'main', 'call strcmp@plt')
+        session.cursorMoved(listingPane, call)
+        //Go to Definition, or a double-click, on `strcmp@plt` in the Listing
+        const stub = rows.indexOf('strcmp@plt:')
+        expect(
+            await session.openResource(
+                listingPane.modelIdentity!,
+                { lineNumber: stub + 1, column: 1 },
+                listingPane.editor
+            )
+        ).toBe(true)
+        expect(listingPane.cursorLine).toBe(stub)
+        //the Pseudocode beside it followed, and keeps the function it left too
+        expect(pane.pseudocodeFunction?.name).toBe('strcmp@plt')
+        //Go to Symbol moves the cursor on to `_start`, the Editor saying first where from
+        session.recordJump(listingPane, stub)
+        session.cursorMoved(listingPane, fn('_start').line)
+        //a function picked in the Symbols panel, while the Listing has the keyboard
+        session.focusEditorGroup(listingPane)
+        expect(await session.revealListingLine(liveSource('crackme'), fn('main').line)).toBe(true)
+        expect(
+            listingPane.history.behind.map((place) => place.view === 'listing' && place.line)
+        ).toEqual([call, stub, fn('_start').line])
+        expect(
+            pane.history.behind.map((place) => place.view === 'pseudocode' && place.functionAddress)
+        ).toEqual([fn('main').address, fn('strcmp@plt').address, fn('_start').address])
+        expect(await session.goBack(listingPane)).toBe(true)
+        expect(listingPane.cursorLine).toBe(fn('_start').line)
+        expect(pane.pseudocodeFunction?.name).toBe('_start')
+        //the same panel while the Pseudocode has it follows the name there, both panes keeping
+        //where they were
+        session.focusEditorGroup(pane)
+        expect(await session.revealListingLine(liveSource('crackme'), stub)).toBe(true)
+        expect(pane.pseudocodeFunction?.name).toBe('strcmp@plt')
+        expect(pane.history.behind.at(-1)).toEqual({
+            selection: liveSource('crackme'),
+            view: 'pseudocode',
+            functionAddress: fn('_start').address
+        })
+        expect(listingPane.history.behind.at(-1)).toEqual({
+            selection: liveSource('crackme'),
+            view: 'listing',
+            line: fn('_start').line
+        })
+    })
+
+    it('opens a closed tab again, and passes over a File that is gone', async () => {
+        const { session, pane, listingPane, rows } = await paired()
+        session.cursorMoved(listingPane, 3)
+        expect(await session.followPseudocodeTarget(pane, rows.indexOf('strcmp@plt:'))).toBe(true)
+        //the Listing pane shows notes.txt instead, as text: no place of the history, but Back
+        //shows the Listing again
+        session.selectFile('notes.txt', listingPane)
+        flushSync()
+        expect(session.navigationPosition(listingPane)).toBeUndefined()
+        expect(await session.goBack(listingPane)).toBe(true)
+        expect(listingPane.displayedPath).toBe('crackme')
+        expect(listingPane.displayedView).toBe('listing')
+        //a place in a File deleted since is dropped
+        listingPane.history.record({ selection: liveSource('gone'), view: 'listing', line: 1 })
+        expect(await session.goBack(listingPane)).toBe(false)
+        expect(listingPane.history.canGoBack).toBe(false)
     })
 })
 

@@ -20,22 +20,9 @@ export function createListingProviders(monacoInstance: MonacoType) {
     const range = (line: number, start: number, end: number) =>
         new monacoInstance.Range(line + 1, start + 1, line + 1, end + 1)
 
-    /** The label or address line under a position of a Listing model. */
-    function target(model: monaco.editor.ITextModel, position: monaco.Position) {
-        const registered = modelListing(model.uri)
-        if (!registered) return undefined
-        const line = position.lineNumber - 1
-        const token = listingTokenAt(model.getLineContent(position.lineNumber), position.column - 1)
-        if (!token) return undefined
-        const label = registered.index.label(token.text, line)
-        const addressLine = label ? -1 : registered.index.addressLine(token.text)
-        if (!label && addressLine < 0) return undefined
-        return { registered, line, token, label, addressLine }
-    }
-
     const definition: monaco.languages.DefinitionProvider = {
         provideDefinition(model, position) {
-            const found = target(model, position)
+            const found = listingNameAt(model, position)
             if (!found) return null
             const { label, addressLine } = found
             if (label)
@@ -49,7 +36,7 @@ export function createListingProviders(monacoInstance: MonacoType) {
 
     const references: monaco.languages.ReferenceProvider = {
         provideReferences(model, position, context) {
-            const found = target(model, position)
+            const found = listingNameAt(model, position)
             if (!found?.label) return null
             const { label, registered } = found
             return registered.index
@@ -68,7 +55,7 @@ export function createListingProviders(monacoInstance: MonacoType) {
             if (!registered) return null
             const line = position.lineNumber - 1
             const contents: monaco.IMarkdownString[] = []
-            const found = target(model, position)
+            const found = listingNameAt(model, position)
             if (found?.label)
                 contents.push({ value: labelHoverMarkdown(registered.listing, found.label) })
             const bytes = lineHoverMarkdown(
@@ -147,6 +134,25 @@ export function createListingProviders(monacoInstance: MonacoType) {
     }
 
     return { definition, references, hover, documentSymbols, folding }
+}
+
+/**
+ * The label or address under a position of a Listing model, which Go to Definition goes to: the
+ * label's definition, or the line of the address.
+ */
+export function listingNameAt(
+    model: monaco.editor.ITextModel,
+    position: Pick<monaco.Position, 'lineNumber' | 'column'>
+) {
+    const registered = modelListing(model.uri)
+    if (!registered) return undefined
+    const line = position.lineNumber - 1
+    const token = listingTokenAt(model.getLineContent(position.lineNumber), position.column - 1)
+    if (!token) return undefined
+    const label = registered.index.label(token.text, line)
+    const addressLine = label ? -1 : registered.index.addressLine(token.text)
+    if (!label && addressLine < 0) return undefined
+    return { registered, line, token, label, addressLine }
 }
 
 type ModelProvider = Record<string, unknown>

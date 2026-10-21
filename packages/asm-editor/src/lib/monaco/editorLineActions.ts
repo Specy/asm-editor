@@ -52,3 +52,57 @@ export function lineActionDescriptor(
         run
     }
 }
+
+/**
+ * Back and forward through the navigation history of the pane an editor is in, which it offers
+ * while it shows a Listing or a Pseudocode.
+ */
+export type EditorNavigation = {
+    readonly canGoBack: boolean
+    readonly canGoForward: boolean
+    back: () => void
+    forward: () => void
+}
+
+/**
+ * Go Back and Go Forward ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+ * decision 8): on Alt+← and Alt+→, as a browser has them, and first in the context menu's
+ * navigation group while there is somewhere to go.
+ */
+export function navigationActions(navigation: EditorNavigation): EditorLineAction[] {
+    return [
+        {
+            id: 'asm-editor.goBack',
+            label: 'Go Back',
+            keybindings: (monaco) => [monaco.KeyMod.Alt | monaco.KeyCode.LeftArrow],
+            menuGroup: 'navigation',
+            menuOrder: 0.1,
+            available: () => navigation.canGoBack,
+            run: () => navigation.back()
+        },
+        {
+            id: 'asm-editor.goForward',
+            label: 'Go Forward',
+            keybindings: (monaco) => [monaco.KeyMod.Alt | monaco.KeyCode.RightArrow],
+            menuGroup: 'navigation',
+            menuOrder: 0.2,
+            available: () => navigation.canGoForward,
+            run: () => navigation.forward()
+        }
+    ]
+}
+
+/** Where a key goes in the history: Alt+← back and Alt+→ forward, with no other modifier. */
+export function navigationKeyStep(
+    event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
+): 'back' | 'forward' | undefined {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined
+    return event.key === 'ArrowLeft' ? 'back' : event.key === 'ArrowRight' ? 'forward' : undefined
+}
+
+/** Where a mouse button goes in the history: the back button (3) and the forward button (4). */
+export function navigationButtonStep(
+    event: Pick<MouseEvent, 'button'>
+): 'back' | 'forward' | undefined {
+    return event.button === 3 ? 'back' : event.button === 4 ? 'forward' : undefined
+}

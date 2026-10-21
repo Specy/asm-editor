@@ -4,6 +4,7 @@ import type { MonacoType } from './Monaco'
 import {
     createBuildArtifactHoverProvider,
     createNumericHoverProvider,
+    numberMarkdown,
     setModelBuildArtifacts
 } from './assemblyInsights'
 
@@ -143,6 +144,52 @@ describe('assembly numeric hovers', () => {
                 {} as never
             )
         ).toMatchObject({ range: expect.objectContaining({ startColumn: 16 }) })
+    })
+})
+
+describe('a number read as text', () => {
+    it("reads its bytes in the Target's order, as many as the value needs", async () => {
+        const x86 = createNumericHoverProvider(monacoStub, {
+            bits: 64,
+            comment: ';',
+            dialect: 'x86'
+        })
+        const line = 'mov rax, 0x4c75257240343a41'
+        const card = markdown(
+            await x86.provideHover?.(
+                model(line) as never,
+                position(line, '0x4c') as never,
+                {} as never
+            )
+        )
+        expect(card).toContain('Hexadecimal: `0x4c75257240343a41`')
+        expect(card).toContain('- Text: `A:4@r%uL`')
+        //the 68000 keeps a number's bytes big-endian
+        const m68k = createNumericHoverProvider(monacoStub, {
+            bits: 32,
+            comment: ';',
+            dialect: 'm68k'
+        })
+        const move = 'move.l #$41424344,d0'
+        expect(
+            markdown(
+                await m68k.provideHover?.(
+                    model(move) as never,
+                    position(move, '$41') as never,
+                    {} as never
+                )
+            )
+        ).toContain('- Text: `ABCD`')
+        expect(numberMarkdown(0x41424344n, 32)).toContain('- Text: `DCBA`')
+        expect(numberMarkdown(0x6948n, 16, 'little')).toContain('- Text: `Hi`')
+    })
+
+    it('has none for one byte, an unprintable byte, a negative value or spaces alone', () => {
+        for (const value of [0x41n, 0x410an, 0x4100_4142n, -0x4142n, 0x2020n])
+            expect(numberMarkdown(value, 64)).not.toContain('Text')
+        //a fence longer than any backticks the text holds, padded where they touch it
+        expect(numberMarkdown(0x6060_41n, 32)).toContain('- Text: ``` A`` ```')
+        expect(numberMarkdown(0x41_2041n, 32)).toContain('- Text: `A A`')
     })
 })
 

@@ -5,15 +5,19 @@
      * without being meant to compile ([ADR 0048](../../../../../docs/adr/0048-decompiled-code-is-a-view-not-a-file.md)).
      */
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
+    import HelpButton from './HelpButton.svelte'
     import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
     let {
         group,
-        findOpen = false
+        findOpen = false,
+        onHelp
     }: {
         group: EditorGroup
         /** Whether the editor's find widget is open, which the notice hides for. */
         findOpen?: boolean
+        /** Opens the Documentation's section on the Pseudocode, from the notice's "?". */
+        onHelp?: () => void
     } = $props()
     /** The Executable's File name. */
     const name = $derived(
@@ -27,4 +31,12 @@
     const fn = $derived(group.pseudocodeFunction?.name)
 </script>
 
-<ReadOnlyNotice label={`Pseudocode of ${fn ?? 'a function'} in ${name}, read-only`} {findOpen} />
+{#snippet help()}
+    <HelpButton label="What is the Pseudocode?" onclick={onHelp} />
+{/snippet}
+
+<ReadOnlyNotice
+    label={`Pseudocode of ${fn ?? 'a function'} in ${name}, read-only`}
+    action={onHelp ? help : undefined}
+    {findOpen}
+/>

@@ -8,7 +8,11 @@ vi.mock('$app/env', () => ({ browser: false }))
 vi.mock('#lib/monaco/editorTheme.ts', () => ({ generateTheme: () => ({}) }))
 vi.mock('monaco-editor/editor/editor.worker?worker', () => ({ default: class {} }))
 vi.mock('monaco-editor', () => ({
-    editor: { defineTheme() {}, registerEditorOpener: () => ({ dispose() {} }) }
+    editor: {
+        defineTheme() {},
+        registerEditorOpener: () => ({ dispose() {} }),
+        registerLinkOpener: () => ({ dispose() {} })
+    }
 }))
 vi.mock('./assemblyLanguageRegistry', () => ({ registerAssemblyLanguage: vi.fn() }))
 vi.mock('#lib/sourceLanguageHelp/register.ts', () => ({ registerSourceLanguageHelp: install }))

@@ -2,20 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from './Monaco'
 
-const { install, openerDisposed, declareLanguage, registerOpener } = vi.hoisted(() => {
-    const openerDisposed = vi.fn()
-    return {
-        install: vi.fn<(...args: unknown[]) => Promise<monaco.IDisposable[]>>(),
-        openerDisposed,
-        declareLanguage: vi.fn(),
-        registerOpener: vi.fn(() => ({ dispose: openerDisposed }))
+const { install, openerDisposed, declareLanguage, registerOpener, registerLinkOpener } = vi.hoisted(
+    () => {
+        const openerDisposed = vi.fn()
+        return {
+            install: vi.fn<(...args: unknown[]) => Promise<monaco.IDisposable[]>>(),
+            openerDisposed,
+            declareLanguage: vi.fn(),
+            registerOpener: vi.fn(() => ({ dispose: openerDisposed })),
+            registerLinkOpener: vi.fn(() => ({ dispose() {} }))
+        }
     }
-})
+)
 vi.mock('$app/env', () => ({ browser: false }))
 vi.mock('#lib/monaco/editorTheme.ts', () => ({ generateTheme: () => ({}) }))
 vi.mock('monaco-editor/editor/editor.worker?worker', () => ({ default: class {} }))
 vi.mock('monaco-editor', () => ({
-    editor: { defineTheme() {}, registerEditorOpener: registerOpener },
+    editor: { defineTheme() {}, registerEditorOpener: registerOpener, registerLinkOpener },
     languages: { register: declareLanguage }
 }))
 vi.mock('./assemblyLanguageRegistry', () => ({ registerAssemblyLanguage: install }))
@@ -36,6 +39,7 @@ beforeEach(async () => {
     vi.resetModules()
     vi.resetAllMocks()
     registerOpener.mockImplementation(() => ({ dispose: openerDisposed }))
+    registerLinkOpener.mockImplementation(() => ({ dispose() {} }))
     install.mockResolvedValue([])
     vi.stubGlobal('self', {})
     Monaco = (await import('./Monaco')).Monaco

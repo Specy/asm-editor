@@ -44,8 +44,14 @@
     import {
         lineActionContextKey,
         lineActionDescriptor,
-        type EditorLineAction
+        navigationActions,
+        navigationButtonStep,
+        navigationKeyStep,
+        type EditorLineAction,
+        type EditorNavigation
     } from '#lib/monaco/editorLineActions.ts'
+    import { followableNameAt } from '#lib/monaco/followNames.ts'
+    import { openProjectResource } from '#lib/languages/service/navigation.ts'
 
     interface Props {
         disabled?: boolean
@@ -108,6 +114,12 @@
          * lines where they are available: "Patch instruction…" on a Listing.
          */
         lineActions?: readonly EditorLineAction[]
+        /**
+         * Back and forward through the pane's navigation history, for a Listing or a Pseudocode:
+         * Go Back and Go Forward in the context menu and on Alt+← and Alt+→, and the mouse's back
+         * and forward buttons.
+         */
+        navigation?: EditorNavigation
     }
 
     let {
@@ -136,7 +148,8 @@
         canBreakAt,
         patchedLines = [],
         lineNote,
-        lineActions
+        lineActions,
+        navigation
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -170,6 +183,14 @@
     let cursorLine = $state(-1)
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Monaco handles; nothing renders from them.
     const lineActionKeys = new Map<string, monaco.editor.IContextKey<boolean>>()
+    /** The line actions with Go Back and Go Forward first, for an editor with a history. */
+    const editorActions = $derived([
+        ...(navigation ? navigationActions(navigation) : []),
+        ...(lineActions ?? [])
+    ])
+    /** The name under the mouse a double-click would follow, drawn as a link. */
+    let followDecorations: monaco.editor.IEditorDecorationsCollection | undefined
+    let followedRange: monaco.IRange | undefined
     let destroyed = false
     /**
      * The editor this component created. `editor` is bound out to the host, and a host that swaps
@@ -195,6 +216,11 @@
         cursorMove: number
         /** Zero-based lines covered by the user's selections, a click's single line included. */
         linesSelect: number[]
+        /**
+         * Go to Symbol or Go to Line moved the cursor: the zero-based line it left, sent before
+         * the cursor's move.
+         */
+        jump: number
     }>()
     let el: HTMLDivElement | null = $state(null)
 
@@ -289,12 +315,16 @@
             observer.observe(mockEditor)
         }
 
+        followDecorations = mountedEditor.createDecorationsCollection()
         toDispose.push(
             mountedEditor.onDidChangeCursorPosition((event) => {
+                const left = cursorLine
                 cursorLine = event.position.lineNumber - 1
                 //at once, not in an effect: a right click moves the cursor and opens the context
                 //menu in the same event, and the menu reads the keys as they are then
                 updateLineActionKeys(cursorLine)
+                //Monaco's own jumps, Go to Symbol's and Go to Line's
+                if (event.source === 'code.jump') dispatcher('jump', left)
                 dispatcher('cursorMove', cursorLine)
             }),
             mountedEditor.onDidChangeCursorSelection((event) => {
@@ -313,8 +343,17 @@
             }),
             mountedEditor.onMouseLeave(() => {
                 hoveredGliphen = null
+                showFollowable(undefined)
             }),
             mountedEditor.onMouseMove((e) => {
+                const model = mountedEditor.getModel()
+                showFollowable(
+                    model &&
+                        e.target.type === loadedMonaco.editor.MouseTargetType.CONTENT_TEXT &&
+                        e.target.position
+                        ? followableNameAt(loadedMonaco, model, e.target.position)?.range
+                        : undefined
+                )
                 if (
                     breakpointsEditable &&
                     e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
@@ -327,6 +366,56 @@
             })
         )
         toDispose.push(() => observer.disconnect())
+
+        //a double-click on a name in a Listing or a Pseudocode follows it, as Go to Definition does
+        //(reverse-engineering-ux.md, decision 7); a single click only places the cursor
+        const follow = (event: MouseEvent) => {
+            const model = mountedEditor.getModel()
+            const target = mountedEditor.getTargetAtClientPoint(event.clientX, event.clientY)
+            if (
+                !model ||
+                event.button !== 0 ||
+                target?.type !== loadedMonaco.editor.MouseTargetType.CONTENT_TEXT ||
+                !target.position
+            )
+                return
+            const name = followableNameAt(loadedMonaco, model, target.position)
+            if (name)
+                void openProjectResource(
+                    name.resource,
+                    { lineNumber: name.line, column: 1 },
+                    mountedEditor
+                )
+        }
+        //the mouse's back and forward buttons move through the history there, rather than the
+        //browser's, which would leave the Workbench
+        const moveInHistory = (event: MouseEvent) => {
+            const step = navigation && navigationButtonStep(event)
+            if (!step) return
+            event.preventDefault()
+            event.stopPropagation()
+            if (event.type === 'mouseup') navigation?.[step]()
+        }
+        editorElement.addEventListener('dblclick', follow)
+        for (const type of ['mousedown', 'mouseup', 'auxclick'] as const)
+            editorElement.addEventListener(type, moveInHistory, { capture: true })
+        toDispose.push(() => {
+            editorElement.removeEventListener('dblclick', follow)
+            for (const type of ['mousedown', 'mouseup', 'auxclick'] as const)
+                editorElement.removeEventListener(type, moveInHistory, { capture: true })
+        })
+        toDispose.push(
+            //Alt+← and Alt+→ are the browser's Back and Forward, and on a Mac Monaco's moves by
+            //word: with a history they are Go Back and Go Forward, which Monaco runs while there is
+            //somewhere to go, and which nothing else gets when there is not
+            mountedEditor.onKeyDown((event) => {
+                const step = navigation && navigationKeyStep(event.browserEvent)
+                if (!step) return
+                event.preventDefault()
+                if (!(step === 'back' ? navigation?.canGoBack : navigation?.canGoForward))
+                    event.stopPropagation()
+            })
+        )
         toDispose.push(
             mountedEditor.onDidChangeModelContent(() => {
                 if (disabled || applyingExternalValue) return
@@ -419,6 +508,8 @@
             console.error(`Language registration failed for ${language}`, error)
         )
         if (currentEditor.getModel() !== model) {
+            //the link under the mouse is the outgoing model's
+            showFollowable(undefined)
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true
             try {
@@ -468,9 +559,22 @@
 
     function updateLineActionKeys(line: number) {
         untrack(() => {
-            for (const action of lineActions ?? [])
+            for (const action of editorActions)
                 lineActionKey(action)?.set(line >= 0 && action.available(line))
         })
+    }
+
+    /** Draws a name as a link while the mouse is over it, or none. */
+    function showFollowable(range: monaco.IRange | undefined) {
+        if (
+            range === followedRange ||
+            (range && followedRange && monacoInstance?.Range.equalsRange(range, followedRange))
+        )
+            return
+        followedRange = range
+        followDecorations?.set(
+            range ? [{ range, options: { inlineClassName: 'followable-name' } }] : []
+        )
     }
 
     //each line action is a Monaco action while the host offers it, shown in the context menu and
@@ -478,8 +582,8 @@
     $effect(() => {
         const currentEditor = editor
         const currentMonaco = monacoInstance
-        const actions = lineActions
-        if (!currentEditor || !currentMonaco || !actions?.length) return
+        const actions = editorActions
+        if (!currentEditor || !currentMonaco || !actions.length) return
         const registered = untrack(() =>
             actions.map((action) => {
                 lineActionKey(action)
@@ -498,9 +602,9 @@
     })
     //and again whenever what decides it changes: a Run starting or ending, another model
     $effect(() => {
-        const actions = lineActions
+        const actions = editorActions
         void activeModelKey
-        if (!editor || !actions?.length) return
+        if (!editor || !actions.length) return
         for (const action of actions)
             lineActionKey(action)?.set(cursorLine >= 0 && action.available(cursorLine))
     })
@@ -1170,6 +1274,12 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    //a name a double-click follows, under the mouse
+    :global(.followable-name) {
+        text-decoration: underline;
+        cursor: pointer;
     }
 
     //what runs when it is not what the line shows, after the line's text

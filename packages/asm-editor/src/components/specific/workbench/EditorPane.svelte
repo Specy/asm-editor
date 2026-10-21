@@ -12,7 +12,11 @@
     import { fileViewIdentity } from '#lib/languages/service/uri.ts'
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
-    import type { EditorLineAction } from '#lib/monaco/editorLineActions.ts'
+    import type { EditorLineAction, EditorNavigation } from '#lib/monaco/editorLineActions.ts'
+    import {
+        LISTING_DOCUMENTATION,
+        PSEUDOCODE_DOCUMENTATION
+    } from '#lib/documentation/x86/executableSections.ts'
     import { watchFindWidget } from '#lib/monaco/findWidget.ts'
     import PatchPromptView from './PatchPrompt.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
@@ -31,7 +35,8 @@
         controls = false,
         fill = false
     }: { group: EditorGroup; share?: number; controls?: boolean; fill?: boolean } = $props()
-    const { session, ui } = useWorkbench()
+    const workbench = useWorkbench()
+    const { session, ui } = workbench
     const emulator = session.emulator
     let dragDepth = $state(0)
     /**
@@ -110,6 +115,32 @@
             run: (line) => void session.showInHex(group, line)
         }
     ]
+    /**
+     * Back and forward through the pane's navigation history, which a Listing and a Pseudocode
+     * offer ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 8).
+     */
+    const navigation: EditorNavigation = {
+        get canGoBack() {
+            return group.history.canGoBack
+        },
+        get canGoForward() {
+            return group.history.canGoForward
+        },
+        back: () => void session.goBack(group),
+        forward: () => void session.goForward(group)
+    }
+    const navigable = $derived(
+        group.displayedView === 'listing' || group.displayedView === 'pseudocode'
+    )
+    /**
+     * The "?" of the Listing's and the Pseudocode's notices: their section of the x86 Executables
+     * Chapter in the Documentation panel (decision 9), where the Workbench has that panel.
+     */
+    const hasDocumentation = $derived(workbench.rail.some((entry) => entry.id === 'documentation'))
+    const documentationAt = (href: string) =>
+        hasDocumentation ? () => ui.showDocumentation(href) : undefined
+
     /**
      * A Listing's Breakpoints go on its instructions, no other line, and a Pseudocode's on the
      * lines the decompiler gave instructions.
@@ -222,9 +253,14 @@
                     session.debugSession}
                 touch={!ui.viewport.canHover}
                 {findOpen}
+                onHelp={documentationAt(LISTING_DOCUMENTATION)}
             />
         {:else if group.displayedView === 'pseudocode' && group.displayedFile}
-            <PseudocodeNotice {group} {findOpen} />
+            <PseudocodeNotice
+                {group}
+                {findOpen}
+                onHelp={documentationAt(PSEUDOCODE_DOCUMENTATION)}
+            />
         {:else if group.displayedLibraryMember && group.displayedFile}
             <LibraryMemberNotice
                 path={group.displayedPath}
@@ -297,6 +333,8 @@
                 listing={listingModel}
                 pseudocode={pseudocodeModel}
                 on:cursorMove={(event) => session.cursorMoved(group, event.detail)}
+                on:jump={(event) => session.recordJump(group, event.detail)}
+                navigation={navigable ? navigation : undefined}
                 canBreakAt={breakable}
                 {patchedLines}
                 lineNote={group.runningWithin}

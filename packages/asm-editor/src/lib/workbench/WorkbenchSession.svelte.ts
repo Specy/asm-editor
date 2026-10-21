@@ -1,4 +1,5 @@
 import { tick, untrack } from 'svelte'
+import type monaco from 'monaco-editor'
 import { programBuildSources } from '#lib/buildSources.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import {
@@ -87,7 +88,8 @@ import {
 import {
     createProjectLanguageSessionId,
     parseProjectSourceUri,
-    projectSourceModelKey
+    projectSourceModelKey,
+    type ProjectModelIdentity
 } from '#lib/languages/service/uri.ts'
 import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
 import type { ProjectAnalysisSnapshot } from '#lib/languages/service/protocol.ts'
@@ -157,6 +159,7 @@ import {
     type LogEntry
 } from './workbenchLog'
 import { EditorGroup } from './EditorGroup.svelte'
+import type { NavigationPosition } from './navigationHistory.svelte'
 import { PatchPrompt } from './patchPrompt.svelte'
 import { EditorModels } from './editorModels'
 import { resolveMappingPair } from './mappingPair'
@@ -1093,51 +1096,8 @@ export class WorkbenchSession {
     mount(): () => void {
         const unregisterNavigation = registerProjectNavigation(
             this.languageSessionId,
-            async (identity, selection, originatingEditor) => {
-                const origin = this.groups.find((group) => group.editor === originatingEditor)
-                //Go to Definition on a name in a Pseudocode moves both panes: the Listing to what
-                //it names, and the Pseudocode to the function that is in
-                if (
-                    origin?.displayedView === 'pseudocode' &&
-                    identity.view === 'listing' &&
-                    identity.path === origin.displayedPath &&
-                    selection
-                ) {
-                    const lineNumber =
-                        'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
-                    return this.followPseudocodeTarget(origin, lineNumber - 1)
-                }
-                const group = origin ?? this.groupForFile(identity.path)
-                if (identity.sourceKind === 'build') {
-                    if (
-                        identity.buildGeneration !== this.buildGeneration ||
-                        !this.existsInBuild(identity.path, identity.view)
-                    ) {
-                        return false
-                    }
-                    this.show(
-                        buildSource(identity.path, identity.buildGeneration),
-                        group,
-                        identity.view
-                    )
-                } else if (identity.path.startsWith(RUNTIME_NAMESPACE)) {
-                    //a Runtime library member, opened read-only from go to definition
-                    if (!this.runtimeMemberFile(identity.path)) return false
-                    this.show(liveSource(identity.path), group)
-                } else {
-                    if (!this.project.files[identity.path] && !this.buildOutputAt(identity.path))
-                        return false
-                    this.show(liveSource(identity.path), group, identity.view)
-                }
-                await tick()
-                if (selection) {
-                    const lineNumber =
-                        'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
-                    const column = 'column' in selection ? selection.column : selection.startColumn
-                    this.revealEditorLine(lineNumber, column, group)
-                }
-                return true
-            }
+            (identity, selection, originatingEditor) =>
+                this.openResource(identity, selection, originatingEditor)
         )
         const sources = untrack(() => this.sourceInput)
         const session = new ProjectLanguageSession(
@@ -1188,6 +1148,63 @@ export class WorkbenchSession {
             this.pseudocode.dispose()
             this.models.dispose()
         }
+    }
+
+    /**
+     * Opens a model Monaco asked for, as Go to Definition does, and a double-click on a name in a
+     * Listing or a Pseudocode ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 7): in the pane whose editor asked, else the File's, at the selection. A jump from a
+     * Listing or a Pseudocode adds to that pane's navigation history.
+     */
+    async openResource(
+        identity: ProjectModelIdentity,
+        selection: monaco.IRange | monaco.IPosition | undefined,
+        originatingEditor?: monaco.editor.ICodeEditor
+    ): Promise<boolean> {
+        const origin = this.groups.find((group) => group.editor === originatingEditor)
+        //Go to Definition on a name in a Pseudocode moves both panes: the Listing to what it
+        //names, and the Pseudocode to the function that is in
+        if (
+            origin?.displayedView === 'pseudocode' &&
+            identity.view === 'listing' &&
+            identity.path === origin.displayedPath &&
+            selection
+        ) {
+            const lineNumber =
+                'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
+            return this.followPseudocodeTarget(origin, lineNumber - 1)
+        }
+        const group = origin ?? this.groupForFile(identity.path)
+        let target: ProjectSourceSelection
+        let view = identity.view
+        if (identity.sourceKind === 'build') {
+            if (
+                identity.buildGeneration !== this.buildGeneration ||
+                !this.existsInBuild(identity.path, identity.view)
+            ) {
+                return false
+            }
+            target = buildSource(identity.path, identity.buildGeneration)
+        } else if (identity.path.startsWith(RUNTIME_NAMESPACE)) {
+            //a Runtime library member, opened read-only from go to definition
+            if (!this.runtimeMemberFile(identity.path)) return false
+            target = liveSource(identity.path)
+            view = undefined
+        } else {
+            if (!this.project.files[identity.path] && !this.buildOutputAt(identity.path))
+                return false
+            target = liveSource(identity.path)
+        }
+        this.recordJump(group)
+        this.show(target, group, view)
+        await tick()
+        if (selection) {
+            const lineNumber =
+                'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
+            const column = 'column' in selection ? selection.column : selection.startColumn
+            this.revealEditorLine(lineNumber, column, group)
+        }
+        return true
     }
 
     // ---- saving --------------------------------------------------------------------------------
@@ -2205,6 +2222,8 @@ export class WorkbenchSession {
             candidate.displayedPath === path && candidate.displayedView === 'listing'
         const target = this.groups.find((candidate) => candidate !== group && showing(candidate))
         const pane = target ?? group
+        //a pane already on the Listing leaves its line behind; the bytes are no place in it
+        this.recordJump(pane)
         if (!target) group.setView(path, 'listing')
         this.focusEditorGroup(pane)
         await tick()
@@ -2235,6 +2254,7 @@ export class WorkbenchSession {
         const shown = panes.find((candidate) => showing(candidate, 'listing'))
         const bytes = panes.find((candidate) => showing(candidate, 'hex'))
         const pane = shown ?? bytes ?? focused
+        this.recordJump(pane)
         if (bytes && !shown) bytes.setView(selection.path, 'listing')
         else if (!shown) this.show(selection, pane, 'listing')
         this.focusEditorGroup(pane)
@@ -2462,11 +2482,16 @@ export class WorkbenchSession {
     /**
      * Go to Definition on a name in a Pseudocode, whose target is on a line of its Listing: the
      * Listing beside it moves to that line, and the Pseudocode to the function it is in, as the
-     * Listing's cursor going there does. A name of data moves the Listing alone.
+     * Listing's cursor going there does. A name of data moves the Listing alone. Both panes add
+     * the place they leave to their navigation history.
      */
     async followPseudocodeTarget(group: EditorGroup, line: number): Promise<boolean> {
         const listing = group.pseudocodeListing?.listing
         if (group.displayedView !== 'pseudocode' || !listing || line < 0) return false
+        //both panes move, and each keeps the place it left, the Listing's taking the Pseudocode's
+        //with it: Back in either returns
+        const shown = this.listingPaneOf(group)
+        this.recordJump(shown ?? group)
         const fn = functionAtLine(listing, line)
         if (fn) group.followFunction(group.displayedPath, fn.address)
         const pane = this.listingBeside(group)
@@ -2477,6 +2502,120 @@ export class WorkbenchSession {
             focus: false,
             scroll: this.holdsModel(pane) ? 'smooth' : 'immediate'
         })
+    }
+
+    // ---- navigation history --------------------------------------------------------------------
+
+    /**
+     * Where a pane is, as its navigation history keeps it: the line of the Listing it shows, at
+     * `line` (its cursor's by default), or the function of its Pseudocode. None in any other view.
+     */
+    navigationPosition(
+        group: EditorGroup,
+        line = group.cursorLine
+    ): NavigationPosition | undefined {
+        const selection = group.sourceSelection
+        if (!this.groups.includes(group) || !selection.path) return undefined
+        if (group.displayedView === 'listing' && group.displayedListing)
+            return { selection, view: 'listing', line: Math.max(line, 0) }
+        const fn = group.displayedView === 'pseudocode' ? group.pseudocodeFunction : undefined
+        return fn ? { selection, view: 'pseudocode', functionAddress: fn.address } : undefined
+    }
+
+    /**
+     * A jump is about to move a pane, or has just moved its cursor from `line`, as Go to Symbol
+     * does: the place it leaves goes into its navigation history
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 8), when that is a Listing's line or a Pseudocode's function. A Listing's jump moves the
+     * Pseudocode beside it too, which keeps its place as well.
+     */
+    recordJump(group: EditorGroup, line = group.cursorLine) {
+        const position = this.navigationPosition(group, line)
+        if (!position) return
+        group.history.record(position)
+        if (position.view !== 'listing') return
+        for (const other of this.groups)
+            if (
+                other !== group &&
+                other.displayedView === 'pseudocode' &&
+                other.pseudocodeListing === group.displayedListing
+            )
+                this.recordJump(other)
+    }
+
+    /** Back, in a pane's navigation history (Alt+←, the mouse's back button, Go Back). */
+    goBack(group: EditorGroup): Promise<boolean> {
+        return this.travel(group, 'back')
+    }
+
+    /** Forward, in a pane's navigation history (Alt+→, the mouse's forward button, Go Forward). */
+    goForward(group: EditorGroup): Promise<boolean> {
+        return this.travel(group, 'forward')
+    }
+
+    private async travel(group: EditorGroup, direction: 'back' | 'forward'): Promise<boolean> {
+        if (!this.groups.includes(group)) return false
+        const current = this.navigationPosition(group)
+        const usable = (position: NavigationPosition) =>
+            this.historySelection(position) !== undefined
+        const target =
+            direction === 'back'
+                ? group.history.back(current, usable)
+                : group.history.forward(current, usable)
+        return target ? this.showPlace(group, target) : false
+    }
+
+    /**
+     * The version of a File a place of the history shows in now: the current Build's while a Debug
+     * session has the File, as it had when the place was in a Build, else the live File, else none,
+     * as for a File deleted since or a library's Listing once the session is over.
+     */
+    private historySelection({
+        selection,
+        view
+    }: NavigationPosition): ProjectSourceSelection | undefined {
+        const { path } = selection
+        if (selection.sourceKind === 'build' && this.existsInBuild(path, view))
+            return buildSource(path, this.buildGeneration)
+        const file = this.project.files[path] ?? this.buildOutputAt(path)
+        return file && fileViewsOf(this.fileKindOf(file, path)).includes(view)
+            ? liveSource(path)
+            : undefined
+    }
+
+    /**
+     * Takes a pane back to a place of its history: a Listing to its line, a Pseudocode to its
+     * function, with the Listing beside it moved to that function unless its cursor is in it
+     * already, since the Pseudocode follows the Listing.
+     */
+    private async showPlace(group: EditorGroup, place: NavigationPosition): Promise<boolean> {
+        const selection = this.historySelection(place)
+        if (!selection) return false
+        const shown =
+            group.displayedView === place.view &&
+            isSameProjectSourceSelection(group.sourceSelection, selection)
+        if (place.view === 'listing') {
+            if (!shown) this.show(selection, group, 'listing')
+            await tick()
+            return this.revealWhenShown(group, place.line, {
+                scroll: shown ? 'smooth' : 'immediate'
+            })
+        }
+        group.followFunction(selection.path, place.functionAddress)
+        if (!shown) this.show(selection, group, 'pseudocode')
+        const pane = this.listingBeside(group)
+        this.focusEditorGroup(group)
+        await tick()
+        const listing = group.pseudocodeListing
+        const fn = listing?.listing && functionAt(listing.listing, place.functionAddress)
+        if (pane && fn)
+            await this.revealWhenShown(pane, fn.line, {
+                focus: false,
+                scroll: this.holdsModel(pane) ? 'smooth' : 'immediate',
+                still: () => pane.displayedListing === listing,
+                unless: () => pane.cursorLine >= fn.line && pane.cursorLine < fn.endLine
+            })
+        return true
     }
 
     /**

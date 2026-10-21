@@ -3,7 +3,7 @@
  * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
  * 16): Monaco's find widget opens in the same corner, so the notice hides while it is open.
  */
-import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount, type Component } from 'svelte'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
@@ -82,4 +82,42 @@ describe('the read-only notice', () => {
             setFindOpen(false)
             expect(notice.classList).not.toContain('find-open')
         })
+})
+
+describe('the "?" of the Listing\'s and the Pseudocode\'s notices', () => {
+    const pseudocode = {
+        displayedPath: 'crackme',
+        pseudocodeListing: undefined,
+        pseudocodeFunction: { name: 'main' }
+    } as unknown as EditorGroup
+
+    it('asks what the view is, and opens its Documentation', () => {
+        for (const [question, renderNotice] of [
+            [
+                'What is the Listing?',
+                (onHelp?: () => void) =>
+                    render(ListingNotice, {
+                        document: { name: 'crackme', status: 'ready' } as ListingDocument,
+                        onHelp
+                    })
+            ],
+            [
+                'What is the Pseudocode?',
+                (onHelp?: () => void) => render(PseudocodeNotice, { group: pseudocode, onHelp })
+            ]
+        ] as const) {
+            const onHelp = vi.fn()
+            const { notice } = renderNotice(onHelp)
+            const help = notice.querySelector<HTMLButtonElement>('button')!
+            expect(help.textContent).toBe('?')
+            expect(help.getAttribute('aria-label')).toBe(question)
+            expect(help.title).toBe(question)
+            help.click()
+            expect(onHelp).toHaveBeenCalledOnce()
+            dispose()
+            //and none where the Workbench has no Documentation panel
+            expect(renderNotice().notice.querySelector('button')).toBeNull()
+            dispose()
+        }
+    })
 })

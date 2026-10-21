@@ -440,6 +440,8 @@ describe('Show in Listing and Show in Hex', () => {
         expect(await session.showInListing(group, 0x1004)).toBe(true)
         expect(group.displayedView).toBe('listing')
         expect(editor.revealed).toEqual([4])
+        //the bytes are no place of the navigation history
+        expect(group.history.canGoBack).toBe(false)
         //at once: a smooth scroll in an editor just mounted is cut short by the layouts after it
         expect(editor.scrolls).toEqual([1])
         //and back, from the line to its one byte
@@ -486,9 +488,14 @@ describe('Show in Listing and Show in Hex', () => {
         flushSync()
         const editor = fakeEditor(session)
         left.editor = editor as unknown as typeof left.editor
+        session.cursorMoved(left, 1)
         expect(await session.showInListing(right, 0x1000)).toBe(true)
         expect([left.displayedView, right.displayedView]).toEqual(['listing', 'hex'])
         expect(editor.revealed).toEqual([3])
+        //the Listing's line it left is behind it, for Back
+        expect(left.history.behind).toEqual([
+            { selection: { sourceKind: 'live', path: 'crackme' }, view: 'listing', line: 1 }
+        ])
         //a pane already on the Listing scrolls there
         expect(editor.scrolls).toEqual([0])
         expect(session.showInHex(left, 2)).toBe(true)

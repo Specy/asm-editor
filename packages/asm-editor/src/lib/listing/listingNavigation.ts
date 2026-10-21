@@ -186,12 +186,17 @@ const ORIGINS: Record<ListingNameOrigin, (label: ListingLabel, listing: Listing)
     }
 }
 
+/** Where a label's name comes from, as a hover says it: "Named by the symbol table." */
+export function nameOrigin(listing: Listing, label: ListingLabel): string {
+    return ORIGINS[label.origin](label, listing)
+}
+
 /** What a hover says about a label: its name, its run-time address and where the name comes from. */
 export function labelHoverMarkdown(listing: Listing, label: ListingLabel): string {
     return [
         `**${label.fullName}** at \`${runTimeAddress(listing, label.address)}\``,
         '',
-        ORIGINS[label.origin](label, listing)
+        nameOrigin(listing, label)
     ].join('\n')
 }
 

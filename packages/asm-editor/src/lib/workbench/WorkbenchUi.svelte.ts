@@ -26,10 +26,11 @@ export class WorkbenchUi {
     /** The Settings section, or part of one, to bring into view when Settings is opened for it. */
     settingsSection = $state<SettingsTarget | null>(null)
     /**
-     * A request for the Documentation panel to focus its search box (Ctrl+K), with a query when one
-     * is given; each request is a new token, which the panel answers once.
+     * A request for the Documentation panel: to focus its search box (Ctrl+K), with a query when
+     * one is given, or to show a Chapter or an entry by its link (`href`); each request is a new
+     * token, which the panel answers once.
      */
-    documentationRequest = $state<{ token: number; query?: string } | null>(null)
+    documentationRequest = $state<{ token: number; query?: string; href?: string } | null>(null)
     /**
      * The address a pointer menu or a register's name last moved the memory view to, which the
      * view marks on its page until it is moved by hand. `build` is the Build it was read in, as the
@@ -93,12 +94,29 @@ export class WorkbenchUi {
      * maximized, as opening would.
      */
     searchDocumentation(query?: string) {
+        this.requestDocumentation({ query })
+    }
+
+    /**
+     * The Documentation panel at a link into it, `/documentation/x86/executables#pseudocode`, as
+     * the "?" of a notice or a hover's link asks
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 9): opened as Ctrl+K opens it, without the keyboard going to its search box.
+     */
+    showDocumentation(href: string) {
+        this.requestDocumentation({ href })
+    }
+
+    private requestDocumentation(request: { query?: string; href?: string }) {
         if (this.activePanel !== 'documentation') {
             this.opened.add('documentation')
             this.access.set('documentation')
         }
         if (this.viewport.deviceClass === 'phone') this.drawerOpen = true
-        this.documentationRequest = { token: (this.documentationRequest?.token ?? 0) + 1, query }
+        this.documentationRequest = {
+            token: (this.documentationRequest?.token ?? 0) + 1,
+            ...request
+        }
     }
 
     openSettings(section: SettingsTarget) {
