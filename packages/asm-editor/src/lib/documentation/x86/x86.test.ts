@@ -139,6 +139,9 @@ describe('the x86 Documentation', () => {
         expect(text('symbols')).toContain('**Strings**')
         expect(text('navigation')).toContain('**Alt+←**')
         expect(text('memory')).toContain('**Follow pointer**')
+        // an Executable's Debug, and the Breakpoint actions of the code menus
+        expect(text('stepping')).toContain('**Debug**')
+        expect(text('breakpoints')).toContain('**Run to Cursor**')
     })
 
     it('has an instruction entry for every instruction page, alphabetically', () => {

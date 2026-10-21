@@ -163,6 +163,12 @@
             "top": 3,
             "expect": "x86/executables/memory",
             "meaning": true
+        },
+        {
+            "query": "run to cursor",
+            "top": 3,
+            "expect": "x86/executables/breakpoints",
+            "meaning": true
         }
     ]
 }

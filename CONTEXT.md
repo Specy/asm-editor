@@ -49,6 +49,11 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. A Breakpoint on a line of **Pseudocode** is the same rule applied through the decompiler's addresses: it places address Breakpoints on the Listing, kept as the Listing's own. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
 
+## Run to Cursor
+
+A Run during a **Debug session** that also stops before the instruction at a line of the running **Executable**'s **Listing**, or, from a line of its **Pseudocode**, before the first instruction of each block mapped to that line, as a **Breakpoint** set there would. Those stops are a Breakpoint for that Run only, never added to the person's, and the Run still stops earlier at any Breakpoint, a **Pause** or the program's end. Like any Run it executes the instruction it starts on, so from the stopped line it runs until the program comes back to it. It is offered while the program is stopped and not waiting for input, on the running program's own Listing and Pseudocode only. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+_Avoid_: run until, continue to here, temporary breakpoint (for the action)
+
 ## Poke
 
 A change a person or the coding agent makes to one register or memory value of a **Debug session** between two instructions, kept in the same Undo history as the instructions as a step of its own. Distinct from a mutation, which is a write the program made, and from a **Testcase**'s starting values, which are preset before the run and never undone.
@@ -61,7 +66,7 @@ _Avoid_: edit, binary patch, hot patch, modification
 
 ## Hex editor
 
-The **Workbench**'s view of a **File** stored as bytes, as rows of hexadecimal bytes beside their text, where typing over the bytes makes **Byte edits**. An **Executable** opens in it, and so does any byte File the browser cannot preview, in every **Target**. Distinct from the memory view, which shows a **Debug session**'s memory rather than a File.
+The **Workbench**'s view of a **File** stored as bytes, as rows of hexadecimal bytes beside their text, where typing over the bytes makes **Byte edits**. Any byte File the browser cannot preview opens in it, in every **Target**; an **Executable** opens on its **Listing** and can be switched to it. Distinct from the memory view, which shows a **Debug session**'s memory rather than a File.
 _Avoid_: hex view, hex dump, byte viewer
 
 ## Preview
@@ -254,7 +259,7 @@ The path of a **Program**'s **Entry file**, from which its Build begins; a new P
 
 ## Entry file
 
-The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing.
+The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing, and the Build button reads Debug.
 _Avoid_: main file, active file, selected file, open file
 
 ## Executable
@@ -264,7 +269,7 @@ _Avoid_: binary (any File that is not text is binary), imported binary, compiled
 
 ## Listing
 
-The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it.
+The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it. An Executable opens on its Listing, at `main` (else the entry point, else the first function), or beside a **Pseudocode** at that Pseudocode's function.
 _Avoid_: disassembly (the decoding that produces it), dump, decompilation (see **Pseudocode**), listing file
 
 ## Pseudocode
@@ -299,7 +304,7 @@ _Avoid_: system code, external code, foreign code
 
 ## Displayed file
 
-The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. A File stored as bytes is displayed in the **Hex editor**, or as a **Preview** when the browser can show its kind; an **Executable** opens in the Hex editor too and can be switched to its **Listing** or its **Pseudocode**.
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. A File stored as bytes is displayed in the **Hex editor**, or as a **Preview** when the browser can show its kind; an **Executable** opens on its **Listing** and can be switched to the Hex editor or its **Pseudocode**, unless the **Project** saved another view for it.
 
 ## Build snapshot
 
