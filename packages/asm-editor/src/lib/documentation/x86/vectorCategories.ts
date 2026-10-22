@@ -1,8 +1,9 @@
 /**
  * The kind of work a vector instruction does, for the headings inside the Extensions groups of SSE,
- * SSE2, SSE3, SSSE3, SSE4, AVX, AVX2 and FMA. Written by the mnemonic: NASM's own headings follow
- * the year an instruction arrived, which splits `paddd` from `vpaddd` and says nothing about what
- * either does. One per mnemonic, the `v` of an AVX spelling dropped.
+ * SSE2, SSE3, SSSE3, SSE4, AVX, AVX2 and FMA, and of AES and carry-less multiplication
+ * ({@link VECTOR_SECTIONS}). Written by the mnemonic: NASM's own headings follow the year an
+ * instruction arrived, which splits `paddd` from `vpaddd` and says nothing about what either does.
+ * One per mnemonic, the `v` of an AVX spelling dropped.
  *
  * Separate from the shared Instruction categories
  * ([the design record](../../../../../../docs/design/instruction-categories.md)): those name the
@@ -27,6 +28,30 @@ export const VECTOR_CATEGORIES = [
 
 export type VectorCategory = (typeof VECTOR_CATEGORIES)[number]['id']
 
+/**
+ * NASM's headings for those groups, VAES's under the document NASM took it from. Another group can
+ * hold a mnemonic a rule below matches, `andn` in BMI or `xabort` in TSX, and is not one of vector
+ * instructions all the same.
+ */
+export const VECTOR_SECTIONS: ReadonlySet<string> = new Set([
+    'Katmai Streaming SIMD instructions (SSE -- a.k.a. KNI, XMM, MMX2)',
+    'Willamette Streaming SIMD instructions (SSE2)',
+    'Willamette MMX instructions (SSE2 SIMD Integer Instructions)',
+    'Willamette SSE2 Cacheability Instructions',
+    'Prescott New Instructions (SSE3)',
+    'Tejas New Instructions (SSSE3)',
+    'Penryn New Instructions (SSE4.1)',
+    'Nehalem New Instructions (SSE4.2)',
+    'Intel AVX instructions',
+    'Intel AVX2 instructions',
+    'Intel Fused Multiply-Add instructions (FMA)',
+    'Intel AES instructions',
+    'Intel AVX AES instructions',
+    'Intel instruction extension based on pub number 319433-030 dated October 2017',
+    'Intel Carry-Less Multiplication instructions (CLMUL)',
+    'Intel AVX Carry-Less Multiplication instructions (CLMUL)'
+])
+
 /** The rules in the order they are tried; the first that matches the stem decides. */
 const RULES: readonly [VectorCategory, RegExp][] = [
     ['fused', /^fn?m(?:add|sub)(?:sub|add)?\d{3}(?:ps|pd|ss|sd)$/],
@@ -41,13 +66,13 @@ const RULES: readonly [VectorCategory, RegExp][] = [
         'state',
         /^(?:zero(?:upper|all)|ldmxcsr|stmxcsr|fxsave|fxrstor|xsave|xrstor|sfence|lfence|mfence|clflush|prefetch|emms)/
     ],
-    ['convert', /^(?:cvt|pmov[sz]x|round|ldqq)/],
+    ['convert', /^(?:cvt|pmov[sz]x|round)/],
     ['lane', /^(?:p?broadcast|insert|extract|pinsr|pextr|movmsk|pmovmskb)/],
     [
         'shuffle',
         /^(?:p?shuf|punpck|unpck|perm|pblend|blend|palignr|pack|movddup|movsldup|movshdup|movlhps|movhlps)/
     ],
-    ['moves', /^(?:mov|lddqu|vldqq)/],
+    ['moves', /^(?:mov|lddqu|ldqqu)/],
     ['compare', /^(?:cmp|comis|ucomis|pcmp|pmin|pmax|min|max|ptest|testp[sd]|phminpos)/],
     ['shifts', /^p?(?:sll|srl|sra|rol|ror)/],
     ['logic', /^(?:p?and|p?or|p?xor|p?andn)/],

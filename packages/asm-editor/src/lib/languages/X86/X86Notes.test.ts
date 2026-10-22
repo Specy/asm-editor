@@ -152,10 +152,10 @@ describe('an instruction the Core cannot run', () => {
         //each as written, and as the note names it
         const instructions = [
             ['vaddps zmm0, zmm1, zmm2', 'vaddps zmm0, zmm1, zmm2'],
-            ['vmovdqu32 zmm0, [rax]', 'vmovdqu32 zmm0, zmmword [rax]'],
+            ['vmovdqu32 zmm0, [rax]', 'vmovdqu32 zmm0, zword [rax]'],
             //64 62 and 65 67 62
             ['fs vaddps zmm0, zmm1, zmm2', 'vaddps zmm0, zmm1, zmm2'],
-            ['gs a32 vmovdqu32 zmm0, [eax]', 'vmovdqu32 zmm0, gs:[eax]']
+            ['gs a32 vmovdqu32 zmm0, [eax]', 'vmovdqu32 zmm0, zword gs:[eax]']
         ]
         for (const [source, decoded] of instructions) {
             const emulator = await ranInto(source)
@@ -166,10 +166,51 @@ describe('an instruction the Core cannot run', () => {
                 description: 'Illegal instruction',
                 unsupported: 'AVX-512 instructions are not currently supported'
             })
-            expect(texts(emulator)[0], source).toContain(
-                'AVX-512 instructions are not currently supported'
-            )
-            void decoded
+            expect(texts(emulator), source).toEqual([
+                `The program ran \`${decoded}\` at \`0x${emulator.pc.toString(16)}\`. AVX-512 instructions are not currently supported.`
+            ])
+        }
+    })
+
+    it('says APX for an APX instruction, in EVEX map 4 or after REX2', async () => {
+        //push2 and the three-operand mul are EVEX map 4, jmpabs is D5 (REX2)
+        for (const source of ['push2 rax, rbx', 'mul eax, ebx, ecx', 'jmpabs 0x401000']) {
+            const emulator = await ranInto(source)
+            expect(emulator.termination, source).toEqual({
+                kind: 'signal',
+                number: 4,
+                name: 'SIGILL',
+                description: 'Illegal instruction',
+                unsupported: 'APX instructions are not currently supported'
+            })
+            //the decoder reads no APX instruction, so the Log has no text to name one by
+            expect(emulator.notes, source).toEqual([])
+        }
+    })
+
+    it('names the extension of a VEX instruction the Core does not run', async () => {
+        //each as written, as the note names it, and its extension
+        const instructions = [
+            //VAES: the 128-bit vaesenc runs
+            [
+                'vaesenc ymm0, ymm1, ymm2',
+                'vaesenc ymm0, ymm1, ymm2',
+                '256-bit AES and carry-less multiplication instructions are not currently supported'
+            ],
+            //the AVX-512 mask instructions are VEX
+            ['kmovw k1, eax', 'kmovw k1, eax', 'AVX-512 instructions are not currently supported'],
+            [
+                'vgf2p8affineqb xmm0, xmm1, xmm2, 0',
+                'vgf2p8affineqb xmm0, xmm1, xmm2, 0x00',
+                'GFNI instructions are not currently supported'
+            ]
+        ]
+        for (const [source, decoded, unsupported] of instructions) {
+            const emulator = await ranInto(source)
+            expect(emulator.termination, source).toMatchObject({ name: 'SIGILL', unsupported })
+            expect(texts(emulator), source).toEqual([
+                `The program ran \`${decoded}\` at \`0x${emulator.pc.toString(16)}\`. ${unsupported}.`
+            ])
         }
     })
 

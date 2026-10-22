@@ -16,17 +16,18 @@ The emulator runs every VEX-encoded instruction of these extensions:
 | AES-NI, PCLMULQDQ | `vaesenc`, `vaesdec`, `vaeskeygenassist`, `vpclmulqdq xmm`                                |
 | SSE4.1, SSE4.2    | `vpminsd`, `vpmovzxbw`, `vblendvps`, `vptest`, `vroundps`, `vdpps`, `vpcmpistri`          |
 
-SSE4.1, SSE4.2 and AES-NI run only in their `v` form: write `vpminsd xmm0, xmm0, xmm1`, not `pminsd xmm0, xmm1`. The legacy encodings without `v` stop the program with `SIGILL`, the illegal-instruction signal, and the **Log** names the instruction: "The program ran `pminsd xmm0, xmm1` at `0x401000`, which the emulator does not support". SSE, SSE2, SSE3 and SSSE3 run in both forms.
+Most of SSE4.1, SSE4.2 and AES-NI run only in their `v` form: write `vpminsd xmm0, xmm0, xmm1`, not `pminsd xmm0, xmm1`. The legacy encodings without `v` stop the program with `SIGILL`, the illegal-instruction signal, and the **Log** names the instruction: "The program ran `pminsd xmm0, xmm1` at `0x401000`, which the emulator does not support". Four run in both forms: `pmulld`, `movntdqa`, `pclmulqdq` and `crc32`, which has no `v` form. SSE, SSE2, SSE3 and SSSE3 run in both forms.
 
 These do not run, and stop the program with `SIGILL` in the same way:
 
 - **AVX-512**: the EVEX encoding, the `zmm` registers, `ymm16` to `ymm31`, the `k` mask registers, masking such as `{k1}{z}` and embedded broadcasts such as `{1to16}`. The Log says "AVX-512 instructions are not currently supported."
 - **VAES**, the 256-bit forms of the AES instructions, such as `vaesenc ymm0, ymm1, ymm2`.
 - The 256-bit form of `vpclmulqdq`.
+- **MMX**: every instruction on the 64-bit `mm` registers, such as `paddd mm0, mm1` or `movq mm0, rax`. Only `emms` runs, and does nothing.
 
 ## CPUID {#cpuid}
 
-The emulator's `cpuid` reports none of the extensions above, although it runs them. `cpuid` with `eax = 1` leaves bit 28 of `ecx` (AVX) clear, and with `eax = 7, ecx = 0` it leaves bit 5 of `ebx` (AVX2) and the BMI bits clear. A processor that runs AVX reports it there. This is the one place where the emulator differs from such a machine: a program that tests `cpuid` before choosing a code path takes its SSE2 path, while code that uses AVX instructions without asking runs.
+The emulator's `cpuid` reports none of AVX, AVX2, FMA, F16C, BMI, AES-NI, SSE4.1 or SSE4.2, although it runs them; of the extensions above it reports only PCLMULQDQ (bit 1 of `ecx` with `eax = 1`). `cpuid` with `eax = 1` leaves bit 28 of `ecx` (AVX) clear, and with `eax = 7, ecx = 0` it leaves bit 5 of `ebx` (AVX2) and the BMI bits clear. A processor that runs AVX reports it there, and a program checks two more things before it uses AVX: bit 27 of `ecx` (OSXSAVE), and the `xgetbv` instruction, which says whether the operating system saves the `ymm` registers. Here bits 27 and 28 are clear, so such a program takes its SSE2 path, while code that uses AVX instructions without asking runs.
 
 ## Registers {#registers}
 
@@ -47,7 +48,7 @@ How an instruction that writes an `xmm` register treats bits 128 to 255 depends 
 | `vaddps ymm0, ymm1, ymm2` | bits 0–255 | the result                                |
 | `vaddss xmm0, xmm1, xmm2` | bits 0–31  | set to zero; bits 32–127 come from `xmm1` |
 
-A legacy SSE instruction, written without `v`, preserves the high half. A VEX instruction with `xmm` operands zeroes it. A scalar VEX instruction takes bits 32 to 127 from its **first source**, not from the destination: `vaddss xmm0, xmm1, xmm2` puts `xmm1[0] + xmm2[0]` in bits 0 to 31, copies bits 32 to 127 of `xmm1`, and zeroes bits 128 to 255. The legacy `addss xmm0, xmm1` keeps bits 32 to 255 of `xmm0`. The same holds for `vmovss` and `vmovsd` between registers, the other scalar arithmetic, and the scalar conversions such as `vcvtsi2sd xmm0, xmm1, rax`.
+A legacy SSE instruction, written without `v`, preserves the high half. A VEX instruction with `xmm` operands zeroes it. A scalar VEX instruction takes bits 32 to 127 from its **first source**, not from the destination: `vaddss xmm0, xmm1, xmm2` puts `xmm1[0] + xmm2[0]` in bits 0 to 31, copies bits 32 to 127 of `xmm1`, and zeroes bits 128 to 255. The legacy `addss xmm0, xmm1` keeps bits 32 to 255 of `ymm0`. The same holds for `vmovss` and `vmovsd` between registers, the other scalar arithmetic, and the scalar conversions such as `vcvtsi2sd xmm0, xmm1, rax`.
 
 `vzeroupper` sets bits 128 to 255 of all sixteen registers to zero; `vzeroall` sets all 256 bits of all sixteen to zero. A legacy SSE instruction must preserve the high halves, which makes it slow on many processors while some high half holds nonzero bits. Compilers therefore emit `vzeroupper` at the end of 256-bit code before a `call` or `ret`. The emulator does not model that cost; it applies the rules in the table.
 
@@ -66,10 +67,12 @@ Most 256-bit instructions operate on the two 128-bit halves separately and ident
 These never move data between the halves; their index or immediate selects within the half:
 
 - `vpshufb`: each control byte's low four bits pick a byte of the same half; a control byte with bit 7 set gives zero.
-- `vpshufd`, `vpshuflw`, `vpshufhw`, `vshufps`, `vshufpd`, `vpermilps`, `vpermilpd`: the immediate or control is applied to each half.
+- `vpshufd`, `vpshuflw`, `vpshufhw`, `vshufps` and `vpermilps` with an immediate: the same immediate is applied to each half.
+- `vshufpd` and `vpermilpd` with an immediate: one bit per element, so the low half takes bits 0 and 1 and the high half bits 2 and 3. `vshufpd ymm0, ymm1, ymm2, 1` gives `ymm1[1], ymm2[0]` in the low half and `ymm1[2], ymm2[2]` in the high half.
+- `vpermilps` and `vpermilpd` with a register: each element's control is in the same element of the control register and picks within its half.
 - `vpalignr`: concatenates and shifts each half separately.
 - `vpunpcklbw` and the other `vpunpck*`, `vunpcklps`, `vunpckhps`: interleave within each half, so `vpunpcklbw ymm` takes bytes 0–7 and 16–23 of its sources.
-- `vpacksswb`, `vpackssdw`, `vpackuswb`, `vpackusdw`: pack each half separately, so the results of the two sources alternate by half.
+- `vpacksswb`, `vpackssdw`, `vpackuswb`, `vpackusdw`: pack each half separately. The low half of the result holds the packed low half of the first source, then that of the second; the high half holds their packed high halves in the same order.
 - `vhaddps`, `vhaddpd`: add neighbouring lanes within each half.
 - `vpslldq`, `vpsrldq`: shift each half by bytes.
 
@@ -112,9 +115,9 @@ Without a size, `vcvtpd2ps xmm0, [rel p]` assembles as the 16-byte form and conv
 
 ## Alignment {#alignment}
 
-Only the aligned moves require an aligned address: `vmovaps`, `vmovapd`, `vmovdqa`, `vmovntps`, `vmovntpd`, `vmovntdq` and `vmovntdqa` need a multiple of 16 with an `xmm` register and a multiple of 32 with a `ymm` register. Any other address ends the program with `SIGSEGV`, a segmentation fault, with `rip` on the instruction; an instruction that faults changes no register.
+Only the aligned moves require an aligned address: `vmovaps`, `vmovapd`, `vmovdqa`, `vmovntps`, `vmovntpd`, `vmovntdq` and `vmovntdqa` need a multiple of 16 with an `xmm` register and a multiple of 32 with a `ymm` register. Any other address ends the program with `SIGSEGV`, a segmentation fault, with `rip` on the instruction. An instruction that faults changes no register and no memory, apart from a gather, below.
 
-Every other instruction accepts any address: `vmovups`, `vmovupd`, `vmovdqu`, the broadcasts, and the memory operand of arithmetic, compare, shuffle and conversion instructions. On a processor, the legacy SSE forms require 16-byte alignment for a memory operand, as in `addps xmm0, [rel v]`, and their `v` forms do not. This emulator checks the alignment of the legacy moves and the integer SSE instructions (`movaps`, `movdqa`, `paddd`) but not of the floating-point arithmetic ones, so `addps xmm0, [rel v + 4]` runs here and faults on a processor.
+Every other instruction accepts any address: `vmovups`, `vmovupd`, `vmovdqu`, the broadcasts, and the memory operand of arithmetic, compare, shuffle and conversion instructions. On a processor, the legacy SSE forms require 16-byte alignment for a memory operand, as in `addps xmm0, [rel v]`, and their `v` forms do not. This emulator checks the alignment of the legacy aligned moves and of most integer SSE instructions (`movaps`, `movdqa`, `paddd`, `pxor`), but not of the floating-point arithmetic ones, `pshufd` and its relatives, or `palignr`, so `addps xmm0, [rel v + 4]` runs here and faults on a processor.
 
 `align 32` before a label in `.data` or `.bss` places it on a multiple of 32:
 
@@ -128,7 +131,7 @@ section .text
     vmovdqa ymm1, [rel table + 4]   ; misaligned: SIGSEGV
 ```
 
-A masked move reads and writes only the elements its mask selects. `vmaskmovps ymm0, ymm1, [rsi]` loads the elements whose mask element in `ymm1` has its top bit set and sets the others to zero; an element left out of the mask does not fault even when its address is not mapped. A gather such as `vpgatherdd ymm0, [rsi + ymm1*4], ymm2` loads element `i` from `rsi + ymm1[i]*4` where the top bit of `ymm2[i]` is set, and sets `ymm2` to zero when it completes.
+A masked move reads and writes only the elements its mask selects. `vmaskmovps ymm0, ymm1, [rsi]` loads the elements whose mask element in `ymm1` has its top bit set and sets the others to zero; an element left out of the mask does not fault even when its address is not mapped. A gather such as `vpgatherdd ymm0, [rsi + ymm1*4], ymm2` loads element `i` from `rsi + ymm1[i]*4` where the top bit of `ymm2[i]` is set, and sets `ymm2` to zero when it completes. If an element's address faults, the elements before it stay loaded and their mask elements cleared, so the gather can be run again to finish.
 
 ## Instruction families {#families}
 
@@ -180,9 +183,9 @@ The other FMA mnemonics follow the same numbering: `vfmsub` computes `a*b - c`, 
 
 ## Floating-point results {#floating-point}
 
-The vector floating-point instructions round by the rounding-control field of `mxcsr`, which starts at round to nearest, ties to even. `vroundps` uses that field when bit 2 of its immediate is set (`vroundps ymm0, ymm1, 4`), and otherwise the mode in bits 0 and 1 of the immediate: 0 nearest, 1 down, 2 up, 3 toward zero. The conversions `vcvtps2dq` and `vcvtpd2dq` round by `mxcsr`; the `vcvtt` forms truncate toward zero. `vstmxcsr` and `vldmxcsr` store and load `mxcsr`.
+On a processor, the vector floating-point instructions round by the rounding-control field of `mxcsr`, which starts at round to nearest, ties to even. This emulator follows that field only in `vroundps`, `vcvtps2ph` and the conversions to integers; its arithmetic, fused multiply-adds and other conversions round to nearest whatever `mxcsr` says, and no instruction sets the exception flags of `mxcsr` apart from the invalid-operation flag of `vcomiss` and its relatives. `vroundps` uses the field when bit 2 of its immediate is set (`vroundps ymm0, ymm1, 4`), and otherwise the mode in bits 0 and 1 of the immediate: 0 nearest, 1 down, 2 up, 3 toward zero. The conversions `vcvtps2dq` and `vcvtpd2dq` round by `mxcsr`; the `vcvtt` forms truncate toward zero. `vstmxcsr` and `vldmxcsr` store and load `mxcsr`.
 
-When an arithmetic result is a NaN, which NaN comes out of an operation on two NaNs is not something to rely on: examples and tests should not depend on its payload. `vrcpps`, `vrcpss`, `vrsqrtps` and `vrsqrtss` return the correctly rounded reciprocal or reciprocal square root here. A processor returns an approximation with a relative error up to 1.5 × 2⁻¹², and different processors return different approximations, so a program that compares their results bit for bit can pass here and fail elsewhere.
+When an arithmetic result is a NaN, which NaN comes out of an operation on two NaNs is not something to rely on: examples and tests should not depend on its payload. `vrcpps` and `vrcpss` return the correctly rounded reciprocal here, and `vrsqrtps` and `vrsqrtss` divide 1 by the rounded square root, which can be one unit off the correctly rounded result. A processor returns an approximation with a relative error up to 1.5 × 2⁻¹², and different processors return different approximations, so a program that compares their results bit for bit can pass here and fail elsewhere.
 
 ## Where AVX code comes from {#sources}
 

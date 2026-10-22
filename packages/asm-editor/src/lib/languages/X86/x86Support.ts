@@ -4,10 +4,11 @@
  *
  * NASM's table names the extension each form needs (`AVX2`, `AVX512F`, `APX`). The Core runs the
  * x86-64 baseline, x87, SSE through SSE3 and SSSE3, and AVX, AVX2, FMA, BMI1 and BMI2 in their VEX
- * encodings, with the AES, PCLMULQDQ and SSE4 instructions that have a `v` form. It does not run
- * AVX-512 (EVEX), APX, MMX or the other extensions below, and a program that reaches one stops with
- * SIGILL. A form that needs an extension named in neither list is neither claimed nor denied: the
- * pages say nothing about it.
+ * encodings, with the AES, PCLMULQDQ and SSE4 instructions that have a `v` form; of the legacy
+ * encodings of those, only PCLMULQDQ and a few SSE4 ones. It does not run AVX-512 (EVEX), APX, an
+ * instruction on an MMX register or the other extensions below, and a program that reaches one
+ * stops with SIGILL. A form that needs an extension named in neither list is neither claimed nor
+ * denied: the pages say nothing about it.
  */
 import type { X86Instruction, X86InstructionForm } from './generated/x86Instructions'
 
@@ -26,10 +27,36 @@ const RUNNING_FEATURES = new Set([
 ])
 
 /**
- * Legacy encodings NASM files under `SSE` that need a later instruction set: the Core runs AES and
- * PCLMULQDQ only as `vaesenc`, `vpclmulqdq` and their relatives.
+ * Legacy encodings NASM files under `SSE` that need a later instruction set: the Core runs AES only
+ * as `vaesenc` and its relatives. PCLMULQDQ, filed there too, it runs in both encodings.
  */
-const VEX_ONLY_LEGACY = /^(aes|pclmul)/
+const VEX_ONLY_LEGACY = /^aes/
+
+/**
+ * The legacy SSE4 encodings the Core runs as they are. Every other SSE4.1 and SSE4.2 instruction
+ * runs only as its `v` form, and `crc32` has none.
+ */
+const LEGACY_SSE4 = new Set(['pmulld', 'movntdqa', 'crc32'])
+
+/**
+ * Mnemonics of an extension the Core does not run that it runs all the same: `emms` has no MMX
+ * state to empty, and `prefetch` and `prefetchw` (`0F 0D`) are hints.
+ */
+const RUNNING_MNEMONICS = new Set(['emms', 'prefetch', 'prefetchw'])
+
+/**
+ * Mnemonics the Core does not run that the table names no extension for, or only the x87 one, by
+ * the family a reader knows them by. NASM does name one for `movbe` and `movdiri`, in its list of
+ * single-instruction extensions, which the generator does not read.
+ */
+const UNSUPPORTED_MNEMONICS = new Map([
+    ['movbe', 'MOVBE'],
+    ['movdiri', 'MOVDIRI'],
+    ['urdmsr', 'the user-mode MSR instructions'],
+    ['uwrmsr', 'the user-mode MSR instructions'],
+    ['fbld', 'the x87 BCD instructions'],
+    ['fbstp', 'the x87 BCD instructions']
+])
 
 /** Extensions the Core does not run, by NASM's name for them and the family a reader knows them by. */
 const UNSUPPORTED: readonly [RegExp, string][] = [
@@ -37,6 +64,7 @@ const UNSUPPORTED: readonly [RegExp, string][] = [
     [/^AVX10/, 'AVX10'],
     [/^APX$/, 'APX'],
     [/^MMX$/, 'MMX'],
+    [/^ADX$/, 'ADX'],
     [/^3DNOW$/, '3DNow!'],
     [/^SSE5$/, 'XOP and FMA4'],
     [/^SSE4A$/, 'SSE4A'],
@@ -61,20 +89,26 @@ export type X86Unsupported =
 export type X86FormSupport = 'runs' | X86Unsupported | 'unknown'
 
 export function x86FormSupport(name: string, form: X86InstructionForm): X86FormSupport {
-    if (form.features.length === 0) return 'runs'
-    if (form.features.every((feature) => RUNNING_FEATURES.has(feature))) {
-        return form.features.includes('SSE') && VEX_ONLY_LEGACY.test(name)
-            ? { kind: 'v-form', family: 'AES and PCLMULQDQ' }
-            : 'runs'
-    }
+    const unsupported = UNSUPPORTED_MNEMONICS.get(name)
+    if (unsupported) return { kind: 'family', family: unsupported }
+    if (RUNNING_MNEMONICS.has(name)) return 'runs'
     for (const feature of form.features) {
         const match = UNSUPPORTED.find(([pattern]) => pattern.test(feature))
         if (match) return { kind: 'family', family: match[1] }
     }
+    // whatever extension added it: `psubq mm0, mm1` is SSE2, and the Core refuses it as MMX
+    if (form.operands.some((operand) => operand.startsWith('mmxreg'))) {
+        return { kind: 'family', family: 'MMX' }
+    }
+    if (form.features.every((feature) => RUNNING_FEATURES.has(feature))) {
+        return form.features.includes('SSE') && VEX_ONLY_LEGACY.test(name)
+            ? { kind: 'v-form', family: 'AES' }
+            : 'runs'
+    }
     // SSE4 runs as a `v` encoding, which NASM lists under the mnemonic with a `v` in front.
     const missing = form.features.filter((feature) => !RUNNING_FEATURES.has(feature))
     if (missing.every((feature) => feature === 'SSE41' || feature === 'SSE42')) {
-        return { kind: 'v-form', family: 'SSE4' }
+        return LEGACY_SSE4.has(name) ? 'runs' : { kind: 'v-form', family: 'SSE4' }
     }
     return 'unknown'
 }

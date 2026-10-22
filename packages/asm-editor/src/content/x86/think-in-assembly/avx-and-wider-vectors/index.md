@@ -198,8 +198,9 @@ _start:
     syscall
 ```
 
-Switch the AVX tab to hex to read the bytes. In `ymm1`, byte 0 is 15 and byte 16 is 31: no byte left
-its half. In `ymm2` the bytes run from 31 down to 0.
+Switch the AVX tab to hex to read the bytes. The hex row prints byte 31 first and byte 0 last, as a
+number is written. `ymm1` reads `101112…1f000102…0f`: byte 0 is 15 and byte 16 is 31, so no byte
+left its half. `ymm2` reads `000102…1e1f`: byte 0 is 31 and byte 31 is 0.
 
 The instructions that move data between halves include `vpermq`, `vpermd`, `vperm2i128`,
 `vperm2f128`, `vextractf128`, `vinsertf128` and the broadcasts. Shuffles such as `vpshufd`,
@@ -335,6 +336,10 @@ _start:
     syscall
 ```
 
+```testcase
+{ "endsWithSignal": "SIGSEGV" }
+```
+
 The program stops on the second `vmovdqa` with SIGSEGV, a segmentation fault. `rip` stays on that
 instruction, `ymm2` is unchanged and `r8` is still 1. A compiler emits an aligned move only where
 it knows the address is aligned, so the fault reveals an address that broke that assumption.
@@ -342,9 +347,10 @@ it knows the address is aligned, so the fault reveals an address that broke that
 ## Checking for AVX
 
 Not every x86-64 processor has AVX, so a program meant to run anywhere asks the `cpuid` instruction
-before it uses AVX instructions: `cpuid` with `eax = 1` reports AVX in bit 28 of `ecx`. This
-emulator's `cpuid` does not set that bit, although the emulator runs AVX instructions; a real
-processor with AVX would set it. A program that checks first therefore takes its SSE path here,
+before it uses AVX instructions: `cpuid` with `eax = 1` reports AVX in bit 28 of `ecx`, and the
+program also checks bit 27 (OSXSAVE) and the `xgetbv` instruction, which together say that the
+operating system saves the `ymm` registers. This emulator's `cpuid` sets neither bit, although the
+emulator runs AVX instructions; a real processor with AVX would set both. A program that checks first therefore takes its SSE path here,
 while code that uses AVX instructions directly, like the programs on this page, runs.
 
 ## Your turn: scale and offset eight values

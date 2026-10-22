@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { x86InstructionMap } from './X86-documentation'
-import { x86FormRuns, x86IsUnsupported, x86Support, x86SupportNote } from './x86Support'
+import {
+    x86FormRuns,
+    x86FormSupport,
+    x86IsUnsupported,
+    x86Support,
+    x86SupportNote
+} from './x86Support'
 
 const instruction = (name: string) => x86InstructionMap.get(name)!
 
@@ -38,8 +44,8 @@ describe('which forms the Core runs', () => {
         ).toHaveLength(1)
     })
 
-    it('runs SSE4, AES and PCLMULQDQ only as their v forms', () => {
-        for (const name of ['pminsd', 'blendps', 'ptest', 'aesenc', 'pclmulqdq', 'pcmpistri']) {
+    it('runs SSE4 and AES only as their v forms', () => {
+        for (const name of ['pminsd', 'blendps', 'ptest', 'aesenc', 'pcmpistri']) {
             expect(x86Support(instruction(name)).any, name).toBe(false)
         }
         for (const name of [
@@ -52,6 +58,72 @@ describe('which forms the Core runs', () => {
         ]) {
             expect(x86Support(instruction(name)).any, name).toBe(true)
         }
+    })
+
+    it('runs the legacy PCLMULQDQ and the few legacy SSE4 encodings the Core decodes', () => {
+        for (const name of [
+            'pclmulqdq',
+            'pclmullqhqdq',
+            'pclmulhqhqdq',
+            'pmulld',
+            'movntdqa',
+            'crc32'
+        ]) {
+            expect(x86Support(instruction(name)).all, name).toBe(true)
+        }
+        // `crc32` has no `v` form to send a reader to
+        expect(x86SupportNote(instruction('crc32'))).toBeUndefined()
+    })
+
+    it('does not run an instruction on an MMX register, whatever extension NASM files it under', () => {
+        for (const [name, operands] of [
+            ['paddb', 'mmxreg,mmxreg/mem64'],
+            ['psubq', 'mmxreg,mmxreg/mem64'],
+            ['pmuludq', 'mmxreg,mmxreg/mem64'],
+            ['cvtpi2ps', 'xmmreg,mmxreg/mem64'],
+            ['movq2dq', 'xmmreg,mmxreg']
+        ]) {
+            const form = instruction(name).forms.find(
+                (form) => form.operands.join(',') === operands
+            )!
+            expect(x86FormSupport(name, form), name).toEqual({ kind: 'family', family: 'MMX' })
+        }
+        expect(x86Support(instruction('psubq')).any).toBe(true)
+        // `emms` has no MMX state to empty, and 0F 0D is a prefetch hint
+        for (const name of ['emms', 'prefetch', 'prefetchw']) {
+            expect(x86Support(instruction(name)).all, name).toBe(true)
+        }
+        expect(x86SupportNote(instruction('pfadd'))).toBe('This emulator does not support 3DNow!.')
+    })
+
+    it('names the instructions it does not run that NASM tags with no extension it does not run', () => {
+        expect(x86SupportNote(instruction('movbe'))).toBe('This emulator does not support MOVBE.')
+        expect(x86SupportNote(instruction('adcx'))).toContain('ADX')
+        expect(x86IsUnsupported(instruction('adox'))).toBe(true)
+        expect(x86SupportNote(instruction('fbld'))).toBe(
+            'This emulator does not support the x87 BCD instructions.'
+        )
+        expect(x86IsUnsupported(instruction('fbstp'))).toBe(true)
+        for (const name of ['movdiri', 'urdmsr', 'uwrmsr']) {
+            expect(x86IsUnsupported(instruction(name)), name).toBe(true)
+        }
+    })
+
+    it('offers the 16 and 32-bit forms NASM can also encode as APX, and not the ones only APX encodes', () => {
+        for (const name of ['popcnt', 'lzcnt', 'tzcnt']) {
+            expect(x86Support(instruction(name)).all, name).toBe(true)
+        }
+        for (const name of ['andn', 'blsi', 'bzhi']) {
+            const running = instruction(name).forms.filter((form) => x86FormRuns(name, form))
+            expect(
+                running.map((form) => form.operands[0]),
+                name
+            ).toEqual(['reg32', 'reg64'])
+        }
+        // `mul eax, ebx, ecx` is APX's encoding; `{nf} mul` is the VEX `mulx`
+        const mul = instruction('mul').forms.filter((form) => !x86FormRuns('mul', form))
+        expect(mul.every((form) => form.features.includes('APX'))).toBe(true)
+        expect(mul.map((form) => form.operands.join(','))).toContain('reg32,reg32,r/m32')
     })
 
     it('says in one sentence what it will not run', () => {

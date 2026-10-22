@@ -21,12 +21,15 @@ describe('the summaries of the aliases', () => {
         )
     })
 
-    it('lends the FMA orders and the 256-bit moves their instruction’s', () => {
+    it('lends the FMA orders their instruction’s, and says 256 bits for the 256-bit moves', () => {
         expect(summaryOf('vfmadd123ps')).toBe(summaryOf('vfmadd213ps'))
         expect(summaryOf('vfnmsub312sd')).toBe(summaryOf('vfnmsub132sd'))
         expect(summaryOf('vfmaddsub321pd')).toBe(summaryOf('vfmaddsub231pd'))
-        expect(summaryOf('vmovqqa')).toBe(summaryOf('vmovdqa'))
-        expect(summaryOf('vldqqu')).toBe(summaryOf('vlddqu'))
+        expect(summaryOf('vmovqqa')).toBe('Move Aligned Quad Quadword (256 Bits)')
+        expect(summaryOf('vldqqu')).toBe('Load Unaligned Integer 256 Bits')
+        for (const name of ['vldqqu', 'vmovntqq', 'vmovqqa', 'vmovqqu']) {
+            expect(summaryOf(name), name).toContain('256 Bits')
+        }
         expect(summaryOf('vpclmulhqhqdq')).toContain('Carry-Less')
     })
 

@@ -54,12 +54,15 @@ const FMA_INTEL_ORDER: Record<string, string> = {
     '321': '231'
 }
 
-/** The 256-bit spellings of the `qq` aliases and the instruction each stands for. */
+/**
+ * The `qq` aliases, NASM's 256-bit spellings of `vlddqu`, `vmovntdq`, `vmovdqa` and `vmovdqu`,
+ * whose own summaries say 128 bits.
+ */
 const ALIASES: Record<string, string> = {
-    vldqqu: 'vlddqu',
-    vmovntqq: 'vmovntdq',
-    vmovqqa: 'vmovdqa',
-    vmovqqu: 'vmovdqu'
+    vldqqu: 'Load Unaligned Integer 256 Bits',
+    vmovntqq: 'Store Quad Quadword (256 Bits) Using Non-Temporal Hint',
+    vmovqqa: 'Move Aligned Quad Quadword (256 Bits)',
+    vmovqqu: 'Move Unaligned Quad Quadword (256 Bits)'
 }
 
 const CLMUL = /^v?pclmul(?:hq|lq)(?:hq|lq)dq$/
@@ -77,7 +80,7 @@ export function x86AliasSummary(
     }
     const fma = FMA.exec(name)
     if (fma) return summaryOf(`${fma[1]}${FMA_INTEL_ORDER[fma[2]]}${fma[3]}`)
-    if (name in ALIASES) return summaryOf(ALIASES[name])
+    if (name in ALIASES) return ALIASES[name]
     if (CLMUL.test(name)) {
         return 'Carry-Less Quadword Multiplication, the quadwords named by the mnemonic'
     }

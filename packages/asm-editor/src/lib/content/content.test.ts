@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
     extractPlaygrounds,
     parsePlaygroundFence,
+    parseTestcaseFence,
     type ContentPlayground
 } from '#lib/content/playgrounds.ts'
 import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
@@ -210,6 +211,19 @@ async function runOnce(
         if (!allowLimit && status === InterpreterStatus.TerminatedWithException) {
             throw new Error(`${nameOf(playground)} stopped with an error`)
         }
+        //a Linux signal is not an error to the x86 adapter, so a crash would otherwise pass as a run.
+        //A solution is left out: it is written for its exercise's starting registers, which this
+        //run does not set, and runTestcase checks it with them.
+        const termination = emulator.termination
+        const signal = termination?.kind === 'signal' ? termination.name : undefined
+        if (!playground.isSolution && signal !== playground.endsWithSignal) {
+            throw new Error(
+                signal
+                    ? `${nameOf(playground)} ended on ${signal}; a playground that shows a crash ` +
+                          `says so with "endsWithSignal": "${signal}" in its \`testcase\` fence`
+                    : `${nameOf(playground)} was declared to end on ${playground.endsWithSignal} and did not`
+            )
+        }
         return {
             terminated: emulator.terminated,
             fingerprint: [
@@ -349,6 +363,27 @@ describe('the hide-until-built fence flag', () => {
         expect(parsed?.settings.hideUntilBuilt).toBe(true)
         expect(parsed?.settings.showScreen).toBe(true)
         expect(parsed?.settings.showConsole).toBe(true)
+    })
+})
+
+describe('the endsWithSignal testcase key', () => {
+    it('declares a crash without making a Testcase', () => {
+        const parsed = parseTestcaseFence('{ "endsWithSignal": "SIGSEGV" }')
+        expect(parsed.endsWithSignal).toBe('SIGSEGV')
+        expect(parsed.hasTestcase).toBe(false)
+    })
+
+    it('must name a signal', () => {
+        expect(() => parseTestcaseFence('{ "endsWithSignal": "segfault" }')).toThrow(
+            /must name a signal/
+        )
+    })
+
+    it('is attached to the playground above it', () => {
+        const [playground] = extractPlaygrounds(
+            '```x86|playground\nud2\n```\n\n```testcase\n{ "endsWithSignal": "SIGILL" }\n```\n'
+        )
+        expect(playground?.endsWithSignal).toBe('SIGILL')
     })
 })
 

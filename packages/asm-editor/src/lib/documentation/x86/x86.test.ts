@@ -231,6 +231,21 @@ describe('the x86 Documentation', () => {
         expect(markdownOf(find('extensions', 'AVX512 Bit Algorithms'))).not.toContain(
             '**Arithmetic**'
         )
+        // and so is a group that is not one of vector instructions, whatever its mnemonics
+        for (const title of [
+            'BMI1 and BMI2 bit operations',
+            'Intel Transactional Synchronization Extensions (TSX)',
+            'Synchronization and fencing',
+            'XSAVE group (AVX and extended state)',
+            'MMX (SIMD using the x87 register file)'
+        ]) {
+            expect(markdownOf(find('extensions', title)), title).not.toMatch(
+                /^\*\*[A-Z][^*]*\*\*$/m
+            )
+        }
+        expect(markdownOf(find('extensions', 'Intel AVX instructions'))).toMatch(
+            /\*\*Moves, loads and stores\*\*\n\n(?:- .*\n)*- `vldqqu`/
+        )
     })
 
     it('has an entry for each of the 26 directive docs, under its group', () => {

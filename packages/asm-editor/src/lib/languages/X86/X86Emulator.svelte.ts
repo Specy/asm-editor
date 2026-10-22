@@ -1,6 +1,6 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
-import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
+import { loadDecoder, type DecodedInstruction, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
@@ -91,6 +91,8 @@ import {
     X86_START_UNIT_FILES
 } from './x86StartUnit'
 import type { Termination } from '#lib/languages/termination.ts'
+import { X86_INSTRUCTIONS } from './generated/x86Instructions'
+import { x86FormSupport } from './x86Support'
 
 /**
  * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with
@@ -167,28 +169,95 @@ export const DEFAULT_X86_FLAGS = [
 /** Linux's signal for an instruction the processor cannot run. */
 const SIGILL = 4
 
+/** The longest an x86 instruction can be, prefixes included. */
+const MAX_INSTRUCTION_LENGTH = 15n
+
 /** Instructions whose only purpose is to raise SIGILL, which a real processor raises too. */
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
 
 /**
- * What a program that ended on an AVX-512 instruction is told, in place of "Illegal instruction"
+ * What a program that ended on an instruction of an extension the Core does not run is told, in
+ * place of "Illegal instruction"
  * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
- * 1): the Core runs AVX and AVX2 but not the EVEX encoding AVX-512 uses, and a real processor
- * with AVX-512 would.
+ * 1), for the family a reader knows it by: "AVX-512 instructions are not currently supported". A
+ * real processor with that extension would run it.
  */
-const AVX_UNSUPPORTED = 'AVX-512 instructions are not currently supported'
+function unsupportedText(family: string): string {
+    // `the SHA extensions` is already a plural to begin a sentence with
+    return family.startsWith('the ')
+        ? `${family[0].toUpperCase()}${family.slice(1)} are not currently supported`
+        : `${family} instructions are not currently supported`
+}
 
-/** The prefixes an EVEX prefix may follow: the segment overrides and the address size. */
-const PREFIXES_BEFORE_EVEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
+/** The prefixes a VEX or EVEX prefix may follow: the segment overrides and the address size. */
+const PREFIXES_BEFORE_VEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
+
+/** The prefixes REX2 may follow: any legacy prefix, the operand size, `lock` and `rep` too. */
+const PREFIXES_BEFORE_REX2 = new Set([...PREFIXES_BEFORE_VEX, 0x66, 0xf0, 0xf2, 0xf3])
+
+/** The EVEX map of the legacy instructions APX extends, `push2` and `pop2` among them. */
+const APX_EVEX_MAP = 4
+
+/** The families only an EVEX or REX2 instruction can belong to. */
+const EVEX_FAMILIES = new Set(['AVX-512', 'AVX10', 'APX'])
+
+/** The widest of `xmm`, `ymm` and `zmm`, by the letters their names begin with: 0 for none. */
+function vectorWidth(letters: readonly string[]): number {
+    return Math.max(0, ...letters.map((letter) => ['x', 'y', 'z'].indexOf(letter) + 1))
+}
+
+/** The widest vector register a decoded instruction names, as {@link vectorWidth} counts. */
+function decodedVectorWidth(decoded: DecodedInstruction): number {
+    return vectorWidth([...decoded.text.matchAll(/\b([xyz])mm\d+\b/g)].map((match) => match[1]))
+}
+
+/** The widest vector register a form names, as {@link vectorWidth} counts. */
+function formVectorWidth(operands: readonly string[]): number {
+    return vectorWidth(operands.map((operand) => /^([xyz])mmreg/.exec(operand)?.[1] ?? ''))
+}
 
 /**
- * Whether an instruction is encoded as AVX-512: in 64-bit mode, the first byte after its segment
- * and address-size prefixes is `62` (EVEX), which outside 64-bit mode is `bound`. A VEX
- * instruction (`C4`, `C5`) that reaches SIGILL is an encoding the processor refuses too, so it is
- * told nothing special.
+ * The extension of an instruction the Core stopped at with SIGILL, when it is one the Core does not
+ * run, from its bytes in 64-bit mode, after its prefixes:
+ *
+ * - `62` (EVEX, `bound` outside 64-bit mode): APX in map 4, where APX puts the legacy instructions
+ *   it extends, and AVX-512 (or AVX10, its successor) in any other.
+ * - `D5` (REX2, `aad` outside 64-bit mode): APX.
+ * - `C4` or `C5` (VEX, `les` and `lds` outside 64-bit mode): whatever the decoded mnemonic's forms
+ *   of the same vector width need, when that is one extension: `vaesenc ymm0, …` is VAES,
+ *   `vaesenc xmm0, …` the AES the Core runs. A VEX instruction the Core refuses can belong to an
+ *   extension it does not run (VAES, GFNI, the AVX-512 mask instructions) or be an encoding no
+ *   processor accepts; it is named only in the first case.
+ *
+ * Any other instruction is `undefined`, and keeps the signal.
  */
-function isAvxEncoding(bytes: Uint8Array): boolean {
-    return bytes.find((byte) => !PREFIXES_BEFORE_EVEX.has(byte)) === 0x62
+function unsupportedFamily(
+    bytes: Uint8Array,
+    decoded: DecodedInstruction | undefined
+): string | undefined {
+    const first = bytes.findIndex((byte) => !PREFIXES_BEFORE_VEX.has(byte))
+    if (bytes[first] === 0x62) {
+        // the payload's low three bits are the map
+        return (bytes[first + 1] & 0x07) === APX_EVEX_MAP ? 'APX' : 'AVX-512'
+    }
+    if (bytes.find((byte) => !PREFIXES_BEFORE_REX2.has(byte)) === 0xd5) return 'APX'
+    if (bytes[first] !== 0xc4 && bytes[first] !== 0xc5) return undefined
+    if (!decoded || decoded.isInvalid) return undefined
+    const instruction = X86_INSTRUCTIONS.find(({ name }) => name === decoded.mnemonic)
+    if (!instruction) return undefined
+    const width = decodedVectorWidth(decoded)
+    const families = new Set<string>()
+    for (const form of instruction.forms) {
+        if (formVectorWidth(form.operands) !== width) continue
+        const support = x86FormSupport(instruction.name, form)
+        // a form of that width the Core runs leaves nothing to say why this one did not
+        if (support === 'runs') return undefined
+        if (support === 'unknown' || support.kind !== 'family') continue
+        // AVX-512 is VEX only in its mask instructions, which name no vector register
+        if (width > 0 && EVEX_FAMILIES.has(support.family)) continue
+        families.add(support.family)
+    }
+    return families.size === 1 ? [...families][0] : undefined
 }
 
 /** What the dock says while a Build waits on each of the Core's phases. */
@@ -392,38 +461,58 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * A program that ended on an instruction the Core cannot run, which a real processor would
-     * (AVX and later, most often): SIGILL at an address whose bytes decode as an instruction. An
+     * (AVX-512 and later, most often): SIGILL at an address whose bytes decode as an instruction. An
      * undefined instruction (`ud2`) raises SIGILL on any processor, and bytes that are no
      * instruction at all are the program's own fault; the Log says nothing more about either. An
-     * AVX instruction is named with what the run's status says of it, and nothing more.
+     * instruction of an extension the Core does not run is named with what the run's status says
+     * of it, and nothing more.
      */
     _terminationNotes(): { tone: 'warning'; text: string }[] {
         const illegal = this.illegalInstruction()
-        if (!illegal || !this.decoder) return []
-        const [decoded] = this.decoder.disassemble(illegal.bytes, illegal.address)
-        if (!decoded || decoded.isInvalid || UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
+        const decoded = illegal?.decoded
+        if (!illegal || !decoded || decoded.isInvalid) return []
+        if (UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
         const ran = `The program ran \`${decoded.text}\` at \`0x${illegal.address.toString(16)}\``
+        const family = unsupportedFamily(illegal.bytes, decoded)
         return [
             {
                 tone: 'warning',
-                text: isAvxEncoding(illegal.bytes)
-                    ? `${ran}. ${AVX_UNSUPPORTED}.`
+                text: family
+                    ? `${ran}. ${unsupportedText(family)}.`
                     : `${ran}, which the emulator does not support`
             }
         ]
     }
 
-    /** The instruction a program that ended on SIGILL stopped at, and its bytes. */
-    private illegalInstruction(): { address: bigint; bytes: Uint8Array } | undefined {
-        const reason = this.core?.stopReason
+    /**
+     * The instruction a program that ended on SIGILL stopped at, the bytes from its address on,
+     * and what the decoder reads in them when it has loaded. The bytes are the longest an
+     * instruction can be where they are mapped: the Core gives an instruction its decoder does not
+     * know, APX's among them, a single byte, and the encoding is in the bytes after it.
+     */
+    private illegalInstruction():
+        | { address: bigint; bytes: Uint8Array; decoded: DecodedInstruction | undefined }
+        | undefined {
+        const core = this.core
+        const reason = core?.stopReason
         if (
+            !core ||
             reason?.kind !== 'signal' ||
             reason.signal?.number !== SIGILL ||
             reason.address === undefined
         )
             return undefined
-        const bytes = this.core?.getInstructionAt(reason.address)?.bytes
-        return bytes ? { address: reason.address, bytes } : undefined
+        const { address } = reason
+        let bytes: Uint8Array | undefined
+        try {
+            bytes = core.readMemoryBytes(address, MAX_INSTRUCTION_LENGTH)
+        } catch {
+            //the instruction ends near the end of what is mapped
+            bytes = core.getInstructionAt(address)?.bytes
+        }
+        if (!bytes) return undefined
+        const [decoded] = this.decoder?.disassemble(bytes, address) ?? []
+        return { address, bytes, decoded }
     }
 
     /**
@@ -1271,7 +1360,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * The Core's stop reason: an exit with its status, or the signal that ended the program, which
-     * for an AVX instruction says that the emulator cannot run it.
+     * for an instruction of an extension the Core does not run says so.
      */
     _getTermination(): Termination | undefined {
         const core = this.core
@@ -1281,9 +1370,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         if (reason?.kind === 'signal' && reason.signal) {
             const { number, name, description } = reason.signal
             const illegal = this.illegalInstruction()
-            return illegal && isAvxEncoding(illegal.bytes)
-                ? { kind: 'signal', number, name, description, unsupported: AVX_UNSUPPORTED }
-                : { kind: 'signal', number, name, description }
+            const family = illegal && unsupportedFamily(illegal.bytes, illegal.decoded)
+            const signal = { kind: 'signal' as const, number, name, description }
+            return family ? { ...signal, unsupported: unsupportedText(family) } : signal
         }
         return { kind: 'end' }
     }

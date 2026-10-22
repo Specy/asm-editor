@@ -47,7 +47,14 @@ export type PlaygroundSettings = {
  */
 export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'avx' | 'x87'
 
-const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = ['fpu', 'cp0', 'csr', 'sse', 'avx', 'x87']
+const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = [
+    'fpu',
+    'cp0',
+    'csr',
+    'sse',
+    'avx',
+    'x87'
+]
 
 export type PlaygroundFence = {
     settings: PlaygroundSettings
@@ -81,6 +88,11 @@ export type PlaygroundTestcase = {
      * which loop until the reader presses Stop.
      */
     runFor?: number
+    /**
+     * The signal a program that shows a crash ends on, such as `SIGSEGV`. Verification only, like
+     * `runFor`: a playground that ends on a signal it does not declare fails the content test.
+     */
+    endsWithSignal?: string
 }
 
 export function parsePlaygroundLanguage(
@@ -224,8 +236,16 @@ export function parseTestcaseFence(raw: string): PlaygroundTestcase {
     if (value.name !== undefined && typeof value.name !== 'string') {
         throw new Error('"name" must be a string')
     }
+    if (value.endsWithSignal !== undefined && !/^SIG[A-Z]+$/.test(String(value.endsWithSignal))) {
+        throw new Error(
+            `"endsWithSignal" must name a signal, such as "SIGSEGV", got ${value.endsWithSignal}`
+        )
+    }
     return {
         runFor,
+        ...(value.endsWithSignal === undefined
+            ? {}
+            : { endsWithSignal: String(value.endsWithSignal) }),
         hasTestcase: [
             'input',
             'expectedOutput',
@@ -429,6 +449,7 @@ export type ContentPlayground = PlaygroundFence & {
     program?: PlaygroundProgram
     testcase?: Testcase
     runFor?: number
+    endsWithSignal?: string
     /** For an exercise, the `solution` playground that follows it. */
     solution?: ContentPlayground
 }
@@ -470,6 +491,7 @@ export function extractPlaygrounds(markdown: string): ContentPlayground[] {
                 const attached = parseTestcaseFence(next.code)
                 playground.testcase = attached.testcase
                 playground.runFor = attached.runFor
+                playground.endsWithSignal = attached.endsWithSignal
             } catch (e) {
                 failure = (e as Error).message
             }

@@ -74,6 +74,10 @@ _start:
     syscall
 ```
 
+```testcase
+{ "endsWithSignal": "SIGSEGV" }
+```
+
 Here the playground stops on `in` and leaves `r9` equal to 1. That is how this emulator presents the
 failed instruction. On Linux, the CPU exception and the signal chosen by the kernel are separate
 steps between the instruction and an unhandled signal terminating a process.

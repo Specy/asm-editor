@@ -163,6 +163,13 @@ const NOT_EXTENSIONS = new Set([
 ])
 
 /**
+ * Whether NASM picks an encoding only under one of APX's `{nf}` and `{zu}` prefixes, which the
+ * shape does not show: `{nf} mul eax, ebx, ecx` is the VEX `mulx`, while `mul eax, ebx, ecx` as
+ * written is APX's encoding, and `sal eax, ebx, ecx` does not assemble at all.
+ */
+const needsApxPrefix = (form) => form.flags.includes('NF_R') || form.flags.includes('ZU_R')
+
+/**
  * One entry per operand shape. The table lists a shape once per encoding, so `add r/m32,imm8`
  * appears several times with different bytes, and again as an alias the disassembler ignores. A
  * reader wants the shape, the oldest processor that has it, and anything notable about it.
@@ -175,19 +182,30 @@ function formsOf(entry) {
         const features = form.flags.filter(
             (flag) => groupOf(flag) === 'feature' && !NOT_EXTENSIONS.has(flag)
         )
+        const apx = form.flags.includes('APX')
+        const prefixed = needsApxPrefix(form)
         const notes = form.flags.filter((flag) => NOTABLE_FLAGS.has(flag))
         const key = operands.join(',')
         const shape = byShape.get(key)
         if (!shape) {
-            byShape.set(key, { operands, cpu, features, notes: new Set(notes) })
+            byShape.set(key, { operands, cpu, features, apx, prefixed, notes: new Set(notes) })
             continue
         }
         // The same shape can have a second encoding on a later processor: `setg r/m8` is a P6
-        // instruction that APX re-encodes to take a `{zu}` prefix. What it needs is what its oldest
-        // encoding needs, so a newer encoding must not add its extension to the shape.
-        if (cpuIndex(cpu) < cpuIndex(shape.cpu)) {
+        // instruction that APX re-encodes to take a `{zu}` prefix. What it needs is what the
+        // encoding NASM picks for it as written needs: the first in the table between one of APX
+        // and one outside it, since NASM takes the first that matches (`popcnt r16,r/m16` is
+        // Nehalem's, though its APX encoding is labelled with the older `X86_64`; `jmpabs` is
+        // APX's, though a fallback without it follows), and otherwise the oldest.
+        const replaces =
+            prefixed !== shape.prefixed
+                ? !prefixed
+                : apx === shape.apx && cpuIndex(cpu) < cpuIndex(shape.cpu)
+        if (replaces) {
             shape.cpu = cpu
             shape.features = features
+            shape.apx = apx
+            shape.prefixed = prefixed
         }
         for (const note of notes) shape.notes.add(note)
     }
@@ -198,10 +216,15 @@ function formsOf(entry) {
             shape.notes.delete('LONG')
             shape.notes.delete('NOLONG')
         }
+        // a shape NASM takes only with `{nf}` is APX's syntax, which that encoding's flags do not say
+        const features =
+            shape.prefixed && !shape.features.includes('APX')
+                ? [...shape.features, 'APX']
+                : shape.features
         return {
             operands: shape.operands,
             cpu: shape.cpu,
-            features: [...shape.features],
+            features: [...features],
             notes: [...shape.notes]
         }
     })

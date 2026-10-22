@@ -6,20 +6,20 @@ Researched 2026-10-21 against `packages/x86` (Blink). Nothing is implemented. Th
 
 ## Where Blink stands
 
-| Piece | State | Where |
-| --- | --- | --- |
-| VEX length decoding (`C4`/`C5`) | Written, **compiled out**: `#define DISABLE_BMI2` is in `libblink/config.h`, and `xed_decode_instruction_length` only calls `xed_vex_scanner` under `#ifndef DISABLE_BMI2`. With it off, `C4`/`C5` are not prefixes, so the instruction is illegal. | `x86.c:386-505,731`, `config.h:30` |
-| What the decoder keeps from a VEX prefix | `vvvv` (`Vreg`, 4 bits), `L` (`Ymm`, bit 30), `R/X/B/W`, `pp` folded into `Osz`/`Rep`, `map` folded into `Mopcode` (`0x1xx`, `0x2xx`, `0x3xx`, the same numbers as legacy `0F`, `0F 38`, `0F 3A`). Nothing records that the prefix was VEX. | `rde.h`, `x86.c` |
-| EVEX (`62`) | Not decoded. | |
-| BMI1/BMI2 handlers | Written (`bmi2.c`, `Op2f5/6/7`, `OpRorx`), but `machine.c:1532` maps them to `OpUd` while `DISABLE_BMI2` is set. CPUID leaf 7 only advertises BMI2 and ADX under the same guard. | `bmi2.c`, `cpuid.c:169` |
-| Vector register file | `u8 xmm[16][16]` in `struct Machine`, twice (`machine.h:228`, `:424`). | |
-| SSE kernels | `static void SsePaddd(u8 x[16], const u8 y[16])` and about 400 more in `sse.c`, `sse2.c`, `ssefloat.c`, `ssemov.c`. Each has an `X86_INTRINSICS` host-asm branch and a portable C branch. The wasm build takes the portable one. | |
-| Dispatch | `kNexgen32e[]` for opcodes below `0x200`, then `GetOp()`'s `XLAT` switch (`machine.c:2074`). `OpSse(A, MmxKernel, SseKernel)` picks MMX or SSE from `Osz(rde)`. | `machine.c`, `sse.c:1496` |
-| JIT | Disabled (`DISABLE_JIT`), so there is no second code path to keep in step. | `config.h:15` |
-| CPUID | No AVX/XSAVE bits. SSSE3 is advertised, SSE4.1/4.2 are `0 << n`. | `cpuid.c` |
-| Save/restore | `OpFxsave`/`OpFxrstor` copy 256 bytes of `xmm`. The signal frame copies `m->xmm`. There is no XSAVE, XRSTOR or XGETBV. | `machine.c:1235`, `signal.c:129,249` |
-| Editor bridge | `blinkenlib_get_fpu_state` / `set_fpu_state` image `xmm` as bytes 0-255 of a 356-byte block, guarded by `_Static_assert`s. JS decodes it in `blink-js/src/fpu-state.ts`; the register view, step diff (`x86-emulator.ts:878`), undo snapshot and Pokes all use that block. | `blinkenlib.c:916-980` |
-| Disassembly | Zydis 4.1.1 already decodes VEX/EVEX. NASM 3.00 assembles them. The C-output translator rejects them (`unsupported-instruction`). | |
+| Piece                                    | State                                                                                                                                                                                                                                                                      | Where                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| VEX length decoding (`C4`/`C5`)          | Written, **compiled out**: `#define DISABLE_BMI2` is in `libblink/config.h`, and `xed_decode_instruction_length` only calls `xed_vex_scanner` under `#ifndef DISABLE_BMI2`. With it off, `C4`/`C5` are not prefixes, so the instruction is illegal.                        | `x86.c:386-505,731`, `config.h:30`   |
+| What the decoder keeps from a VEX prefix | `vvvv` (`Vreg`, 4 bits), `L` (`Ymm`, bit 30), `R/X/B/W`, `pp` folded into `Osz`/`Rep`, `map` folded into `Mopcode` (`0x1xx`, `0x2xx`, `0x3xx`, the same numbers as legacy `0F`, `0F 38`, `0F 3A`). Nothing records that the prefix was VEX.                                | `rde.h`, `x86.c`                     |
+| EVEX (`62`)                              | Not decoded.                                                                                                                                                                                                                                                               |                                      |
+| BMI1/BMI2 handlers                       | Written (`bmi2.c`, `Op2f5/6/7`, `OpRorx`), but `machine.c:1532` maps them to `OpUd` while `DISABLE_BMI2` is set. CPUID leaf 7 only advertises BMI2 and ADX under the same guard.                                                                                           | `bmi2.c`, `cpuid.c:169`              |
+| Vector register file                     | `u8 xmm[16][16]` in `struct Machine`, twice (`machine.h:228`, `:424`).                                                                                                                                                                                                     |                                      |
+| SSE kernels                              | `static void SsePaddd(u8 x[16], const u8 y[16])` and about 400 more in `sse.c`, `sse2.c`, `ssefloat.c`, `ssemov.c`. Each has an `X86_INTRINSICS` host-asm branch and a portable C branch. The wasm build takes the portable one.                                           |                                      |
+| Dispatch                                 | `kNexgen32e[]` for opcodes below `0x200`, then `GetOp()`'s `XLAT` switch (`machine.c:2074`). `OpSse(A, MmxKernel, SseKernel)` picks MMX or SSE from `Osz(rde)`.                                                                                                            | `machine.c`, `sse.c:1496`            |
+| JIT                                      | Disabled (`DISABLE_JIT`), so there is no second code path to keep in step.                                                                                                                                                                                                 | `config.h:15`                        |
+| CPUID                                    | No AVX/XSAVE bits. SSSE3 is advertised, SSE4.1/4.2 are `0 << n`.                                                                                                                                                                                                           | `cpuid.c`                            |
+| Save/restore                             | `OpFxsave`/`OpFxrstor` copy 256 bytes of `xmm`. The signal frame copies `m->xmm`. There is no XSAVE, XRSTOR or XGETBV.                                                                                                                                                     | `machine.c:1235`, `signal.c:129,249` |
+| Editor bridge                            | `blinkenlib_get_fpu_state` / `set_fpu_state` image `xmm` as bytes 0-255 of a 356-byte block, guarded by `_Static_assert`s. JS decodes it in `blink-js/src/fpu-state.ts`; the register view, step diff (`x86-emulator.ts:878`), undo snapshot and Pokes all use that block. | `blinkenlib.c:916-980`               |
+| Disassembly                              | Zydis 4.1.1 already decodes VEX/EVEX. NASM 3.00 assembles them. The C-output translator rejects them (`unsupported-instruction`).                                                                                                                                          |                                      |
 
 So the work is almost entirely in the execution core and the state block. Parsing is mostly there.
 
@@ -30,6 +30,7 @@ So the work is almost entirely in the execution core and the state block. Parsin
 Keep `u8 xmm[16][16]` untouched and add `u8 ymmh[16][16]` beside it (the upper 128 bits). Every legacy-SSE handler and every `XmmRexrReg(m, rde)` caller then stays as is, and a legacy SSE write leaves `ymmh` alone, which is the architectural rule. Widening `xmm` itself to `[16][32]` would touch every kernel call and the JIT-shaped pointer code for no gain.
 
 The rules each VEX handler must follow:
+
 - VEX.128 (`L=0`) writes **zero** `ymmh[dst]`.
 - VEX.256 writes both halves.
 - Scalar VEX forms (`vaddss`, `vmovss`, ...) take the bits above the scalar from `vvvv` (or `rm` for the memory-load forms) and zero `ymmh[dst]`.
@@ -66,14 +67,14 @@ Kernels such as `Pshufb`, `Palignr`, `Punpck*`, `Packs*` work per 128-bit lane, 
 
 Genuinely new code, not wrappable:
 
-| Group | Instructions |
-| --- | --- |
-| Lane-crossing | `vperm2f128/i128`, `vpermq/pd`, `vpermd/ps`, `vinsertf128/i128`, `vextractf128/i128`, `vbroadcast*` (including `vpbroadcast*`), 256-bit `vpmovzx/sx` (reads 8-16 bytes, not a full vector) |
-| VEX-only | `vzeroupper/all`, `vpermilps/pd`, `vtestps/pd`, `vblendv*` (4-operand, register in `imm8[7:4]`), `vpblendd`, `vmaskmov*`, `vpmaskmov*`, `vpsllv/srlv/srav`, `vroundps` forms with changed immediates |
-| FMA3 | 36 `vfmadd/vfmsub/vfnmadd/vfnmsub` forms × 132/213/231 × ps/pd/ss/sd. Needs a truly fused multiply-add: `fmaf`/`fma` from the C library are correct (Emscripten uses a software `fma`), plain `a*b+c` is not. |
-| Gathers | `vpgather*`, `vgather*`: a loop with a mask register, element-wise fault behaviour, and the mask cleared as elements complete. |
-| F16C | `vcvtph2ps`, `vcvtps2ph` (half-float conversion; small). |
-| BMI | Already written, just re-enable. Add `tzcnt`/`lzcnt`/`popcnt` checks while there. |
+| Group         | Instructions                                                                                                                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lane-crossing | `vperm2f128/i128`, `vpermq/pd`, `vpermd/ps`, `vinsertf128/i128`, `vextractf128/i128`, `vbroadcast*` (including `vpbroadcast*`), 256-bit `vpmovzx/sx` (reads 8-16 bytes, not a full vector)                    |
+| VEX-only      | `vzeroupper/all`, `vpermilps/pd`, `vtestps/pd`, `vblendv*` (4-operand, register in `imm8[7:4]`), `vpblendd`, `vmaskmov*`, `vpmaskmov*`, `vpsllv/srlv/srav`, `vroundps` forms with changed immediates          |
+| FMA3          | 36 `vfmadd/vfmsub/vfnmadd/vfnmsub` forms × 132/213/231 × ps/pd/ss/sd. Needs a truly fused multiply-add: `fmaf`/`fma` from the C library are correct (Emscripten uses a software `fma`), plain `a*b+c` is not. |
+| Gathers       | `vpgather*`, `vgather*`: a loop with a mask register, element-wise fault behaviour, and the mask cleared as elements complete.                                                                                |
+| F16C          | `vcvtph2ps`, `vcvtps2ph` (half-float conversion; small).                                                                                                                                                      |
+| BMI           | Already written, just re-enable. Add `tzcnt`/`lzcnt`/`popcnt` checks while there.                                                                                                                             |
 
 AVX-512 (EVEX, 32 registers, `k0-k7`, masking, broadcast, rounding) is a separate project of similar size to everything above. Not planned.
 
@@ -90,6 +91,7 @@ AVX-512 (EVEX, 32 registers, `k0-k7`, masking, broadcast, rounding) is a separat
 ### 6. Editor side
 
 Small:
+
 - Register view: `ymm0-15` rows (or expand the existing xmm rows to show 256 bits). `fpu-state.ts` and the step diff add the `ymmh` half.
 - The AVX note from the reverse-engineering plan goes away once the Core runs these instructions; keep it for EVEX.
 - The translator's `unsupported-instruction` stays unless the Start-unit work wants AVX output, which is a separate ask.
@@ -108,15 +110,15 @@ This is where most of the cost is: SIMD semantics have many edge rules (saturati
 
 Estimates are for one person who knows the codebase, including the differential tests.
 
-| Phase | Content | Size |
-| --- | --- | --- |
-| 0 | Enable the VEX scanner behind a dispatch key, `OpUd` for everything, re-enable BMI1/BMI2 with tests, differential harness skeleton | small |
-| 1 | `ymmh` register file, state block v2, JS bridge, undo/Poke range, editor register view | small-medium |
-| 2 | Generic wrappers: AVX 128/256 over existing kernels (moves, arithmetic, logic, compare, shuffle-by-lane, scalar, conversions, `vzeroupper`) | medium |
-| 3 | AVX2 integer + lane-crossing + broadcast + variable shifts + blends + masked moves | medium |
-| 4 | FMA3 and F16C | small-medium |
-| 5 | Gathers | small-medium |
-| 6 | CPUID, XGETBV, XSAVE family, signal-frame decision, dynamic-glibc fixture, glibc ifunc runs | medium (the risky one) |
+| Phase | Content                                                                                                                                     | Size                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 0     | Enable the VEX scanner behind a dispatch key, `OpUd` for everything, re-enable BMI1/BMI2 with tests, differential harness skeleton          | small                  |
+| 1     | `ymmh` register file, state block v2, JS bridge, undo/Poke range, editor register view                                                      | small-medium           |
+| 2     | Generic wrappers: AVX 128/256 over existing kernels (moves, arithmetic, logic, compare, shuffle-by-lane, scalar, conversions, `vzeroupper`) | medium                 |
+| 3     | AVX2 integer + lane-crossing + broadcast + variable shifts + blends + masked moves                                                          | medium                 |
+| 4     | FMA3 and F16C                                                                                                                               | small-medium           |
+| 5     | Gathers                                                                                                                                     | small-medium           |
+| 6     | CPUID, XGETBV, XSAVE family, signal-frame decision, dynamic-glibc fixture, glibc ifunc runs                                                 | medium (the risky one) |
 
 Minimum useful milestone is phases 0-3 + 6 without gathers: it runs `-march=x86-64-v3` GCC output and glibc's AVX2 string functions. Phases 4-5 can follow.
 
@@ -135,19 +137,33 @@ Minimum useful milestone is phases 0-3 + 6 without gathers: it runs `-march=x86-
 
 ## Implementation
 
-The owner's answers: no AVX-512, `CPUID` unchanged, legacy signal frames. Done in `packages/x86` (not committed, not released).
+The owner's answers: no AVX-512, `CPUID` unchanged, legacy signal frames. Done in `packages/x86`: committed as 2308d3f, reviewed and fixed on 2026-10-22 (see Review below), not released.
 
 **What changed from the plan above.**
-- The wrapper does not call kernels (`SsePaddd` and friends): it calls the legacy *handler* (`OpSsePaddd`, `OpAddpsd`, ...), after copying `vvvv` into the destination register and, for the second lane, swapping the upper halves into the `xmm` file and adding 16 to the displacement. That reuses the float and conversion handlers too, which are not written as kernels. A destination that is also the r/m source, or a shared shift count, goes through a scratch register.
+
+- The wrapper does not call kernels (`SsePaddd` and friends): it calls the legacy _handler_ (`OpSsePaddd`, `OpAddpsd`, ...), after copying `vvvv` into the destination register and, for the second lane, swapping the upper halves into the `xmm` file and adding 16 to the displacement. That reuses the float and conversion handlers too, which are not written as kernels. A destination that is also the r/m source, or a shared shift count, goes through a scratch register.
 - The VEX key is the legacy map plus a bit (`XED_VEX_MAP`), so `0f 58` as VEX is `0x558`. `GetOp()` hands those to `GetVexOp()`; a single entry point (`OpVexTop`) checks the prefix against a table before anything runs.
 - A VEX instruction that faults restores the registers it touched (`m->vexundo`, restored in `HaltMachine`), and 256-bit stores and masked stores reserve every byte before writing any, so a fault leaves the machine as the host does.
-- `SSE4` instructions Blink never had (blends, `pmin/max`, `pmovzx`, `ptest`, rounding, `dpps`, string compares, ...) exist only in their VEX form, in `avx2.c`. Legacy encodings still raise SIGILL because `CPUID` reports none of them.
+- `SSE4` instructions Blink never had (blends, `pmin/max`, `pmovzx`, `ptest`, rounding, `dpps`, string compares, ...) exist only in their VEX form, in `avx2.c`. Their legacy encodings still raise SIGILL, apart from `pmulld`, `movntdqa`, `crc32` and `pclmulqdq`, which Blink already ran; `CPUID` reports PCLMULQDQ and none of the others.
 - `BMI1/2` are written again in `avx2.c` (the old `bmi2.c` stays disabled): it lacked `andn`, `bls*` and `bextr`, and keyed on the legacy map.
 
 **What exists.** AVX, AVX2, FMA3 (every form and order), F16C, gathers, masked moves, BMI1/2, AES-NI, PCLMULQDQ, SSE4.1/4.2 in VEX form. Not AVX-512, VAES or VPCLMULQDQ (the host lacks the latter two, so there was nothing to compare with).
 
-**Verification.** `blink-js/tests/avx/` assembles one program per group of cases, runs it in Blink and on the host (which has AVX2, FMA and BMI2), and compares every register, the memory the case touches and the flags. `coverage.test.ts` places every VEX map, prefix, opcode, length, width, register and memory form in a slot, and a signal handler records which raise SIGILL or SIGSEGV: Blink must agree with the host on all of them. `faults.test.ts` compares 43 faulting and page-straddling accesses, with the address of the fault. Results that depend on which of two NaNs hardware picks are compared only where the rule is defined (`min`, `max`, compares, FMA, `round`), not for `addps` and its relatives, whose NaN payload depends on how the host orders the operands.
+**Verification.** `blink-js/tests/avx/` assembles one program per group of cases, runs it in Blink and on the host (which has AVX2, FMA and BMI2), and compares every register, the memory the case touches and the flags. `coverage.test.ts` places every VEX map, prefix, opcode, length, width, register and memory form in a slot, and a signal handler records which raise SIGILL or SIGSEGV: Blink must agree with the host on all of them. `coverage.test.ts` also runs every slot with `vvvv` naming `xmm1`, the maps VEX does not define, and a LOCK prefix before VEX. `faults.test.ts` compares 70 faulting and page-straddling accesses: the registers, the signal, its code and its address relative to the page, the bytes below the unmapped page and a read-only page. Its signal handler leaves its findings in memory, because `rt_sigreturn` restores every register from the context. Results that depend on which of two NaNs hardware picks are compared only where the rule is defined (`min`, `max`, compares, FMA, `round`), not for `addps` and its relatives, whose NaN payload depends on how the host orders the operands.
 
 **Legacy bugs found on the way** (fixed, they affect SSE too): `unpckhpd`, `sqrtpd`, float to integer conversions of NaN and out-of-range values and the rounding mode of `cvtss2si`, `pextrw` leaving the upper bits of its register.
 
-**Not done.** `vmaskmovdqu`'s memory form does not exist (correct); EVEX; the signal frame keeps the legacy state only. `rcpps` and `rsqrtps` compute exact results where hardware returns approximations that differ between processors, so they are not compared. The editor has not been changed: its register view shows no `ymm`, its "AVX instructions are not currently supported" note should now apply to EVEX only, and it needs the Core release.
+**Review (2026-10-22).** Six reviewers compared the commit with the host and the SDM. Fixed after it, each with a test that fails on 2308d3f:
+
+- `vpinsrw`, `vcvtsi2ss` and `vcvtsi2sd` read the wrong general register when its number matched the destination's: the wrapper's scratch register for aliased `xmm` operands replaced a general register operand.
+- `cvtpd2dq` truncated and `cvttpd2dq` rounded (the cases were swapped in Blink since 2022), and they and `cvtpd2ps` left bits 64 to 127 alone.
+- The VEX map field was not checked, so maps 5 to 31 ran as maps 1 to 3, and map 7 took an immediate as the next instruction; LOCK before VEX ran; the memory forms of `vmovss` and `vmovsd` accepted a `vvvv`.
+- Scalar instructions with VEX.L set ran on both lanes; they ignore L.
+- A store straddling into an unmapped page left its staged bytes for the next instruction to commit into the mapped page (`HaltMachine` now drops them); a 128-bit `vmovdqa`, `vmovntdq` or `vmovntps` store, and the legacy aligned stores, skipped the write check and were missing from Undo; `vcvtpd2ps xmm, ymm` that faulted on its second half kept its first; `vmovddup ymm, m256` checked only the bytes it used.
+- A gather made its mask all ones or zeros only as it went and cleared nothing past the last element before a fault; a 32-bit gather address did not wrap.
+- `vpcmpestri` with W1 took INT64_MIN as a negative length; single precision FMA rounded twice when the result was a denormal float (Emscripten's `fmaf`).
+- Misaligned aligned moves reported SIGSEGV with an address instead of `SI_KERNEL` and none; MMX register forms that still ran wrote the `xmm` register of the same number, and now raise SIGILL as `DISABLE_MMX` intends.
+- Found while checking the editor's claims against the Core: `crc32 r32, r/m16` raised SIGILL, and `8f /1` to `/7` ran as `pop`.
+- `dist-smoke.mjs` still expected the 356-byte block, and `coverage.test.ts` failed on CI's AMD runner, which runs VAES, VPCLMULQDQ and W0 `vpermq`; those are now named as expected differences. The undo history packets are version 2.
+
+**Not done.** `vmaskmovdqu`'s memory form does not exist (correct); EVEX; the signal frame keeps the legacy state only. `rcpps` returns the correctly rounded reciprocal and `rsqrtps` 1 divided by the rounded square root, where hardware returns approximations that differ between processors, so they are not compared. MXCSR: only the conversions to integers, `round` and `vcvtps2ph` follow its rounding mode, `DAZ` and `FTZ` do nothing, and no instruction but `comiss` and its relatives sets an exception flag, in SSE as in AVX. The editor shows the `ymm` registers in an AVX tab and documents the vector instructions (editor 7d89c2ad and the fixes after the review).

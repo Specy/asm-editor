@@ -38,7 +38,7 @@ import {
     type EntryField
 } from '../entries'
 import { x86InstructionCategories } from './categories'
-import { VECTOR_CATEGORIES, vectorCategory } from './vectorCategories'
+import { VECTOR_CATEGORIES, VECTOR_SECTIONS, vectorCategory } from './vectorCategories'
 import { x86FormTags } from '../instructions/formTags'
 import { withInstructionCategory } from '../instructions/resolve'
 import { documentSignature } from '../instructions/document'
@@ -217,10 +217,10 @@ function supportNote(members: X86Instruction[]): string | undefined {
 
 /**
  * The markdown of an Extensions group: its support note, then its mnemonics, under a label per kind
- * of work when the group is vector instructions the Core runs. A mnemonic of a partly supported
- * group that the Core is known not to run is marked on its line.
+ * of work when the group is one of vector instructions ({@link VECTOR_SECTIONS}) the Core runs. A
+ * mnemonic of a partly supported group that the Core is known not to run is marked on its line.
  */
-function groupMarkdown(members: X86Instruction[], integer: boolean): string {
+function groupMarkdown(members: X86Instruction[], integer: boolean, vectors: boolean): string {
     const supports = new Map(members.map((member) => [member, x86Support(member)]))
     const mixed =
         members.some((member) => supports.get(member)!.any) && members.some(x86IsUnsupported)
@@ -236,7 +236,7 @@ function groupMarkdown(members: X86Instruction[], integer: boolean): string {
     }
     const note = supportNote(members)
     const vector =
-        !integer &&
+        vectors &&
         members.some(
             (member) => supports.get(member)!.any && vectorCategory(member.name) !== undefined
         )
@@ -278,7 +278,7 @@ function extensions(): Chapter {
     groups.sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
     const entries = groups.map(({ title, members, integer }): DocumentationEntry => {
         const anchor = headingSlug(title)
-        const markdown = groupMarkdown(members, integer)
+        const markdown = groupMarkdown(members, integer, VECTOR_SECTIONS.has(title))
         const features = [...new Set(members.flatMap((member) => member.features))].map((feature) =>
             [feature, X86_FLAG_MEANINGS[feature]].filter(Boolean).join(': ')
         )

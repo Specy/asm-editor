@@ -289,8 +289,13 @@ started out assuming it ran nothing with an extension flag. What changed:
 
 - `x86Support.ts` states, for each form, whether the Core runs it (no extension, or only
   extensions it runs), is known not to (AVX-512, AVX10, APX, MMX, 3DNow!, XOP, SHA and the other
-  families listed there), runs it only as its `v` form (SSE4, AES, PCLMULQDQ), or is not known
-  either way. Nothing is claimed about the last: CET, VMX, TSX and the rest say nothing.
+  families listed there, and `movbe`, `adcx`, `adox`, `fbld` and `fbstp`, which carry no
+  extension), runs it only as its `v` form (SSE4 and AES, apart from `pmulld`, `movntdqa`,
+  `crc32` and `pclmulqdq`, which Blink runs in their legacy encoding too), or is not known either
+  way. Nothing is claimed about the last: CET, VMX, TSX and the rest say nothing. A form with an
+  MMX register operand counts as MMX whatever NASM tags it, since the Core runs only `emms` of
+  them, and `prefetch` and `prefetchw` run although NASM files them under 3DNow!. A review on
+  2026-10-22 ran every classified form in the Core and found these exceptions.
 - Each Extensions group begins with what the Core does about it: "This emulator does not support
   AVX-512." for a group it stops at throughout, a sentence naming the forms it leaves out for a
   group it runs in part, and for SSE4 the instruction to write instead. A mnemonic in a group that
