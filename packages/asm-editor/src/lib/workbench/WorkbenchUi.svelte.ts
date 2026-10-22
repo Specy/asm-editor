@@ -32,6 +32,13 @@ export class WorkbenchUi {
      */
     documentationRequest = $state<{ token: number; query?: string; href?: string } | null>(null)
     /**
+     * A request for the Search panel to focus its query (Ctrl+Shift+F), filled with `query` when
+     * one is given; each request is a new token, which the panel answers once
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 23).
+     */
+    searchRequest = $state<{ token: number; query?: string } | null>(null)
+    /**
      * The address a pointer menu or a register's name last moved the memory view to, which the
      * view marks on its page until it is moved by hand. `build` is the Build it was read in, as the
      * next Build's memory belongs to another run (`markedMemoryAddress` in `pointerMenu.ts`).
@@ -116,6 +123,22 @@ export class WorkbenchUi {
         this.documentationRequest = {
             token: (this.documentationRequest?.token ?? 0) + 1,
             ...request
+        }
+    }
+
+    /**
+     * Ctrl+Shift+F: the Search panel with its query focused, and filled with `query` when given.
+     * Opened if another panel is, and otherwise left as it is, as Ctrl+K leaves the Documentation.
+     */
+    searchProject(query?: string) {
+        if (this.activePanel !== 'search') {
+            this.opened.add('search')
+            this.access.set('search')
+        }
+        if (this.viewport.deviceClass === 'phone') this.drawerOpen = true
+        this.searchRequest = {
+            token: (this.searchRequest?.token ?? 0) + 1,
+            ...(query !== undefined ? { query } : {})
         }
     }
 

@@ -23,8 +23,16 @@ describe('command-key shortcuts', () => {
         expect(shortcutsStore.get('Mod+KeyK')?.type).toBe(ShortcutAction.SearchDocumentation)
     })
 
+    it('binds Search the Project to Mod+Shift+KeyF, which Ctrl+Shift+F is read as', () => {
+        expect(shortcutsStore.get('Mod+Shift+KeyF')?.type).toBe(ShortcutAction.SearchProject)
+        expect(modShortcutKey(keydown({ code: 'KeyF', ctrlKey: true, shiftKey: true }))).toBe(
+            'Mod+Shift+KeyF'
+        )
+    })
+
     it('labels keys the way a reader writes them', () => {
         expect(shortcutLabel('Mod+KeyK')).toBe('Ctrl+K')
+        expect(shortcutLabel('Mod+Shift+KeyF')).toBe('Ctrl+Shift+F')
         expect(shortcutLabel('ShiftLeft+KeyD')).toBe('Shift+D')
         expect(shortcutLabel('ShiftLeft+ArrowDown')).toBe('Shift+↓')
     })

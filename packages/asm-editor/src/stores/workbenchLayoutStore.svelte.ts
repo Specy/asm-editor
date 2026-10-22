@@ -29,7 +29,16 @@ export type WorkbenchLayout = {
     collapsed: Record<string, boolean>
     /** Each floating Debug tool's window, by tool id. */
     floating: Record<string, FloatingWindowState>
+    /**
+     * What the Search panel looks in, its "Look in" ticks, kept as the person leaves them
+     * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 25
+     * and open question 4).
+     */
+    searchLookIn: SearchLookIn
 }
+
+/** The Search panel's "Look in" ticks: the Project's text Files, the Listings, the Pseudocode. */
+export type SearchLookIn = { files: boolean; listings: boolean; pseudocode: boolean }
 
 const STORAGE_KEY = 'asm-editor_workbench_layout'
 
@@ -45,6 +54,7 @@ const DEFAULT_READING_PANEL_WIDTH = 448
 export const DEFAULT_PANEL_WIDTHS: Readonly<Record<string, number>> = {
     explorer: 256,
     symbols: 320,
+    search: 352,
     testcases: DEFAULT_READING_PANEL_WIDTH,
     documentation: DEFAULT_READING_PANEL_WIDTH,
     agent: 448,
@@ -63,7 +73,8 @@ export function defaultLayout(): WorkbenchLayout {
         debugCollapsed: false,
         debugTopHeight: null,
         collapsed: {},
-        floating: {}
+        floating: {},
+        searchLookIn: { files: true, listings: true, pseudocode: true }
     }
 }
 
@@ -137,6 +148,12 @@ export function readStoredLayout(json: string | null): WorkbenchLayout {
             }
         }
     }
+    if (isRecord(stored.searchLookIn)) {
+        for (const kind of ['files', 'listings', 'pseudocode'] as const) {
+            const ticked = stored.searchLookIn[kind]
+            if (typeof ticked === 'boolean') layout.searchLookIn[kind] = ticked
+        }
+    }
     return layout
 }
 
@@ -199,6 +216,11 @@ function createWorkbenchLayoutStore() {
         },
         setCollapsed(id: string, collapsed: boolean) {
             data.collapsed[id] = collapsed
+            store()
+        },
+        /** Ticks or unticks one of the Search panel's "Look in" places. */
+        setSearchLookIn(kind: keyof SearchLookIn, ticked: boolean) {
+            data.searchLookIn[kind] = ticked
             store()
         },
         floating(id: string): FloatingWindowState | undefined {

@@ -10,7 +10,8 @@ export enum ShortcutAction {
     ClearExecution,
     Step,
     Undo,
-    SearchDocumentation
+    SearchDocumentation,
+    SearchProject
 }
 type Shortcut = {
     type: ShortcutAction
@@ -36,7 +37,8 @@ const shortcutDefinitions = [
     createShortcut(ShortcutAction.ClearExecution, 'ShiftLeft+KeyC', 'Clear execution', 6),
     createShortcut(ShortcutAction.Step, 'ShiftLeft+ArrowDown', 'Step', 7),
     createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8),
-    createShortcut(ShortcutAction.SearchDocumentation, 'Mod+KeyK', 'Search the documentation', 9)
+    createShortcut(ShortcutAction.SearchDocumentation, 'Mod+KeyK', 'Search the documentation', 9),
+    createShortcut(ShortcutAction.SearchProject, 'Mod+Shift+KeyF', 'Search the Project', 10)
 ]
 
 const definitionsById = new Map(shortcutDefinitions.map((shortcut) => [shortcut.id, shortcut]))
@@ -67,11 +69,15 @@ const KEY_LABELS: Record<string, string> = {
     ArrowRight: '→'
 }
 
-/** How a key reads: `Mod+KeyK` as Ctrl+K or ⌘K, `ShiftLeft+KeyD` as Shift+D. */
+/**
+ * How a key reads: `Mod+KeyK` as Ctrl+K or ⌘K, `Mod+Shift+KeyF` as Ctrl+Shift+F or ⌘⇧F,
+ * `ShiftLeft+KeyD` as Shift+D.
+ */
 export function shortcutLabel(key: string): string {
     const command = usesCommandKey()
     const parts = key.split('+').map((part) => {
         if (part === 'Mod') return command ? '⌘' : 'Ctrl'
+        if (part === 'Shift') return command ? '⇧' : 'Shift'
         if (/^Key[A-Z]$/.test(part)) return part.slice(3)
         if (/^Digit\d$/.test(part)) return part.slice(5)
         if (/^(Shift|Control|Alt|Meta)(Left|Right)$/.test(part)) {

@@ -1,8 +1,8 @@
 <script lang="ts">
     /**
      * The narrow column of icons always beside the Workbench: each opens its panel, and the open
-     * one closes it again. Explorer, Symbols in a Project that has an Executable, Testcases and
-     * Documentation on top, with the host's own panels; the AI assistant, Share, the host's links
+     * one closes it again. Explorer, Symbols in a Project that has an Executable, Search,
+     * Testcases and Documentation on top, with the host's own panels; the AI assistant, Share, the host's links
      * and Settings at the bottom. Back is at its top on a desktop and a tablet, which have no top
      * bar, and in a phone's drawer. Their Save, shown while the Project has unsaved changes, heads
      * the bottom group, where appearing moves no other icon.

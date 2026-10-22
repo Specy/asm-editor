@@ -15,13 +15,7 @@
     import WorkbenchDesktop from './WorkbenchDesktop.svelte'
     import WorkbenchCompact from './WorkbenchCompact.svelte'
     import DebugToolsFloating from './DebugToolsFloating.svelte'
-    import FaCopy from '~icons/fa-solid/copy'
-    import FaTags from '~icons/fa-solid/tags'
-    import FaFlask from '~icons/fa-solid/flask'
-    import FaBook from '~icons/fa-solid/book'
-    import FaShareAlt from '~icons/fa-solid/share-alt'
-    import FaCog from '~icons/fa-solid/cog'
-    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import { workbenchRail } from './workbenchRail'
     import { documentationLanguageOf, languageScope } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { hasExecutable } from '#lib/executables.ts'
@@ -117,6 +111,9 @@
         },
         searchDocumentation: () => {
             if (accessOf('documentation') !== 'off') ui.searchDocumentation()
+        },
+        searchProject: (query) => {
+            if (accessOf('search') !== 'off') ui.searchProject(query)
         }
     }
 
@@ -171,75 +168,9 @@
      */
     const symbolsOffered = $derived(project.language === 'X86' && hasExecutable(project.files))
 
-    const rail = $derived.by<RailEntry[]>(() => {
-        const entries: RailEntry[] = []
-        const builtin = (
-            id: BuiltinPanelId,
-            title: string,
-            icon: RailEntry['icon'],
-            group: RailEntry['group'],
-            maximizable = false,
-            dot?: RailEntry['dot'],
-            tooltip?: string
-        ) => {
-            const panelAccess = accessOf(id)
-            if (panelAccess === 'off') return
-            entries.push({ id, title, tooltip, icon, group, maximizable, access: panelAccess, dot })
-        }
-        const host = (group: RailEntry['group']) => {
-            for (const panel of hostPanels.filter((candidate) => candidate.group === group)) {
-                entries.push({
-                    id: panel.id,
-                    title: panel.title,
-                    icon: panel.icon,
-                    group,
-                    maximizable: panel.maximizable ?? false,
-                    access: 'on',
-                    content: panel.content
-                })
-            }
-        }
-        builtin('explorer', 'Explorer', FaCopy, 'top')
-        if (symbolsOffered)
-            builtin(
-                'symbols',
-                'Symbols',
-                FaTags,
-                'top',
-                false,
-                undefined,
-                'Symbols: the functions and strings of the program'
-            )
-        builtin('testcases', 'Testcases', FaFlask, 'top', true, testcasesDot)
-        builtin('documentation', 'Documentation', FaBook, 'top', true)
-        host('top')
-        builtin('agent', 'AI assistant', SparklesIcon, 'bottom')
-        if (onShare) {
-            entries.push({
-                id: 'share',
-                title: 'Share',
-                icon: FaShareAlt,
-                group: 'bottom',
-                maximizable: false,
-                access: 'on',
-                action: onShare
-            })
-        }
-        for (const link of hostLinks) {
-            entries.push({
-                id: link.id,
-                title: link.title,
-                icon: link.icon,
-                group: 'bottom',
-                maximizable: false,
-                access: 'on',
-                action: link.onClick
-            })
-        }
-        host('bottom')
-        builtin('settings', 'Settings', FaCog, 'bottom')
-        return entries
-    })
+    const rail = $derived(
+        workbenchRail({ access, symbolsOffered, testcasesDot, hostPanels, hostLinks, onShare })
+    )
 
     //the open Symbols panel goes with the Project's last Executable
     $effect(() => {

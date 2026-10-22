@@ -7,11 +7,12 @@
      *
      * The exam keeps the access it had in the old editor
      * ([the design record](../../../../../../docs/design/workbench.md), Layout and behaviour): no
-     * Explorer, AI or Settings, the Testcases read only, the documentation without its links. The
-     * prompt is a panel of the exam's own, open when the section opens, and in review mode the
-     * teacher's review agent is another.
+     * Explorer, AI, Search or Settings, the Testcases read only, the documentation without its
+     * links (`EXAM_PANEL_ACCESS`). The prompt is a panel of the exam's own, open when the section
+     * opens, and in review mode the teacher's review agent is another.
      */
     import Workbench from '#cmp/specific/workbench/Workbench.svelte'
+    import { EXAM_PANEL_ACCESS } from './examAccess'
     import Header from '#cmp/shared/layout/Header.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import FaFileAlt from '~icons/fa-solid/file-alt'
@@ -97,7 +98,7 @@
     <Workbench
         {project}
         {readonly}
-        access={{ explorer: 'off', agent: 'off', settings: 'off', testcases: 'readonly' }}
+        access={EXAM_PANEL_ACCESS}
         documentationLinks={false}
         searchLectures={false}
         {hostPanels}

@@ -85,6 +85,10 @@ import {
     pseudocodeLinesOf
 } from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
+import { ProjectSearch } from '#lib/projectSearch/projectSearch.svelte.ts'
+import { findMatchAgain, matchedText, type MatchPlace } from '#lib/projectSearch/matchPlace.ts'
+import type { SearchDocumentInfo } from '#lib/projectSearch/searchResults.ts'
+import type { SearchRange, SearchRow } from '#lib/projectSearch/searchText.ts'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
@@ -270,7 +274,15 @@ export type WorkbenchSessionPanels = {
     toggleSettings?: () => void
     /** Opens the Documentation panel with its search box focused (Ctrl+K). */
     searchDocumentation?: () => void
+    /**
+     * Opens the Search panel with its query focused (Ctrl+Shift+F), filled with `query`: the
+     * editor's selection, when it is on one line.
+     */
+    searchProject?: (query?: string) => void
 }
+
+/** A Search panel row's match, as the session opens it: a 0-based line and offset, its text. */
+type SearchMatch = { line: number; column: number; text: string; range: SearchRange | undefined }
 
 /**
  * The state and the actions of one Project being edited, built and debugged: everything the project
@@ -308,6 +320,13 @@ export class WorkbenchSession {
      * function decompiled ([file-views.md](../../../../../docs/design/file-views.md), decision 6).
      */
     readonly pseudocode = new PseudocodeDocuments()
+    /**
+     * The Search panel's query, results and documents, which its worker and the Pseudocode
+     * cache's background batches serve while the panel is shown
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decisions 23 to 29).
+     */
+    readonly projectSearch: ProjectSearch = new ProjectSearch(searchHost(this))
     /**
      * How each open Hex editor saves what was typed and not saved yet: typing becomes a Byte edit
      * when it pauses, and a Build or a test run locks the Files, so it is saved before either
@@ -879,6 +898,7 @@ export class WorkbenchSession {
         //than reading deriveds that went inert with their owner
         $effect(() => () => {
             this.disposed = true
+            this.projectSearch.dispose()
             this.pseudocode.dispose()
         })
         $effect(() => {
@@ -1234,6 +1254,7 @@ export class WorkbenchSession {
             this.languageSession = undefined
             this.emulator.dispose()
             this.compilationController?.abort()
+            this.projectSearch.dispose()
             this.pseudocode.dispose()
             this.models.dispose()
         }
@@ -2375,17 +2396,32 @@ export class WorkbenchSession {
         return !view || fileViewsOf(this.fileKindOf(file, path)).includes(view)
     }
 
+    /**
+     * Puts a pane's cursor on a line, in the middle of its editor; with `select`, selects from
+     * there to that 1-based line and column, as a Search panel result selects its match.
+     */
     revealEditorLine(
         lineNumber: number,
         column: number,
         group = this.groups[0],
-        scroll: 'smooth' | 'immediate' = 'smooth'
+        scroll: 'smooth' | 'immediate' = 'smooth',
+        select?: { endLine: number; endColumn: number }
     ) {
         if (!this.groups.includes(group)) return
         const editor = group.editor
         if (!editor) return
         editor.revealLineInCenter(lineNumber, SCROLL_TYPE[scroll])
         editor.setPosition({ lineNumber, column })
+        if (!select) return
+        const range = {
+            startLineNumber: lineNumber,
+            startColumn: column,
+            endLineNumber: select.endLine,
+            endColumn: select.endColumn
+        }
+        editor.setSelection(range)
+        //a match far along a long line is scrolled to sideways too
+        editor.revealRangeInCenterIfOutsideViewport(range, SCROLL_TYPE[scroll])
     }
 
     /** Explorer navigation: changes the File, not which version of the Project is being looked at. */
@@ -2670,6 +2706,7 @@ export class WorkbenchSession {
         this.moveFileBreakpoints(from, to)
         this.byteEditHistory.move(from, to)
         this.annotationHistory.move(from, to)
+        this.pseudocode.search.rename(from, to)
         this.dropAnnotationPrompts(from)
         const view = this.project.fileViews?.[from]
         if (view) {
@@ -2696,6 +2733,7 @@ export class WorkbenchSession {
         this.moveFileBreakpoints(path)
         this.byteEditHistory.move(path)
         this.annotationHistory.move(path)
+        this.pseudocode.search.forget(path)
         this.dropAnnotationPrompts(path)
         if (this.project.fileViews?.[path]) {
             this.project.setFileView(path, undefined)
@@ -2919,7 +2957,9 @@ export class WorkbenchSession {
      * column), as the current line's was (`CurrentLineReveal`), which left Show in Listing a
      * tenth of the way to its line. With `still`, the reveal is dropped once it no longer holds,
      * so a reveal waiting for an editor does not undo a move made meanwhile; with `unless`, it is
-     * not made when the editor, holding the model, says so.
+     * not made when the editor, holding the model, says so. With `origin`, it waits for the model
+     * made for that document: a Listing made again (a rename, a comment) keeps its model's key,
+     * and the editor moves its cursor to the new model's lines when it takes it.
      */
     private async revealWhenShown(
         group: EditorGroup,
@@ -2928,12 +2968,16 @@ export class WorkbenchSession {
             column = 1,
             focus = true,
             scroll = 'immediate',
+            select,
+            origin,
             still,
             unless
         }: {
             column?: number
             focus?: boolean
             scroll?: 'smooth' | 'immediate'
+            select?: { endLine: number; endColumn: number }
+            origin?: object
             still?: () => boolean
             unless?: (editor: NonNullable<EditorGroup['editor']>) => boolean
         } = {}
@@ -2949,9 +2993,18 @@ export class WorkbenchSession {
             )
                 return false
             const editor = group.editor
-            if (editor && this.holdsModel(group) && editor.getModel()!.getLineCount() > line) {
+            const made =
+                !origin ||
+                (this.models.originOf(key) === origin &&
+                    this.models.modelOf(key) === editor?.getModel())
+            if (
+                editor &&
+                made &&
+                this.holdsModel(group) &&
+                editor.getModel()!.getLineCount() > line
+            ) {
                 if (unless?.(editor)) return false
-                this.revealEditorLine(zeroBasedLineToMonaco(line), column, group, scroll)
+                this.revealEditorLine(zeroBasedLineToMonaco(line), column, group, scroll, select)
                 if (focus) editor.focus()
                 return true
             }
@@ -3114,7 +3167,11 @@ export class WorkbenchSession {
      * Listing's cursor going there does. A name of data moves the Listing alone. Both panes add
      * the place they leave to their navigation history.
      */
-    async followPseudocodeTarget(group: EditorGroup, line: number): Promise<boolean> {
+    async followPseudocodeTarget(
+        group: EditorGroup,
+        line: number,
+        reveal: { column?: number; select?: { endLine: number; endColumn: number } } = {}
+    ): Promise<boolean> {
         const listing = group.pseudocodeListing?.listing
         if (group.displayedView !== 'pseudocode' || !listing || line < 0) return false
         //both panes move, and each keeps the place it left, the Listing's taking the Pseudocode's
@@ -3128,9 +3185,228 @@ export class WorkbenchSession {
         await tick()
         //a Listing already shown scrolls to it; one opened for it jumps
         return this.revealWhenShown(pane, line, {
+            ...reveal,
             focus: false,
             scroll: this.holdsModel(pane) ? 'smooth' : 'immediate'
         })
+    }
+
+    // ---- the Search panel ----------------------------------------------------------------------
+
+    /**
+     * Opens a row of the Search panel's results at its match, `range` or the row's first
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 26): a text File with the match selected; a line of an Executable's Listing, found again by
+     * its address in the Listing shown, which comment lines or names may have moved; a function's
+     * Pseudocode in the Decompile view, its Listing beside it, at the match found again in the
+     * text shown, which has a header the search's text has not and may break its lines elsewhere.
+     * The pane it moves keeps the Listing or Pseudocode place it leaves in its Navigation history,
+     * as Go to Symbol does. The keyboard stays in the panel. False when the place is gone.
+     */
+    async openSearchResult(
+        document: SearchDocumentInfo,
+        row: SearchRow,
+        range: SearchRange | undefined = row.ranges[0]
+    ): Promise<boolean> {
+        const match: SearchMatch = {
+            line: row.line - 1,
+            column: range?.start ?? 0,
+            text: range ? matchedText(row, range) : '',
+            range
+        }
+        if (document.kind === 'file') return this.openFileMatch(document.path, match)
+        if (document.kind === 'listing') return this.openListingMatch(document.path, match)
+        if (!document.function) return false
+        return this.openPseudocodeMatch(document.path, document.function.address, match)
+    }
+
+    /** The text selected in the editor that has the keyboard, when it is on one line. */
+    private selectedSearchText(): string | undefined {
+        const editor = this.groups.find((group) => group.editor?.hasTextFocus())?.editor
+        const selection = editor?.getSelection()
+        const model = editor?.getModel()
+        if (!selection || !model || selection.isEmpty()) return undefined
+        if (selection.startLineNumber !== selection.endLineNumber) return undefined
+        return model.getValueInRange(selection)
+    }
+
+    /**
+     * The version of an Executable a result opens in: the Debug session's, where a pane shows it
+     * and its bytes are the live File's, so a search does not take the debugger's view away; else
+     * the live File, which the panel searched.
+     */
+    private searchSource(path: string): ProjectSourceSelection {
+        const built = this.groups.some(
+            (group) =>
+                group.displayedPath === path &&
+                group.sourceSelection.sourceKind === 'build' &&
+                group.sourceSelection.buildGeneration === this.buildGeneration
+        )
+        return built &&
+            this.debugSession &&
+            this.existsInBuild(path) &&
+            sameFileContent(this.emulator.buildSources?.files[path], this.project.files[path])
+            ? buildSource(path, this.buildGeneration)
+            : liveSource(path)
+    }
+
+    /** The panes, the focused one first. */
+    private panesFocusedFirst(): EditorGroup[] {
+        const focused = this.focusedGroup
+        return [focused, ...this.groups.filter((group) => group !== focused)]
+    }
+
+    private async openFileMatch(path: string, match: SearchMatch): Promise<boolean> {
+        if (!this.project.files[path]) return false
+        const pane =
+            this.panesFocusedFirst().find((group) => group.displayedPath === path) ??
+            this.groupForFile(path)
+        const shown = pane.displayedPath === path && pane.displayedView === 'text'
+        this.recordJump(pane)
+        const selection = selectProjectFile(
+            pane.sourceSelection,
+            path,
+            this.buildGeneration,
+            this.existsInBuild(path)
+        )
+        this.show(selection, pane, 'text')
+        await tick()
+        if (this.disposed || pane.displayedPath !== path || pane.displayedView !== 'text')
+            return false
+        const found = findMatchAgain(pane.displayedCode, match.line, match.column, match.text)
+        return this.revealWhenShown(pane, found.line, {
+            ...matchSelection(found, match),
+            focus: false,
+            scroll: shown ? 'smooth' : 'immediate'
+        })
+    }
+
+    /**
+     * A Listing result, as the Symbols panel reveals a line: the Listing beside a focused
+     * Pseudocode of the Executable moves to it, else a pane showing the Listing, else one showing
+     * its bytes, switched to it, else the focused pane.
+     */
+    private async openListingMatch(path: string, match: SearchMatch): Promise<boolean> {
+        if (!this.project.files[path]) return false
+        const searched = this.projectSearch.searchedListing(path)
+        const place = searched && placeOfLine(searched, match.line)
+        const lineIn = (listing: Listing) =>
+            place
+                ? lineOfPlace(listing, place)
+                : Math.min(match.line, listing.lines.addresses.length - 1)
+        /** The selection of the match on `line`, when the line still holds it. */
+        const reveal = (text: string, line: number) => {
+            const found = findMatchAgain(lineOfText(text, line), 0, match.column, match.text)
+            return found.found ? matchSelection({ ...found, line }, match) : { column: 1 }
+        }
+        const selection = this.searchSource(path)
+        const focused = this.focusedGroup
+        const showing = (candidate: EditorGroup, view: FileView) =>
+            candidate.displayedView === view &&
+            isSameProjectSourceSelection(candidate.sourceSelection, selection)
+        if (showing(focused, 'pseudocode')) {
+            const listing = await focused.pseudocodeListing?.ready.catch(() => undefined)
+            if (!listing) return false
+            const line = lineIn(listing)
+            return this.followPseudocodeTarget(focused, line, reveal(listing.text, line))
+        }
+        const panes = this.panesFocusedFirst()
+        const shown = panes.find((candidate) => showing(candidate, 'listing'))
+        const bytes = panes.find((candidate) => showing(candidate, 'hex'))
+        const pane = shown ?? bytes ?? focused
+        this.recordJump(pane)
+        if (bytes && !shown) bytes.setView(path, 'listing')
+        else if (!shown) this.show(selection, pane, 'listing')
+        this.focusEditorGroup(pane)
+        await tick()
+        const document = this.listingFor(selection)
+        const listing = await document?.ready.catch(() => undefined)
+        if (!listing || this.disposed || !showing(pane, 'listing')) return false
+        const line = lineIn(listing)
+        return this.revealWhenShown(pane, line, {
+            ...reveal(pane.displayedListingView?.text ?? listing.text, line),
+            focus: false,
+            scroll: shown ? 'smooth' : 'immediate',
+            origin: document,
+            still: () => pane.displayedListing === document
+        })
+    }
+
+    /**
+     * A Pseudocode result: the function in the Decompile view of a pane showing the Executable's
+     * Pseudocode, else of the focused pane, with the Listing beside it, as Decompile lays them
+     * out; the Pseudocode at the match, the Listing at the first instruction of its line.
+     */
+    private async openPseudocodeMatch(
+        path: string,
+        address: number,
+        match: SearchMatch
+    ): Promise<boolean> {
+        if (!this.project.files[path]) return false
+        const selection = this.searchSource(path)
+        const showing = (candidate: EditorGroup) =>
+            candidate.displayedView === 'pseudocode' &&
+            isSameProjectSourceSelection(candidate.sourceSelection, selection)
+        const pane = this.panesFocusedFirst().find(showing) ?? this.focusedGroup
+        const shown = showing(pane) && pane.pseudocodeFunction?.address === address
+        this.recordJump(pane)
+        pane.followFunction(path, address)
+        if (!showing(pane)) this.show(selection, pane, 'pseudocode')
+        const listingPane = this.listingBeside(pane)
+        this.focusEditorGroup(pane)
+        await tick()
+        const document = await this.decompiledIn(pane, path, address)
+        if (!document) return false
+        const found = findMatchAgain(
+            document.text,
+            document.firstLine + match.line,
+            match.column,
+            match.text
+        )
+        const revealed = await this.revealWhenShown(pane, found.line, {
+            ...matchSelection(found, match),
+            focus: false,
+            scroll: shown ? 'smooth' : 'immediate',
+            still: () => pane.displayedPseudocode === document
+        })
+        const listingLine = document.map?.listingLines[found.line]?.[0] ?? document.fn.line
+        if (listingPane)
+            void this.revealWhenShown(listingPane, listingLine, {
+                focus: false,
+                scroll: this.holdsModel(listingPane) ? 'smooth' : 'immediate',
+                still: () => listingPane.displayedListing === pane.pseudocodeListing
+            })
+        return revealed
+    }
+
+    /**
+     * The Pseudocode of the function at `address` once a pane shows it decompiled, or undefined
+     * once the pane shows something else or the decompiler gives an error. A background batch may
+     * hold the decompiler for its time limit first.
+     */
+    private async decompiledIn(
+        pane: EditorGroup,
+        path: string,
+        address: number
+    ): Promise<PseudocodeDocument | undefined> {
+        for (let attempt = 0; attempt < 1200; attempt++) {
+            if (
+                this.disposed ||
+                !this.groups.includes(pane) ||
+                pane.displayedPath !== path ||
+                pane.displayedView !== 'pseudocode' ||
+                pane.pseudocodeFunctions[path] !== address
+            )
+                return undefined
+            const document = pane.requestedPseudocode
+            if (document?.fn.address === address) {
+                if (document.status === 'failed') return undefined
+                if (document.status === 'ready' && pane.displayedPseudocode === document)
+                    return document
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        return undefined
     }
 
     // ---- navigation history --------------------------------------------------------------------
@@ -3919,6 +4195,10 @@ export class WorkbenchSession {
                 this.panels.searchDocumentation?.()
                 break
             }
+            case ShortcutAction.SearchProject: {
+                this.panels.searchProject?.(this.selectedSearchText())
+                break
+            }
             case ShortcutAction.ToggleDocs: {
                 this.panels.toggleDocumentation?.()
                 break
@@ -3964,6 +4244,56 @@ export class WorkbenchSession {
             }
         }
     }
+}
+
+/** What the Search panel reads of a session, as it is when read. */
+function searchHost(session: WorkbenchSession): ConstructorParameters<typeof ProjectSearch>[0] {
+    return {
+        get project() {
+            return session.project
+        },
+        get listings() {
+            return session.emulator.listings
+        },
+        get pseudocode() {
+            return session.pseudocode.search
+        }
+    }
+}
+
+/**
+ * Where a Search panel row's match goes in a pane's editor: from where it was found again to its
+ * end, which for a match running onto later lines is as many lines on. A match not found again
+ * selects nothing, the cursor at its line's start.
+ */
+function matchSelection(
+    found: MatchPlace,
+    match: SearchMatch
+): { column: number; select?: { endLine: number; endColumn: number } } {
+    if (!found.found) return { column: 1 }
+    const column = found.column + 1
+    const { range } = match
+    if (range?.endLine !== undefined && range.endColumn !== undefined)
+        return {
+            column,
+            select: {
+                endLine: found.line + 1 + (range.endLine - 1 - match.line),
+                endColumn: range.endColumn + 1
+            }
+        }
+    return { column, select: { endLine: found.line + 1, endColumn: column + match.text.length } }
+}
+
+/** The text of a 0-based line of a text. */
+function lineOfText(text: string, line: number): string {
+    let start = 0
+    for (let at = 0; at < line; at++) {
+        const next = text.indexOf('\n', start)
+        if (next < 0) return ''
+        start = next + 1
+    }
+    const end = text.indexOf('\n', start)
+    return text.slice(start, end < 0 ? undefined : end)
 }
 
 /** The events Back and Forward come by outside an editor, see `handleHistoryInput`. */

@@ -9,7 +9,9 @@
      * ([programs.md](../../../../../../docs/design/programs.md), decision 10). Symbols lists the
      * functions and strings of an Executable
      * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
-     * decision 18).
+     * decision 18). Search finds text in the Project's Files, Listings and Pseudocode, and can be
+     * maximized too ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decisions 23 to 29).
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
@@ -24,6 +26,7 @@
     import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
     import SymbolsPanel from './SymbolsPanel.svelte'
+    import SearchPanel from './SearchPanel.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -71,6 +74,7 @@
     const MIN_WIDTHS: Record<string, string> = {
         explorer: '13rem',
         symbols: '16rem',
+        search: '18rem',
         testcases: '24rem',
         documentation: '24rem',
         agent: '20rem',
@@ -148,6 +152,7 @@
             class:shown
             class:gutterless={entry.id === 'explorer' ||
                 entry.id === 'symbols' ||
+                entry.id === 'search' ||
                 entry.id === 'testcases' ||
                 entry.id === 'documentation'}
         >
@@ -196,6 +201,14 @@
                         {shown}
                         onReveal={() => {
                             if (ui.deviceClass === 'phone') ui.drawerOpen = false
+                        }}
+                    />
+                {:else if entry.id === 'search'}
+                    <!-- on a phone the drawer holds it: closing the drawer closes the panel -->
+                    <SearchPanel
+                        shown={shown && (!phone || ui.drawerOpen)}
+                        onReveal={() => {
+                            if (phone) ui.drawerOpen = false
                         }}
                     />
                 {:else if entry.id === 'testcases'}
@@ -331,8 +344,8 @@
             display: flex;
         }
 
-        /* The Explorer seldom scrolls; Symbols, Testcases and Documentation reserve their own
-           gutter. */
+        /* The Explorer seldom scrolls; Symbols, Search, Testcases and Documentation reserve their
+           own gutter. */
         &.gutterless {
             overflow-y: hidden;
             scrollbar-gutter: auto;
