@@ -444,14 +444,19 @@ After S1, A3 and A5.
 
 ## Open questions
 
-1. **Blocks P0.** How locals are named: after the decompiler's analysis (decision 16, what research recommends: no other name changes, every reported id applies, and the search cache's rewrites are exact but for line breaks) or through Ghidra's name recommendations, as Ghidra's own window does, where renaming one variable renumbers the other default names (`pcVar2` becomes `pcVar1`)? The owner's decision 1 named Ghidra's mechanism; this is the one place research departs from it.
-2. Where a comment set on a Pseudocode line is stored: the line's first mapped instruction (the owner's decision 14: 83.0% land directly above the line, and the Listing shows it at the start of the statement's code), or its largest address (86.1%, and the Listing shows it at the statement's end)? Not blocking.
-3. The decompiler's version: fold P0 into the unpublished 1.0.0, as demangling's P0 was, or a 1.1.0? Not blocking.
-4. Whether Pseudocode starts unticked and the person's ticks are kept (decision 25), given that opening the panel with it ticked starts minutes of decompiling a static program; and whether the background limit of 5 s suits. Not blocking.
-5. Phones: on an iPhone, Rename… and Comment… in a Listing or Pseudocode have no way in without a keyboard. A button in the Listing's and Pseudocode's notice, or a long press handled by the Workbench itself, would add one. Not blocking.
-6. A renamed jump target in the Pseudocode's `goto`s needs the package to take code labels (an image field, so version 4 of the image), and would also let `goto`s read the Listing's `.LAB_n` instead of Ghidra's `code_r0x…`. Now, later, or never? Not blocking.
-7. The Search panel serves every Target, but the Documentation has no Workbench-wide Chapter: describe its Files part in each language's Documentation, only in the x86 Executables Chapter, or nowhere? Not blocking.
-8. Renamed data in a stripped program has no memory-view label, since the memory view's labels come from the program's own symbol table: add the Listing's renamed labels there? Not blocking.
+Settled on 2026-10-22 by the organiser, with research's recommended defaults, on the owner's instruction to implement; the owner may revisit any of them.
+
+1. **How locals are named:** after the decompiler's analysis (decision 16). Renaming one variable never renumbers the other default names, and every reported id applies. This departs from the wording "Ghidra's mechanism" in the owner's decision 1, which named the means, not a requirement.
+2. **Where a Pseudocode line's comment is stored:** the line's first mapped instruction (decision 14), the rule Pseudocode Breakpoints follow.
+3. **The decompiler's version:** P0 folds into the unpublished 1.0.0, as demangling's P0 did.
+4. **Pseudocode in the Search panel:** ticked by default, and the person's ticks are kept.
+    - For an Executable of up to 1,000 functions, decompiling starts when the panel opens.
+    - A larger one, such as a static program, starts on the first query instead, with progress and Cancel.
+    - The background limit of 5 s per function stands.
+5. **Phones without a keyboard:** a follow-up. A Rename/Comment button in the notices or a Workbench long press is not in this plan.
+6. **Renamed `goto` targets (code labels, image v4):** later.
+7. **Where the Search panel is documented:** the x86 Executables Chapter for now. A Workbench-wide Chapter is a follow-up.
+8. **Memory-view labels for renamed data in stripped programs:** a follow-up.
 
 ## Glossary terms
 
