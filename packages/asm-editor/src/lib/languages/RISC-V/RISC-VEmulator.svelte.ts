@@ -431,8 +431,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             }
         }
         this.riscv = riscv
-        this._buildLibraryFiles = this.libraryFiles(sources, riscv)
-        return { ok: true, diagnostics }
+        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, riscv) }
     }
 
     /**

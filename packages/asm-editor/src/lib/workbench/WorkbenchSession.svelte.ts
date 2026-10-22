@@ -2993,11 +2993,12 @@ export class WorkbenchSession {
     }
 
     /**
-     * Cancel, while a Build goes on: it ends at once, whatever it waits for, even something that
-     * never answers, its result is discarded and the Workbench goes back to editing, with no Debug
-     * session begun, as Stop leaves it. A Core still busy with the cancelled Build finishes unseen,
-     * and a Build pressed meanwhile waits for it, saying so, which for a stalled download is until
-     * the Core gives the download up.
+     * Cancel, while a Build goes on, and Stop: it ends at once, whatever it waits for, even something
+     * that never answers, its result is discarded and the Workbench goes back to editing, with no
+     * Debug session begun, as Stop leaves it. What the Emulator itself waited on for it, such as a
+     * chunk import or a load, is dropped at once. A Core still assembling for it finishes unseen,
+     * and a Build pressed meanwhile waits for that, saying so, which for a stalled download of the
+     * assembler is until the Core gives the download up, 20 s at most.
      */
     cancelBuild() {
         if (!this.building) return
@@ -3135,7 +3136,9 @@ export class WorkbenchSession {
     }
 
     stop() {
-        this.clearExecution()
+        //during a Build, in a download or its run to `main`, Stop is its Cancel
+        if (this.building) this.cancelBuild()
+        else this.clearExecution()
         this.running = false
         this.testcasesResult = []
     }
@@ -3246,7 +3249,8 @@ export class WorkbenchSession {
                 break
             }
             case ShortcutAction.ClearExecution: {
-                this.clearExecution()
+                if (this.building) this.cancelBuild()
+                else this.clearExecution()
                 break
             }
             case ShortcutAction.Step: {

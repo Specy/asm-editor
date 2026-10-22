@@ -11,7 +11,7 @@ import {
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
-import type { BuildSources } from '#lib/projectFiles.ts'
+import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
@@ -34,6 +34,13 @@ export type CompileResult =
            * None for a Build that loaded an Executable, which is a File already.
            */
           program?: Uint8Array
+          /**
+           * The Runtime library members or the start code the program was linked with, which the
+           * debugger opens as `buildLibraryFiles`.
+           */
+          libraryFiles?: ProjectFiles
+          /** What the Log should say about the program built, such as a library it lacks. */
+          notes?: Omit<EmulatorNote, 'id'>[]
       }
     | { ok: false; diagnostics: Diagnostic[]; report: string }
 
@@ -58,11 +65,17 @@ export class CompilationFailedError extends Error {
  * x86 Core's Bundled libraries or its assembler: the request failed, or nothing arrived for a while.
  * Nothing is wrong with the program, so its message names what could not be downloaded and says
  * to Build again ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
- * decision 2), in the Terminal, the Log and the toast alike.
+ * decision 2), in the Terminal, the Log and the toast alike. When the server `refused` it, with a
+ * status such as 404, the connection is fine and the same request fails again: the site has most
+ * likely been updated since the page loaded, its files renamed, and reloading the page fetches the
+ * new names.
  */
 export class BuildDownloadError extends Error {
-    constructor(problem: string, options?: ErrorOptions) {
-        super(`${problem}. Check the connection and Build again.`, options)
+    constructor(problem: string, options?: ErrorOptions & { refused?: boolean }) {
+        super(
+            `${problem}. ${options?.refused ? 'Reload the page' : 'Check the connection'} and Build again.`,
+            options
+        )
         this.name = 'BuildDownloadError'
     }
 }

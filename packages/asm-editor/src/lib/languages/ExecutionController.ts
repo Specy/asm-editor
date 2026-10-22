@@ -13,6 +13,8 @@ export class ExecutionController {
     private generation = 0
     private pendingPrompts = 0
     private readonly cancelPrompt: () => void
+    /** The waits `whileCurrent` ends at the next `invalidate`. */
+    private readonly supersessionListeners = new Set<() => void>()
 
     constructor(cancelPrompt: () => void) {
         this.cancelPrompt = cancelPrompt
@@ -25,6 +27,9 @@ export class ExecutionController {
     invalidate(): void {
         this.generation += 1
         if (this.pendingPrompts > 0) this.cancelPrompt()
+        const superseded = [...this.supersessionListeners]
+        this.supersessionListeners.clear()
+        for (const listener of superseded) listener()
     }
 
     isCurrent(execution: ExecutionGeneration): boolean {
@@ -44,6 +49,29 @@ export class ExecutionController {
             this.ensureCurrent(execution)
             throw error
         }
+    }
+
+    /**
+     * Waits for `promise` only while `execution` is current: once it is superseded the wait ends at
+     * once with `ExecutionSupersededError`, even when `promise` never settles, and however `promise`
+     * settles later is dropped. For a wait nothing else bounds, such as a chunk import, which must
+     * not hold whatever comes after the execution it was for.
+     */
+    whileCurrent<T>(execution: ExecutionGeneration, promise: PromiseLike<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const superseded = () => reject(new ExecutionSupersededError())
+            if (this.isCurrent(execution)) this.supersessionListeners.add(superseded)
+            else superseded()
+            const settle = (outcome: () => void) => {
+                this.supersessionListeners.delete(superseded)
+                if (this.isCurrent(execution)) outcome()
+                else superseded()
+            }
+            promise.then(
+                (value) => settle(() => resolve(value)),
+                (error: unknown) => settle(() => reject(error))
+            )
+        })
     }
 
     async waitForPrompt<T>(

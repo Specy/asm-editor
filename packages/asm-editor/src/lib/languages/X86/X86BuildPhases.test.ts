@@ -110,4 +110,110 @@ describe('an x86 Build', () => {
         expect(emulator.errors).toEqual([])
         expect(emulator.canExecute).toBe(true)
     })
+
+    it('says to reload the page when the server refused a download', async () => {
+        const emulator = await emulatorFor(executable)
+        const core = (emulator as unknown as { core: CoreX86Emulator }).core
+        //a site updated since the page loaded no longer has the files it names
+        vi.spyOn(core, 'loadExecutable').mockRejectedValueOnce(
+            new ResourceDownloadError('libc.so.6', '404 Not Found', { status: 404 })
+        )
+        await expect(emulator.compile(0, executable)).rejects.toThrow(
+            'Could not download libc.so.6: 404 Not Found. Reload the page and Build again.'
+        )
+    })
+})
+
+/**
+ * A Build that Cancel ended, `clear()` here as the Workbench's Cancel calls it, while it waited:
+ * whatever it waited for, however that ends, it writes nothing into the Emulator, and the Build
+ * pressed next does not wait for anything only the editor was waiting on.
+ */
+describe('a cancelled x86 Build', () => {
+    /** The Core's `loadExecutable` for the next load, which ends when the test says. */
+    function heldLoad(core: CoreX86Emulator) {
+        const load = { finish: (_info: unknown) => {} }
+        vi.spyOn(core, 'loadExecutable').mockImplementationOnce(
+            () => new Promise((resolve) => (load.finish = resolve)) as never
+        )
+        return load
+    }
+
+    it('says nothing in the Log of the program it was loading', async () => {
+        const emulator = await emulatorFor(executable)
+        const core = (emulator as unknown as { core: CoreX86Emulator }).core
+        const load = heldLoad(core)
+        const cancelled = emulator.compile(0, executable)
+        await vi.waitFor(() => expect(core.loadExecutable).toHaveBeenCalledOnce())
+        emulator.clear()
+        //the download ends later, for a program that needs a library x86 does not bundle
+        load.finish({
+            pie: true,
+            interpreter: '/lib64/ld-linux-x86-64.so.2',
+            needed: ['libc.so.6', 'libfoo.so.1'],
+            missing: ['libfoo.so.1']
+        })
+        await cancelled
+        //a Build still current says it (X86Notes.test.ts)
+        expect(emulator.notes).toEqual([])
+        expect(emulator.canExecute).toBe(false)
+    })
+
+    it('lends the debugger no start code it was linking', async () => {
+        const sources = { ...assembly, x86Support: true }
+        const emulator = await emulatorFor(sources)
+        const core = (emulator as unknown as { core: CoreX86Emulator }).core
+        const build = { finish: (_result: unknown) => {} }
+        const compiled = vi
+            .spyOn(core, 'compileProject')
+            .mockImplementationOnce(
+                () => new Promise((resolve) => (build.finish = resolve)) as never
+            )
+        const cancelled = emulator.compile(0, sources)
+        await vi.waitFor(() => expect(compiled).toHaveBeenCalledOnce())
+        emulator.clear()
+        build.finish({ ok: true, diagnostics: [], report: '' })
+        await cancelled
+        expect(emulator.buildLibraryFiles).toBeUndefined()
+        expect(emulator.canExecute).toBe(false)
+    })
+
+    it('holds no later Build while it waits on an import that never ends', async () => {
+        const emulator = await emulatorFor(executable)
+        const core = (emulator as unknown as { core: CoreX86Emulator }).core
+        const loads = vi.spyOn(core, 'loadExecutable')
+        //Zydis's chunk, which never arrives
+        const adapter = emulator as unknown as {
+            programStartOf(bytes: Uint8Array): Promise<unknown>
+        }
+        adapter.programStartOf = () => new Promise(() => {})
+        let settled = false
+        void emulator.compile(0, executable).finally(() => (settled = true))
+        await vi.waitFor(() => expect(loads).toHaveBeenCalledOnce())
+        emulator.clear()
+        await vi.waitFor(() => expect(settled).toBe(true))
+        //the chunk arrives for the next one
+        delete (adapter as { programStartOf?: unknown }).programStartOf
+        await emulator.compile(0, executable)
+        expect(emulator.canExecute).toBe(true)
+        expect(emulator.notes).toEqual([])
+    })
+
+    it('holds no later Build while it waits on the Runtime library', async () => {
+        const emulator = await emulatorFor(assembly)
+        const adapter = emulator as unknown as {
+            _prepareBuild(sources: BuildSources): Promise<void>
+        }
+        const prepare = adapter._prepareBuild
+        const hung = vi.fn(() => new Promise<void>(() => {}))
+        adapter._prepareBuild = hung
+        let settled = false
+        void emulator.compile(0, assembly).finally(() => (settled = true))
+        await vi.waitFor(() => expect(hung).toHaveBeenCalledOnce())
+        emulator.clear()
+        await vi.waitFor(() => expect(settled).toBe(true))
+        adapter._prepareBuild = prepare
+        await emulator.compile(0, assembly)
+        expect(emulator.canExecute).toBe(true)
+    })
 })

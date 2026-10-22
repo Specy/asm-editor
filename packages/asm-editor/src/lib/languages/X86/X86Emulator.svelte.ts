@@ -580,9 +580,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             return await this.compileSources(sources)
         } catch (error) {
             //a library or the assembler that could not be downloaded: Build again, and it is
-            //downloaded again
+            //downloaded again, after a reload of the page when the server refused it
             if (error instanceof ResourceDownloadError)
-                throw new BuildDownloadError(error.message, { cause: error })
+                throw new BuildDownloadError(error.message, {
+                    cause: error,
+                    refused: error.status !== undefined
+                })
             throw error
         } finally {
             this.compiling = false
@@ -613,32 +616,30 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             const document = this._listings!.openExecutable(sources.entry, file)!
             const bytes = fileBytes(file)
             this.reportBuildPhase('Loading the program…')
-            const [info, start] = await Promise.all([
-                //the Executable's own File can be read but not written, deleted or renamed while
-                //it runs
-                core.loadExecutable(bytes, {
-                    protectedPath: '/project/' + sources.entry,
-                    onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
-                }),
-                this.programStartOf(bytes)
-            ])
-            this._buildLibraryFiles = undefined
+            //neither wait outlasts a Cancel: the Core gives up a load that a later one or a clear
+            //superseded, and Zydis's chunk import has no limit of its own
+            const [info, start] = await this.whileBuildIsCurrent(
+                Promise.all([
+                    //the Executable's own File can be read but not written, deleted or renamed
+                    //while it runs
+                    core.loadExecutable(bytes, {
+                        protectedPath: '/project/' + sources.entry,
+                        onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
+                    }),
+                    this.programStartOf(bytes)
+                ])
+            )
             this.loadingExecutable = { path: sources.entry, file, document, start }
             //the dynamic linker will fail to load the program with its own message, on stderr
-            for (const name of info.missing)
-                this.addNote({
-                    tone: 'warning',
-                    text: `${name} is not one of the bundled libraries`
-                })
+            const missing = info.missing.map(
+                (name) => `${name} is not one of the bundled libraries`
+            )
             return {
                 ok: true,
-                diagnostics: info.missing.map((name) =>
-                    executableDiagnostic(
-                        sources.entry,
-                        `${name} is not one of the bundled libraries`,
-                        'warning'
-                    )
-                )
+                diagnostics: missing.map((text) =>
+                    executableDiagnostic(sources.entry, text, 'warning')
+                ),
+                notes: missing.map((text) => ({ tone: 'warning' as const, text }))
             }
         }
         //sources that could not be resolved, such as Generated assembly that needs a Runtime
@@ -658,7 +659,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             const library = sources.runtimeAbi
                 ? loadedRuntimeLibrary(sources.runtimeAbi, 'X86')
                 : undefined
-            this._buildLibraryFiles = library
+            const libraryFiles = library
                 ? Object.fromEntries(
                       Object.entries(library.members).map(([path, content]) => [
                           path,
@@ -669,7 +670,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                   ? X86_START_UNIT_FILES
                   : undefined
             //the linked executable, a copy, which becomes the Build output (ADR 0050)
-            return { ok: true, diagnostics, program: core.getExecutable() ?? undefined }
+            return {
+                ok: true,
+                diagnostics,
+                program: core.getExecutable() ?? undefined,
+                libraryFiles
+            }
         }
         return { ok: false, diagnostics, report: result.report }
     }

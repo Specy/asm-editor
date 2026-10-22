@@ -1388,6 +1388,19 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
+     * Waits for `promise` only while the Build in progress lasts: `clear()`, which Cancel and Stop
+     * call, ends the wait at once with an error, even when `promise` never settles, so that the
+     * Build pressed next does not wait for it. For an adapter's wait that nothing else bounds, such
+     * as a chunk import, or a Core's load that a later one supersedes safely.
+     */
+    protected whileBuildIsCurrent<T>(promise: Promise<T>): Promise<T> {
+        return this.executionController.whileCurrent(
+            this.phaseExecution ?? this.executionController.capture(),
+            promise
+        )
+    }
+
+    /**
      * `stopInUserCode` is the Build a Debug session starts from, which stops where a Step from the
      * program's start would (`runStartCode`). A Testcase starts at the first instruction instead:
      * its starting registers and instruction limit apply from there, as they always have.
@@ -1418,8 +1431,11 @@ export abstract class GenericEmulator<T, R extends string>
                     ? $state.snapshot(this._sources)
                     : normalizeBuildInput(sourceOverride)
             entry = sources.entry
-            await prepareMemoryNames(sources)
-            await this._prepareBuild?.(sources)
+            //chunk imports, which nothing bounds: a Build cancelled while they hang ends at once
+            //rather than holding every later Build behind it
+            await this.executionController.whileCurrent(execution, prepareMemoryNames(sources))
+            if (this._prepareBuild)
+                await this.executionController.whileCurrent(execution, this._prepareBuild(sources))
             this.executionController.ensureCurrent(execution)
             this.passProgramArguments(sources, programArguments)
             const result = await this._compile(sources, historySize)
@@ -1432,6 +1448,9 @@ export abstract class GenericEmulator<T, R extends string>
             //a successful build replaces the semantic check's list so stale squiggles drop and the
             //warnings the assembler emitted while succeeding are shown
             this.state.compilerDiagnostics = result.diagnostics ?? []
+            //only now, for the Build still current: a cancelled one says nothing of its program
+            this._buildLibraryFiles = result.libraryFiles
+            for (const note of result.notes ?? []) this.addNote(note)
             const output = this.placeBuildOutput(sources, result.program, stopInUserCode)
             this._initialize(historySize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb

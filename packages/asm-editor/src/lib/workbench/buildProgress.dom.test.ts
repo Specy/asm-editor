@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import { BuildDownloadError } from '#lib/languages/BaseEmulator.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
+import { ShortcutAction } from '#stores/shortcutsStore.ts'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 
@@ -124,6 +125,24 @@ describe('a Build in progress', () => {
         await vi.waitFor(() => expect(session.building).toBe(false))
         flushSync()
         expect(session.debugSession).toBe(false)
+        expect(session.log).toEqual([])
+        expect(labels()).toEqual(['Build'])
+    })
+
+    it('ends at Stop, and at the Clear execution shortcut, as at Cancel', async () => {
+        const { session, build, labels, press } = setup()
+        press('Build')
+        session.stop()
+        await vi.waitFor(() => expect(session.building).toBe(false))
+        expect(build.signal?.aborted).toBe(true)
+        press('Build')
+        expect(session.building).toBe(true)
+        ;(session as unknown as { runShortcut(type: ShortcutAction): void }).runShortcut(
+            ShortcutAction.ClearExecution
+        )
+        await vi.waitFor(() => expect(session.building).toBe(false))
+        flushSync()
+        expect(build.signal?.aborted).toBe(true)
         expect(session.log).toEqual([])
         expect(labels()).toEqual(['Build'])
     })

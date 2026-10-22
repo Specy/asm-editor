@@ -431,8 +431,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             }
         }
         this.mips = mips
-        this._buildLibraryFiles = this.libraryFiles(sources, mips)
-        return { ok: true, diagnostics }
+        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, mips) }
     }
 
     /**

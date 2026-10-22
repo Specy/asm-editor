@@ -1,11 +1,12 @@
 import { executableKind } from '#lib/executables.ts'
-import { createX86Emulator, type MonacoError } from '@specy/x86'
+import { createX86Emulator, ResourceDownloadError, type MonacoError } from '@specy/x86'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
 import { x86CoreProject, prepareX86Runtime } from '#lib/languages/X86/x86StartUnit.ts'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 import { unresolvedSnapshot, unresolvedSources } from './unresolved'
+import { AnalysisUnavailableError } from '../workers/projectWorkerServer'
 
 export function x86DiagnosticToLanguageDiagnostic(
     error: MonacoError,
@@ -73,8 +74,35 @@ export async function analyzeX86Project(
     if (unresolved)
         return unresolvedSnapshot(sources, unresolved, sessionId, revision, 'X86', 'nasm-project')
     await prepareX86Runtime(sources)
-    checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
-    const diagnostics = await checker.checkProject(x86CoreProject(sources))
+    let diagnostics: MonacoError[]
+    try {
+        checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
+        diagnostics = await checker.checkProject(x86CoreProject(sources))
+    } catch (error) {
+        if (!(error instanceof ResourceDownloadError)) throw error
+        //the assembler did not arrive, which says nothing of the code: a warning rather than an
+        //error, which would hold Build back, until the check downloads it again. A server that
+        //refused it refuses it again, until a reload of the page asks for the site's new files
+        const refused = error.status !== undefined
+        const message = `${error.message}. ${
+            refused
+                ? 'Reload the page to have the code checked.'
+                : 'The code is checked once it downloads, which is tried again shortly.'
+        }`
+        throw new AnalysisUnavailableError(
+            message,
+            unresolvedSnapshot(
+                sources,
+                message,
+                sessionId,
+                revision,
+                'X86',
+                'nasm-project',
+                'warning'
+            ),
+            { cause: error, retry: !refused }
+        )
+    }
     // NASM reports no reached set, so the editor follows literal includes for file-status hints.
     const reached = x86ReachableFiles(sources)
     const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
