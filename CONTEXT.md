@@ -284,7 +284,7 @@ _Avoid_: symbol table (the ELF's own, which a stripped program lacks), outline, 
 
 ## Navigation history
 
-The places an editor pane jumped from in a **Listing** or a **Pseudocode**, kept per pane as a browser keeps its history: a line of a Listing, or the function a Pseudocode showed, in the version of the **File** it was shown in. Every jump records the place it leaves, in each pane it moves: a double-click on a name, Go to Definition, Go to Symbol, Show in Listing, a row of the **Symbols panel**. Go Back and Go Forward (Alt+← and Alt+→, the mouse's back and forward buttons, the context menu) move through it, past places that no longer exist. It lives as long as the open **Project** and is never saved. Distinct from the History of the **Debug tools**, which records the steps instruction Undo can take back.
+The places an editor pane jumped from in a **Listing** or a **Pseudocode**, kept per pane as a browser keeps its history: a line of a Listing, or the function a Pseudocode showed, in the version of the **File** it was shown in. Every jump records the place it leaves, in each pane it moves: a double-click on a name, Go to Definition, Go to Symbol, Show in Listing, a row of the **Symbols panel**. Go Back and Go Forward (Alt+← and Alt+→, the mouse's back and forward buttons, the context menu) move through it, past places that no longer exist; outside the editor, the keys and the buttons move the focused pane's. It lives as long as the open **Project** and is never saved. Distinct from the History of the **Debug tools**, which records the steps instruction Undo can take back.
 _Avoid_: history (alone, which is the Debug tools' History), back stack, breadcrumbs, jump list
 
 ## Invented name

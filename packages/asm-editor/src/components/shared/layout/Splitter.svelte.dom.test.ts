@@ -9,6 +9,8 @@ function render(
         /** Whether the pane can collapse to a strip, and whether it starts collapsed. */
         collapsible?: boolean
         collapsed?: boolean
+        /** Whether the pane starts at its automatic size, which a resize gives a size of its own. */
+        automatic?: boolean
     } = {}
 ) {
     const target = document.createElement('div')
@@ -16,10 +18,12 @@ function render(
     const events = {
         resized: [] as number[],
         committed: [] as number[],
-        collapses: [] as boolean[]
+        collapses: [] as boolean[],
+        resets: 0
     }
     let size = $state(200)
     let collapsed = $state(props.collapsed ?? false)
+    let automatic = $state(props.automatic ?? false)
     const component = mount(Splitter, {
         target,
         props: {
@@ -33,9 +37,18 @@ function render(
             label: 'Resize the side panel',
             onResize: (next: number) => {
                 size = next
+                automatic = false
                 events.resized.push(next)
             },
             onCommit: (next: number) => events.committed.push(next),
+            get automatic() {
+                return automatic
+            },
+            onReset: () => {
+                size = 200
+                automatic = true
+                events.resets += 1
+            },
             get collapsed() {
                 return collapsed
             },
@@ -53,6 +66,7 @@ function render(
         handle,
         events,
         size: () => size,
+        automatic: () => automatic,
         cleanup() {
             unmount(component)
             target.remove()
@@ -139,6 +153,20 @@ describe('Splitter collapsing its pane to a strip', () => {
         expect(splitter.size()).toBe(200)
         expect(splitter.handle.getAttribute('aria-valuenow')).toBe('0')
         expect(splitter.handle.getAttribute('aria-valuemin')).toBe('0')
+        splitter.cleanup()
+    })
+
+    it('collapses a pane at its automatic size back at that size, not at its measure', () => {
+        //the debug column, whose automatic width is no width of the person's to keep
+        const splitter = render({ collapsible: true, automatic: true })
+        pointer(splitter.handle, 'pointerdown', 0)
+        pointer(splitter.handle, 'pointermove', -60)
+        expect(splitter.automatic()).toBe(false)
+        pointer(splitter.handle, 'pointermove', -160)
+        pointer(splitter.handle, 'pointerup', -160)
+        expect(splitter.events.collapses).toEqual([true])
+        expect(splitter.events.resets).toBe(1)
+        expect(splitter.automatic()).toBe(true)
         splitter.cleanup()
     })
 

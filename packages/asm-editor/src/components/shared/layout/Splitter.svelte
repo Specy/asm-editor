@@ -7,7 +7,8 @@
      *
      * Given `onCollapse`, the pane can also collapse to a strip of its own. A drag that takes it
      * below `collapseBelow` collapses it, back at the size it had when the drag began, so opening it
-     * again restores that; a drag from the strip past `collapseBelow` opens it at the pointer.
+     * again restores that: its automatic size (`onReset`) when it had that (`automatic`). A drag
+     * from the strip past `collapseBelow` opens it at the pointer.
      * Enter collapses or opens it from the keyboard, as the WAI-ARIA window splitter's does, and
      * the arrow that grows the pane opens it too. A collapsed pane reads as size 0.
      */
@@ -29,6 +30,8 @@
         onCommit?: (size: number) => void
         /** A double click, for going back to the automatic size. */
         onReset?: () => void
+        /** Whether the pane has its automatic size, which `size` only measures. */
+        automatic?: boolean
         /** Whether the pane is collapsed to its strip; only read with `onCollapse`. */
         collapsed?: boolean
         /** The size a drag collapses the pane below, which defaults to half of `min`. */
@@ -49,6 +52,7 @@
         onResize,
         onCommit,
         onReset,
+        automatic = false,
         collapsed = false,
         collapseBelow,
         onCollapse,
@@ -58,6 +62,7 @@
     let dragging = $state(false)
     let origin = 0
     let startSize = 0
+    let startedAutomatic = false
     const isCollapsed = $derived(!!onCollapse && collapsed)
 
     function clamp(value: number) {
@@ -74,6 +79,7 @@
         dragging = true
         origin = position(event)
         startSize = isCollapsed ? 0 : size
+        startedAutomatic = !isCollapsed && automatic
         //capture keeps the drag going over Monaco and over panes that would take the events
         ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
     }
@@ -84,8 +90,10 @@
         if (onCollapse) {
             if (pointed < (collapseBelow ?? min / 2)) {
                 if (isCollapsed) return
-                //the sizes the drag went through on its way down are not the pane's to keep
-                if (startSize && size !== startSize) onResize(startSize)
+                //the sizes the drag went through on its way down are not the pane's to keep, and
+                //an automatic size it began at stays automatic, rather than becoming its measure
+                if (startedAutomatic && onReset) onReset()
+                else if (startSize && size !== startSize) onResize(startSize)
                 onCollapse(true)
                 return
             }

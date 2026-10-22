@@ -499,7 +499,8 @@ describe("a memory cell's pointer menu", () => {
         panel.select(1, 4)
         expect(panel.rightClick(2)).toBe(true)
         await tick()
-        expect(panel.menus).toEqual([{ address: ADDRESS + 2n, value: 0x44330201n, bytes: 4 }])
+        //at the selection's start, where Follow pointer reads the pointer the number is
+        expect(panel.menus).toEqual([{ address: ADDRESS + 1n, value: 0x44330201n, bytes: 4 }])
         //the selection is still there to poke
         expect(panel.input()?.value).toBe(String(0x44330201))
         panel.close()

@@ -16,7 +16,7 @@
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import { Monaco } from '#lib/monaco/Monaco.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
-    import { goto } from '$app/navigation'
+    import { beforeNavigate, goto } from '$app/navigation'
     import { resolve } from '$app/paths'
     import type { ResolvedPathname } from '$app/types'
     import Page from '#cmp/shared/layout/Page.svelte'
@@ -44,6 +44,20 @@
         project.id === SHARE_ID ||
             (dirty && (!preferencesStore.values.autoSave.value || lastSaveFailed))
     )
+
+    /**
+     * Leaving for another page of the site while there are unsaved changes asks first, as leaving
+     * the site does ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 17): a link, or the browser's Back, which Alt+← and the mouse's back button are
+     * outside a Listing and a Pseudocode with somewhere to go. An unload is the browser's to ask
+     * about, through `beforeunload` below, and the page's own navigations have asked already
+     * (`changePage`) or follow a save.
+     */
+    beforeNavigate((navigation) => {
+        if (!unsaved || navigation.willUnload || navigation.type === 'goto') return
+        if (!confirm('You have unsaved changes. Leave this page without saving them?'))
+            navigation.cancel()
+    })
 
     async function loadProject() {
         const id = page.params.project ?? ''

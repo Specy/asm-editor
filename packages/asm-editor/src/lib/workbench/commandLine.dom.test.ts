@@ -336,13 +336,27 @@ describe('a read the program waits on, below the Command line', () => {
         }
     }
 
-    it('leaves the keyboard in the Command line, the console ringed to say where to type', () => {
-        //a tester typed the answer into the Arguments (reverse-engineering-ux.md, decision 12)
+    it('takes the keyboard from the locked Command line, the console ringed to say where to type', () => {
+        //a tester typed the answer into the Arguments, which no one can type in during the session
+        //(reverse-engineering-ux.md, decision 12)
         const tab = terminalTab()
+        expect(tab.arguments.readOnly).toBe(true)
         tab.arguments.focus()
         void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
         flushSync()
-        expect(document.activeElement).toBe(tab.arguments)
+        expect(document.activeElement).toBe(tab.console)
+        expect(tab.ring()).toBe(true)
+    })
+
+    it('leaves the keyboard in a field someone can type in', () => {
+        const tab = terminalTab()
+        const filter = document.createElement('input')
+        document.body.append(filter)
+        disposers.push(() => filter.remove())
+        filter.focus()
+        void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(filter)
         expect(tab.ring()).toBe(true)
     })
 

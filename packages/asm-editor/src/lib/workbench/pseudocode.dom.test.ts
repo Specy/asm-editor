@@ -182,7 +182,11 @@ function listingEditor(session: WorkbenchSession, pane: EditorGroup) {
             uri: {
                 scheme: 'asm-editor',
                 authority: session.languageSessionId,
-                path: `/live/${pane.displayedPath}`,
+                //the version the pane shows, a Build's during a Debug session
+                path:
+                    pane.sourceSelection.sourceKind === 'build'
+                        ? `/build-${pane.sourceSelection.buildGeneration}/${pane.displayedPath}`
+                        : `/live/${pane.displayedPath}`,
                 fragment: 'listing'
             },
             isDisposed: () => false,
@@ -191,6 +195,7 @@ function listingEditor(session: WorkbenchSession, pane: EditorGroup) {
         revealLineInCenter: (line: number) => revealed.push(line),
         setPosition: ({ lineNumber }: { lineNumber: number }) =>
             session.cursorMoved(pane, lineNumber - 1),
+        getPosition: () => ({ lineNumber: pane.cursorLine + 1, column: 1 }),
         getVisibleRanges: () => [],
         focus: () => {}
     } as unknown as typeof pane.editor
@@ -615,6 +620,105 @@ describe('the navigation history', () => {
             view: 'listing',
             line: fn('_start').line
         })
+    })
+
+    it('goes back and forward from outside the editor, keeping the browser on the page', async () => {
+        const { session, pane, listingPane, listing, rows } = await paired()
+        const call = listingLine(listing, 'main', 'call strcmp@plt')
+        session.cursorMoved(listingPane, call)
+        expect(await session.followPseudocodeTarget(pane, rows.indexOf('strcmp@plt:'))).toBe(true)
+        session.focusEditorGroup(listingPane)
+        //a row of the Symbols panel, which keeps the keyboard after a click, and a text field
+        const row = document.createElement('button')
+        const field = document.createElement('input')
+        document.body.append(row, field)
+        const send = (target: HTMLElement, event: Event) => {
+            target.addEventListener(event.type, (e) => session.handleHistoryInput(e as never), {
+                once: true
+            })
+            target.dispatchEvent(event)
+            return event.defaultPrevented
+        }
+        const key = (target: HTMLElement, key: string) =>
+            send(target, new KeyboardEvent('keydown', { key, altKey: true, cancelable: true }))
+        const button = (type: string, button: number) =>
+            send(row, new MouseEvent(type, { button, cancelable: true }))
+        //a text field keeps Alt+←, which moves by word there on a Mac
+        expect(key(field, 'ArrowLeft')).toBe(false)
+        expect(listingPane.cursorLine).toBe(rows.indexOf('strcmp@plt:'))
+        expect(key(row, 'ArrowLeft')).toBe(true)
+        await vi.waitFor(() => expect(listingPane.cursorLine).toBe(call))
+        //with nowhere to go back to, Alt+← is the browser's
+        expect(key(row, 'ArrowLeft')).toBe(false)
+        //the mouse's forward button, which goes on its release
+        expect(button('mousedown', 4)).toBe(true)
+        expect(listingPane.cursorLine).toBe(call)
+        expect(button('mouseup', 4)).toBe(true)
+        expect(button('auxclick', 4)).toBe(true)
+        await vi.waitFor(() => expect(listingPane.cursorLine).toBe(rows.indexOf('strcmp@plt:')))
+        //and with nowhere further to go, the next press is the browser's
+        expect(button('mousedown', 4)).toBe(false)
+        expect(button('mouseup', 4)).toBe(false)
+        //a pane on text has no history to move through
+        session.selectFile('notes.txt', listingPane)
+        flushSync()
+        expect(button('mousedown', 3)).toBe(false)
+        expect(button('mouseup', 3)).toBe(false)
+    })
+
+    it('goes back into a Listing still being generated, once it is', async () => {
+        const { session, emulator } = setup()
+        //the Listing comes when the test says, as a large one or the next Build's does
+        let generated!: () => void
+        const gate = new Promise<void>((resolve) => (generated = resolve))
+        emulator.listings = new ListingDocuments(async (order) => {
+            await gate
+            return generateListing(decoder, { ...order, version: 'v1' })
+        })
+        const pane = show(session, 'notes.txt')
+        listingEditor(session, pane)
+        pane.history.record({ selection: liveSource('crackme'), view: 'listing', line: 40 })
+        const back = session.goBack(pane)
+        await tick()
+        expect(pane.displayedView).toBe('listing')
+        expect(pane.displayedListing?.status).toBe('generating')
+        //it takes longer than a reveal's first attempts
+        await new Promise((resolve) => setTimeout(resolve, 120))
+        generated()
+        expect(await back).toBe(true)
+        expect(pane.cursorLine).toBe(40)
+    })
+
+    it("records a pointer menu's Show in Listing only in the pane it moves", async () => {
+        const { session, emulator } = setup()
+        const left = show(session, 'crackme')
+        const right = show(session, 'crackme', session.splitEditor())
+        await session.build()
+        await tick()
+        flushSync()
+        const listing = left.displayedListing!.listing!
+        const revealed = listingEditor(session, left)
+        listingEditor(session, right)
+        Object.assign(emulator, {
+            getSourceLocationFromAddress: (address: bigint) => ({
+                file: 'crackme',
+                line: lineOfAddress(listing, Number(address) - BASE)
+            })
+        })
+        const main = listing.functions.find((item) => item.name === 'main')!
+        const start = listing.functions.find((item) => item.name === '_start')!
+        session.cursorMoved(left, main.line)
+        session.cursorMoved(right, main.line)
+        //the right pane came back from somewhere it can go forward to again
+        const ahead = { selection: right.sourceSelection, view: 'listing' as const, line: 3 }
+        right.history.ahead = [ahead]
+        await session.revealAddress(BigInt(start.address + BASE), { jump: true })
+        expect(revealed.at(-1)).toBe(lineOfAddress(listing, start.address) + 1)
+        expect(left.history.behind).toEqual([
+            { selection: left.sourceSelection, view: 'listing', line: main.line }
+        ])
+        expect(right.history.behind).toEqual([])
+        expect(right.history.ahead).toEqual([ahead])
     })
 
     it('opens a closed tab again, and passes over a File that is gone', async () => {

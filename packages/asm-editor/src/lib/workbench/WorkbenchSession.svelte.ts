@@ -97,6 +97,7 @@ import type { ProjectAnalysisSnapshot } from '#lib/languages/service/protocol.ts
 import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosticBridge.ts'
 import { registerProjectNavigation } from '#lib/languages/service/navigation.ts'
 import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
+import { navigationButtonStep, navigationKeyStep } from '#lib/monaco/editorLineActions.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import {
     modShortcutKey,
@@ -507,6 +508,10 @@ export class WorkbenchSession {
     }>()
     /** Counts the ends of Debug sessions, so a Build knows that Stop ended it part way. */
     private executionClears = 0
+    /** The mouse's back or forward button pressed for a pane's history, see `handleHistoryButton`. */
+    private historyPress:
+        | { button: number; group: EditorGroup; step: 'back' | 'forward' }
+        | undefined
     /** Counts requests for the Command line to take the keyboard, as a Problem about it makes. */
     commandLineFocus = $state(0)
     bottomTab = $state<BottomTab>('terminal')
@@ -1131,15 +1136,18 @@ export class WorkbenchSession {
             if (e.key === 'Meta') this.pressedKeys.clear()
         }
         const blur = () => this.pressedKeys.clear()
+        const history = (e: KeyboardEvent | MouseEvent) => this.handleHistoryInput(e)
         window.addEventListener('keydown', keydown)
         window.addEventListener('keydown', commandKey, { capture: true })
         window.addEventListener('keyup', keyup)
         window.addEventListener('blur', blur)
+        for (const type of HISTORY_EVENTS) window.addEventListener(type, history)
         return () => {
             window.removeEventListener('keydown', keydown)
             window.removeEventListener('keydown', commandKey, { capture: true })
             window.removeEventListener('keyup', keyup)
             window.removeEventListener('blur', blur)
+            for (const type of HISTORY_EVENTS) window.removeEventListener(type, history)
             unsubscribeLanguageSession()
             unregisterNavigation()
             session.dispose()
@@ -1886,13 +1894,7 @@ export class WorkbenchSession {
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
-        const showing = this.groups.filter((group) => group.displayedPath === file)
-        const movable = (group: EditorGroup) => group.displayedView !== 'pseudocode'
-        const group =
-            showing.find((group) => group.showsInstructions) ??
-            showing.find(movable) ??
-            (movable(this.executionGroup) ? this.executionGroup : this.groups.find(movable)) ??
-            this.paneBesidePseudocode(file)
+        const group = this.buildFilePane(file) ?? this.paneBesidePseudocode(file)
         this.executionGroupId = group.id
         //an Executable's Listing, which is no view the person chose, so it is not saved
         const view = group.displayedPath === file && group.showsInstructions ? undefined : 'listing'
@@ -1910,6 +1912,21 @@ export class WorkbenchSession {
     }
 
     /**
+     * The pane `showBuildFile` shows a File of the Build in, unless every pane shows a Pseudocode:
+     * one showing the File with its instructions, else one showing it otherwise, else the
+     * execution pane, else any pane.
+     */
+    private buildFilePane(file: string): EditorGroup | undefined {
+        const showing = this.groups.filter((group) => group.displayedPath === file)
+        const movable = (group: EditorGroup) => group.displayedView !== 'pseudocode'
+        return (
+            showing.find((group) => group.showsInstructions) ??
+            showing.find(movable) ??
+            (movable(this.executionGroup) ? this.executionGroup : this.groups.find(movable))
+        )
+    }
+
+    /**
      * Where the Build's version of a File opens when every pane shows a Pseudocode: as the Listing
      * beside the File's own Pseudocode, as Decompile opens it; beside another Executable's, in a
      * new pane while there is only one, else in the execution pane.
@@ -1923,17 +1940,19 @@ export class WorkbenchSession {
     /**
      * Shows an address of the running program, from the Call stack, the History or a pointer
      * menu's Show in Listing: its line, or, in a Listing still being generated, that Listing with
-     * its progress and then the line. With `jump`, Show in Listing's, the panes showing the File
-     * keep where they were in their navigation history
+     * its progress and then the line. With `jump`, Show in Listing's, the pane that moves keeps
+     * where it was in its navigation history
      * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
      * 8), as no reveal of the program counter's does.
      */
     async revealAddress(address: bigint, { jump = false }: { jump?: boolean } = {}) {
         let location = this.emulator.getSourceLocationFromAddress(address)
-        //before anything moves: a Listing's line, or a Pseudocode's function
-        if (jump && location)
-            for (const group of this.groups)
-                if (group.displayedPath === location.file) this.recordJump(group)
+        //before anything moves, in the pane that moves, never a Pseudocode: its Listing's line,
+        //which records the Pseudocode beside it too. Other panes are left as they are
+        if (jump && location) {
+            const pane = this.buildFilePane(location.file)
+            if (pane) this.recordJump(pane)
+        }
         if (location && location.line < 0) {
             const pending = this.emulator.listings?.session.get(location.file)
             if (pending?.status !== 'generating') return
@@ -2606,6 +2625,11 @@ export class WorkbenchSession {
         if (place.view === 'listing') {
             if (!shown) this.show(selection, group, 'listing')
             await tick()
+            //a Listing still being generated, such as the new Build's or one dropped from the
+            //cache, has no model yet: its reveal would give up when it gets one
+            const document = group.displayedListing
+            await document?.ready.catch(() => undefined)
+            if (group.displayedListing !== document) return false
             return this.revealWhenShown(group, place.line, {
                 scroll: shown ? 'smooth' : 'immediate'
             })
@@ -2616,6 +2640,7 @@ export class WorkbenchSession {
         this.focusEditorGroup(group)
         await tick()
         const listing = group.pseudocodeListing
+        await listing?.ready.catch(() => undefined)
         const fn = listing?.listing && functionAt(listing.listing, place.functionAddress)
         if (pane && fn)
             await this.revealWhenShown(pane, fn.line, {
@@ -3199,6 +3224,66 @@ export class WorkbenchSession {
         this.runShortcut(shortcut.type)
     }
 
+    /**
+     * Alt+← and Alt+→, and the mouse's back and forward buttons, anywhere in the Workbench: Back and
+     * Forward in the focused pane's navigation history while it shows a Listing or a Pseudocode
+     * and has somewhere to go ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 8), rather than the browser's, which would leave the Project and end its Debug
+     * session. A click in the Symbols panel leaves the keyboard there, and the mouse can be over
+     * any panel. An editor showing a Listing or a Pseudocode has taken them already, and the keys
+     * stay with a code editor or a text field, where on a Mac Alt+← moves by word. With nowhere to
+     * go, they are the browser's, which the project page asks about while changes are unsaved.
+     */
+    handleHistoryInput(e: KeyboardEvent | MouseEvent) {
+        if (e.defaultPrevented) return
+        if (e.type !== 'keydown') {
+            this.handleHistoryButton(e as MouseEvent)
+            return
+        }
+        const step = navigationKeyStep(e as KeyboardEvent)
+        const target = e.target instanceof HTMLElement ? e.target : null
+        if (
+            !step ||
+            (target &&
+                (target.closest('.monaco-editor') ||
+                    ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
+                    target.isContentEditable))
+        )
+            return
+        const group = this.historyPane(step)
+        if (!group) return
+        e.preventDefault()
+        void this.travel(group, step)
+    }
+
+    /**
+     * A press of the mouse's back or forward button, which goes on its release, as the browser's
+     * Back would: whether it is the history's is settled at the press, and its release and click
+     * are kept from the browser with it.
+     */
+    private handleHistoryButton(e: MouseEvent) {
+        const step = navigationButtonStep(e)
+        if (!step) return
+        if (e.type === 'mousedown') {
+            const group = this.historyPane(step)
+            this.historyPress = group && { button: e.button, group, step }
+        }
+        const press = this.historyPress
+        if (press?.button !== e.button) return
+        e.preventDefault()
+        if (e.type === 'mouseup') void this.travel(press.group, press.step)
+        if (e.type === 'auxclick') this.historyPress = undefined
+    }
+
+    /** The focused pane, when it shows a Listing or a Pseudocode with somewhere to go that way. */
+    private historyPane(step: 'back' | 'forward'): EditorGroup | undefined {
+        const group = this.focusedGroup
+        if (group.displayedView !== 'listing' && group.displayedView !== 'pseudocode') return
+        return (step === 'back' ? group.history.canGoBack : group.history.canGoForward)
+            ? group
+            : undefined
+    }
+
     private handleKeyDown(e: KeyboardEvent) {
         this.pressedKeys.set(e.code, true)
         const code = Array.from(this.pressedKeys.keys()).join('+')
@@ -3271,6 +3356,9 @@ export class WorkbenchSession {
         }
     }
 }
+
+/** The events Back and Forward come by outside an editor, see `handleHistoryInput`. */
+const HISTORY_EVENTS = ['keydown', 'mousedown', 'mouseup', 'auxclick'] as const
 
 /**
  * `promise`, or nothing as soon as `signal` aborts: a cancelled Build ends at once, even while what

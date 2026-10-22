@@ -276,14 +276,17 @@
 
     /**
      * A field of the page someone may be typing in. The code editor's text is none, but the
-     * boxes of its Find, its Go to Symbol and its rename are.
+     * boxes of its Find, its Go to Symbol and its rename are. A field nobody can type in, read only
+     * or disabled, is none either: the locked Command line of a Debug session, where a tester
+     * typed the program's answer, which went nowhere.
      */
     function isTextEntry(element: HTMLElement): boolean {
         if (element.closest('.monaco-editor'))
             return element.closest('.monaco-inputbox, .quick-input-widget') !== null
-        if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)
-            return true
-        if (element instanceof HTMLInputElement) return !NON_TEXT_INPUTS.has(element.type)
+        if (element instanceof HTMLSelectElement) return !element.disabled
+        if (element instanceof HTMLTextAreaElement) return !element.readOnly && !element.disabled
+        if (element instanceof HTMLInputElement)
+            return !NON_TEXT_INPUTS.has(element.type) && !element.readOnly && !element.disabled
         return element.isContentEditable
     }
 

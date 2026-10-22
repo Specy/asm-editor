@@ -45,12 +45,10 @@
         lineActionContextKey,
         lineActionDescriptor,
         navigationActions,
-        navigationButtonStep,
-        navigationKeyStep,
         type EditorLineAction,
         type EditorNavigation
     } from '#lib/monaco/editorLineActions.ts'
-    import { followableNameAt } from '#lib/monaco/followNames.ts'
+    import { followNamesAndHistory } from '#lib/monaco/editorNavigation.ts'
     import { openProjectResource } from '#lib/languages/service/navigation.ts'
 
     interface Props {
@@ -351,17 +349,8 @@
             }),
             mountedEditor.onMouseLeave(() => {
                 hoveredGliphen = null
-                showFollowable(undefined)
             }),
             mountedEditor.onMouseMove((e) => {
-                const model = mountedEditor.getModel()
-                showFollowable(
-                    model &&
-                        e.target.type === loadedMonaco.editor.MouseTargetType.CONTENT_TEXT &&
-                        e.target.position
-                        ? followableNameAt(loadedMonaco, model, e.target.position)?.range
-                        : undefined
-                )
                 if (
                     breakpointsEditable &&
                     e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
@@ -375,53 +364,18 @@
         )
         toDispose.push(() => observer.disconnect())
 
-        //a double-click on a name in a Listing or a Pseudocode follows it, as Go to Definition does
-        //(reverse-engineering-ux.md, decision 7); a single click only places the cursor
-        const follow = (event: MouseEvent) => {
-            const model = mountedEditor.getModel()
-            const target = mountedEditor.getTargetAtClientPoint(event.clientX, event.clientY)
-            if (
-                !model ||
-                event.button !== 0 ||
-                target?.type !== loadedMonaco.editor.MouseTargetType.CONTENT_TEXT ||
-                !target.position
-            )
-                return
-            const name = followableNameAt(loadedMonaco, model, target.position)
-            if (name)
-                void openProjectResource(
-                    name.resource,
-                    { lineNumber: name.line, column: 1 },
-                    mountedEditor
-                )
-        }
-        //the mouse's back and forward buttons move through the history there, rather than the
-        //browser's, which would leave the Workbench
-        const moveInHistory = (event: MouseEvent) => {
-            const step = navigation && navigationButtonStep(event)
-            if (!step) return
-            event.preventDefault()
-            event.stopPropagation()
-            if (event.type === 'mouseup') navigation?.[step]()
-        }
-        editorElement.addEventListener('dblclick', follow)
-        for (const type of ['mousedown', 'mouseup', 'auxclick'] as const)
-            editorElement.addEventListener(type, moveInHistory, { capture: true })
-        toDispose.push(() => {
-            editorElement.removeEventListener('dblclick', follow)
-            for (const type of ['mousedown', 'mouseup', 'auxclick'] as const)
-                editorElement.removeEventListener(type, moveInHistory, { capture: true })
-        })
+        //a double-click on a name in a Listing or a Pseudocode follows it, and Alt+←, Alt+→ and the
+        //mouse's buttons move through the pane's history there (decisions 7 and 8)
         toDispose.push(
-            //Alt+← and Alt+→ are the browser's Back and Forward, and on a Mac Monaco's moves by
-            //word: with a history they are Go Back and Go Forward, which Monaco runs while there is
-            //somewhere to go, and which nothing else gets when there is not
-            mountedEditor.onKeyDown((event) => {
-                const step = navigation && navigationKeyStep(event.browserEvent)
-                if (!step) return
-                event.preventDefault()
-                if (!(step === 'back' ? navigation?.canGoBack : navigation?.canGoForward))
-                    event.stopPropagation()
+            followNamesAndHistory(loadedMonaco, mountedEditor, editorElement, {
+                navigation: () => navigation,
+                follow: (name) =>
+                    void openProjectResource(
+                        name.resource,
+                        { lineNumber: name.line, column: 1 },
+                        mountedEditor
+                    ),
+                showFollowable
             })
         )
         toDispose.push(

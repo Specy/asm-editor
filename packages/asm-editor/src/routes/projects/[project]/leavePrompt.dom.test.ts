@@ -16,8 +16,13 @@ const page = vi.hoisted(() => ({
     params: { project: '' },
     url: new URL('https://asm-editor.specy.app/projects/')
 }))
+/** The page's `beforeNavigate` callbacks, which a navigation within the site calls first. */
+const navigationGuards = vi.hoisted(() => [] as ((navigation: object) => void)[])
 vi.mock('$app/state', () => ({ page }))
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }))
+vi.mock('$app/navigation', () => ({
+    goto: vi.fn(),
+    beforeNavigate: (guard: (navigation: object) => void) => navigationGuards.push(guard)
+}))
 //Monaco does not run in jsdom, and the Workbench is not what these are about
 vi.mock('#lib/monaco/Monaco.ts', () => ({ Monaco: { load: () => {}, dispose: () => {} } }))
 vi.mock('#cmp/specific/workbench/Workbench.svelte', async () => ({
@@ -35,6 +40,7 @@ beforeEach(() => {
     vi.spyOn(toast, 'logPill').mockImplementation(() => undefined)
 })
 afterEach(async () => {
+    navigationGuards.length = 0
     preferencesStore.values.autoSave.value = true
     for (const project of [...ProjectStore.projects]) await ProjectStore.deleteProject(project)
     vi.restoreAllMocks()
@@ -60,6 +66,13 @@ async function open(id: string, search = '') {
             const event = new Event('beforeunload', { cancelable: true })
             window.dispatchEvent(event)
             return event.defaultPrevented
+        },
+        /** Whether a navigation within the site went ahead, `type` as SvelteKit names it. */
+        navigates(type: 'link' | 'popstate' | 'goto', willUnload = false) {
+            let cancelled = false
+            const navigation = { type, willUnload, cancel: () => (cancelled = true) }
+            for (const guard of navigationGuards) guard(navigation)
+            return !cancelled
         },
         dispose: () => unmount(component)
     }
@@ -90,6 +103,32 @@ it('asks before leaving a shared Project, which is nobody’s until saved', asyn
     const project = await open('share', `?project=${shared}`)
     try {
         expect(project.asks()).toBe(true)
+    } finally {
+        project.dispose()
+    }
+})
+
+it('asks before going to another page of the site while changes wait for Save', async () => {
+    const stored = await ProjectStore.addProject(makeProject({ name: 'back' }))
+    const project = await open(stored.id)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+        //saved: the browser's Back, which Alt+← is outside a Listing, goes without a word
+        expect(project.navigates('popstate')).toBe(true)
+        expect(confirm).not.toHaveBeenCalled()
+        preferencesStore.values.autoSave.value = false
+        project.button('Change').click()
+        flushSync()
+        expect(project.navigates('popstate')).toBe(false)
+        expect(project.navigates('link')).toBe(false)
+        expect(confirm).toHaveBeenCalledTimes(2)
+        confirm.mockReturnValue(true)
+        expect(project.navigates('popstate')).toBe(true)
+        //the page's own navigations have asked already, and an unload is the browser's to ask about
+        confirm.mockClear()
+        expect(project.navigates('goto')).toBe(true)
+        expect(project.navigates('link', true)).toBe(true)
+        expect(confirm).not.toHaveBeenCalled()
     } finally {
         project.dispose()
     }

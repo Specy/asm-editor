@@ -169,6 +169,7 @@
                 <Splitter
                     orientation="vertical"
                     size={layout.debugWidth ?? debugWidth}
+                    automatic={layout.debugWidth === null}
                     direction={-1}
                     min={LAYOUT_LIMITS.debugWidth.min}
                     max={Math.max(LAYOUT_LIMITS.debugWidth.min, bodyWidth - 480)}

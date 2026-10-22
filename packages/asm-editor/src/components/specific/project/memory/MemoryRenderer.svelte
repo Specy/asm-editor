@@ -425,8 +425,10 @@
         contextMenu = {
             x: e.clientX,
             y: e.clientY,
+            //inside a selection, the cell is the selection: its number, and where it starts, which
+            //Follow pointer reads from as the number reads
             items: cellMenu({
-                address: currentAddress + BigInt(index),
+                address: currentAddress + BigInt(inSelection ? selectionStart : index),
                 value,
                 bytes: inSelection ? selectionLength : 1
             })
