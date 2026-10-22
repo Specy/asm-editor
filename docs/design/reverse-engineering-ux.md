@@ -69,7 +69,7 @@ Status: decided 2026-10-21 by the owner, from [the usability study](../research/
 
 From the study, kept for later at the owner's word:
 
-- **C++ demangling** in the Listing, the Pseudocode and Go to Symbol, and typing `std::string` locals.
+- **C++ demangling** in the Listing, the Pseudocode and Go to Symbol, and typing `std::string` locals. _Taken up 2026-10-22 in [C++ demangling](./cpp-demangling.md): phase 1 (demangled names everywhere but the Listing's own text) is done; phase 2 (names in the Listing's text) and phase 3 (C++ types) remain._
 - **Rename and comments**, saved in the Project, fed into both the Listing and the decompiler.
 - **Cross-references** with address, containing function and kind (call, jump, read).
 - **An IDA- or Ghidra-style keymap** (`g`, `n`, `x`, `;`).
