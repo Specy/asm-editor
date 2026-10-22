@@ -50,6 +50,70 @@ export function demangledComment(demangled: Pick<DemangledName, 'comment'>, offs
     return `${demangled.comment}${offset}`.replaceAll('"', '\\"')
 }
 
+/** Where a line's comment starts: its first `;` outside a string, or the line's length. */
+export function commentStart(line: string): number {
+    let inside = false
+    for (let i = 0; i < line.length; ++i) {
+        if (line[i] === '"' && line[i - 1] !== '\\') inside = !inside
+        else if (line[i] === ';' && !inside) return i
+    }
+    return line.length
+}
+
+/**
+ * The longest comment of a person's written at the end of its line
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+ * 11); a longer one, or one of several lines, goes above the line.
+ */
+export const END_OF_LINE_COMMENT = 60
+/** The column a person's comment written above a line is wrapped at. */
+export const COMMENT_LINE_WIDTH = 100
+
+/** What breaks a person's comment into lines: a line feed, and whatever else a text may hold. */
+const LINE_BREAK = /\r\n?|\n|\u2028|\u2029/
+
+/** Whether a person's comment is written at the end of its line: one line of at most 60 characters. */
+export function endOfLineComment(comment: string): boolean {
+    return comment.length <= END_OF_LINE_COMMENT && !LINE_BREAK.test(comment)
+}
+
+/**
+ * A line with a person's comment at its end: after the comments the Listing writes itself, with a
+ * second semicolon between them (`lea rdi, [rel s_hunter2]  ; "hunter2" ; the password`), else from
+ * {@link COMMENT_COLUMN}. Either way the line ends with `; ` and the comment.
+ */
+export function withPersonComment(line: string, comment: string): string {
+    return commentStart(line) < line.length
+        ? `${line} ; ${comment}`
+        : commentedLine(line, [comment])
+}
+
+/**
+ * A person's comment as lines of their own, each `indent`, a semicolon and a space, then the text
+ * wrapped at word boundaries to {@link COMMENT_LINE_WIDTH} columns (a word longer than a line
+ * broken where it fills one), its own line breaks kept, an empty line of it a bare semicolon.
+ */
+export function commentLines(comment: string, indent: string): string[] {
+    const prefix = `${indent};`
+    const width = Math.max(1, COMMENT_LINE_WIDTH - prefix.length - 1)
+    const lines: string[] = []
+    for (const paragraph of comment.split(LINE_BREAK)) {
+        let rest = paragraph.trimEnd()
+        while (rest.length > width) {
+            let cut = rest.lastIndexOf(' ', width)
+            let piece = cut > 0 ? rest.slice(0, cut).trimEnd() : ''
+            if (!piece) {
+                cut = width
+                piece = rest.slice(0, width)
+            }
+            lines.push(`${prefix} ${piece}`)
+            rest = rest.slice(cut).replace(/^ +/, '')
+        }
+        lines.push(rest ? `${prefix} ${rest}` : prefix)
+    }
+    return lines
+}
+
 /**
  * The comment for a name an operand or a pointer is written with, `name` or `name+0x10`, when the
  * label it names has a demangled name, else undefined: blocks, numbers and raw names get none.

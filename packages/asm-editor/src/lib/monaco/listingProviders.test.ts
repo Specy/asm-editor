@@ -546,3 +546,127 @@ describe('the Listing in the editor', () => {
         expect(wrapped.displayName).toBe('project')
     })
 })
+
+describe("a Listing with a person's renames and comments", () => {
+    const ANNOTATED_URI = 'asm-editor://session/build-4/crackme'
+    let annotated: Listing
+    let annotatedLines: string[]
+
+    beforeAll(async () => {
+        const named = (name: string) => listing.labels.find((label) => label.name === name)!.address
+        const instruction = (code: string) => listing.lines.addresses[lineOf(code, lineOf('main:'))]
+        annotated = generateListing(await loadDecoder(), {
+            bytes: crackme,
+            name: 'crackme',
+            base: PIE_LOAD_BASE,
+            version: 'v1',
+            annotations: {
+                names: new Map([[named('frame_dummy'), 'setup_frames']]),
+                comments: new Map([
+                    [instruction('call printf@plt'), 'prompts; main reads the answer next'],
+                    [
+                        instruction('call strcmp@plt'),
+                        `the same as strcmp@plt at 0x${(named('strcmp@plt') + PIE_LOAD_BASE).toString(16)}, which main calls once; it returns zero for equal strings`
+                    ]
+                ]),
+                functionComments: new Map([[named('main'), 'main asks for the password']])
+            }
+        })
+        annotatedLines = annotated.text.split('\n')
+        setModelListing(ANNOTATED_URI, { listing: annotated, bytes: crackme, library: false })
+    })
+
+    const annotatedModel = () =>
+        ({
+            uri: { toString: () => ANNOTATED_URI },
+            getLineContent: (lineNumber: number) => annotatedLines[lineNumber - 1],
+            getLineMaxColumn: (lineNumber: number) => annotatedLines[lineNumber - 1].length + 1
+        }) as unknown as monaco.editor.ITextModel
+    const annotatedLine = (start: string) => {
+        const line = annotatedLines.findIndex((candidate) => candidate.startsWith(start))
+        expect(line, start).toBeGreaterThanOrEqual(0)
+        return line
+    }
+    const annotatedAt = (line: number, text: string, from = 0) =>
+        ({
+            lineNumber: line + 1,
+            column: annotatedLines[line].indexOf(text, from) + 2
+        }) as monaco.Position
+    const hoverText = (position: monaco.Position) => {
+        const hover = providers().hover.provideHover(annotatedModel(), position, token)
+        return hover && (hover as monaco.languages.Hover).contents.map((part) => part.value)
+    }
+
+    it("neither goes, follows nor hovers from a comment's words", () => {
+        const printf = annotatedLine('    call printf@plt')
+        const word = annotatedLines[printf].lastIndexOf('main')
+        expect(word).toBeGreaterThan(annotatedLines[printf].indexOf(' ; '))
+        const inComment = annotatedAt(printf, 'main', word)
+        expect(
+            providers().definition.provideDefinition(annotatedModel(), inComment, token)
+        ).toBeNull()
+        expect(followableNameAt(monacoStub, annotatedModel(), inComment)).toBeUndefined()
+        // The line's address and bytes, and no label.
+        expect(hoverText(inComment)).toEqual([expect.stringMatching(/^Address `0x/)])
+        // The operand before it is a name as ever.
+        const stub = providers().definition.provideDefinition(
+            annotatedModel(),
+            annotatedAt(printf, 'printf@plt'),
+            token
+        ) as monaco.languages.Location
+        expect(stub.range.startLineNumber - 1).toBe(annotatedLine('printf@plt:'))
+
+        // A comment's own lines: no name, no address, no hover.
+        const above = annotatedLine('    ; the same as strcmp@plt')
+        for (const text of ['strcmp@plt', '0x', 'main']) {
+            const position = annotatedAt(above, text)
+            expect(
+                providers().definition.provideDefinition(annotatedModel(), position, token),
+                text
+            ).toBeNull()
+            expect(followableNameAt(monacoStub, annotatedModel(), position), text).toBeUndefined()
+            expect(hoverText(position), text).toBeNull()
+        }
+        const functionComment = annotatedLine('; main asks')
+        expect(hoverText(annotatedAt(functionComment, 'main'))).toBeNull()
+
+        // References to main: its operand and its label, not the comments naming it.
+        const references = providers().references.provideReferences(
+            annotatedModel(),
+            annotatedAt(annotatedLine('main:'), 'main'),
+            { includeDeclaration: true },
+            token
+        ) as monaco.languages.Location[]
+        expect(
+            references.map((reference) => annotatedLines[reference.range.startLineNumber - 1])
+        ).toEqual(['    lea rdi, [rel main]', 'main:'])
+    })
+
+    it('leaves the gutter empty on comment lines, and hovers a renamed label with its old name', () => {
+        const numbers = listingLineNumbers(annotated)
+        const above = annotatedLine('    ; the same as strcmp@plt')
+        const call = annotatedLine('    call strcmp@plt')
+        expect(annotated.lines.addresses[above]).toBe(annotated.lines.addresses[call])
+        expect(numbers(above + 1)).toBe('')
+        expect(numbers(annotatedLine('; main asks') + 1)).toBe('')
+        expect(numbers(call + 1)).toBe(
+            (annotated.lines.addresses[call] + PIE_LOAD_BASE).toString(16)
+        )
+        expect(numbers(annotatedLine('main:') + 1)).not.toBe('')
+
+        const pointer = annotatedLine('__frame_dummy_init_array_entry: dq setup_frames')
+        expect(hoverText(annotatedAt(pointer, 'setup_frames'))?.[0]).toBe(
+            [
+                `**setup_frames** at \`0x${(annotated.labels.find((label) => label.name === 'setup_frames')!.address + PIE_LOAD_BASE).toString(16)}\``,
+                'Renamed from `frame_dummy`.',
+                'Named by the symbol table.'
+            ].join('\n\n')
+        )
+        const symbols = providers().documentSymbols.provideDocumentSymbols(
+            annotatedModel(),
+            token
+        ) as monaco.languages.DocumentSymbol[]
+        expect(symbols.map((symbol) => symbol.name)).toContain('setup_frames')
+        expect(symbols.map((symbol) => symbol.name)).not.toContain('frame_dummy')
+    })
+})

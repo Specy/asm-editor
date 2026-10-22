@@ -62,6 +62,7 @@ export function createListingService(
                 name: request.name,
                 base: request.base,
                 version: request.version,
+                annotations: request.annotations,
                 analysis,
                 demangler: names,
                 onProgress: (fraction) => {

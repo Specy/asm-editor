@@ -23,6 +23,14 @@ export type FunctionSymbol = {
      * and the tooltip gives.
      */
     demangled?: { short: string; signature: string }
+    /**
+     * For a function the person renamed, whose `name` and `display` are theirs: the name the
+     * Listing gave it, and that name's short name and signature for a C++ one, which the filter
+     * matches too
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 9).
+     */
+    renamed?: { from: string; demangled?: { short: string; signature: string } }
     /** Run-time. */
     address: number
     /** In bytes, up to the next function or the end of its section. */
@@ -48,14 +56,24 @@ const UNBOUNDED_STRING = 4096
 
 export function listingFunctions(listing: Listing): FunctionSymbol[] {
     const index = ListingIndex.of(listing)
+    const forms = (demangled: { short: string; signature: string }) => ({
+        short: demangled.short,
+        signature: demangled.signature
+    })
     return listing.functions.map((fn) => {
-        const demangled =
-            fn.list === undefined ? undefined : index.label(fn.name, fn.line)?.demangled
+        const label = index.label(fn.name, fn.line)
+        const demangled = fn.list === undefined ? undefined : label?.demangled
+        const renamed = label?.renamed
         return {
             name: fn.name,
             display: fn.list ?? fn.name,
-            ...(demangled
-                ? { demangled: { short: demangled.short, signature: demangled.signature } }
+            ...(demangled ? { demangled: forms(demangled) } : {}),
+            ...(renamed
+                ? {
+                      renamed: renamed.demangled
+                          ? { from: renamed.from, demangled: forms(renamed.demangled) }
+                          : { from: renamed.from }
+                  }
                 : {}),
             address: fn.address + listing.base,
             size: fn.end - fn.address,
@@ -124,30 +142,39 @@ export function symbolQuery(text: string): string {
 
 /**
  * The functions whose name or address holds a filter, made by `symbolQuery`: for a C++ function,
- * its raw name, its short name, its signature or what its row shows.
+ * its raw name, its short name, its signature or what its row shows; for a renamed one, the
+ * person's name and the names it had.
  */
 export function filterFunctions(functions: FunctionSymbol[], query: string): FunctionSymbol[] {
     if (!query) return functions
     const digits = addressQuery(query)
     const holds = (text: string) => text.toLowerCase().includes(query)
+    const holdsForms = (demangled: { short: string; signature: string } | undefined) =>
+        demangled !== undefined && (holds(demangled.short) || holds(demangled.signature))
     return functions.filter(
         (fn) =>
             holds(fn.name) ||
-            (fn.demangled !== undefined &&
-                (holds(fn.display) ||
-                    holds(fn.demangled.short) ||
-                    holds(fn.demangled.signature))) ||
+            (fn.demangled !== undefined && (holds(fn.display) || holdsForms(fn.demangled))) ||
+            (fn.renamed !== undefined &&
+                (holds(fn.renamed.from) || holdsForms(fn.renamed.demangled))) ||
             (digits !== undefined && fn.address.toString(16).includes(digits))
     )
 }
 
 /**
  * A function row's tooltip: its name, address and size, a C++ function by its signature with the
- * raw name the Listing's text and Ctrl+F use on a line of its own.
+ * raw name the Listing's text and Ctrl+F use on a line of its own; a renamed one by the person's
+ * name, then what it was renamed from, a C++ name by its signature and its raw name.
  */
 export function functionTooltip(fn: FunctionSymbol): string {
     const size = `${fn.size} byte${fn.size === 1 ? '' : 's'}`
     const at = `at ${symbolAddress(fn.address)}, ${size}`
+    if (fn.renamed) {
+        const { from, demangled } = fn.renamed
+        return demangled
+            ? `${fn.name} ${at}\nRenamed from ${demangled.signature}\n${from}`
+            : `${fn.name} ${at}\nRenamed from ${from}`
+    }
     return fn.demangled ? `${fn.demangled.signature} ${at}\n${fn.name}` : `${fn.name} ${at}`
 }
 

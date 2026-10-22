@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { loadDemangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder } from './decoder'
 import { generateListing } from './generateListing'
-import { ListingError } from './listing'
-import { ListingClient } from './listingClient'
+import { bytesFile } from '#lib/projectFiles.ts'
+import { ListingError, type Listing, type ListingAnnotations } from './listing'
+import { ListingClient, type ListingOrder } from './listingClient'
+import { ListingDocuments, listingAnnotations } from './listingDocuments.svelte'
 import { createListingService, PROGRESS_DELAY_MS, startListingWorker } from './listingService'
 import type { ListingRequest, ListingResponse } from './protocol'
 
@@ -106,6 +108,31 @@ describe('the Listing service', () => {
             version: 'v1'
         })
         expect(responses).toEqual([{ type: 'listing', id: 3, listing: raw }])
+    })
+
+    it("makes the Listing with an Executable's renames and comments", async () => {
+        const responses: ListingResponse[] = []
+        const service = createListingService((response) => responses.push(response))
+        const annotations: ListingAnnotations = {
+            names: new Map([[0x11e9, 'check_password']]),
+            comments: new Map([[0x11ed, 'saves the frame']]),
+            functionComments: new Map([[0x11e9, 'Asks for a password.']])
+        }
+        // Posted to a worker, the maps arrive as copies.
+        await service.handle(structuredClone({ ...request(4), annotations }))
+        const [answer] = responses as Extract<ListingResponse, { type: 'listing' }>[]
+        expect(answer.listing).toEqual(
+            generateListing(await loadDecoder(), {
+                bytes: crackme(),
+                name: 'crackme',
+                base: 0x555555554000,
+                version: 'v1',
+                annotations
+            })
+        )
+        expect(answer.listing.text).toContain('\n; Asks for a password.\ncheck_password:\n')
+        expect(answer.listing.text).toMatch(/\n {4}push rbp +; saves the frame\n/)
+        expect(answer.listing.comments?.lines).toHaveLength(2)
     })
 
     it('says when a failure is not the bytes', async () => {
@@ -243,6 +270,24 @@ describe('the Listing client', () => {
         expect(other).not.toBeInstanceOf(ListingError)
     })
 
+    it('passes the renames and comments to its worker, and generates with them where there is none', async () => {
+        vi.stubGlobal('Worker', FakeWorker)
+        FakeWorker.instances = []
+        const order = {
+            bytes: crackme(),
+            name: 'crackme',
+            base: 0x555555554000,
+            annotations: { names: new Map([[0x11e9, 'check_password']]) }
+        } satisfies ListingOrder
+        const listing = await new ListingClient(FakeWorker as unknown as new () => Worker).generate(
+            order
+        )
+        expect(listing.functions.map((fn) => fn.name)).toContain('check_password')
+        vi.unstubAllGlobals()
+        const here = await new ListingClient().generate(order)
+        expect(here.text).toBe(listing.text)
+    })
+
     it('generates on the calling thread where there are no workers', async () => {
         const listing = await new ListingClient().generate({
             bytes: crackme(),
@@ -256,5 +301,72 @@ describe('the Listing client', () => {
             base: 0x555555554000n
         })
         expect(named.functions.find((fn) => fn.name === '_Znwm@plt')?.list).toBe('operator new@plt')
+    })
+})
+
+describe('Listing documents', () => {
+    it("make another document when an Executable's renames or comments change, and only then", () => {
+        const orders: ListingOrder[] = []
+        const documents = new ListingDocuments((order) => {
+            orders.push(order)
+            return new Promise<Listing>(() => {})
+        })
+        const file = bytesFile(crackme())
+        const plain = documents.openExecutable('crackme', file)!
+        expect(orders[0].annotations).toBeUndefined()
+        const renamed = { ...file, annotations: { names: { '0x11e9': 'check_password' } } }
+        const first = documents.openExecutable('crackme', renamed)!
+        expect(first).not.toBe(plain)
+        expect(orders[1].annotations).toEqual({ names: new Map([[0x11e9, 'check_password']]) })
+        // The same annotations, in another record, are the same document.
+        const again = {
+            ...file,
+            annotations: { names: { '0x11e9': 'check_password' } }
+        }
+        expect(documents.openExecutable('crackme', again)).toBe(first)
+        // A local rename, which only the Pseudocode shows, changes no Listing.
+        const local = {
+            ...renamed,
+            annotations: {
+                ...renamed.annotations,
+                locals: { '0x11e9': { 'stack:-0x98': 'password' } }
+            }
+        }
+        expect(documents.openExecutable('crackme', local)).toBe(first)
+        expect(
+            documents.openExecutable('crackme', {
+                ...file,
+                annotations: { locals: local.annotations.locals }
+            })
+        ).toBe(plain)
+        const commented = {
+            ...renamed,
+            annotations: { ...renamed.annotations, comments: { '0x11ed': 'saves the frame' } }
+        }
+        expect(documents.openExecutable('crackme', commented)).not.toBe(first)
+        expect(orders).toHaveLength(3)
+        expect(orders[2].annotations).toEqual({
+            names: new Map([[0x11e9, 'check_password']]),
+            comments: new Map([[0x11ed, 'saves the frame']])
+        })
+    })
+
+    it('take the kinds a Listing shows, by link-time address in address order', () => {
+        expect(listingAnnotations(undefined)).toBeUndefined()
+        expect(
+            listingAnnotations({ locals: { '0x10': { 'stack:-0x8': 'count' } } })
+        ).toBeUndefined()
+        const annotations = listingAnnotations({
+            names: { '0x20': 'second', '0x10': 'first' },
+            functionComments: { '0x10': 'the first' }
+        })!
+        expect(annotations).toEqual({
+            names: new Map([
+                [0x10, 'first'],
+                [0x20, 'second']
+            ]),
+            functionComments: new Map([[0x10, 'the first']])
+        })
+        expect([...annotations.names!.keys()]).toEqual([0x10, 0x20])
     })
 })

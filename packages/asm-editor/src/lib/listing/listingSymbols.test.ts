@@ -168,3 +168,79 @@ describe('the functions of a C++ program', () => {
         expect(shown(symbolAddress(destructor.address))).toEqual(['std::string::~basic_string'])
     })
 })
+
+describe('renamed functions', () => {
+    it("show the person's name, and are found and explained by the names they had", async () => {
+        const decoder = await loadDecoder()
+        const main = listing.functions.find((fn) => fn.name === 'main')!
+        const renamed = generateListing(decoder, {
+            bytes,
+            name: 'crackme',
+            base: PIE_BASE,
+            version: 'v1',
+            annotations: { names: new Map([[main.address, 'check_password']]) }
+        })
+        const functions = listingFunctions(renamed)
+        const check = functions.find((fn) => fn.address === main.address + PIE_BASE)!
+        expect(check).toMatchObject({
+            name: 'check_password',
+            display: 'check_password',
+            renamed: { from: 'main' }
+        })
+        expect(check.demangled).toBeUndefined()
+        expect(functionTooltip(check)).toBe(
+            'check_password at 0x5555555551e9, 210 bytes\nRenamed from main'
+        )
+        const names = (text: string) =>
+            filterFunctions(functions, symbolQuery(text)).map((fn) => fn.name)
+        expect(names('check')).toEqual(['check_password'])
+        expect(names('MAIN')).toEqual(['check_password'])
+        expect(functions.filter((fn) => fn !== check).every((fn) => !fn.renamed)).toBe(true)
+
+        const cppBytes = new Uint8Array(
+            readFileSync(
+                new URL('../../../../x86/blink-js/tests/fixtures/elf/cpp', import.meta.url)
+            )
+        )
+        const DESTRUCTOR = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev'
+        const demangler = await loadDemangler()
+        const plain = generateListing(decoder, {
+            bytes: cppBytes,
+            name: 'cpp',
+            base: PIE_BASE,
+            version: 'v1',
+            demangler
+        })
+        const address = plain.functions.find((fn) => fn.name === DESTRUCTOR)!.address
+        const cpp = listingFunctions(
+            generateListing(decoder, {
+                bytes: cppBytes,
+                name: 'cpp',
+                base: PIE_BASE,
+                version: 'v1',
+                demangler,
+                annotations: { names: new Map([[address, 'drop_string']]) }
+            })
+        )
+        const dropped = cpp.find((fn) => fn.name === 'drop_string')!
+        expect(dropped).toMatchObject({
+            display: 'drop_string',
+            renamed: {
+                from: DESTRUCTOR,
+                demangled: {
+                    short: 'std::string::~basic_string',
+                    signature: 'std::string::~basic_string()'
+                }
+            }
+        })
+        expect(dropped.demangled).toBeUndefined()
+        expect(functionTooltip(dropped)).toBe(
+            `drop_string at ${symbolAddress(dropped.address)}, ${dropped.size} bytes\nRenamed from std::string::~basic_string()\n${DESTRUCTOR}`
+        )
+        const shown = (text: string) =>
+            filterFunctions(cpp, symbolQuery(text)).map((fn) => fn.display)
+        expect(shown('~basic_string')).toEqual(['drop_string'])
+        expect(shown(DESTRUCTOR)).toEqual(['drop_string'])
+        expect(shown('drop')).toEqual(['drop_string'])
+    })
+})

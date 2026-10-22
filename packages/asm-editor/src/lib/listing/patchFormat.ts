@@ -15,7 +15,7 @@ import {
     NO_HOLDERS,
     stringComment as sharedStringComment
 } from './addressNames'
-import { instructionLineText, nameComment } from './listingText'
+import { instructionLineText, nameComment, withPersonComment } from './listingText'
 import { withoutComment } from './patchResolver'
 
 /**
@@ -208,7 +208,12 @@ export type DescribedLine = {
      * string one reaches, then {@link rest}.
      */
     comments: string[]
-    /** The whole line, indented, as the Listing shows it. */
+    /**
+     * The whole line, indented, as the Listing shows it, with the person's comment the line has
+     * at its end kept there
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 11).
+     */
     text: string
 }
 
@@ -244,7 +249,14 @@ export function describeLine(
         ...(first ? operandComments(listing, bytes, first, line, hints) : []),
         ...rest
     ]
-    return { instruction, rest, comments, text: instructionLineText(instruction, comments) }
+    const text = instructionLineText(instruction, comments)
+    const person = ListingIndex.of(listing).endOfLineComment(line)
+    return {
+        instruction,
+        rest,
+        comments,
+        text: person === undefined ? text : withPersonComment(text, person)
+    }
 }
 
 /** The bytes a patch writes: the encoding, padded with `nop` to the length of the instruction it replaces. */

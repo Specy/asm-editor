@@ -1,7 +1,14 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
+import { addressMap } from '#lib/annotations/annotations.ts'
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
-import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
-import { ListingError, type Listing } from './listing'
+import {
+    byteEditsKey,
+    fileBytes,
+    listingAnnotationsKey,
+    type Annotations,
+    type ProjectFile
+} from '#lib/projectFiles.ts'
+import { ListingError, type Listing, type ListingAnnotations } from './listing'
 import type { ListingOrder } from './listingClient'
 import { plannedLoadBase } from './listingPaths'
 
@@ -37,12 +44,15 @@ export class ListingDocument {
         /** What its link-time addresses are shifted by when the program runs. */
         readonly base: number,
         readonly bytes: Uint8Array,
-        generate: Generate
+        generate: Generate,
+        /** The renames and comments it is generated with, an Executable File's. */
+        readonly annotations?: ListingAnnotations
     ) {
         this.ready = generate({
             bytes,
             name,
             base,
+            ...(annotations ? { annotations } : {}),
             onProgress: (fraction) => {
                 this.progress = fraction
             }
@@ -71,6 +81,12 @@ export type ListingDocumentOrder = {
     content: string
     /** A File's Byte edits as `byteEditsKey` names them, which change its bytes too. */
     edits?: string
+    /**
+     * An Executable File's Annotations, of which the Listing shows the renames and comments
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decisions 6 to 12): a change to those makes another document. A library's takes none.
+     */
+    annotations?: Annotations
     /** Reads the bytes, called only when the Listing has not been made yet. */
     bytes: () => Uint8Array
 }
@@ -94,6 +110,7 @@ export class ListingDocuments {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Key material for `documents`; it has no tracked consumer.
     private readonly contentIds = new Map<string, number>()
     private nextContentId = 0
+    private readonly annotationKeys = new WeakMap<Annotations, string>()
     /**
      * The Listings of the running program, by the path they are shown at: its Executable's and
      * each library's it has executed code of. Cleared when the Debug session ends.
@@ -132,11 +149,18 @@ export class ListingDocuments {
      * any other reason (its worker died) is generated again.
      */
     open(order: ListingDocumentOrder): ListingDocument {
-        const key = `${order.base}\0${order.name}\0${this.contentId(order.content)}\0${order.edits ?? ''}`
+        const annotations = this.annotationsKey(order.annotations)
+        const key = `${order.base}\0${order.name}\0${this.contentId(order.content)}\0${order.edits ?? ''}\0${annotations && this.contentId(annotations)}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
         if (!document || (document.status === 'failed' && !document.lasting))
-            document = new ListingDocument(order.name, order.base, order.bytes(), this.generate)
+            document = new ListingDocument(
+                order.name,
+                order.base,
+                order.bytes(),
+                this.generate,
+                annotations ? listingAnnotations(order.annotations) : undefined
+            )
         this.documents.set(key, document)
         if (this.documents.size > KEPT_DOCUMENTS)
             this.documents.delete(this.documents.keys().next().value!)
@@ -154,8 +178,23 @@ export class ListingDocuments {
             base: plannedLoadBase(executableAnalysis(file).pie),
             content: file.content,
             edits: byteEditsKey(file),
+            ...(file.annotations ? { annotations: file.annotations } : {}),
             bytes: () => fileBytes(file)
         })
+    }
+
+    /**
+     * `listingAnnotationsKey` of a File's Annotations, empty for none, kept per record: a File's
+     * record is replaced whole when they change, and the key of 256 KiB of them is not free.
+     */
+    private annotationsKey(annotations: Annotations | undefined): string {
+        if (!annotations) return ''
+        let key = this.annotationKeys.get(annotations)
+        if (key === undefined) {
+            key = listingAnnotationsKey({ annotations })
+            this.annotationKeys.set(annotations, key)
+        }
+        return key
     }
 
     private contentId(content: string): number {
@@ -168,4 +207,22 @@ export class ListingDocuments {
         }
         return id
     }
+}
+
+/**
+ * A File's Annotations as its Listing is generated with them, by link-time address: its global
+ * renames, line comments and function comments, not the local renames only the Pseudocode shows.
+ * Undefined when it has none of those.
+ */
+export function listingAnnotations(
+    annotations: Annotations | undefined
+): ListingAnnotations | undefined {
+    if (!annotations) return undefined
+    const kinds = {
+        names: addressMap(annotations.names),
+        comments: addressMap(annotations.comments),
+        functionComments: addressMap(annotations.functionComments)
+    }
+    const kept = Object.entries(kinds).filter(([, map]) => map.size)
+    return kept.length ? (Object.fromEntries(kept) as ListingAnnotations) : undefined
 }

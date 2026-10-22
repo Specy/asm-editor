@@ -7,11 +7,13 @@ import {
     functionAtLine,
     LINE_KIND,
     lineOfAddress,
+    PERSON_COMMENT,
+    personCommentIndex,
     type Listing,
     type ListingLabel,
     type ListingNameOrigin
 } from './listing'
-import { demangledComment } from './listingText'
+import { commentStart, demangledComment } from './listingText'
 
 /**
  * Reading a Listing's text for navigation: the name under the cursor, the label it means, every
@@ -40,16 +42,6 @@ function insideString(line: string, column: number): boolean {
     for (let i = 0; i < column && i < line.length; ++i)
         if (line[i] === '"' && line[i - 1] !== '\\') inside = !inside
     return inside
-}
-
-/** Where a line's comment starts: its first `;` outside a string, or the line's length. */
-function commentStart(line: string): number {
-    let inside = false
-    for (let i = 0; i < line.length; ++i) {
-        if (line[i] === '"' && line[i - 1] !== '\\') inside = !inside
-        else if (line[i] === ';' && !inside) return i
-    }
-    return line.length
 }
 
 /**
@@ -161,6 +153,31 @@ export class ListingIndex {
         return false
     }
 
+    /**
+     * Whether a column of a line's text is in a person's comment
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 11): text, whose words are never names, nor numbers to follow, even where one is a label's,
+     * as `main` in `; calls main twice`. `text` is the line as shown, which a Debug session's
+     * patch may have rewritten before the comment it keeps at its end.
+     */
+    inPersonComment(text: string, line: number, column: number): boolean {
+        const at = personCommentIndex(this.listing, line)
+        return at >= 0 && column >= text.length - this.listing.comments!.lengths[at]
+    }
+
+    /**
+     * The person's comment a line has at its end, as they wrote it, or undefined: what a patched
+     * line keeps after its new code.
+     */
+    endOfLineComment(line: number): string | undefined {
+        const at = personCommentIndex(this.listing, line)
+        const comments = this.listing.comments
+        if (at < 0 || comments!.kinds[at] !== PERSON_COMMENT.end) return undefined
+        const end = this.offsetOfLine(line + 1) - 1
+        //the length counts its `; `
+        return this.listing.text.slice(end - comments!.lengths[at] + 2, end)
+    }
+
     /** The line a number names, when it is a run-time address the Listing covers. */
     addressLine(token: string): number {
         if (!/^0x[\da-f]+$/i.test(token)) return -1
@@ -206,10 +223,13 @@ export class ListingIndex {
             const lineStart = this.offsetOfLine(line)
             const start = at - lineStart
             if (insideString(text.slice(lineStart, at), start)) continue
-            if (this.demangles !== false) {
+            const commented = personCommentIndex(this.listing, line) >= 0
+            if (this.demangles !== false || commented) {
                 const lineEnd = text.indexOf('\n', at)
                 const lineText = text.slice(lineStart, lineEnd < 0 ? undefined : lineEnd)
-                if (this.inDemangledComment(lineText, line, start)) continue
+                if (commented && this.inPersonComment(lineText, line, start)) continue
+                if (this.demangles !== false && this.inDemangledComment(lineText, line, start))
+                    continue
             }
             spans.push({ line, start, end: start + name.length })
         }
@@ -285,12 +305,31 @@ export function nameOrigin(listing: Listing, label: ListingLabel): string {
  */
 export function labelHoverMarkdown(listing: Listing, label: ListingLabel): string {
     const address = `\`${runTimeAddress(listing, label.address)}\``
-    const { demangled } = label
+    const { demangled, renamed } = label
+    const conflict =
+        label.renameConflict === undefined
+            ? []
+            : [
+                  `Renamed ${markdownCode(label.renameConflict)} in this Project, but another label has that name, so this one keeps its own until one of them changes.`
+              ]
+    if (renamed)
+        //the person's name, then what it was, as the hover gave it before
+        return [
+            `**${label.fullName}** at ${address}`,
+            `Renamed from ${markdownCode(renamed.demangled?.signature ?? renamed.from)}.`,
+            ...(renamed.demangled ? demangledNameMarkdown(renamed.demangled, renamed.from) : []),
+            nameOrigin(listing, label)
+        ].join('\n\n')
     if (!demangled)
-        return [`**${label.fullName}** at ${address}`, '', nameOrigin(listing, label)].join('\n')
+        return [
+            `**${label.fullName}** at ${address}`,
+            ...conflict,
+            nameOrigin(listing, label)
+        ].join('\n\n')
     return [
         `**${markdownCode(demangled.signature)}** at ${address}`,
         ...demangledNameMarkdown(demangled, label.fullName),
+        ...conflict,
         nameOrigin(listing, label)
     ].join('\n\n')
 }

@@ -289,6 +289,81 @@ describe('naming a patched line’s targets', () => {
         )
         expect(instructionText(listing, lineOf('main:'))).toBe('')
     })
+
+    it("keeps a person's comment at the end of a patched line", () => {
+        const check = checkLine()
+        const lea = lineOf('lea rax, [rel s_Wrong]')
+        const strcmp = lineOf('call strcmp@plt')
+        const address = (line: number) => listing.lines.addresses[line]
+        const annotated = generateListing(decoder, {
+            bytes,
+            name: 'crackme',
+            base: PIE_BASE,
+            version: 'v1',
+            annotations: {
+                comments: new Map([
+                    [address(check), 'the check'],
+                    [address(lea), 'says no'],
+                    [
+                        address(strcmp),
+                        'a comment too long for the end of its line, so written above it'
+                    ]
+                ])
+            }
+        })
+        const lines = annotated.text.split('\n')
+        // One comment line above `call strcmp@plt` moves every line after it down by one.
+        const moved = (line: number) => (line > strcmp ? line + 1 : line)
+        const je = describeLine(
+            decoder.disassemble(
+                Uint8Array.of(0x74, bytes[listing.lines.offsets[check] + 1]),
+                runTime(check)
+            ),
+            annotated,
+            bytes,
+            moved(check)
+        )
+        expect(je.text).toBe(`${'    je .LAB_2'.padEnd(39)} ; the check`)
+        expect(je.comments).toEqual([])
+        const padded = describeLine(
+            decoder.disassemble(Uint8Array.of(0x90, 0x90), runTime(check)),
+            annotated,
+            bytes,
+            moved(check)
+        )
+        expect(padded.text).toBe(`${'    nop'.padEnd(39)} ; + 1 nop ; the check`)
+        //the line as the Listing wrote it, its string's comment first
+        const original = describeLine(
+            decoder.disassemble(
+                bytes.subarray(listing.lines.offsets[lea], listing.lines.offsets[lea] + 7),
+                runTime(lea)
+            ),
+            annotated,
+            bytes,
+            moved(lea)
+        )
+        expect(original.text).toBe(lines[moved(lea)])
+        expect(original.text.endsWith(' ; "Wrong!" ; says no')).toBe(true)
+        //a comment above a line stays there, and the line's own text has none
+        const call = describeLine(
+            decoder.disassemble(
+                bytes.subarray(listing.lines.offsets[strcmp], listing.lines.offsets[strcmp] + 5),
+                runTime(strcmp)
+            ),
+            annotated,
+            bytes,
+            moved(strcmp)
+        )
+        expect(call.text).toBe('    call strcmp@plt')
+        //the patched text keeps its comment's words out of navigation
+        const patched = withLines(annotated, [[moved(check), padded.text]])
+        const index = ListingIndex.of(patched)
+        const shown = patched.text.split('\n')[moved(check)]
+        expect(shown).toBe(padded.text)
+        expect(index.inPersonComment(shown, moved(check), shown.indexOf('check'))).toBe(true)
+        expect(index.inPersonComment(shown, moved(check), shown.indexOf('nop'))).toBe(false)
+        expect(instructionText(annotated, moved(check))).toBe('jne .LAB_2')
+    })
 })
 
 describe('the patcher', () => {

@@ -17,8 +17,22 @@ import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDeman
 import { loadDecoder, type ListingDecoder } from './decoder'
 import { generateListing, ListingError } from './generateListing'
 import { findProgramStart } from './programStart'
-import { functionAtLine, LINE_KIND, lineOfAddress, lineOfFileOffset, type Listing } from './listing'
-import { ListingIndex, listingTokenAt } from './listingNavigation'
+import { pseudocodeMap } from '#lib/pseudocode/pseudocodeMap.ts'
+import {
+    functionAtLine,
+    instructionAddressAt,
+    LINE_KIND,
+    lineOfAddress,
+    lineOfFileOffset,
+    lineOfPlace,
+    PERSON_COMMENT,
+    placeOfLine,
+    type Listing,
+    type ListingAnnotations
+} from './listing'
+import { breakpointLine } from './listingBreakpoints'
+import type { ListingDocuments } from './listingDocuments.svelte'
+import { labelHoverMarkdown, ListingIndex, listingTokenAt } from './listingNavigation'
 import { withoutComment } from './patchResolver'
 
 const UPDATE = !!process.env.UPDATE_LISTING_SNAPSHOTS
@@ -865,4 +879,656 @@ describe('C++ names', () => {
         const plain = listingOf(handBuiltCpp(), 'hand-built C++', 0)
         expect(ListingIndex.of(plain).inDemangledComment('    call x ; main', 0, 12)).toBe(false)
     })
+})
+
+describe('Annotations', () => {
+    function annotated(
+        bytes: Uint8Array,
+        name: string,
+        annotations: ListingAnnotations,
+        names?: Demangler
+    ) {
+        const base = decoder.analyze(bytes).pie ? PIE_BASE : 0
+        return generateListing(decoder, {
+            bytes,
+            name,
+            base,
+            version: 'v1',
+            demangler: names,
+            annotations
+        })
+    }
+    /** The first 0-based line at or after `from` whose code, without its comment, is `code`. */
+    function lineWith(listing: Listing, code: string, from = 0): number {
+        const line = linesOf(listing).findIndex(
+            (candidate, i) => i >= from && withoutComment(candidate).trim() === code
+        )
+        expect(line, code).toBeGreaterThanOrEqual(0)
+        return line
+    }
+    const labelNamed = (listing: Listing, fullName: string) =>
+        listing.labels.find((label) => label.fullName === fullName)!
+
+    it('leaves a Listing as it is without annotations, or with none that apply', () => {
+        for (const name of ['crackme', 'crackme-stripped', 'hello-atexit-static', 'cpp']) {
+            const bytes = fixture(name)
+            const names = name === 'cpp' ? demangler : undefined
+            const plain = listingOf(bytes, name, undefined, names)
+            const [first] = plain.functions
+            for (const annotations of [
+                {},
+                { names: new Map(), comments: new Map(), functionComments: new Map() },
+                // Nothing at these addresses, a function's own name, empty comments.
+                {
+                    names: new Map([
+                        [0, 'nowhere'],
+                        [first.address, first.name]
+                    ]),
+                    comments: new Map([
+                        [0x10, 'in the ELF header'],
+                        [first.address, '']
+                    ]),
+                    functionComments: new Map([
+                        [1, 'nothing'],
+                        [first.address, '']
+                    ])
+                }
+            ] satisfies ListingAnnotations[]) {
+                const listing = annotated(bytes, name, annotations, names)
+                expect(listing.text, name).toBe(plain.text)
+                expect(listing.lines, name).toEqual(plain.lines)
+                expect(listing.labels, name).toEqual(plain.labels)
+                expect(listing.functions, name).toEqual(plain.functions)
+                expect('comments' in listing, name).toBe(false)
+            }
+        }
+    }, 60_000)
+
+    it('renames a function, a string, a datum and a jump target wherever their names are written', () => {
+        const bytes = fixture('crackme')
+        const plain = listingOf(bytes, 'crackme')
+        const at = (fullName: string) => labelNamed(plain, fullName).address
+        const listing = annotated(bytes, 'crackme', {
+            names: new Map([
+                [at('main'), 'check_password'],
+                [at('s_hunter2'), 'password'],
+                [at('DAT_nimble_sandpiper'), 'newline'],
+                [at('frame_dummy'), 'setup_frames'],
+                // A jump target's name is kept without the dot it is written with.
+                [at('main.LAB_2'), 'wrong']
+            ])
+        })
+        expectConsistent(listing, bytes)
+        // Only names change: the same lines, at the same addresses.
+        expect(listing.lines).toEqual(plain.lines)
+        expect(linesOf(listing).slice(0, 6)).toEqual(linesOf(plain).slice(0, 6))
+        const text = listing.text
+        expect(text).toContain('\n    lea rdi, [rel check_password]\n')
+        expect(text).not.toContain('\nmain:\n')
+        expect(text).toMatch(/\n {4}lea rdx, \[rel password\] +; "hunter2"\n/)
+        expect(text).toMatch(/\n {4}lea rdx, \[rel newline\] +; "\\n"\n/)
+        expect(text).toContain('\npassword: db "hunter2", 0\n')
+        expect(text).toContain('\n__frame_dummy_init_array_entry: dq setup_frames\n')
+        const check = functionText(listing, 'check_password')
+        expect(check.startsWith('check_password:\n')).toBe(true)
+        expect(check).toContain('\n    jne .wrong\n')
+        expect(check).toContain('\n.wrong:\n')
+        // Another function's `.LAB_2` is its own.
+        expect(functionText(listing, '__do_global_dtors_aux')).toContain('\n.LAB_2:\n')
+
+        expect(
+            listing.labels
+                .filter((label) => label.renamed)
+                .map(({ name, fullName, origin, renamed }) => ({ name, fullName, origin, renamed }))
+        ).toEqual([
+            {
+                name: 'setup_frames',
+                fullName: 'setup_frames',
+                origin: 'symbol',
+                renamed: { from: 'frame_dummy' }
+            },
+            {
+                name: 'check_password',
+                fullName: 'check_password',
+                origin: 'symbol',
+                renamed: { from: 'main' }
+            },
+            {
+                name: '.wrong',
+                fullName: 'check_password.wrong',
+                origin: 'block',
+                renamed: { from: '.LAB_2' }
+            },
+            {
+                name: 'newline',
+                fullName: 'newline',
+                origin: 'invented',
+                renamed: { from: 'DAT_nimble_sandpiper' }
+            },
+            {
+                name: 'password',
+                fullName: 'password',
+                origin: 'string',
+                renamed: { from: 's_hunter2' }
+            }
+        ])
+        // Every label is where it was, and the functions are named as their labels.
+        expect(
+            listing.labels.map((label) => [
+                label.address,
+                label.kind,
+                label.renamed?.from ?? label.name
+            ])
+        ).toEqual(plain.labels.map((label) => [label.address, label.kind, label.name]))
+        const renamedFunctions: Record<string, string> = {
+            main: 'check_password',
+            frame_dummy: 'setup_frames'
+        }
+        expect(listing.functions).toEqual(
+            plain.functions.map((fn) => ({ ...fn, name: renamedFunctions[fn.name] ?? fn.name }))
+        )
+        const index = ListingIndex.of(listing)
+        const block = labelNamed(listing, 'check_password.wrong')
+        expect(index.label('.wrong', lineWith(listing, 'jne .wrong'))).toBe(block)
+        expect(index.references(block).map((span) => span.line)).toEqual([
+            lineWith(listing, 'jne .wrong'),
+            block.line
+        ])
+        // The hover says what the name was, then where that came from.
+        expect(labelHoverMarkdown(listing, labelNamed(listing, 'check_password'))).toBe(
+            [
+                '**check_password** at `0x5555555551e9`',
+                'Renamed from `main`.',
+                'Named by the symbol table.'
+            ].join('\n\n')
+        )
+        expect(labelHoverMarkdown(listing, block)).toBe(
+            [
+                `**check_password.wrong** at \`0x${(block.address + PIE_BASE).toString(16)}\``,
+                'Renamed from `.LAB_2`.',
+                'A place a jump goes to inside `check_password`.'
+            ].join('\n\n')
+        )
+    })
+
+    it("keeps a stripped program's Invented names, renaming one of them or all", () => {
+        const bytes = fixture('crackme-stripped')
+        const plain = listingOf(bytes, 'crackme-stripped')
+        const invented = plain.labels.filter((label) => label.origin === 'invented')
+        const barracuda = labelNamed(plain, 'FUN_bronze_barracuda')
+        const one = annotated(bytes, 'crackme-stripped', {
+            names: new Map([[barracuda.address, 'first']])
+        })
+        expectConsistent(one, bytes)
+        expect(one.labels.map((label) => label.name)).toEqual(
+            plain.labels.map((label) => (label === barracuda ? 'first' : label.name))
+        )
+        expect(labelHoverMarkdown(one, labelNamed(one, 'first'))).toContain(
+            'Renamed from `FUN_bronze_barracuda`.\n\nAn invented name: nothing in the file names this function'
+        )
+        const all = annotated(bytes, 'crackme-stripped', {
+            names: new Map(invented.map((label, i) => [label.address, `named_${i}`]))
+        })
+        expectConsistent(all, bytes)
+        expect(all.labels.map((label) => label.name)).toEqual(
+            plain.labels.map((label) => {
+                const i = invented.indexOf(label)
+                return i < 0 ? label.name : `named_${i}`
+            })
+        )
+    })
+
+    it('writes a renamed C++ function as named, its demangled forms kept for the hover', () => {
+        const bytes = fixture('cpp')
+        const plain = listingOf(bytes, 'cpp', PIE_BASE, demangler)
+        const raw = '_ZNSt15__new_allocatorIcED1Ev'
+        const forms = labelNamed(plain, raw).demangled!
+        expect(forms.short).toBe('std::__new_allocator<char>::~__new_allocator')
+        const listing = annotated(
+            bytes,
+            'cpp',
+            { names: new Map([[labelNamed(plain, raw).address, 'free_chars']]) },
+            demangler
+        )
+        expectConsistent(listing, bytes)
+        expect(listing.lines).toEqual(plain.lines)
+        const lines = linesOf(listing)
+        // No demangled comment: the person's name says what the function is.
+        expect(lines).toContain('free_chars:')
+        const calls = lines.filter((line) => line.includes('free_chars'))
+        expect(calls.length).toBeGreaterThan(2)
+        for (const line of calls) expect(line).toMatch(/^(?:free_chars:| {4}call free_chars)$/)
+        expect(listing.text).not.toContain(raw)
+        const label = labelNamed(listing, 'free_chars')
+        expect(label.demangled).toBeUndefined()
+        expect(label.renamed).toEqual({ from: raw, demangled: forms })
+        expect(listing.functions.find((fn) => fn.name === 'free_chars')).not.toHaveProperty('list')
+        // Every other function keeps its list form.
+        expect(
+            listing.functions.filter((fn) => fn.name !== 'free_chars').map((fn) => fn.list)
+        ).toEqual(plain.functions.filter((fn) => fn.name !== raw).map((fn) => fn.list))
+        const hover = labelHoverMarkdown(listing, label)
+        expect(hover).toContain(`Renamed from \`${forms.signature}\`.`)
+        expect(hover).toContain(`name \`${raw}\``)
+        expect(hover.endsWith('Named by the symbol table.')).toBe(true)
+    })
+
+    it("keeps a PLT stub's and a GOT slot's library names", () => {
+        const bytes = fixture('crackme')
+        const plain = listingOf(bytes, 'crackme')
+        const listing = annotated(bytes, 'crackme', {
+            names: new Map(
+                [
+                    'puts@plt',
+                    'puts@plt_resolver',
+                    '__gmon_start__@got',
+                    '__libc_start_main@got'
+                ].map((name) => [labelNamed(plain, name).address, 'say'])
+            )
+        })
+        expect(listing.text).toBe(plain.text)
+        expect(listing.labels).toEqual(plain.labels)
+    })
+
+    it('refuses a name another label has, until one of the two changes', () => {
+        const bytes = fixture('crackme')
+        const plain = listingOf(bytes, 'crackme')
+        const at = (fullName: string) => labelNamed(plain, fullName).address
+        const renames = (names: [string, string][]) => {
+            const listing = annotated(bytes, 'crackme', {
+                names: new Map(names.map(([from, to]) => [at(from), to]))
+            })
+            expectConsistent(listing, bytes)
+            return listing.labels
+                .filter((label) => label.renamed || label.renameConflict)
+                .map((label) => [
+                    label.renamed?.from ?? label.name,
+                    label.name,
+                    label.renameConflict
+                ])
+        }
+        expect(renames([['main', '_start']])).toEqual([['main', 'main', '_start']])
+        // The Pseudocode would print `puts@plt` as `puts`.
+        expect(renames([['main', 'puts']])).toEqual([['main', 'main', 'puts']])
+        // The lower address takes a name two are given.
+        expect(
+            renames([
+                ['_init', 'setup'],
+                ['_fini', 'setup']
+            ])
+        ).toEqual([
+            ['_init', 'setup', undefined],
+            ['_fini', '_fini', 'setup']
+        ])
+        // A name a rename takes away is free.
+        expect(
+            renames([
+                ['_init', '_fini'],
+                ['_fini', '_init']
+            ])
+        ).toEqual([
+            ['_init', '_fini', undefined],
+            ['_fini', '_init', undefined]
+        ])
+        // A refused rename keeps its label's name, which another rename then cannot take.
+        expect(
+            renames([
+                ['_init', '_fini'],
+                ['_fini', 'puts']
+            ])
+        ).toEqual([
+            ['_init', '_init', '_fini'],
+            ['_fini', '_fini', 'puts']
+        ])
+        // An alias at the same address gives way, rather than defining the name twice.
+        const aliased = renames([['data_start', '__data_start']])
+        expect(aliased).toEqual([['data_start', '__data_start', undefined]])
+        // A jump target's name is unique within its function only.
+        expect(renames([['main.LAB_1', 'LAB_2']])).toEqual([['.LAB_1', '.LAB_1', '.LAB_2']])
+        expect(
+            renames([
+                ['main.LAB_1', 'LAB_2'],
+                ['main.LAB_2', 'LAB_1']
+            ])
+        ).toEqual([
+            ['.LAB_1', '.LAB_2', undefined],
+            ['.LAB_2', '.LAB_1', undefined]
+        ])
+        expect(
+            renames([
+                ['_init.LAB_1', 'retry'],
+                ['main.LAB_1', 'retry']
+            ])
+        ).toEqual([
+            ['.LAB_1', '.retry', undefined],
+            ['.LAB_1', '.retry', undefined]
+        ])
+        const refused = annotated(bytes, 'crackme', { names: new Map([[at('main'), '_start']]) })
+        expect(refused.text).toBe(plain.text)
+        expect(labelHoverMarkdown(refused, labelNamed(refused, 'main'))).toBe(
+            [
+                '**main** at `0x5555555551e9`',
+                'Renamed `_start` in this Project, but another label has that name, so this one keeps its own until one of them changes.',
+                'Named by the symbol table.'
+            ].join('\n\n')
+        )
+    })
+
+    /** crackme's `main` with a comment of every form. */
+    function commentedCrackme() {
+        const bytes = fixture('crackme')
+        const plain = listingOf(bytes, 'crackme')
+        const main = labelNamed(plain, 'main')
+        const address = (code: string, from = main.line) =>
+            plain.lines.addresses[lineWith(plain, code, from)]
+        const sixty = 'reads up to 127 characters of a line from stdin, and its NUL'
+        const sixtyOne = 'compares the line with the password the program keeps in data'
+        const comments = new Map([
+            [address('push rbp'), 'saves the frame'],
+            [address('lea rdx, [rel s_hunter2]'), 'the password'],
+            [address('call printf@plt'), 'prompts; main reads the answer next'],
+            [address('call fgets@plt'), sixty],
+            [address('call strcmp@plt'), sixtyOne],
+            [
+                address('test eax, eax'),
+                'compares what was typed with the password: zero in eax means they are equal, so the program prints Correct! and returns zero'
+            ],
+            [
+                address('lea rdx, [rel DAT_nimble_sandpiper]'),
+                'strips the line break\n\nfgets keeps it'
+            ],
+            // Inside an instruction: on its line.
+            [address('mov eax, 0x00', lineWith(plain, '.LAB_3:')) + 2, 'inside'],
+            // Two on one line: both above it.
+            [address('call puts@plt') + 0, 'one'],
+            [address('call puts@plt') + 1, 'two'],
+            [labelNamed(plain, 's_hunter2').address, 'the secret'],
+            [labelNamed(plain, 's_Wrong').address, `${sixtyOne}, again`]
+        ])
+        const functionComments = new Map([
+            [
+                main.address,
+                'Asks for a password on stdin and says whether it is right.\nmain returns 1 when stdin ends.'
+            ],
+            // No function starts at `leave`: above its line.
+            [address('leave'), 'restores the frame']
+        ])
+        const listing = annotated(bytes, 'crackme', { comments, functionComments })
+        return { bytes, plain, listing, comments, functionComments, sixty, sixtyOne }
+    }
+
+    it('writes a short comment at the end of its line, a longer one above it and a function comment above its labels', () => {
+        const { bytes, plain, listing, sixty, sixtyOne } = commentedCrackme()
+        expectConsistent(listing, bytes)
+        expect(sixty).toHaveLength(60)
+        expect(sixtyOne).toHaveLength(61)
+        const main = functionText(listing, 'main')
+        const lines = linesOf(listing)
+        const mainLabel = labelNamed(listing, 'main')
+        // The function comment, between the blank line and the label.
+        expect(lines.slice(mainLabel.line - 3, mainLabel.line + 3)).toEqual([
+            '',
+            '; Asks for a password on stdin and says whether it is right.',
+            '; main returns 1 when stdin ends.',
+            'main:',
+            '    endbr64',
+            '    push rbp                            ; saves the frame'
+        ])
+        expect(main).toContain(
+            '\n    lea rdx, [rel s_hunter2]            ; "hunter2" ; the password\n'
+        )
+        expect(main).toContain(
+            '\n    call printf@plt                     ; prompts; main reads the answer next\n'
+        )
+        expect(main).toContain(`\n    call fgets@plt                      ; ${sixty}\n`)
+        expect(main).toContain(`\n    ; ${sixtyOne}\n    call strcmp@plt\n`)
+        expect(main).toContain(
+            [
+                '',
+                '    ; compares what was typed with the password: zero in eax means they are equal, so the program',
+                '    ; prints Correct! and returns zero',
+                '    test eax, eax',
+                ''
+            ].join('\n')
+        )
+        // After the jump target's label, its own line breaks and empty line kept.
+        expect(main).toContain(
+            [
+                '',
+                '.LAB_1:',
+                '    ; strips the line break',
+                '    ;',
+                '    ; fgets keeps it',
+                '    lea rdx, [rel DAT_nimble_sandpiper] ; "\\n"',
+                ''
+            ].join('\n')
+        )
+        expect(main).toContain('\n.LAB_3:\n    mov eax, 0x00                       ; inside\n')
+        expect(main).toContain('\n    ; one\n    ; two\n    call puts@plt\n')
+        expect(main).toContain('\n.LAB_5:\n; restores the frame\n    leave\n')
+        // Data: at the end of an inline label's line, or above it, the label still on its line.
+        expect(lines).toContain('s_hunter2: db "hunter2", 0              ; the secret')
+        const wrong = labelNamed(listing, 's_Wrong')
+        expect(lines.slice(wrong.line - 1, wrong.line + 1)).toEqual([
+            `    ; ${sixtyOne}, again`,
+            's_Wrong: db "Wrong!", 0'
+        ])
+        // Every other line is as it was.
+        const code = (listing: Listing) =>
+            linesOf(listing)
+                .filter(
+                    (_, line) =>
+                        listing.lines.kinds[line] !== LINE_KIND.comment ||
+                        listing.lines.addresses[line] < 0
+                )
+                .map((line) => withoutComment(line).trimEnd())
+        expect(code(listing)).toEqual(code(plain))
+    })
+
+    it('notes the lines of a comment, which cover no bytes, and the line table passes over them', () => {
+        const { listing, plain, comments, functionComments } = commentedCrackme()
+        const { kinds, addresses, sizes, offsets, byAddress } = listing.lines
+        const person = listing.comments!
+        // The lines holding bytes are the plain Listing's, in the same order.
+        const covering = (l: Listing) =>
+            Array.from(l.lines.byAddress, (line) => [l.lines.addresses[line], l.lines.sizes[line]])
+        expect(covering(listing)).toEqual(covering(plain))
+        expect([...byAddress].some((line) => kinds[line] === LINE_KIND.comment)).toBe(false)
+        const lines = linesOf(listing)
+        const noted = Array.from(person.lines, (line, i) => ({
+            line,
+            address: person.addresses[i],
+            kind: person.kinds[i],
+            text: lines[line].slice(lines[line].length - person.lengths[i])
+        }))
+        // In line order, each line once, and every one's person's part a comment that is theirs.
+        expect(noted.map((entry) => entry.line)).toEqual(
+            [...new Set(person.lines)].sort((a, b) => a - b)
+        )
+        for (const { line, address, kind, text } of noted) {
+            expect(text.startsWith(';'), lines[line]).toBe(true)
+            const said = text.replace(/^; ?/, '')
+            const source =
+                kind === PERSON_COMMENT.function
+                    ? functionComments.get(address)!
+                    : comments.get(address)!
+            expect(source, lines[line]).toBeDefined()
+            if (kind === PERSON_COMMENT.end) {
+                expect(said).toBe(source)
+                expect(kinds[line]).not.toBe(LINE_KIND.comment)
+            } else {
+                // A line of its own: kind comment, the address it annotates, no bytes.
+                expect(source.replace(/\s+/g, ' ')).toContain(said.replace(/\s+/g, ' '))
+                expect(lines[line].length).toBeLessThanOrEqual(100)
+                expect(kinds[line]).toBe(LINE_KIND.comment)
+                expect(addresses[line]).toBe(address)
+                expect([sizes[line], offsets[line]]).toEqual([0, -1])
+                expect(instructionAddressAt(listing, line)).toBeUndefined()
+            }
+        }
+        expect(noted.filter((entry) => entry.kind === PERSON_COMMENT.end)).toHaveLength(6)
+        // A function comment is between functions; a comment above a line is in its function.
+        const main = listing.functions.find((fn) => fn.name === 'main')!
+        const first = noted.find((entry) => entry.kind === PERSON_COMMENT.function)!
+        expect(first.line).toBe(main.line - 2)
+        expect(functionAtLine(listing, first.line)).toBeUndefined()
+        const previous = listing.functions[listing.functions.indexOf(main) - 1]
+        expect(previous.endLine).toBe(main.line - 3)
+        const above = noted.find((entry) => entry.kind === PERSON_COMMENT.above)!
+        expect(functionAtLine(listing, above.line)).toBe(main)
+        // Each commented address is still found on the line that holds it.
+        for (const address of [...comments.keys(), ...functionComments.keys()]) {
+            const line = lineOfAddress(listing, address)
+            expect(kinds[line] === LINE_KIND.instruction || kinds[line] === LINE_KIND.data).toBe(
+                true
+            )
+            expect(withoutComment(lines[line]).trimEnd()).toBe(
+                withoutComment(linesOf(plain)[lineOfAddress(plain, address)]).trimEnd()
+            )
+        }
+    })
+
+    it('keeps Breakpoints, the Pseudocode and places on their lines across comment lines', () => {
+        const { listing, plain, comments } = commentedCrackme()
+        const session = (l: Listing) =>
+            ({ session: new Map([['crackme', { listing: l }]]) }) as unknown as ListingDocuments
+        const code = (l: Listing, line: number) => withoutComment(linesOf(l)[line]).trimEnd()
+        for (const address of comments.keys()) {
+            const line = breakpointLine({ file: 'crackme', address }, session(listing))
+            const before = breakpointLine({ file: 'crackme', address }, session(plain))
+            expect(line).toBeGreaterThan(before)
+            expect(code(listing, line)).toBe(code(plain, before))
+        }
+        // A Pseudocode line of each of main's instructions maps to that instruction's line.
+        const main = listing.functions.find((fn) => fn.name === 'main')!
+        const instructions: number[] = []
+        for (let line = main.line; line < main.endLine; ++line) {
+            const address = instructionAddressAt(listing, line)
+            if (address !== undefined) instructions.push(address)
+        }
+        const map = pseudocodeMap(
+            listing,
+            main,
+            instructions.map((address) => ({ text: '', tokens: [], addresses: [address] })),
+            0
+        )
+        map.listingLines.forEach((lines, row) => {
+            expect(lines).toHaveLength(1)
+            expect(instructionAddressAt(listing, lines[0])).toBe(instructions[row])
+        })
+        // Every line that stands for an address is found again by it, in either Listing.
+        for (let line = 0; line < plain.lines.kinds.length; ++line) {
+            const place = placeOfLine(plain, line)
+            if (!place) continue
+            const found = lineOfPlace(listing, place)
+            expect(
+                linesOf(listing)[found].startsWith(withoutComment(linesOf(plain)[line]).trimEnd()),
+                `line ${line}`
+            ).toBe(true)
+        }
+        const { kinds, addresses } = listing.lines
+        for (let line = 0; line < kinds.length; ++line) {
+            if (kinds[line] !== LINE_KIND.comment || addresses[line] < 0) continue
+            const place = placeOfLine(listing, line)!
+            expect(place.kind).toBe(LINE_KIND.comment)
+            expect(lineOfPlace(listing, place), linesOf(listing)[line]).toBe(line)
+            // Without the comment, the line holding its address.
+            expect(lineOfPlace(plain, place)).toBe(lineOfAddress(plain, place.address))
+        }
+        const labelLine = labelNamed(listing, 'main').line
+        expect(lineOfPlace(plain, placeOfLine(listing, labelLine)!)).toBe(
+            labelNamed(plain, 'main').line
+        )
+    })
+
+    it("reads a person's comment as text, never as names", () => {
+        const { listing } = commentedCrackme()
+        const index = ListingIndex.of(listing)
+        const lines = linesOf(listing)
+        const printf = lineWith(listing, 'call printf@plt')
+        const text = lines[printf]
+        const word = listingTokenAt(text, text.lastIndexOf('main') + 1)!
+        expect(word.text).toBe('main')
+        expect(index.label(word.text, printf)).toBeDefined()
+        expect(index.inPersonComment(text, printf, word.start)).toBe(true)
+        expect(index.inPersonComment(text, printf, text.indexOf('printf@plt'))).toBe(false)
+        // The `;` the person typed is in their comment.
+        expect(index.inPersonComment(text, printf, text.indexOf('prompts'))).toBe(true)
+        // A line of its own, and the same line with other code before its comment.
+        const functionLine = listing.comments!.lines[0]
+        expect(index.inPersonComment(lines[functionLine], functionLine, 2)).toBe(true)
+        const patched = `    call puts@plt${text.slice(text.indexOf(' ; '))}`
+        expect(index.inPersonComment(patched, printf, patched.indexOf('puts@plt'))).toBe(false)
+        expect(index.inPersonComment(patched, printf, patched.lastIndexOf('main'))).toBe(true)
+        expect(index.endOfLineComment(printf)).toBe('prompts; main reads the answer next')
+        expect(index.endOfLineComment(functionLine)).toBeUndefined()
+        expect(index.endOfLineComment(lineWith(listing, 'ret'))).toBeUndefined()
+        // References find main's label and the operand naming it, not the comments' words.
+        const main = labelNamed(listing, 'main')
+        expect(index.references(main).map((span) => lines[span.line])).toEqual([
+            '    lea rdi, [rel main]',
+            'main:'
+        ])
+    })
+
+    it('renames and comments every function of a C++ program, its tables agreeing with its text', () => {
+        const bytes = new Uint8Array(
+            readFileSync(
+                new URL('../../../../decompiler/js/tests/fixtures/elf/factcheck', import.meta.url)
+            )
+        )
+        const plain = listingOf(bytes, 'factcheck', PIE_BASE, demangler)
+        const names = new Map<number, string>()
+        const functionComments = new Map<number, string>()
+        for (const fn of plain.functions) {
+            if (fn.name.includes('@')) continue
+            names.set(fn.address, `renamed_${fn.address.toString(16)}`)
+            functionComments.set(fn.address, `What ${fn.list ?? fn.name} does.`)
+        }
+        const comments = new Map<number, string>()
+        const { kinds, addresses } = plain.lines
+        for (let line = 0; line < kinds.length; line += 3)
+            if (kinds[line] === LINE_KIND.instruction || kinds[line] === LINE_KIND.data)
+                comments.set(
+                    addresses[line],
+                    comments.size % 2
+                        ? `line ${line}`
+                        : `line ${line}, with a comment long enough to be written above it rather than at its end`
+                )
+        const listing = annotated(
+            bytes,
+            'factcheck',
+            { names, comments, functionComments },
+            demangler
+        )
+        expectConsistent(listing, bytes)
+        const covering = (l: Listing) =>
+            Array.from(l.lines.byAddress, (line) => [l.lines.addresses[line], l.lines.sizes[line]])
+        expect(covering(listing)).toEqual(covering(plain))
+        expect(listing.functions.map((fn) => fn.address)).toEqual(
+            plain.functions.map((fn) => fn.address)
+        )
+        // Every function but the PLT's has the person's name and no list form; no name clashed.
+        for (const fn of listing.functions)
+            expect(fn.name).toBe(
+                names.get(fn.address) ?? plain.functions.find((p) => p.address === fn.address)!.name
+            )
+        expect(listing.functions.filter((fn) => names.has(fn.address) && fn.list)).toEqual([])
+        expect(listing.labels.filter((label) => label.renameConflict)).toEqual([])
+        // Each comment shows once, at its end or as lines above its line.
+        const person = listing.comments!
+        const shown = new Set(
+            Array.from(person.addresses).filter(
+                (_, i) => person.kinds[i] !== PERSON_COMMENT.function
+            )
+        )
+        expect(shown).toEqual(new Set(comments.keys()))
+        expect(
+            new Set(
+                Array.from(person.addresses).filter(
+                    (_, i) => person.kinds[i] === PERSON_COMMENT.function
+                )
+            )
+        ).toEqual(new Set(functionComments.keys()))
+    }, 30_000)
 })

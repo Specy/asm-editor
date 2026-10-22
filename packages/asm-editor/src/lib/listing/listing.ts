@@ -87,9 +87,25 @@ export type ListingLabel = {
      * The readable forms of a C++ symbol's name, for a label whose raw name the demangler reads
      * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decisions 2 and 5): the
      * raw `name` stays the label, which the text, operands and every lookup use. Its `list` is the
-     * function's {@link ListingFunction.list} for a function's label, else its short name.
+     * function's {@link ListingFunction.list} for a function's label, else its short name. Absent
+     * for a renamed label, whose name is the person's: its old forms are in {@link renamed}.
      */
     demangled?: DemangledName
+    /**
+     * For a label the person renamed
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decisions 6 to 9): `name` is theirs (`.name` for a jump target), which the text, operands and
+     * every lookup use, and `from` the name the Listing gave it (`FUN_brave_otter`, `.LAB_3`, a
+     * mangled name), whose `origin` this label keeps, with that name's demangled forms, which the
+     * hover still gives.
+     */
+    renamed?: { from: string; demangled?: DemangledName }
+    /**
+     * The person's name for this label when another label has it (decision 10), as the label
+     * would have been named (`.name` for a jump target): it is not applied, and the label keeps
+     * the Listing's name until one of the two changes.
+     */
+    renameConflict?: string
 }
 
 export type ListingFunction = {
@@ -104,9 +120,58 @@ export type ListingFunction = {
     /**
      * What a list names it by, for a function whose label is demangled: its short name, or where
      * another of the Listing's functions shares that, its signature, then its constructor's or
-     * destructor's variant (`listForms`, cpp-demangling.md decision 7). Absent for a raw name.
+     * destructor's variant (`listForms`, cpp-demangling.md decision 7). Absent for a raw name and
+     * a person's, which `name` is.
      */
     list?: string
+}
+
+/**
+ * A File's Annotations as its Listing is generated with them
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions 6
+ * to 12), each kind by link-time address: the person's names for labels (a jump target's without
+ * its dot), their line comments, and their function comments by the function's address.
+ */
+export type ListingAnnotations = {
+    names?: ReadonlyMap<number, string>
+    comments?: ReadonlyMap<number, string>
+    functionComments?: ReadonlyMap<number, string>
+}
+
+/** Indexed by the codes in {@link ListingComments.kinds}. */
+export const PERSON_COMMENT_KINDS = ['end', 'above', 'function'] as const
+export type PersonCommentKind = (typeof PERSON_COMMENT_KINDS)[number]
+export const PERSON_COMMENT = {
+    /** A short line comment at the end of the line it annotates, after the Listing's own. */
+    end: 0,
+    /** A line of a longer line comment, above the line it annotates, after that address's labels. */
+    above: 1,
+    /**
+     * A line of a function comment, between the blank line before the function and its labels,
+     * or above the line holding its address when no function starts there.
+     */
+    function: 2
+} as const satisfies Record<PersonCommentKind, number>
+
+/**
+ * The lines holding a person's comment (decisions 11 and 12), in parallel arrays as
+ * {@link ListingLines} are, one entry per line, in ascending line order. A comment written above a
+ * line takes lines of its own, of kind `comment` with the address it annotates, covering no bytes,
+ * so `byAddress`, {@link lineOfAddress}, Breakpoints and the gutter pass over them.
+ */
+export type ListingComments = {
+    /** The 0-based lines. */
+    lines: Int32Array
+    /** The link-time address each comment is kept at: a line comment's, a function's. */
+    addresses: Float64Array
+    /** Each one's {@link PERSON_COMMENT}. */
+    kinds: Uint8Array
+    /**
+     * How many characters the person's part takes at the end of the line, from its semicolon: the
+     * same on a line a Debug session patched, which keeps the comment at its end, so where it
+     * starts is found from the end of whichever text the line has.
+     */
+    lengths: Int32Array
 }
 
 export type Listing = {
@@ -128,6 +193,8 @@ export type Listing = {
     entry: number
     /** Link-time address of `main`, from a symbol or the `__libc_start_main` pattern, if known. */
     main?: number
+    /** The lines holding a person's comment, absent when it has none. */
+    comments?: ListingComments
 }
 
 /**
@@ -187,4 +254,83 @@ export function instructionAddressAt(listing: Listing, line: number): number | u
     return listing.lines.kinds[line] === LINE_KIND.instruction
         ? listing.lines.addresses[line]
         : undefined
+}
+
+/** The index of a 0-based line's entry in {@link Listing.comments}, or -1 when it holds none. */
+export function personCommentIndex(listing: Listing, line: number): number {
+    const lines = listing.comments?.lines
+    if (!lines) return -1
+    let low = 0
+    let high = lines.length - 1
+    while (low <= high) {
+        const middle = (low + high) >> 1
+        if (lines[middle] < line) low = middle + 1
+        else if (lines[middle] > line) high = middle - 1
+        else return middle
+    }
+    return -1
+}
+
+/**
+ * Where a line is, kept by address rather than by line number, so it is found again in another
+ * Listing of the same bytes whose comment lines or names differ: the address the line stands for
+ * (its bytes' start, the address its label names or its person's comment annotates), its
+ * {@link LINE_KIND}, and which of that address's lines of that kind it is, from 0.
+ */
+export type ListingPlace = { address: number; kind: number; nth: number }
+
+/**
+ * The lines around the line holding an address, first to last: the labels and comments above it,
+ * of its own address or of addresses it holds, then itself. For a name of an address no line
+ * holds (past its region), its label lines. Empty when the Listing has no line for the address.
+ */
+function linesAround(listing: Listing, address: number): [first: number, last: number] {
+    const { addresses, kinds, sizes } = listing.lines
+    let last = lineOfAddress(listing, address)
+    let start = address
+    let end = address + 1
+    if (last >= 0) {
+        start = addresses[last]
+        end = start + sizes[last]
+    } else for (const label of listing.labels) if (label.address === address) last = label.line
+    if (last < 0) return [0, -1]
+    let first = last
+    while (
+        first > 0 &&
+        (kinds[first - 1] === LINE_KIND.label || kinds[first - 1] === LINE_KIND.comment) &&
+        addresses[first - 1] >= start &&
+        addresses[first - 1] < end
+    )
+        --first
+    return [first, last]
+}
+
+/** A 0-based line's {@link ListingPlace}, undefined for a line standing for no address. */
+export function placeOfLine(listing: Listing, line: number): ListingPlace | undefined {
+    const { addresses, kinds } = listing.lines
+    const address = addresses[line]
+    const kind = kinds[line]
+    if (!(address >= 0) || kind === LINE_KIND.section || kind === LINE_KIND.blank) return undefined
+    const [first] = linesAround(listing, address)
+    let nth = 0
+    for (let at = first; at < line; ++at) if (kinds[at] === kind && addresses[at] === address) ++nth
+    return { address, kind, nth }
+}
+
+/**
+ * The line of a {@link ListingPlace} in this Listing: the line of its address and kind, the last
+ * of them where there are fewer, else the line holding the address; -1 when the Listing has no
+ * line for the address.
+ */
+export function lineOfPlace(listing: Listing, place: ListingPlace): number {
+    const { addresses, kinds } = listing.lines
+    const [first, last] = linesAround(listing, place.address)
+    let found = -1
+    let nth = 0
+    for (let at = first; at <= last; ++at)
+        if (kinds[at] === place.kind && addresses[at] === place.address) {
+            found = at
+            if (nth++ === place.nth) break
+        }
+    return found >= 0 ? found : last
 }

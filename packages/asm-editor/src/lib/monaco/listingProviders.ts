@@ -152,8 +152,13 @@ export function listingNameAt(
     const line = position.lineNumber - 1
     const text = model.getLineContent(position.lineNumber)
     const token = listingTokenAt(text, position.column - 1)
-    //a comment's demangled name is text, whose words are no names
-    if (!token || registered.index.inDemangledComment(text, line, token.start)) return undefined
+    //a comment's demangled name and a person's comment are text, whose words are no names
+    if (
+        !token ||
+        registered.index.inPersonComment(text, line, token.start) ||
+        registered.index.inDemangledComment(text, line, token.start)
+    )
+        return undefined
     const label = registered.index.label(token.text, line)
     const addressLine = label ? -1 : registered.index.addressLine(token.text)
     if (!label && addressLine < 0) return undefined
