@@ -28,7 +28,9 @@ import {
 import {
     commentAt,
     functionCommentAt,
+    localName,
     rename,
+    renameLocal,
     resetName,
     setComment,
     setFunctionComment
@@ -70,12 +72,16 @@ import {
     type ListingFunction
 } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
-import { PseudocodeDocuments } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
+import {
+    PseudocodeDocuments,
+    type PseudocodeDocument
+} from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
 import {
     defaultPseudocodeFunction,
     functionAt,
     pseudocodeBreakpointAddresses,
     pseudocodeBreakpointsOn,
+    pseudocodeCommentPlace,
     pseudocodeLinesOf
 } from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchSite } from '#lib/listing/listingPatcher.svelte.ts'
@@ -186,11 +192,16 @@ import {
     commentTarget,
     functionCommentTarget,
     labelToRename,
+    pseudocodeLabelToRename,
+    pseudocodeNameToRename,
     renameProblem,
     renameTarget,
     typedName,
+    variableRenameProblem,
+    variableRenameTarget,
     type CommentTarget,
-    type RenameTarget
+    type RenameTarget,
+    type VariableRenameTarget
 } from './annotationTargets'
 import { EditorModels } from './editorModels'
 import { resolveMappingPair } from './mappingPair'
@@ -939,8 +950,10 @@ export class WorkbenchSession {
             untrack(() => this.pseudocode.retain(shown, paths))
         })
         //a function's Pseudocode, once decompiled, opens at the line the Listing's cursor is on,
-        //rather than where the function shown before it was scrolled to
-        const revealed = new WeakMap<EditorGroup, object>()
+        //rather than where the function shown before it was scrolled to; the same function
+        //decompiled again in the same model (a rename, a comment, a Byte edit) stays where the
+        //editor is, which moves its cursor to the same place of the new text (decision 22)
+        const revealed = new WeakMap<EditorGroup, { document: object; key: string }>()
         //and the Listing it pairs with scrolls to that function, when it is a Listing new to the
         //pair
         const pairedListings = new WeakMap<EditorGroup, ListingDocument>()
@@ -954,9 +967,11 @@ export class WorkbenchSession {
         $effect(() => {
             for (const group of this.groups) {
                 const document = group.displayedPseudocode
-                if (document?.status !== 'ready' || revealed.get(group) === document) continue
-                revealed.set(group, document)
-                untrack(() => void this.revealPseudocodeLine(group))
+                const before = revealed.get(group)
+                if (document?.status !== 'ready' || before?.document === document) continue
+                const key = group.modelKey
+                revealed.set(group, { document, key })
+                if (before?.key !== key) untrack(() => void this.revealPseudocodeLine(group))
             }
         })
 
@@ -1659,16 +1674,29 @@ export class WorkbenchSession {
     // ---- renames and comments ------------------------------------------------------------------
 
     /**
-     * The Executable File whose own Listing a pane shows, which takes renames and comments
-     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
-     * 1): none in a read-only Workbench, for a library's Listing, for the Build output, which is no
-     * File of the Project, or for a Build's version of a File whose bytes the Project's File no
-     * longer has.
+     * The Executable File whose own Listing or Pseudocode a pane shows, which takes renames and
+     * comments ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 1): none in a read-only Workbench, for a library's Listing, for the Build output,
+     * which is no File of the Project, or for a Build's version of a File whose bytes the
+     * Project's File no longer has.
      */
     annotatablePath(group: EditorGroup): string | undefined {
-        if (group.displayedView !== 'listing' || !group.displayedListing) return undefined
+        const view = group.displayedView
+        if (view === 'listing' ? !group.displayedListing : view !== 'pseudocode') return undefined
+        if (view === 'pseudocode' && !group.displayedPseudocode) return undefined
         if (group.displayedLibraryListing || group.displayedBuildOutput) return undefined
         return this.annotatableFile(group.sourceSelection)
+    }
+
+    /**
+     * The function's Pseudocode a pane shows, decompiled, when its File takes renames and comments:
+     * the one on screen, whose lines the cursor is on, which may be the one before a change while
+     * the function is decompiled again with it (decision 22).
+     */
+    private annotatablePseudocode(group: EditorGroup): PseudocodeDocument | undefined {
+        if (group.displayedView !== 'pseudocode' || !this.annotatablePath(group)) return undefined
+        const document = group.displayedPseudocode
+        return document?.status === 'ready' && document.map ? document : undefined
     }
 
     /**
@@ -1755,6 +1783,33 @@ export class WorkbenchSession {
         )
     }
 
+    /**
+     * Names variable `id` of the function at link-time `functionAddress` of an Executable's
+     * Pseudocode (decisions 6 and 16), by the decompiler's id for it: the name is not checked
+     * here, which `variableRenameProblem` does first.
+     */
+    renameVariable(path: string, functionAddress: number, id: string, name: string): boolean {
+        return this.annotated(this.writeVariableName(path, functionAddress, id, name))
+    }
+
+    /** Reset name of a variable (decision 10): the decompiler names it again. */
+    resetVariable(path: string, functionAddress: number, id: string): boolean {
+        return this.annotated(this.writeVariableName(path, functionAddress, id, undefined))
+    }
+
+    private writeVariableName(
+        path: string,
+        functionAddress: number,
+        id: string,
+        name: string | undefined
+    ) {
+        return this.writeAnnotations(
+            path,
+            { kind: 'local', address: functionAddress, id },
+            (annotations) => renameLocal(annotations, functionAddress, id, name)
+        )
+    }
+
     /** The comment on the line at an address (decision 11); an empty one deletes it. */
     setComment(path: string, address: number, text: string): boolean {
         return this.annotated(this.writeComment(path, { kind: 'comment', address }, text))
@@ -1816,15 +1871,89 @@ export class WorkbenchSession {
         return this.canUndoAnnotation(path, true)
     }
 
-    /** What Rename… at a line and column of a pane's Listing renames, if anything. */
+    /**
+     * What Rename… at a line and column of a pane's Listing renames, if anything; in its
+     * Pseudocode, the label a function's or a global's name there stands for (decision 18).
+     */
     renameTargetAt(group: EditorGroup, line: number, column: number): RenameTarget | undefined {
+        if (group.displayedView === 'pseudocode') {
+            const document = this.annotatablePseudocode(group)
+            const label =
+                document &&
+                pseudocodeLabelToRename(
+                    document.listing,
+                    document.lines,
+                    document.firstLine,
+                    line,
+                    column
+                )
+            return document && label ? renameTarget(document.listing, label) : undefined
+        }
         const listing = this.annotatablePath(group) ? group.displayedListingView : undefined
         const label = listing && labelToRename(listing, line, column)
         return listing && label ? renameTarget(listing, label) : undefined
     }
 
-    /** What Comment… on a line of a pane's Listing edits, or with `fn` Function comment…. */
+    /**
+     * What Rename… at a line and column of a pane's Pseudocode renames when it is one of the
+     * function's variables or parameters (decisions 6, 7 and 16), if anything.
+     */
+    variableTargetAt(
+        group: EditorGroup,
+        line: number,
+        column: number
+    ): VariableRenameTarget | undefined {
+        const document = this.annotatablePseudocode(group)
+        if (!document) return undefined
+        const token = pseudocodeNameToRename(document.lines, document.firstLine, line, column)
+        const id = token?.variable
+        if (!token || id === undefined) return undefined
+        const printed = document.lines[line - document.firstLine].text.slice(token.start, token.end)
+        //the decompiler's own name: the one printed, unless the person's was
+        const named = document.annotations.locals.some((local) => local.id === id)
+        const raw = named ? document.defaultNames.get(id) : printed
+        return variableRenameTarget(document.listing, document.fn, document.variables, id, {
+            printed,
+            ...(raw !== undefined ? { raw } : {})
+        })
+    }
+
+    /** Whether Rename… applies at a line and column of a pane's Listing or Pseudocode. */
+    canRenameAt(group: EditorGroup, line: number, column: number): boolean {
+        return (
+            this.renameTargetAt(group, line, column) !== undefined ||
+            this.variableTargetAt(group, line, column) !== undefined
+        )
+    }
+
+    /** Whether the person named variable `id` of the function at `functionAddress`. */
+    private variableRenamed(path: string, functionAddress: number, id: string): boolean {
+        return localName(this.project.files[path]?.annotations, functionAddress, id) !== undefined
+    }
+
+    /**
+     * What Comment… on a line of a pane's Listing edits, or with `fn` Function comment…; in its
+     * Pseudocode (decision 14), on the declaration or a line of the function comment the function
+     * comment, on a comment of the person's that comment, on a statement the comment at its first
+     * mapped instruction, and Function comment… on any other line of it.
+     */
     commentTargetAt(group: EditorGroup, line: number, fn = false): CommentTarget | undefined {
+        if (group.displayedView === 'pseudocode') {
+            const document = this.annotatablePseudocode(group)
+            if (!document) return undefined
+            const { fn: shown, map, listing, lines } = document
+            const place = pseudocodeCommentPlace(map!, listing, lines, shown, line)
+            const functionComment: CommentTarget = {
+                kind: 'function comment',
+                address: shown.address,
+                function: shown
+            }
+            if (fn) return place?.kind === 'function' ? undefined : functionComment
+            if (!place) return undefined
+            return place.kind === 'function'
+                ? functionComment
+                : { kind: 'comment', address: place.address }
+        }
         const listing = this.annotatablePath(group) ? group.displayedListingView : undefined
         if (!listing) return undefined
         return fn ? functionCommentTarget(listing, line) : commentTarget(listing, line)
@@ -1838,18 +1967,31 @@ export class WorkbenchSession {
             : commentAt(annotations, target.address)
     }
 
-    /** Whether Reset name applies there: a renamed label, or one whose name another label took. */
+    /**
+     * Whether Reset name applies there: a renamed label, or one whose name another label took; a
+     * variable of a Pseudocode the person named.
+     */
     canResetNameAt(group: EditorGroup, line: number, column: number): boolean {
         const target = this.renameTargetAt(group, line, column)
+        if (target)
+            return !target.refusal && (!!target.label.renamed || !!target.label.renameConflict)
+        const path = this.annotatablePath(group)
+        const variable = this.variableTargetAt(group, line, column)
         return (
-            !!target && !target.refusal && (!!target.label.renamed || !!target.label.renameConflict)
+            !!path &&
+            !!variable &&
+            !variable.refusal &&
+            this.variableRenamed(path, variable.functionAddress, variable.id)
         )
     }
 
     resetNameAt(group: EditorGroup, line: number, column: number): boolean {
         const path = this.annotatablePath(group)
+        if (!path) return false
         const target = this.renameTargetAt(group, line, column)
-        return !!path && !!target && this.resetName(path, target.address)
+        if (target) return this.resetName(path, target.address)
+        const variable = this.variableTargetAt(group, line, column)
+        return !!variable && this.resetVariable(path, variable.functionAddress, variable.id)
     }
 
     /** Whether Delete comment applies on a line: a comment of the person's is there. */
@@ -1870,7 +2012,11 @@ export class WorkbenchSession {
      * saying why it cannot be renamed now: its name, checked as typed against the Listing's
      * labels; its own name resets it.
      */
-    renamePrompt(path: string, target: RenameTarget): AnnotationPrompt | undefined {
+    renamePrompt(
+        path: string,
+        target: RenameTarget,
+        pseudocodeFunction?: number
+    ): AnnotationPrompt | undefined {
         const refusal = target.refusal ?? this.annotationRefusal(path)
         if (refusal) {
             toast.warn(refusal)
@@ -1892,6 +2038,7 @@ export class WorkbenchSession {
             ...(note ? { note } : {}),
             text: target.current,
             ...(target.jumpTarget ? { prefix: '.' } : {}),
+            ...(pseudocodeFunction !== undefined ? { pseudocodeFunction } : {}),
             problem: (text) => renameProblem(target, text),
             save: (text) => {
                 const name = typedName(target, text)
@@ -1907,13 +2054,53 @@ export class WorkbenchSession {
     }
 
     /**
+     * The prompt of Rename… for a variable of a function's Pseudocode (decisions 16 and 18), or
+     * undefined after saying why it cannot be renamed now: its name, checked as typed against the
+     * function's other variables and the Listing's labels; the decompiler's own name resets it.
+     */
+    variableRenamePrompt(path: string, target: VariableRenameTarget): AnnotationPrompt | undefined {
+        const refusal = target.refusal ?? this.annotationRefusal(path)
+        if (refusal) {
+            toast.warn(refusal)
+            return undefined
+        }
+        const { functionAddress, id, raw } = target
+        const renamed = this.variableRenamed(path, functionAddress, id)
+        const note = !renamed
+            ? undefined
+            : raw !== undefined
+              ? `Renamed from ${raw}; that name resets it.`
+              : 'Reset name gives back the name the decompiler gave it.'
+        return new AnnotationPrompt({
+            kind: 'name',
+            path,
+            address: functionAddress,
+            title: `Rename ${target.current}`,
+            ...(note ? { note } : {}),
+            text: target.current,
+            pseudocodeFunction: functionAddress,
+            problem: (text) => variableRenameProblem(target, text),
+            save: (text) => {
+                const name = text.trim()
+                return this.writeVariableName(
+                    path,
+                    functionAddress,
+                    id,
+                    name === raw ? undefined : name
+                )
+            }
+        })
+    }
+
+    /**
      * The prompt of Comment… or Function comment… (decision 18), or undefined after saying why
      * the File takes none now: the comment there is, which saving empty deletes.
      */
     commentPrompt(
         path: string,
         listing: Listing,
-        target: CommentTarget
+        target: CommentTarget,
+        pseudocodeFunction?: number
     ): AnnotationPrompt | undefined {
         const refusal = this.annotationRefusal(path)
         if (refusal) {
@@ -1932,27 +2119,44 @@ export class WorkbenchSession {
             address: target.address,
             title,
             text: this.commentOf(path, target) ?? '',
+            ...(pseudocodeFunction !== undefined ? { pseudocodeFunction } : {}),
             problem: (text) => commentProblem(normalizeComment(text)),
             save: (text) => this.writeComment(path, target, text)
         })
     }
 
-    /** Rename… at a line and column of a pane's Listing: its prompt, over the line. */
+    /**
+     * Rename… at a line and column of a pane's Listing or Pseudocode: its prompt, over the line. A
+     * Pseudocode's function or global is renamed as in the Listing, and its variable by its id.
+     */
     openRenamePrompt(group: EditorGroup, line: number, column: number): boolean {
         const path = this.annotatablePath(group)
+        if (!path) return false
+        const over = this.annotatablePseudocode(group)?.fn.address
         const target = this.renameTargetAt(group, line, column)
-        const prompt = path && target && this.renamePrompt(path, target)
+        const variable = target ? undefined : this.variableTargetAt(group, line, column)
+        const prompt = target
+            ? this.renamePrompt(path, target, over)
+            : variable && this.variableRenamePrompt(path, variable)
         if (!prompt) return false
         this.showAnnotationPrompt(group, prompt)
         return true
     }
 
-    /** Comment… on a line of a pane's Listing, or with `fn` Function comment…: its prompt. */
+    /**
+     * Comment… on a line of a pane's Listing or Pseudocode, or with `fn` Function comment…: its
+     * prompt.
+     */
     openCommentPrompt(group: EditorGroup, line: number, fn = false): boolean {
         const path = this.annotatablePath(group)
-        const listing = group.displayedListingView
+        const pseudocode = this.annotatablePseudocode(group)
+        const listing = pseudocode ? pseudocode.listing : group.displayedListingView
         const target = this.commentTargetAt(group, line, fn)
-        const prompt = path && listing && target && this.commentPrompt(path, listing, target)
+        const prompt =
+            path &&
+            listing &&
+            target &&
+            this.commentPrompt(path, listing, target, pseudocode?.fn.address)
         if (!prompt) return false
         this.showAnnotationPrompt(group, prompt)
         return true

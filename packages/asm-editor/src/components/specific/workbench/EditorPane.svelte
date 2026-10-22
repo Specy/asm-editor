@@ -92,6 +92,7 @@
                   listingIdentity: fileViewIdentity(identity, 'listing'),
                   variables: document.variables,
                   locals: document.annotations.locals,
+                  defaultNames: document.defaultNames,
                   functionAddress: document.fn.address
               }
             : undefined
@@ -175,13 +176,13 @@
         runToCursor: (line) => void session.runToCursor(group, line)
     })
     /**
-     * Rename…, Comment… and the rest on the Executable's own Listing
+     * Rename…, Comment… and the rest on the Executable's own Listing and its Pseudocode
      * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions
-     * 18 and 19), offered where the pane's File takes them; refused with the reason while a Build,
-     * a Run or the Testcases run.
+     * 14 and 16 to 19), offered where the pane's File takes them; refused with the reason while a
+     * Build, a Run or the Testcases run. The session acts on the view the pane shows.
      */
     const annotating = annotationActions({
-        canRename: (line, column) => session.renameTargetAt(group, line, column) !== undefined,
+        canRename: (line, column) => session.canRenameAt(group, line, column),
         rename: (line, column) => void session.openRenamePrompt(group, line, column),
         canResetName: (line, column) => session.canResetNameAt(group, line, column),
         resetName: (line, column) => void session.resetNameAt(group, line, column),
@@ -210,6 +211,8 @@
     })
     /** The Executable's own Listing's: Patch instruction…, Show in Hex, renames and comments too. */
     const ownListingActions = [...listingActions, ...debugActions, ...annotating]
+    /** A Pseudocode's: Breakpoints and Run to Cursor, renames and comments. */
+    const pseudocodeActions = [...debugActions, ...annotating]
 
     /**
      * Whether the pane's find widget is open, in the top right corner where a read-only notice
@@ -402,7 +405,7 @@
                         ? undefined
                         : ownListingActions
                     : pseudocodeModel
-                      ? debugActions
+                      ? pseudocodeActions
                       : undefined}
                 viewStates={group.editorViewStates}
                 bind:editor={group.editor}

@@ -148,7 +148,10 @@ export class EditorGroup {
     declare readonly pseudocodeModelKeys: readonly string[]
     /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
     patchPrompt = $state.raw<PatchPrompt | undefined>()
-    /** The Rename… or Comment… prompt opened over this group's Listing; see `openAnnotationPrompt`. */
+    /**
+     * The Rename… or Comment… prompt opened over this group's Listing or Pseudocode; see
+     * `openAnnotationPrompt`.
+     */
     annotationPrompt = $state.raw<AnnotationPrompt | undefined>()
 
     constructor(
@@ -379,12 +382,16 @@ export class EditorGroup {
     }
     /**
      * The open Rename… or Comment… prompt, while the pane shows the Listing of the File it
-     * annotates ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * annotates, or the Pseudocode of the function it was opened over
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
      * decision 18).
      */
     get openAnnotationPrompt(): AnnotationPrompt | undefined {
         const prompt = this.annotationPrompt
-        return prompt && this.displayedView === 'listing' && prompt.spec.path === this.displayedPath
+        if (!prompt || prompt.spec.path !== this.displayedPath) return undefined
+        const over = prompt.spec.pseudocodeFunction
+        if (over === undefined) return this.displayedView === 'listing' ? prompt : undefined
+        return this.displayedView === 'pseudocode' && this.displayedPseudocode?.fn.address === over
             ? prompt
             : undefined
     }

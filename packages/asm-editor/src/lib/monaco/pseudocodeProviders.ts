@@ -36,9 +36,9 @@ import { modelPseudocode } from './pseudocodeModels'
  * card and explains Ghidra's own words ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
  * decisions 5 and 6). A name the person gave says what it was
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions 8,
- * 9 and 16): a global's "Renamed from" its old name, a local's where the decompiler keeps it; and
- * a comment's words are text, never a name or one of Ghidra's words. They answer for Pseudocode
- * models only.
+ * 9 and 16): a global's "Renamed from" its old name, a local's too where the decompiler's name
+ * for it is known, and where the decompiler keeps it; and a comment's words are text, never a name
+ * or one of Ghidra's words. They answer for Pseudocode models only.
  */
 export function createPseudocodeProviders(monacoInstance: MonacoType) {
     const range = (position: Pick<monaco.Position, 'lineNumber'>, start: number, end: number) =>
@@ -158,7 +158,8 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
                                 registered.variables?.find(
                                     (candidate) => candidate.id === variable
                                 ),
-                                (registered.functionAddress ?? 0) + registered.listing.base
+                                (registered.functionAddress ?? 0) + registered.listing.base,
+                                registered.defaultNames?.get(variable)
                             )
                         }
                     ]

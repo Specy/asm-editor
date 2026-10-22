@@ -215,17 +215,25 @@ export function variableStorageWords(
 /**
  * The hover of a local variable or parameter the person renamed
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
- * 16): their name, and where the decompiler keeps it, which the decompiler's own name for it
- * said. Without the variable, as when the decompiler no longer reports it, the name alone.
+ * 16): their name, what it was renamed from when the decompiler's own name for it is known
+ * (`from`), as a renamed label's hover says it, and where the decompiler keeps it, which that name
+ * said. Without the variable, as when the decompiler no longer reports it, no place.
  */
 export function renamedVariableMarkdown(
     name: string,
     variable: Pick<DecompiledVariable, 'id' | 'kind' | 'storage'> | undefined,
-    entry: number
+    entry: number,
+    from?: string
 ): string {
     const what = variable?.kind === 'parameter' ? 'a parameter' : 'a local variable'
     const where = variable
-        ? ` The decompiler keeps it ${variableStorageWords(variable, entry)} (\`${variable.storage}\`).`
+        ? `The decompiler keeps it ${variableStorageWords(variable, entry)} (\`${variable.storage}\`).`
         : ''
-    return `**${name}**: ${what} renamed in this Project.${where} Reset name gives back the name the decompiler gave it.\n\n${PSEUDOCODE_LINK}`
+    if (from === undefined)
+        return `**${name}**: ${what} renamed in this Project.${where && ` ${where}`} Reset name gives back the name the decompiler gave it.\n\n${PSEUDOCODE_LINK}`
+    return [
+        `**${name}**: ${what} renamed in this Project.`,
+        `Renamed from \`${from}\`.${where && ` ${where}`} Reset name gives that name back.`,
+        PSEUDOCODE_LINK
+    ].join('\n\n')
 }

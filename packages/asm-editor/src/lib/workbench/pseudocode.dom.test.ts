@@ -11,7 +11,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import type { EditorGroup } from './EditorGroup.svelte'
-import type { WorkbenchSession } from './WorkbenchSession.svelte'
+import type { WorkbenchSession, WorkbenchSessionHost } from './WorkbenchSession.svelte'
 import type { AddressBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
@@ -22,6 +22,8 @@ import { PseudocodeClient } from '#lib/pseudocode/pseudocodeClient.ts'
 import type { PseudocodeDocument } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
 import { listingLineOfTarget, pseudocodeTargetAt } from '#lib/pseudocode/pseudocodeMap.ts'
 import { createPseudocodeProviders } from '#lib/monaco/pseudocodeProviders.ts'
+import { movePseudocodeViewState } from '#lib/monaco/pseudocodeViewState.ts'
+import { toast } from '#stores/toastStore.ts'
 import { setModelPseudocode } from '#lib/monaco/pseudocodeModels.ts'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { fileViewIdentity } from '#lib/languages/service/uri.ts'
@@ -106,34 +108,40 @@ afterEach(() => {
 
 /**
  * crackme beside a text File, with a Build that stops at `main` as the x86 Emulator does; or
- * another Executable, a C++ one's Listing demangled as the Listing worker demangles it.
+ * another Executable, a C++ one's Listing demangled as the Listing worker demangles it. With
+ * `hold`, each Listing waits to be generated until the function it returns is called.
  */
 function setup(
     data: StoredProject = {},
     executable: { path: string; content: string; cpp?: boolean } = {
         path: 'crackme',
         content: crackme
-    }
+    },
+    host: Partial<WorkbenchSessionHost> = {}
 ) {
-    const fixture = editorGroupsFixture('X86', {
-        entry: executable.path,
-        files: {
-            [executable.path]: { encoding: 'base64', content: executable.content },
-            'notes.txt': { encoding: 'plain', content: 'password?' }
+    const fixture = editorGroupsFixture(
+        'X86',
+        {
+            entry: executable.path,
+            files: {
+                [executable.path]: { encoding: 'base64', content: executable.content },
+                'notes.txt': { encoding: 'plain', content: 'password?' }
+            },
+            ...data
         },
-        ...data
-    })
+        host
+    )
     disposers.push(fixture.dispose)
     const { emulator } = fixture
-    const store = new ListingDocuments((order) =>
-        Promise.resolve(
-            generateListing(decoder, {
-                ...order,
-                version: 'v1',
-                ...(executable.cpp ? { demangler } : {})
-            })
-        )
-    )
+    let held: Promise<void> | undefined
+    const store = new ListingDocuments(async (order) => {
+        await held
+        return generateListing(decoder, {
+            ...order,
+            version: 'v1',
+            ...(executable.cpp ? { demangler } : {})
+        })
+    })
     emulator.listings = store
     emulator.compile = async (_historySize, sources) => {
         const files = JSON.parse(JSON.stringify(sources.files))
@@ -153,7 +161,15 @@ function setup(
         store.clearSession()
     }
     flushSync()
-    return fixture
+    const hold = () => {
+        let release = () => {}
+        held = new Promise((resolve) => (release = resolve))
+        return () => {
+            held = undefined
+            release()
+        }
+    }
+    return { ...fixture, hold }
 }
 
 function show(session: WorkbenchSession, path: string, group: EditorGroup = session.groups[0]) {
@@ -1244,5 +1260,605 @@ describe('the Pseudocode in a Debug session', () => {
         expect(pane.displayedView).toBe('pseudocode')
         expect(session.groups[1].displayedPath).toBe('main.asm')
         expect(session.executionGroup).toBe(session.groups[1])
+    })
+})
+
+describe('renames and comments in the Pseudocode', () => {
+    /** main's link-time address in crackme. */
+    const MAIN = 0x11e9
+    const runTime = (address: number) => `0x${(address + BASE).toString(16)}`
+
+    /** crackme's main decompiled beside its Listing, in a Workbench of `host`. */
+    async function paired(host: Partial<WorkbenchSessionHost> = {}) {
+        const fixture = setup({}, undefined, host)
+        const { session } = fixture
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        const document = await decompiled(pane)
+        return { ...fixture, pane, listingPane, document, listing: listingOf(pane) }
+    }
+
+    /**
+     * The Pseudocode a pane shows once the one it asks for is decompiled and its text holds
+     * `text` (or, with `absent`, no longer does), after a change.
+     */
+    async function shownWith(pane: EditorGroup, text: string, absent = false) {
+        for (let attempt = 0; attempt < 500; attempt++) {
+            flushSync()
+            const shown = pane.displayedPseudocode
+            if (
+                shown?.status === 'ready' &&
+                pane.requestedPseudocode === shown &&
+                shown.text.includes(text) !== absent
+            )
+                return shown
+            await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+        throw new Error(`the Pseudocode never ${absent ? 'lost' : 'showed'} ${text}`)
+    }
+
+    /** The line of the first `text` of a document, and a column `offset` into its `word`. */
+    function at(document: PseudocodeDocument, text: string, word = text, offset = 1) {
+        const line = lineWith(document, text)
+        expect(line, text).toBeGreaterThanOrEqual(0)
+        const column = document.text.split('\n')[line].indexOf(word)
+        expect(column, word).toBeGreaterThanOrEqual(0)
+        return { line, column: column + offset }
+    }
+
+    /** Waits for a pane's Listing to be the one asked for, and returns its text's lines. */
+    async function listingRows(session: WorkbenchSession, pane: EditorGroup) {
+        for (let attempt = 0; attempt < 500; attempt++) {
+            flushSync()
+            const requested = session.listingFor(pane.sourceSelection)
+            if (requested?.status === 'ready' && pane.displayedListing === requested)
+                return requested.listing!.text.split('\n')
+            await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+        throw new Error('the Listing was not generated')
+    }
+
+    it('renames a local with Rename…, its name checked as typed, only its function decompiled again', async () => {
+        const { session, pane, listingPane, document } = await paired()
+        const listingDocument = pane.pseudocodeListing
+        const name = at(document, 'iVar1 = strcmp(acStack_98', 'acStack_98')
+        expect(session.annotatablePath(pane)).toBe('crackme')
+        expect(session.canRenameAt(pane, name.line, name.column)).toBe(true)
+        expect(session.renameTargetAt(pane, name.line, name.column)).toBeUndefined()
+        expect(session.variableTargetAt(pane, name.line, name.column)).toMatchObject({
+            functionAddress: MAIN,
+            id: 'stack:-0x98',
+            parameter: false,
+            current: 'acStack_98',
+            raw: 'acStack_98'
+        })
+        expect(session.canResetNameAt(pane, name.line, name.column)).toBe(false)
+        //just after the name, where a click past its last letter leaves the cursor
+        expect(
+            session.variableTargetAt(pane, name.line, name.column - 1 + 'acStack_98'.length)?.id
+        ).toBe('stack:-0x98')
+        //no name: a keyword, a string's text, a number
+        const branch = at(document, 'if (iVar1 == 0)', 'if')
+        expect(session.canRenameAt(pane, branch.line, branch.column)).toBe(false)
+        const string = at(document, '"hunter2"', 'hunter2')
+        expect(session.canRenameAt(pane, string.line, string.column)).toBe(false)
+
+        expect(session.openRenamePrompt(pane, name.line, name.column)).toBe(true)
+        const prompt = pane.openAnnotationPrompt!
+        expect(prompt.spec).toMatchObject({
+            kind: 'name',
+            title: 'Rename acStack_98',
+            text: 'acStack_98',
+            pseudocodeFunction: MAIN
+        })
+        expect(prompt.spec.note).toBeUndefined()
+        //over this Pseudocode, not the Listing beside it
+        expect(listingPane.openAnnotationPrompt).toBeUndefined()
+        const reason = (text: string) => {
+            prompt.input(text)
+            return prompt.problem
+        }
+        //its own name, which keeps it the decompiler's
+        expect(reason('acStack_98')).toBeUndefined()
+        expect(reason('local_98')).toBe(
+            'local_98 reads as a name the decompiler gives; choose one that does not'
+        )
+        expect(reason('sVar4')).toBe(
+            'sVar4 reads as a name the decompiler gives; choose one that does not'
+        )
+        expect(reason('main')).toBe(
+            'main is the name of a global, which the Pseudocode would then write as ::main'
+        )
+        expect(reason('puts')).toBe(
+            'puts is the name of a global, which the Pseudocode would then write as ::puts'
+        )
+        expect(reason('int')).toBe('int is a keyword of C')
+        expect(reason('my password')).toBe(
+            'A name holds letters, digits and underscores only, not a space'
+        )
+        expect(reason(' password ')).toBeUndefined()
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        expect(pane.annotationPrompt).toBeUndefined()
+        expect(session.project.files.crackme.annotations).toEqual({
+            locals: { '0x11e9': { 'stack:-0x98': 'password' } }
+        })
+        flushSync()
+        //only main is decompiled again: the Listing is the one it was, and the text stays shown
+        expect(session.listingFor(pane.sourceSelection)).toBe(listingDocument)
+        expect(pane.requestedPseudocode).not.toBe(document)
+        expect(pane.displayedPseudocode).toBe(document)
+        expect(pane.displayedCode).toBe(document.text)
+        const renamed = await shownWith(pane, 'iVar1 = strcmp(password,"hunter2");')
+        expect(renamed.text).toContain('char password [136];')
+        expect(renamed.text).toContain('pcVar2 = fgets(password,0x80,stdin);')
+        expect(pane.pseudocodeListing).toBe(listingDocument)
+        //what the decompiler named it, which its hover and its prompt say
+        expect(renamed.defaultNames.get('stack:-0x98')).toBe('acStack_98')
+
+        //another variable cannot take the name, and takes its own
+        const result = at(renamed, 'iVar1 = strcmp', 'iVar1')
+        session.openRenamePrompt(pane, result.line, result.column)
+        const other = pane.openAnnotationPrompt!
+        other.input('password')
+        expect(other.problem).toBe('password is the name of another variable of this function')
+        other.input('result')
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        const both = await shownWith(pane, 'result = strcmp(password,"hunter2");')
+        expect(both.text).toContain('if (result == 0) {')
+        //the prompt of a renamed one says what it was
+        const stack = at(both, 'result = strcmp(password', 'password')
+        expect(session.canResetNameAt(pane, stack.line, stack.column)).toBe(true)
+        session.openRenamePrompt(pane, stack.line, stack.column)
+        expect(pane.openAnnotationPrompt!.spec).toMatchObject({
+            title: 'Rename password',
+            text: 'password',
+            note: 'Renamed from acStack_98; that name resets it.'
+        })
+    })
+
+    it('resets a local’s name: Reset name, or the decompiler’s name typed', async () => {
+        const { session, pane } = await paired()
+        expect(session.renameVariable('crackme', MAIN, 'stack:-0x98', 'password')).toBe(true)
+        let renamed = await shownWith(pane, 'strcmp(password,')
+        let name = at(renamed, 'strcmp(password', 'password')
+        expect(session.canResetNameAt(pane, name.line, name.column)).toBe(true)
+        expect(session.resetNameAt(pane, name.line, name.column)).toBe(true)
+        expect(session.project.files.crackme.annotations).toBeUndefined()
+        const reset = await shownWith(pane, 'strcmp(acStack_98,')
+        name = at(reset, 'strcmp(acStack_98', 'acStack_98')
+        expect(session.canResetNameAt(pane, name.line, name.column)).toBe(false)
+
+        session.renameVariable('crackme', MAIN, 'stack:-0x98', 'password')
+        renamed = await shownWith(pane, 'strcmp(password,')
+        name = at(renamed, 'strcmp(password', 'password')
+        session.openRenamePrompt(pane, name.line, name.column)
+        const prompt = pane.openAnnotationPrompt!
+        prompt.input('acStack_98')
+        expect(prompt.problem).toBeUndefined()
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        expect(session.project.files.crackme.annotations).toBeUndefined()
+        await shownWith(pane, 'strcmp(acStack_98,')
+    })
+
+    it('refuses a parameter its function’s C declaration names, saying why', async () => {
+        const warn = vi.spyOn(toast, 'warn')
+        const hello = readFileSync('../x86/blink-js/tests/fixtures/elf/hello-atexit-static')
+        const { session } = setup({}, { path: 'hello', content: hello.toString('base64') })
+        const pane = show(session, 'hello')
+        session.decompile(pane)
+        flushSync()
+        await decompiled(pane)
+        const puts = listingOf(pane).functions.find((fn) => fn.name === 'puts')!
+        pane.followFunction('hello', puts.address)
+        flushSync()
+        const document = await decompiled(pane)
+        expect(document.text).toContain('int puts(char *s)')
+        const parameter = at(document, 'int puts(char *s)', 's)')
+        expect(session.variableTargetAt(pane, parameter.line, parameter.column)).toMatchObject({
+            parameter: true,
+            current: 's',
+            refusal: 's is named by the C declaration of puts, so it keeps that name'
+        })
+        expect(session.canRenameAt(pane, parameter.line, parameter.column)).toBe(true)
+        expect(session.canResetNameAt(pane, parameter.line, parameter.column)).toBe(false)
+        expect(session.openRenamePrompt(pane, parameter.line, parameter.column)).toBe(false)
+        expect(warn).toHaveBeenLastCalledWith(
+            's is named by the C declaration of puts, so it keeps that name'
+        )
+        expect(pane.annotationPrompt).toBeUndefined()
+        //its locals are the person's to name
+        const local = at(document, 'sVar6 = strlen(s)', 'sVar6')
+        expect(session.openRenamePrompt(pane, local.line, local.column)).toBe(true)
+        expect(session.project.files.hello.annotations).toBeUndefined()
+    }, 30_000)
+
+    it('renames a function from its declaration and its calls, as the Listing does', async () => {
+        const warn = vi.spyOn(toast, 'warn')
+        const { session, pane, listingPane, document } = await paired()
+        //a library function's name is the library's
+        const call = at(document, 'iVar1 = strcmp', 'strcmp')
+        expect(session.renameTargetAt(pane, call.line, call.column)).toMatchObject({
+            refusal: 'strcmp is named by the library it comes from'
+        })
+        expect(session.openRenamePrompt(pane, call.line, call.column)).toBe(false)
+        expect(warn).toHaveBeenLastCalledWith('strcmp is named by the library it comes from')
+
+        const declaration = at(document, 'undefined8 main(void)', 'main')
+        expect(session.renameTargetAt(pane, declaration.line, declaration.column)).toMatchObject({
+            address: MAIN,
+            raw: 'main',
+            current: 'main'
+        })
+        expect(session.variableTargetAt(pane, declaration.line, declaration.column)).toBe(undefined)
+        expect(session.openRenamePrompt(pane, declaration.line, declaration.column)).toBe(true)
+        const prompt = pane.openAnnotationPrompt!
+        expect(prompt.spec).toMatchObject({
+            kind: 'name',
+            title: 'Rename main',
+            text: 'main',
+            pseudocodeFunction: MAIN
+        })
+        prompt.input('_start')
+        expect(prompt.problem).toBe(`_start is the name of another label, at ${runTime(0x1100)}`)
+        prompt.input('check_password')
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        expect(session.project.files.crackme.annotations).toEqual({
+            names: { '0x11e9': 'check_password' }
+        })
+        //the program is opened again with the name, the text shown until then
+        flushSync()
+        expect(pane.displayedCode).toBe(document.text)
+        const renamed = await shownWith(pane, 'undefined8 check_password(void)')
+        expect(renamed.text.split('\n')[0]).toBe(
+            '// check_password, 0x5555555551e9 to 0x5555555552ba'
+        )
+        expect(await listingRows(session, listingPane)).toContain('check_password:')
+        //the name it was renamed from, as the Listing's hover says it
+        const again = at(renamed, 'undefined8 check_password(void)', 'check_password')
+        expect(session.canResetNameAt(pane, again.line, again.column)).toBe(true)
+        session.openRenamePrompt(pane, again.line, again.column)
+        expect(pane.openAnnotationPrompt!.spec.note).toBe('Renamed from main; that name resets it.')
+        session.closeAnnotationPrompt(pane)
+
+        //and from a call, in _start, where the library's own is refused
+        const start = listingOf(pane).functions.find((fn) => fn.name === '_start')!
+        pane.followFunction('crackme', start.address)
+        flushSync()
+        const entry = await shownWith(pane, '__libc_start_main(check_password,')
+        const library = at(entry, '__libc_start_main(', '__libc_start_main')
+        expect(session.renameTargetAt(pane, library.line, library.column)?.refusal).toBe(
+            '__libc_start_main is named by the library it comes from'
+        )
+        const argument = at(entry, '__libc_start_main(check_password', 'check_password')
+        expect(session.resetNameAt(pane, argument.line, argument.column)).toBe(true)
+        expect(session.project.files.crackme.annotations).toBeUndefined()
+        await shownWith(pane, '__libc_start_main(main,')
+    })
+
+    it('renames a stripped program’s invented function from a call of it', async () => {
+        const stripped = readFileSync('../decompiler/js/tests/fixtures/elf/crackme-stripped')
+        const { session } = setup({}, { path: 'stripped', content: stripped.toString('base64') })
+        const pane = show(session, 'stripped')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        await decompiled(pane)
+        //a function nothing in the file names, calling another
+        const caller = listingOf(pane).functions.find((fn) => fn.name === 'FUN_peachy_anteater')!
+        pane.followFunction('stripped', caller.address)
+        flushSync()
+        const document = await decompiled(pane)
+        const call = at(document, 'FUN_moonlit_vole(', 'FUN_moonlit_vole')
+        const target = session.renameTargetAt(pane, call.line, call.column)!
+        expect(target).toMatchObject({ raw: 'FUN_moonlit_vole', current: 'FUN_moonlit_vole' })
+        expect(target.refusal).toBeUndefined()
+        expect(session.openRenamePrompt(pane, call.line, call.column)).toBe(true)
+        pane.openAnnotationPrompt!.input('deregister')
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        expect(session.project.files.stripped.annotations).toEqual({
+            names: { [`0x${target.address.toString(16)}`]: 'deregister' }
+        })
+        await shownWith(pane, 'deregister(')
+        expect(await listingRows(session, listingPane)).toContain('deregister:')
+    })
+
+    it('comments on a statement at its first instruction, shown above it and in the Listing', async () => {
+        const { session, pane, listingPane, document, listing } = await paired()
+        const branch = lineWith(document, 'if (iVar1 == 0)')
+        const test = listing.lines.addresses[listingLine(listing, 'main', 'test eax, eax')]
+        expect(session.commentTargetAt(pane, branch)).toEqual({ kind: 'comment', address: test })
+        expect(session.canDeleteCommentAt(pane, branch)).toBe(false)
+        expect(session.openCommentPrompt(pane, branch)).toBe(true)
+        const prompt = pane.openAnnotationPrompt!
+        expect(prompt.spec).toMatchObject({
+            kind: 'comment',
+            title: `Comment at ${runTime(test)}`,
+            text: '',
+            pseudocodeFunction: MAIN
+        })
+        expect(prompt.multiline).toBe(true)
+        prompt.input('the password matched')
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        expect(session.project.files.crackme.annotations).toEqual({
+            comments: { [`0x${test.toString(16)}`]: 'the password matched' }
+        })
+        const commented = await shownWith(pane, '/* the password matched */')
+        const rows = commented.text.split('\n')
+        const moved = lineWith(commented, 'if (iVar1 == 0)')
+        expect(rows[moved - 1].trim()).toBe('/* the password matched */')
+        //at the end of the test's line in the Listing beside it
+        const listed = await listingRows(session, listingPane)
+        expect(listed.find((row) => row.includes('test eax, eax'))).toMatch(
+            / ; the password matched$/
+        )
+        //its own line edits it, and Delete comment takes it away
+        expect(session.commentTargetAt(pane, moved - 1)).toEqual({ kind: 'comment', address: test })
+        session.openCommentPrompt(pane, moved - 1)
+        expect(pane.openAnnotationPrompt!.spec.text).toBe('the password matched')
+        session.closeAnnotationPrompt(pane)
+        expect(session.canDeleteCommentAt(pane, moved)).toBe(true)
+        expect(session.canDeleteCommentAt(pane, moved - 1)).toBe(true)
+        expect(session.deleteCommentAt(pane, moved - 1)).toBe(true)
+        expect(session.project.files.crackme.annotations).toBeUndefined()
+        await shownWith(pane, 'the password matched', true)
+    })
+
+    it('comments on the function from its declaration, or with Function comment… from any line', async () => {
+        const { session, pane, listingPane, document } = await paired()
+        const declaration = lineWith(document, 'undefined8 main(void)')
+        expect(session.commentTargetAt(pane, declaration)).toMatchObject({
+            kind: 'function comment',
+            address: MAIN,
+            function: { name: 'main' }
+        })
+        //Comment… is the function comment there, so no Function comment… beside it
+        expect(session.commentTargetAt(pane, declaration, true)).toBeUndefined()
+        //no comment on a brace, a declaration, the decompiler's warning or the header
+        expect(session.commentTargetAt(pane, declaration + 1)).toBeUndefined()
+        expect(session.commentTargetAt(pane, lineWith(document, 'int iVar1;'))).toBeUndefined()
+        expect(session.commentTargetAt(pane, lineWith(document, 'WARNING'))).toBeUndefined()
+        expect(session.commentTargetAt(pane, 0)).toBeUndefined()
+        const strcmp = lineWith(document, 'strcmp(acStack_98')
+        expect(session.commentTargetAt(pane, strcmp, true)).toMatchObject({
+            kind: 'function comment',
+            address: MAIN
+        })
+        expect(session.commentTargetAt(pane, 0, true)?.kind).toBe('function comment')
+        expect(session.openCommentPrompt(pane, strcmp, true)).toBe(true)
+        expect(pane.openAnnotationPrompt!.spec.title).toBe('Comment on the function main')
+        pane.openAnnotationPrompt!.input('Asks for the password\nand checks it')
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        expect(session.project.files.crackme.annotations).toEqual({
+            functionComments: { '0x11e9': 'Asks for the password\nand checks it' }
+        })
+        const commented = await shownWith(pane, 'Asks for the password')
+        const first = lineWith(commented, 'Asks for the password')
+        expect(first).toBeLessThan(lineWith(commented, 'undefined8 main(void)'))
+        //each of its lines edits it
+        expect(session.commentTargetAt(pane, first)).toMatchObject({
+            kind: 'function comment',
+            address: MAIN
+        })
+        expect(session.commentTargetAt(pane, first + 1)).toMatchObject({
+            kind: 'function comment',
+            address: MAIN
+        })
+        //above main's label in the Listing
+        const listed = await listingRows(session, listingPane)
+        const label = listed.indexOf('main:')
+        expect(listed.slice(label - 2, label)).toEqual([
+            '; Asks for the password',
+            '; and checks it'
+        ])
+    })
+
+    it('undoes and redoes renames and comments made there, the Pseudocode following', async () => {
+        const { session, pane, document, listing } = await paired()
+        const test = listing.lines.addresses[listingLine(listing, 'main', 'test eax, eax')]
+        expect(session.canUndoAnnotation('crackme')).toBe(false)
+        session.renameVariable('crackme', MAIN, 'stack:-0x98', 'password')
+        session.setComment('crackme', test, 'matched')
+        await shownWith(pane, '/* matched */')
+        expect(session.annotatablePath(pane)).toBe('crackme')
+        expect(session.canUndoAnnotation('crackme')).toBe(true)
+        expect(session.undoAnnotation('crackme')).toBe(true)
+        let shown = await shownWith(pane, '/* matched */', true)
+        expect(shown.text).toContain('strcmp(password,')
+        expect(session.undoAnnotation('crackme')).toBe(true)
+        shown = await shownWith(pane, 'strcmp(acStack_98,')
+        expect(shown.text).toBe(document.text)
+        expect(session.canRedoAnnotation('crackme')).toBe(true)
+        expect(session.redoAnnotation('crackme')).toBe(true)
+        await shownWith(pane, 'strcmp(password,')
+    })
+
+    it('takes none in a read-only Workbench, nor in the Build output’s Pseudocode', async () => {
+        const { session, pane, document } = await paired({ readonly: true })
+        const name = at(document, 'iVar1 = strcmp(acStack_98', 'acStack_98')
+        expect(session.annotatablePath(pane)).toBeUndefined()
+        expect(session.canRenameAt(pane, name.line, name.column)).toBe(false)
+        expect(session.commentTargetAt(pane, name.line)).toBeUndefined()
+        expect(session.openRenamePrompt(pane, name.line, name.column)).toBe(false)
+        expect(session.openCommentPrompt(pane, name.line)).toBe(false)
+
+        const built = setup()
+        built.emulator.buildOutput = {
+            path: 'main',
+            bytes: new Uint8Array(crackmeBytes),
+            generation: 1,
+            sources: { entry: 'crackme', files: {} }
+        }
+        flushSync()
+        const output = show(built.session, 'main')
+        built.session.decompile(output)
+        flushSync()
+        const decompiledOutput = await decompiled(output)
+        const local = at(decompiledOutput, 'iVar1 = strcmp(acStack_98', 'acStack_98')
+        expect(output.displayedBuildOutput).toBe(true)
+        expect(built.session.annotatablePath(output)).toBeUndefined()
+        expect(built.session.canRenameAt(output, local.line, local.column)).toBe(false)
+    })
+
+    it('is refused while a Build, a Run or the Testcases run, with the reason', async () => {
+        const warn = vi.spyOn(toast, 'warn')
+        const { session, pane, document } = await paired()
+        const name = at(document, 'iVar1 = strcmp(acStack_98', 'acStack_98')
+        const branch = lineWith(document, 'if (iVar1 == 0)')
+        session.building = true
+        //offered, so the key says why
+        expect(session.canRenameAt(pane, name.line, name.column)).toBe(true)
+        expect(session.openRenamePrompt(pane, name.line, name.column)).toBe(false)
+        expect(warn).toHaveBeenLastCalledWith('A Build is running: rename and comment once it ends')
+        session.building = false
+        session.running = true
+        expect(session.openCommentPrompt(pane, branch)).toBe(false)
+        expect(warn).toHaveBeenLastCalledWith(
+            'The program is running: Pause it to rename or comment'
+        )
+        session.running = false
+        session.testing = true
+        expect(session.renameVariable('crackme', MAIN, 'stack:-0x98', 'password')).toBe(false)
+        expect(warn).toHaveBeenLastCalledWith(
+            'The Testcases are running: rename and comment once they end'
+        )
+        session.testing = false
+        expect(session.project.files.crackme.annotations).toBeUndefined()
+    })
+
+    it('keeps the text, with no "Decompiling…" over it, until the function is decompiled again', async () => {
+        const { session, pane, document, listing, hold } = await paired()
+        const host = window.document.createElement('div')
+        window.document.body.appendChild(host)
+        const status = mount(PseudocodeStatus, {
+            target: host,
+            props: { group: pane, onRetry: () => {} }
+        })
+        disposers.push(() => unmount(status))
+        const reveal = vi.spyOn(
+            session as unknown as { revealPseudocodeLine: (group: EditorGroup) => Promise<void> },
+            'revealPseudocodeLine'
+        )
+        const test = listing.lines.addresses[listingLine(listing, 'main', 'test eax, eax')]
+        //a comment makes the Listing again, then decompiles main again
+        const release = hold()
+        session.setComment('crackme', test, 'matched')
+        session.renameVariable('crackme', MAIN, 'stack:-0x98', 'password')
+        //main's text is shown all along: the one before, then once decompiled with the comment
+        //from the Listing it is shown beside until the new one is ready, then from that one
+        const shown = () => {
+            flushSync()
+            const displayed = pane.displayedPseudocode
+            expect(displayed?.status).toBe('ready')
+            expect(displayed?.fn.address).toBe(MAIN)
+            expect(pane.modelIdentity).toBeDefined()
+            expect(pane.displayedCode).toBe(displayed!.text)
+            expect(host.textContent).not.toContain('Decompiling')
+        }
+        flushSync()
+        expect(pane.requestedPseudocode?.status).toBe('decompiling')
+        expect(pane.displayedPseudocode).toBe(document)
+        for (let step = 0; step < 20; step++) {
+            await new Promise((resolve) => setTimeout(resolve, 10))
+            shown()
+            expect(session.listingFor(pane.sourceSelection)?.status).toBe('generating')
+        }
+        release()
+        for (
+            let attempt = 0;
+            attempt < 500 && pane.displayedPseudocode?.listingDocument === document.listingDocument;
+            attempt++
+        ) {
+            await new Promise((resolve) => setTimeout(resolve, 5))
+            shown()
+        }
+        const commented = await shownWith(pane, '/* matched */')
+        expect(commented.text).toContain('strcmp(password,')
+        expect(pane.displayedCode).toBe(commented.text)
+        //the editor keeps its place in it, rather than going to the Listing's cursor
+        expect(reveal).not.toHaveBeenCalled()
+        //another function is shown where the Listing's cursor is
+        pane.followFunction(
+            'crackme',
+            listing.functions.find((fn) => fn.name === '_start')!.address
+        )
+        flushSync()
+        await decompiled(pane)
+        expect(reveal).toHaveBeenCalledOnce()
+    })
+
+    it('moves the cursor to the same place of the text decompiled again', async () => {
+        const { session, pane, document, listing } = await paired()
+        const test = listing.lines.addresses[listingLine(listing, 'main', 'test eax, eax')]
+        session.setFunctionComment('crackme', MAIN, 'checks it')
+        session.setComment('crackme', test, 'matched\non two lines')
+        session.renameVariable('crackme', MAIN, 'stack:-0x98', 'pw')
+        const after = await shownWith(pane, 'strcmp(pw,')
+        const state = (line: number, column: number) =>
+            ({
+                cursorState: [
+                    {
+                        inSelectionMode: false,
+                        selectionStart: { lineNumber: line + 1, column: column + 1 },
+                        position: { lineNumber: line + 1, column: column + 1 }
+                    }
+                ],
+                viewState: {
+                    scrollLeft: 0,
+                    firstPosition: { lineNumber: line + 1, column: 1 },
+                    firstPositionDeltaTop: 0
+                },
+                contributionsState: {}
+            }) as unknown as Parameters<typeof movePseudocodeViewState>[0]
+        const moved = (line: number, column: number) => {
+            const result = movePseudocodeViewState(state(line, column), document, after)
+            return {
+                line: result.cursorState[0].position.lineNumber - 1,
+                column: result.cursorState[0].position.column - 1,
+                first: result.viewState.firstPosition.lineNumber - 1
+            }
+        }
+        //on the renamed name, three letters into it, which has two
+        const name = at(document, 'iVar1 = strcmp(acStack_98', 'acStack_98', 3)
+        const call = lineWith(after, 'iVar1 = strcmp(pw')
+        expect(moved(name.line, name.column)).toEqual({
+            line: call,
+            column: after.text.split('\n')[call].indexOf('pw') + 2,
+            first: call
+        })
+        //past a comment written above it, after the name
+        const branch = at(document, 'if (iVar1 == 0)', '{', 0)
+        expect(moved(branch.line, branch.column)).toMatchObject({
+            line: lineWith(after, 'if (iVar1 == 0)'),
+            column: branch.column
+        })
+        //the declaration below the function comment, and a brace with the line it follows
+        const declaration = lineWith(document, 'undefined8 main(void)')
+        expect(moved(declaration, 3).line).toBe(lineWith(after, 'undefined8 main(void)'))
+        expect(moved(declaration + 1, 0).line).toBe(lineWith(after, 'undefined8 main(void)') + 1)
+        //the header stays
+        expect(moved(0, 4)).toEqual({ line: 0, column: 4, first: 0 })
+    })
+
+    it('renames a local of the Build’s Pseudocode during a paused Debug session', async () => {
+        const { session } = setup()
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        await decompiled(pane)
+        await session.build()
+        await tick()
+        flushSync()
+        expect(pane.sourceSelection).toMatchObject({ sourceKind: 'build' })
+        const document = await decompiled(pane)
+        const name = at(document, 'iVar1 = strcmp(acStack_98', 'acStack_98')
+        expect(session.annotatablePath(pane)).toBe('crackme')
+        expect(session.openRenamePrompt(pane, name.line, name.column)).toBe(true)
+        pane.openAnnotationPrompt!.input('password')
+        expect(session.saveAnnotationPrompt(pane)).toBe(true)
+        //the Build's record keeps its bytes; the version shown has the live File's names
+        expect(session.emulator.buildSources?.files.crackme.annotations).toBeUndefined()
+        await shownWith(pane, 'strcmp(password,')
     })
 })

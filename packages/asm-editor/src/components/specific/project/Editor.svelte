@@ -50,6 +50,10 @@
     } from '#lib/monaco/editorLineActions.ts'
     import { followNamesAndHistory } from '#lib/monaco/editorNavigation.ts'
     import { noteViewStateListing, viewStateFor } from '#lib/monaco/listingViewState.ts'
+    import {
+        noteViewStatePseudocode,
+        pseudocodeViewStateFor
+    } from '#lib/monaco/pseudocodeViewState.ts'
     import { openProjectResource } from '#lib/languages/service/navigation.ts'
 
     interface Props {
@@ -194,6 +198,11 @@
      * onto the next Listing of the same File, whose lines may sit elsewhere (`viewStateFor`).
      */
     let placedListing: ListingModel['listing'] | undefined
+    /**
+     * Likewise the Pseudocode the model shown was placed with: a function decompiled again (after
+     * a rename or a comment) keeps the same places in view (`pseudocodeViewStateFor`).
+     */
+    let placedPseudocode: PseudocodeModel | undefined
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Monaco handles; nothing renders from them.
     const lineActionKeys = new Map<string, monaco.editor.IContextKey<boolean>>()
     /** The line actions with Go Back and Go Forward first, for an editor with a history. */
@@ -417,11 +426,16 @@
         shown: EditorSource
     ) {
         const viewState = modelViewStates.get(shown.key)
-        //a Listing made again since keeps its addresses in view, not its line numbers
+        //a Listing made again since keeps its addresses in view, not its line numbers, and a
+        //Pseudocode decompiled again its statements, comments and names
         const placing = untrack(() => listing?.listing)
         placedListing = placing
+        const decompiled = untrack(() => pseudocode)
+        placedPseudocode = decompiled
         if (viewState) {
-            currentEditor.restoreViewState(viewStateFor(viewState, placing))
+            currentEditor.restoreViewState(
+                pseudocodeViewStateFor(viewStateFor(viewState, placing), decompiled)
+            )
             return
         }
         const opensAt = shown.opensAt
@@ -497,6 +511,7 @@
         //same key, disposing the one the editor holds, whose state would then be lost
         const leaving = currentEditor.getModel() ? currentEditor.saveViewState() : null
         noteViewStateListing(leaving, placedListing)
+        noteViewStatePseudocode(leaving, placedPseudocode)
         //and the keyboard: Monaco drops it with the view of a model it lets go, which a Listing
         //made again after a rename typed there would take from the person
         const typing = currentEditor.hasTextFocus()
@@ -533,6 +548,7 @@
         activeModelKey = next.key
         //the same model's Listing with a Debug session's patches keeps its line table
         placedListing = untrack(() => listing?.listing)
+        placedPseudocode = untrack(() => pseudocode)
         cursorLine = (currentEditor.getPosition()?.lineNumber ?? 0) - 1
         cursorColumn = (currentEditor.getPosition()?.column ?? 0) - 1
     }
@@ -718,6 +734,7 @@
         if (viewStates && viewStateKey && ownEditor?.getModel()) {
             const state = ownEditor.saveViewState()
             noteViewStateListing(state, placedListing)
+            noteViewStatePseudocode(state, placedPseudocode)
             viewStates.set(viewStateKey, state)
         }
 

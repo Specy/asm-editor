@@ -9,6 +9,21 @@
 
     let { group, onRetry }: { group: EditorGroup; onRetry: () => void } = $props()
     const document = $derived(group.requestedPseudocode)
+    /**
+     * The Pseudocode the pane shows of the same function while it is decompiled again, after a
+     * rename, a comment or a Byte edit: it stays in view until the new one is ready
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 22), under no "Decompiling…".
+     */
+    const kept = $derived.by(() => {
+        const shown = group.displayedPseudocode
+        return (
+            shown !== document &&
+            shown?.status === 'ready' &&
+            shown.path === document?.path &&
+            shown.fn.address === document.fn.address
+        )
+    })
     const fn = $derived(group.pseudocodeFunction)
     /** How the function is named: a C++ one by its short name, as lists show it. */
     const name = $derived(fn?.list ?? fn?.name)
@@ -26,7 +41,7 @@
             <p>{name} could not be decompiled: {document.error}</p>
             <button type="button" onclick={onRetry}>Try again</button>
         </div>
-    {:else if document?.status !== 'ready'}
+    {:else if document?.status !== 'ready' && !kept}
         <!-- shown only once it takes a moment, so a quick function does not flash it -->
         <div class="pseudocode-status waiting" role="status">
             <h2>Decompiling…</h2>

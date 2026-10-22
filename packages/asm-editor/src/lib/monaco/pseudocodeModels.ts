@@ -22,6 +22,11 @@ export type PseudocodeModel = {
     variables?: readonly DecompiledVariable[]
     /** The person's names it was decompiled with, by variable id. */
     locals?: readonly LocalName[]
+    /**
+     * The names the decompiler gives the function's variables, by id, where known, which the
+     * hover of one the person renamed says it was renamed from.
+     */
+    defaultNames?: ReadonlyMap<string, string>
     /** The function's link-time address, which a variable's first use is counted from. */
     functionAddress?: number
 }

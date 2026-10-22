@@ -17,6 +17,11 @@ export type AnnotationPromptSpec = {
     text: string
     /** Written before the field, as part of the name: a jump target's dot. */
     prefix?: string
+    /**
+     * The function whose Pseudocode it was opened over, by its link-time address: it shows over
+     * that Pseudocode, as one opened without it shows over the File's Listing.
+     */
+    pseudocodeFunction?: number
     /** Why the text cannot be saved, as the prompt says under the field; undefined when it can. */
     problem: (text: string) => string | undefined
     /** Saves the text, giving why it could not be when it was not. */
@@ -24,10 +29,10 @@ export type AnnotationPromptSpec = {
 }
 
 /**
- * Rename…, Comment… and Function comment…'s prompt, opened over a Listing line, or in the Symbols
- * panel, as the Patch prompt opens: the text as typed, the reason it cannot be saved as it stands,
- * and why saving it failed when it did. Saving a comment empty deletes it, and saving a label's own
- * name resets it.
+ * Rename…, Comment… and Function comment…'s prompt, opened over a Listing or Pseudocode line, or in
+ * the Symbols panel, as the Patch prompt opens: the text as typed, the reason it cannot be saved as
+ * it stands, and why saving it failed when it did. Saving a comment empty deletes it, and saving a
+ * label's or a variable's own name resets it.
  */
 export class AnnotationPrompt {
     text = $state('')

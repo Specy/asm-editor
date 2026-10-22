@@ -486,9 +486,12 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         )
     })
 
-    /** A model of an annotated function, as the editor registers one. */
-    function annotatedModel(name: string) {
-        const uri = `annotated-${name}`
+    /**
+     * A model of an annotated function, as the editor registers one, with the decompiler's names
+     * for its variables where `defaultNames` gives them.
+     */
+    function annotatedModel(name: string, defaultNames?: ReadonlyMap<string, string>) {
+        const uri = `annotated-${name}${defaultNames ? '-named' : ''}`
         const { lines, listing: of, variables, locals, address } = annotated.get(name)!
         disposers.push(
             setModelPseudocode(uri, {
@@ -503,7 +506,8 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
                 },
                 variables,
                 locals,
-                functionAddress: address
+                functionAddress: address,
+                ...(defaultNames ? { defaultNames } : {})
             })
         )
         return { uri: { toString: () => uri } } as unknown as monaco.editor.ITextModel
@@ -520,9 +524,14 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         } as monaco.Position
     }
 
-    function hoverOf(name: string, text: string, offset = 1): string[] {
+    function hoverOf(
+        name: string,
+        text: string,
+        offset = 1,
+        defaultNames?: ReadonlyMap<string, string>
+    ): string[] {
         const result = createPseudocodeProviders(monacoStub).hover.provideHover(
-            annotatedModel(name),
+            annotatedModel(name, defaultNames),
             position(name, text, offset),
             {} as never
         ) as monaco.languages.Hover | null
@@ -574,6 +583,22 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         //a name the decompiler gave is still explained as Ghidra's
         expect(hoverOf('crackme', 'pcVar2 = fgets')[0]).toContain(
             '**pcVar2**: a local variable the decompiler made'
+        )
+    })
+
+    it('says what a renamed local was renamed from where the decompiler’s name for it is known', () => {
+        const known = new Map([['stack:-0x98', 'acStack_98']])
+        const [stack] = hoverOf('crackme', 'password,0x80', 1, known)
+        expect(stack).toBe(
+            [
+                '**password**: a local variable renamed in this Project.',
+                'Renamed from `acStack_98`. The decompiler keeps it on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Reset name gives that name back.',
+                PSEUDOCODE_LINK
+            ].join('\n\n')
+        )
+        //one it does not know is said as before
+        expect(hoverOf('crackme', 'result = strcmp', 1, known)[0]).toContain(
+            'Reset name gives back the name the decompiler gave it.'
         )
     })
 

@@ -2,7 +2,7 @@ import type { DecompiledLine, DecompiledVariable } from '@specy/decompiler'
 import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import type { Listing, ListingFunction } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
-import type { ProjectFile } from '#lib/projectFiles.ts'
+import { byteEditsKey, type ProjectFile } from '#lib/projectFiles.ts'
 import { functionAnnotations, functionAnnotationsKey } from './pseudocodeAnnotations'
 import {
     PseudocodeClient,
@@ -63,7 +63,14 @@ export class PseudocodeDocument {
          * decisions 13 to 16).
          */
         readonly annotations: FunctionAnnotations,
-        decompile: Decompile
+        decompile: Decompile,
+        /**
+         * The names the decompiler gives the function's variables, by id, as far as any of its
+         * decompilations from the same bytes printed them: each settled document adds those it
+         * printed of the variables the person did not name. Shared by those documents, so a
+         * renamed variable's hover and prompt can say what it was called.
+         */
+        readonly defaultNames: Map<string, string>
     ) {
         //once whatever made it has settled: a stage may be reported at once, and a document is
         //made while a pane works out what it shows
@@ -100,6 +107,10 @@ export class PseudocodeDocument {
         const header = `// ${fn.list ?? fn.name}, 0x${first.toString(16)} to 0x${last.toString(16)}`
         this.lines = result.lines
         this.variables = result.variables
+        const { locals } = this.annotations
+        for (const variable of result.variables)
+            if (!locals.some((local) => local.id === variable.id))
+                this.defaultNames.set(variable.id, variable.name)
         this.map = pseudocodeMap(listing, fn, result.lines, this.firstLine)
         this.text = `${header}\n\n${result.text}\n`
         this.status = 'ready'
@@ -108,6 +119,8 @@ export class PseudocodeDocument {
 
 /** How many documents are kept beside those shown: a function read again is shown at once. */
 const KEPT_DOCUMENTS = 24
+/** How many functions' default variable names are kept. */
+const KEPT_DEFAULT_NAMES = 256
 
 /**
  * The Pseudocode documents of one Workbench session and the one client of its Pseudocode
@@ -126,6 +139,16 @@ export class PseudocodeDocuments {
     readonly search: PseudocodeSearchCache
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A cache read by `open`; what is shown is tracked through each document's own state.
     private readonly documents = new Map<string, PseudocodeDocument>()
+    /**
+     * The decompiler's names for each function's variables, by path and function, for the bytes
+     * they were printed from (see `PseudocodeDocument.defaultNames`); the oldest forgotten past
+     * {@link KEPT_DEFAULT_NAMES}.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read by hovers and prompts when asked; nothing renders from it.
+    private readonly defaultNames = new Map<
+        string,
+        { content: string; edits: string; names: Map<string, string> }
+    >()
     /** A short number for each Listing document, which the documents' keys name. */
     private readonly listingIds = new WeakMap<ListingDocument, number>()
     private nextListingId = 0
@@ -167,11 +190,18 @@ export class PseudocodeDocuments {
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
         if (!document || document.aborted) {
-            document = new PseudocodeDocument(path, listingDocument, listing, fn, own, (options) =>
-                this.decompiler().decompile(path, file, listing, fn.address, {
-                    ...options,
-                    annotations: own
-                })
+            document = new PseudocodeDocument(
+                path,
+                listingDocument,
+                listing,
+                fn,
+                own,
+                (options) =>
+                    this.decompiler().decompile(path, file, listing, fn.address, {
+                        ...options,
+                        annotations: own
+                    }),
+                this.defaultNamesOf(path, file, fn.address)
             )
         }
         this.documents.set(key, document)
@@ -224,6 +254,21 @@ export class PseudocodeDocuments {
 
     private decompiler(): PseudocodeClient {
         return (this.client ??= this.createClient())
+    }
+
+    /** The names the decompiler gives the variables of the function at `address` of these bytes. */
+    private defaultNamesOf(path: string, file: ProjectFile, address: number): Map<string, string> {
+        const key = `${path}\0${address}`
+        const edits = byteEditsKey(file)
+        let kept = this.defaultNames.get(key)
+        if (kept?.content !== file.content || kept.edits !== edits) {
+            // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Filled as documents settle; read when a hover or prompt asks.
+            kept = { content: file.content, edits, names: new Map() }
+            this.defaultNames.set(key, kept)
+            if (this.defaultNames.size > KEPT_DEFAULT_NAMES)
+                this.defaultNames.delete(this.defaultNames.keys().next().value!)
+        }
+        return kept.names
     }
 
     private listingId(document: ListingDocument): number {

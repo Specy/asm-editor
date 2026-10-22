@@ -1,4 +1,10 @@
-import { globalNameProblem, libraryNameProblem, type NamedLabel } from '#lib/annotations/names.ts'
+import type { DecompiledLine, DecompiledToken, DecompiledVariable } from '@specy/decompiler'
+import {
+    globalNameProblem,
+    libraryNameProblem,
+    localNameProblem,
+    type NamedLabel
+} from '#lib/annotations/names.ts'
 import {
     functionAtLine,
     LINE_KIND,
@@ -9,12 +15,14 @@ import {
     type ListingLabel
 } from '#lib/listing/listing.ts'
 import { ListingIndex, listingTokenAt } from '#lib/listing/listingNavigation.ts'
+import { listingLabelOfTarget } from '#lib/pseudocode/pseudocodeMap.ts'
 
 /**
- * What Rename… and Comment… act on at a line of an Executable's own Listing
+ * What Rename… and Comment… act on at a line of an Executable's own Listing or of its Pseudocode
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions 6,
- * 7 and 10 to 12): the label a name under the cursor or a label's line means, and the address a
- * line's comment is kept at. Lines and columns are 0-based.
+ * 7, 10 to 12 and 14): the label a name under the cursor or a label's line means, a variable of
+ * the function a Pseudocode shows, and the address a line's comment is kept at. Lines and columns
+ * are 0-based.
  */
 
 /** A 0-based line's text, as the Listing writes it. */
@@ -200,4 +208,118 @@ export function functionCommentTarget(listing: Listing, line: number): CommentTa
     if (commentTarget(listing, line)?.kind === 'function comment') return undefined
     const fn = functionAtLine(listing, line)
     return fn && functionComment(listing, fn.address)
+}
+
+/**
+ * The name Rename… at a line and column of a function's Pseudocode renames: a function's or a
+ * global's, which refers to its `target`, or one of the function's variables, by its `variable`
+ * id; a position just after one is on it, as for Go to Definition. Never a string, whose text is
+ * no name, a `goto` label (a renamed jump target shows in the Listing only), or a comment's word.
+ */
+export function pseudocodeNameToRename(
+    lines: readonly DecompiledLine[],
+    firstLine: number,
+    line: number,
+    column: number
+): DecompiledToken | undefined {
+    const named = (lines[line - firstLine]?.tokens ?? []).filter(
+        (token) =>
+            token.kind !== 'comment' &&
+            (token.variable !== undefined ||
+                (token.target !== undefined &&
+                    (token.kind === 'function' || token.kind === 'variable')))
+    )
+    return (
+        named.find((token) => token.start <= column && column < token.end) ??
+        named.find((token) => token.end === column)
+    )
+}
+
+/**
+ * The label of the Listing a function or global named at a line and column of its Pseudocode
+ * stands for, which Rename… there renames as the Listing's would: the name operands use at its
+ * address. Undefined for a variable, or a name of no label.
+ */
+export function pseudocodeLabelToRename(
+    listing: Listing,
+    lines: readonly DecompiledLine[],
+    firstLine: number,
+    line: number,
+    column: number
+): ListingLabel | undefined {
+    const target = pseudocodeNameToRename(lines, firstLine, line, column)?.target
+    const label = target === undefined ? undefined : listingLabelOfTarget(listing, target)
+    return label && label.kind !== 'block' ? renamedLabelAt(listing, label) : undefined
+}
+
+/**
+ * What a rename of one of a function's variables or parameters needs (decisions 6, 7, 10 and 16):
+ * the names it has and had, the names it may not take, and why it cannot be renamed at all.
+ */
+export type VariableRenameTarget = {
+    /** The function's link-time address, under which its variables' names are kept. */
+    functionAddress: number
+    /** The decompiler's id for the variable (decision 15). */
+    id: string
+    parameter: boolean
+    /** The name the Pseudocode prints for it now. */
+    current: string
+    /**
+     * The name the decompiler gives it, where known: the one printed, before the person named it,
+     * or as an earlier decompilation printed it. Typing it resets the variable's name.
+     */
+    raw?: string
+    /**
+     * Why it cannot be renamed at all: a parameter a C declaration names, which the decompiler
+     * keeps (`puts(char *s)`).
+     */
+    refusal?: string
+    /** The names of the function's other variables, as printed, which it must differ from. */
+    variables: readonly string[]
+    /** Every label name of the Listing, which a variable must not hide. */
+    globals: readonly string[]
+}
+
+/**
+ * The rename of variable `id` of the function `fn` of a Pseudocode: its name as `variables`
+ * reports it (`printed` when the decompiler reports none), the decompiler's own name for it when
+ * `raw` knows it, refused for a parameter the function's declaration names.
+ */
+export function variableRenameTarget(
+    listing: Listing,
+    fn: Pick<ListingFunction, 'address' | 'name' | 'list'>,
+    variables: readonly DecompiledVariable[],
+    id: string,
+    { printed, raw }: { printed: string; raw?: string }
+): VariableRenameTarget {
+    const variable = variables.find((each) => each.id === id)
+    const current = variable?.name ?? printed
+    return {
+        functionAddress: fn.address,
+        id,
+        parameter: variable?.kind === 'parameter',
+        current,
+        ...(raw !== undefined ? { raw } : {}),
+        ...(variable?.locked
+            ? {
+                  refusal: `${current} is named by the C declaration of ${fn.list ?? fn.name}, so it keeps that name`
+              }
+            : {}),
+        variables: variables.filter((each) => each.id !== id).map((each) => each.name),
+        globals: listing.labels.map((label) => label.name)
+    }
+}
+
+/**
+ * Why a typed name cannot be a variable's, as the prompt says it under the field, or undefined
+ * when it can: the decompiler's own name for it always can, which resets it.
+ */
+export function variableRenameProblem(
+    target: VariableRenameTarget,
+    typed: string
+): string | undefined {
+    if (target.refusal) return target.refusal
+    const name = typed.trim()
+    if (target.raw !== undefined && name === target.raw) return undefined
+    return localNameProblem(name, target.variables, target.globals)
 }
