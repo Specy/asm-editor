@@ -247,3 +247,41 @@ it('lists the Arguments as a region of their own, with their parts under it', as
     flushSync()
     expect(ui.change).toHaveBeenLastCalledWith(0x7fffffe8n)
 })
+
+it('lists a demangled label by its name, with the raw one in its tooltip and its filter', async () => {
+    const ui = render(true, true, {
+        regions: [],
+        labels: [
+            {
+                name: '_ZSt4cout@GLIBCXX_3.4',
+                displayName: 'std::cout@GLIBCXX_3.4',
+                section: '.data',
+                address: 0x1018n,
+                fromLibrary: false
+            }
+        ]
+    })
+    ui.target.querySelector<HTMLButtonElement>('[aria-label="Memory regions"]')!.click()
+    flushSync()
+    await tick()
+    flushSync()
+    await tick()
+    const labelRows = () =>
+        [...ui.target.querySelectorAll<HTMLElement>('[role="option"] .data-label')].map((row) => ({
+            text: row.querySelector('span')?.textContent,
+            title: row.getAttribute('title')
+        }))
+    expect(labelRows()).toEqual([
+        { text: 'buffer', title: null },
+        { text: 'std::cout@GLIBCXX_3.4', title: 'std::cout@GLIBCXX_3.4\n_ZSt4cout@GLIBCXX_3.4' }
+    ])
+    const filter = ui.target.querySelector<HTMLInputElement>(
+        '[aria-label="Filter memory regions"]'
+    )!
+    for (const text of ['_ZSt4cout', 'std::cout']) {
+        filter.value = text
+        filter.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+        expect(labelRows().map((row) => row.text)).toEqual(['std::cout@GLIBCXX_3.4'])
+    }
+})

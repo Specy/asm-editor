@@ -3,6 +3,7 @@ import {
     type EmulatorDecoration,
     type EmulatorNote,
     type ExecutionStep,
+    type LibraryStretch,
     type RegisterFileDescriptor,
     RegisterSize,
     type SourceBreakpoint,
@@ -268,9 +269,10 @@ export abstract class BaseEmulator<R extends string> {
 
     /**
      * What the History calls a Step's stretch of library code, from the first library instruction
-     * it ran (`puts in libc.so.6`); undefined to name it after that instruction's File.
+     * it ran (`puts in libc.so.6`), and the tooltip of a C++ name it shortens; undefined to name it
+     * after that instruction's File.
      */
-    _libraryStretchName?(entered: ExecutionStep): string | undefined
+    _libraryStretchName?(entered: ExecutionStep): Omit<LibraryStretch, 'instructions'> | undefined
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
 

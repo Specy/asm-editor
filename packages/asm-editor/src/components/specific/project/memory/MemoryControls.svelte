@@ -240,6 +240,15 @@
         return `${row.region.section && group.length > 1 ? row.region.kind : row.region.name}${first ? ` · ${first.displayName ?? first.name}` : ''}`
     }
 
+    /**
+     * A label row's tooltip where it shows a name in place of the raw one, such as an Executable's
+     * demangled C++ name: both, so the raw name stays readable.
+     */
+    function labelTooltip(label: DataLabel): string | undefined {
+        const display = label.displayName ?? label.name
+        return display === label.name ? undefined : `${display}\n${label.name}`
+    }
+
     function updateAddress(value: bigint) {
         const clampedSize = value - (value % BigInt(bytesPerPage))
         const minMaxAddress = clampBigInt(clampedSize, 0n, memorySize - BigInt(bytesPerPage - 1))
@@ -393,7 +402,11 @@
                         {/snippet}
                         {#snippet item(row)}
                             {@const destination = row as Destination}
-                            <div class="destination" class:data-label={!!destination.label}>
+                            <div
+                                class="destination"
+                                class:data-label={!!destination.label}
+                                title={destination.label && labelTooltip(destination.label)}
+                            >
                                 {#if destination.region && !destination.label}<span
                                         class="swatch"
                                         style:background={memoryRegionColor(

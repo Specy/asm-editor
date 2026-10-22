@@ -31,6 +31,7 @@
                 <button
                     class:noHover={label.name === ''}
                     class="label-name row"
+                    title={label.detail}
                     onclick={() => {
                         onGoToLabel(label)
                     }}

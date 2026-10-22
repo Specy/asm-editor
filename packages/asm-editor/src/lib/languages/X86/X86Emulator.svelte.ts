@@ -1,4 +1,11 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
+import { debugName, memoryLabelName, type DebugName } from '#lib/languages/demangle/debugNames.ts'
+import type { Describe } from '#lib/languages/demangle/demangledNames.ts'
+import {
+    loadDemangler,
+    loadedDemangler,
+    needsDemangler
+} from '#lib/languages/demangle/loadDemangler.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { loadDecoder, type DecodedInstruction, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
@@ -32,6 +39,7 @@ import {
     type EmulatorSettings,
     type ExecutionStep,
     isLineBreakpoint,
+    type LibraryStretch,
     type MutationOperation,
     type PokeWrite,
     type RegisterFileDescriptor,
@@ -246,6 +254,7 @@ function unsupportedFamily(
     const instruction = X86_INSTRUCTIONS.find(({ name }) => name === decoded.mnemonic)
     if (!instruction) return undefined
     const width = decodedVectorWidth(decoded)
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and read here; nothing tracks it.
     const families = new Set<string>()
     for (const form of instruction.forms) {
         if (formVectorWidth(form.operands) !== width) continue
@@ -655,10 +664,18 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * Loads the Runtime library a Build links, or the list of library functions that explains an
-     * undefined `printf` in a Build that does not link it.
+     * undefined `printf` in a Build that does not link it. For an Executable with C++ names, loads
+     * the demangler before the Core loads the program, for the debug tools and the memory view to
+     * show its names and its libraries' demangled; if it does not load, they show them raw.
      */
     async _prepareBuild(sources: BuildSources): Promise<void> {
-        if (executableKind(sources.files[sources.entry]) !== 'none') return
+        const entry = sources.files[sources.entry]
+        const kind = executableKind(entry)
+        if (kind === 'supported') {
+            if (needsDemangler(executableAnalysis(entry!))) await loadDemangler().catch(() => {})
+            return
+        }
+        if (kind !== 'none') return
         if (sources.runtimeAbi === undefined) await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
         else await prepareX86Runtime(sources)
     }
@@ -795,9 +812,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /**
      * The Core's Call stack, each frame on its Listing line. A frame in a library whose Listing
      * has not been made keeps the Core's name and no line: going to it makes the Listing then.
+     * A loaded Executable's C++ names read demangled, their signature and raw name in the tooltip
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11).
      */
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
+        const describe = this.describe()
         return (
             this.core?.getCallStack().map((frame) => {
                 const located = this.locate(frame.target, false)
@@ -807,9 +827,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 const { listing, base } = located
                 const start = listing && located.line >= 0 && functionAtLine(listing, located.line)
                 const named = start && start.address + base === Number(frame.target)
+                const { name, detail } = named
+                    ? debugName(start.name, describe)
+                    : frameName(frame, describe)
                 return {
                     ...frame,
-                    name: named ? start.name : frameName(frame),
+                    name,
+                    ...(detail ? { detail } : {}),
                     address: frame.target,
                     file: located.file || undefined,
                     line: named ? start.line : located.line
@@ -1094,31 +1118,43 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * A Step's stretch of library code, named in the History after what it called: the function
      * a PLT stub of the Executable jumps to and the library its GOT slot leads to now the call
      * has bound it (`puts in libc.so.6`), or for a call straight into a library the symbol it
-     * entered.
+     * entered. A C++ function reads demangled (`std::ostream::operator<< in libstdc++.so.6`), its
+     * signature and raw name in the tooltip.
      */
-    _libraryStretchName(entered: ExecutionStep): string | undefined {
+    _libraryStretchName(entered: ExecutionStep): Omit<LibraryStretch, 'instructions'> | undefined {
         const core = this.core
         const executable = this.executable
         if (!core || !executable) return undefined
         const pc = BigInt(entered.pc)
         const object = this.objectAt(pc)
         if (!object) return undefined
-        if (!object.main) return libraryFunctionName(core, pc, object)
+        const describe = this.describe()
+        if (!object.main) return libraryFunctionName(core, pc, object, describe)
         const offset = pc - object.base
         const stub = executableAnalysis(executable.file).plt.find(
             (candidate) => candidate.address === offset
         )
         if (!stub) return undefined
-        const name = stub.name.replace(/@plt(_resolver)?$/, '')
+        const { name, detail } = debugName(stub.name.replace(/@plt(_resolver)?$/, ''), describe)
+        const tooltip = detail ? { detail } : {}
         try {
             const slot = core.readMemoryBytes(stub.got + object.base, 8n)
             const target = new DataView(slot.buffer, slot.byteOffset, 8).getBigUint64(0, true)
             const library = this.objectAt(target)
-            if (library && !library.main) return `${name} in ${libraryName(library)}`
+            if (library && !library.main)
+                return { library: `${name} in ${libraryName(library)}`, ...tooltip }
         } catch {
             //an unreadable slot names the function alone
         }
-        return name
+        return { library: name, ...tooltip }
+    }
+
+    /**
+     * The demangler's reading of names while a loaded Executable runs, once `_prepareBuild` has
+     * loaded it; undefined for an assembled program, whose names stay as the Core gives them.
+     */
+    private describe(): Describe | undefined {
+        return this.executable ? loadedDemangler()?.describe : undefined
     }
 
     /** A running program's Listing, which once ready says where the program is. */
@@ -1251,12 +1287,19 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 section: layout.sections[Number(layout.items[i + 3])],
                 alignment: layout.items[i + 4]
             })
+        //a loaded Executable's C++ data read demangled, as the memory view's picker, its search,
+        //the grid's hover and the address box show and take a `displayName`
+        const describe = this.describe()
         return memoryLayoutFromItems(
             items,
-            layout.symbols.map((symbol) => ({
-                ...symbol,
-                section: layout.sections[symbol.section]
-            }))
+            layout.symbols.map((symbol) => {
+                const displayName = memoryLabelName(symbol.name, describe)
+                return {
+                    ...symbol,
+                    section: layout.sections[symbol.section],
+                    ...(displayName ? { displayName } : {})
+                }
+            })
         )
     }
     _getHeapBounds() {
@@ -1655,9 +1698,12 @@ function pltRanges(file: ProjectFile): [start: number, end: number][] {
 }
 
 /** A frame's name without a Listing: its symbol, and how far into it the call went. */
-function frameName(frame: { name: string; address: bigint; target: bigint }): string {
-    if (!frame.name || frame.target === frame.address) return frame.name
-    return `${frame.name}+0x${(frame.target - frame.address).toString(16)}`
+function frameName(
+    frame: { name: string; address: bigint; target: bigint },
+    describe: Describe | undefined
+): DebugName {
+    if (!frame.name || frame.target === frame.address) return debugName(frame.name, describe)
+    return debugName(frame.name, describe, `+0x${(frame.target - frame.address).toString(16)}`)
 }
 
 /** What a loaded library is called: its soname, as its Listing's path says it. */
@@ -1666,10 +1712,17 @@ function libraryName(object: X86LoadedObject): string {
 }
 
 /** The function a call into a library entered, by the symbol starting there, and its library. */
-function libraryFunctionName(core: CoreX86Emulator, pc: bigint, object: X86LoadedObject): string {
+function libraryFunctionName(
+    core: CoreX86Emulator,
+    pc: bigint,
+    object: X86LoadedObject,
+    describe: Describe | undefined
+): Omit<LibraryStretch, 'instructions'> {
     const symbol = core.runtime.resolveSymbol(pc)
     const library = libraryName(object)
-    return symbol && symbol.address === pc && symbol.name ? `${symbol.name} in ${library}` : library
+    if (!symbol || symbol.address !== pc || !symbol.name) return { library }
+    const { name, detail } = debugName(symbol.name, describe)
+    return { library: `${name} in ${library}`, ...(detail ? { detail } : {}) }
 }
 
 /** Where an address is shown, with the Listing it was found in and that Listing's load base. */

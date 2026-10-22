@@ -9,6 +9,9 @@ import { readFileSync } from 'node:fs'
 import { analyze } from '@specy/x86/elf'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
+import { executableAnalysis } from '#lib/executables.ts'
+import { needsDemangler } from '#lib/languages/demangle/loadDemangler.ts'
+import { memoryHover, resolveMemoryAddress } from '#lib/languages/memoryRegions.ts'
 import { instructionAddressAt, LINE_KIND, type Listing } from '#lib/listing/listing.ts'
 import { InThreadWorker } from '#lib/pseudocode/inThreadWorker.ts'
 import { PseudocodeClient } from '#lib/pseudocode/pseudocodeClient.ts'
@@ -40,6 +43,26 @@ function lineOf(listing: Listing, text: string): number {
     expect(line, text).toBeGreaterThanOrEqual(0)
     expect(lines.indexOf(lines[line], line + 1), `${text} is not unique`).toBe(-1)
     return line
+}
+
+/**
+ * The first line from `from` that calls `name`, whatever comment the Listing writes after it (a C++
+ * name's demangled one).
+ */
+function callLine(listing: Listing, name: string, from = 0): number {
+    const lines = listing.text.split('\n')
+    const line = lines.findIndex(
+        (text, index) => index >= from && text.split(';')[0].trim() === `call ${name}`
+    )
+    expect(line, name).toBeGreaterThanOrEqual(0)
+    return line
+}
+
+/** The line of a label, whatever comment the Listing writes after it. */
+function labelLine(listing: Listing, name: string): number {
+    const label = listing.labels.find((candidate) => candidate.name === name)
+    expect(label, name).toBeDefined()
+    return label!.line
 }
 
 /** The first instruction line after a label line. */
@@ -623,6 +646,132 @@ describe('library code of an Executable', () => {
             file: 'overflow',
             line: call + 1
         })
+    })
+})
+
+/**
+ * A C++ Executable's names in the debug tools and the memory view
+ * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decisions 11 and 12), on the
+ * Core's `cpp` fixture: `std::vector<std::string>` of two words written with `std::cout`.
+ */
+describe('C++ names of an Executable', () => {
+    /** `std::operator<<(std::ostream&, std::string const&)`, through the PLT. */
+    const WRITE_STRING =
+        '_ZStlsIcSt11char_traitsIcESaIcEERSt13basic_ostreamIT_T0_ES7_RKNSt7__cxx1112basic_stringIS4_S5_T1_EE'
+    /** `std::operator<<(std::ostream&, char)`, through the PLT. */
+    const WRITE_CHARACTER = '_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c'
+    /** `std::string`'s constructor from a `char const*`, `main`'s first call. */
+    const STRING_FROM_LITERAL =
+        '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1IS3_EEPKcRKS3_'
+
+    it('names the memory view’s data labels demangled, the raw names in the hover and the address box', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        const label = (name: string) => emulator.dataLabels.find((label) => label.name === name)!
+        const cout = label('_ZSt4cout@GLIBCXX_3.4')
+        expect(cout.displayName).toBe('std::cout@GLIBCXX_3.4')
+        expect(label('_ZTISt13runtime_error@GLIBCXX_3.4').displayName).toBe(
+            'typeinfo for std::runtime_error@GLIBCXX_3.4'
+        )
+        // names that are not mangled read as before
+        expect(label('__dso_handle').displayName).toBeUndefined()
+        expect(label('DW.ref.__gxx_personality_v0').displayName).toBeUndefined()
+        // the grid's hover gives both
+        expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, cout.address + 8n)).toBe(
+            '.bss · std::cout@GLIBCXX_3.4+8 (_ZSt4cout@GLIBCXX_3.4)'
+        )
+        // the address box takes the demangled name, and the raw names it took before
+        const resolve = (input: string) =>
+            resolveMemoryAddress(input, true, (name) => emulator.resolveMemoryLabel(name))
+        expect(resolve('std::cout@GLIBCXX_3.4')).toBe(cout.address)
+        expect(resolve('std::cout@GLIBCXX_3.4+8')).toBe(cout.address + 8n)
+        expect(resolve('_ZSt4cout@GLIBCXX_3.4')).toBe(cout.address)
+        expect(resolve('typeinfo for std::runtime_error@GLIBCXX_3.4')).toBe(
+            label('_ZTISt13runtime_error@GLIBCXX_3.4').address
+        )
+        expect(resolve('main')).toBe(BigInt(listing.main! + PIE_LOAD_BASE))
+    })
+
+    it('names the Call stack’s frames demangled, the signature and raw name in their tooltip', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        await stepTo(emulator, callLine(listing, STRING_FROM_LITERAL))
+        await emulator.step()
+        const frames = emulator.callStack
+        expect(frames.at(-1)).toMatchObject({
+            name: 'std::string::basic_string<std::allocator<char>>',
+            detail: `std::string::basic_string<std::allocator<char>>(char const*, std::allocator<char> const&)\n${STRING_FROM_LITERAL}`,
+            file: 'cpp',
+            line: labelLine(listing, STRING_FROM_LITERAL)
+        })
+        // C names, libc's frames among them, read as before, with no tooltip
+        const main = frames.find((frame) => frame.name === 'main')!
+        expect(main.detail).toBeUndefined()
+        const libc = frames.filter((frame) => frame.file === '@lib/libc.so.6')
+        expect(libc.map((frame) => frame.name)).toContain('__libc_start_main')
+        expect(libc.every((frame) => frame.detail === undefined)).toBe(true)
+    })
+
+    it('names a frame in libstdc++ demangled, and the PLT stub that led there', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        // the second word's write, whose calls the first one bound
+        const write = callLine(listing, `${WRITE_STRING}@plt`)
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, write)!, 'cpp')
+        await emulator.run(0)
+        await emulator.run(0)
+        expect(emulator.line).toBe(write)
+        expect(emulator.stdOut).toBe('hello\n')
+        preferencesStore.values.stepIntoRuntimeLibrary.value = true
+        const inLibrary = () =>
+            emulator.callStack.find((frame) => frame.file === '@lib/libstdc++.so.6')
+        for (let i = 0; i < 100 && !inLibrary(); i++) await emulator.step()
+        // named by the library's Listing once it is made
+        await emulator.listings!.session.get('@lib/libstdc++.so.6')!.ready
+        await Promise.resolve()
+        expect(inLibrary()).toMatchObject({
+            name: 'std::ostream::sentry::sentry@plt',
+            detail: 'std::ostream::sentry::sentry(std::ostream&)@plt\n_ZNSo6sentryC1ERSo@plt'
+        })
+        const stub = labelLine(listing, `${WRITE_STRING}@plt`)
+        expect(emulator.callStack.find((frame) => frame.line === stub)).toMatchObject({
+            name: 'std::operator<<<char, std::char_traits<char>, std::allocator<char>>@plt',
+            detail: `std::operator<<<char, std::char_traits<char>, std::allocator<char>>(std::ostream&, std::string const&)@plt\n${WRITE_STRING}@plt`
+        })
+        // libstdc++'s Listing takes seconds
+    }, 30_000)
+
+    it('names the History’s calls into libstdc++ demangled, the signature and raw name in their tooltip', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        const write = callLine(listing, `${WRITE_STRING}@plt`)
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, write)!, 'cpp')
+        await emulator.run(0)
+        await emulator.step()
+        expect(emulator.latestSteps[0].stretch).toEqual({
+            library:
+                'std::operator<<<char, std::char_traits<char>, std::allocator<char>> in libstdc++.so.6',
+            detail: `std::operator<<<char, std::char_traits<char>, std::allocator<char>>(std::ostream&, std::string const&)\n${WRITE_STRING}`,
+            instructions: expect.any(Number)
+        })
+        await stepTo(emulator, callLine(listing, `${WRITE_CHARACTER}@plt`, write))
+        await emulator.step()
+        expect(emulator.stdOut).toBe('hello\n')
+        expect(emulator.latestSteps[0].stretch).toMatchObject({
+            library: 'std::operator<<<std::char_traits<char>> in libstdc++.so.6',
+            detail: `std::operator<<<std::char_traits<char>>(std::ostream&, char)\n${WRITE_CHARACTER}`
+        })
+    })
+
+    it('leaves a C program’s names as they were', async () => {
+        const sources = executableSources()
+        expect(needsDemangler(executableAnalysis(sources.files.crackme))).toBe(false)
+        const { emulator, listing } = await built(sources)
+        expect(emulator.dataLabels.every((label) => label.displayName === undefined)).toBe(true)
+        emulator.peripherals.terminal.useScriptedInput(['hunter2'])
+        await stepTo(emulator, lineOf(listing, 'call printf@plt'))
+        await emulator.step()
+        expect(emulator.latestSteps[0].stretch).toEqual({
+            library: 'printf in libc.so.6',
+            instructions: expect.any(Number)
+        })
+        expect(emulator.callStack.every((frame) => frame.detail === undefined)).toBe(true)
     })
 })
 

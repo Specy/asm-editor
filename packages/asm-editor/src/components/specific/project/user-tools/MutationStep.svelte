@@ -240,12 +240,18 @@
                 <div class="stretch">Undo stops here: effects are not recorded.</div>
             {/if}
             {#if step.stretch}
-                <!-- a Step that ran through library code: one Undo takes all of it back -->
+                <!-- a Step that ran through library code: one Undo takes all of it back. A C++
+                     function it called reads short, its signature and raw name in the tooltip -->
                 <div
                     class="stretch"
-                    title={step.undoable === false
-                        ? 'This call includes effects Undo cannot restore'
-                        : 'One Undo takes back the call and the library code it ran'}
+                    title={[
+                        step.stretch.detail,
+                        step.undoable === false
+                            ? 'This call includes effects Undo cannot restore'
+                            : 'One Undo takes back the call and the library code it ran'
+                    ]
+                        .filter(Boolean)
+                        .join('\n')}
                 >
                     Called {step.stretch.library}: {step.stretch.instructions.toLocaleString()} instructions
                 </div>

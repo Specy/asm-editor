@@ -988,6 +988,7 @@ export abstract class GenericEmulator<T, R extends string>
                 //newest first: the first library instruction, then the call that reached it
                 const [entered, call] = this._getUndoHistoryRange(skip + segment.entries - 2, 2)
                 if (!call) break
+                const named = entered && this._libraryStretchName?.(entered)
                 rows.push({
                     ...call,
                     undoable:
@@ -997,11 +998,12 @@ export abstract class GenericEmulator<T, R extends string>
                             true),
                     stretch: {
                         library:
-                            (entered && this._libraryStretchName?.(entered)) ??
+                            named?.library ??
                             entered?.file
                                 ?.slice(entered.file.lastIndexOf('/') + 1)
                                 .replace(/\.s$/, '') ??
                             'library',
+                        ...(named?.detail ? { detail: named.detail } : {}),
                         instructions: segment.entries
                     }
                 })

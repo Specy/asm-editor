@@ -71,6 +71,12 @@ export type Diagnostic =
 
 export type StackFrame = {
     name: string
+    /**
+     * What the frame's tooltip adds where `name` shortens it: a C++ function's signature and the
+     * raw name it stands for ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md),
+     * decision 11).
+     */
+    detail?: string
     address: bigint
     destination: bigint
     sp: bigint
@@ -286,7 +292,22 @@ export type ExecutionStep = {
      * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
      * takes back together.
      */
-    stretch?: { library: string; instructions: number }
+    stretch?: LibraryStretch
+}
+
+/** A Step's stretch of library code, as the History names it. */
+export type LibraryStretch = {
+    /**
+     * What the Step called: `printf`, `puts in libc.so.6`,
+     * `std::ostream::operator<< in libstdc++.so.6`.
+     */
+    library: string
+    /**
+     * Where `library` shortens a C++ name, what its tooltip adds: the signature and the raw name
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 11).
+     */
+    detail?: string
+    instructions: number
 }
 
 /**

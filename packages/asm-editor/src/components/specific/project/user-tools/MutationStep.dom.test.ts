@@ -280,3 +280,37 @@ describe('irreversible History rows', () => {
         }
     })
 })
+
+describe('library calls in the History', () => {
+    it('names a C++ function short, its signature and raw name first in the tooltip', async () => {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const step: ExecutionStep = {
+            kind: 'instruction',
+            mutations: [],
+            pc: 4096,
+            line: 3,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            stretch: {
+                library: 'std::ostream::operator<< in libstdc++.so.6',
+                detail: 'std::ostream::operator<<(int)\n_ZNSolsEi',
+                instructions: 40
+            }
+        }
+        const app = mount(MutationStep, { target, props: { step, flags: [], language: 'X86' } })
+        flushSync()
+        try {
+            const stretch = target.querySelector<HTMLElement>('.stretch')!
+            expect(stretch.textContent).toContain(
+                'Called std::ostream::operator<< in libstdc++.so.6: 40 instructions'
+            )
+            expect(stretch.title).toBe(
+                'std::ostream::operator<<(int)\n_ZNSolsEi\nOne Undo takes back the call and the library code it ran'
+            )
+        } finally {
+            await unmount(app)
+            target.remove()
+        }
+    })
+})
