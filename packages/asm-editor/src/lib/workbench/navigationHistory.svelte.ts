@@ -1,23 +1,38 @@
+import type { ListingPlace } from '#lib/listing/listing.ts'
 import type { ProjectSourceSelection } from '#lib/monaco/projectSourceSelection.ts'
 
 /**
  * A place an editor pane showed in an Executable, which Back and Forward return to
  * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision 8):
  * a line of its Listing, or the function its Pseudocode showed, in the version of the File the
- * pane showed it in.
+ * pane showed it in. A Listing's line keeps the address it stands for, by which it is found again
+ * in a Listing made since, whose comment lines or names may have moved it
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+ * 22); `line` is where it was, for a line standing for no address.
  */
 export type NavigationPosition = { selection: ProjectSourceSelection } & (
-    | { view: 'listing'; line: number }
+    | { view: 'listing'; line: number; place?: ListingPlace }
     | { view: 'pseudocode'; functionAddress: number }
 )
 
 /** How many places a pane keeps behind it, and as many ahead. */
 export const NAVIGATION_HISTORY_LIMIT = 50
 
-/** Whether two places are the same: the same File, view and line or function, in either version. */
+/**
+ * Whether two places are the same: the same File, view and line (by its address where both have
+ * one) or function, in either version.
+ */
 export function samePosition(a: NavigationPosition, b: NavigationPosition): boolean {
     if (a.selection.path !== b.selection.path) return false
-    if (a.view === 'listing') return b.view === 'listing' && a.line === b.line
+    if (a.view === 'listing') {
+        if (b.view !== 'listing') return false
+        if (!a.place || !b.place) return a.line === b.line
+        return (
+            a.place.address === b.place.address &&
+            a.place.kind === b.place.kind &&
+            a.place.nth === b.place.nth
+        )
+    }
     return b.view === 'pseudocode' && a.functionAddress === b.functionAddress
 }
 

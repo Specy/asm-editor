@@ -8,7 +8,7 @@ import {
 } from '#lib/languages/demangle/loadDemangler.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { loadDecoder, type DecodedInstruction, type ListingDecoder } from '#lib/listing/decoder.ts'
-import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { byteEditsKey, fileBytes, type Annotations, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
     instructionAddressAt,
@@ -35,6 +35,7 @@ import {
 import {
     type ArgumentsArea,
     type BuildArtifact,
+    type DataLabel,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -736,7 +737,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     this.programStartOf(bytes)
                 ])
             )
-            this.loadingExecutable = { path: sources.entry, file, document, start }
+            this.loadingExecutable = {
+                path: sources.entry,
+                file,
+                document,
+                start,
+                annotations: file.annotations
+            }
             //the dynamic linker will fail to load the program with its own message, on stderr
             const missing = info.missing.map(
                 (name) => `${name} is not one of the bundled libraries`
@@ -965,17 +972,43 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     private programListing(executable: LoadedExecutable, object: X86LoadedObject) {
         const base = Number(object.base)
-        if (executable.document.base !== base && this._listings) {
-            executable.document = this._listings.open({
-                name: executable.document.name,
-                base,
-                content: executable.file.content,
-                edits: byteEditsKey(executable.file),
-                bytes: () => fileBytes(executable.file)
-            })
-            this.listingOpened(executable.path, executable.document)
-        }
+        if (executable.document.base !== base) this.openProgramListing(executable, base)
         return { path: executable.path, document: executable.document }
+    }
+
+    /**
+     * Opens the Executable's Listing again, at `base` and with the Annotations its File has now,
+     * and once the session shows it, shows that one instead, whose lines the program's addresses
+     * are then read on as soon as it is ready.
+     */
+    private openProgramListing(executable: LoadedExecutable, base: number) {
+        if (!this._listings) return
+        const document = this._listings.open({
+            name: executable.document.name,
+            base,
+            content: executable.file.content,
+            edits: byteEditsKey(executable.file),
+            ...(executable.annotations ? { annotations: executable.annotations } : {}),
+            bytes: () => fileBytes(executable.file)
+        })
+        if (document === executable.document) return
+        executable.document = document
+        if (executable === this.executable) this.listingOpened(executable.path, document)
+    }
+
+    /**
+     * The Annotations of the running Executable's File, as a rename or a comment made during the
+     * Debug session leaves them ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 22): its Listing is opened again with them, at the address it runs at, so the
+     * program's lines, the Call stack, the memory view's labels and the address box take them at
+     * once. The Build snapshot's record keeps the bytes the program runs, which they do not change.
+     */
+    setExecutableAnnotations(path: string, annotations: Annotations | undefined): void {
+        for (const executable of [this.executable, this.loadingExecutable]) {
+            if (executable?.path !== path || executable.annotations === annotations) continue
+            executable.annotations = annotations
+            this.openProgramListing(executable, executable.document.base)
+        }
     }
 
     /** A library's Listing, under `@lib/<soname>`, generated the first time the run is in it. */
@@ -1351,10 +1384,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * target's `.LAB_n` names a place only inside its function, so it is none.
      */
     _resolveMemoryLabel(name: string) {
-        const symbol = this.core?.resolveMemoryLabel(name)
-        if (symbol !== undefined) return symbol
         const executable = this.executable
         const listing = executable?.document.listing
+        //a person's name first, which the Listing keeps unique: a symbol of a library may have it
+        const renamed = listing && ListingIndex.of(listing).label(name, -1)
+        if (executable && renamed?.renamed && renamed.kind !== 'block')
+            return BigInt(renamed.address) + this.programBase(executable)
+        const symbol = this.core?.resolveMemoryLabel(name)
+        if (symbol !== undefined) return symbol
         if (!executable || !listing) return undefined
         //on no line, a bare `.LAB_n` is no label
         const index = ListingIndex.of(listing)
@@ -1363,6 +1400,43 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             ? BigInt(label.address) + this.programBase(executable)
             : undefined
     }
+
+    /**
+     * The memory view's labels, a symbol of the running Executable that the person renamed by
+     * their name ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 8), as its `displayName`, which the picker, its search, the grid's hover and the
+     * address box show and take: read from the Listing the session shows, so a rename made during
+     * the session shows once its Listing is made again. The raw name stays the label's.
+     */
+    override get dataLabels() {
+        const labels = super.dataLabels
+        const executable = this.executable
+        const listing = executable && this._listings?.session.get(executable.path)?.listing
+        if (!executable || !listing || !listing.labels.some((label) => label.renamed)) return labels
+        const kept = this.renamedLabels
+        if (kept?.labels === labels && kept.listing === listing) return kept.renamed
+        const base = this.programBase(executable)
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and read here only.
+        const names = new Map<string, { name: string; address: bigint }>()
+        for (const label of listing.labels)
+            if (label.renamed && label.kind !== 'block')
+                names.set(label.renamed.from, {
+                    name: label.name,
+                    address: BigInt(label.address) + base
+                })
+        const renamed = labels.map((label) => {
+            const person = names.get(label.name)
+            return person?.address === label.address
+                ? { ...label, displayName: person.name }
+                : label
+        })
+        this.renamedLabels = { labels, listing, renamed }
+        return renamed
+    }
+    /** The last labels `dataLabels` renamed, by the labels and the Listing it read. */
+    private renamedLabels:
+        | { labels: readonly DataLabel[]; listing: Listing; renamed: DataLabel[] }
+        | undefined
 
     _getSp(): bigint {
         return this.core?.getSp() ?? 0n
@@ -1672,10 +1746,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
 type LoadedExecutable = {
     path: string
+    /** As the Build took it, whose bytes the program runs. */
     file: ProjectFile
     document: ListingDocument
     /** Its entry point and `main`, link-time, found at Build (`findProgramStart`). */
     start: { entry: number; main?: number } | undefined
+    /**
+     * The Annotations its Listing is made with: the Build's, then the File's as the person changes
+     * them during the session (`setExecutableAnnotations`).
+     */
+    annotations: Annotations | undefined
 }
 
 /** The sections a linker puts PLT stubs in: lazy `.plt`, `.plt.sec` with CET, `.plt.got`, `.iplt`. */
@@ -1705,13 +1785,24 @@ function pltRanges(file: ProjectFile): [start: number, end: number][] {
 /**
  * A frame's name from the Listing function it starts: a C++ function's list form, as the Symbols
  * panel and Go to Symbol show it, with the signature and raw name its label carries as the
- * tooltip; else its name, demangled here when the Listing was made without the demangler.
+ * tooltip; a renamed function's person's name, with the name it was renamed from as the tooltip;
+ * else its name, demangled here when the Listing was made without the demangler.
  */
 function listedFunctionName(
     listing: Listing,
     fn: ListingFunction,
     describe: Describe | undefined
 ): DebugName {
+    const renamed = ListingIndex.of(listing).label(fn.name, fn.line)?.renamed
+    if (renamed) {
+        const signature = renamed.demangled?.signature
+        return {
+            name: fn.name,
+            detail: signature
+                ? `Renamed from ${signature}\n${renamed.from}`
+                : `Renamed from ${renamed.from}`
+        }
+    }
     const demangled =
         fn.list === undefined
             ? undefined

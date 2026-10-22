@@ -6,6 +6,7 @@ import {
     liveSource,
     canEditProjectBreakpoints,
     isCurrentBuildLocation,
+    isSameProjectSourceSelection,
     type ProjectSourceSelection
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
@@ -33,6 +34,7 @@ import {
 } from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
+import type { AnnotationPrompt } from './annotationPrompt.svelte'
 import { NavigationHistory } from './navigationHistory.svelte'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
@@ -110,6 +112,10 @@ export class EditorGroup {
      * decisions 5 and 18). It is read-only and is no File of the Project.
      */
     declare readonly displayedListing: ListingDocument | undefined
+    /** The Listing document asked for, which `displayedListing` shows once it is ready. */
+    declare private readonly requestedListing: ListingDocument | undefined
+    /** The same for `pseudocodeListing`. */
+    declare private readonly requestedPseudocodeListing: ListingDocument | undefined
     /**
      * The running Executable's patched lines, when this group shows its Listing in the current
      * Build ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13).
@@ -142,6 +148,8 @@ export class EditorGroup {
     declare readonly pseudocodeModelKeys: readonly string[]
     /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
     patchPrompt = $state.raw<PatchPrompt | undefined>()
+    /** The Rename… or Comment… prompt opened over this group's Listing; see `openAnnotationPrompt`. */
+    annotationPrompt = $state.raw<AnnotationPrompt | undefined>()
 
     constructor(
         readonly session: WorkbenchSession,
@@ -167,11 +175,15 @@ export class EditorGroup {
         )
         this.displayedView = $derived(this.viewOf(this.displayedPath, this.displayedKind))
         //generated only for a pane that shows it: an Executable in the Hex editor needs none
-        this.displayedListing = $derived(
+        this.requestedListing = $derived(
             this.displayedView === 'listing'
                 ? this.session.listingFor(this.sourceSelection)
                 : undefined
         )
+        //apart from the request, which may make the document: a derived does not depend on the
+        //state of a document it made, and this one waits for it to be ready
+        const shownListing = this.listingAsShown()
+        this.displayedListing = $derived(shownListing(this.requestedListing))
         this.displayedPatches = $derived.by(() => {
             const patched = this.session.emulator.patcher?.patched
             const selection = this.sourceSelection
@@ -186,11 +198,13 @@ export class EditorGroup {
         this.displayedListingView = $derived(
             this.displayedPatches?.listing ?? this.displayedListing?.listing
         )
-        this.pseudocodeListing = $derived(
+        this.requestedPseudocodeListing = $derived(
             this.displayedView === 'pseudocode'
                 ? this.session.listingFor(this.sourceSelection)
                 : undefined
         )
+        const decompiledListing = this.listingAsShown()
+        this.pseudocodeListing = $derived(decompiledListing(this.requestedPseudocodeListing))
         this.pseudocodeFunction = $derived.by(() => {
             const listing = this.pseudocodeListing?.listing
             return listing ? this.session.pseudocodeFunctionFor(this, listing) : undefined
@@ -207,8 +221,11 @@ export class EditorGroup {
         this.displayedPseudocode = $derived.by(() => {
             const requested = this.requestedPseudocode
             if (requested?.status !== 'decompiling') return (settled = requested)
-            return settled?.listingDocument === requested.listingDocument &&
-                settled.path === requested.path
+            //another function of the same Listing, or the same function of a Listing made again
+            //(a rename, a comment, a Byte edit), keeps the one shown until it is decompiled
+            return settled?.path === requested.path &&
+                (settled.listingDocument === requested.listingDocument ||
+                    settled.fn.address === requested.fn.address)
                 ? settled
                 : requested
         })
@@ -223,6 +240,31 @@ export class EditorGroup {
             return Object.values(shown)
         })
         this.resetCompilationOptions()
+    }
+
+    /**
+     * A Listing document as this pane shows it: the one asked for, except that while one made
+     * again for the same version of the same File is being generated (after a rename or a comment,
+     * a Byte edit, or at the address a Debug session loaded the program at), the one it showed
+     * stays until the new one is ready, so the text is not taken away for the moment it takes
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 22). One per derived value, whose last document it keeps.
+     */
+    private listingAsShown() {
+        let shown: { document: ListingDocument; selection: ProjectSourceSelection } | undefined
+        return (requested: ListingDocument | undefined): ListingDocument | undefined => {
+            const selection = this.sourceSelection
+            if (
+                requested?.status === 'generating' &&
+                shown &&
+                shown.document !== requested &&
+                shown.document.status === 'ready' &&
+                isSameProjectSourceSelection(shown.selection, selection)
+            )
+                return shown.document
+            shown = requested && { document: requested, selection: { ...selection } }
+            return requested
+        }
     }
 
     /**
@@ -336,6 +378,17 @@ export class EditorGroup {
             : undefined
     }
     /**
+     * The open Rename… or Comment… prompt, while the pane shows the Listing of the File it
+     * annotates ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 18).
+     */
+    get openAnnotationPrompt(): AnnotationPrompt | undefined {
+        const prompt = this.annotationPrompt
+        return prompt && this.displayedView === 'listing' && prompt.spec.path === this.displayedPath
+            ? prompt
+            : undefined
+    }
+    /**
      * Whether the displayed Listing is a library's the running program loaded, which takes no
      * Breakpoints (decision 11); a Project File under `@lib/` is an ordinary File.
      */
@@ -347,10 +400,11 @@ export class EditorGroup {
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
         //a library's Listing is no File at all
         if (this.displayedLibraryListing) return undefined
-        //the Build output is outside the Project too, and the same in either version
+        //the Build output is outside the Project too, and the same in either version; the Build's
+        //version of a File has the live File's renames and comments
         return (
             (this.sourceView === 'snapshot'
-                ? this.session.emulator.buildSources?.files[this.displayedPath]
+                ? this.session.snapshotFile(this.displayedPath)
                 : this.session.project.files[this.displayedPath]) ??
             this.session.buildOutputAt(this.displayedPath)
         )

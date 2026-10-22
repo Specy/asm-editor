@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import type { MonacoType } from './Monaco'
 import {
+    annotationActions,
     debuggingActions,
     lineActionContextKey,
     lineActionDescriptor,
@@ -48,8 +49,8 @@ describe('Go Back and Go Forward', () => {
             contextMenuGroupId: 'navigation'
         })
         expect(forward.keybindings?.(monaco)).toEqual([512 | 17])
-        expect([back.available(0), forward.available(0)]).toEqual([true, false])
-        back.run(0)
+        expect([back.available(0, 0), forward.available(0, 0)]).toEqual([true, false])
+        back.run(0, 0)
         expect(navigation.back).toHaveBeenCalledOnce()
     })
 
@@ -106,14 +107,103 @@ describe('Toggle Breakpoint and Run to Cursor', () => {
             contextMenuOrder: 2
         })
         //offered on the lines the pane says, and run there
-        expect([1, 2, 3].map((line) => [toggle.available(line), runTo.available(line)])).toEqual([
+        expect(
+            [1, 2, 3].map((line) => [toggle.available(line, 0), runTo.available(line, 0)])
+        ).toEqual([
             [false, false],
             [true, false],
             [false, true]
         ])
-        toggle.run(2)
-        runTo.run(3)
+        toggle.run(2, 0)
+        runTo.run(3, 0)
         expect(debugging.toggleBreakpoint).toHaveBeenCalledWith(2)
         expect(debugging.runToCursor).toHaveBeenCalledWith(3)
+    })
+})
+
+describe('Rename…, Comment… and the rest', () => {
+    const monaco = {
+        KeyMod: { CtrlCmd: 2048, Shift: 1024 },
+        KeyCode: { KeyN: 44, F2: 60, Semicolon: 85, KeyZ: 56, KeyY: 55 }
+    } as unknown as MonacoType
+
+    function annotations() {
+        return {
+            canRename: vi.fn((line: number, column: number) => line === 1 && column === 9),
+            rename: vi.fn(),
+            canResetName: vi.fn(() => false),
+            resetName: vi.fn(),
+            canComment: vi.fn((line: number) => line === 1),
+            comment: vi.fn(),
+            canCommentFunction: vi.fn(() => true),
+            commentFunction: vi.fn(),
+            canDeleteComment: vi.fn(() => false),
+            deleteComment: vi.fn(),
+            canUndo: true,
+            undo: vi.fn(),
+            canRedo: false,
+            redo: vi.fn()
+        }
+    }
+
+    it('are on n and F2, ;, and Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y, the editor text’s only', () => {
+        const actions = annotationActions(annotations())
+        const described = actions.map((action) => lineActionDescriptor(action, monaco, () => {}))
+        expect(described.map(({ id, label, keybindings }) => ({ id, label, keybindings }))).toEqual(
+            [
+                { id: 'asm-editor.rename', label: 'Rename…', keybindings: [44, 60] },
+                { id: 'asm-editor.comment', label: 'Comment…', keybindings: [85] },
+                {
+                    id: 'asm-editor.functionComment',
+                    label: 'Function comment…',
+                    keybindings: undefined
+                },
+                { id: 'asm-editor.resetName', label: 'Reset name', keybindings: undefined },
+                { id: 'asm-editor.deleteComment', label: 'Delete comment', keybindings: undefined },
+                {
+                    id: 'asm-editor.undoAnnotation',
+                    label: 'Undo rename or comment',
+                    keybindings: [2048 | 56]
+                },
+                {
+                    id: 'asm-editor.redoAnnotation',
+                    label: 'Redo rename or comment',
+                    keybindings: [2048 | 1024 | 56, 2048 | 55]
+                }
+            ]
+        )
+        //in a group of their own, after the debugging one and before Patch instruction…, in order
+        for (const [index, descriptor] of described.entries())
+            expect(descriptor).toMatchObject({
+                keybindingContext: 'editorTextFocus',
+                contextMenuGroupId: '1_edit_annotations',
+                contextMenuOrder: index + 1
+            })
+        //Monaco sorts the groups after `navigation` by localeCompare
+        const groups = ['1_debug', '1_edit_annotations', '1_modification']
+        expect([...groups].reverse().sort((a, b) => a.localeCompare(b))).toEqual(groups)
+    })
+
+    it('are offered where the pane says, at the cursor’s line and column, and run there', () => {
+        const pane = annotations()
+        const [rename, comment, fn, reset, remove, undo, redo] = annotationActions(pane)
+        expect(rename.available(1, 9)).toBe(true)
+        expect(rename.available(1, 2)).toBe(false)
+        expect(pane.canRename).toHaveBeenLastCalledWith(1, 2)
+        expect([comment.available(1, 0), comment.available(2, 0)]).toEqual([true, false])
+        expect([fn.available(5, 0), reset.available(1, 9), remove.available(1, 0)]).toEqual([
+            true,
+            false,
+            false
+        ])
+        expect([undo.available(0, 0), redo.available(0, 0)]).toEqual([true, false])
+        rename.run(1, 9)
+        comment.run(1, 0)
+        fn.run(5, 0)
+        undo.run(0, 0)
+        expect(pane.rename).toHaveBeenCalledWith(1, 9)
+        expect(pane.comment).toHaveBeenCalledWith(1)
+        expect(pane.commentFunction).toHaveBeenCalledWith(5)
+        expect(pane.undo).toHaveBeenCalledOnce()
     })
 })

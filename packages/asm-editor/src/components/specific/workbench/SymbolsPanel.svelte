@@ -9,11 +9,17 @@
      * name, or text, or address holds what is typed; Enter in it reveals the first, and the arrow
      * keys move from it through the rows. A C++ function's row shows its demangled name, and its
      * filter and tooltip read the raw name as well
-     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11).
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11). A
+     * function's row renames it, comments on it and resets its name, from its menu (a right click,
+     * the Menu key, or on a touch screen its button) and on F2
+     * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 18), in a prompt over the panel.
      */
+    import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import { functionAtLine } from '#lib/listing/listing.ts'
     import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+    import { ListingIndex } from '#lib/listing/listingNavigation.ts'
     import {
         filterFunctions,
         filterStrings,
@@ -21,16 +27,24 @@
         listingFunctions,
         listingStrings,
         symbolAddress,
-        symbolQuery
+        symbolQuery,
+        type FunctionSymbol
     } from '#lib/listing/listingSymbols.ts'
+    import type { AnnotationPrompt } from '#lib/workbench/annotationPrompt.svelte.ts'
+    import { renameTarget } from '#lib/workbench/annotationTargets.ts'
     import {
         buildSource,
         isSameProjectSourceSelection,
         liveSource,
         type ProjectSourceSelection
     } from '#lib/monaco/projectSourceSelection.ts'
+    import FaCommentAlt from '~icons/fa-solid/comment-alt'
+    import FaEllipsisH from '~icons/fa-solid/ellipsis-h'
     import FaFilter from '~icons/fa-solid/filter'
+    import FaPen from '~icons/fa-solid/pen'
     import FaTimes from '~icons/fa-solid/times'
+    import FaUndo from '~icons/fa-solid/undo'
+    import AnnotationPromptView from './AnnotationPrompt.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -42,7 +56,7 @@
 
     let { shown = true, onReveal }: Props = $props()
 
-    const { session } = useWorkbench()
+    const { session, ui } = useWorkbench()
     const project = session.project
 
     type Kind = 'functions' | 'strings'
@@ -77,12 +91,23 @@
         }
     )
 
-    //kept while the panel is hidden, so showing it again finds its rows as they were
+    //kept while the panel is hidden, so showing it again finds its rows as they were, and while
+    //the same File's Listing is made again, after a rename or a comment, so its rows stay
     let kept: ListingDocument | undefined
+    let keptSelection: ProjectSourceSelection | undefined
+    //asked for apart: a derived does not depend on the state of a document it made
+    const requested = $derived(source && shown ? session.listingFor(source.selection) : undefined)
     const listingDocument = $derived.by(() => {
         if (!source) return (kept = undefined)
         if (!shown) return kept
-        return (kept = session.listingFor(source.selection))
+        if (
+            requested?.status === 'generating' &&
+            kept?.status === 'ready' &&
+            isSameProjectSourceSelection(keptSelection, source.selection)
+        )
+            return kept
+        keptSelection = source.selection
+        return (kept = requested)
     })
     const listing = $derived(listingDocument?.listing)
     const functions = $derived(listing ? listingFunctions(listing) : [])
@@ -141,6 +166,102 @@
         onReveal?.()
     }
 
+    /** The Project's File the rows rename and comment on, when the listed version takes them. */
+    const annotatable = $derived(source ? session.annotatableFile(source.selection) : undefined)
+    let menu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    /** The function whose menu is open, whose row is marked meanwhile. */
+    let menuFunction = $state<number | undefined>()
+    let prompt = $state.raw<AnnotationPrompt | undefined>()
+    /** The row the prompt was opened from, which takes the keyboard back when it closes. */
+    let promptRow: HTMLElement | undefined
+    /** The prompt, while the panel lists the File it annotates. */
+    const openPrompt = $derived(
+        prompt && prompt.spec.path === source?.selection.path ? prompt : undefined
+    )
+
+    /** A function row's label and Listing function, in the Listing listed. */
+    function functionOf(symbol: FunctionSymbol) {
+        const fn = listing?.functions.find((each) => each.line === symbol.line)
+        const label = listing && fn ? ListingIndex.of(listing).label(fn.name, fn.line) : undefined
+        return fn && label ? { fn, label } : undefined
+    }
+
+    function rename(symbol: FunctionSymbol, row?: HTMLElement) {
+        const found = functionOf(symbol)
+        if (!annotatable || !listing || !found) return
+        open(session.renamePrompt(annotatable, renameTarget(listing, found.label)), row)
+    }
+
+    function comment(symbol: FunctionSymbol, row?: HTMLElement) {
+        const found = functionOf(symbol)
+        if (!annotatable || !listing || !found) return
+        const target = {
+            kind: 'function comment' as const,
+            address: found.fn.address,
+            function: found.fn
+        }
+        open(session.commentPrompt(annotatable, listing, target), row)
+    }
+
+    function open(opened: AnnotationPrompt | undefined, row: HTMLElement | undefined) {
+        if (!opened) return
+        prompt = opened
+        promptRow = row
+    }
+
+    function closePrompt() {
+        prompt = undefined
+        promptRow?.focus()
+    }
+
+    function functionItems(symbol: FunctionSymbol, row?: HTMLElement): ContextMenuEntry[] {
+        const label = functionOf(symbol)?.label
+        const disabled = !annotatable
+        return [
+            {
+                label: 'Rename…',
+                icon: FaPen,
+                disabled,
+                onSelect: () => rename(symbol, row)
+            },
+            {
+                label: 'Comment…',
+                icon: FaCommentAlt,
+                disabled,
+                onSelect: () => comment(symbol, row)
+            },
+            ...(label?.renamed || label?.renameConflict
+                ? [
+                      {
+                          label: 'Reset name',
+                          icon: FaUndo,
+                          disabled,
+                          onSelect: () => {
+                              if (annotatable) session.resetName(annotatable, label.address)
+                          }
+                      }
+                  ]
+                : [])
+        ]
+    }
+
+    /**
+     * A function row's menu, at the pointer, or under the row when the keyboard opened it (Shift+F10,
+     * the Menu key) or its button did.
+     */
+    function openMenu(event: MouseEvent, symbol: FunctionSymbol, row: HTMLElement) {
+        event.preventDefault()
+        event.stopPropagation()
+        const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0)
+        const at = keyboard || event.type === 'click' ? row.getBoundingClientRect() : undefined
+        menuFunction = symbol.address
+        menu = {
+            x: at ? at.left + 16 : event.clientX,
+            y: at ? at.bottom : event.clientY,
+            items: functionItems(symbol, row)
+        }
+    }
+
     function revealFirst() {
         const first = kind === 'functions' ? shownFunctions[0] : shownStrings[0]
         if (first) reveal(first.line)
@@ -166,9 +287,14 @@
 
     /**
      * Up and Down move through the rows, Home and End to the first and last; Up from the first
-     * goes back to the filter.
+     * goes back to the filter. F2 renames a function's row.
      */
-    function onRowKeydown(event: KeyboardEvent) {
+    function onRowKeydown(event: KeyboardEvent, symbol?: FunctionSymbol) {
+        if (event.key === 'F2' && symbol) {
+            event.preventDefault()
+            rename(symbol, event.currentTarget as HTMLElement)
+            return
+        }
         const all = rows()
         const index = all.indexOf(event.currentTarget as HTMLButtonElement)
         let next: HTMLElement | undefined
@@ -274,19 +400,39 @@
             >
                 {#if kind === 'functions'}
                     {#each shownFunctions as fn (fn.address)}
-                        <li>
+                        <li class="function-item">
                             <button
                                 type="button"
                                 class="symbol-row function"
                                 class:current={fn.address === current}
+                                class:menu-open={menu !== null && menuFunction === fn.address}
                                 title={functionTooltip(fn)}
                                 onclick={() => reveal(fn.line)}
-                                onkeydown={onRowKeydown}
+                                onkeydown={(event) => onRowKeydown(event, fn)}
+                                oncontextmenu={(event) =>
+                                    openMenu(event, fn, event.currentTarget as HTMLElement)}
                             >
                                 <span class="symbol-name">{fn.display}</span>
                                 <span class="symbol-address">{symbolAddress(fn.address)}</span>
                                 <span class="symbol-size">{fn.size} B</span>
                             </button>
+                            {#if !ui.viewport.canHover}
+                                <!-- a touch screen has no right click: the row's menu is a button -->
+                                <button
+                                    type="button"
+                                    class="row-menu"
+                                    title={`Rename or comment on ${fn.display}`}
+                                    aria-label={`Rename or comment on ${fn.display}`}
+                                    tabindex="-1"
+                                    onclick={(event) => {
+                                        const row = event.currentTarget
+                                            .previousElementSibling as HTMLElement
+                                        openMenu(event, fn, row)
+                                    }}
+                                >
+                                    <FaEllipsisH />
+                                </button>
+                            {/if}
                         </li>
                     {/each}
                 {:else}
@@ -313,10 +459,33 @@
             </ul>
         {/if}
     {/if}
+    {#if openPrompt}
+        <AnnotationPromptView
+            prompt={openPrompt}
+            onsave={() => {
+                if (openPrompt.save()) closePrompt()
+            }}
+            onclose={closePrompt}
+            onrelease={() => promptRow?.focus()}
+        />
+    {/if}
+    {#if menu}
+        <ContextMenu
+            x={menu.x}
+            y={menu.y}
+            items={menu.items}
+            label="Function actions"
+            onClose={() => {
+                menu = null
+                menuFunction = undefined
+            }}
+        />
+    {/if}
 </section>
 
 <style lang="scss">
     .symbols {
+        position: relative;
         display: flex;
         flex-direction: column;
         flex: 1;
@@ -497,6 +666,37 @@
             background: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
             box-shadow: inset 2px 0 0 var(--accent);
         }
+
+        &.menu-open {
+            outline: 1px solid var(--accent);
+            outline-offset: -1px;
+        }
+    }
+
+    .function-item {
+        display: flex;
+        align-items: center;
+
+        .symbol-row {
+            flex: 1;
+            width: auto;
+            min-width: 0;
+        }
+    }
+
+    /* a touch screen's way to a row's menu, beside its size */
+    .row-menu {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 1.9rem;
+        height: 1.55rem;
+        padding: 0.4rem;
+        border: none;
+        background: transparent;
+        color: inherit;
+        opacity: 0.7;
+        cursor: pointer;
     }
 
     .symbol-name {

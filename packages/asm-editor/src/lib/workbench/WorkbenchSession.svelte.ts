@@ -18,7 +18,23 @@ import {
     isEnvironmentHeaderPath,
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
-import type { ByteEdit, ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
+import {
+    sameFileContent,
+    type Annotations,
+    type ByteEdit,
+    type ProjectFile,
+    type ProjectFiles
+} from '#lib/projectFiles.ts'
+import {
+    commentAt,
+    functionCommentAt,
+    rename,
+    resetName,
+    setComment,
+    setFunctionComment
+} from '#lib/annotations/annotations.ts'
+import { AnnotationHistory, type AnnotationChange } from '#lib/annotations/annotationHistory.ts'
+import { commentProblem, normalizeComment } from '#lib/annotations/comments.ts'
 import {
     buildOutputCollision,
     buildOutputFile,
@@ -48,6 +64,8 @@ import {
     functionAtLine,
     instructionAddressAt,
     lineOfFileOffset,
+    lineOfPlace,
+    placeOfLine,
     type Listing,
     type ListingFunction
 } from '#lib/listing/listing.ts'
@@ -163,6 +181,17 @@ import {
 import { EditorGroup } from './EditorGroup.svelte'
 import type { NavigationPosition } from './navigationHistory.svelte'
 import { PatchPrompt } from './patchPrompt.svelte'
+import { AnnotationPrompt } from './annotationPrompt.svelte'
+import {
+    commentTarget,
+    functionCommentTarget,
+    labelToRename,
+    renameProblem,
+    renameTarget,
+    typedName,
+    type CommentTarget,
+    type RenameTarget
+} from './annotationTargets'
 import { EditorModels } from './editorModels'
 import { resolveMappingPair } from './mappingPair'
 import {
@@ -258,6 +287,12 @@ export class WorkbenchSession {
     /** The Hex editor's Undo and Redo of each File, shared by both panes. */
     readonly byteEditHistory = new ByteEditHistory()
     /**
+     * The Undo and Redo of each Executable's renames and comments, shared by every pane showing
+     * its Listing ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 19).
+     */
+    readonly annotationHistory = new AnnotationHistory()
+    /**
      * The Pseudocode the panes show, and the session's Pseudocode worker, started with the first
      * function decompiled ([file-views.md](../../../../../docs/design/file-views.md), decision 6).
      */
@@ -351,9 +386,39 @@ export class WorkbenchSession {
         return listings.openExecutable(
             path,
             (selection.sourceKind === 'build'
-                ? this.emulator.buildSources?.files[path]
+                ? this.snapshotFile(path)
                 : this.project.files[path]) ?? this.buildOutputAt(path)
         )
+    }
+
+    /** The records `snapshotFile` made, by the Build's record and the live one they were made of. */
+    private readonly snapshotFiles = new WeakMap<
+        ProjectFile,
+        { live: ProjectFile; file: ProjectFile }
+    >()
+
+    /**
+     * A File of the Build snapshot as the editor shows it: with the Annotations the live File has
+     * while it holds the same bytes, since they change no byte and are made during the Debug
+     * session too ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decisions 20 and 22); else as the Build took it.
+     */
+    snapshotFile(path: string): ProjectFile | undefined {
+        const built = this.emulator.buildSources?.files[path]
+        const live = this.project.files[path]
+        if (!built || !live || built.annotations === live.annotations) return built
+        const kept = this.snapshotFiles.get(built)
+        if (kept?.live === live) return kept.file
+        let file = built
+        if (sameFileContent(built, live))
+            file = Object.freeze({
+                encoding: built.encoding,
+                content: built.content,
+                ...(built.edits ? { edits: built.edits } : {}),
+                ...(live.annotations ? { annotations: live.annotations } : {})
+            })
+        this.snapshotFiles.set(built, { live, file })
+        return file
     }
 
     groupForFile(path: string) {
@@ -1560,6 +1625,7 @@ export class WorkbenchSession {
         const patcher = this.emulator.patcher
         const site = this.patchSite(group, line)
         if (!patcher || !site) return false
+        group.annotationPrompt = undefined
         group.patchPrompt?.dispose()
         const prompt = new PatchPrompt(site, patcher, this.buildGeneration)
         group.patchPrompt = prompt
@@ -1588,6 +1654,327 @@ export class WorkbenchSession {
         }
         this.closePatchPrompt(group)
         return true
+    }
+
+    // ---- renames and comments ------------------------------------------------------------------
+
+    /**
+     * The Executable File whose own Listing a pane shows, which takes renames and comments
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 1): none in a read-only Workbench, for a library's Listing, for the Build output, which is no
+     * File of the Project, or for a Build's version of a File whose bytes the Project's File no
+     * longer has.
+     */
+    annotatablePath(group: EditorGroup): string | undefined {
+        if (group.displayedView !== 'listing' || !group.displayedListing) return undefined
+        if (group.displayedLibraryListing || group.displayedBuildOutput) return undefined
+        return this.annotatableFile(group.sourceSelection)
+    }
+
+    /**
+     * The same for a version of a File, as the Symbols panel lists it: the path of the Project's
+     * File, when it holds the bytes of that version.
+     */
+    annotatableFile(selection: ProjectSourceSelection): string | undefined {
+        const path = selection.path
+        if (this.host.readonly || !path) return undefined
+        const file = this.project.files[path]
+        const shown = selection.sourceKind === 'build' ? this.snapshotFile(path) : file
+        return file && shown && sameFileContent(file, shown) ? path : undefined
+    }
+
+    /**
+     * Why a File's Annotations cannot change now, or undefined when they can: never in a read-only
+     * Workbench, nor while a Build, a Run or the Testcases run. A paused Debug session takes them,
+     * and its Listing shows them at once (decision 22).
+     */
+    annotationRefusal(path: string): string | undefined {
+        if (this.host.readonly) return 'This Project is read-only'
+        if (this.testing) return 'The Testcases are running: rename and comment once they end'
+        if (this.building) return 'A Build is running: rename and comment once it ends'
+        if (this.running) return 'The program is running: Pause it to rename or comment'
+        if (!this.project.files[path]) return `${path} is not a File of the Project`
+        return undefined
+    }
+
+    /**
+     * Changes a File's Annotations through the FileSystem, which saves them as any change to the
+     * Files is saved (decision 20), as one step of its annotation history (decision 19); during a
+     * Debug session, the running Listing takes them too. Why it could not, or undefined once done.
+     */
+    private writeAnnotations(
+        path: string,
+        change: AnnotationChange,
+        edit: (annotations: Annotations | undefined) => Annotations | undefined
+    ): string | undefined {
+        const refusal = this.annotationRefusal(path)
+        if (refusal) return refusal
+        const before = this.project.files[path]
+        try {
+            this.project.fileSystem.annotate(path, edit(before.annotations))
+        } catch (error) {
+            console.error(error)
+            return getM68kErrorMessage(error)
+        }
+        const after = this.project.files[path]
+        this.annotationHistory.record(path, before, after?.annotations, change)
+        this.annotationsChanged(path)
+        return undefined
+    }
+
+    /** A File's Annotations changed: the running program's Listing takes them, and its tab stays. */
+    private annotationsChanged(path: string) {
+        this.emulator.setExecutableAnnotations?.(path, this.project.files[path]?.annotations)
+        this.keepOpen(path)
+    }
+
+    /** Says why a change could not be made, as a toast; whether it was made. */
+    private annotated(failure: string | undefined): boolean {
+        if (failure) toast.warn(failure)
+        return failure === undefined
+    }
+
+    /**
+     * Names the label at a link-time address of an Executable's Listing (decisions 6 and 8), a jump
+     * target's without its dot: the name is not checked here, which `renameProblem` does first.
+     */
+    renameLabel(path: string, address: number, name: string): boolean {
+        return this.annotated(
+            this.writeAnnotations(path, { kind: 'name', address }, (annotations) =>
+                rename(annotations, address, name)
+            )
+        )
+    }
+
+    /** Reset name (decision 10): the label at an address has the Listing's name again. */
+    resetName(path: string, address: number): boolean {
+        return this.annotated(
+            this.writeAnnotations(path, { kind: 'name', address }, (annotations) =>
+                resetName(annotations, address)
+            )
+        )
+    }
+
+    /** The comment on the line at an address (decision 11); an empty one deletes it. */
+    setComment(path: string, address: number, text: string): boolean {
+        return this.annotated(this.writeComment(path, { kind: 'comment', address }, text))
+    }
+
+    /** The comment of the function at an address (decision 12); an empty one deletes it. */
+    setFunctionComment(path: string, address: number, text: string): boolean {
+        return this.annotated(this.writeComment(path, { kind: 'function comment', address }, text))
+    }
+
+    private writeComment(path: string, target: CommentTarget, text: string) {
+        const { address } = target
+        return target.kind === 'function comment'
+            ? this.writeAnnotations(path, { kind: 'function comment', address }, (annotations) =>
+                  setFunctionComment(annotations, address, text)
+              )
+            : this.writeAnnotations(path, { kind: 'comment', address }, (annotations) =>
+                  setComment(annotations, address, text)
+              )
+    }
+
+    /** Whether a File's annotation history has a step to undo, or with `redo` to redo. */
+    canUndoAnnotation(path: string, redo = false): boolean {
+        const file = this.project.files[path]
+        if (!file || this.host.readonly) return false
+        return redo
+            ? this.annotationHistory.canRedo(path, file)
+            : this.annotationHistory.canUndo(path, file)
+    }
+
+    /**
+     * Undo of a File's last rename or comment, or with `redo` Redo of the last one undone: the
+     * File's Annotations as they were on the other side of the step. Neither instruction Undo nor
+     * a text editor's.
+     */
+    undoAnnotation(path: string, redo = false): boolean {
+        const refusal = this.annotationRefusal(path)
+        if (refusal) return this.annotated(refusal)
+        const file = this.project.files[path]
+        const step = redo
+            ? this.annotationHistory.redo(path, file)
+            : this.annotationHistory.undo(path, file)
+        if (!step) return false
+        try {
+            this.project.fileSystem.annotate(path, step.annotations)
+        } catch (error) {
+            console.error(error)
+            return this.annotated(getM68kErrorMessage(error))
+        }
+        this.annotationsChanged(path)
+        return true
+    }
+
+    redoAnnotation(path: string): boolean {
+        return this.undoAnnotation(path, true)
+    }
+
+    canRedoAnnotation(path: string): boolean {
+        return this.canUndoAnnotation(path, true)
+    }
+
+    /** What Rename… at a line and column of a pane's Listing renames, if anything. */
+    renameTargetAt(group: EditorGroup, line: number, column: number): RenameTarget | undefined {
+        const listing = this.annotatablePath(group) ? group.displayedListingView : undefined
+        const label = listing && labelToRename(listing, line, column)
+        return listing && label ? renameTarget(listing, label) : undefined
+    }
+
+    /** What Comment… on a line of a pane's Listing edits, or with `fn` Function comment…. */
+    commentTargetAt(group: EditorGroup, line: number, fn = false): CommentTarget | undefined {
+        const listing = this.annotatablePath(group) ? group.displayedListingView : undefined
+        if (!listing) return undefined
+        return fn ? functionCommentTarget(listing, line) : commentTarget(listing, line)
+    }
+
+    /** The comment there is at a target, as the person wrote it. */
+    private commentOf(path: string, target: CommentTarget): string | undefined {
+        const annotations = this.project.files[path]?.annotations
+        return target.kind === 'function comment'
+            ? functionCommentAt(annotations, target.address)
+            : commentAt(annotations, target.address)
+    }
+
+    /** Whether Reset name applies there: a renamed label, or one whose name another label took. */
+    canResetNameAt(group: EditorGroup, line: number, column: number): boolean {
+        const target = this.renameTargetAt(group, line, column)
+        return (
+            !!target && !target.refusal && (!!target.label.renamed || !!target.label.renameConflict)
+        )
+    }
+
+    resetNameAt(group: EditorGroup, line: number, column: number): boolean {
+        const path = this.annotatablePath(group)
+        const target = this.renameTargetAt(group, line, column)
+        return !!path && !!target && this.resetName(path, target.address)
+    }
+
+    /** Whether Delete comment applies on a line: a comment of the person's is there. */
+    canDeleteCommentAt(group: EditorGroup, line: number): boolean {
+        const path = this.annotatablePath(group)
+        const target = this.commentTargetAt(group, line)
+        return !!path && !!target && this.commentOf(path, target) !== undefined
+    }
+
+    deleteCommentAt(group: EditorGroup, line: number): boolean {
+        const path = this.annotatablePath(group)
+        const target = this.commentTargetAt(group, line)
+        return !!path && !!target && this.annotated(this.writeComment(path, target, ''))
+    }
+
+    /**
+     * The prompt of Rename… for a label of a File's Listing (decision 18), or undefined after
+     * saying why it cannot be renamed now: its name, checked as typed against the Listing's
+     * labels; its own name resets it.
+     */
+    renamePrompt(path: string, target: RenameTarget): AnnotationPrompt | undefined {
+        const refusal = target.refusal ?? this.annotationRefusal(path)
+        if (refusal) {
+            toast.warn(refusal)
+            return undefined
+        }
+        const { label, address } = target
+        const shown = target.jumpTarget ? label.fullName : (label.demangled?.short ?? label.name)
+        const dot = target.jumpTarget ? '.' : ''
+        const note = label.renameConflict
+            ? `Your name ${label.renameConflict} is not applied: another label has it.`
+            : label.renamed
+              ? `Renamed from ${dot}${target.raw}; that name resets it.`
+              : undefined
+        return new AnnotationPrompt({
+            kind: 'name',
+            path,
+            address,
+            title: `Rename ${shown}`,
+            ...(note ? { note } : {}),
+            text: target.current,
+            ...(target.jumpTarget ? { prefix: '.' } : {}),
+            problem: (text) => renameProblem(target, text),
+            save: (text) => {
+                const name = typedName(target, text)
+                return name === target.raw
+                    ? this.writeAnnotations(path, { kind: 'name', address }, (annotations) =>
+                          resetName(annotations, address)
+                      )
+                    : this.writeAnnotations(path, { kind: 'name', address }, (annotations) =>
+                          rename(annotations, address, name)
+                      )
+            }
+        })
+    }
+
+    /**
+     * The prompt of Comment… or Function comment… (decision 18), or undefined after saying why
+     * the File takes none now: the comment there is, which saving empty deletes.
+     */
+    commentPrompt(
+        path: string,
+        listing: Listing,
+        target: CommentTarget
+    ): AnnotationPrompt | undefined {
+        const refusal = this.annotationRefusal(path)
+        if (refusal) {
+            toast.warn(refusal)
+            return undefined
+        }
+        const fn = target.function
+        const where = `0x${(target.address + listing.base).toString(16)}`
+        const title =
+            target.kind === 'function comment'
+                ? `Comment on the function ${fn ? (fn.list ?? fn.name) : `at ${where}`}`
+                : `Comment at ${where}`
+        return new AnnotationPrompt({
+            kind: target.kind,
+            path,
+            address: target.address,
+            title,
+            text: this.commentOf(path, target) ?? '',
+            problem: (text) => commentProblem(normalizeComment(text)),
+            save: (text) => this.writeComment(path, target, text)
+        })
+    }
+
+    /** Rename… at a line and column of a pane's Listing: its prompt, over the line. */
+    openRenamePrompt(group: EditorGroup, line: number, column: number): boolean {
+        const path = this.annotatablePath(group)
+        const target = this.renameTargetAt(group, line, column)
+        const prompt = path && target && this.renamePrompt(path, target)
+        if (!prompt) return false
+        this.showAnnotationPrompt(group, prompt)
+        return true
+    }
+
+    /** Comment… on a line of a pane's Listing, or with `fn` Function comment…: its prompt. */
+    openCommentPrompt(group: EditorGroup, line: number, fn = false): boolean {
+        const path = this.annotatablePath(group)
+        const listing = group.displayedListingView
+        const target = this.commentTargetAt(group, line, fn)
+        const prompt = path && listing && target && this.commentPrompt(path, listing, target)
+        if (!prompt) return false
+        this.showAnnotationPrompt(group, prompt)
+        return true
+    }
+
+    private showAnnotationPrompt(group: EditorGroup, prompt: AnnotationPrompt) {
+        group.patchPrompt?.dispose()
+        group.patchPrompt = undefined
+        group.annotationPrompt = prompt
+    }
+
+    /** Saves a pane's prompt, and closes it once saved. */
+    saveAnnotationPrompt(group: EditorGroup): boolean {
+        const prompt = group.openAnnotationPrompt
+        if (!prompt?.save()) return false
+        this.closeAnnotationPrompt(group)
+        return true
+    }
+
+    closeAnnotationPrompt(group: EditorGroup) {
+        group.annotationPrompt = undefined
+        group.editor?.focus()
     }
 
     // ---- which File is shown -------------------------------------------------------------------
@@ -2078,6 +2465,8 @@ export class WorkbenchSession {
         let changed = this.programFileRenamed(from, to)
         this.moveFileBreakpoints(from, to)
         this.byteEditHistory.move(from, to)
+        this.annotationHistory.move(from, to)
+        this.dropAnnotationPrompts(from)
         const view = this.project.fileViews?.[from]
         if (view) {
             this.project.setFileView(from, undefined)
@@ -2102,6 +2491,8 @@ export class WorkbenchSession {
         this.project.removeProgram(path)
         this.moveFileBreakpoints(path)
         this.byteEditHistory.move(path)
+        this.annotationHistory.move(path)
+        this.dropAnnotationPrompts(path)
         if (this.project.fileViews?.[path]) {
             this.project.setFileView(path, undefined)
             changed = true
@@ -2118,6 +2509,12 @@ export class WorkbenchSession {
             }
             if (!group.tabs.paths.length && this.groups.length > 1) this.closeGroup(group)
         }
+    }
+
+    /** Closes the prompts renaming or commenting in a File that moved or went. */
+    private dropAnnotationPrompts(path: string) {
+        for (const group of this.groups)
+            if (group.annotationPrompt?.spec.path === path) group.annotationPrompt = undefined
     }
 
     /**
@@ -2536,7 +2933,8 @@ export class WorkbenchSession {
 
     /**
      * Where a pane is, as its navigation history keeps it: the line of the Listing it shows, at
-     * `line` (its cursor's by default), or the function of its Pseudocode. None in any other view.
+     * `line` (its cursor's by default), with the address it stands for, or the function of its
+     * Pseudocode. None in any other view.
      */
     navigationPosition(
         group: EditorGroup,
@@ -2544,8 +2942,12 @@ export class WorkbenchSession {
     ): NavigationPosition | undefined {
         const selection = group.sourceSelection
         if (!this.groups.includes(group) || !selection.path) return undefined
-        if (group.displayedView === 'listing' && group.displayedListing)
-            return { selection, view: 'listing', line: Math.max(line, 0) }
+        if (group.displayedView === 'listing' && group.displayedListing) {
+            const at = Math.max(line, 0)
+            const listing = group.displayedListing.listing
+            const place = listing && placeOfLine(listing, at)
+            return { selection, view: 'listing', line: at, ...(place ? { place } : {}) }
+        }
         const fn = group.displayedView === 'pseudocode' ? group.pseudocodeFunction : undefined
         return fn ? { selection, view: 'pseudocode', functionAddress: fn.address } : undefined
     }
@@ -2630,7 +3032,10 @@ export class WorkbenchSession {
             const document = group.displayedListing
             await document?.ready.catch(() => undefined)
             if (group.displayedListing !== document) return false
-            return this.revealWhenShown(group, place.line, {
+            //found by its address, in a Listing whose comments or names may have moved it
+            const listing = document?.listing
+            const found = listing && place.place ? lineOfPlace(listing, place.place) : -1
+            return this.revealWhenShown(group, found >= 0 ? found : place.line, {
                 scroll: shown ? 'smooth' : 'immediate'
             })
         }

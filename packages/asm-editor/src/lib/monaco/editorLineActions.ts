@@ -5,6 +5,8 @@ import type { MonacoType } from './Monaco'
  * A command on the line the cursor is on, which an editor offers in its context menu and on a
  * key: "Patch instruction…" on a Listing line. It is offered only where `available` says, which
  * the editor asks again whenever the cursor moves and whenever what `available` reads changes.
+ * Both are given the cursor's 0-based line and column, the column for a command on the name under
+ * the cursor, as Rename… is.
  */
 export type EditorLineAction = {
     /** Unique among the editor's actions: `asm-editor.patchInstruction`. */
@@ -19,9 +21,9 @@ export type EditorLineAction = {
      */
     menuGroup?: string
     menuOrder?: number
-    /** Whether it applies to a 0-based line now. */
-    available: (line: number) => boolean
-    run: (line: number) => void
+    /** Whether it applies to a 0-based line, at a 0-based column, now. */
+    available: (line: number, column: number) => boolean
+    run: (line: number, column: number) => void
 }
 
 /** The context key telling Monaco whether an action is available on the cursor's line. */
@@ -130,6 +132,108 @@ export function debuggingActions(debugging: EditorDebugging): EditorLineAction[]
             menuOrder: 2,
             available: (line) => debugging.canRunToCursor(line),
             run: (line) => debugging.runToCursor(line)
+        }
+    ]
+}
+
+/**
+ * Renaming and commenting in an Executable's own Listing, at the cursor
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision 18):
+ * a name under the cursor or a label's line takes Rename… and, once renamed, Reset name; a line
+ * with an address takes Comment… (a function's label line its function comment), a line inside a
+ * function Function comment…, and one with a comment Delete comment. Undo and Redo take back and
+ * bring back the last of them, by the File's annotation history (decision 19).
+ */
+export type EditorAnnotations = {
+    canRename: (line: number, column: number) => boolean
+    rename: (line: number, column: number) => void
+    canResetName: (line: number, column: number) => boolean
+    resetName: (line: number, column: number) => void
+    canComment: (line: number) => boolean
+    comment: (line: number) => void
+    canCommentFunction: (line: number) => boolean
+    commentFunction: (line: number) => void
+    canDeleteComment: (line: number) => boolean
+    deleteComment: (line: number) => void
+    readonly canUndo: boolean
+    undo: () => void
+    readonly canRedo: boolean
+    redo: () => void
+}
+
+/**
+ * Rename…, Comment… and the rest, in a group of their own after the debugging one, before "Patch
+ * instruction…": Rename… on `n` and F2, Comment… on `;`, as IDA, Binary Ninja and Cutter have `n`
+ * and `;` and VS Code F2; Undo on Ctrl+Z and Redo on Ctrl+Shift+Z and Ctrl+Y (⌘ on a Mac). Each
+ * key is the editor text's only (`lineActionDescriptor`): a Listing is read-only, so `n` and `;`
+ * type nothing there, Monaco's own F2 needs a writable model, and its text Undo has nothing to
+ * take back, while the action is offered. Monaco binds `;` by the key a US layout types it with.
+ */
+export function annotationActions(annotations: EditorAnnotations): EditorLineAction[] {
+    const group = '1_edit_annotations'
+    return [
+        {
+            id: 'asm-editor.rename',
+            label: 'Rename…',
+            keybindings: (monaco) => [monaco.KeyCode.KeyN, monaco.KeyCode.F2],
+            menuGroup: group,
+            menuOrder: 1,
+            available: (line, column) => annotations.canRename(line, column),
+            run: (line, column) => annotations.rename(line, column)
+        },
+        {
+            id: 'asm-editor.comment',
+            label: 'Comment…',
+            keybindings: (monaco) => [monaco.KeyCode.Semicolon],
+            menuGroup: group,
+            menuOrder: 2,
+            available: (line) => annotations.canComment(line),
+            run: (line) => annotations.comment(line)
+        },
+        {
+            id: 'asm-editor.functionComment',
+            label: 'Function comment…',
+            menuGroup: group,
+            menuOrder: 3,
+            available: (line) => annotations.canCommentFunction(line),
+            run: (line) => annotations.commentFunction(line)
+        },
+        {
+            id: 'asm-editor.resetName',
+            label: 'Reset name',
+            menuGroup: group,
+            menuOrder: 4,
+            available: (line, column) => annotations.canResetName(line, column),
+            run: (line, column) => annotations.resetName(line, column)
+        },
+        {
+            id: 'asm-editor.deleteComment',
+            label: 'Delete comment',
+            menuGroup: group,
+            menuOrder: 5,
+            available: (line) => annotations.canDeleteComment(line),
+            run: (line) => annotations.deleteComment(line)
+        },
+        {
+            id: 'asm-editor.undoAnnotation',
+            label: 'Undo rename or comment',
+            keybindings: (monaco) => [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ],
+            menuGroup: group,
+            menuOrder: 6,
+            available: () => annotations.canUndo,
+            run: () => annotations.undo()
+        },
+        {
+            id: 'asm-editor.redoAnnotation',
+            label: 'Redo rename or comment',
+            keybindings: (monaco) => [
+                monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ,
+                monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY
+            ],
+            menuGroup: group,
+            menuOrder: 7,
+            available: () => annotations.canRedo,
+            run: () => annotations.redo()
         }
     ]
 }

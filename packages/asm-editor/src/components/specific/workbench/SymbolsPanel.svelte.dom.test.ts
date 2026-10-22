@@ -9,7 +9,7 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount, type Component } from 'svelte'
+import { flushSync, mount, tick, unmount, type Component } from 'svelte'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import { hasExecutable } from '#lib/executables.ts'
 import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
@@ -22,6 +22,7 @@ import { liveSource } from '#lib/monaco/projectSourceSelection.ts'
 import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
 import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
 import { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
+import { toast } from '#stores/toastStore.ts'
 import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.svelte.ts'
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 import type { RailEntry } from './workbenchContext'
@@ -45,6 +46,7 @@ beforeAll(async () => {
     decoder = await loadDecoder()
     demangler = await loadDemangler()
     HTMLElement.prototype.scrollIntoView ??= () => {}
+    HTMLElement.prototype.showPopover ??= function () {}
 })
 
 const disposers: (() => void)[] = []
@@ -64,15 +66,22 @@ const rail: RailEntry[] = [
  * The side panel showing Symbols, over crackme, the Entry, beside a text File. With `hold`, the
  * Listing is generated only when `release` is called.
  */
-function symbolsPanel(data: StoredProject = {}, { hold = false } = {}) {
-    const fixture = editorGroupsFixture('X86', {
-        entry: 'crackme',
-        files: {
-            crackme: { encoding: 'base64', content: crackme },
-            'notes.txt': { encoding: 'plain', content: 'password?' }
+function symbolsPanel(
+    data: StoredProject = {},
+    { hold = false, readonly = false, touch = false } = {}
+) {
+    const fixture = editorGroupsFixture(
+        'X86',
+        {
+            entry: 'crackme',
+            files: {
+                crackme: { encoding: 'base64', content: crackme },
+                'notes.txt': { encoding: 'plain', content: 'password?' }
+            },
+            ...data
         },
-        ...data
-    })
+        { readonly }
+    )
     let release = () => {}
     const held = new Promise<void>((resolve) => (release = resolve))
     const generate = async (order: ListingOrder) => {
@@ -82,7 +91,7 @@ function symbolsPanel(data: StoredProject = {}, { hold = false } = {}) {
         return generateListing(decoder, { ...order, version: 'v1', demangler })
     }
     fixture.emulator.listings = new ListingDocuments(generate)
-    const viewport = $state({ deviceClass: 'desktop' as const, canHover: true })
+    const viewport = $state({ deviceClass: 'desktop' as const, canHover: !touch })
     let active = $state<string | null>(null)
     const ui = new WorkbenchUi(viewport, { get: () => active, set: (id) => (active = id) })
     ui.open('symbols')
@@ -387,5 +396,171 @@ describe('the Symbols panel', () => {
         key(view.rows().at(-1)!, 'Home')
         key(view.rows()[0], 'ArrowUp')
         expect(document.activeElement).toBe(view.filterInput())
+    })
+})
+
+describe('renaming and commenting from the Symbols panel', () => {
+    /** The row of a function, by the name it shows. */
+    const rowOf = (view: ReturnType<typeof symbolsPanel>, name: string) =>
+        view.rows().find((row) => row.querySelector('.symbol-name')?.textContent === name)!
+    const menuItems = () =>
+        [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((item) => ({
+            label: item.textContent!.trim(),
+            disabled: item.disabled
+        }))
+    const pickItem = (label: string) => {
+        ;[...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+            .find((item) => item.textContent!.trim() === label)!
+            .click()
+        flushSync()
+    }
+    /** Opens a row's menu, which focuses its first item once drawn. */
+    const openMenu = async (row: HTMLElement) => {
+        row.dispatchEvent(
+            new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: 30,
+                clientY: 40
+            })
+        )
+        flushSync()
+        await tick()
+    }
+    const type = (view: ReturnType<typeof symbolsPanel>, text: string) => {
+        const field = view
+            .panel()
+            .querySelector<HTMLInputElement | HTMLTextAreaElement>(
+                '.annotation-prompt input, .annotation-prompt textarea'
+            )!
+        field.value = text
+        field.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+        return field
+    }
+    const submit = (view: ReturnType<typeof symbolsPanel>) => {
+        view.panel()
+            .querySelector('.annotation-prompt form')!
+            .dispatchEvent(new SubmitEvent('submit', { cancelable: true }))
+        flushSync()
+    }
+
+    it('renames a function from its row’s menu, the row then listing it so, and resets it', async () => {
+        const view = symbolsPanel()
+        show(view.session, 'crackme')
+        await view.listed()
+        await openMenu(rowOf(view, 'main'))
+        expect(menuItems()).toEqual([
+            { label: 'Rename…', disabled: false },
+            { label: 'Comment…', disabled: false }
+        ])
+        pickItem('Rename…')
+        const prompt = view.panel().querySelector('.annotation-prompt')!
+        expect(prompt.textContent).toContain('Rename main')
+        //a refused name says why, and Save waits
+        type(view, 'my name')
+        expect(prompt.querySelector('.annotation-error')?.textContent).toBe(
+            'A name holds letters, digits and underscores only, not a space'
+        )
+        type(view, 'check_password')
+        submit(view)
+        expect(view.panel().querySelector('.annotation-prompt')).toBeNull()
+        expect(view.project.files.crackme.annotations).toEqual({
+            names: { '0x11e9': 'check_password' }
+        })
+        await until(() => rowOf(view, 'check_password') !== undefined)
+        expect(rowOf(view, 'check_password').title).toContain('Renamed from main')
+        //the filter still finds it by the name it had
+        view.typeFilter('main')
+        expect(view.rowTexts().map((row) => row[0])).toContain('check_password')
+        view.typeFilter('')
+        await openMenu(rowOf(view, 'check_password'))
+        expect(menuItems().map((item) => item.label)).toEqual(['Rename…', 'Comment…', 'Reset name'])
+        pickItem('Reset name')
+        expect(view.project.files.crackme.annotations).toBeUndefined()
+        await until(() => rowOf(view, 'main') !== undefined)
+    })
+
+    it('comments on a function, its comment shown in the prompt again', async () => {
+        const view = symbolsPanel()
+        show(view.session, 'crackme')
+        await view.listed()
+        await openMenu(rowOf(view, 'main'))
+        pickItem('Comment…')
+        expect(view.panel().querySelector('.annotation-prompt')!.textContent).toContain(
+            'Comment on the function main'
+        )
+        type(view, 'Asks for the password')
+        submit(view)
+        expect(view.project.files.crackme.annotations).toEqual({
+            functionComments: { '0x11e9': 'Asks for the password' }
+        })
+        await until(() => view.session.listingFor(liveSource('crackme'))?.status === 'ready')
+        await openMenu(rowOf(view, 'main'))
+        pickItem('Comment…')
+        expect(
+            view.panel().querySelector<HTMLTextAreaElement>('.annotation-prompt textarea')!.value
+        ).toBe('Asks for the password')
+    })
+
+    it('opens Rename… on F2 while a row has the keyboard, and gives the keyboard back', async () => {
+        const view = symbolsPanel()
+        show(view.session, 'crackme')
+        await view.listed()
+        const row = rowOf(view, '_start')
+        row.focus()
+        row.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true })
+        )
+        flushSync()
+        const prompt = view.panel().querySelector<HTMLElement>('.annotation-prompt')!
+        expect(prompt.textContent).toContain('Rename _start')
+        prompt.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+        flushSync()
+        expect(view.panel().querySelector('.annotation-prompt')).toBeNull()
+        expect(document.activeElement).toBe(row)
+        //a PLT stub's says why it keeps its name
+        const warn = vi.spyOn(toast, 'warn')
+        rowOf(view, 'puts@plt').dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true })
+        )
+        flushSync()
+        expect(view.panel().querySelector('.annotation-prompt')).toBeNull()
+        expect(warn).toHaveBeenCalledWith('puts is named by the library it comes from')
+    })
+
+    it('has a button for a row’s menu on a touch screen, which has no right click', async () => {
+        const view = symbolsPanel({}, { touch: true })
+        show(view.session, 'crackme')
+        await view.listed()
+        const button = rowOf(view, 'main').parentElement!.querySelector<HTMLButtonElement>(
+            'button.row-menu'
+        )!
+        expect(button.getAttribute('aria-label')).toBe('Rename or comment on main')
+        button.click()
+        flushSync()
+        await tick()
+        expect(menuItems().map((item) => item.label)).toEqual(['Rename…', 'Comment…'])
+        //with a mouse there is none
+        const mouse = symbolsPanel()
+        show(mouse.session, 'crackme')
+        await mouse.listed()
+        expect(mouse.panel().querySelector('button.row-menu')).toBeNull()
+    })
+
+    it('offers nothing to change in a read-only Workbench', async () => {
+        const view = symbolsPanel({}, { readonly: true })
+        show(view.session, 'crackme')
+        await view.listed()
+        await openMenu(rowOf(view, 'main'))
+        expect(menuItems()).toEqual([
+            { label: 'Rename…', disabled: true },
+            { label: 'Comment…', disabled: true }
+        ])
+        rowOf(view, 'main').dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true })
+        )
+        flushSync()
+        expect(view.panel().querySelector('.annotation-prompt')).toBeNull()
     })
 })

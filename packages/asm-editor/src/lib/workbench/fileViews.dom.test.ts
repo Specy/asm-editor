@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
-import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import { LINE_KIND, placeOfLine, type Listing } from '#lib/listing/listing.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { ListingOrder } from '#lib/listing/listingClient.ts'
 import type { AvailableLanguages, StoredProject } from '#lib/Project.svelte.ts'
@@ -499,7 +499,12 @@ describe('Show in Listing and Show in Hex', () => {
         expect(editor.revealed).toEqual([3])
         //the Listing's line it left is behind it, for Back
         expect(left.history.behind).toEqual([
-            { selection: { sourceKind: 'live', path: 'crackme' }, view: 'listing', line: 1 }
+            {
+                selection: { sourceKind: 'live', path: 'crackme' },
+                view: 'listing',
+                line: 1,
+                place: placeOfLine(left.displayedListing!.listing!, 1)
+            }
         ])
         //a pane already on the Listing scrolls there
         expect(editor.scrolls).toEqual([0])

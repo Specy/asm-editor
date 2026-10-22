@@ -94,3 +94,26 @@ describe('a navigation history', () => {
         expect(samePosition(fn(0x10), fn(0x10, 'other'))).toBe(false)
     })
 })
+
+describe('a Listing place', () => {
+    it('is the same place by the address it stands for, whatever line it is on now', () => {
+        const at = (n: number, address: number, nth = 0): NavigationPosition => ({
+            selection: liveSource('crackme'),
+            view: 'listing',
+            line: n,
+            place: { address, kind: 4, nth }
+        })
+        //a comment added above moved the instruction three lines down
+        expect(samePosition(at(10, 0x1149), at(13, 0x1149))).toBe(true)
+        expect(samePosition(at(10, 0x1149), at(10, 0x114d))).toBe(false)
+        expect(samePosition(at(10, 0x1149), at(11, 0x1149, 1))).toBe(false)
+        //a place kept without one, from a line standing for no address, by its line
+        expect(samePosition(line(10), at(10, 0x1149))).toBe(true)
+        expect(samePosition(line(10), at(12, 0x1149))).toBe(false)
+        //a record of the same place twice keeps one
+        const history = new NavigationHistory()
+        history.record(at(10, 0x1149))
+        history.record(at(13, 0x1149))
+        expect(history.behind).toEqual([at(10, 0x1149)])
+    })
+})

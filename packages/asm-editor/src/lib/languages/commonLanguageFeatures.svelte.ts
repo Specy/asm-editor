@@ -4,7 +4,7 @@ import type { InjectedPeripheralOptions } from '#lib/languages/peripherals/perip
 import type { Termination } from '#lib/languages/termination.ts'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
 import { unsignedBigIntToSigned } from '#lib/utils.ts'
-import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
+import type { Annotations, BuildInput, BuildSources } from '#lib/projectFiles.ts'
 
 export type StatusRegister = {
     name: string
@@ -828,6 +828,12 @@ export type BaseEmulatorActions = {
      * program's to configure.
      */
     setDisplay?: (display: ProjectDisplay) => void
+    /**
+     * x86 only: the Annotations the File of the Executable a Debug session runs has now, which
+     * its running Listing is made again with ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 22): a rename or a comment made during the session shows at once.
+     */
+    setExecutableAnnotations?: (path: string, annotations: Annotations | undefined) => void
     /**
      * MIPS and RISC-V only: the display the Screen is configured with right now, and whether the
      * last Build read it out of the program's own `@screen` comment directive rather than from the

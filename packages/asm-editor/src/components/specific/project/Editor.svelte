@@ -49,6 +49,7 @@
         type EditorNavigation
     } from '#lib/monaco/editorLineActions.ts'
     import { followNamesAndHistory } from '#lib/monaco/editorNavigation.ts'
+    import { noteViewStateListing, viewStateFor } from '#lib/monaco/listingViewState.ts'
     import { openProjectResource } from '#lib/languages/service/navigation.ts'
 
     interface Props {
@@ -186,6 +187,13 @@
     let hoveredGliphen: number | null = $state(null)
     /** The 0-based line the cursor is on, which the line actions are offered for. */
     let cursorLine = $state(-1)
+    /** And its 0-based column, for an action on the name under the cursor, as Rename… is. */
+    let cursorColumn = $state(-1)
+    /**
+     * The Listing the model shown was placed with, untracked: a view state saved over it is moved
+     * onto the next Listing of the same File, whose lines may sit elsewhere (`viewStateFor`).
+     */
+    let placedListing: ListingModel['listing'] | undefined
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Monaco handles; nothing renders from them.
     const lineActionKeys = new Map<string, monaco.editor.IContextKey<boolean>>()
     /** The line actions with Go Back and Go Forward first, for an editor with a history. */
@@ -326,9 +334,10 @@
             mountedEditor.onDidChangeCursorPosition((event) => {
                 const left = cursorLine
                 cursorLine = event.position.lineNumber - 1
+                cursorColumn = event.position.column - 1
                 //at once, not in an effect: a right click moves the cursor and opens the context
                 //menu in the same event, and the menu reads the keys as they are then
-                updateLineActionKeys(cursorLine)
+                updateLineActionKeys(cursorLine, cursorColumn)
                 //Monaco's own jumps, Go to Symbol's and Go to Line's
                 if (event.source === 'code.jump') dispatcher('jump', left)
                 dispatcher('cursorMove', cursorLine)
@@ -408,8 +417,11 @@
         shown: EditorSource
     ) {
         const viewState = modelViewStates.get(shown.key)
+        //a Listing made again since keeps its addresses in view, not its line numbers
+        const placing = untrack(() => listing?.listing)
+        placedListing = placing
         if (viewState) {
-            currentEditor.restoreViewState(viewState)
+            currentEditor.restoreViewState(viewStateFor(viewState, placing))
             return
         }
         const opensAt = shown.opensAt
@@ -481,6 +493,13 @@
         //a host that swaps its content while Monaco is still loading can destroy this component
         //between the editor's creation and this effect; a disposed editor throws on setModel
         if (destroyed || !currentEditor || !currentMonaco) return
+        //saved before the model is resolved: a Listing made again replaces the model under the
+        //same key, disposing the one the editor holds, whose state would then be lost
+        const leaving = currentEditor.getModel() ? currentEditor.saveViewState() : null
+        noteViewStateListing(leaving, placedListing)
+        //and the keyboard: Monaco drops it with the view of a model it lets go, which a Listing
+        //made again after a rename typed there would take from the person
+        const typing = currentEditor.hasTextFocus()
         const model = sharedModels
             ? sharedModels.resolve(
                   currentMonaco,
@@ -500,18 +519,22 @@
         if (currentEditor.getModel() !== model) {
             //the link under the mouse is the outgoing model's
             showFollowable(undefined)
-            if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
+            if (viewStateKey && leaving) modelViewStates.set(viewStateKey, leaving)
             applyingExternalValue = true
             try {
                 currentEditor.setModel(model)
                 placeModel(currentEditor, currentMonaco, next)
+                if (typing && !currentEditor.hasTextFocus()) currentEditor.focus()
             } finally {
                 applyingExternalValue = false
             }
         }
         viewStateKey = next.key
         activeModelKey = next.key
+        //the same model's Listing with a Debug session's patches keeps its line table
+        placedListing = untrack(() => listing?.listing)
         cursorLine = (currentEditor.getPosition()?.lineNumber ?? 0) - 1
+        cursorColumn = (currentEditor.getPosition()?.column ?? 0) - 1
     }
 
     $effect(() => {
@@ -546,10 +569,10 @@
         return key
     }
 
-    function updateLineActionKeys(line: number) {
+    function updateLineActionKeys(line: number, column: number) {
         untrack(() => {
             for (const action of editorActions)
-                lineActionKey(action)?.set(line >= 0 && action.available(line))
+                lineActionKey(action)?.set(line >= 0 && action.available(line, Math.max(column, 0)))
         })
     }
 
@@ -578,8 +601,10 @@
                 lineActionKey(action)
                 return currentEditor.addAction(
                     lineActionDescriptor(action, currentMonaco, (target) => {
-                        const line = (target.getPosition()?.lineNumber ?? 0) - 1
-                        if (line >= 0 && action.available(line)) action.run(line)
+                        const position = target.getPosition()
+                        const line = (position?.lineNumber ?? 0) - 1
+                        const column = Math.max((position?.column ?? 1) - 1, 0)
+                        if (line >= 0 && action.available(line, column)) action.run(line, column)
                     })
                 )
             })
@@ -595,7 +620,9 @@
         void activeModelKey
         if (!editor || !actions.length) return
         for (const action of actions)
-            lineActionKey(action)?.set(cursorLine >= 0 && action.available(cursorLine))
+            lineActionKey(action)?.set(
+                cursorLine >= 0 && action.available(cursorLine, Math.max(cursorColumn, 0))
+            )
     })
 
     $effect(() => {
@@ -687,9 +714,12 @@
     })
     onDestroy(() => {
         destroyed = true
-        //for the next editor of a host that keeps them
-        if (viewStates && viewStateKey && ownEditor?.getModel())
-            viewStates.set(viewStateKey, ownEditor.saveViewState())
+        //for the next editor of a host that keeps them, with the Listing it was over
+        if (viewStates && viewStateKey && ownEditor?.getModel()) {
+            const state = ownEditor.saveViewState()
+            noteViewStateListing(state, placedListing)
+            viewStates.set(viewStateKey, state)
+        }
 
         toDispose.forEach((disposable) => {
             if (typeof disposable === 'function') return disposable()

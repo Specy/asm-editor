@@ -16,7 +16,7 @@ import type { AddressBreakpoint } from '#lib/languages/commonLanguageFeatures.sv
 import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
-import { lineOfAddress, type Listing } from '#lib/listing/listing.ts'
+import { lineOfAddress, placeOfLine, type Listing } from '#lib/listing/listing.ts'
 import { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
 import { PseudocodeClient } from '#lib/pseudocode/pseudocodeClient.ts'
 import type { PseudocodeDocument } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
@@ -521,9 +521,15 @@ describe('the Pseudocode beside its Listing', () => {
 
     it('survives a Byte edit, the Pseudocode decompiled again from the edited bytes', async () => {
         const { session, pane, listingPane, document } = await paired()
+        const listing = pane.pseudocodeListing
         expect(session.editFileBytes('crackme', HUNTER2 + 6, Uint8Array.of(0x33))).toBe(true)
         flushSync()
         await tick()
+        //the Listing is made again from the edited bytes, the one before shown until it is ready
+        for (let attempt = 0; attempt < 100 && pane.pseudocodeListing === listing; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 10))
+            flushSync()
+        }
         const edited = await decompiled(pane)
         expect(edited).not.toBe(document)
         expect(edited.text).toContain('iVar1 = strcmp(acStack_98,"hunter3");')
@@ -576,8 +582,14 @@ describe('the navigation history', () => {
                 functionAddress: fn('main').address
             }
         ])
+        //the line the Listing left, by the address it stands for too
         expect(listingPane.history.behind).toEqual([
-            { selection: liveSource('crackme'), view: 'listing', line: call }
+            {
+                selection: liveSource('crackme'),
+                view: 'listing',
+                line: call,
+                place: placeOfLine(listing, call)
+            }
         ])
         //Back: main's Pseudocode, and the Listing beside it on main
         expect(await session.goBack(pane)).toBe(true)
@@ -640,7 +652,8 @@ describe('the navigation history', () => {
         expect(listingPane.history.behind.at(-1)).toEqual({
             selection: liveSource('crackme'),
             view: 'listing',
-            line: fn('_start').line
+            line: fn('_start').line,
+            place: placeOfLine(listing, fn('_start').line)
         })
     })
 
@@ -737,7 +750,12 @@ describe('the navigation history', () => {
         await session.revealAddress(BigInt(start.address + BASE), { jump: true })
         expect(revealed.at(-1)).toBe(lineOfAddress(listing, start.address) + 1)
         expect(left.history.behind).toEqual([
-            { selection: left.sourceSelection, view: 'listing', line: main.line }
+            {
+                selection: left.sourceSelection,
+                view: 'listing',
+                line: main.line,
+                place: placeOfLine(listing, main.line)
+            }
         ])
         expect(right.history.behind).toEqual([])
         expect(right.history.ahead).toEqual([ahead])

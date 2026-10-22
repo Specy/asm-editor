@@ -49,7 +49,7 @@ const labelAddress = (fullName: string) =>
 
 /** Memory as the program would see it: the file's bytes, and whatever the test pokes over them. */
 function fakeHost(assembled: Record<string, number[]> = {}) {
-    const document = { listing, bytes, base: PIE_BASE } as unknown as ListingDocument
+    let document = { listing, bytes, base: PIE_BASE } as unknown as ListingDocument
     const poked = new Map<number, number>()
     let running = true
     const byteAt = (link: number) => {
@@ -91,6 +91,11 @@ function fakeHost(assembled: Record<string, number[]> = {}) {
         },
         end() {
             running = false
+        },
+        /** The session's Listing made again, as a rename or a comment during it makes it. */
+        show(next: Listing) {
+            document = { listing: next, bytes, base: PIE_BASE } as unknown as ListingDocument
+            patcher.refresh()
         }
     }
 }
@@ -401,6 +406,47 @@ describe('the patcher', () => {
         host.unpoke(address, 2)
         expect(host.patcher.patched).toBeUndefined()
         expect(host.patcher.site(line)!.text).toBe('jne .LAB_2')
+    })
+
+    it('keeps a patch on its instruction in a Listing made again with comment lines above it', async () => {
+        const line = checkLine()
+        const address = runTime(line)
+        const target = labelAddress('main.LAB_2')
+        const je = `je 0x${target.toString(16)}`
+        const displacement = Number(target - address - 2n)
+        const host = fakeHost({ [je]: [0x74, displacement] })
+        expect(
+            host.patcher.apply(ok(await host.patcher.preview(host.patcher.site(line)!, je)))
+        ).toBe(true)
+        expect([...host.patcher.patched!.lines.keys()]).toEqual([line])
+        //two lines of a comment above `call strcmp@plt`, and one at the end of the patched line
+        const call = lineOf('call strcmp@plt')
+        const commented = generateListing(decoder, {
+            bytes,
+            name: 'crackme',
+            base: PIE_BASE,
+            version: 'v1',
+            annotations: {
+                comments: new Map([
+                    [listing.lines.addresses[call], 'the check\nitself'],
+                    [listing.lines.addresses[line], 'flipped']
+                ])
+            }
+        })
+        host.show(commented)
+        const patched = host.patcher.patched!
+        expect(patched.document.listing).toBe(commented)
+        expect([...patched.lines.keys()]).toEqual([line + 2])
+        expect(patched.lines.get(line + 2)?.text).toMatch(/^ {4}je \.LAB_2 +; flipped$/)
+        expect(patched.listing.text.split('\n')[line + 2]).toBe(patched.lines.get(line + 2)?.text)
+        expect(host.patcher.site(line + 2)!.text).toBe('je .LAB_2')
+        expect(
+            host.patcher.title({
+                address,
+                old: [0x75, displacement],
+                new: [0x74, displacement]
+            })
+        ).toBe(`Patched jne → je at 0x${address.toString(16)}`)
     })
 
     it('writes nothing for an unchanged preview, or once the session has ended', async () => {

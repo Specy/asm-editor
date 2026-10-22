@@ -13,6 +13,7 @@
     import { LINE_KIND } from '#lib/listing/listing.ts'
     import type { ListingModel } from '#lib/monaco/listingModels.ts'
     import {
+        annotationActions,
         debuggingActions,
         type EditorLineAction,
         type EditorNavigation
@@ -23,6 +24,7 @@
     } from '#lib/documentation/x86/executableSections.ts'
     import { watchFindWidget } from '#lib/monaco/findWidget.ts'
     import PatchPromptView from './PatchPrompt.svelte'
+    import AnnotationPromptView from './AnnotationPrompt.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import EmptyEditor from './EmptyEditor.svelte'
@@ -172,8 +174,42 @@
         canRunToCursor: (line) => session.runToCursorTargets(group, line) !== undefined,
         runToCursor: (line) => void session.runToCursor(group, line)
     })
-    /** The Executable's own Listing's: Patch instruction… and Show in Hex too. */
-    const ownListingActions = [...listingActions, ...debugActions]
+    /**
+     * Rename…, Comment… and the rest on the Executable's own Listing
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions
+     * 18 and 19), offered where the pane's File takes them; refused with the reason while a Build,
+     * a Run or the Testcases run.
+     */
+    const annotating = annotationActions({
+        canRename: (line, column) => session.renameTargetAt(group, line, column) !== undefined,
+        rename: (line, column) => void session.openRenamePrompt(group, line, column),
+        canResetName: (line, column) => session.canResetNameAt(group, line, column),
+        resetName: (line, column) => void session.resetNameAt(group, line, column),
+        canComment: (line) => session.commentTargetAt(group, line) !== undefined,
+        comment: (line) => void session.openCommentPrompt(group, line),
+        canCommentFunction: (line) => session.commentTargetAt(group, line, true) !== undefined,
+        commentFunction: (line) => void session.openCommentPrompt(group, line, true),
+        canDeleteComment: (line) => session.canDeleteCommentAt(group, line),
+        deleteComment: (line) => void session.deleteCommentAt(group, line),
+        get canUndo() {
+            const path = session.annotatablePath(group)
+            return path !== undefined && session.canUndoAnnotation(path)
+        },
+        undo: () => {
+            const path = session.annotatablePath(group)
+            if (path !== undefined) session.undoAnnotation(path)
+        },
+        get canRedo() {
+            const path = session.annotatablePath(group)
+            return path !== undefined && session.canUndoAnnotation(path, true)
+        },
+        redo: () => {
+            const path = session.annotatablePath(group)
+            if (path !== undefined) session.redoAnnotation(path)
+        }
+    })
+    /** The Executable's own Listing's: Patch instruction…, Show in Hex, renames and comments too. */
+    const ownListingActions = [...listingActions, ...debugActions, ...annotating]
 
     /**
      * Whether the pane's find widget is open, in the top right corner where a read-only notice
@@ -390,6 +426,14 @@
                 available={session.pokeable}
                 onapply={() => session.applyPatch(group)}
                 onclose={() => session.closePatchPrompt(group)}
+                onrelease={() => group.editor?.focus()}
+            />
+        {/if}
+        {#if group.openAnnotationPrompt}
+            <AnnotationPromptView
+                prompt={group.openAnnotationPrompt}
+                onsave={() => session.saveAnnotationPrompt(group)}
+                onclose={() => session.closeAnnotationPrompt(group)}
                 onrelease={() => group.editor?.focus()}
             />
         {/if}

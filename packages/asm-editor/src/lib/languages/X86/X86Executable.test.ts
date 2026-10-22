@@ -323,6 +323,96 @@ describe('a Debug session of an Executable', () => {
     })
 })
 
+describe('renames and comments of an Executable', () => {
+    /** crackme's `main`, and its `lea rdx, [rel s_hunter2]`, link-time. */
+    const MAIN = 0x11e9
+    const PASSWORD = 0x1263
+
+    function annotated(names: Record<string, string>, comments: Record<string, string> = {}) {
+        const sources = executableSources()
+        const file = sources.files.crackme
+        return {
+            ...sources,
+            files: { crackme: { ...file, annotations: { names, comments } } }
+        }
+    }
+
+    it('are in the running Listing, its Call stack, memory labels and address box', async () => {
+        const sources = annotated(
+            { [`0x${MAIN.toString(16)}`]: 'check_password', '0x4000': 'start_of_data' },
+            { [`0x${PASSWORD.toString(16)}`]: 'the password\nin .rodata' }
+        )
+        const { emulator, listing } = await built(sources)
+        // the program counter at main's first instruction, on its line of the annotated Listing
+        const label = labelLine(listing, 'check_password')
+        const first = firstInstructionAfter(listing, label)
+        expect(emulator.line).toBe(first)
+        expect(listing.text).toContain(
+            '    ; the password\n    ; in .rodata\n    lea rdx, [rel s_hunter2]'
+        )
+        // a Breakpoint on the commented instruction stops there, below its comment
+        const lea = lineOf(listing, 'lea rdx, [rel s_hunter2]            ; "hunter2"')
+        expect(instructionAddressAt(listing, lea)).toBe(PASSWORD)
+        emulator.toggleAddressBreakpoint(PASSWORD, 'crackme')
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        await emulator.run(0)
+        expect(emulator.pc).toBe(BigInt(PASSWORD + PIE_LOAD_BASE))
+        expect(emulator.line).toBe(lea)
+        // the frame of the renamed function, by the person's name, the Listing's in its tooltip
+        const frame = emulator.callStack.find((each) => each.line === label)
+        expect(frame).toMatchObject({
+            name: 'check_password',
+            detail: 'Renamed from main',
+            file: 'crackme'
+        })
+        // the address box takes the new name, and the raw one still
+        expect(emulator.resolveMemoryLabel('check_password')).toBe(BigInt(MAIN + PIE_LOAD_BASE))
+        expect(emulator.resolveMemoryLabel('main')).toBe(BigInt(MAIN + PIE_LOAD_BASE))
+        // the memory view's label of a renamed datum's symbol reads as the person named it, and
+        // the address box takes that name
+        const data = listing.labels.find((each) => each.address === 0x4000 && each.renamed)!
+        const symbol = emulator.dataLabels.find((each) => each.name === data.renamed!.from)!
+        expect(symbol).toMatchObject({
+            displayName: 'start_of_data',
+            address: BigInt(0x4000 + PIE_LOAD_BASE)
+        })
+        expect(emulator.resolveMemoryLabel('start_of_data')).toBe(symbol.address)
+    })
+
+    it('change during the session: its Listing is made again, the program on the same instruction', async () => {
+        const { emulator, listing } = await built(executableSources())
+        const line = lineOf(listing, 'call strcmp@plt')
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, line)!, 'crackme')
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        await emulator.run(0)
+        expect(emulator.line).toBe(line)
+        const before = emulator.listings!.session.get('crackme')!
+        const annotations = {
+            names: { [`0x${MAIN.toString(16)}`]: 'check_password' },
+            comments: { [`0x${PASSWORD.toString(16)}`]: 'a\nb\nc' }
+        }
+        emulator.setExecutableAnnotations('crackme', annotations)
+        const after = emulator.listings!.session.get('crackme')!
+        expect(after).not.toBe(before)
+        // at the address the program was loaded at
+        expect(after.base).toBe(before.base)
+        const remade = await after.ready
+        await pauseUntil(() => emulator.line === lineOf(remade, 'call strcmp@plt'))
+        expect(emulator.line).toBe(line + 3)
+        expect(emulator.callStack.find((frame) => frame.name === 'check_password')).toMatchObject({
+            line: labelLine(remade, 'check_password'),
+            detail: 'Renamed from main'
+        })
+        expect(emulator.resolveMemoryLabel('check_password')).toBe(BigInt(MAIN + PIE_LOAD_BASE))
+        // the same annotations again open nothing new
+        emulator.setExecutableAnnotations('crackme', annotations)
+        expect(emulator.listings!.session.get('crackme')).toBe(after)
+        // and the program runs on, on the new Listing's lines
+        await emulator.step()
+        expect(emulator.line).toBe(lineOf(remade, 'test eax, eax'))
+    })
+})
+
 describe('the start of an Executable', () => {
     it('stops at main without waiting for the Listing, whose lines come when it is ready', async () => {
         //a Listing that takes as long as the test says, as a large static binary's does
