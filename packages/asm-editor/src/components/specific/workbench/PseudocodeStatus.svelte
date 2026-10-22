@@ -10,6 +10,8 @@
     let { group, onRetry }: { group: EditorGroup; onRetry: () => void } = $props()
     const document = $derived(group.requestedPseudocode)
     const fn = $derived(group.pseudocodeFunction)
+    /** How the function is named: a C++ one by its short name, as lists show it. */
+    const name = $derived(fn?.list ?? fn?.name)
 </script>
 
 {#if group.pseudocodeListing?.status === 'ready'}
@@ -21,7 +23,7 @@
     {:else if document?.status === 'failed'}
         <div class="pseudocode-status" role="status">
             <h2>No Pseudocode</h2>
-            <p>{fn.name} could not be decompiled: {document.error}</p>
+            <p>{name} could not be decompiled: {document.error}</p>
             <button type="button" onclick={onRetry}>Try again</button>
         </div>
     {:else if document?.status !== 'ready'}
@@ -29,9 +31,7 @@
         <div class="pseudocode-status waiting" role="status">
             <h2>Decompiling…</h2>
             <p>
-                {document?.stage === 'loading'
-                    ? 'Loading the decompiler'
-                    : `Decompiling ${fn.name}`}
+                {document?.stage === 'loading' ? 'Loading the decompiler' : `Decompiling ${name}`}
             </p>
             <progress aria-label="Decompiling" value="10" max="100"></progress>
         </div>

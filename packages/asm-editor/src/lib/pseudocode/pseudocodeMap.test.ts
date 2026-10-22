@@ -17,7 +17,7 @@ import {
     functionAt,
     listingLineOfTarget,
     listingLinesOfLocations,
-    listingNameOfTarget,
+    listingLabelOfTarget,
     pseudocodeBreakpointAddresses,
     pseudocodeBreakpointLines,
     pseudocodeBreakpointsOn,
@@ -233,7 +233,7 @@ describe('the names in a Pseudocode', () => {
         const rows = listing.text.split('\n')
         const strcmpPlt = listing.functions.find((fn) => fn.name === 'strcmp@plt')!
         expect(rows[listingLineOfTarget(listing, strcmpPlt.address)]).toBe('strcmp@plt:')
-        expect(listingNameOfTarget(listing, strcmpPlt.address)).toBe('strcmp@plt')
+        expect(listingLabelOfTarget(listing, strcmpPlt.address)?.fullName).toBe('strcmp@plt')
         const string = lines[row('"hunter2"') - FIRST].tokens.find(
             (token) => token.kind === 'constant' && token.target !== undefined
         )!
@@ -242,7 +242,7 @@ describe('the names in a Pseudocode', () => {
         const stdin = lines[row('0x80,stdin)') - FIRST].tokens.find(
             (token) => token.target !== undefined && token.kind === 'variable'
         )!
-        expect(listingNameOfTarget(listing, stdin.target!)).toBe('stdin@GLIBC_2.2.5')
+        expect(listingLabelOfTarget(listing, stdin.target!)?.fullName).toBe('stdin@GLIBC_2.2.5')
         expect(rows[listingLineOfTarget(listing, stdin.target!)]).toMatch(/^stdin@GLIBC_2\.2\.5:/)
     })
 

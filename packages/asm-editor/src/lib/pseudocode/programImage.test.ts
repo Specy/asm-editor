@@ -2,7 +2,8 @@
  * The decompiler's program image made from a Listing, through the real decompiler package in
  * Node: a Listing generated for the x86 Core's fixtures, its `programImage`, and the Pseudocode,
  * whose every function and data name must be one the Listing gives (the plan's whole loop, D3.4,
- * moved to E8.1).
+ * moved to E8.1), a C++ program's in their namespaces
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), P4).
  */
 import { readFileSync } from 'node:fs'
 import {
@@ -13,11 +14,13 @@ import {
 } from '@specy/decompiler'
 import glibc from '@specy/decompiler/prototypes/glibc'
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
+import { pseudocodeText } from '#lib/languages/demangle/demangledNames.ts'
+import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ElfAnalysis, type ListingDecoder } from '../listing/decoder'
 import { generateListing } from '../listing/generateListing'
 import type { Listing } from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
-import { programImage, ZERO_FILL_LIMIT } from './programImage'
+import { programImage, stubFunctionName, ZERO_FILL_LIMIT } from './programImage'
 
 const PIE_BASE = 0x555555554000
 
@@ -30,10 +33,12 @@ const fixture = (name: string) =>
 
 let decoder: ListingDecoder
 let decompiler: Decompiler
+let demangler: Demangler
 
 beforeAll(async () => {
     decoder = await loadDecoder()
     decompiler = await loadDecompiler({ architecture: 'x86-64' })
+    demangler = await loadDemangler()
 })
 
 afterAll(() => decompiler.dispose())
@@ -45,17 +50,22 @@ type Opened = {
     program: DecompiledProgram
 }
 
-/** A fixture's Listing at the address it runs at, and the program its image opens. */
-function open(name: string, bytes = fixture(name)): Opened {
+/**
+ * A fixture's Listing at the address it runs at, its names demangled when a demangler is given,
+ * and the program its image opens, as the Pseudocode worker opens it.
+ */
+function open(name: string, bytes = fixture(name), names?: Demangler): Opened {
     const analysis = decoder.analyze(bytes)
     const listing = generateListing(decoder, {
         bytes,
         name,
         base: plannedLoadBase(analysis.pie),
-        version: 'v1'
+        version: 'v1',
+        ...(names ? { analysis, demangler: names } : {})
     })
     const program = decompiler.openProgram(
-        programImage({ bytes, listing, analysis, prototypes: glibc })
+        programImage({ bytes, listing, analysis, prototypes: glibc }),
+        { namespaces: 'minimal' }
     )
     expect(program.warnings).toEqual([])
     return { bytes, analysis, listing, program }
@@ -285,6 +295,211 @@ describe("hello-atexit-static's image", () => {
         const opendir = decompileNamed(opened, 'opendir')
         expect(opendir.lines[0].text).toBe('DIR * opendir(char *name)')
     })
+})
+
+describe("cpp's image, its C++ names demangled", () => {
+    let opened: Opened
+    beforeAll(() => {
+        opened = open('cpp', fixture('cpp'), demangler)
+    })
+    afterAll(() => opened.program.dispose())
+
+    /** The run-time address of the Listing's label of that name. */
+    const addressOf = (name: string) => {
+        const label = opened.listing.labels.find((candidate) => candidate.name === name)
+        if (!label) throw new Error(`the Listing has no label ${name}`)
+        return label.address + opened.listing.base
+    }
+
+    it('gives each C++ name its namespaces and the symbol it binds by, and C names as they were', () => {
+        const { bytes, analysis, listing } = opened
+        const image = programImage({ bytes, listing, analysis, prototypes: glibc })
+        const at = (name: string) => ({ address: addressOf(name) })
+        const THROW = '_ZSt20__throw_length_errorPKc'
+        //a PLT stub by the function it jumps to, with the symbol glibc.h declares it by; its
+        //resolver keeps its suffix in its name and its symbol, so binds no prototype
+        expect(image.functions).toContainEqual({
+            ...at(`${THROW}@plt`),
+            name: '__throw_length_error',
+            namespace: ['std'],
+            symbol: THROW
+        })
+        expect(image.functions).toContainEqual({
+            ...at(`${THROW}@plt_resolver`),
+            name: '__throw_length_error@plt_resolver',
+            namespace: ['std'],
+            symbol: `${THROW}@plt_resolver`
+        })
+        //a class whose name holds a `::` is one namespace; a name in none has no path
+        const BEGIN =
+            '_ZNSt6vectorINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESaIS5_EE5beginEv'
+        expect(image.functions).toContainEqual({
+            ...at(BEGIN),
+            name: 'begin',
+            namespace: ['std', 'vector<std::string>'],
+            symbol: BEGIN
+        })
+        expect(image.functions).toContainEqual({
+            ...at('_ZnwmPv'),
+            name: 'operator new',
+            symbol: '_ZnwmPv'
+        })
+        expect(image.functions).toContainEqual({ ...at('main'), name: 'main' })
+        expect(image.functions).toContainEqual({ ...at('__cxa_throw@plt'), name: '__cxa_throw' })
+        //special data as identifiers filed under their class, an object of libstdc++'s without
+        //its version, and a GOT slot as its function and `@got`
+        expect(image.data).toContainEqual({
+            ...at('_ZTISt13runtime_error@GLIBCXX_3.4'),
+            name: 'typeinfo',
+            namespace: ['std', 'runtime_error'],
+            symbol: '_ZTISt13runtime_error',
+            size: 24
+        })
+        expect(image.data).toContainEqual({
+            ...at('_ZSt4cout@GLIBCXX_3.4'),
+            name: 'cout',
+            namespace: ['std'],
+            symbol: '_ZSt4cout',
+            size: 272
+        })
+        expect(image.data).toContainEqual({
+            ...at(`${THROW}@got`),
+            name: '__throw_length_error@got',
+            namespace: ['std'],
+            symbol: `${THROW}@got`,
+            size: 8
+        })
+        expect(image.data).toContainEqual({
+            ...at('__cxa_throw@got'),
+            name: '__cxa_throw@got',
+            size: 8
+        })
+        //a GOT slot's function by its symbol, which is the stub's
+        expect(image.pointers).toContainEqual({
+            ...at(`${THROW}@got`),
+            name: '__throw_length_error',
+            namespace: ['std'],
+            symbol: THROW
+        })
+        expect(image.pointers).toContainEqual({ ...at('__cxa_throw@got'), name: '__cxa_throw' })
+    })
+
+    it('decompiles every function, printing only the names the Listing gives, in their namespaces', () => {
+        const { listing, program } = opened
+        //each name a label at an address may print as: raw, without a stub's, a slot's or a
+        //version's suffix, or a C++ name in full or as far as minimal qualification keeps it
+        const forms = new Map<number, string[]>()
+        for (const label of listing.labels) {
+            if (label.kind === 'block') continue
+            const raw = label.name
+            const names = [raw, stubFunctionName(raw), raw.replace(/@got$|@GLIBCXX?_[\d.]+$/, '')]
+            if (label.demangled) {
+                const full = pseudocodeText(label.demangled.pseudocode)
+                names.push(full, full + label.demangled.suffix)
+            }
+            forms.set(label.address, [...(forms.get(label.address) ?? []), ...names])
+        }
+        const printed = new Set<string>()
+        for (const fn of listing.functions) {
+            const result = decompiled(program.decompile(fn.address + listing.base))
+            expect(result.text, fn.name).not.toMatch(/\bfunc_0x|\b_Z[A-Za-z0-9_]+/)
+            for (const { text, target } of namedTokens(result, listing.base)) {
+                printed.add(text)
+                expect(
+                    forms.get(target)?.some((name) => name === text || name.endsWith(`::${text}`)),
+                    `${text} in ${fn.name}`
+                ).toBe(true)
+            }
+        }
+        for (const name of [
+            'std::vector<std::string>::begin',
+            'std::operator<<<char, std::char_traits<char>, std::allocator<char>>',
+            'std::cout',
+            'std::runtime_error::typeinfo',
+            'operator new',
+            '__cxa_throw'
+        ])
+            expect(printed).toContain(name)
+    })
+
+    it("reads main by the C++ names, minimal qualification dropping what a class's member shares", () => {
+        const { listing, program } = opened
+        const main = decompileNamed(opened, 'main')
+        expect(main.text).toContain('lStack_f0 = std::vector<std::string>::begin(puStack_e0);')
+        expect(main.text).toContain(
+            'std::operator<<<char, std::char_traits<char>, std::allocator<char>>(std::cout,lStack_f0)'
+        )
+        expect(main.text).toContain(
+            'std::runtime_error::runtime_error(thrown_exception,"caught exception");'
+        )
+        expect(main.text).toContain('__cxa_throw(thrown_exception,std::runtime_error::typeinfo,')
+        //a member of std::string calls another by its own name, and its declaration says its path
+        const fn = listing.functions.find((candidate) =>
+            candidate.name.startsWith(
+                '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERmm'
+            )
+        )!
+        const create = decompiled(program.decompile(fn.address + listing.base))
+        expect(create.name).toBe('_M_create')
+        expect(create.lines[0].text).toMatch(/^\w+ \*? ?std::string::_M_create\(/)
+        expect(create.text).toMatch(/\bmax_size\(/)
+        expect(create.text).not.toContain('std::string::max_size(')
+    })
+
+    it("keeps glibc.h's prototype of __throw_length_error, bound by its symbol: it does not return", () => {
+        const { bytes, analysis, listing, program } = opened
+        //the functions whose Listing calls its stub
+        const lines = listing.text.split('\n')
+        const callers = listing.functions.filter((fn) =>
+            lines
+                .slice(fn.line, fn.endLine)
+                .some((line) => /\bcall\s+_ZSt20__throw_length_errorPKc@plt\b/.test(line))
+        )
+        expect(callers.length).toBeGreaterThan(0)
+        const noReturn =
+            /WARNING: Subroutine does not return \*\/\n\s*(?:std::)?__throw_length_error\(/
+        for (const fn of callers)
+            expect(decompiled(program.decompile(fn.address + listing.base)).text, fn.name).toMatch(
+                noReturn
+            )
+        //named alike without its symbol, glibc.h's mangled declaration would not bind
+        const image = programImage({ bytes, listing, analysis, prototypes: glibc })
+        const unbound = decompiler.openProgram({
+            ...image,
+            functions: image.functions.map(({ symbol: _symbol, ...fn }) => fn),
+            pointers: image.pointers?.map(({ symbol: _symbol, ...pointer }) => pointer)
+        })
+        try {
+            expect(
+                decompiled(unbound.decompile(callers[0].address + listing.base)).text
+            ).not.toMatch(noReturn)
+        } finally {
+            unbound.dispose()
+        }
+    })
+})
+
+it("leaves a C program's image as it was when its Listing is made with the demangler", () => {
+    for (const name of ['crackme', 'crackme-stripped']) {
+        const bytes = fixture(name)
+        const analysis = decoder.analyze(bytes)
+        const base = plannedLoadBase(analysis.pie)
+        const plain = generateListing(decoder, { bytes, name, base, version: 'v1' })
+        const demangling = generateListing(decoder, {
+            bytes,
+            name,
+            base,
+            version: 'v1',
+            analysis,
+            demangler
+        })
+        const image = programImage({ bytes, listing: demangling, analysis, prototypes: glibc })
+        expect(image).toEqual(programImage({ bytes, listing: plain, analysis, prototypes: glibc }))
+        for (const entry of [...image.functions, ...image.data, ...(image.pointers ?? [])])
+            expect(
+                Object.keys(entry).filter((key) => key === 'namespace' || key === 'symbol')
+            ).toEqual([])
+    }
 })
 
 it('gives a segment at most ZERO_FILL_LIMIT zeros past its file bytes, and skips one overlapping', () => {

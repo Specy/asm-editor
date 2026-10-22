@@ -171,9 +171,11 @@ function variableMarkdown(word: string): string | undefined {
 /**
  * The hover of one of Ghidra's own words, with the link to the Documentation: an `undefined`
  * type, or a variable named the decompiler's way. Undefined for any other word, the program's own
- * names included.
+ * names included: a C++ name qualified by its namespaces (`std::`, `game::in_range`, the part of
+ * one the printer broke onto two lines) is never Ghidra's, whatever its last part looks like.
  */
 export function ghidraWordMarkdown(word: string, kind: TokenKind): string | undefined {
+    if (word.includes('::')) return undefined
     const explained =
         kind === 'type'
             ? typeMarkdown(word)

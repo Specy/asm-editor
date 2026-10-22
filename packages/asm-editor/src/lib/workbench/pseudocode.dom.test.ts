@@ -2,7 +2,8 @@
  * Decompile and the Pseudocode beside its Listing
  * ([file-views.md](../../../../../docs/design/file-views.md), decisions 5, 6 and 11; the plan's
  * E8.3 to E8.6): crackme's real Listing, decompiled by the real decompiler on the test's thread,
- * as jsdom has no Worker.
+ * as jsdom has no Worker; and a C++ Executable's, its names demangled
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), P4).
  */
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
@@ -11,6 +12,8 @@ import { flushSync, mount, tick, unmount } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import type { EditorGroup } from './EditorGroup.svelte'
 import type { WorkbenchSession } from './WorkbenchSession.svelte'
+import type { AddressBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
 import { lineOfAddress, type Listing } from '#lib/listing/listing.ts'
@@ -52,8 +55,8 @@ vi.mock('@specy/decompiler', async (importOriginal) => {
                 ...decompiler,
                 memory: () => decompiler.memory(),
                 dispose: () => decompiler.dispose(),
-                openProgram(image: Parameters<typeof decompiler.openProgram>[0]) {
-                    const program = decompiler.openProgram(image)
+                openProgram(...args: Parameters<typeof decompiler.openProgram>) {
+                    const program = decompiler.openProgram(...args)
                     return {
                         warnings: program.warnings,
                         dispose: () => program.dispose(),
@@ -83,10 +86,14 @@ const crackme = crackmeBytes.toString('base64')
 const BASE = 0x555555554000
 /** "hunter2", at link-time 0x2017, in a segment whose file offset is its address. */
 const HUNTER2 = 0x2017
+/** The decompiler package's FactCheck-like C++ program (g++ -O0), a PIE. */
+const factcheck = readFileSync('../decompiler/js/tests/fixtures/elf/factcheck').toString('base64')
 
 let decoder: ListingDecoder
+let demangler: Demangler
 beforeAll(async () => {
     decoder = await loadDecoder()
+    demangler = await loadDemangler()
 })
 
 const disposers: (() => void)[] = []
@@ -97,12 +104,21 @@ afterEach(() => {
     vi.restoreAllMocks()
 })
 
-/** crackme beside a text File, with a Build that stops at `main` as the x86 Emulator does. */
-function setup(data: StoredProject = {}) {
+/**
+ * crackme beside a text File, with a Build that stops at `main` as the x86 Emulator does; or
+ * another Executable, a C++ one's Listing demangled as the Listing worker demangles it.
+ */
+function setup(
+    data: StoredProject = {},
+    executable: { path: string; content: string; cpp?: boolean } = {
+        path: 'crackme',
+        content: crackme
+    }
+) {
     const fixture = editorGroupsFixture('X86', {
-        entry: 'crackme',
+        entry: executable.path,
         files: {
-            crackme: { encoding: 'base64', content: crackme },
+            [executable.path]: { encoding: 'base64', content: executable.content },
             'notes.txt': { encoding: 'plain', content: 'password?' }
         },
         ...data
@@ -110,7 +126,13 @@ function setup(data: StoredProject = {}) {
     disposers.push(fixture.dispose)
     const { emulator } = fixture
     const store = new ListingDocuments((order) =>
-        Promise.resolve(generateListing(decoder, { ...order, version: 'v1' }))
+        Promise.resolve(
+            generateListing(decoder, {
+                ...order,
+                version: 'v1',
+                ...(executable.cpp ? { demangler } : {})
+            })
+        )
     )
     emulator.listings = store
     emulator.compile = async (_historySize, sources) => {
@@ -891,6 +913,160 @@ describe('Run to Cursor', () => {
         emulator.terminated = true
         flushSync()
         expect(session.runToCursorTargets(listingPane, test)).toBeUndefined()
+    })
+})
+
+describe("a C++ Executable's Pseudocode", () => {
+    const STRING_APPEND = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEpLERKS4_'
+
+    /** factcheck's main decompiled beside its Listing, whose editor moves as a reveal asks. */
+    async function paired() {
+        const fixture = setup({}, { path: 'factcheck', content: factcheck, cpp: true })
+        const { session } = fixture
+        const pane = show(session, 'factcheck')
+        session.decompile(pane)
+        flushSync()
+        const listingPane = session.groups[0]
+        const document = await decompiled(pane)
+        const listing = listingOf(pane)
+        const revealed = listingEditor(session, listingPane)
+        const fn = (name: string) => listing.functions.find((item) => item.name === name)!
+        return { ...fixture, pane, listingPane, document, listing, revealed, fn }
+    }
+
+    /** The Pseudocode's notice and its status over it, as the pane shows them. */
+    function mountNotices(pane: EditorGroup) {
+        const host = document.createElement('div')
+        document.body.appendChild(host)
+        const notice = mount(PseudocodeNotice, { target: host, props: { group: pane } })
+        const status = mount(PseudocodeStatus, {
+            target: host,
+            props: { group: pane, onRetry: () => {} }
+        })
+        disposers.push(() => {
+            unmount(status)
+            unmount(notice)
+        })
+        flushSync()
+        return host
+    }
+
+    it('reads main by its C++ names, one token each, and follows one there and back', async () => {
+        const { session, pane, listingPane, document, listing, fn } = await paired()
+        expect(pane.pseudocodeFunction?.name).toBe('main')
+        expect(document.text).toContain('std::string::operator+=(auStack_128,auStack_c8);')
+        expect(document.text).toContain(
+            'std::vector<std::string>::push_back(auStack_198,auStack_128);'
+        )
+        expect(document.text).toContain(
+            'piVar4 = (int *)std::map<std::string, int>::operator[](auStack_158,auStack_128);'
+        )
+        expect(document.text).not.toMatch(/\b_Z\w+/)
+        //anywhere on the qualified name, the one token of the function it calls
+        const name = 'std::string::operator+='
+        const row = lineWith(document, `${name}(auStack_128,auStack_c8)`)
+        const start = document.text.split('\n')[row].indexOf(name)
+        const token = pseudocodeTargetAt(document.lines, document.firstLine, row, start)!
+        expect(
+            pseudocodeTargetAt(document.lines, document.firstLine, row, start + name.length - 2)
+        ).toBe(token)
+        expect([token.start, token.end]).toEqual([start, start + name.length])
+        const append = fn(STRING_APPEND)
+        expect(token.target).toBe(append.address)
+        //Go to Definition: the Listing moves to its label, and the Pseudocode to it
+        const line = listingLineOfTarget(listing, token.target)
+        expect(line).toBe(append.line)
+        expect(await session.followPseudocodeTarget(pane, line)).toBe(true)
+        expect(pane.pseudocodeFunction).toBe(append)
+        expect(listingPane.cursorLine).toBe(line)
+        const shown = await decompiled(pane)
+        //the header names it as lists do: by its signature, since std::string has two of them,
+        //its declaration by its whole path
+        expect(shown.text).toMatch(
+            /^\/\/ std::string::operator\+=\(std::string const&\), 0x[\da-f]+ to 0x[\da-f]+\n\n/
+        )
+        expect(shown.text.split('\n')[2]).toContain(' std::string::operator+=(')
+        //Back: main, the Listing with it
+        expect(await session.goBack(pane)).toBe(true)
+        expect(pane.pseudocodeFunction?.name).toBe('main')
+        expect(listingPane.cursorLine).toBe(fn('main').line)
+        expect(await session.goForward(pane)).toBe(true)
+        expect(pane.pseudocodeFunction).toBe(append)
+    })
+
+    it('names the function it shows as lists do: its short name, or its signature where another shares it', async () => {
+        const { session, pane, listingPane, fn } = await paired()
+        const host = mountNotices(pane)
+        expect(host.textContent).toContain('Pseudocode of main in factcheck, read-only')
+        //"Decompiling…" names the function the Listing's cursor moved into, by its short name
+        const push = fn(
+            '_ZNSt6vectorINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESaIS5_EE9push_backERKS5_'
+        )
+        expect(push.list).toBe('std::vector<std::string>::push_back')
+        session.cursorMoved(listingPane, push.line)
+        flushSync()
+        expect(pane.requestedPseudocode?.status).toBe('decompiling')
+        expect(host.textContent).toContain(
+            'Pseudocode of std::vector<std::string>::push_back in factcheck,'
+        )
+        expect(host.textContent).toContain('Decompiling std::vector<std::string>::push_back')
+        await decompiled(pane)
+        //a deleting destructor beside the complete one, both game::Boss::~Boss
+        const deleting = fn('_ZN4game4BossD0Ev')
+        expect(deleting.list).toBe('game::Boss::~Boss() [deleting]')
+        session.cursorMoved(listingPane, deleting.line)
+        flushSync()
+        const document = await decompiled(pane)
+        flushSync()
+        expect(document.text.split('\n')[0]).toMatch(
+            /^\/\/ game::Boss::~Boss\(\) \[deleting\], 0x[\da-f]+ to 0x[\da-f]+$/
+        )
+        expect(host.textContent).toContain(
+            'Pseudocode of game::Boss::~Boss() [deleting] in factcheck, read-only'
+        )
+        //the Symbols panel's choice, while the Pseudocode has the keyboard, follows it too
+        session.focusEditorGroup(pane)
+        expect(await session.revealListingLine(liveSource('factcheck'), fn('main').line)).toBe(true)
+        expect(pane.pseudocodeFunction?.name).toBe('main')
+    })
+
+    it('takes Breakpoints on a namespaced function’s lines and runs to them', async () => {
+        const { session, emulator, pane, listingPane, listing, fn } = await paired()
+        const push = fn(
+            '_ZNSt6vectorINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESaIS5_EE9push_backERKS5_'
+        )
+        session.cursorMoved(listingPane, push.line)
+        flushSync()
+        const document = await decompiled(pane)
+        expect(document.text.split('\n')[0]).toMatch(/^\/\/ std::vector<std::string>::push_back, /)
+        //its first line with instructions, a Breakpoint at the first of them
+        const line = document.map!.addresses.findIndex((addresses) => addresses.length > 0)
+        expect(line).toBeGreaterThan(0)
+        session.toggleBreakpoint(line, pane)
+        flushSync()
+        expect(emulator.breakpoints).toHaveLength(1)
+        const [breakpoint] = emulator.breakpoints as AddressBreakpoint[]
+        expect(breakpoint).toMatchObject({ file: 'factcheck' })
+        expect(breakpoint.address).toBeGreaterThanOrEqual(push.address)
+        expect(breakpoint.address).toBeLessThan(push.end)
+        expect(pane.displayedBreakpoints).toEqual([line])
+        expect(listingPane.displayedBreakpoints).toEqual([
+            lineOfAddress(listing, breakpoint.address)
+        ])
+        session.toggleBreakpoint(line, pane)
+        flushSync()
+        expect(emulator.breakpoints).toEqual([])
+        //Run to Cursor in a Debug session, in the Pseudocode of the Build, which starts at the
+        //program counter's function
+        await session.build()
+        await tick()
+        flushSync()
+        await decompiled(pane)
+        pane.followFunction('factcheck', push.address)
+        flushSync()
+        await decompiled(pane)
+        expect(pane.pseudocodeFunction?.name).toBe(push.name)
+        expect(session.runToCursorTargets(pane, line)).toEqual([breakpoint])
     })
 })
 

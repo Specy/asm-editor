@@ -1,10 +1,16 @@
 import type monaco from 'monaco-editor'
+import { pseudocodeText, type DemangledName } from '#lib/languages/demangle/demangledNames.ts'
 import { projectSourceUri } from '#lib/languages/service/uri.ts'
 import type { Listing, ListingLabel } from '#lib/listing/listing.ts'
-import { ListingIndex, nameOrigin } from '#lib/listing/listingNavigation.ts'
 import {
+    demangledNameMarkdown,
+    ListingIndex,
+    markdownCode,
+    nameOrigin
+} from '#lib/listing/listingNavigation.ts'
+import {
+    listingLabelOfTarget,
     listingLineOfTarget,
-    listingNameOfTarget,
     pseudocodeTargetAt,
     pseudocodeTokenAt
 } from '#lib/pseudocode/pseudocodeMap.ts'
@@ -21,7 +27,10 @@ import { modelPseudocode } from './pseudocodeModels'
  * Navigation in a Pseudocode ([file-views.md](../../../../../docs/design/file-views.md), decision
  * 6): Go to Definition on a called function, a global or a string goes to its line in the
  * Listing, which the Workbench shows in the Listing beside the Pseudocode, moving the Pseudocode
- * to that function; a hover names it as the Listing does. A name the decompiler prints without a
+ * to that function; a hover names it as the Listing does, a C++ name by its signature with its
+ * demangled text, variant and mangled name ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md),
+ * decision 10). A qualified name (`std::string::operator+=`) is one token, its namespaces
+ * included, so both answer anywhere on it. A name the decompiler prints without a
  * target, such as Ghidra's own `syscall`, has neither. The hover also gives a number the Listing's
  * card and explains Ghidra's own words ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
  * decisions 5 and 6). They answer for Pseudocode models only.
@@ -53,24 +62,43 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
     const runTime = (listing: Listing, address: number) =>
         `0x${(address + listing.base).toString(16)}`
 
+    /**
+     * A C++ name's forms under the hover's first line, which gives its signature, in the
+     * Listing's hover's words, then how the Pseudocode writes a special name, and the link to the
+     * Pseudocode's section, which says how its names read (cpp-demangling.md, decisions 10 and
+     * 16).
+     */
+    const demangledDetails = (label: ListingLabel | undefined) =>
+        label?.demangled
+            ? [
+                  [
+                      ...demangledNameMarkdown(label.demangled, label.fullName),
+                      ...specialSpelling(label.demangled),
+                      PSEUDOCODE_LINK
+                  ].join('\n\n')
+              ]
+            : []
+    /** How a hover names a label: a C++ name by its signature, any other as the Listing does. */
+    const hoverName = (label: ListingLabel) =>
+        markdownCode(label.demangled?.signature ?? label.fullName)
+
     const hover: monaco.languages.HoverProvider = {
         provideHover(model, position) {
             const found = pseudocodeNameAt(model, position)
             if (found) {
                 const { registered, token } = found
                 const { listing } = registered
-                const name = listingNameOfTarget(listing, token.target)
-                const origin = invented(
-                    listing,
-                    name ? ListingIndex.of(listing).label(name, 0) : undefined
-                )
+                const label = listingLabelOfTarget(listing, token.target)
                 return {
                     range: range(position, token.start, token.end),
                     contents: [
                         {
-                            value: `${name ? `\`${name}\` at ` : ''}\`${runTime(listing, token.target)}\` in the Listing: Go to Definition shows it there.`
+                            value: `${label ? `${hoverName(label)} at ` : ''}\`${runTime(listing, token.target)}\` in the Listing: Go to Definition shows it there.`
                         },
-                        ...origin.map((value) => ({ value: `${value}\n\n${PSEUDOCODE_LINK}` }))
+                        ...invented(listing, label).map((value) => ({
+                            value: `${value}\n\n${PSEUDOCODE_LINK}`
+                        })),
+                        ...demangledDetails(label).map((value) => ({ value }))
                     ]
                 }
             }
@@ -93,7 +121,7 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
             const { listing } = registered
             const widened =
                 token.kind === 'variable' && word.startsWith('_')
-                    ? ListingIndex.of(listing).label(word.slice(1), 0)
+                    ? widenedLabel(listing, word.slice(1))
                     : undefined
             if (widened)
                 return {
@@ -101,8 +129,17 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
                     contents: [
                         {
                             value: [
-                                `\`${widened.fullName}\` at \`${runTime(listing, widened.address)}\` in the Listing, read here as more bytes than its label covers, which the decompiler marks with a \`_\`.`,
+                                `${hoverName(widened)} at \`${runTime(listing, widened.address)}\` in the Listing, read here as more bytes than its label covers, which the decompiler marks with a \`_\`.`,
                                 ...invented(listing, widened),
+                                ...(widened.demangled
+                                    ? [
+                                          ...demangledNameMarkdown(
+                                              widened.demangled,
+                                              widened.fullName
+                                          ),
+                                          ...specialSpelling(widened.demangled)
+                                      ]
+                                    : []),
                                 PSEUDOCODE_LINK
                             ].join('\n\n')
                         }
@@ -119,6 +156,41 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
     }
 
     return { definition, hover }
+}
+
+/**
+ * How the Pseudocode writes a special name, which the hover's first line gives in the Listing's
+ * words (cpp-demangling.md, decision 16): `vtable for game::Boss` as `game::Boss::vtable`, a thunk
+ * by the name of the function it stands for.
+ */
+function specialSpelling(demangled: DemangledName): string[] {
+    if (!demangled.special) return []
+    const written = markdownCode(pseudocodeText(demangled.pseudocode))
+    return [
+        demangled.kind === 'function'
+            ? `The Pseudocode writes it ${written}, the name of what it stands for.`
+            : `The Pseudocode writes it ${written}.`
+    ]
+}
+
+/**
+ * The label a name the decompiler widened (`_name`) is of: a label of that name, else the one C++
+ * name whose own name, without its namespaces, it is, as the decompiler writes a namespaced name
+ * it widens (`_cout` for `std::cout`).
+ */
+function widenedLabel(listing: Listing, name: string): ListingLabel | undefined {
+    const named = ListingIndex.of(listing).label(name, 0)
+    if (named) return named
+    let found: ListingLabel | undefined
+    for (const label of listing.labels) {
+        const demangled = label.demangled
+        if (!demangled || label.kind === 'function') continue
+        const own = demangled.pseudocode.name
+        if (own !== name && own + demangled.suffix !== name) continue
+        if (found) return undefined
+        found = label
+    }
+    return found
 }
 
 /**

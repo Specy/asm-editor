@@ -77,7 +77,10 @@ export function createPseudocodeService(
             if (request.type === 'open') {
                 programs.get(request.program)?.dispose()
                 programs.delete(request.program)
-                const program = loaded.openProgram(request.image)
+                //a C++ name as far as tells it apart where it is used: `std::string::operator+=`
+                //from `main`, `size` inside another member of `std::string` (cpp-demangling.md,
+                //decision 14)
+                const program = loaded.openProgram(request.image, { namespaces: 'minimal' })
                 programs.set(request.program, program)
                 post({ type: 'opened', id: request.id, warnings: program.warnings })
             } else {

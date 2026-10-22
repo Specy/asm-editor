@@ -85,6 +85,13 @@ describe("Ghidra's words", () => {
         for (const word of ['s', 'format', 'stdin', 'counter', 'main'])
             expect(ghidraWordMarkdown(word, 'variable')).toBeUndefined()
     })
+
+    it('reads none into a C++ name, however its last part looks', () => {
+        //qualified, or the part of one the printer broke onto two lines
+        for (const word of ['game::param_1', 'std::in_place', 'io::local_10', 'std::', '::iVar1'])
+            expect(ghidraWordMarkdown(word, 'variable')).toBeUndefined()
+        expect(ghidraWordMarkdown('game::undefined8', 'type')).toBeUndefined()
+    })
 })
 
 describe('the Documentation sections the Listing and the Pseudocode link to', () => {

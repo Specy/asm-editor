@@ -26,9 +26,10 @@
     )
     /**
      * The pane's function once the Listing names it: while another function decompiles, that
-     * one, as "Decompiling…" over the Pseudocode still shown names it.
+     * one, as "Decompiling…" over the Pseudocode still shown names it. A C++ function by its
+     * short name, as lists show it.
      */
-    const fn = $derived(group.pseudocodeFunction?.name)
+    const fn = $derived(group.pseudocodeFunction?.list ?? group.pseudocodeFunction?.name)
 </script>
 
 {#snippet help()}

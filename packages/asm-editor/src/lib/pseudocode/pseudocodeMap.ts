@@ -3,8 +3,10 @@ import {
     instructionAddressAt,
     lineOfAddress,
     type Listing,
-    type ListingFunction
+    type ListingFunction,
+    type ListingLabel
 } from '#lib/listing/listing.ts'
+import { ListingIndex } from '#lib/listing/listingNavigation.ts'
 import type { SourceLocation } from '#lib/sourceCompilation/records.ts'
 import { blockEntries } from '#lib/sourceCompilation/sourceBreakpoints.ts'
 import { sourceColor, type SourceMapColoring } from '#lib/sourceCompilation/sourceColoring.ts'
@@ -276,12 +278,16 @@ export function listingLineOfTarget(listing: Listing, target: number): number {
     return labelLine >= 0 ? labelLine : lineOfAddress(listing, target)
 }
 
-/** The name the Listing gives a target, for a hover: its function's, else its label's. */
-export function listingNameOfTarget(listing: Listing, target: number): string | undefined {
+/**
+ * The label the Listing gives a target, for a hover: its function's, else the one operands use
+ * for the address (the last there). Its `fullName` is the Listing's name for it, its `demangled`
+ * the forms of a C++ name.
+ */
+export function listingLabelOfTarget(listing: Listing, target: number): ListingLabel | undefined {
     const fn = functionAt(listing, target)
-    if (fn) return fn.name
-    let name: string | undefined
+    if (fn) return ListingIndex.of(listing).label(fn.name, fn.line)
+    let found: ListingLabel | undefined
     for (const label of listing.labels)
-        if (label.address === target && label.kind !== 'block') name = label.fullName
-    return name
+        if (label.address === target && label.kind !== 'block') found = label
+    return found
 }

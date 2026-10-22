@@ -1,4 +1,11 @@
-import type { ProgramData, ProgramImage, ProgramPointer, ProgramRegion } from '@specy/decompiler'
+import type {
+    ProgramData,
+    ProgramFunction,
+    ProgramImage,
+    ProgramPointer,
+    ProgramRegion
+} from '@specy/decompiler'
+import type { DemangledName } from '#lib/languages/demangle/demangledNames.ts'
 import type { ElfAnalysis } from '#lib/listing/decoder.ts'
 import { versionedName } from '#lib/listing/elfModel.ts'
 import type { Listing, ListingLabel } from '#lib/listing/listing.ts'
@@ -58,21 +65,62 @@ export function stubFunctionName(name: string): string {
  *   `JUMP_SLOT` relocation of a symbol that is no object), so a call through
  *   `__libc_start_main@got` reads as a call of `__libc_start_main`. An IRELATIVE slot stays data:
  *   only its own stub calls through it, and what it holds is chosen when the program starts.
+ *
+ * A C++ program's names, which its Listing demangled, go in their namespaces with their symbols
+ * ({@link scopedName}), so the Pseudocode reads `std::string::operator+=` where the Listing
+ * writes `_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEpLERKS4_`; the PLT stub
+ * `_ZSt20__throw_length_errorPKc@plt` is `__throw_length_error` in `['std']` with the symbol
+ * `_ZSt20__throw_length_errorPKc`, which `glibc.h` declares, so it still does not return. A C
+ * program's image is as it was.
  */
 export function programImage(input: ProgramImageInput): ProgramImage {
     const { bytes, listing, analysis } = input
     const base = listing.base
     return {
         regions: loadRegions(bytes, analysis, base),
-        functions: listing.functions.map((fn) => ({
-            address: fn.address + base,
-            name: stubFunctionName(fn.name)
-        })),
+        functions: functionNames(listing, base),
         data: dataNames(listing, analysis, base),
         strings: stringRanges(listing, base),
         pointers: functionSlots(listing, analysis, base),
         prototypes: input.prototypes
     }
+}
+
+/**
+ * A name as the decompiler takes it ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md),
+ * decisions 13 and 16): a C name as it is; a C++ one, whose label the Listing demangled, as its
+ * Pseudocode name in its namespaces, with `plain` as the symbol prototypes and pointers bind by:
+ * `_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEpLERKS4_` is `operator+=` in
+ * `['std', 'string']`, `_ZTVN4game4BossE` is `vtable` in `['game', 'Boss']`. What `plain` keeps
+ * past the mangled name (`@plt_resolver`, `@got`, a version, `_2`) follows the name too and stays
+ * in the symbol, so a stub's resolver or a GOT slot never binds the function's prototype, as
+ * `puts@plt_resolver` does not bind `puts`'s.
+ */
+function scopedName(
+    plain: string,
+    demangled: DemangledName | undefined
+): Pick<ProgramFunction, 'name' | 'namespace' | 'symbol'> {
+    if (!demangled || !plain.startsWith(demangled.mangled)) return { name: plain }
+    const { namespace, name } = demangled.pseudocode
+    //the package refuses an empty namespace, which no demangled name should have
+    if (namespace.some((part) => !part)) return { name: plain }
+    return {
+        name: name + plain.slice(demangled.mangled.length),
+        ...(namespace.length ? { namespace } : {}),
+        symbol: plain
+    }
+}
+
+/** The Listing's functions, by the names operands use, a PLT stub's without its `@plt`. */
+function functionNames(listing: Listing, base: number): ProgramFunction[] {
+    //Listing names are unique, and only a C++ program's labels are demangled
+    const demangled = new Map<string, DemangledName>()
+    for (const label of listing.labels)
+        if (label.demangled) demangled.set(label.name, label.demangled)
+    return listing.functions.map((fn) => ({
+        address: fn.address + base,
+        ...scopedName(stubFunctionName(fn.name), demangled.get(fn.name))
+    }))
 }
 
 function loadRegions(
@@ -164,7 +212,7 @@ function dataNames(
                 : (objects.get(label.address) ?? strings.get(label.address))
         data.push({
             address: label.address + base,
-            name: unversioned.get(label.name) ?? label.name,
+            ...scopedName(unversioned.get(label.name) ?? label.name, label.demangled),
             ...(size ? { size } : {})
         })
     }
@@ -201,9 +249,11 @@ function functionSlots(
         if (!relocation?.symbol || objects.has(relocation.symbol)) continue
         if (relocation.type !== R_X86_64_GLOB_DAT && relocation.type !== R_X86_64_JUMP_SLOT)
             continue
+        //the slot's label is the function's name and `@got`, demangled as the function's
+        const symbol = printableSymbolName(relocation.symbol)
         pointers.push({
             address: label.address + base,
-            name: printableSymbolName(relocation.symbol)
+            ...scopedName(symbol, label.demangled?.mangled === symbol ? label.demangled : undefined)
         })
     }
     return pointers

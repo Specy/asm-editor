@@ -80,7 +80,8 @@ export class PseudocodeDocument {
         const { fn, listing } = this
         const first = fn.address + listing.base
         const last = Math.max(fn.address, fn.end - 1) + listing.base
-        const header = `// ${fn.name}, 0x${first.toString(16)} to 0x${last.toString(16)}`
+        //a C++ function by its short name, as lists show it (cpp-demangling.md, decision 11)
+        const header = `// ${fn.list ?? fn.name}, 0x${first.toString(16)} to 0x${last.toString(16)}`
         this.lines = result.lines
         this.map = pseudocodeMap(listing, fn, result.lines, this.firstLine)
         this.text = `${header}\n\n${result.text}\n`
