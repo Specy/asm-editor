@@ -1,4 +1,4 @@
-import type { DecompiledFunction, ProgramImage } from '@specy/decompiler'
+import type { DecompiledFunction, DecompileOptions, ProgramImage } from '@specy/decompiler'
 
 /**
  * What the editor asks the decompiler's worker. The worker answers requests one at a time, in the
@@ -10,8 +10,17 @@ export type PseudocodeRequest =
      * it name. A program already open under that number is disposed first.
      */
     | { type: 'open'; id: number; program: number; image: ProgramImage }
-    /** Decompiles the function starting at `address`, an address of the image. */
-    | { type: 'decompile'; id: number; program: number; address: number }
+    /**
+     * Decompiles the function starting at `address`, an address of the image, with the File's
+     * Annotations of that function and any time limit (`options`, at the image's addresses).
+     */
+    | {
+          type: 'decompile'
+          id: number
+          program: number
+          address: number
+          options?: DecompileOptions
+      }
     /** Disposes a program. Nothing answers it. */
     | { type: 'close'; program: number }
 

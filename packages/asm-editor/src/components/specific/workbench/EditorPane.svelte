@@ -87,7 +87,10 @@
                   lines: document.lines,
                   firstLine: document.firstLine,
                   listing: document.listing,
-                  listingIdentity: fileViewIdentity(identity, 'listing')
+                  listingIdentity: fileViewIdentity(identity, 'listing'),
+                  variables: document.variables,
+                  locals: document.annotations.locals,
+                  functionAddress: document.fn.address
               }
             : undefined
     })

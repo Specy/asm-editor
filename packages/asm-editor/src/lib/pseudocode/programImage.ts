@@ -72,6 +72,11 @@ export function stubFunctionName(name: string): string {
  * `_ZSt20__throw_length_errorPKc@plt` is `__throw_length_error` in `['std']` with the symbol
  * `_ZSt20__throw_length_errorPKc`, which `glibc.h` declares, so it still does not return. A C
  * program's image is as it was.
+ *
+ * A function or datum the person renamed ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+ * decisions 9 and 17) goes by their name in the global scope, its raw name (the Listing's, a C++
+ * one mangled) kept as its symbol, so prototypes and pointers still bind by it: `printf` renamed
+ * `say` keeps `int printf(const char *format, ...)`, and its strings are still strings.
  */
 export function programImage(input: ProgramImageInput): ProgramImage {
     const { bytes, listing, analysis } = input
@@ -111,16 +116,39 @@ function scopedName(
     }
 }
 
+/**
+ * A renamed label's name as the decompiler takes it: the person's, in the global scope, with
+ * `raw` as the symbol (a versioned object's without its version, as its name was).
+ */
+function renamedName(label: ListingLabel, raw: string): Pick<ProgramFunction, 'name' | 'symbol'> {
+    return { name: label.name, symbol: raw }
+}
+
+/**
+ * The labels that are not a function's jump targets and whose name is no plain raw name, by
+ * name: those the Listing demangled and those the person renamed. Listing names are unique but
+ * for jump targets, and only a C++ program's labels are demangled.
+ */
+function namedLabels(listing: Listing): Map<string, ListingLabel> {
+    const labels = new Map<string, ListingLabel>()
+    for (const label of listing.labels)
+        if (label.kind !== 'block' && (label.demangled || label.renamed))
+            labels.set(label.name, label)
+    return labels
+}
+
 /** The Listing's functions, by the names operands use, a PLT stub's without its `@plt`. */
 function functionNames(listing: Listing, base: number): ProgramFunction[] {
-    //Listing names are unique, and only a C++ program's labels are demangled
-    const demangled = new Map<string, DemangledName>()
-    for (const label of listing.labels)
-        if (label.demangled) demangled.set(label.name, label.demangled)
-    return listing.functions.map((fn) => ({
-        address: fn.address + base,
-        ...scopedName(stubFunctionName(fn.name), demangled.get(fn.name))
-    }))
+    const labels = namedLabels(listing)
+    return listing.functions.map((fn) => {
+        const label = labels.get(fn.name)
+        return {
+            address: fn.address + base,
+            ...(label?.renamed
+                ? renamedName(label, label.renamed.from)
+                : scopedName(stubFunctionName(fn.name), label?.demangled))
+        }
+    })
 }
 
 function loadRegions(
@@ -182,7 +210,7 @@ function pairLengths(pairs: Float64Array | undefined): Map<number, number> {
  */
 function unversionedObjects(
     listing: Listing,
-    analysis: ProgramImageInput['analysis']
+    analysis: Pick<ElfAnalysis, 'dynamicSymbols'>
 ): Map<string, string> {
     const labels = new Set(listing.labels.map((label) => label.name))
     const names = new Map<string, string>()
@@ -197,7 +225,7 @@ function unversionedObjects(
 
 function dataNames(
     listing: Listing,
-    analysis: ProgramImageInput['analysis'],
+    analysis: Pick<ElfAnalysis, 'dynamicSymbols'>,
     base: number
 ): ProgramData[] {
     const objects = pairLengths(listing.holders?.objects)
@@ -210,9 +238,12 @@ function dataNames(
             label.origin === 'got'
                 ? POINTER_SIZE
                 : (objects.get(label.address) ?? strings.get(label.address))
+        const raw = label.renamed?.from
         data.push({
             address: label.address + base,
-            ...scopedName(unversioned.get(label.name) ?? label.name, label.demangled),
+            ...(raw === undefined
+                ? scopedName(unversioned.get(label.name) ?? label.name, label.demangled)
+                : renamedName(label, unversioned.get(raw) ?? raw)),
             ...(size ? { size } : {})
         })
     }
@@ -242,6 +273,10 @@ function functionSlots(
             .filter((symbol) => OBJECT_TYPES.has(symbol.type))
             .map((symbol) => symbol.name)
     )
+    //a function of the program's the person renamed binds by its raw name, its symbol now
+    const renamed = new Set<string>()
+    for (const label of listing.labels)
+        if (label.kind === 'function' && label.renamed) renamed.add(label.renamed.from)
     const pointers: ProgramPointer[] = []
     for (const label of primaryLabels(listing).values()) {
         if (label.origin !== 'got') continue
@@ -251,10 +286,57 @@ function functionSlots(
             continue
         //the slot's label is the function's name and `@got`, demangled as the function's
         const symbol = printableSymbolName(relocation.symbol)
+        const named = scopedName(
+            symbol,
+            label.demangled?.mangled === symbol ? label.demangled : undefined
+        )
         pointers.push({
             address: label.address + base,
-            ...scopedName(symbol, label.demangled?.mangled === symbol ? label.demangled : undefined)
+            ...named,
+            ...(renamed.has(symbol) && !named.symbol ? { symbol } : {})
         })
     }
     return pointers
+}
+
+const namesKeys = new WeakMap<Listing, string>()
+
+/**
+ * What a program image of the Listing holds of the person's renames: the renamed functions' and
+ * data's addresses and names, empty without any, kept per Listing. A program is opened again when
+ * it changes, and only then: a comment or a jump target's name changes the Listing but not the
+ * image (a renamed jump target reaches the Pseudocode only through code labels, which the image
+ * does not carry).
+ */
+export function programNamesKey(listing: Listing): string {
+    let key = namesKeys.get(listing)
+    if (key === undefined) {
+        key = listing.labels
+            .filter((label) => label.renamed && label.kind !== 'block')
+            .map((label) => `${label.address.toString(16)}=${label.name}`)
+            .join('\n')
+        namesKeys.set(listing, key)
+    }
+    return key
+}
+
+/** A name as the decompiler prints it, without the namespaces only some places print. */
+export type PseudocodeName = Readonly<{ name: string; namespace?: readonly string[] }>
+
+/**
+ * The names a program image of the Listing gives, by link-time address, as the decompiler keeps
+ * them: a function's before a datum's at the same address. What the search cache rewrites a kept
+ * Pseudocode's names from after a rename ({@link programImage}'s functions and data).
+ */
+export function programNames(
+    listing: Listing,
+    analysis: Pick<ElfAnalysis, 'dynamicSymbols'>
+): Map<number, PseudocodeName> {
+    const names = new Map<number, PseudocodeName>()
+    const add = ({ address, name, namespace }: ProgramFunction | ProgramData) => {
+        if (!names.has(address)) names.set(address, namespace ? { name, namespace } : { name })
+    }
+    functionNames(listing, 0).forEach(add)
+    dataNames(listing, analysis, 0).forEach(add)
+    return names
 }

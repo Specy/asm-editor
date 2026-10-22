@@ -1,7 +1,9 @@
-import type { DecompiledLine } from '@specy/decompiler'
+import type { DecompiledLine, DecompiledVariable } from '@specy/decompiler'
+import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import type { Listing, ListingFunction } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import type { ProjectFile } from '#lib/projectFiles.ts'
+import { functionAnnotations, functionAnnotationsKey } from './pseudocodeAnnotations'
 import {
     PseudocodeClient,
     type PseudocodeOptions,
@@ -9,6 +11,7 @@ import {
     type PseudocodeStage
 } from './pseudocodeClient'
 import { pseudocodeMap, type PseudocodeMap } from './pseudocodeMap'
+import { PseudocodeSearchCache } from './pseudocodeSearchCache'
 
 /**
  * The Pseudocode the editor shows, as documents: one per function of a Listing, decompiled in
@@ -33,6 +36,12 @@ export class PseudocodeDocument {
     /** The document's text: the header naming the function, then the decompiler's. */
     text = $state('')
     lines = $state.raw<readonly DecompiledLine[]>([])
+    /**
+     * The function's local variables and parameters, as the decompiler reports them, each with
+     * its id, which its names' tokens carry (`DecompiledToken.variable`), and the name printed:
+     * the person's where they named it ({@link annotations}).
+     */
+    variables = $state.raw<readonly DecompiledVariable[]>([])
     map = $state.raw<PseudocodeMap | undefined>()
     /** Why there is none: the decompiler's own message, or why it did not answer. */
     error = $state<string | undefined>()
@@ -47,6 +56,13 @@ export class PseudocodeDocument {
         readonly listingDocument: ListingDocument,
         readonly listing: Listing,
         readonly fn: ListingFunction,
+        /**
+         * What it is decompiled with of the File's Annotations, at link-time addresses: the
+         * person's names for its variables, its line comments and its function comment
+         * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+         * decisions 13 to 16).
+         */
+        readonly annotations: FunctionAnnotations,
         decompile: Decompile
     ) {
         //once whatever made it has settled: a stage may be reported at once, and a document is
@@ -83,6 +99,7 @@ export class PseudocodeDocument {
         //a C++ function by its short name, as lists show it (cpp-demangling.md, decision 11)
         const header = `// ${fn.list ?? fn.name}, 0x${first.toString(16)} to 0x${last.toString(16)}`
         this.lines = result.lines
+        this.variables = result.variables
         this.map = pseudocodeMap(listing, fn, result.lines, this.firstLine)
         this.text = `${header}\n\n${result.text}\n`
         this.status = 'ready'
@@ -95,10 +112,18 @@ const KEPT_DOCUMENTS = 24
 /**
  * The Pseudocode documents of one Workbench session and the one client of its Pseudocode
  * worker (plan decision 8), made with the first document, so that the decompiler package is
- * loaded only once something is decompiled.
+ * loaded only once something is decompiled; and the Search panel's cache of every function's
+ * Pseudocode, decompiled through the same client in the background
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+ * 28).
  */
 export class PseudocodeDocuments {
     private client?: PseudocodeClient
+    /**
+     * Every function's Pseudocode of the session's Executables, as text, for the Search panel:
+     * decompiled at background priority while it runs, so a pane's requests come first.
+     */
+    readonly search: PseudocodeSearchCache
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A cache read by `open`; what is shown is tracked through each document's own state.
     private readonly documents = new Map<string, PseudocodeDocument>()
     /** A short number for each Listing document, which the documents' keys name. */
@@ -114,27 +139,39 @@ export class PseudocodeDocuments {
 
     constructor(
         private readonly createClient: () => PseudocodeClient = () => new PseudocodeClient()
-    ) {}
+    ) {
+        this.search = new PseudocodeSearchCache(() =>
+            this.disposed ? undefined : this.decompiler()
+        )
+    }
 
     /**
      * The Pseudocode of a function of a Listing made from `file`, the File shown at `path`: the
-     * one made before when there is one, else a new one, decompiled from here on.
+     * one made before when there is one, else a new one, decompiled from here on. It takes the
+     * function's part of the Annotations of `annotated`, the File itself by default (a Debug
+     * session's may be the live File's while the bytes are its Build's), so a rename of one of its
+     * locals or a comment in it makes another document, decompiled again (decision 22).
      */
     open(
         path: string,
         file: ProjectFile,
         listingDocument: ListingDocument,
-        fn: ListingFunction
+        fn: ListingFunction,
+        annotated: Pick<ProjectFile, 'annotations'> = file
     ): PseudocodeDocument | undefined {
         void this.revision
         const listing = listingDocument.listing
         if (!listing || this.disposed) return undefined
-        const key = `${this.listingId(listingDocument)}\0${path}\0${fn.address}`
+        const own = functionAnnotations(annotated.annotations, fn.address, fn.end)
+        const key = `${this.listingId(listingDocument)}\0${path}\0${fn.address}\0${functionAnnotationsKey(own)}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
         if (!document || document.aborted) {
-            document = new PseudocodeDocument(path, listingDocument, listing, fn, (options) =>
-                this.decompiler().decompile(path, file, listing, fn.address, options)
+            document = new PseudocodeDocument(path, listingDocument, listing, fn, own, (options) =>
+                this.decompiler().decompile(path, file, listing, fn.address, {
+                    ...options,
+                    annotations: own
+                })
             )
         }
         this.documents.set(key, document)
@@ -174,9 +211,10 @@ export class PseudocodeDocuments {
         this.revision++
     }
 
-    /** Ends the worker and forgets every document, as the Workbench session ends. */
+    /** Ends the worker and forgets every document and the search's cache, as the Workbench session ends. */
     dispose(): void {
         this.disposed = true
+        this.search.dispose()
         for (const document of this.documents.values()) document.abort()
         this.documents.clear()
         this.paths.clear()

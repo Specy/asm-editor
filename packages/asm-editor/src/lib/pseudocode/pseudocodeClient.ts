@@ -1,9 +1,16 @@
-import type { DecompiledFunction } from '@specy/decompiler'
+import type { DecompiledFunction, DecompileOptions } from '@specy/decompiler'
 import PseudocodeWorker from './pseudocode.worker?worker'
+import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import { executableAnalysis } from '#lib/executables.ts'
 import type { Listing } from '#lib/listing/listing.ts'
 import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
-import { programImage } from './programImage'
+import { programImage, programNamesKey } from './programImage'
+import {
+    annotationOptions,
+    functionAnnotations,
+    functionAnnotationsKey
+} from './pseudocodeAnnotations'
+import { functionAt } from './pseudocodeMap'
 import type { PseudocodeRequest, PseudocodeResponse } from './protocol'
 
 /**
@@ -19,6 +26,13 @@ export const PSEUDOCODE_WORKER_SILENCE_MS = 45_000
 export const PSEUDOCODE_WORKER_IDLE_MS = 30_000
 /** How many decompiled functions are kept, across Executables. */
 export const KEPT_PSEUDOCODE = 32
+/**
+ * How long the decompiler works on a function asked for in the background, for the Search panel,
+ * before giving up on it ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+ * decision 28): a decompilation cannot be interrupted, so a pane's request waits behind at most
+ * this much of one.
+ */
+export const BACKGROUND_TIME_LIMIT_MS = 5_000
 
 /**
  * A function's Pseudocode as the decompiler gives it, or `{ address, error }` with the reason
@@ -34,10 +48,24 @@ export type PseudocodeResult = DecompiledFunction
  */
 export type PseudocodeStage = 'loading' | 'decompiling'
 
+/**
+ * Whom a request is for: a pane showing the function, or the Search panel's batch, whose
+ * requests wait while any of a pane's do, have {@link BACKGROUND_TIME_LIMIT_MS} each, and whose
+ * results are not among the kept ones.
+ */
+export type PseudocodePriority = 'visible' | 'background'
+
 export type PseudocodeOptions = {
     /** Gives up waiting: the promise rejects with the signal's reason. */
     signal?: AbortSignal
     onStage?: (stage: PseudocodeStage) => void
+    /**
+     * The function's Annotations at link-time addresses, as `functionAnnotations` gives them; by
+     * default those `file.annotations` hold for the function of `listing` starting at `address`.
+     */
+    annotations?: FunctionAnnotations
+    /** `'visible'` by default. */
+    priority?: PseudocodePriority
 }
 
 type ClientOptions = {
@@ -45,6 +73,8 @@ type ClientOptions = {
     idleMs?: number
     /** The prototypes passed with every program; glibc's from the package by default. */
     prototypes?: () => Promise<string>
+    /** A background request's time limit, {@link BACKGROUND_TIME_LIMIT_MS} by default. */
+    backgroundTimeLimitMs?: number
 }
 
 /** What the client uses of a Worker, which a stand-in on the calling thread has too. */
@@ -80,12 +110,15 @@ type Caller = {
 
 type Job = {
     key: string
+    lane: PseudocodePriority
     programKey: string
     path: string
     file: ProjectFile
     listing: Listing
     /** Link-time. */
     address: number
+    /** The function's Annotations as the decompiler takes them, at the image's addresses. */
+    options?: DecompileOptions
     callers: Set<Caller>
     started: boolean
     stage?: PseudocodeStage
@@ -97,13 +130,17 @@ type Job = {
 /**
  * The editor's side of the Pseudocode worker (plan decision 8), one per Workbench session. It
  * keeps one program open in the worker per Executable path, opened with the Executable's bytes,
- * Byte edits included, and its Listing's names (`programImage`), and opened again when they
- * change; `release` closes one once no pane shows it. Requests are answered one at a time, in
- * order; one asked for again while it waits, by another pane, waits with it. Results are kept by
- * the File's content, its Byte edits, the Listing's base and names version, the function's
- * address and the decompiler's version, the last {@link KEPT_PSEUDOCODE}; a failure is not kept
- * when another try may answer: past the decompiler's time limit (a busy machine), or the worker
- * failing.
+ * Byte edits included, and its Listing's names (`programImage`), the person's renames among them,
+ * and opened again when they change; `release` closes one once no pane shows it, and `hold` keeps
+ * one open meanwhile for a batch. Requests are answered one at a time, in order, a pane's before
+ * any of the background's ({@link PseudocodePriority}); one asked for again while it waits, by
+ * another pane, waits with it. A request carries the function's Annotations: its renamed locals,
+ * its comments and its function comment
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions
+ * 13 to 17 and 22). Results are kept by the File's content, its Byte edits, the Listing's base,
+ * names version and renames, the function's address and Annotations and the decompiler's version,
+ * the last {@link KEPT_PSEUDOCODE} a pane asked for; a failure is not kept when another try may
+ * answer: past the decompiler's time limit (a busy machine), or the worker failing.
  *
  * The decompiler package is loaded with the first request. A worker silent for
  * {@link PSEUDOCODE_WORKER_SILENCE_MS} while a request waits, or that errors or cannot start (where
@@ -114,10 +151,16 @@ type Job = {
  */
 export class PseudocodeClient {
     private state?: WorkerState
-    private readonly queue: Job[] = []
+    /** The requests waiting their turn, a pane's first. */
+    private readonly queues: Record<PseudocodePriority, Job[]> = { visible: [], background: [] }
+    /** Every request asked for and not answered, by its lane and key ({@link jobKey}). */
     private readonly jobs = new Map<string, Job>()
     private current?: Job
     private readonly programs = new Map<string, OpenProgram>()
+    /** The paths a pane asked for since `release`: their programs stay open when a batch ends. */
+    private readonly shown = new Set<string>()
+    /** How many batches keep each path's program open ({@link hold}). */
+    private readonly holds = new Map<string, number>()
     /** Opens still unanswered, by request id, and why each that failed did. */
     private readonly opening = new Map<number, OpenProgram>()
     private readonly openFailures = new Map<number, string>()
@@ -134,6 +177,7 @@ export class PseudocodeClient {
     private glibc?: Promise<string>
     private readonly silenceMs: number
     private readonly idleMs: number
+    private readonly backgroundTimeLimitMs: number
     /** The Ghidra release and commit of the decompiler, once one has loaded. */
     version: string | undefined
 
@@ -143,11 +187,13 @@ export class PseudocodeClient {
     ) {
         this.silenceMs = options.silenceMs ?? PSEUDOCODE_WORKER_SILENCE_MS
         this.idleMs = options.idleMs ?? PSEUDOCODE_WORKER_IDLE_MS
+        this.backgroundTimeLimitMs = options.backgroundTimeLimitMs ?? BACKGROUND_TIME_LIMIT_MS
     }
 
     /**
      * The Pseudocode of the function starting at a link-time `address` of the Executable shown at
-     * `path`, whose `listing` was made from `file`'s bytes. Never rejects but through `signal`.
+     * `path`, whose `listing` was made from `file`'s bytes, with the function's Annotations.
+     * Never rejects but through `signal`.
      */
     decompile(
         path: string,
@@ -156,29 +202,41 @@ export class PseudocodeClient {
         address: number,
         options: PseudocodeOptions = {}
     ): Promise<PseudocodeResult> {
-        const programKey = `${this.contentId(file.content)}\0${byteEditsKey(file)}\0${listing.base}\0${listing.version}`
-        const key = `${programKey}\0${address}`
+        const lane = options.priority ?? 'visible'
+        const own =
+            options.annotations ??
+            functionAnnotations(
+                file.annotations,
+                address,
+                functionAt(listing, address)?.end ?? address
+            )
+        const programKey = `${this.contentId(file.content)}\0${byteEditsKey(file)}\0${listing.base}\0${listing.version}\0${this.contentId(programNamesKey(listing))}`
+        const key = `${programKey}\0${address}\0${this.contentId(functionAnnotationsKey(own))}`
+        if (lane === 'visible') this.shown.add(path)
         const kept = this.version === undefined ? undefined : this.kept(key)
         if (kept) return Promise.resolve(kept)
         const { signal } = options
         if (signal?.aborted) return Promise.reject(signal.reason)
         return new Promise<PseudocodeResult>((resolve, reject) => {
-            let job = this.jobs.get(key)
-            if (!job) {
-                job = {
+            const waiting =
+                this.jobs.get(jobKey(lane, key)) ??
+                //the background rides along a pane's request; a pane's takes the background's
+                //place in the queue when it has not started
+                (lane === 'background'
+                    ? this.jobs.get(jobKey('visible', key))
+                    : this.promoted(key)) ??
+                this.enqueue({
                     key,
+                    lane,
                     programKey,
                     path,
                     file,
                     listing,
                     address,
+                    options: annotationOptions(own, listing.base),
                     callers: new Set(),
                     started: false
-                }
-                this.jobs.set(key, job)
-                this.queue.push(job)
-            }
-            const waiting = job
+                })
             const caller: Caller = { resolve, reject, onStage: options.onStage }
             waiting.callers.add(caller)
             if (signal) {
@@ -188,12 +246,8 @@ export class PseudocodeClient {
                     // Nobody waits for it any more: unless it has started, it is not asked for.
                     // One no longer queued (answered, or dropped with the client) takes nothing
                     // else with it.
-                    const queued = this.queue.indexOf(waiting)
-                    if (!waiting.started && !waiting.callers.size && queued >= 0) {
-                        this.jobs.delete(waiting.key)
-                        this.queue.splice(queued, 1)
+                    if (!waiting.started && !waiting.callers.size && this.dequeue(waiting))
                         this.heard()
-                    }
                 }
                 signal.addEventListener('abort', abort, { once: true })
                 caller.cleanup = () => signal.removeEventListener('abort', abort)
@@ -204,15 +258,67 @@ export class PseudocodeClient {
     }
 
     /**
-     * Closes the program open for a path, once no pane shows its Pseudocode. A request for it
-     * later opens it again.
+     * Closes the program open for a path, once no pane shows its Pseudocode; a batch holding it
+     * ({@link hold}) closes it as it lets go. A request for it later opens it again.
      */
     release(path: string): void {
+        this.shown.delete(path)
+        if (!this.holds.has(path)) this.close(path)
+    }
+
+    /**
+     * Keeps the program open for a path while a batch decompiles its functions in the background,
+     * whether a pane shows it or not; what this returns lets go, once, closing the program unless
+     * a pane asked for it since it was last released.
+     */
+    hold(path: string): () => void {
+        this.holds.set(path, (this.holds.get(path) ?? 0) + 1)
+        let held = true
+        return () => {
+            if (!held) return
+            held = false
+            //a hold from before `dispose` lets go of nothing
+            const count = (this.holds.get(path) ?? 1) - 1
+            if (count > 0) return void this.holds.set(path, count)
+            this.holds.delete(path)
+            if (!this.shown.has(path)) this.close(path)
+        }
+    }
+
+    private close(path: string) {
         const program = this.programs.get(path)
         if (!program) return
         this.programs.delete(path)
         if (this.state) this.post({ type: 'close', program: program.number })
         this.heard()
+    }
+
+    /** Queues a new request at the back of its lane. */
+    private enqueue(job: Job): Job {
+        this.jobs.set(jobKey(job.lane, job.key), job)
+        this.queues[job.lane].push(job)
+        return job
+    }
+
+    /** Takes a request that has not started out of its lane; whether it was there. */
+    private dequeue(job: Job): boolean {
+        const queue = this.queues[job.lane]
+        const at = queue.indexOf(job)
+        if (at < 0) return false
+        queue.splice(at, 1)
+        this.jobs.delete(jobKey(job.lane, job.key))
+        return true
+    }
+
+    /**
+     * The background's request of a function a pane now asks for, moved to the pane's lane with
+     * the pane's time limit, when it has not started; undefined otherwise.
+     */
+    private promoted(key: string): Job | undefined {
+        const job = this.jobs.get(jobKey('background', key))
+        if (!job || job.started || !this.dequeue(job)) return undefined
+        job.lane = 'visible'
+        return this.enqueue(job)
     }
 
     /**
@@ -221,9 +327,12 @@ export class PseudocodeClient {
      */
     dispose(): void {
         this.generation++
-        const waiting = [...this.jobs.values()]
-        this.queue.length = 0
+        const waiting = [...new Set(this.jobs.values())]
+        this.queues.visible.length = 0
+        this.queues.background.length = 0
         this.jobs.clear()
+        this.shown.clear()
+        this.holds.clear()
         this.current = undefined
         if (this.state) this.end(this.state)
         this.results.clear()
@@ -249,10 +358,10 @@ export class PseudocodeClient {
             this.results.delete(this.results.keys().next().value!)
     }
 
-    /** Starts the next request in the queue once none is under way. */
+    /** Starts the next request, a pane's before the background's, once none is under way. */
     private async next() {
         if (this.current) return
-        const job = this.queue.shift()
+        const job = this.queues.visible.shift() ?? this.queues.background.shift()
         if (!job) return this.heard()
         this.current = job
         job.started = true
@@ -304,11 +413,16 @@ export class PseudocodeClient {
         }
         job.id = this.nextId++
         job.program = program.number
+        const options: DecompileOptions | undefined =
+            job.lane === 'background'
+                ? { ...job.options, timeLimitMs: this.backgroundTimeLimitMs }
+                : job.options
         this.post({
             type: 'decompile',
             id: job.id,
             program: program.number,
-            address: job.address + job.listing.base
+            address: job.address + job.listing.base,
+            ...(options ? { options } : {})
         })
         this.heard()
     }
@@ -319,12 +433,21 @@ export class PseudocodeClient {
         for (const caller of job.callers) caller.onStage?.(stage)
     }
 
-    /** Answers a request and starts the next. */
+    /**
+     * Answers a request and starts the next. A result another try would give again (`keep`) also
+     * answers the same function waiting in the other lane, and is kept when a pane asked for it.
+     */
     private finish(job: Job, result: PseudocodeResult, keep: boolean) {
         if (this.current === job) this.current = undefined
-        this.jobs.delete(job.key)
-        if (keep) this.keep(job.key, result)
-        this.answer(job, result)
+        this.jobs.delete(jobKey(job.lane, job.key))
+        const twin = keep
+            ? this.jobs.get(jobKey(job.lane === 'visible' ? 'background' : 'visible', job.key))
+            : undefined
+        const answered = twin && !twin.started && this.dequeue(twin) ? [job, twin] : [job]
+        for (const done of answered) {
+            if (keep && done.lane === 'visible') this.keep(done.key, result)
+            this.answer(done, result)
+        }
         this.heard()
         void this.next()
     }
@@ -404,7 +527,11 @@ export class PseudocodeClient {
                     ),
                 this.silenceMs
             )
-        else if (!this.programs.size && !this.queue.length)
+        else if (
+            !this.programs.size &&
+            !this.queues.visible.length &&
+            !this.queues.background.length
+        )
             this.idle = setTimeout(() => this.end(state), this.idleMs)
     }
 
@@ -468,13 +595,18 @@ export class PseudocodeClient {
     }
 }
 
+/** A request's key in `PseudocodeClient.jobs`: the same function is asked for once per lane. */
+function jobKey(lane: PseudocodePriority, key: string) {
+    return `${lane}\0${key}`
+}
+
 function failed(job: Job, error: unknown, prefix = ''): PseudocodeResult {
     const message = error instanceof Error ? error.message : String(error)
     return { address: job.address, error: `${prefix}${message}` }
 }
 
 /** The decompiler's message for a function past its time limit, which a less busy machine may beat. */
-function isTimeLimit(error: string) {
+export function isTimeLimit(error: string): boolean {
     return / took longer than .* to decompile$/.test(error)
 }
 
@@ -486,7 +618,8 @@ function toLinkTime(result: DecompiledFunction, base: number): PseudocodeResult 
         address: result.address - base,
         name: result.name,
         text: result.text,
-        //ids are offsets from the function's entry, so no base moves them
+        //ids are offsets from the function's entry, so no base moves them; a comment's tokens
+        //carry the address it is at, shifted below as an instruction's are
         variables: result.variables,
         lines: result.lines.map((line) => ({
             text: line.text,

@@ -1,4 +1,4 @@
-import type { TokenKind } from '@specy/decompiler'
+import type { DecompiledVariable, TokenKind } from '@specy/decompiler'
 import { PSEUDOCODE_DOCUMENTATION } from '#lib/documentation/x86/executableSections.ts'
 
 /**
@@ -183,4 +183,49 @@ export function ghidraWordMarkdown(word: string, kind: TokenKind): string | unde
               ? variableMarkdown(word)
               : undefined
     return explained && `${explained}\n\n${PSEUDOCODE_LINK}`
+}
+
+/**
+ * Where the decompiler keeps a variable, in words, from Ghidra's description of its storage and
+ * its id ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+ * decision 15): "on the stack, 0x98 bytes below where the stack pointer was when the function was
+ * entered", "in `EAX`, first set at `0x555555555277`". `entry` is the function's run-time address,
+ * which an id counts the variable's first use from.
+ */
+export function variableStorageWords(
+    variable: Pick<DecompiledVariable, 'id' | 'kind' | 'storage'>,
+    entry: number
+): string {
+    const { storage } = variable
+    const stack = /^Stack\[(-)?0x([\da-f]+)\]$/i.exec(storage)
+    if (stack)
+        return stack[1]
+            ? `on the stack, 0x${stack[2]} bytes below where the stack pointer was when the function was entered`
+            : `on the stack, 0x${stack[2]} bytes above where the stack pointer was when the function was entered: past the return address, where a caller leaves arguments`
+    const use = /@\+0x([\da-f]+)$/.exec(variable.id)
+    const first = use ? `, first set at \`0x${(entry + parseInt(use[1], 16)).toString(16)}\`` : ''
+    if (/^HASH:/i.test(storage))
+        return `in no one place: a value the decompiler follows through the code${first}`
+    if (variable.kind === 'parameter') return `arriving in \`${storage}\``
+    return storage.includes(':')
+        ? `split across \`${storage}\`${first}`
+        : `in \`${storage}\`${first}`
+}
+
+/**
+ * The hover of a local variable or parameter the person renamed
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+ * 16): their name, and where the decompiler keeps it, which the decompiler's own name for it
+ * said. Without the variable, as when the decompiler no longer reports it, the name alone.
+ */
+export function renamedVariableMarkdown(
+    name: string,
+    variable: Pick<DecompiledVariable, 'id' | 'kind' | 'storage'> | undefined,
+    entry: number
+): string {
+    const what = variable?.kind === 'parameter' ? 'a parameter' : 'a local variable'
+    const where = variable
+        ? ` The decompiler keeps it ${variableStorageWords(variable, entry)} (\`${variable.storage}\`).`
+        : ''
+    return `**${name}**: ${what} renamed in this Project.${where} Reset name gives back the name the decompiler gave it.\n\n${PSEUDOCODE_LINK}`
 }

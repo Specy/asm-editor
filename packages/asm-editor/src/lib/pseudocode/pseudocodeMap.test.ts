@@ -3,7 +3,13 @@
  * crackme's real Listing and the real decompiler's lines in Node.
  */
 import { readFileSync } from 'node:fs'
-import { loadDecompiler, type DecompiledLine, type Decompiler } from '@specy/decompiler'
+import {
+    loadDecompiler,
+    type DecompiledLine,
+    type DecompiledProgram,
+    type Decompiler,
+    type DecompileOptions
+} from '@specy/decompiler'
 import glibc from '@specy/decompiler/prototypes/glibc'
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { loadDecoder } from '../listing/decoder'
@@ -21,11 +27,14 @@ import {
     pseudocodeBreakpointAddresses,
     pseudocodeBreakpointLines,
     pseudocodeBreakpointsOn,
+    pseudocodeCommentPlace,
+    pseudocodeDeclarationLine,
     pseudocodeLineOfAddress,
     pseudocodeLinesOf,
     pseudocodeLocationsOf,
     pseudocodeMap,
     pseudocodeTargetAt,
+    pseudocodeVariableAt,
     type PseudocodeMap
 } from './pseudocodeMap'
 
@@ -33,6 +42,7 @@ import {
 const FIRST = 2
 
 let decompiler: Decompiler
+let program: DecompiledProgram
 let listing: Listing
 let main: ListingFunction
 let lines: DecompiledLine[]
@@ -61,26 +71,36 @@ beforeAll(async () => {
         base: plannedLoadBase(analysis.pie),
         version: 'v1'
     })
-    const program = decompiler.openProgram(
-        programImage({ bytes, listing, analysis, prototypes: glibc })
-    )
+    program = decompiler.openProgram(programImage({ bytes, listing, analysis, prototypes: glibc }))
     main = listing.functions.find((fn) => fn.name === 'main')!
-    const result = program.decompile(main.address + listing.base)
+    lines = decompileMain()
+    map = pseudocodeMap(listing, main, lines, FIRST)
+})
+
+afterAll(() => {
+    program.dispose()
+    decompiler.dispose()
+})
+
+/**
+ * main's Pseudocode, with the options given. The image is at the Listing's addresses; the map
+ * reads link-time ones, as the client gives.
+ */
+function decompileMain(options?: DecompileOptions): DecompiledLine[] {
+    const result = program.decompile(main.address + listing.base, options)
     if ('error' in result) throw new Error(result.error)
-    // The image is at the Listing's addresses; the map reads link-time ones, as the client gives.
-    lines = result.lines.map((line) => ({
+    const linkTime = (address: number | undefined) =>
+        address === undefined ? {} : { address: address - listing.base }
+    return result.lines.map((line) => ({
         ...line,
         addresses: line.addresses.map((address) => address - listing.base),
         tokens: line.tokens.map((token) => ({
             ...token,
+            ...linkTime(token.address),
             ...(token.target === undefined ? {} : { target: token.target - listing.base })
         }))
     }))
-    map = pseudocodeMap(listing, main, lines, FIRST)
-    program.dispose()
-})
-
-afterAll(() => decompiler.dispose())
+}
 
 describe('the Pseudocode map', () => {
     it("covers the function's Listing lines and no others", () => {
@@ -250,5 +270,112 @@ describe('the names in a Pseudocode', () => {
         expect(defaultPseudocodeFunction(listing)).toBe(main)
         expect(functionAt(listing, main.address)).toBe(main)
         expect(functionAt(listing, main.address + 1)).toBeUndefined()
+    })
+})
+
+describe('a Pseudocode line’s variables and comments (annotations-and-search.md, decisions 14 and 15)', () => {
+    it("finds a variable's id under the cursor, and just after its name", () => {
+        const fgets = row('fgets(acStack_98')
+        const text = lines[fgets - FIRST].text
+        const at = text.indexOf('acStack_98')
+        expect(pseudocodeVariableAt(lines, FIRST, fgets, at)).toMatchObject({
+            kind: 'variable',
+            variable: 'stack:-0x98'
+        })
+        expect(pseudocodeVariableAt(lines, FIRST, fgets, at + 'acStack_98'.length)?.variable).toBe(
+            'stack:-0x98'
+        )
+        //a function's name and a global are no local
+        expect(pseudocodeVariableAt(lines, FIRST, fgets, text.indexOf('fgets'))).toBeUndefined()
+        expect(pseudocodeVariableAt(lines, FIRST, fgets, text.indexOf('stdin'))).toBeUndefined()
+        expect(pseudocodeVariableAt(lines, FIRST, 0, 0)).toBeUndefined()
+        //a declaration names one too
+        const declaration = row('int iVar1;')
+        expect(
+            pseudocodeVariableAt(
+                lines,
+                FIRST,
+                declaration,
+                lines[declaration - FIRST].text.indexOf('iVar1')
+            )?.variable
+        ).toBe('register:0x0:4@+0x8e')
+    })
+
+    it("keeps a statement's comment at its first mapped instruction, the declaration's as the function's", () => {
+        //the if holds the test and the jne: the test comes first
+        const branch = row('if (iVar1 == 0)')
+        const test = listingRow('test eax, eax')
+        expect(pseudocodeCommentPlace(map, listing, lines, main, branch)).toEqual({
+            kind: 'line',
+            address: listing.lines.addresses[test]
+        })
+        expect(pseudocodeCommentPlace(map, listing, lines, main, branch)?.address).toBe(
+            pseudocodeBreakpointAddresses(map, listing, branch)[0]
+        )
+        const declaration = pseudocodeDeclarationLine(lines, FIRST, main.address)
+        expect(lines[declaration - FIRST].text).toBe('undefined8 main(void)')
+        expect(pseudocodeCommentPlace(map, listing, lines, main, declaration)).toEqual({
+            kind: 'function',
+            address: main.address
+        })
+        //braces, declarations and the header take none
+        for (const line of [0, 1, row('{'), row('int iVar1;'), lines.length + FIRST])
+            expect(
+                pseudocodeCommentPlace(map, listing, lines, main, line),
+                String(line)
+            ).toBeUndefined()
+    })
+
+    it('maps a comment’s lines to nothing, and finds the comment each keeps', () => {
+        const strcmp = listingRow('call strcmp@plt')
+        const call = listing.lines.addresses[strcmp]
+        const annotated = decompileMain({
+            comments: [
+                { address: main.address + listing.base, text: 'at endbr64' },
+                { address: call + listing.base, text: 'compares it\nwith the password' }
+            ],
+            functionComment: 'Reads the password',
+            unplacedComments: true
+        })
+        const made = pseudocodeMap(listing, main, annotated, FIRST)
+        const rowOf = (text: string) =>
+            annotated.findIndex((line) => line.text.includes(text)) + FIRST
+        const statement = rowOf('strcmp(acStack_98')
+        const comment = rowOf('/* compares it')
+        expect(rowOf('with the password */')).toBe(comment + 1)
+        expect(statement).toBe(comment + 2)
+        //the statement holds the call; the comment's lines hold nothing
+        expect(pseudocodeLineOfAddress(made, listing, call)).toBe(statement)
+        for (const line of [comment, comment + 1, rowOf('Reads the password'), rowOf('at endbr64')])
+            expect(made.listingLines[line], String(line)).toEqual([])
+        expect(pseudocodeBreakpointAddresses(made, listing, comment)).toEqual([])
+        expect(pseudocodeLineOfAddress(made, listing, main.address)).toBe(-1)
+        //Comment… on a comment's line edits that comment
+        expect(pseudocodeCommentPlace(made, listing, annotated, main, comment + 1)).toEqual({
+            kind: 'line',
+            address: call
+        })
+        expect(
+            pseudocodeCommentPlace(made, listing, annotated, main, rowOf('Reads the password'))
+        ).toEqual({ kind: 'function', address: main.address })
+        //one Ghidra could not place is a line comment, at the entry too; its heading is Ghidra's
+        expect(pseudocodeCommentPlace(made, listing, annotated, main, rowOf('at endbr64'))).toEqual(
+            {
+                kind: 'line',
+                address: main.address
+            }
+        )
+        expect(
+            pseudocodeCommentPlace(made, listing, annotated, main, rowOf('could not be placed'))
+        ).toBeUndefined()
+        expect(
+            pseudocodeCommentPlace(made, listing, annotated, main, rowOf('undefined8 main(void)'))
+        ).toEqual({ kind: 'function', address: main.address })
+        //a comment's words are never a name to follow, whatever a token carries
+        const words = annotated[comment - FIRST]
+        const forged = [
+            { ...words, tokens: words.tokens.map((token) => ({ ...token, target: call })) }
+        ]
+        expect(pseudocodeTargetAt(forged, comment, comment, words.tokens[1].start)).toBeUndefined()
     })
 })

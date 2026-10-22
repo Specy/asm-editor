@@ -18,9 +18,15 @@ import { pseudocodeText } from '#lib/languages/demangle/demangledNames.ts'
 import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ElfAnalysis, type ListingDecoder } from '../listing/decoder'
 import { generateListing } from '../listing/generateListing'
-import type { Listing } from '../listing/listing'
+import type { Listing, ListingAnnotations } from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
-import { programImage, stubFunctionName, ZERO_FILL_LIMIT } from './programImage'
+import {
+    programImage,
+    programNames,
+    programNamesKey,
+    stubFunctionName,
+    ZERO_FILL_LIMIT
+} from './programImage'
 
 const PIE_BASE = 0x555555554000
 
@@ -52,16 +58,23 @@ type Opened = {
 
 /**
  * A fixture's Listing at the address it runs at, its names demangled when a demangler is given,
- * and the program its image opens, as the Pseudocode worker opens it.
+ * with the person's renames and comments when given, and the program its image opens, as the
+ * Pseudocode worker opens it.
  */
-function open(name: string, bytes = fixture(name), names?: Demangler): Opened {
+function open(
+    name: string,
+    bytes = fixture(name),
+    names?: Demangler,
+    annotations?: ListingAnnotations
+): Opened {
     const analysis = decoder.analyze(bytes)
     const listing = generateListing(decoder, {
         bytes,
         name,
         base: plannedLoadBase(analysis.pie),
         version: 'v1',
-        ...(names ? { analysis, demangler: names } : {})
+        ...(names ? { analysis, demangler: names } : {}),
+        ...(annotations ? { annotations } : {})
     })
     const program = decompiler.openProgram(
         programImage({ bytes, listing, analysis, prototypes: glibc }),
@@ -531,4 +544,199 @@ it('gives a segment at most ZERO_FILL_LIMIT zeros past its file bytes, and skips
     expect(image.regions[0].bytes.length).toBe(0x100 + ZERO_FILL_LIMIT)
     expect(image.regions[0].bytes[0xff]).toBe(7)
     expect(image.regions[0].bytes[0x100]).toBe(0)
+})
+
+/** The link-time address of a fixture's label, by its Listing name. */
+function labelAddress(listing: Listing, name: string): number {
+    const label = listing.labels.find((candidate) => candidate.name === name)
+    if (!label) throw new Error(`the Listing has no label ${name}`)
+    return label.address
+}
+
+/** A Listing's text, the lines of the function of that name. */
+function functionLines(listing: Listing, name: string): string[] {
+    const fn = listing.functions.find((candidate) => candidate.name === name)!
+    return listing.text.split('\n').slice(fn.line, fn.endLine)
+}
+
+describe('an image with the person’s renames (annotations-and-search.md, decisions 9 and 17)', () => {
+    it('names a renamed function and datum theirs in the global scope, the raw name their symbol', () => {
+        const plain = open('crackme')
+        const { listing } = plain
+        const main = labelAddress(listing, 'main')
+        const hunter = labelAddress(listing, 's_hunter2')
+        const stdin = labelAddress(listing, 'stdin@GLIBC_2.2.5')
+        const jump = listing.labels.find((label) => label.kind === 'block' && label.address > main)!
+        const renamed = open('crackme', fixture('crackme'), undefined, {
+            names: new Map([
+                [main, 'check'],
+                [hunter, 'password_text'],
+                [stdin, 'input'],
+                [jump.address, 'retry']
+            ])
+        })
+        try {
+            const image = programImage({ ...renamed, prototypes: glibc })
+            const at = (address: number) => address + listing.base
+            expect(image.functions).toContainEqual({
+                address: at(main),
+                name: 'check',
+                symbol: 'main'
+            })
+            expect(image.data).toContainEqual({
+                address: at(hunter),
+                name: 'password_text',
+                symbol: 's_hunter2',
+                size: 8
+            })
+            //a versioned object binds glibc.h's declaration by its plain name, as before
+            expect(image.data).toContainEqual({
+                address: at(stdin),
+                name: 'input',
+                symbol: 'stdin',
+                size: 8
+            })
+            //a jump target's name reaches no image
+            expect(image.functions.some((fn) => fn.name === 'retry')).toBe(false)
+            expect(image.data.some((datum) => datum.name === 'retry')).toBe(false)
+
+            //the Pseudocode is the one it was, with the person's names
+            const before = decompileNamed(plain, 'main').text
+            const after = decompileNamed(renamed, 'check').text
+            expect(after).toBe(
+                before.replace('main(void)', 'check(void)').replace(',stdin)', ',input)')
+            )
+            expect(after).toContain('strcmp(acStack_98,"hunter2")')
+            expect(decompileNamed(renamed, '_start').text).toContain(
+                '__libc_start_main(check,unaff_retaddr,'
+            )
+            expect(programNames(renamed.listing, renamed.analysis).get(main)).toEqual({
+                name: 'check'
+            })
+        } finally {
+            plain.program.dispose()
+            renamed.program.dispose()
+        }
+    })
+
+    it('keys a program by the renames it holds, not by comments or jump targets', () => {
+        const bytes = fixture('crackme')
+        const analysis = decoder.analyze(bytes)
+        const base = plannedLoadBase(analysis.pie)
+        const make = (annotations?: ListingAnnotations) =>
+            generateListing(decoder, {
+                bytes,
+                name: 'crackme',
+                base,
+                version: 'v1',
+                ...(annotations ? { annotations } : {})
+            })
+        const plain = make()
+        const main = labelAddress(plain, 'main')
+        const jump = plain.labels.find((label) => label.kind === 'block' && label.address > main)!
+        const names = new Map([[main, 'check']])
+        expect(programNamesKey(plain)).toBe('')
+        expect(programNamesKey(make({ comments: new Map([[main, 'the entry']]) }))).toBe('')
+        expect(programNamesKey(make({ names: new Map([[jump.address, 'retry']]) }))).toBe('')
+        const renamed = programNamesKey(make({ names }))
+        expect(renamed).toBe(`${main.toString(16)}=check`)
+        expect(
+            programNamesKey(
+                make({ names, functionComments: new Map([[main, 'Reads the password']]) })
+            )
+        ).toBe(renamed)
+        expect(programNamesKey(make({ names: new Map([[main, 'verify']]) }))).not.toBe(renamed)
+    })
+
+    it('keeps a renamed function’s prototype, bound by its symbol, in a static program', () => {
+        const plain = open('hello-atexit-static')
+        const printf = labelAddress(plain.listing, 'printf')
+        const exit = labelAddress(plain.listing, 'exit')
+        const renamed = open('hello-atexit-static', fixture('hello-atexit-static'), undefined, {
+            names: new Map([
+                [printf, 'say'],
+                [exit, 'leave_now']
+            ])
+        })
+        try {
+            //its arguments read as printf's: a format string and what it prints
+            const main = decompileNamed(renamed, 'main').text
+            expect(main).toBe(decompileNamed(plain, 'main').text.replace('printf(', 'say('))
+            expect(main).toMatch(/say\("hello %s argc=%d\\n",/)
+            //a caller of exit still knows it does not return
+            const caller = plain.listing.functions.find((fn) =>
+                functionLines(plain.listing, fn.name).some((line) => /\bcall\s+exit\b/.test(line))
+            )!
+            const callerText = decompiled(
+                renamed.program.decompile(caller.address + renamed.listing.base)
+            ).text
+            expect(callerText).toMatch(/WARNING: Subroutine does not return \*\/\n\s*leave_now\(/)
+            expect(callerText).toBe(
+                decompileNamed(plain, caller.name).text.replace(/\bexit\(/g, 'leave_now(')
+            )
+            //without its symbol, printf's prototype would not bind
+            const image = programImage({ ...renamed, prototypes: glibc })
+            const unbound = decompiler.openProgram({
+                ...image,
+                functions: image.functions.map((fn) =>
+                    fn.name === 'say' ? { address: fn.address, name: fn.name } : fn
+                )
+            })
+            try {
+                expect(
+                    decompiled(
+                        unbound.decompile(
+                            labelAddress(renamed.listing, 'main') + renamed.listing.base
+                        )
+                    ).text
+                ).not.toBe(main)
+            } finally {
+                unbound.dispose()
+            }
+        } finally {
+            plain.program.dispose()
+            renamed.program.dispose()
+        }
+    })
+
+    it('puts a renamed C++ function in the global scope, its mangled name its symbol', () => {
+        const plain = open('cpp', fixture('cpp'), demangler)
+        const begin = plain.listing.functions.find((fn) =>
+            fn.name.startsWith(
+                '_ZNSt6vectorINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESaIS5_EE5beginEv'
+            )
+        )!
+        const checkLen = plain.listing.functions.find((fn) =>
+            functionLines(plain.listing, fn.name).some((line) =>
+                /\bcall\s+_ZSt20__throw_length_errorPKc@plt\b/.test(line)
+            )
+        )!
+        const renamed = open('cpp', fixture('cpp'), demangler, {
+            names: new Map([
+                [begin.address, 'first_word'],
+                [checkLen.address, 'check_len']
+            ])
+        })
+        try {
+            const image = programImage({ ...renamed, prototypes: glibc })
+            expect(image.functions).toContainEqual({
+                address: begin.address + renamed.listing.base,
+                name: 'first_word',
+                symbol: begin.name
+            })
+            const main = decompileNamed(renamed, 'main').text
+            expect(main).toContain('lStack_f0 = first_word(puStack_e0);')
+            expect(main).not.toContain('begin(')
+            //its own callee still does not return, bound by its symbol
+            const own = decompileNamed(renamed, 'check_len')
+            expect(own.lines[0].text).toMatch(/ check_len\(/)
+            expect(own.lines[0].text).not.toContain('::check_len')
+            expect(own.text).toMatch(
+                /WARNING: Subroutine does not return \*\/\n\s*(?:std::)?__throw_length_error\(/
+            )
+        } finally {
+            plain.program.dispose()
+            renamed.program.dispose()
+        }
+    })
 })

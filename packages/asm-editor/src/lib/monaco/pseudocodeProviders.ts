@@ -17,7 +17,8 @@ import {
 import {
     constantValue,
     ghidraWordMarkdown,
-    PSEUDOCODE_LINK
+    PSEUDOCODE_LINK,
+    renamedVariableMarkdown
 } from '#lib/pseudocode/pseudocodeHovers.ts'
 import { numberMarkdown } from './assemblyInsights'
 import type { MonacoType } from './Monaco'
@@ -33,7 +34,11 @@ import { modelPseudocode } from './pseudocodeModels'
  * included, so both answer anywhere on it. A name the decompiler prints without a
  * target, such as Ghidra's own `syscall`, has neither. The hover also gives a number the Listing's
  * card and explains Ghidra's own words ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
- * decisions 5 and 6). They answer for Pseudocode models only.
+ * decisions 5 and 6). A name the person gave says what it was
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions 8,
+ * 9 and 16): a global's "Renamed from" its old name, a local's where the decompiler keeps it; and
+ * a comment's words are text, never a name or one of Ghidra's words. They answer for Pseudocode
+ * models only.
  */
 export function createPseudocodeProviders(monacoInstance: MonacoType) {
     const range = (position: Pick<monaco.Position, 'lineNumber'>, start: number, end: number) =>
@@ -81,6 +86,19 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
     /** How a hover names a label: a C++ name by its signature, any other as the Listing does. */
     const hoverName = (label: ListingLabel) =>
         markdownCode(label.demangled?.signature ?? label.fullName)
+    /**
+     * What a renamed label was, in the Listing's hover's words: "Renamed from" its old name, a
+     * C++ one's signature and forms, and where an invented one came from.
+     */
+    const renamedFrom = (listing: Listing, label: ListingLabel) => {
+        const { renamed } = label
+        if (!renamed) return []
+        return [
+            `Renamed from ${markdownCode(renamed.demangled?.signature ?? renamed.from)}.`,
+            ...(renamed.demangled ? demangledNameMarkdown(renamed.demangled, renamed.from) : []),
+            ...invented(listing, label)
+        ]
+    }
 
     const hover: monaco.languages.HoverProvider = {
         provideHover(model, position) {
@@ -95,10 +113,20 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
                         {
                             value: `${label ? `${hoverName(label)} at ` : ''}\`${runTime(listing, token.target)}\` in the Listing: Go to Definition shows it there.`
                         },
-                        ...invented(listing, label).map((value) => ({
-                            value: `${value}\n\n${PSEUDOCODE_LINK}`
-                        })),
-                        ...demangledDetails(label).map((value) => ({ value }))
+                        ...(label?.renamed
+                            ? [
+                                  {
+                                      value: [...renamedFrom(listing, label), PSEUDOCODE_LINK].join(
+                                          '\n\n'
+                                      )
+                                  }
+                              ]
+                            : [
+                                  ...invented(listing, label).map((value) => ({
+                                      value: `${value}\n\n${PSEUDOCODE_LINK}`
+                                  })),
+                                  ...demangledDetails(label).map((value) => ({ value }))
+                              ])
                     ]
                 }
             }
@@ -111,12 +139,30 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
                 line,
                 position.column - 1
             )
-            if (!token) return null
+            //a comment's words are text, whatever they look like
+            if (!token || token.kind === 'comment') return null
             const word = registered.lines[line - registered.firstLine].text.slice(
                 token.start,
                 token.end
             )
             const at = range(position, token.start, token.end)
+            //a variable the person named is theirs, not one of Ghidra's words
+            const { variable } = token
+            if (variable !== undefined && registered.locals?.some((local) => local.id === variable))
+                return {
+                    range: at,
+                    contents: [
+                        {
+                            value: renamedVariableMarkdown(
+                                word,
+                                registered.variables?.find(
+                                    (candidate) => candidate.id === variable
+                                ),
+                                (registered.functionAddress ?? 0) + registered.listing.base
+                            )
+                        }
+                    ]
+                }
             //Ghidra writes a `_` before a name it reads more bytes of than its label covers
             const { listing } = registered
             const widened =
@@ -130,7 +176,9 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
                         {
                             value: [
                                 `${hoverName(widened)} at \`${runTime(listing, widened.address)}\` in the Listing, read here as more bytes than its label covers, which the decompiler marks with a \`_\`.`,
-                                ...invented(listing, widened),
+                                ...(widened.renamed
+                                    ? renamedFrom(listing, widened)
+                                    : invented(listing, widened)),
                                 ...(widened.demangled
                                     ? [
                                           ...demangledNameMarkdown(

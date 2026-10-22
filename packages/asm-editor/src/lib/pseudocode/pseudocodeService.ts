@@ -89,7 +89,7 @@ export function createPseudocodeService(
                 post({
                     type: 'function',
                     id: request.id,
-                    result: program.decompile(request.address)
+                    result: program.decompile(request.address, request.options)
                 })
             }
         } catch (error) {

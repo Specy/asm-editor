@@ -1,4 +1,4 @@
-import type { DecompiledLine } from '@specy/decompiler'
+import type { DecompiledLine, DecompiledVariable, LocalName } from '@specy/decompiler'
 import type { Listing } from '#lib/listing/listing.ts'
 import type { ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 
@@ -15,6 +15,15 @@ export type PseudocodeModel = {
     listing: Listing
     /** The model of that Listing, where Go to Definition goes. */
     listingIdentity: ProjectModelIdentity
+    /**
+     * The function's local variables and parameters, as the decompiler reports them, which the
+     * hover of one the person renamed says where it is kept from.
+     */
+    variables?: readonly DecompiledVariable[]
+    /** The person's names it was decompiled with, by variable id. */
+    locals?: readonly LocalName[]
+    /** The function's link-time address, which a variable's first use is counted from. */
+    functionAddress?: number
 }
 
 const models = new Map<string, PseudocodeModel>()

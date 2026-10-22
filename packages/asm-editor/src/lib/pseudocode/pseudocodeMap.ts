@@ -18,7 +18,10 @@ import type { ColoredLineRange } from '#lib/monaco/lineColoring.ts'
  * through the instruction addresses the decompiler gives each of its lines, each found in the
  * Listing by `lineOfAddress`. It covers the function's Listing lines only, so nothing that reads
  * it walks a whole Listing (libc's has 473,000 lines). Lines are 0-based lines of the Pseudocode
- * document, whose header comes before the decompiler's first line, and of the Listing.
+ * document, whose header comes before the decompiler's first line, and of the Listing. A line of
+ * comments alone, a person's or the decompiler's warning, is no code: its words carry the address
+ * the comment is at, but it maps to nothing, so the program counter, a Breakpoint and the pairing
+ * land on the statement below it.
  */
 export type PseudocodeMap = {
     /** The document line of the decompiler's first line. */
@@ -51,9 +54,10 @@ export function pseudocodeMap(
     let start = fn.line
     let end = fn.endLine
     for (const line of lines) {
-        addresses.push(line.addresses.length ? [...line.addresses] : NONE)
+        const code = isCodeLine(line)
+        addresses.push(code && line.addresses.length ? [...line.addresses] : NONE)
         const found: number[] = []
-        for (const address of line.addresses) {
+        for (const address of code ? line.addresses : NONE) {
             const at = lineOfAddress(listing, address)
             if (at < 0 || found.includes(at)) continue
             found.push(at)
@@ -74,6 +78,11 @@ export function pseudocodeMap(
         listingLines,
         pseudocodeLines: pseudocodeLines.map((rows) => (rows.length ? rows : NONE))
     }
+}
+
+/** Whether a decompiled line holds code: it is not a comment's line, all of whose words are. */
+function isCodeLine(line: DecompiledLine): boolean {
+    return !line.tokens.length || line.tokens.some((token) => token.kind !== 'comment')
 }
 
 /** The document lines holding the instruction on a Listing line, none outside the map's range. */
@@ -240,14 +249,94 @@ export function pseudocodeTargetAt(
     line: number,
     column: number
 ): (DecompiledToken & { target: number }) | undefined {
+    //a comment's words are text, whatever they say (annotations-and-search.md, decision 11)
     const named = (lines[line - firstLine]?.tokens ?? []).filter(
-        (token): token is DecompiledToken & { target: number } => token.target !== undefined
+        (token): token is DecompiledToken & { target: number } =>
+            token.target !== undefined && token.kind !== 'comment'
     )
     //a position just after a name, where a click past its last letter puts the cursor, is on it
     return (
         named.find((token) => token.start <= column && column < token.end) ??
         named.find((token) => token.end === column)
     )
+}
+
+/**
+ * The name of one of the function's local variables or parameters under a 0-based column of a
+ * line of the Pseudocode document, with its id in the function's `variables`
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+ * 15): what Rename… renames. A position just after it is on it, as for {@link pseudocodeTargetAt}.
+ */
+export function pseudocodeVariableAt(
+    lines: readonly DecompiledLine[],
+    firstLine: number,
+    line: number,
+    column: number
+): (DecompiledToken & { variable: string }) | undefined {
+    const named = (lines[line - firstLine]?.tokens ?? []).filter(
+        (token): token is DecompiledToken & { variable: string } => token.variable !== undefined
+    )
+    return (
+        named.find((token) => token.start <= column && column < token.end) ??
+        named.find((token) => token.end === column)
+    )
+}
+
+/**
+ * The document line of a function's declaration (`undefined8 main(void)`): the first line naming
+ * the function itself, at its link-time `address`, below any header comments; -1 for none.
+ */
+export function pseudocodeDeclarationLine(
+    lines: readonly DecompiledLine[],
+    firstLine: number,
+    address: number
+): number {
+    const at = lines.findIndex((line) =>
+        line.tokens.some((token) => token.kind === 'function' && token.target === address)
+    )
+    return at < 0 ? -1 : at + firstLine
+}
+
+/**
+ * What a Comment… on a line of a function's Pseudocode edits
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions
+ * 13 and 14), at link-time addresses: on the declaration line, or a line of the function comment
+ * above it, the function comment; on a person's comment, that comment, at its address (one Ghidra
+ * could not place among them); on a statement, the comment at the line's first mapped instruction,
+ * the address a Breakpoint set there takes first. Undefined on any other line: braces,
+ * declarations, the decompiler's warnings.
+ */
+export type PseudocodeCommentPlace =
+    | { kind: 'function'; address: number }
+    | { kind: 'line'; address: number }
+
+export function pseudocodeCommentPlace(
+    map: PseudocodeMap,
+    listing: Listing,
+    lines: readonly DecompiledLine[],
+    fn: Pick<ListingFunction, 'address'>,
+    line: number
+): PseudocodeCommentPlace | undefined {
+    const declaration = pseudocodeDeclarationLine(lines, map.firstLine, fn.address)
+    if (line === declaration) return { kind: 'function', address: fn.address }
+    const decompiled = lines[line - map.firstLine]
+    if (!decompiled) return undefined
+    const comment = decompiled.tokens.find((token) => token.kind === 'comment')
+    if (comment && !isCodeLine(decompiled)) {
+        if (comment.comment !== 'user' || comment.address === undefined) return undefined
+        //above the declaration, the function comment comes before Ghidra's heading of the
+        //comments it could not place, which are line comments
+        const heading = lines.findIndex((candidate) =>
+            candidate.tokens.some((token) => token.comment === 'warning')
+        )
+        const header = declaration >= 0 && line < declaration
+        const beforeHeading = heading < 0 || line - map.firstLine < heading
+        return header && beforeHeading && comment.address === fn.address
+            ? { kind: 'function', address: fn.address }
+            : { kind: 'line', address: comment.address }
+    }
+    const [address] = pseudocodeBreakpointAddresses(map, listing, line)
+    return address === undefined ? undefined : { kind: 'line', address }
 }
 
 /**
