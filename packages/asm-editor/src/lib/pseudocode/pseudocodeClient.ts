@@ -486,6 +486,8 @@ function toLinkTime(result: DecompiledFunction, base: number): PseudocodeResult 
         address: result.address - base,
         name: result.name,
         text: result.text,
+        //ids are offsets from the function's entry, so no base moves them
+        variables: result.variables,
         lines: result.lines.map((line) => ({
             text: line.text,
             addresses: line.addresses.map((address) => address - base),
