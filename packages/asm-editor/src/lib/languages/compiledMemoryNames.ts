@@ -1,16 +1,11 @@
 import type { DataLabel } from './commonLanguageFeatures.svelte'
 import type { BuildSources } from '#lib/projectFiles.ts'
-import type { DemangleModule } from './demangle/module'
+import { loadDemangler, loadedDemangler } from './demangle/loadDemangler'
 
-let demangler: DemangleModule | undefined
-let loading: Promise<void> | undefined
 /** Load the demangler only for a C++ Build, before touching a Core. */
 export async function prepareMemoryNames(sources: BuildSources): Promise<void> {
     if (!Object.values(sources.compiledLanguages ?? {}).includes('cpp')) return
-    loading ??= import('./demangle/module.js').then(async ({ default: create }) => {
-        demangler = await create()
-    })
-    await loading
+    await loadDemangler()
 }
 
 /** Enough bytes for a preview's 24 characters, each up to four bytes of UTF-8, and one more. */
@@ -37,21 +32,13 @@ export function compiledMemoryNames(
     read: (address: bigint, length: bigint) => Uint8Array
 ): DataLabel[] {
     if (!Object.keys(sources.compiledLanguages ?? {}).length) return [...labels]
+    const demangler = loadedDemangler()
     const named = labels.map((label) => {
         const compiled =
             label.fromLibrary || !!(label.file && sources.compiledLanguages?.[label.file])
         if (!compiled) return { ...label, displayName: label.name, suffixless: label.name }
-        let displayName = label.name
-        if (demangler && /^_Z/.test(label.name)) {
-            const pointer = demangler.ccall('demangle', 'number', ['string'], [label.name])
-            if (pointer) {
-                try {
-                    displayName = demangler.UTF8ToString(pointer)
-                } finally {
-                    demangler._free(pointer)
-                }
-            }
-        }
+        // The demangler's exact text, as `__cxa_demangle` gives it (memory-regions decision 9).
+        const displayName = demangler?.describe(label.name)?.text ?? label.name
         const suffixless = displayName.replace(/\.\d+$/, '')
         let preview: string | undefined
         if (/^[.$]LC\d+/.test(label.name)) {
