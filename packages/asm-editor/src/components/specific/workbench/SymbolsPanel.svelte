@@ -7,7 +7,9 @@
      * when no pane shows it yet. A row reveals its line in the Listing, which a Pseudocode beside
      * it follows, and the row the Listing's cursor is in is marked. The filter keeps the rows whose
      * name, or text, or address holds what is typed; Enter in it reveals the first, and the arrow
-     * keys move from it through the rows.
+     * keys move from it through the rows. A C++ function's row shows its demangled name, and its
+     * filter and tooltip read the raw name as well
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11).
      */
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import { functionAtLine } from '#lib/listing/listing.ts'
@@ -15,6 +17,7 @@
     import {
         filterFunctions,
         filterStrings,
+        functionTooltip,
         listingFunctions,
         listingStrings,
         symbolAddress,
@@ -131,8 +134,6 @@
             : widest(strings.map((string) => symbolAddress(string.address)))
     )
     const sizeWidth = $derived(widest(functions.map((fn) => `${fn.size} B`)))
-
-    const bytes = (size: number) => `${size} byte${size === 1 ? '' : 's'}`
 
     function reveal(line: number) {
         if (!source) return
@@ -278,11 +279,11 @@
                                 type="button"
                                 class="symbol-row function"
                                 class:current={fn.address === current}
-                                title={`${fn.name} at ${symbolAddress(fn.address)}, ${bytes(fn.size)}`}
+                                title={functionTooltip(fn)}
                                 onclick={() => reveal(fn.line)}
                                 onkeydown={onRowKeydown}
                             >
-                                <span class="symbol-name">{fn.name}</span>
+                                <span class="symbol-name">{fn.display}</span>
                                 <span class="symbol-address">{symbolAddress(fn.address)}</span>
                                 <span class="symbol-size">{fn.size} B</span>
                             </button>

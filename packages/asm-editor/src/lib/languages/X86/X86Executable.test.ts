@@ -710,6 +710,53 @@ describe('C++ names of an Executable', () => {
         expect(libc.every((frame) => frame.detail === undefined)).toBe(true)
     })
 
+    it('names a frame by what the Symbols panel lists, the signature where the Listing has overloads', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        //`std::string::_M_local_data()`, beside `std::string::_M_local_data() const`
+        const LOCAL_DATA = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv'
+        const start = firstInstructionAfter(listing, labelLine(listing, LOCAL_DATA))
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, start)!, 'cpp')
+        await emulator.run(0)
+        expect(emulator.line).toBe(start)
+        const frames = emulator.callStack
+        expect(frames.at(-1)).toMatchObject({
+            name: 'std::string::_M_local_data()',
+            detail: `std::string::_M_local_data()\n${LOCAL_DATA}`,
+            line: labelLine(listing, LOCAL_DATA)
+        })
+        //its caller has no overload: its short name
+        expect(frames.at(-2)).toMatchObject({
+            name: 'std::string::basic_string<std::allocator<char>>',
+            detail: `std::string::basic_string<std::allocator<char>>(char const*, std::allocator<char> const&)\n${STRING_FROM_LITERAL}`
+        })
+    })
+
+    it('takes a function’s short name or signature in the address box, when only one address has it', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        const resolve = (input: string) =>
+            resolveMemoryAddress(input, true, (name) => emulator.resolveMemoryLabel(name))
+        const at = (name: string) =>
+            BigInt(listing.labels.find((label) => label.name === name)!.address + PIE_LOAD_BASE)
+        const destructor = at('_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev')
+        expect(resolve('std::string::~basic_string')).toBe(destructor)
+        expect(resolve('std::string::~basic_string()+4')).toBe(destructor + 4n)
+        expect(resolve('operator new')).toBe(at('_ZnwmPv'))
+        expect(resolve('operator new@plt')).toBe(at('_Znwm@plt'))
+        //overloads: only their signatures name one
+        const localData = at(
+            '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv'
+        )
+        expect(resolve('std::string::_M_local_data()')).toBe(localData)
+        expect(resolve('std::string::_M_local_data() const')).toBe(
+            at('_ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv')
+        )
+        expect(() => resolve('std::string::_M_local_data')).toThrow(
+            'Unknown label: std::string::_M_local_data'
+        )
+        //raw names as before
+        expect(resolve('_ZnwmPv')).toBe(at('_ZnwmPv'))
+    })
+
     it('names a frame in libstdc++ demangled, and the PLT stub that led there', async () => {
         const { emulator, listing } = await built(executableSources('cpp'))
         // the second word's write, whose calls the first one bound

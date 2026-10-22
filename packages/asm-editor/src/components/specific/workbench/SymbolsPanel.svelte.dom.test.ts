@@ -2,7 +2,9 @@
  * The Symbols panel
  * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
  * 18), in the side panel over crackme's real Listing: what it lists and of which File,
- * its filter and its switch, its loading state, and the line a row reveals.
+ * its filter and its switch, its loading state, and the line a row reveals; and the C++ names of
+ * the x86 Core's `cpp` fixture ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md),
+ * decision 11).
  */
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
@@ -10,6 +12,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount, type Component } from 'svelte'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import { hasExecutable } from '#lib/executables.ts'
+import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
 import type { Listing } from '#lib/listing/listing.ts'
@@ -34,10 +37,13 @@ vi.hoisted(() => {
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
+const cpp = readFileSync('../x86/blink-js/tests/fixtures/elf/cpp').toString('base64')
 
 let decoder: ListingDecoder
+let demangler: Demangler
 beforeAll(async () => {
     decoder = await loadDecoder()
+    demangler = await loadDemangler()
     HTMLElement.prototype.scrollIntoView ??= () => {}
 })
 
@@ -72,7 +78,8 @@ function symbolsPanel(data: StoredProject = {}, { hold = false } = {}) {
     const generate = async (order: ListingOrder) => {
         order.onProgress?.(0.4)
         if (hold) await held
-        return generateListing(decoder, { ...order, version: 'v1' })
+        //as the Listing worker makes it, which loads the demangler for a C++ program
+        return generateListing(decoder, { ...order, version: 'v1', demangler })
     }
     fixture.emulator.listings = new ListingDocuments(generate)
     const viewport = $state({ deviceClass: 'desktop' as const, canHover: true })
@@ -111,8 +118,8 @@ function symbolsPanel(data: StoredProject = {}, { hold = false } = {}) {
         flushSync()
     }
     /** The Listing the panel reads, once generated. */
-    const listed = async (): Promise<Listing> => {
-        const document = fixture.session.listingFor(liveSource('crackme'))!
+    const listed = async (path = 'crackme'): Promise<Listing> => {
+        const document = fixture.session.listingFor(liveSource(path))!
         const listing = await document.ready
         flushSync()
         return listing
@@ -321,6 +328,40 @@ describe('the Symbols panel', () => {
         expect(revealed).toEqual([main.line + 1])
         expect(right.pseudocodeFunctions.crackme).toBe(main.address)
         expect([left.displayedView, right.displayedView]).toEqual(['listing', 'pseudocode'])
+    })
+
+    it("lists a C++ program's functions by their demangled names, and filters by either", async () => {
+        const view = symbolsPanel({
+            entry: 'cpp',
+            files: { cpp: { encoding: 'base64', content: cpp } }
+        })
+        show(view.session, 'cpp')
+        const listing = await view.listed('cpp')
+        const destructor = listing.functions.find(
+            (fn) => fn.name === '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev'
+        )!
+        const address = `0x${(destructor.address + listing.base).toString(16)}`
+        const size = destructor.end - destructor.address
+        expect(view.rowTexts()).toContainEqual(['std::string::~basic_string', address, `${size} B`])
+        expect(view.rowTexts()).toContainEqual(['main', expect.any(String), expect.any(String)])
+        //the filter reads the short name, the signature and the raw name
+        view.typeFilter('~basic_string')
+        expect(view.rowTexts().map(([name]) => name)).toEqual(['std::string::~basic_string'])
+        expect(view.rows()[0].title).toBe(
+            `std::string::~basic_string() at ${address}, ${size} bytes\n${destructor.name}`
+        )
+        view.typeFilter('_M_data(char*)')
+        expect(view.rowTexts().map(([name]) => name)).toEqual(['std::string::_M_data(char*)'])
+        view.typeFilter('_ZdlPvm')
+        expect(view.rowTexts().map(([name]) => name)).toEqual([
+            'operator delete@plt_resolver',
+            'operator delete@plt'
+        ])
+        //a row still reveals the raw name's line
+        const reveal = vi.spyOn(view.session, 'revealListingLine').mockResolvedValue(true)
+        view.typeFilter('~basic_string')
+        view.rows()[0].click()
+        expect(reveal).toHaveBeenCalledWith(liveSource('cpp'), destructor.line)
     })
 
     it('is worked from the keyboard: Enter reveals the first match, the arrows move', async () => {

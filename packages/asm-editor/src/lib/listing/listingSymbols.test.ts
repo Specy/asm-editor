@@ -1,16 +1,19 @@
 /**
  * The Symbols panel's rows
  * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
- * 18), from crackme's real Listing.
+ * 18), from crackme's real Listing, and the C++ names of the x86 Core's `cpp` fixture
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 11).
  */
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vite-plus/test'
+import { loadDemangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder } from './decoder'
 import { generateListing } from './generateListing'
 import type { Listing } from './listing'
 import {
     filterFunctions,
     filterStrings,
+    functionTooltip,
     listingFunctions,
     listingStrings,
     symbolAddress,
@@ -43,6 +46,9 @@ describe('the functions', () => {
         expect(functions.map((fn) => fn.address)).toEqual(
             functions.map((fn) => fn.address).sort((a, b) => a - b)
         )
+        //C names show as they are
+        expect(functions.every((fn) => fn.display === fn.name && !fn.demangled)).toBe(true)
+        expect(functionTooltip(main)).toBe('main at 0x5555555551e9, 210 bytes')
     })
 
     it('are filtered by name, whatever its case, or by address, with or without 0x', () => {
@@ -96,5 +102,69 @@ describe('the strings', () => {
         expect(unbounded.map((string) => string.text)).toEqual(
             listingStrings(listing, bytes).map((string) => string.text)
         )
+    })
+})
+
+describe('the functions of a C++ program', () => {
+    let cpp: Listing
+    beforeAll(async () => {
+        const cppBytes = new Uint8Array(
+            readFileSync(
+                new URL('../../../../x86/blink-js/tests/fixtures/elf/cpp', import.meta.url)
+            )
+        )
+        cpp = generateListing(await loadDecoder(), {
+            bytes: cppBytes,
+            name: 'cpp',
+            base: PIE_BASE,
+            version: 'v1',
+            demangler: await loadDemangler()
+        })
+    })
+
+    const DESTRUCTOR = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev'
+
+    it('show their demangled names, the signature where two share one', () => {
+        const functions = listingFunctions(cpp)
+        const byName = (name: string) => functions.find((fn) => fn.name === name)!
+        const destructor = byName(DESTRUCTOR)
+        expect(destructor).toMatchObject({
+            display: 'std::string::~basic_string',
+            demangled: {
+                short: 'std::string::~basic_string',
+                signature: 'std::string::~basic_string()'
+            }
+        })
+        expect(functionTooltip(destructor)).toBe(
+            `std::string::~basic_string() at ${symbolAddress(destructor.address)}, ${destructor.size} bytes\n${DESTRUCTOR}`
+        )
+        expect(
+            functions
+                .map((fn) => fn.display)
+                .filter((display) => display.startsWith('std::string::_M_data'))
+        ).toEqual(['std::string::_M_data() const', 'std::string::_M_data(char*)'])
+        expect(byName('_Znwm@plt').display).toBe('operator new@plt')
+        expect(byName('main').display).toBe('main')
+        expect(byName('main').demangled).toBeUndefined()
+        expect(byName('strlen@plt').display).toBe('strlen@plt')
+    })
+
+    it('are filtered by their raw name, short name, signature or address', () => {
+        const functions = listingFunctions(cpp)
+        const shown = (text: string) =>
+            filterFunctions(functions, symbolQuery(text)).map((fn) => fn.display)
+        expect(shown('~BASIC_STRING')).toEqual(['std::string::~basic_string'])
+        expect(shown(DESTRUCTOR)).toEqual(['std::string::~basic_string'])
+        expect(shown('basic_string()')).toEqual(['std::string::~basic_string'])
+        expect(shown('_m_data(char*)')).toEqual(['std::string::_M_data(char*)'])
+        expect(shown('operator new')).toEqual([
+            'operator new@plt_resolver',
+            'operator new@plt',
+            'operator new'
+        ])
+        //the mangled spelling the raw name holds
+        expect(shown('_ZdlPvm')).toEqual(['operator delete@plt_resolver', 'operator delete@plt'])
+        const destructor = functions.find((fn) => fn.name === DESTRUCTOR)!
+        expect(shown(symbolAddress(destructor.address))).toEqual(['std::string::~basic_string'])
     })
 })

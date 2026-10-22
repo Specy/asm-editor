@@ -6,11 +6,16 @@ import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from './Monaco'
+import { demangledName } from '#lib/languages/demangle/demangledNames.ts'
 import { loadDemangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
-import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
-import { listingTokenAt } from '#lib/listing/listingNavigation.ts'
+import { functionAtLine, LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import {
+    demangledNameMarkdown,
+    listingTokenAt,
+    markdownCode
+} from '#lib/listing/listingNavigation.ts'
 import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import {
     listingLineNumbers,
@@ -321,6 +326,161 @@ describe('a Listing whose comments say C++ names', () => {
                 /^(?:_Znwm@plt:| {4}call _Znwm@plt\b)/.test(line) ? [i] : []
             )
         )
+    })
+
+    /** The hover's label part at the first `name` on the first line starting with `start`. */
+    const labelHover = (start: string, name: string) => {
+        const line = cppLines.findIndex((text) => text.startsWith(start))
+        expect(line, start).toBeGreaterThanOrEqual(0)
+        const hover = providers().hover.provideHover(
+            cppModel(),
+            cppAt(line, name),
+            token
+        ) as monaco.languages.Hover
+        return hover.contents[0].value
+    }
+    const addressOf = (name: string) =>
+        `0x${(cpp.labels.find((label) => label.name === name)!.address + PIE_LOAD_BASE).toString(16)}`
+
+    it('hovers a C++ name with its signature, its other forms and its mangled name', () => {
+        //the demangler's text spells out what the signature shortens; the variant is named
+        const destructor = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev'
+        expect(labelHover(`    call ${destructor}`, destructor)).toBe(
+            [
+                `**\`std::string::~basic_string()\`** at \`${addressOf(destructor)}\``,
+                'As the demangler writes it: `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>::~basic_string()`',
+                `Short name \`std::string::~basic_string\`; mangled name \`${destructor}\`, where \`D1\` marks the complete destructor.`,
+                'Named by the symbol table.'
+            ].join('\n\n')
+        )
+        //a PLT stub's: the demangler's text is the signature, which keeps the Listing's suffix
+        expect(labelHover('    call _Znwm@plt ', '_Znwm@plt')).toBe(
+            [
+                `**\`operator new(unsigned long)@plt\`** at \`${addressOf('_Znwm@plt')}\``,
+                'Short name `operator new@plt`; mangled name `_Znwm@plt`.',
+                'A PLT stub: it jumps to `_Znwm`, in a shared library, through the address its GOT slot holds.'
+            ].join('\n\n')
+        )
+        //data have one form
+        const cout = '_ZSt4cout@GLIBCXX_3.4'
+        expect(labelHover(`    lea rdx, [rel ${cout}]`, cout)).toBe(
+            [
+                `**\`std::cout@GLIBCXX_3.4\`** at \`${addressOf(cout)}\``,
+                `Mangled name \`${cout}\`.`,
+                'Named by the symbol table.'
+            ].join('\n\n')
+        )
+        //a C name, and a block of a C function, as before
+        expect(labelHover('main:', 'main')).toBe(
+            `**main** at \`${addressOf('main')}\`\n\nNamed by the symbol table.`
+        )
+        expect(labelHover('    jns .LAB_1', '.LAB_1')).toContain(
+            'A place a jump goes to inside `main`.'
+        )
+    })
+
+    it('says which C++ function a block is in by its demangled name', () => {
+        const block = cpp.labels.find(
+            (label) => label.kind === 'block' && functionAtLine(cpp, label.line)?.list
+        )!
+        const owner = functionAtLine(cpp, block.line)!
+        expect(owner.name).toMatch(/^_Z/)
+        const hover = providers().hover.provideHover(
+            cppModel(),
+            cppAt(block.line, block.name),
+            token
+        ) as monaco.languages.Hover
+        expect(hover.contents[0].value).toBe(
+            [
+                `**${block.fullName}** at \`0x${(block.address + PIE_LOAD_BASE).toString(16)}\``,
+                '',
+                `A place a jump goes to inside \`${owner.list}\`.`
+            ].join('\n')
+        )
+    })
+
+    it('outlines C++ functions by the names lists show, selected on the raw name', () => {
+        const symbols = providers().documentSymbols.provideDocumentSymbols(
+            cppModel(),
+            token
+        ) as monaco.languages.DocumentSymbol[]
+        expect(symbols).toHaveLength(cpp.functions.length)
+        const symbol = (name: string) => {
+            const index = cpp.functions.findIndex((fn) => fn.name === name)
+            return { fn: cpp.functions[index], symbol: symbols[index] }
+        }
+        const destructor = symbol('_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev')
+        expect(destructor.symbol.name).toBe('std::string::~basic_string')
+        expect(destructor.symbol.detail).toBe(addressOf(destructor.fn.name))
+        expect(destructor.symbol.selectionRange).toEqual(
+            new Range(
+                destructor.fn.line + 1,
+                1,
+                destructor.fn.line + 1,
+                destructor.fn.name.length + 1
+            )
+        )
+        //overloads by their signatures, a stub with its suffix, C names raw
+        expect(
+            symbols
+                .map((symbol) => symbol.name)
+                .filter((name) => name.startsWith('std::string::_M_data'))
+        ).toEqual(['std::string::_M_data() const', 'std::string::_M_data(char*)'])
+        expect(symbol('_Znwm@plt').symbol.name).toBe('operator new@plt')
+        expect(symbol('main').symbol.name).toBe('main')
+        expect(symbol('strlen@plt').symbol.name).toBe('strlen@plt')
+    })
+
+    it('finds a C++ label by a short name or signature only one address has', () => {
+        const index = modelListing(CPP_URI)!.index
+        const label = (name: string) => cpp.labels.find((candidate) => candidate.name === name)!
+        //a destructor's complete and base variants share an address: either is the place
+        const destructor = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev'
+        expect(index.demangledLabel('std::string::~basic_string')?.address).toBe(
+            label(destructor).address
+        )
+        expect(index.demangledLabel('std::string::~basic_string()')?.address).toBe(
+            label(destructor).address
+        )
+        //overloads share their short name, not their signatures
+        expect(index.demangledLabel('std::string::_M_data')).toBeUndefined()
+        expect(index.demangledLabel('std::string::_M_data(char*)')).toBe(
+            label('_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEPc')
+        )
+        expect(index.demangledLabel('operator new')).toBe(label('_ZnwmPv'))
+        expect(index.demangledLabel('operator new@plt')).toBe(label('_Znwm@plt'))
+        expect(index.demangledLabel('std::cout@GLIBCXX_3.4')).toBe(label('_ZSt4cout@GLIBCXX_3.4'))
+        //raw names are the other lookup's
+        expect(index.demangledLabel('_ZnwmPv')).toBeUndefined()
+        expect(index.demangledLabel('main')).toBeUndefined()
+    })
+})
+
+describe('the hover of a demangled name', () => {
+    it('names a constructor or destructor variant by its mangled mark', async () => {
+        const { describe: read } = await loadDemangler()
+        const said = (raw: string) => demangledNameMarkdown(demangledName(raw, read)!, raw)
+        expect(said('_ZN4game6PlayerD0Ev')).toEqual([
+            'Short name `game::Player::~Player`; mangled name `_ZN4game6PlayerD0Ev`, where `D0` marks the deleting destructor, which frees the object once it is destroyed.'
+        ])
+        expect(said('_ZN4game6PlayerC2Ev').at(-1)).toBe(
+            'Short name `game::Player::Player`; mangled name `_ZN4game6PlayerC2Ev`, where `C2` marks the base constructor.'
+        )
+        expect(said('_ZThn16_N4game4BossD1Ev').at(-1)).toBe(
+            'Short name `non-virtual thunk to game::Boss::~Boss`; mangled name `_ZThn16_N4game4BossD1Ev`, where `D1` marks the complete destructor.'
+        )
+        //a vtable is data, read as written
+        expect(said('_ZTVN4game4BossE')).toEqual(['Mangled name `_ZTVN4game4BossE`.'])
+        //a template function's return type and a clone's suffix are the demangler's own
+        expect(said('_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_.isra.0')[0]).toBe(
+            'As the demangler writes it: `std::basic_ostream<char, std::char_traits<char>>& std::endl<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&) (.isra.0)`'
+        )
+    })
+
+    it('shows a name as Markdown code, whatever it holds', () => {
+        expect(markdownCode('std::vector<int*>')).toBe('`std::vector<int*>`')
+        expect(markdownCode('a`b')).toBe('``a`b``')
+        expect(markdownCode('`quoted`')).toBe('`` `quoted` ``')
     })
 })
 

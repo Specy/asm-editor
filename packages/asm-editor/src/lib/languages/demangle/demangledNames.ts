@@ -57,7 +57,8 @@ export type CtorDtorVariant =
     | 'unified'
     | 'comdat'
 
-const VARIANTS: Record<string, CtorDtorVariant> = {
+/** The variant each mangled variant names, `D0` the deleting destructor; `C…` are constructors. */
+export const VARIANTS: Record<string, CtorDtorVariant> = {
     C1: 'complete',
     C2: 'base',
     C3: 'allocating',

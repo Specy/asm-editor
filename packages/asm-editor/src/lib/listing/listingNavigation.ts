@@ -1,4 +1,9 @@
 import {
+    VARIANTS as CTOR_DTOR_VARIANTS,
+    type CtorDtorVariant,
+    type DemangledName
+} from '#lib/languages/demangle/demangledNames.ts'
+import {
     functionAtLine,
     LINE_KIND,
     lineOfAddress,
@@ -63,6 +68,7 @@ export function listingTokenAt(line: string, column: number): ListingToken | und
 /** Lookups on one Listing, built when first needed and kept with it. */
 export class ListingIndex {
     private labelsByName?: Map<string, ListingLabel>
+    private labelsByDemangledName?: Map<string, ListingLabel | null>
     private lineStarts?: Uint32Array
     private demangles?: boolean
 
@@ -90,6 +96,34 @@ export class ListingIndex {
             return owner ? this.labelsByName.get(owner.name + name) : undefined
         }
         return this.labelsByName.get(name)
+    }
+
+    /**
+     * The label a demangled name means, as lists and hovers write it: a short name
+     * (`std::ostream::operator<<@plt`), a signature (`std::string::operator+=(std::string const&)`)
+     * or a list form (`game::Player::Player(std::string) [complete]`), when only labels at one
+     * address have it ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision
+     * 11): a class's constructors share a short name, which then means none of them.
+     */
+    demangledLabel(name: string): ListingLabel | undefined {
+        if (!this.labelsByDemangledName) {
+            const named = new Map<string, ListingLabel | null>()
+            for (const label of this.listing.labels) {
+                const { demangled } = label
+                if (!demangled) continue
+                for (const form of new Set([
+                    demangled.short,
+                    demangled.signature,
+                    demangled.list
+                ])) {
+                    const known = named.get(form)
+                    if (known === undefined) named.set(form, label)
+                    else if (known && known.address !== label.address) named.set(form, null)
+                }
+            }
+            this.labelsByDemangledName = named
+        }
+        return this.labelsByDemangledName.get(name) ?? undefined
     }
 
     /**
@@ -234,7 +268,7 @@ const ORIGINS: Record<ListingNameOrigin, (label: ListingLabel, listing: Listing)
     block: (label, listing) => {
         const owner = functionAtLine(listing, label.line)
         return owner
-            ? `A place a jump goes to inside \`${owner.name}\`.`
+            ? `A place a jump goes to inside ${markdownCode(owner.list ?? owner.name)}.`
             : 'A place a jump goes to.'
     }
 }
@@ -244,13 +278,72 @@ export function nameOrigin(listing: Listing, label: ListingLabel): string {
     return ORIGINS[label.origin](label, listing)
 }
 
-/** What a hover says about a label: its name, its run-time address and where the name comes from. */
+/**
+ * What a hover says about a label: its name, its run-time address and where the name comes from.
+ * A C++ name reads by its signature, then its other forms and its mangled name
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 10).
+ */
 export function labelHoverMarkdown(listing: Listing, label: ListingLabel): string {
+    const address = `\`${runTimeAddress(listing, label.address)}\``
+    const { demangled } = label
+    if (!demangled)
+        return [`**${label.fullName}** at ${address}`, '', nameOrigin(listing, label)].join('\n')
     return [
-        `**${label.fullName}** at \`${runTimeAddress(listing, label.address)}\``,
-        '',
+        `**${markdownCode(demangled.signature)}** at ${address}`,
+        ...demangledNameMarkdown(demangled, label.fullName),
         nameOrigin(listing, label)
-    ].join('\n')
+    ].join('\n\n')
+}
+
+/**
+ * What a hover says of a demangled name under a title giving its signature
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 10): the
+ * demangler's own text where the signature reads otherwise, then the short name where it differs
+ * from the signature, the raw name the program and the Listing's text use, and the constructor's
+ * or destructor's variant the raw name marks:
+ *
+ * - "As the demangler writes it: `std::__cxx11::basic_string<char, …>::operator+=(…)`"
+ * - "Short name `game::Player::~Player`; mangled name `_ZN4game6PlayerD0Ev`, where `D0` marks the
+ *   deleting destructor, which frees the object once it is destroyed."
+ */
+export function demangledNameMarkdown(demangled: DemangledName, raw: string): string[] {
+    const { signature, suffix, text } = demangled
+    //the demangler's text says nothing more when the signature is that text, its Listing's suffix
+    //and a variant's mark: no template shortened, no return type left out, no clone rewritten
+    const plain = text + suffix
+    const same = signature === plain || signature.startsWith(`${plain} [`)
+    const short =
+        demangled.short === signature ? '' : `Short name ${markdownCode(demangled.short)}; mangled`
+    const variant = demangled.variant && variantWords(demangled, demangled.variant)
+    return [
+        ...(same ? [] : [`As the demangler writes it: ${markdownCode(text)}`]),
+        `${short || 'Mangled'} name ${markdownCode(raw)}${variant ? `, where ${variant}` : ''}.`
+    ]
+}
+
+/** What a hover says of a constructor's or destructor's variant: "`D0` marks the deleting destructor". */
+function variantWords(demangled: DemangledName, variant: CtorDtorVariant): string | undefined {
+    const destructor = demangled.pseudocode.name.startsWith('~')
+    const code = Object.keys(CTOR_DTOR_VARIANTS).find(
+        (candidate) =>
+            CTOR_DTOR_VARIANTS[candidate] === variant &&
+            candidate.startsWith(destructor ? 'D' : 'C')
+    )
+    if (!code) return undefined
+    const what = `\`${code}\` marks the ${variant} ${destructor ? 'destructor' : 'constructor'}`
+    return variant === 'deleting' ? `${what}, which frees the object once it is destroyed` : what
+}
+
+/**
+ * Markdown code that shows `text` as it is: fenced by more backticks than it holds in a row, and
+ * padded where it starts or ends with a backtick or a space, which the fence would otherwise eat.
+ * A C++ name holds `<`, `*` and `_`, which plain Markdown would read as markup.
+ */
+export function markdownCode(text: string): string {
+    const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+    const fence = '`'.repeat(longest + 1)
+    const pad = /^[ `]|[ `]$/.test(text) ? ' ' : ''
+    return `${fence}${pad}${text}${pad}${fence}`
 }
 
 /**

@@ -13,7 +13,8 @@ import {
     functionAtLine,
     instructionAddressAt,
     lineOfAddress,
-    type Listing
+    type Listing,
+    type ListingFunction
 } from '#lib/listing/listing.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
 import { ListingIndex } from '#lib/listing/listingNavigation.ts'
@@ -813,7 +814,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * The Core's Call stack, each frame on its Listing line. A frame in a library whose Listing
      * has not been made keeps the Core's name and no line: going to it makes the Listing then.
      * A loaded Executable's C++ names read demangled, their signature and raw name in the tooltip
-     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11).
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11): a frame
+     * of a Listing's function as the Symbols panel lists it, the signature where it has overloads.
      */
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
@@ -828,7 +830,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 const start = listing && located.line >= 0 && functionAtLine(listing, located.line)
                 const named = start && start.address + base === Number(frame.target)
                 const { name, detail } = named
-                    ? debugName(start.name, describe)
+                    ? listedFunctionName(listing, start, describe)
                     : frameName(frame, describe)
                 return {
                     ...frame,
@@ -1344,7 +1346,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * Where a name the memory view's address box takes is at run time: a symbol the Core knows, or
      * else a label of the running Executable's Listing, such as an Invented name (`FUN_…`, `DAT_…`)
      * or an `s_` string ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
-     * decision 4). A jump target's `.LAB_n` names a place only inside its function, so it is none.
+     * decision 4), or a C++ label by a short name or signature only one address has
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11). A jump
+     * target's `.LAB_n` names a place only inside its function, so it is none.
      */
     _resolveMemoryLabel(name: string) {
         const symbol = this.core?.resolveMemoryLabel(name)
@@ -1353,7 +1357,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const listing = executable?.document.listing
         if (!executable || !listing) return undefined
         //on no line, a bare `.LAB_n` is no label
-        const label = ListingIndex.of(listing).label(name, -1)
+        const index = ListingIndex.of(listing)
+        const label = index.label(name, -1) ?? index.demangledLabel(name)
         return label && label.kind !== 'block'
             ? BigInt(label.address) + this.programBase(executable)
             : undefined
@@ -1695,6 +1700,24 @@ function pltRanges(file: ProjectFile): [start: number, end: number][] {
         Number(stub.address),
         Number(stub.address) + PLT_STUB_SIZE
     ])
+}
+
+/**
+ * A frame's name from the Listing function it starts: a C++ function's list form, as the Symbols
+ * panel and Go to Symbol show it, with the signature and raw name its label carries as the
+ * tooltip; else its name, demangled here when the Listing was made without the demangler.
+ */
+function listedFunctionName(
+    listing: Listing,
+    fn: ListingFunction,
+    describe: Describe | undefined
+): DebugName {
+    const demangled =
+        fn.list === undefined
+            ? undefined
+            : ListingIndex.of(listing).label(fn.name, fn.line)?.demangled
+    if (fn.list === undefined || !demangled) return debugName(fn.name, describe)
+    return { name: fn.list, detail: `${demangled.signature}\n${fn.name}` }
 }
 
 /** A frame's name without a Listing: its symbol, and how far into it the call went. */

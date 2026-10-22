@@ -85,10 +85,13 @@ export function createListingProviders(monacoInstance: MonacoType) {
             const registered = modelListing(model.uri)
             if (!registered) return null
             const { listing } = registered
+            //a C++ function by its list form, the only text Monaco's filter reads, and selected on
+            //the raw name its label line starts with
+            //([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 11)
             return listing.functions.map((fn) => {
                 const end = Math.max(fn.line, fn.endLine - 1)
                 return {
-                    name: fn.name,
+                    name: fn.list ?? fn.name,
                     detail: `0x${(fn.address + listing.base).toString(16)}`,
                     kind: monacoInstance.languages.SymbolKind.Function,
                     tags: [],

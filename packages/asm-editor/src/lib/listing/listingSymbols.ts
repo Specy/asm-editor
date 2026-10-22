@@ -1,14 +1,28 @@
 import { lineOfAddress, type Listing } from './listing'
+import { ListingIndex } from './listingNavigation'
 import { cEscape } from './listingText'
 
 /**
  * The functions and strings of a Listing as the Symbols panel lists them
  * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
  * 18), in address order and at run-time addresses, as the Listing's gutter and hover give them.
+ * A C++ function is listed by its demangled name
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 11).
  */
 
 export type FunctionSymbol = {
+    /** Its label: the raw name, `_ZNSolsEi@plt`, which the Listing's text uses. */
     name: string
+    /**
+     * What its row shows: a C++ function's list form (`std::ostream::operator<<@plt`, a signature
+     * where another function shares that), else its name.
+     */
+    display: string
+    /**
+     * A C++ function's short name and signature, which the filter matches as well as the raw name,
+     * and the tooltip gives.
+     */
+    demangled?: { short: string; signature: string }
     /** Run-time. */
     address: number
     /** In bytes, up to the next function or the end of its section. */
@@ -33,12 +47,21 @@ export type StringSymbol = {
 const UNBOUNDED_STRING = 4096
 
 export function listingFunctions(listing: Listing): FunctionSymbol[] {
-    return listing.functions.map((fn) => ({
-        name: fn.name,
-        address: fn.address + listing.base,
-        size: fn.end - fn.address,
-        line: fn.line
-    }))
+    const index = ListingIndex.of(listing)
+    return listing.functions.map((fn) => {
+        const demangled =
+            fn.list === undefined ? undefined : index.label(fn.name, fn.line)?.demangled
+        return {
+            name: fn.name,
+            display: fn.list ?? fn.name,
+            ...(demangled
+                ? { demangled: { short: demangled.short, signature: demangled.signature } }
+                : {}),
+            address: fn.address + listing.base,
+            size: fn.end - fn.address,
+            line: fn.line
+        }
+    })
 }
 
 /**
@@ -99,15 +122,33 @@ export function symbolQuery(text: string): string {
     return text.trim().toLowerCase()
 }
 
-/** The functions whose name or address holds a filter, made by `symbolQuery`. */
+/**
+ * The functions whose name or address holds a filter, made by `symbolQuery`: for a C++ function,
+ * its raw name, its short name, its signature or what its row shows.
+ */
 export function filterFunctions(functions: FunctionSymbol[], query: string): FunctionSymbol[] {
     if (!query) return functions
     const digits = addressQuery(query)
+    const holds = (text: string) => text.toLowerCase().includes(query)
     return functions.filter(
         (fn) =>
-            fn.name.toLowerCase().includes(query) ||
+            holds(fn.name) ||
+            (fn.demangled !== undefined &&
+                (holds(fn.display) ||
+                    holds(fn.demangled.short) ||
+                    holds(fn.demangled.signature))) ||
             (digits !== undefined && fn.address.toString(16).includes(digits))
     )
+}
+
+/**
+ * A function row's tooltip: its name, address and size, a C++ function by its signature with the
+ * raw name the Listing's text and Ctrl+F use on a line of its own.
+ */
+export function functionTooltip(fn: FunctionSymbol): string {
+    const size = `${fn.size} byte${fn.size === 1 ? '' : 's'}`
+    const at = `at ${symbolAddress(fn.address)}, ${size}`
+    return fn.demangled ? `${fn.demangled.signature} ${at}\n${fn.name}` : `${fn.name} ${at}`
 }
 
 /** The strings whose text, as stored or as escaped, or address holds a filter. */
