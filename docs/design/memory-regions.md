@@ -52,8 +52,15 @@ parallel symbol source paths, so included Generated assembly receives compiled
 names without renaming handwritten labels in the same Build. Blink preserves
 translated compiler names in NASM comment metadata and reports their source paths.
 
-C++ names use a lazy, self-contained Emscripten build of LLVM libc++abi (about
-95 KB uncompressed; its license and rebuild script are checked in). Compiled
+C++ names use a lazy, self-contained Emscripten build of LLVM libc++abi's
+demangler (its license and rebuild script are checked in). Since
+[C++ demangling](./cpp-demangling.md)'s phase 1 (2026-10-22) it is the module the
+Listing and the x86 debug tools share, about 101 KB uncompressed:
+`loadDemangler.ts` loads it once per JavaScript context, and its `describe`
+gives the text `__cxa_demangle` gave, so the labels read as before, except a name
+over 8,192 characters, which stays raw. An imported Executable's data labels,
+which `compiledMemoryNames` leaves as they are, are demangled by the x86 adapter,
+in the shorter forms of that record's decision 12. Compiled
 provenance comes from reachable Compilation records. Suffixes are retained on
 collisions, and string previews decode UTF-8, escape control characters, and show
 up to 24 characters. No demangler is loaded for C or handwritten assembly.

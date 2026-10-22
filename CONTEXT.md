@@ -269,17 +269,17 @@ _Avoid_: binary (any File that is not text is binary), imported binary, compiled
 
 ## Listing
 
-The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it. An Executable opens on its Listing, at `main` (else the entry point, else the first function), or beside a **Pseudocode** at that Pseudocode's function.
+The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. A C++ symbol keeps its mangled name in the text, which every lookup reads, and a comment beside it gives its **Demangled name**. It is generated whenever it is shown and never saved, and nothing builds from it. An Executable opens on its Listing, at `main` (else the entry point, else the first function), or beside a **Pseudocode** at that Pseudocode's function.
 _Avoid_: disassembly (the decoding that produces it), dump, decompilation (see **Pseudocode**), listing file
 
 ## Pseudocode
 
-The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
+The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. A C++ program's functions and data read by their **Demangled names** in their namespaces, qualified only as far as the place they are used needs. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
 _Avoid_: decompiled C, decompilation (when the text is meant), source, C code
 
 ## Symbols panel
 
-The **Workbench** side panel that lists the functions and the strings of an **Executable**, read from its **Listing**: the Executable shown in the focused editor pane, or else the **Selected program**'s **Entry file** when it is one. A function's row shows its name, run-time address and size, a string's its text and address. A row reveals its line in the Listing, which a **Pseudocode** beside it follows, and the jump goes into the pane's **Navigation history**. Its rail entry is offered only in an x86 **Project** that has an Executable. Distinct from Monaco's Go to Symbol, which lists one Listing's labels inside the editor, and from the Explorer, which lists **Files**.
+The **Workbench** side panel that lists the functions and the strings of an **Executable**, read from its **Listing**: the Executable shown in the focused editor pane, or else the **Selected program**'s **Entry file** when it is one. A function's row shows its name, run-time address and size, a string's its text and address; a C++ function is listed by its **Demangled name**, and the filter also matches its mangled name. A row reveals its line in the Listing, which a **Pseudocode** beside it follows, and the jump goes into the pane's **Navigation history**. Its rail entry is offered only in an x86 **Project** that has an Executable. Distinct from Monaco's Go to Symbol, which lists one Listing's labels inside the editor, and from the Explorer, which lists **Files**.
 _Avoid_: symbol table (the ELF's own, which a stripped program lacks), outline, functions window
 
 ## Navigation history
@@ -291,6 +291,11 @@ _Avoid_: history (alone, which is the Debug tools' History), back stack, breadcr
 
 A name the **Listing** gives an address its **Executable** names nowhere: `FUN_<adjective>_<animal>` for a function, `DAT_<adjective>_<animal>` for data. It is derived from the address in the file, so it is the same on every open and for everyone, from word lists that are never edited once released. Distinct from the names the bytes give (symbols, `name@plt`, an `s_` string's text) and from the numbered `.LAB_n` of a jump target. See [ADR 0045](./docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
 _Avoid_: random name, generated name, placeholder name
+
+## Demangled name
+
+The readable name the editor shows for a C++ symbol of an **Executable**, a **Build output** or a library they load, worked out from the mangled name by LLVM's demangler: `_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEpLERKS4_` is `std::string::operator+=`. Its short form, without parameters and with the standard library's templates shortened (`std::string` for `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>`), names a function in the **Symbols panel**, Go to Symbol, the Call stack and the History, the lists giving the signature instead where overloads share a short form; the **Listing**'s comments give the signature, `std::string::operator+=(std::string const&)`; the **Pseudocode** writes it in its namespaces; a hover gives every form, with the demangler's exact text and the mangled name. The mangled name stays the Listing's label, which its text and every lookup use, and a name the demangler cannot read stays mangled. Distinct from an **Invented name**, which the Listing makes up where nothing names an address, and from a C++ Build's memory labels, which show the demangler's exact text.
+_Avoid_: display name (the code's field for any name shown in place of another), pretty name, unmangled name, symbol name (the mangled one)
 
 ## Bundled library
 

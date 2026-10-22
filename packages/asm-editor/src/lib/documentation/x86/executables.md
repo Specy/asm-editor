@@ -78,9 +78,9 @@ The **Inspector** button above the bytes shows or hides it. In a wide pane it si
 
 **Disassemble** shows an Executable's **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. The Listing is generated from the File's current bytes when shown and is never saved. It is read-only, as the notice at the top right says; to change the program, [edit its bytes](#byte-edits) in the Hex editor. The notice's **?** opens this section in the Documentation panel, and the notice hides while Find (Ctrl+F) is open in the pane. The gutter shows an address for each line. The Listing opens with `main`, or the entry point when no `main` is found, near the top, and beside a Pseudocode at its function. Switching the pane to Hex and back returns to the same place.
 
-Data sections follow the code: strings appear as `s_Enter_password: db "Enter password: ", 0`, other bytes as `db` or `dq`, and uninitialized space as `resb`. An instruction that reads data through `[rel …]` names the data, with the string as a comment. Searching for a printed message can therefore help you find instructions that use it.
+Data sections follow the code: strings appear as `s_Enter_password: db "Enter password: ", 0`, other bytes as `db` or `dq`, and uninitialized space as `resb`. An instruction that reads data through `[rel …]` names the data, with the string as a comment. Searching for a printed message can therefore help you find instructions that use it. In a C++ program, a comment also gives the readable [C++ name](#cpp-names) of each function or data a line names.
 
-Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name. Hover over a number for its value in decimal, hexadecimal and binary. When the number's bytes, in the order x86 keeps them in memory, are at least two printable characters, the card adds a **Text** line: `0x4c75257240343a41` reads `A:4@r%uL`, as a string the program builds from it does.
+Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name; a C++ name's hover also gives its [other forms](#cpp-names). Hover over a number for its value in decimal, hexadecimal and binary. When the number's bytes, in the order x86 keeps them in memory, are at least two printable characters, the card adds a **Text** line: `0x4c75257240343a41` reads `A:4@r%uL`, as a string the program builds from it does.
 
 **Go to Definition** (F12, or Ctrl+click) on a label opens its location, and so does a double-click on a label or on the target of a call or jump; such a name is underlined while the pointer is over it. **Go to References** lists the lines that name it. [Back and forward](#navigation) returns to where you were.
 
@@ -99,11 +99,40 @@ A **symbol** is a saved name for a function or data address. **Stripping** a pro
 
 The invented words do not describe what the code does. They depend on its address in the file, so the same program gets the same names on every open and for every reader. You can use those names in shared notes.
 
+A C++ program's saved names are mangled, such as `_ZNSolsEi@plt` for `std::ostream::operator<<(int)`. The Listing keeps them as they are and shows the [C++ names](#cpp-names) in comments, hovers and lists.
+
+## C++ names {#cpp-names}
+
+A C++ compiler encodes a function's namespaces, class and parameter types in its symbol name: `std::ostream::operator<<(int)` is `_ZNSolsEi` in the file. This encoding is called **mangling**. The editor demangles the names of an Executable, of a [Build output](#build-output) and of the libraries they load, such as `@lib/libstdc++.so.6`.
+
+The Listing's text keeps the mangled names, which its operands, labels, Go to Definition, References and [Patches](#patching) use. A comment gives the C++ name beside a call or jump target, an operand that names data, a `dq` pointer and a label's own line:
+
+```x86
+    call _ZNSolsEi@plt                  ; std::ostream::operator<<(int)
+    lea rdx, [rel _ZTVN4game4BossE+0x10] ; vtable for game::Boss+0x10
+_ZTVN4game4BossE: db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ; vtable for game::Boss
+    dq _ZTIN4game4BossE                 ; typeinfo for game::Boss
+    dq _ZN4game4BossD1Ev                ; game::Boss::~Boss()
+    dq _ZN4game4BossD0Ev                ; game::Boss::~Boss() [deleting]
+```
+
+**Find** (Ctrl+F) therefore finds a function by its C++ name, at its label and at each call. A comment's words are not names: double-clicking `main` in `; main::'lambda'(int)::operator()(int) const` goes nowhere, and the mangled name before the comment is the one to follow. A comment longer than 100 characters gives the name and `(…)` instead of the parameters. `[deleting]` marks a deleting destructor, which also frees the object; a vtable lists it beside the complete destructor, which otherwise reads the same. The rarer allocating and inheriting constructors are marked `[allocating]` and `[inheriting]`.
+
+The standard library's long template names are shortened: `std::string` stands for `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>` and `std::ostream` for `std::basic_ostream<char, std::char_traits<char>>`, and template arguments that are the defaults are left out, as in `std::vector<std::string>` and `std::map<std::string, int>`. Other templates read as the demangler writes them. libstdc++ contains an older string type beside the current one, and both read `std::string`; the address and the hover tell them apart.
+
+Hover over a C++ name in the Listing for its signature and address, then the demangler's exact text when the signature shortens it, its short name and its mangled name. For a constructor or destructor, the hover also says which variant the mangled name marks, such as "`D0` marks the deleting destructor". Then it says where the name comes from, as for any label.
+
+Lists show a function's **short name**, without its parameters: `std::vector<std::string>::push_back`. Where two functions share a short name, as overloads do, each shows its signature, such as `sum(std::vector<int> const&)` and `sum(std::vector<std::string> const&)`; where the signatures match too, the variant follows, `[complete]` or `[base]`. **Go to Symbol** (Ctrl+Shift+O), the [Symbols panel](#symbols) and the Pseudocode's first line name functions this way. Go to Symbol finds a function only by the name it shows; the Symbols panel's filter also finds it by its mangled name. The **Call stack** and the History show short names [while stepping](#stepping), and the [memory view](#memory) shows the names of C++ data. The [Pseudocode](#pseudocode) writes names in their namespaces.
+
+A name the demangler cannot read stays mangled. Examples include a few of libstdc++'s typeinfo names for the `_Float32x` and `_Float64x` types, some templates whose return type contains an expression, some of GCC's conversion operators to a type in a namespace, names over 8,192 characters, and Rust's newer `_R` names. If the demangler cannot be loaded, every name stays mangled. The demangler is LLVM's, whose text differs from that of GNU's `c++filt`, `objdump -C` and gdb in two ways: closing brackets have no space between them (`>>`), and a lambda reads `main::'lambda'(int)` where GNU writes `main::{lambda(int)#1}`.
+
+While a C++ program compiled in the editor runs, its Call stack and History show mangled names; its Build output's Listing and Pseudocode show C++ names as described here.
+
 ## The Symbols panel {#symbols}
 
-The **Symbols** panel, the tags icon in the rail, lists the functions and strings of an Executable: the one shown in the editor pane you used last, or else the project's Entry file when it is an Executable. The rail offers it only in a project that has an Executable. Choose **Functions** for each function's [name](#names), address and size in bytes, up to the next function, or **Strings** for each string the Listing labels, with its text and address. The addresses are the ones the program has when it runs, as in the Listing's gutter. If no pane shows the Listing yet, the panel generates it first.
+The **Symbols** panel, the tags icon in the rail, lists the functions and strings of an Executable: the one shown in the editor pane you used last, or else the project's Entry file when it is an Executable. The rail offers it only in a project that has an Executable. Choose **Functions** for each function's [name](#names), address and size in bytes, up to the next function, or **Strings** for each string the Listing labels, with its text and address. The addresses are the ones the program has when it runs, as in the Listing's gutter. If no pane shows the Listing yet, the panel generates it first. A C++ function's row shows its [short name](#cpp-names), or its signature where another function has the same short name; its tooltip gives the signature, address and size, then the mangled name.
 
-Click a row to show its line in the Listing; a [Pseudocode](#decompile) beside the Listing follows it to that function. The row the Listing's cursor is in is marked. The filter box keeps the rows whose name or text contains what you type, or whose address contains it as hexadecimal digits, with or without `0x`. **Enter** shows the first row that matches, and the arrow keys move from the filter down through the rows.
+Click a row to show its line in the Listing; a [Pseudocode](#decompile) beside the Listing follows it to that function. The row the Listing's cursor is in is marked. The filter box keeps the rows whose name or text contains what you type, or whose address contains it as hexadecimal digits, with or without `0x`. For a C++ function, the filter checks the mangled name, the short name and the signature, so both `operator+=` and `_ZNSolsEi` find rows. **Enter** shows the first row that matches, and the arrow keys move from the filter down through the rows.
 
 ## Decompile {#decompile}
 
@@ -117,7 +146,11 @@ Like the Listing, the Pseudocode is generated from the File's current bytes and 
 
 ## Reading the Pseudocode {#pseudocode}
 
-The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`. Functions and data have the names the [Listing](#names) gives them, invented ones included, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, a library variable the Listing names with its version, such as `stdin@GLIBC_2.2.5`, reads as `stdin`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`, and the types of library variables such as `stdin`.
+The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`; a C++ function is named as lists name it, such as `// game::Boss::~Boss() [deleting], …`. Functions and data have the names the [Listing](#names) gives them, invented ones included, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, a library variable the Listing names with its version, such as `stdin@GLIBC_2.2.5`, reads as `stdin`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`, and the types of library variables such as `stdin`.
+
+A C++ program's functions and data read with their namespaces and classes, as C++ writes them: in `main`, `std::string::operator+=(auStack_128,auStack_c8)` and `std::vector<std::string>::push_back(auStack_198,auStack_128)`. As in Ghidra, a name is qualified only as far as the place it is used needs: inside a member of `std::string`, a call of another member reads `max_size(…)`, and inside `game::Boss::Boss`, the call of its base class's constructor reads `Player::Player(param_1,param_2)`. A function's own declaration line always gives its whole name. Overloads read alike, such as `sum(auStack_178)` and `sum(auStack_198)` for two functions named `sum`; hover over one to see which it is.
+
+Special data read as names filed under what they belong to: `std::runtime_error::typeinfo` for what the Listing calls `typeinfo for std::runtime_error`, and `greeting()::text::guard` for `guard variable for greeting()::text`, the flag that makes sure the static `text` in `greeting()` is initialised once. A lambda reads as part of the function it is written in: `main::'lambda'(int)::operator()`. A function's address read from its GOT slot ends in `@got`, as in `__cxa_throw(thrown_exception,std::runtime_error::typeinfo,std::runtime_error::~runtime_error@got)`. A constructor's store of its class's vtable reads as a number, `*param_1 = 0x555555562c20;`, because the address is 0x10 bytes into the vtable; the Listing's line for it says `vtable for game::Boss+0x10`.
 
 The decompiler names everything else itself:
 
@@ -130,7 +163,7 @@ Hover over one of these words for a short explanation of it, with a link back to
 
 Hover over a number for the card the [Listing](#listing) shows: its value in decimal, hexadecimal and binary, and a **Text** line when its bytes are printable. A constant written into a local variable is often part of a string built 8 bytes at a time: `0x4c75257240343a41` reads `A:4@r%uL`.
 
-**Go to Definition**: press F12 on a called function or a data name, Ctrl+click it (Cmd+click on a Mac) or double-click it to show it in the Listing. For a called function, the Pseudocode then shows that function. Such a name is underlined while the pointer is over it. Hover over the name to see the Listing's name and address for it; for an [invented name](#names), the hover also says where the name comes from.
+**Go to Definition**: press F12 on a called function or a data name, Ctrl+click it (Cmd+click on a Mac) or double-click it to show it in the Listing. For a called function, the Pseudocode then shows that function. Such a name is underlined while the pointer is over it. Hover over the name to see the Listing's name and address for it; for an [invented name](#names), the hover also says where the name comes from. For a [C++ name](#cpp-names), the hover gives its signature, the demangler's text, its short and mangled names and, for special data, how the Pseudocode writes it. A qualified name is one name: the hover, the double-click and Go to Definition work anywhere on `std::string::operator+=`. When the decompiler breaks a long name across two lines, only the part on the second line is linked.
 
 The notice at the top right names the function shown. Its **?** opens this section in the Documentation panel, and the notice hides while Find (Ctrl+F) is open in the pane.
 
@@ -156,11 +189,11 @@ Startup can stop earlier at one of your Breakpoints. If the program asks for Ter
 
 Instructions executed during Build's startup advance are outside Undo history. New steps are recorded from the point where Build stops.
 
-By default, **Step** over a shared-library call such as `call printf@plt` runs the call and stops at the next program instruction. It stops earlier if the library calls back into your program, as when `qsort` calls your comparison function. History groups the library call into one row, such as "Called printf in libc.so.6". While it waits for input, the editor shows the call that led there, such as `call fgets@plt`.
+By default, **Step** over a shared-library call such as `call printf@plt` runs the call and stops at the next program instruction. It stops earlier if the library calls back into your program, as when `qsort` calls your comparison function. History groups the library call into one row, such as "Called printf in libc.so.6". A C++ function reads by its [short name](#cpp-names), as in "Called std::ostream::operator<< in libstdc++.so.6", with its signature and mangled name in the row's tooltip. While it waits for input, the editor shows the call that led there, such as `call fgets@plt`.
 
 To step through shared-library instructions, enable **Step into library code** in **Preferences**. For a statically linked Executable, the library code is already part of the Executable, so Step enters those functions like other program functions. Programs [compiled in the editor](/documentation/x86/runtime-library#stepping) use different startup handling: enabling this Preference begins their execution at `_start`.
 
-A crash inside a library, such as invalid data reaching `strlen`, is shown on that library's instruction. The **Call stack** includes the program's own frames; choose a frame to see its line.
+A crash inside a library, such as invalid data reaching `strlen`, is shown on that library's instruction. The **Call stack** includes the program's own frames; choose a frame to see its line. A C++ frame shows its short name, or its signature where overloads share the short name, with the signature and mangled name in its tooltip.
 
 When the program exits, the Listing and the Pseudocode stay where you were reading, and no line is highlighted. Its last instructions run in the C library, and the only line of its own code involved is `_start`'s call of `__libc_start_main`. A program that ends on a signal, such as a crash, is still shown where it stopped. **Undo** takes the last step back and shows its line again.
 
@@ -183,6 +216,8 @@ The Breakpoints belong to instructions, not to the text: they stay where they ar
 ## Addresses in registers and memory {#memory}
 
 During a Debug session, the memory view's address box takes the Listing's [names](#names) as well as addresses: `main`, `FUN_brave_otter`, `DAT_misty_tanager`, `s_Enter_password` or `strcmp@plt`, and an offset after one, as in `DAT_misty_tanager+8`. Each goes to the address the name has while the program runs. A `.LAB_` name is not taken, since it names a place only inside its function. The `0x` before the box shows only while it holds a number.
+
+In a C++ program, the box also takes [C++ names](#cpp-names). It takes a function's short name or signature when no other function has the same one, such as `sum(std::vector<int> const&)` but not `sum`, which names two functions. It takes data by the name the memory view shows, including any version suffix: `std::cout@GLIBCXX_3.4` works, `std::cout` alone does not. The memory view's list of regions and data, and its hover over a byte, name C++ data this way and add the mangled name: the hover names `std::cout@GLIBCXX_3.4 (_ZSt4cout@GLIBCXX_3.4)`, and the list gives the mangled name in the row's tooltip.
 
 Right-click a register's value, the program counter's included, or a byte in the memory view for a menu that reads the value as an address:
 

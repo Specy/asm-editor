@@ -74,6 +74,7 @@ describe('the x86 Documentation', () => {
             'data-inspector',
             'listing',
             'names',
+            'cpp-names',
             'symbols',
             'decompile',
             'pseudocode',
@@ -116,6 +117,10 @@ describe('the x86 Documentation', () => {
             '@GLIBC_'
         ])
             expect(text('names')).toContain(name)
+        // C++ names: the Listing keeps the mangled ones, and comments and lists read them
+        expect(text('names')).toContain('[C++ names](#cpp-names)')
+        for (const form of ['_ZNSolsEi', 'std::string', '[deleting]', '8,192'])
+            expect(text('cpp-names')).toContain(form)
         expect(text('patching')).toContain('**Space**')
         expect(text('patching')).toContain('long press')
         expect(text('stepping')).toContain('**Step into library code**')

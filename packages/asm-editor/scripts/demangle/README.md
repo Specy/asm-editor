@@ -3,8 +3,9 @@
 The editor reads C++ names with LLVM libc++abi's Itanium demangler, compiled with Emscripten to a
 self-contained ES module (`src/lib/languages/demangle/module.js`, its wasm inlined). It needs no
 network service, filesystem or `c++filt` process, and loads lazily: in the Listing worker for a
-program with mangled names, and on the main thread for a C++ Build's memory labels
-(`loadDemangler.ts`). Assembly and C never load it.
+program with mangled names, and on the main thread for a C++ Build's memory labels and for an
+Executable's Call stack, History and memory labels (`loadDemangler.ts`). Assembly and C never load
+it.
 
 `demangle.cpp` exports one function, `describe(name)`, which parses a `_Z` name with the
 `ItaniumDemangle.h` that Emscripten's libc++abi ships and reads its parts off the syntax tree, as

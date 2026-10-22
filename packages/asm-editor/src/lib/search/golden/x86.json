@@ -99,6 +99,17 @@
             "expect": "x86/executables/names"
         },
         {
+            "query": "mangled names",
+            "top": 2,
+            "expect": "x86/executables/cpp-names"
+        },
+        {
+            "query": "C++ mangled names",
+            "top": 3,
+            "expect": "x86/executables/cpp-names",
+            "meaning": true
+        },
+        {
             "query": "bundled shared libraries",
             "top": 3,
             "expect": "x86/executables/libraries"
