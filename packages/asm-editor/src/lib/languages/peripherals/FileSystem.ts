@@ -1,4 +1,5 @@
 import {
+    annotationsKey,
     bytesFile,
     cleanFiles,
     projectFileFromBytes,
@@ -9,13 +10,17 @@ import {
     mergeOverwrites,
     overwriteText,
     overwritesOnly,
+    storedAnnotationsSize,
     storedFilesSize,
+    withAnnotations,
     withByteEdits,
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
+    ANNOTATIONS_BYTE_LIMIT,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
+    type Annotations,
     type BuildSources,
     type ByteEdit,
     type FileEncoding,
@@ -37,9 +42,9 @@ function decodeStandalone(bytes: Uint8Array): string | null {
 
 /**
  * `file` caches this node's storage representation, dropped whenever `bytes` changes and put back
- * by an Undo that restores the bytes it stood for, so a File's record (its original and Byte edits)
- * comes back as it was rather than rebuilt from its bytes. `built` marks the Build output, which
- * the program reads but never changes and which is no File of the Project.
+ * by an Undo that restores the bytes it stood for, so a File's record (its original, Byte edits and
+ * Annotations) comes back as it was rather than rebuilt from its bytes. `built` marks the Build
+ * output, which the program reads but never changes and which is no File of the Project.
  */
 type Node = { bytes: Uint8Array; file?: ProjectFile; built?: true }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
@@ -264,9 +269,9 @@ export class FileSystem {
         this.commit(files)
     }
     /**
-     * Replaces a File's whole content, which becomes its new original: any Byte edits it had are
-     * dropped, as for an upload over it (ADR 0047). It is stored as text when the bytes decode as
-     * UTF-8, unless `encoding` says how.
+     * Replaces a File's whole content, which becomes its new original: any Byte edits and
+     * Annotations it had are dropped, as for an upload over it (ADR 0047). It is stored as text
+     * when the bytes decode as UTF-8, unless `encoding` says how.
      */
     writeBytes(path: string, bytes: Uint8Array, replace = true, encoding?: FileEncoding) {
         this.assertEditable()
@@ -323,7 +328,8 @@ export class FileSystem {
     /**
      * Overwrites `bytes` at `offset` of a File stored as text, whose bytes are its UTF-8: its text
      * changes, as typing into it does, and it keeps no Byte edits (ADR 0047). The File keeps its
-     * length, and the bytes must leave it UTF-8.
+     * length, and the bytes must leave it UTF-8. Like a Byte edit it moves no address, so the
+     * File keeps its Annotations.
      */
     overwriteText(path: string, offset: number, bytes: Uint8Array) {
         this.assertEditable()
@@ -346,7 +352,41 @@ export class FileSystem {
             throw new ProjectFormatError(
                 `Not saved: ${path} is stored as text, and these bytes would leave it no longer UTF-8`
             )
-        this.commit({ ...this.files, [path]: Object.freeze({ encoding: 'plain', content: text }) })
+        this.commit({
+            ...this.files,
+            [path]: Object.freeze({
+                encoding: 'plain',
+                content: text,
+                ...(file.annotations ? { annotations: file.annotations } : {})
+            })
+        })
+    }
+    /**
+     * Replaces a File's Annotations
+     * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 20), or takes them all away with undefined. They change no byte, so unlike every
+     * other change this is allowed while a Debug session holds the Files: the session's record of
+     * the File takes them and publishes it, so that its next publish keeps them, and no instruction
+     * Undo takes them back. The record is checked as a saved one is, and the Project's Annotations
+     * together must stay within 256 KiB; a refused change leaves the Files as they were. Its File
+     * change notice saves them as any change to the Files is saved. A record the same as the
+     * File's changes nothing and tells no one.
+     */
+    annotate(path: string, annotations: Annotations | undefined) {
+        path = resolveFilePath(path)
+        if (this.active) {
+            this.active.annotate(path, annotations)
+            return
+        }
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (annotationsKey(file) === annotationsKey({ annotations })) return
+        const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
+        files[path] = withAnnotations(path, file, annotations)
+        if (storedAnnotationsSize(files) > ANNOTATIONS_BYTE_LIMIT)
+            throw new ProjectFormatError('Project exceeds the 256 KiB annotation limit')
+        this.store.write(Object.freeze(files))
+        this.notify(true)
     }
     writeText(path: string, text: string, replace = true) {
         const file = { encoding: 'plain' as const, content: text }
@@ -395,9 +435,10 @@ export class FileSystem {
     /**
      * The Debug session's own publish. It validated each path through `resolveFilePath`'s rules,
      * refused File/directory collisions as it applied them and enforced the size and count limits
-     * through `capacity`, and every File it publishes came from `bytesFile` or is a record it was
-     * given, which `cleanFiles` checked, so re-running `cleanFiles` here would decode and re-encode
-     * the whole Project on every Core step that touches a File.
+     * through `capacity`, and every File it publishes came from `bytesFile`, is a record it was
+     * given, which `cleanFiles` checked, or is one `annotate` checked through `withAnnotations` and
+     * the Annotations' limit, so re-running `cleanFiles` here would decode and re-encode the whole
+     * Project on every Core step that touches a File.
      */
     private publishSessionFiles(files: ProjectFiles) {
         this.store.write(files)
@@ -498,6 +539,30 @@ export class FileSystemSession {
     /** Where the session presents the Build output, if it does. */
     get buildOutputPath(): string | undefined {
         return this.builtPath
+    }
+    /**
+     * `FileSystem.annotate` while this session holds the Files: the File's record, made from its
+     * bytes when the program has changed them, takes `annotations`, and the session publishes it,
+     * so that every later publish keeps them. It is journaled in no instruction's frame, so no
+     * instruction Undo takes it back, but an Undo of a program's write puts back the record from
+     * before the write, with the Annotations it had then (decision 3). The Build output, which is
+     * no File of the Project, takes none.
+     */
+    annotate(path: string, annotations: Annotations | undefined) {
+        this.ensureActive()
+        const node = this.paths.get(path)
+        if (!node || node.built)
+            throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        const file = node.file ?? bytesFile(node.bytes)
+        if (annotationsKey(file) === annotationsKey({ annotations })) return
+        const next = withAnnotations(path, file, annotations)
+        const records: Record<string, ProjectFile> = Object.create(null)
+        for (const [other, each] of this.paths) if (each.file) records[other] = each.file
+        records[path] = next
+        if (storedAnnotationsSize(records) > ANNOTATIONS_BYTE_LIMIT)
+            throw new ProjectFormatError('Project exceeds the 256 KiB annotation limit')
+        node.file = next
+        this.flush()
     }
     private record(change: Inverse) {
         this.ensureActive()

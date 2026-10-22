@@ -551,7 +551,7 @@ describe('Byte edits in an archive', () => {
         expect(() => makeProjectFromArchive(archive(1, edits))).toThrow('Malformed manifest')
         expect(() => makeProjectFromArchive(archive(2, 'edits'))).toThrow('Malformed manifest')
         expect(() => makeProjectFromArchive(archive(2, edits))).toThrow('past the end')
-        expect(() => makeProjectFromArchive(archive(4, edits))).toThrow('Unsupported')
+        expect(() => makeProjectFromArchive(archive(5, edits))).toThrow('Unsupported')
     })
 
     it('travels in a share link', () => {
@@ -561,5 +561,183 @@ describe('Byte edits in an archive', () => {
         )
         expect(shared.files.chall.edits).toEqual(edits)
         expect([...fileBytes(shared.files.chall)]).toEqual([0xff, 0x41, 0x42, 2])
+    })
+})
+
+/**
+ * Version 4 gives a File's manifest entry its Annotations
+ * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 21),
+ * written only when some File has them, in the shape after Programs.
+ */
+describe('Annotations in an archive', () => {
+    const annotations = {
+        names: { '0x1139': 'check' },
+        comments: { '0x1150': 'compares the password\nwith "hunter2"' },
+        functionComments: { '0x1139': 'Checks the flag.' },
+        locals: { '0x1139': { 'stack:-0x98': 'password' } }
+    }
+    const edits = [{ offset: 1, remove: 2, insert: 'QUI=' }]
+    function annotatedProject() {
+        return makeProject({
+            language: 'X86',
+            entry: 'chall',
+            files: {
+                chall: { encoding: 'base64', content: '/wABAg==', edits, annotations },
+                'notes.txt': { encoding: 'plain', content: 'hunter2?' }
+            }
+        })
+    }
+    const manifestOf = (archive: Uint8Array) =>
+        JSON.parse(new TextDecoder().decode(unzipSync(archive)['project.json']))
+    const metadata = {
+        id: '',
+        name: 'Annotated',
+        description: '',
+        language: 'X86',
+        createdAt: 0,
+        updatedAt: 0
+    }
+    const programs = { chall: { settings: {}, testcases: [] } }
+    const archive = (version: number, entry: unknown, project: object = { programs }) =>
+        zipSync({
+            'project.json': encoder.encode(
+                JSON.stringify({
+                    version,
+                    project: { ...metadata, ...project },
+                    files: { chall: entry }
+                })
+            ),
+            'files/chall': new Uint8Array([0xff, 0, 1, 2])
+        })
+
+    it('keeps them in the manifest as version 4, the shape after Programs, and reads them back', () => {
+        const project = annotatedProject()
+        const download = projectToArchive(project)
+        const manifest = manifestOf(download)
+        expect(manifest.version).toBe(4)
+        //one Program, which needs no Programs before Annotations, still takes the shape after them
+        expect(manifest.project.programs).toEqual({ chall: { settings: {}, testcases: [] } })
+        expect(manifest.project).not.toHaveProperty('entry')
+        expect(manifest.files).toEqual({
+            chall: { encoding: 'base64', edits, annotations },
+            'notes.txt': { encoding: 'plain' }
+        })
+        expect([...unzipSync(download)['files/chall']]).toEqual([0xff, 0, 1, 2])
+        const imported = makeProjectFromArchive(download).project
+        expect(imported.files.chall).toEqual({
+            encoding: 'base64',
+            content: '/wABAg==',
+            edits,
+            annotations
+        })
+        expect(imported.files['notes.txt']).toEqual({ encoding: 'plain', content: 'hunter2?' })
+        expect(imported.programs).toEqual(project.programs)
+        expect(imported.selectedProgram).toBe('chall')
+    })
+
+    it('stays in the oldest version that holds the Project without any', () => {
+        const project = annotatedProject()
+        project.fileSystem.annotate('chall', undefined)
+        expect(manifestOf(projectToArchive(project)).version).toBe(2)
+        project.fileSystem.setByteEdits('chall', [])
+        expect(manifestOf(projectToArchive(project)).version).toBe(1)
+        project.createProgram('notes.txt')
+        expect(manifestOf(projectToArchive(project)).version).toBe(3)
+    })
+
+    it('keeps them on a text File and on several Programs alike', () => {
+        const project = makeProject({
+            language: 'X86',
+            files: {
+                'main.asm': { encoding: 'plain', content: 'nop', annotations },
+                'other.asm': { encoding: 'plain', content: 'nop' }
+            },
+            programs: {
+                'main.asm': { settings: {}, testcases: [] },
+                'other.asm': { settings: {}, testcases: [] }
+            }
+        })
+        const download = projectToArchive(project)
+        expect(manifestOf(download).version).toBe(4)
+        expect(makeProjectFromArchive(download).project.files['main.asm'].annotations).toEqual(
+            annotations
+        )
+    })
+
+    it('reads older versions, and refuses Annotations where no version holds them', () => {
+        for (const version of [2, 3]) {
+            const project =
+                version === 3 ? { programs } : { entry: 'chall', settings: {}, testcases: [] }
+            expect(
+                makeProjectFromArchive(archive(version, { encoding: 'base64', edits }, project))
+                    .project.files.chall
+            ).toEqual({ encoding: 'base64', content: '/wABAg==', edits })
+            expect(() =>
+                makeProjectFromArchive(
+                    archive(version, { encoding: 'base64', annotations }, project)
+                )
+            ).toThrow('Malformed manifest File entry: chall')
+        }
+        expect(() =>
+            makeProjectFromArchive(
+                archive(
+                    1,
+                    { encoding: 'base64', annotations },
+                    { entry: 'chall', settings: {}, testcases: [] }
+                )
+            )
+        ).toThrow('Malformed manifest File entry: chall')
+        //version 4 takes a File without any, and refuses the shape before Programs
+        expect(
+            makeProjectFromArchive(archive(4, { encoding: 'base64' })).project.files.chall
+        ).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        expect(() =>
+            makeProjectFromArchive(
+                archive(
+                    4,
+                    { encoding: 'base64', annotations },
+                    { entry: 'chall', settings: {}, testcases: [] }
+                )
+            )
+        ).toThrow('Malformed Project metadata')
+    })
+
+    it('refuses Annotations that do not hold up, as a saved Project refuses them', () => {
+        expect(() =>
+            makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: 'names' }))
+        ).toThrow('Malformed manifest File entry: chall')
+        expect(() =>
+            makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: [] }))
+        ).toThrow('Malformed manifest File entry: chall')
+        expect(() =>
+            makeProjectFromArchive(
+                archive(4, { encoding: 'base64', annotations: { names: { main: 'check' } } })
+            )
+        ).toThrow('Invalid address of a name in chall: main')
+        expect(() =>
+            makeProjectFromArchive(
+                archive(4, { encoding: 'base64', annotations: { names: { '0x1': 'rax' } } })
+            )
+        ).toThrow('rax is the name of an x86 register')
+        expect(() =>
+            makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: { notes: {} } }))
+        ).toThrow('Invalid annotations for chall')
+    })
+
+    it('never gives a one-File Project with Annotations as its source text, which loses them', () => {
+        const one = makeProject({
+            files: { 'main.s': { encoding: 'plain', content: 'nop' } },
+            entry: 'main.s'
+        })
+        expect(isSingleSourceProject(one)).toBe(true)
+        one.fileSystem.annotate('main.s', { comments: { '0x0': 'the start' } })
+        expect(isSingleSourceProject(one)).toBe(false)
+        expect(isLegacyLinkedFileCompatible(one.toObject())).toBe(false)
+        const download = projectDownload(one)
+        expect(download.kind).toBe('archive')
+        expect(
+            makeProjectFromArchive(download.contents as Uint8Array).project.files['main.s']
+                .annotations
+        ).toEqual({ comments: { '0x0': 'the start' } })
     })
 })

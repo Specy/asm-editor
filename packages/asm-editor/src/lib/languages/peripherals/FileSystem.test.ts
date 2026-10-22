@@ -944,3 +944,207 @@ describe('the Build output in a FileSystemSession', () => {
         expect(run.stat('main')).toEqual({ kind: 'file', size: 6 })
     })
 })
+
+/**
+ * Annotations ride on a File's record beside its Byte edits
+ * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+ * decisions 3 and 20): changed through `annotate`, kept by every change that leaves the bytes'
+ * addresses where they were, dropped with a whole new content, and made during a Debug session too.
+ */
+describe('Annotations in the FileSystem', () => {
+    const names = (name: string) => ({ names: { '0x1139': name } })
+    /** A byte File `chall` named `check` at 0x1139, and a text File. */
+    function annotated() {
+        const fs = new FileSystem({
+            chall: { encoding: 'base64', content: encodeBase64(new Uint8Array([0xff, 0, 1, 2])) },
+            'notes.txt': { encoding: 'plain', content: 'notes' }
+        })
+        fs.annotate('chall', names('check'))
+        return fs
+    }
+    /** Every File change notice `fs` sends, with whether the Files changed. */
+    function notices(fs: FileSystem) {
+        const seen: boolean[] = []
+        fs.subscribe((filesChanged) => seen.push(filesChanged))
+        return seen
+    }
+
+    it('replaces the record, tells of the change, and takes them away', () => {
+        const fs = annotated()
+        const seen = notices(fs)
+        const bytes = fs.files.chall.content
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.annotate('./chall', { ...names('verify'), comments: { '0x1150': 'here' } })
+        expect(fs.files.chall.annotations).toEqual({
+            ...names('verify'),
+            comments: { '0x1150': 'here' }
+        })
+        expect(fs.files.chall.content).toBe(bytes)
+        expect(seen).toEqual([true])
+        //the same record again changes nothing and tells no one
+        const before = fs.files
+        fs.annotate('chall', { comments: { '0x1150': 'here' }, ...names('verify') })
+        expect(fs.files).toBe(before)
+        expect(seen).toEqual([true])
+        fs.annotate('chall', undefined)
+        expect(fs.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        expect(seen).toEqual([true, true])
+        //the Files stay as `cleanFiles` leaves them
+        expect(Object.isFrozen(fs.files)).toBe(true)
+        expect(Object.getPrototypeOf(fs.files)).toBe(null)
+    })
+
+    it('refuses a missing File and a record that does not hold up, changing nothing', () => {
+        const fs = annotated()
+        const before = fs.files
+        expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)
+        expect(() => fs.annotate('chall', names('rax'))).toThrow(
+            'Invalid name in chall at 0x1139: rax is the name of an x86 register'
+        )
+        expect(() => fs.annotate('chall', { comments: { '0x1': 'x'.repeat(4001) } })).toThrow(
+            ProjectFormatError
+        )
+        expect(fs.files).toBe(before)
+    })
+
+    it("keeps the Project's Annotations within 256 KiB together", () => {
+        const fs = annotated()
+        const comments = (count: number) => ({
+            comments: Object.fromEntries(
+                Array.from({ length: count }, (_, index) => [
+                    `0x${(0x100000 + index).toString(16)}`,
+                    'x'.repeat(4000)
+                ])
+            )
+        })
+        fs.annotate('notes.txt', comments(60))
+        const before = fs.files
+        expect(() => fs.annotate('chall', comments(6))).toThrow(
+            'Project exceeds the 256 KiB annotation limit'
+        )
+        expect(fs.files).toBe(before)
+        fs.annotate('chall', comments(5))
+    })
+
+    it('keeps them through Byte edits, their Undo, a rename and every other File changing', () => {
+        const fs = annotated()
+        fs.editBytes('chall', 1, encode('AB'))
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.setByteEdits('chall', [])
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.writeText('notes.txt', 'more notes')
+        fs.rename('chall', 'bin/chall')
+        expect(fs.files['bin/chall'].annotations).toEqual(names('check'))
+        //and through a Build's snapshot, which a Debug session's Listing reads
+        expect(fs.snapshot('bin/chall').files['bin/chall'].annotations).toEqual(names('check'))
+    })
+
+    it('keeps them when typing over the bytes of an Executable stored as text', () => {
+        const fs = new FileSystem({ elf: { encoding: 'plain', content: 'ELF text' } })
+        fs.annotate('elf', names('check'))
+        fs.overwriteText('elf', 0, encode('elf'))
+        expect(fs.files.elf).toEqual({
+            encoding: 'plain',
+            content: 'elf text',
+            annotations: names('check')
+        })
+    })
+
+    it('drops them with a whole new content, as an upload over the File does', () => {
+        const fs = annotated()
+        fs.writeBytes('chall', new Uint8Array([0xff, 0, 1, 2]))
+        expect(fs.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        const text = new FileSystem({ 'notes.txt': { encoding: 'plain', content: 'notes' } })
+        text.annotate('notes.txt', names('check'))
+        text.writeText('notes.txt', 'notes')
+        expect(text.files['notes.txt']).toEqual({ encoding: 'plain', content: 'notes' })
+    })
+
+    it('takes them during a Debug session, through the record the session publishes', () => {
+        const fs = annotated()
+        const session = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: () => T): T => session.performInstruction(steps++, operation)
+        const fd = step(() => session.open('out.txt', 'write'))
+        expect(() => fs.editBytes('chall', 0, encode('X'))).toThrow('Stop')
+        fs.annotate('chall', names('verify'))
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        //a later publish keeps them, and no instruction Undo takes them back
+        step(() => session.write(fd, encode('log')))
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        session.undo(--steps)
+        expect(fs.files['out.txt']).toEqual({ encoding: 'plain', content: '' })
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        //the Build output is no File of the Project, and takes none
+        session.presentBuildOutput('program', new Uint8Array([0x7f]))
+        expect(failure(() => fs.annotate('program', names('x')))).toBe(FileErrorCode.NotFound)
+        expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)
+        expect(() => fs.annotate('chall', names('int'))).toThrow('int is a keyword of C')
+        session.stop()
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        expect(() => session.annotate('chall', names('late'))).toThrow('ended')
+    })
+
+    it("drops them at a program's write, and an Undo of it brings the record back", () => {
+        const fs = annotated()
+        const before = fs.files.chall
+        const session = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: () => T): T => session.performInstruction(steps++, operation)
+        const fd = step(() => session.open('chall', { access: 'read-write' }))
+        step(() => session.pwrite(fd, 3, new Uint8Array([0xfe])))
+        expect(fs.files.chall).toEqual({
+            encoding: 'base64',
+            content: encodeBase64(new Uint8Array([0xff, 0, 1, 0xfe]))
+        })
+        //made after the write, on the record built from the new bytes
+        fs.annotate('chall', names('after'))
+        expect(fs.files.chall.annotations).toEqual(names('after'))
+        expect(fileBytes(fs.files.chall)).toEqual(new Uint8Array([0xff, 0, 1, 0xfe]))
+        //Undo of the write puts back the record from before it, with the Annotations it had then
+        session.undo(--steps)
+        expect(fs.files.chall).toBe(before)
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        //an append drops them too, even to a File stored as text
+        fs.annotate('notes.txt', names('notes'))
+        const notes = step(() => session.open('notes.txt', 'append'))
+        step(() => session.write(notes, encode('!')))
+        expect(fs.files['notes.txt']).toEqual({ encoding: 'plain', content: 'notes!' })
+        session.undo(--steps)
+        expect(fs.files['notes.txt'].annotations).toEqual(names('notes'))
+        session.stop()
+    })
+
+    it('takes a renamed File by its new path during a session', () => {
+        const fs = annotated()
+        const session = fs.beginSession(undefined, 1000)
+        session.performInstruction(0, () => session.rename('chall', 'moved'))
+        expect(fs.files.moved.annotations).toEqual(names('check'))
+        fs.annotate('moved', names('moved'))
+        expect(fs.files.moved.annotations).toEqual(names('moved'))
+        expect(failure(() => fs.annotate('chall', names('x')))).toBe(FileErrorCode.NotFound)
+        session.stop()
+    })
+
+    it("refuses a session's record past the Project's 256 KiB together", () => {
+        const fs = annotated()
+        const big = (from: number, count: number) => ({
+            comments: Object.fromEntries(
+                Array.from({ length: count }, (_, index) => [
+                    `0x${(0x100000 + from + index).toString(16)}`,
+                    'x'.repeat(4000)
+                ])
+            )
+        })
+        fs.annotate('notes.txt', big(0, 60))
+        const session = fs.beginSession()
+        const before = fs.files
+        expect(() => fs.annotate('chall', big(0, 6))).toThrow(
+            'Project exceeds the 256 KiB annotation limit'
+        )
+        expect(fs.files).toBe(before)
+        fs.annotate('chall', big(0, 5))
+        expect(Object.keys(fs.files.chall.annotations!.comments!)).toHaveLength(5)
+        session.stop()
+    })
+})

@@ -1,4 +1,6 @@
 import { isAssemblerProfile } from './assemblerProfiles'
+import { commentProblem } from './annotations/comments'
+import { looksLikeGhidraName, nameProblem } from './annotations/names'
 import { isRuntimeAbiName } from './runtimeAbi'
 
 /** Shared byte and path rules for persistence, assembly, and the FileSystem. */
@@ -12,20 +14,57 @@ export type FileEncoding = 'plain' | 'base64'
  */
 export type ByteEdit = Readonly<{ offset: number; remove: number; insert: string }>
 /**
- * One File as the Project stores it: its original bytes as `content` and, on a File stored as bytes
- * only, the Byte edits typed over them, omitted when there are none. Every reader goes through
- * `fileBytes`, which applies them.
+ * A link-time address, the file address Invented names are derived from
+ * ([ADR 0045](../../../../docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md)),
+ * so an annotation keyed by one does not depend on where a PIE is loaded: `0x` and lower-case hex
+ * digits without leading zeros, as `fileAddress` writes it, of at most `Number.MAX_SAFE_INTEGER`.
+ */
+export type FileAddress = string
+/**
+ * A person's **Annotations** on an Executable, kept beside its bytes as its Byte edits are
+ * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 2):
+ * - `names`: global renames, of a function, data, string or jump-target label, by its address;
+ * - `comments`: line comments, by the address of the line they are on;
+ * - `functionComments`: function comments, by the function's address;
+ * - `locals`: renames of one function's Pseudocode variables, by the function's address, then the
+ *   decompiler's opaque id for the variable (decision 15).
+ *
+ * Each map is omitted when it is empty, and a File keeps no record when all are. Every key and
+ * text is checked by `cleanAnnotations`, which also puts the keys in address order (ids in code
+ * unit order), so the same annotations always save as the same text.
+ */
+export type Annotations = Readonly<{
+    names?: Readonly<Record<FileAddress, string>>
+    comments?: Readonly<Record<FileAddress, string>>
+    functionComments?: Readonly<Record<FileAddress, string>>
+    locals?: Readonly<Record<FileAddress, Readonly<Record<string, string>>>>
+}>
+/**
+ * One File as the Project stores it: its original bytes as `content`; on a File stored as bytes
+ * only, the Byte edits typed over them; and the Annotations a person made on it. Each is omitted
+ * when there are none. Every reader goes through `fileBytes`, which applies the edits. Annotations
+ * change no byte: a Byte edit and a rename of the File keep them, and whatever makes its whole
+ * content new drops them (decision 3).
  */
 export type ProjectFile = Readonly<{
     encoding: FileEncoding
     content: string
     edits?: readonly ByteEdit[]
+    annotations?: Annotations
 }>
 export type ProjectFiles = Readonly<Record<string, ProjectFile>>
 export const FILE_ENCODINGS: readonly FileEncoding[] = ['plain', 'base64']
 export const FILE_BYTE_LIMIT = 16 * 1024 * 1024
 export const FILE_COUNT_LIMIT = 4096
 export const PATH_BYTE_LIMIT = 1024
+/**
+ * What the Annotations of all a Project's Files take together, in UTF-8 bytes of their keys,
+ * ids, names and comments (decision 5): small enough for an archive's 1 MiB manifest to hold them
+ * beside the Byte edits.
+ */
+export const ANNOTATIONS_BYTE_LIMIT = 256 * 1024
+/** The longest variable id the decompiler's annotations are kept by. */
+export const VARIABLE_ID_LENGTH_LIMIT = 256
 const hasOwn = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key)
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
@@ -259,7 +298,8 @@ export function storedFilesSize(files: ProjectFiles): number {
  * A byte File with `edits` in place of its own over the same original, checked as `cleanFiles`
  * checks a saved list, against the original's length, which is read from its base64 rather than
  * decoded: `file` is a record `cleanFiles` checked, so its original needs no checking again, and
- * a Byte edit costs what its edits do, not the whole File.
+ * a Byte edit costs what its edits do, not the whole File. Its Annotations stay: an overwrite moves
+ * no address.
  */
 export function withByteEdits(
     path: string,
@@ -271,7 +311,8 @@ export function withByteEdits(
     return Object.freeze({
         encoding: file.encoding,
         content: file.content,
-        ...(clean ? { edits: clean } : {})
+        ...(clean ? { edits: clean } : {}),
+        ...(file.annotations ? { annotations: file.annotations } : {})
     })
 }
 
@@ -282,7 +323,10 @@ export function byteEditsKey(file: ProjectFile): string {
         : ''
 }
 
-/** Whether two Files hold the same bytes the same way: encoding, original and Byte edits. */
+/**
+ * Whether two Files hold the same bytes the same way: encoding, original and Byte edits. Their
+ * Annotations are no part of it, so a rename or a comment never makes a Build stale.
+ */
 export function sameFileContent(left: ProjectFile | undefined, right: ProjectFile | undefined) {
     if (!left || !right) return left === right
     return (
@@ -290,6 +334,259 @@ export function sameFileContent(left: ProjectFile | undefined, right: ProjectFil
         left.content === right.content &&
         byteEditsKey(left) === byteEditsKey(right)
     )
+}
+
+const ANNOTATION_KINDS: readonly (keyof Annotations)[] = [
+    'names',
+    'comments',
+    'functionComments',
+    'locals'
+]
+/** The kinds a Listing is generated from: renames and comments, not a function's local names. */
+const LISTING_ANNOTATION_KINDS: readonly (keyof Annotations)[] = [
+    'names',
+    'comments',
+    'functionComments'
+]
+const FILE_ADDRESS = /^0x(?:0|[1-9a-f][0-9a-f]*)$/
+
+/** Whether `key` is a {@link FileAddress}: canonical lower-case hex, a safe integer. */
+export function isFileAddress(key: unknown): key is FileAddress {
+    return (
+        typeof key === 'string' &&
+        key.length <= 16 &&
+        FILE_ADDRESS.test(key) &&
+        Number(key) <= Number.MAX_SAFE_INTEGER
+    )
+}
+
+/**
+ * Whether `id` can be a variable id, which the editor keeps as the decompiler gives it without
+ * reading it (decision 15): 1 to {@link VARIABLE_ID_LENGTH_LIMIT} characters, none a control.
+ */
+export function isVariableId(id: unknown): id is string {
+    if (typeof id !== 'string' || !id.length || id.length > VARIABLE_ID_LENGTH_LIMIT) return false
+    for (let index = 0; index < id.length; index++) {
+        const code = id.charCodeAt(index)
+        if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return false
+    }
+    return true
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Strings in the order of their UTF-16 code units, as `sort` without a comparator puts them. */
+function byCodeUnits(left: string, right: string) {
+    return left < right ? -1 : left > right ? 1 : 0
+}
+
+/** Canonical file addresses in address order: the longer is the larger, without leading zeros. */
+function byAddress(left: string, right: string) {
+    return left.length - right.length || byCodeUnits(left, right)
+}
+
+/** A frozen map without a prototype, with `entries` in the order given. */
+function frozenRecord<T>(entries: readonly (readonly [string, T])[]): Readonly<Record<string, T>> {
+    const record: Record<string, T> = Object.create(null)
+    for (const [key, value] of entries) record[key] = value
+    return Object.freeze(record)
+}
+
+/** A saved comment's problem: not text, empty, or what `commentProblem` refuses. */
+function savedCommentProblem(text: unknown): string | undefined {
+    if (typeof text !== 'string') return 'not text'
+    if (!text.trim()) return 'an empty comment'
+    return commentProblem(text)
+}
+
+/** A saved local's name's problem: what any name may not be, or one shaped like Ghidra's own. */
+function savedLocalProblem(name: unknown): string | undefined {
+    if (typeof name !== 'string') return 'not text'
+    const problem = nameProblem(name)
+    if (problem) return problem
+    return looksLikeGhidraName(name) ? `${name} reads as a name the decompiler gives` : undefined
+}
+
+/** One map of texts by address, checked, in address order; undefined when absent or empty. */
+function cleanAddressTexts(
+    path: string,
+    value: unknown,
+    what: string,
+    problemOf: (text: unknown) => string | undefined
+): Readonly<Record<FileAddress, string>> | undefined {
+    if (value === undefined) return undefined
+    if (!isPlainRecord(value)) throw new ProjectFormatError(`Invalid ${what}s for ${path}`)
+    const entries = Object.entries(value).map(([key, text]) => {
+        if (!isFileAddress(key))
+            throw new ProjectFormatError(`Invalid address of a ${what} in ${path}: ${key}`)
+        const problem = problemOf(text)
+        if (problem)
+            throw new ProjectFormatError(`Invalid ${what} in ${path} at ${key}: ${problem}`)
+        return [key, text as string] as const
+    })
+    if (!entries.length) return undefined
+    return frozenRecord(entries.sort((left, right) => byAddress(left[0], right[0])))
+}
+
+/**
+ * A File's saved Annotations, checked as a saved list of Byte edits is: an unknown kind, a key
+ * that is not a canonical file address or variable id, a name that is not one a person may give
+ * (`nameProblem`, and for a local one not shaped like Ghidra's own), or a comment that is empty
+ * or past the limits throws a `ProjectFormatError`. Uniqueness is not checked, since it depends on
+ * the Listing, which a Byte edit can change: a name another label took is not applied
+ * (decision 10). The result is frozen, in address order, without empty maps; undefined when
+ * nothing is left.
+ */
+export function cleanAnnotations(path: string, value: unknown): Annotations | undefined {
+    if (value === undefined) return undefined
+    if (
+        !isPlainRecord(value) ||
+        Object.keys(value).some((key) => !ANNOTATION_KINDS.includes(key as keyof Annotations))
+    )
+        throw new ProjectFormatError(`Invalid annotations for ${path}`)
+    const names = cleanAddressTexts(path, value.names, 'name', (name) =>
+        typeof name === 'string' ? nameProblem(name) : 'not text'
+    )
+    const comments = cleanAddressTexts(path, value.comments, 'comment', savedCommentProblem)
+    const functionComments = cleanAddressTexts(
+        path,
+        value.functionComments,
+        'function comment',
+        savedCommentProblem
+    )
+    let locals: Annotations['locals']
+    if (value.locals !== undefined) {
+        if (!isPlainRecord(value.locals))
+            throw new ProjectFormatError(`Invalid local names for ${path}`)
+        const functions: (readonly [FileAddress, Readonly<Record<string, string>>])[] = []
+        for (const [key, variables] of Object.entries(value.locals)) {
+            if (!isFileAddress(key))
+                throw new ProjectFormatError(`Invalid address of a function in ${path}: ${key}`)
+            if (!isPlainRecord(variables))
+                throw new ProjectFormatError(`Invalid local names for ${path} at ${key}`)
+            const named = Object.entries(variables).map(([id, name]) => {
+                if (!isVariableId(id))
+                    throw new ProjectFormatError(`Invalid variable id in ${path} at ${key}`)
+                const problem = savedLocalProblem(name)
+                if (problem)
+                    throw new ProjectFormatError(
+                        `Invalid local name in ${path} at ${key}: ${problem}`
+                    )
+                return [id, name as string] as const
+            })
+            if (named.length)
+                functions.push([
+                    key,
+                    frozenRecord(named.sort(([left], [right]) => byCodeUnits(left, right)))
+                ])
+        }
+        if (functions.length)
+            locals = frozenRecord(functions.sort((left, right) => byAddress(left[0], right[0])))
+    }
+    const kinds = { names, comments, functionComments, locals }
+    const kept = ANNOTATION_KINDS.filter((kind) => kinds[kind] !== undefined)
+    if (!kept.length) return undefined
+    return Object.freeze(Object.fromEntries(kept.map((kind) => [kind, kinds[kind]]))) as Annotations
+}
+
+/**
+ * The same File with `annotations` in place of its own, checked and put in order as
+ * `cleanAnnotations` does; without a record when they are undefined or empty. Its bytes and Byte
+ * edits stay as they are. The Project's limit on all its Files' Annotations together is the
+ * caller's to check (`storedAnnotationsSize`), as `FileSystem.annotate` does.
+ */
+export function withAnnotations(
+    path: string,
+    file: ProjectFile,
+    annotations: Annotations | undefined
+): ProjectFile {
+    const clean = cleanAnnotations(path, annotations)
+    return Object.freeze({
+        encoding: file.encoding,
+        content: file.content,
+        ...(file.edits ? { edits: file.edits } : {}),
+        ...(clean ? { annotations: clean } : {})
+    })
+}
+
+/** The UTF-8 bytes of a File's Annotations: every key, id, name and comment. */
+function annotationsSize(annotations: Annotations | undefined): number {
+    if (!annotations) return 0
+    let size = 0
+    const texts = (record: Readonly<Record<string, string>> | undefined) => {
+        for (const [key, text] of Object.entries(record ?? {}))
+            size += utf8Length(key) + utf8Length(text)
+    }
+    texts(annotations.names)
+    texts(annotations.comments)
+    texts(annotations.functionComments)
+    for (const [key, variables] of Object.entries(annotations.locals ?? {})) {
+        size += utf8Length(key)
+        texts(variables)
+    }
+    return size
+}
+
+/**
+ * What the Annotations of all `files` take of the Project's {@link ANNOTATIONS_BYTE_LIMIT}, as
+ * `cleanFiles` counts it, for Files whose Annotations it checked.
+ */
+export function storedAnnotationsSize(files: ProjectFiles): number {
+    let size = 0
+    for (const file of Object.values(files)) size += annotationsSize(file.annotations)
+    return size
+}
+
+/** The kinds of `annotations` named, in a fixed order, as text no two different records share. */
+function annotationsText(
+    annotations: Annotations | undefined,
+    kinds: readonly (keyof Annotations)[]
+): string {
+    if (!annotations) return ''
+    const sorted = (
+        record: Readonly<Record<string, unknown>>,
+        order: (left: string, right: string) => number
+    ): [string, unknown][] =>
+        Object.keys(record)
+            .sort(order)
+            .map((key) => [key, record[key]])
+    const parts: [keyof Annotations, unknown][] = []
+    for (const kind of kinds) {
+        const record = annotations[kind]
+        if (!record || !Object.keys(record).length) continue
+        if (kind !== 'locals') {
+            parts.push([kind, sorted(record, byAddress)])
+            continue
+        }
+        const functions = sorted(record, byAddress)
+            .map(([key, variables]) => [
+                key,
+                sorted(variables as Readonly<Record<string, string>>, byCodeUnits)
+            ])
+            .filter(([, variables]) => variables.length)
+        if (functions.length) parts.push([kind, functions])
+    }
+    return parts.length ? JSON.stringify(parts) : ''
+}
+
+/**
+ * A stable text naming a File's Annotations, empty when it has none, for keys and equality: two
+ * Files' keys are equal exactly when their Annotations are, whatever order their keys were added
+ * in.
+ */
+export function annotationsKey(file: Pick<ProjectFile, 'annotations'>): string {
+    return annotationsText(file.annotations, ANNOTATION_KINDS)
+}
+
+/**
+ * The part of {@link annotationsKey} a File's Listing is generated from, its renames and comments,
+ * so that renaming a local, which only its function's Pseudocode shows, leaves the Listing as it
+ * is. Empty when there is none.
+ */
+export function listingAnnotationsKey(file: Pick<ProjectFile, 'annotations'>): string {
+    return annotationsText(file.annotations, LISTING_ANNOTATION_KINDS)
 }
 
 /**
@@ -406,6 +703,7 @@ export function cleanFiles(raw: unknown): ProjectFiles {
         throw new ProjectFormatError('Project exceeds the 4,096-file limit')
     const files: Record<string, ProjectFile> = Object.create(null)
     let size = 0
+    let annotated = 0
     for (const [path, value] of entries) {
         if (!isValidFilePath(path)) throw new ProjectFormatError(`Invalid file path: ${path}`)
         if (
@@ -426,10 +724,15 @@ export function cleanFiles(raw: unknown): ProjectFiles {
         for (const edit of edits ?? []) size += base64Length(edit.insert)
         if (size > FILE_BYTE_LIMIT)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+        const annotations = cleanAnnotations(path, value.annotations)
+        annotated += annotationsSize(annotations)
+        if (annotated > ANNOTATIONS_BYTE_LIMIT)
+            throw new ProjectFormatError('Project exceeds the 256 KiB annotation limit')
         files[path] = Object.freeze({
             encoding: value.encoding,
             content: value.content,
-            ...(edits ? { edits } : {})
+            ...(edits ? { edits } : {}),
+            ...(annotations ? { annotations } : {})
         })
     }
     for (const path of Object.keys(files)) {
