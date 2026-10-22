@@ -1,4 +1,10 @@
-import type { DecodedInstruction, ListingDecoder } from './decoder'
+import {
+    demangledName,
+    listForms,
+    type DemangledName
+} from '#lib/languages/demangle/demangledNames.ts'
+import type { Demangler } from '#lib/languages/demangle/loadDemangler.ts'
+import type { DecodedInstruction, ElfAnalysis, ListingDecoder } from './decoder'
 import {
     findRegion,
     readElfModel,
@@ -26,7 +32,7 @@ import {
     nameAddress,
     stringComment as sharedStringComment
 } from './addressNames'
-import { instructionLineText } from './listingText'
+import { commentedLine, demangledComment, instructionLineText, nameComment } from './listingText'
 import {
     calledNames,
     mainFromStart,
@@ -50,6 +56,15 @@ export type ListingInput = {
     version: ListingNameVersion
     /** Called now and then with the share of the work done, from 0 to 1. */
     onProgress?: (fraction: number) => void
+    /** The decoder's analysis of `bytes`, when the caller has made it already. */
+    analysis?: ElfAnalysis
+    /**
+     * The C++ demangler, for a program with mangled names: its labels then carry their demangled
+     * forms and its comments say them
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decisions 1, 2 and 9).
+     * Without it the Listing names everything raw.
+     */
+    demangler?: Demangler
 }
 
 export { ListingError }
@@ -85,6 +100,11 @@ function floorIndex(sorted: Float64Array, value: number): number {
     return found
 }
 
+/** Comment parts said of one thing, by a space: `name "text"`, `vtable for X+0x10 "text"`. */
+function joined(...parts: (string | undefined)[]): string {
+    return parts.filter((part) => part !== undefined).join(' ')
+}
+
 function hexByte(byte: number) {
     return `0x${byte < 16 ? '0' : ''}${byte.toString(16)}`
 }
@@ -99,7 +119,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     const progress = input.onProgress ?? (() => undefined)
     const hex = (address: number) => `0x${(address + base).toString(16)}`
 
-    const analysis = decoder.analyze(bytes)
+    const analysis = input.analysis ?? decoder.analyze(bytes)
     if (!analysis.isElf) throw new ListingError('not an ELF file')
     const machine = bytes.length >= 20 ? bytes[18] | (bytes[19] << 8) : 0
     if (bytes[4] !== 2 || bytes[5] !== 1 || machine !== 62)
@@ -492,6 +512,28 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     for (const address of dataLabels)
         if (!namesAt.has(address))
             claim(address, inventName('DAT_', address, taken, version), 'invented')
+
+    // Every name is claimed: the demangled forms of the C++ ones, by name. A name the demangler
+    // cannot read, or whose forms fail, stays raw.
+    const demangled = new Map<string, DemangledName>()
+    if (input.demangler) {
+        const { describe } = input.demangler
+        for (const name of used.keys()) {
+            if (!name.startsWith('_Z')) continue
+            try {
+                const forms = demangledName(name, describe)
+                if (forms) demangled.set(name, forms)
+            } catch {
+                // Shown raw.
+            }
+        }
+    }
+    const demangledOf = (name: string) => demangled.get(name)
+    /** A label line, with its demangled name as its comment. */
+    const labelLine = (name: string) => {
+        const forms = demangled.get(name)
+        return forms ? commentedLine(`${name}:`, [demangledComment(forms)]) : `${name}:`
+    }
     progress(0.6)
 
     // How an operand names an address, from inside a given function: the rules a patched line
@@ -534,28 +576,26 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
                 if (absolute && operand.immediate !== undefined) {
                     const value = Number(operand.immediate)
                     if (namesAt.has(value) && !blockNumber.has(value)) {
+                        const name = primary(value)
                         const string = strings.has(value) ? stringComment(value) : undefined
-                        comments.push(string ? `${primary(value)} ${string}` : primary(value))
+                        comments.push(joined(name, nameComment(name, demangledOf), string))
                     }
                 }
                 continue
             }
             if (operand.branchTarget !== undefined) {
                 const target = Number(operand.branchTarget)
-                edits.push([
-                    operand.textStart,
-                    operand.textEnd,
-                    addressName(target, from) ?? hex(target)
-                ])
+                const name = addressName(target, from)
+                edits.push([operand.textStart, operand.textEnd, name ?? hex(target)])
+                const said = name === undefined ? undefined : nameComment(name, demangledOf)
+                if (said) comments.push(said)
             } else if (operand.memoryTarget !== undefined) {
                 const target = Number(operand.memoryTarget)
-                edits.push([
-                    operand.textStart,
-                    operand.textEnd,
-                    `[rel ${addressName(target, from) ?? hex(target)}]`
-                ])
+                const name = addressName(target, from)
+                edits.push([operand.textStart, operand.textEnd, `[rel ${name ?? hex(target)}]`])
+                const said = name === undefined ? undefined : nameComment(name, demangledOf)
                 const string = stringComment(target)
-                if (string) comments.push(string)
+                if (said || string) comments.push(joined(said, string))
             }
         }
         edits.sort((a, b) => b[0] - a[0])
@@ -564,7 +604,10 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         if (absolute && text.includes('[0x')) {
             const match = /(?<![:\w])\[0x([\da-f]+)\]/.exec(text)
             const value = match ? parseInt(match[1], 16) : Number.NaN
-            if (namesAt.has(value) && !blockNumber.has(value)) comments.push(primary(value))
+            if (namesAt.has(value) && !blockNumber.has(value)) {
+                const name = primary(value)
+                comments.push(joined(name, nameComment(name, demangledOf)))
+            }
         }
         return instructionLineText(text, comments)
     }
@@ -591,7 +634,14 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         kind: ListingLabelKind,
         origin: ListingNameOrigin,
         address: number
-    ) => labels.push({ name, fullName, kind, origin, address, line: text.length })
+    ) => {
+        const forms = kind === 'block' ? undefined : demangled.get(name)
+        labels.push(
+            forms
+                ? { name, fullName, kind, origin, address, line: text.length, demangled: forms }
+                : { name, fullName, kind, origin, address, line: text.length }
+        )
+    }
 
     for (const line of header()) emit(LINE_KIND.comment, line)
     // Where data must start a new line: a label, a string, the end of an object.
@@ -623,7 +673,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             const [first, ...aliases] = namesAt.get(address)!
             for (const { name, origin } of [...aliases, first]) {
                 label(name, name, 'data', origin, address)
-                emit(LINE_KIND.label, `${name}:`, address)
+                emit(LINE_KIND.label, labelLine(name), address)
             }
         }
     }
@@ -659,7 +709,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             for (const { name, origin } of primaryName ? [...aliases, primaryName] : []) {
                 if (name === primaryName.name && open?.address === address) open.line = text.length
                 label(name, name, 'function', origin, address)
-                emit(LINE_KIND.label, `${name}:`, address)
+                emit(LINE_KIND.label, labelLine(name), address)
             }
             const block = blockNumber.get(address)
             if (block !== undefined) {
@@ -703,6 +753,21 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             if (boundaries[middle] <= start) next = middle + 1
             else high = middle
         }
+        // The comment saying the demangled name of an inline label, for the first line after it.
+        let named: string | undefined
+        /** A data line, with that comment and its own, if any. */
+        const commented = (line: string, comment?: string) => {
+            if (named === undefined && comment === undefined) return line
+            // A GOT slot's own name and the stub it points to say the same: once.
+            const said =
+                named === undefined
+                    ? [comment!]
+                    : comment && comment !== named
+                      ? [named, comment]
+                      : [named]
+            named = undefined
+            return commentedLine(line, said)
+        }
         let at = start
         while (at < end) {
             while (next < boundaries.length && boundaries[next] <= at) ++next
@@ -714,13 +779,16 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             const kind: ListingLabelKind = strings.has(at) ? 'string' : 'data'
             names.forEach(({ name, origin }, i) => {
                 label(name, name, kind, origin, at)
-                if (inline && i === names.length - 1) prefix = `${name}: `
-                else emit(LINE_KIND.label, `${name}:`, at)
+                if (inline && i === names.length - 1) {
+                    prefix = `${name}: `
+                    const forms = demangled.get(name)
+                    if (forms) named = demangledComment(forms)
+                } else emit(LINE_KIND.label, labelLine(name), at)
             })
             const linePrefix = prefix || '    '
             if (at >= fileEnd) {
                 const size = limit - at
-                emit(LINE_KIND.data, `${linePrefix}resb ${size}`, at, size)
+                emit(LINE_KIND.data, commented(`${linePrefix}resb ${size}`), at, size)
                 at = limit
                 continue
             }
@@ -738,7 +806,9 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
                     if (lineEnd === at + stringSize - 1) lineEnd++
                     emit(
                         LINE_KIND.data,
-                        `${first ? linePrefix : '    '}db ${stringOperands(region, lineStart, lineEnd)}`,
+                        commented(
+                            `${first ? linePrefix : '    '}db ${stringOperands(region, lineStart, lineEnd)}`
+                        ),
                         lineStart,
                         lineEnd - lineStart,
                         region.offset + lineStart - region.address
@@ -752,7 +822,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             const stop = Math.min(limit, fileEnd)
             const pointer = at % 8 === 0 && at + 8 <= stop ? pointerAt(at) : undefined
             if (pointer !== undefined) {
-                emit(LINE_KIND.data, `${linePrefix}dq ${pointer}`, at, 8, offset)
+                emit(
+                    LINE_KIND.data,
+                    commented(`${linePrefix}dq ${pointer}`, nameComment(pointer, demangledOf)),
+                    at,
+                    8,
+                    offset
+                )
                 at += 8
                 continue
             }
@@ -762,7 +838,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             if (zeros - at >= ZERO_RUN) {
                 emit(
                     LINE_KIND.data,
-                    `${linePrefix}times ${zeros - at} db 0`,
+                    commented(`${linePrefix}times ${zeros - at} db 0`),
                     at,
                     zeros - at,
                     offset
@@ -783,7 +859,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             }
             const values: string[] = []
             for (let byte = at; byte < lineEnd; ++byte) values.push(hexByte(fileByte(region, byte)))
-            emit(LINE_KIND.data, `${linePrefix}db ${values.join(', ')}`, at, lineEnd - at, offset)
+            emit(
+                LINE_KIND.data,
+                commented(`${linePrefix}db ${values.join(', ')}`),
+                at,
+                lineEnd - at,
+                offset
+            )
             at = lineEnd
         }
     }
@@ -850,6 +932,19 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         if (main !== undefined && namesAt.get(main)?.[0].origin === 'main')
             lines.push(`; main: ${hex(main)}, the address _start passes to __libc_start_main`)
         return lines
+    }
+
+    // What lists name the functions with demangled names by, telling their collisions apart.
+    if (demangled.size) {
+        const listed = listForms(
+            functions.map(({ name }) => ({ name, demangled: demangled.get(name) }))
+        )
+        functions.forEach((fn, i) => {
+            const forms = demangled.get(fn.name)
+            if (!forms) return
+            fn.list = listed[i]
+            forms.list = listed[i]
+        })
     }
 
     // Lines covering bytes, in address order: each region's lines already are.

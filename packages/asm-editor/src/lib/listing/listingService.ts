@@ -1,4 +1,9 @@
-import { loadDecoder, type ListingDecoder } from './decoder'
+import {
+    loadDemangler,
+    needsDemangler,
+    type Demangler
+} from '#lib/languages/demangle/loadDemangler.ts'
+import { loadDecoder, type ElfAnalysis, type ListingDecoder } from './decoder'
 import { generateListing } from './generateListing'
 import { ListingError } from './listing'
 import type { ListingRequest, ListingResponse } from './protocol'
@@ -9,7 +14,26 @@ const PROGRESS_INTERVAL_MS = 100
 
 type ServiceOptions = {
     decoder?: () => Promise<ListingDecoder>
+    demangler?: () => Promise<Demangler>
     now?: () => number
+}
+
+/**
+ * The C++ demangler a program's Listing needs: loaded only when its symbol tables or relocations
+ * hold a mangled name ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision
+ * 1), so a C program never pays for it. Undefined otherwise, and when it fails to load: the
+ * Listing is then made with raw names, as for a C program.
+ */
+export async function demanglerFor(
+    analysis: ElfAnalysis,
+    load: () => Promise<Demangler> = loadDemangler
+): Promise<Demangler | undefined> {
+    if (!analysis.isElf || !needsDemangler(analysis)) return undefined
+    try {
+        return await load()
+    } catch {
+        return undefined
+    }
 }
 
 /**
@@ -22,12 +46,15 @@ export function createListingService(
     options: ServiceOptions = {}
 ) {
     const decoder = options.decoder ?? loadDecoder
+    const demangler = options.demangler ?? loadDemangler
     const now = options.now ?? (() => performance.now())
     let queue = Promise.resolve()
 
     async function generate(request: ListingRequest) {
         try {
             const loaded = await decoder()
+            const analysis = loaded.analyze(request.bytes)
+            const names = await demanglerFor(analysis, demangler)
             const started = now()
             let reported = -Infinity
             const listing = generateListing(loaded, {
@@ -35,6 +62,8 @@ export function createListingService(
                 name: request.name,
                 base: request.base,
                 version: request.version,
+                analysis,
+                demangler: names,
                 onProgress: (fraction) => {
                     const time = now()
                     if (time - started < PROGRESS_DELAY_MS) return

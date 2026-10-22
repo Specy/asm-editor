@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'vite-plus/test'
+import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder } from './decoder'
 import { generateListing } from './generateListing'
 
@@ -7,6 +8,8 @@ import { generateListing } from './generateListing'
  * How long a Listing takes to generate in Node, against the plan's targets (binary-import-plan.md,
  * M7.9): `crackme` under 50 ms, a static glibc binary under 1 s, libc under 3 s. Also how long
  * copying the result takes, which is what posting it from the worker to the editor costs.
+ * `libstdc++.so.6` is listed with raw names and then with its C++ names demangled
+ * (cpp-demangling.md, decision 1), which costs it about a tenth more.
  *
  *     node_modules/.bin/vp test run --config vitest.measure.config.ts --project node src/lib/listing
  */
@@ -21,7 +24,20 @@ const inputs = [
         base: 0,
         target: 1000
     },
-    { name: 'libc.so.6', path: 'src/assets/linux/libc.so.6', base: 0x7ffff7c00000, target: 3000 }
+    { name: 'libc.so.6', path: 'src/assets/linux/libc.so.6', base: 0x7ffff7c00000, target: 3000 },
+    {
+        name: 'libstdc++.so.6',
+        path: 'src/assets/linux/libstdc++.so.6',
+        base: 0x7ffff7e00000,
+        target: 3000
+    },
+    {
+        name: 'libstdc++.so.6',
+        path: 'src/assets/linux/libstdc++.so.6',
+        base: 0x7ffff7e00000,
+        target: 3000,
+        demangle: true
+    }
 ]
 
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[values.length >> 1]
@@ -29,18 +45,20 @@ const median = (values: number[]) => [...values].sort((a, b) => a - b)[values.le
 describe('Listing generation', () => {
     it('meets its time targets', async () => {
         const decoder = await loadDecoder()
+        const loaded = await loadDemangler()
         const rows: string[] = []
         for (const input of inputs) {
             const bytes = new Uint8Array(
                 readFileSync(new URL(`../../../../x86/blink-js/${input.path}`, import.meta.url))
             )
+            const demangler: Demangler | undefined = 'demangle' in input ? loaded : undefined
             const times: number[] = []
             const coldStart = performance.now()
-            let listing = generateListing(decoder, { ...input, bytes, version: 'v1' })
+            let listing = generateListing(decoder, { ...input, bytes, version: 'v1', demangler })
             const cold = performance.now() - coldStart
             for (let repeat = 0; repeat < REPEATS; ++repeat) {
                 const start = performance.now()
-                listing = generateListing(decoder, { ...input, bytes, version: 'v1' })
+                listing = generateListing(decoder, { ...input, bytes, version: 'v1', demangler })
                 times.push(performance.now() - start)
             }
             const cloneStart = performance.now()
@@ -48,7 +66,7 @@ describe('Listing generation', () => {
             const clone = performance.now() - cloneStart
             rows.push(
                 [
-                    input.name.padEnd(20),
+                    (demangler ? `${input.name} C++` : input.name).padEnd(20),
                     `${(bytes.length / 1024).toFixed(0)} KiB`.padStart(9),
                     `${listing.lines.kinds.length} lines`.padStart(14),
                     `${listing.labels.length} labels`.padStart(14),

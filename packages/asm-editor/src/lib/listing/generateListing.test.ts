@@ -12,10 +12,14 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vite-plus/test'
+import { CLOSE, OPEN } from '#lib/languages/demangle/demangledNames.ts'
+import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from './decoder'
 import { generateListing, ListingError } from './generateListing'
 import { findProgramStart } from './programStart'
 import { functionAtLine, LINE_KIND, lineOfAddress, lineOfFileOffset, type Listing } from './listing'
+import { ListingIndex, listingTokenAt } from './listingNavigation'
+import { withoutComment } from './patchResolver'
 
 const UPDATE = !!process.env.UPDATE_LISTING_SNAPSHOTS
 const PIE_BASE = 0x555555554000
@@ -178,16 +182,19 @@ function withoutSymbolTable(bytes: Uint8Array): Uint8Array {
 }
 
 let decoder: ListingDecoder
+let demangler: Demangler
 beforeAll(async () => {
     decoder = await loadDecoder()
+    demangler = await loadDemangler()
 })
 
 function listingOf(
     bytes: Uint8Array,
     name: string,
-    base = decoder.analyze(bytes).pie ? PIE_BASE : 0
+    base = decoder.analyze(bytes).pie ? PIE_BASE : 0,
+    names?: Demangler
 ) {
-    return generateListing(decoder, { bytes, name, base, version: 'v1' })
+    return generateListing(decoder, { bytes, name, base, version: 'v1', demangler: names })
 }
 
 function linesOf(listing: Listing) {
@@ -252,11 +259,12 @@ function expectConsistent(listing: Listing, bytes: Uint8Array) {
     lines.forEach((line, i) => {
         const used: string[] = []
         for (const [, name] of line.matchAll(/\[rel ([^\]+]+)(?:\+0x[\da-f]+)?\]/g)) used.push(name)
+        const code = withoutComment(line)
         const branch =
             /^ {4}(?:bnd )?(?:j[a-z]+|call|loop[a-z]*) ([^\s[;,+]+)(?:\+0x[\da-f]+)?(?: |$)/.exec(
-                line
+                code
             )
-        if (branch && !line.includes('[') && !register.test(branch[1])) used.push(branch[1])
+        if (branch && !code.includes('[') && !register.test(branch[1])) used.push(branch[1])
         const pointer = /^(?:\S+: | {4})dq ([^\s;]+)/.exec(line)
         if (pointer) used.push(pointer[1])
         for (const name of used) {
@@ -269,7 +277,10 @@ function expectConsistent(listing: Listing, bytes: Uint8Array) {
         }
     })
     listing.functions.forEach((current, i) => {
-        check(lines[current.line] === `${current.name}:`, () => `function ${current.name}'s line`)
+        check(
+            withoutComment(lines[current.line]).trimEnd() === `${current.name}:`,
+            () => `function ${current.name}'s line`
+        )
         check(current.endLine > current.line, () => `function ${current.name} is empty`)
         check(functionAtLine(listing, current.line) === current, () => `${current.name} not found`)
         check(
@@ -590,5 +601,237 @@ describe('determinism', () => {
         expect(elsewhere.lines).toEqual(planned.lines)
         expect(elsewhere.text).not.toBe(planned.text)
         expect(elsewhere.text.replaceAll('0x7fff', '0x5555')).toBe(planned.text)
+    })
+})
+
+/**
+ * A static C++ program at fixed addresses: `main` calls a lambda of its own and `g<"x">()`, and
+ * takes the address of a vtable, an object inside `.text` whose two slots point to a deleting
+ * destructor and a `const` member function. `g`'s name reads with quotes, as LLVM prints a
+ * template argument made from a string, through a demangler that reads it so.
+ */
+function handBuiltCpp(): Uint8Array {
+    // prettier-ignore
+    const text = [
+        0xe8, 0x0b, 0x00, 0x00, 0x00, // 0x400080 main: call 0x400090, the lambda
+        0xbf, 0x98, 0x00, 0x40, 0x00, // 0x400085 mov edi, 0x400098, the vtable
+        0xe8, 0x06, 0x00, 0x00, 0x00, // 0x40008a call 0x400095, g
+        0xc3, //                         0x40008f ret
+        0x31, 0xc0, 0xc3, //             0x400090 the lambda: xor eax, eax; ret
+        0xc3, //                         0x400093 game::Boss::~Boss() [deleting]
+        0xc3, //                         0x400094 game::Boss::bonus() const
+        0xc3, //                         0x400095 g
+        0x90, 0x90, //                   0x400096 padding
+        0x93, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, // 0x400098 vtable for game::Boss
+        0x94, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00
+    ]
+    return buildElf(text, [
+        { name: '_ZZ4mainENKUliE_clEi', info: 0x02, value: 0x400090, size: 3 },
+        { name: '_ZTVN4game4BossE', info: 0x01, value: 0x400098, size: 16 },
+        { name: 'main', info: 0x12, value: 0x400080, size: 0x10 },
+        { name: '_ZN4game4BossD0Ev', info: 0x12, value: 0x400093, size: 1 },
+        { name: '_ZNK4game4Boss5bonusEv', info: 0x12, value: 0x400094, size: 1 },
+        { name: '_Z1gv', info: 0x12, value: 0x400095, size: 1 }
+    ])
+}
+
+describe('C++ names', () => {
+    const C_PROGRAMS = ['crackme', 'crackme-stripped', 'hello-atexit-static', 'math', 'avx']
+
+    it("leaves a C program's Listing byte for byte as it is, asking the demangler nothing", () => {
+        for (const name of C_PROGRAMS) {
+            const bytes = fixture(name)
+            const asked: string[] = []
+            const watched: Demangler = {
+                describe: (mangled) => {
+                    asked.push(mangled)
+                    return demangler.describe(mangled)
+                }
+            }
+            const plain = listingOf(bytes, name)
+            const named = listingOf(bytes, name, undefined, watched)
+            expect(named.text, name).toBe(plain.text)
+            expect(named.lines, name).toEqual(plain.lines)
+            expect(named.labels, name).toEqual(plain.labels)
+            expect(named.functions, name).toEqual(plain.functions)
+            expect(named.labels.some((label) => 'demangled' in label)).toBe(false)
+            expect(named.functions.some((fn) => 'list' in fn)).toBe(false)
+            expect(asked, name).toEqual([])
+        }
+    }, 30_000)
+
+    it("says the cpp fixture's C++ names in comments, its text keeping the raw names", () => {
+        const bytes = fixture('cpp')
+        const plain = listingOf(bytes, 'cpp')
+        const listing = listingOf(bytes, 'cpp', PIE_BASE, demangler)
+        expectConsistent(listing, bytes)
+        // Only comments are added: every line's code, the line table and the labels' names stay.
+        const before = linesOf(plain)
+        const after = linesOf(listing)
+        expect(after.length).toBe(before.length)
+        after.forEach((line, i) =>
+            expect(withoutComment(line).trimEnd(), `line ${i}`).toBe(
+                withoutComment(before[i]).trimEnd()
+            )
+        )
+        expect(listing.lines).toEqual(plain.lines)
+        expect(listing.labels.map(({ demangled: _, ...label }) => label)).toEqual(plain.labels)
+        expect(listing.functions.map(({ list: _, ...fn }) => fn)).toEqual(plain.functions)
+
+        const lines = linesOf(listing)
+        const hash = createHash('sha256').update(listing.text).digest('hex')
+        const excerpt = [
+            `; Excerpt of the Listing of cpp with C++ names, whose whole text has SHA-256 ${hash}`,
+            functionText(listing, 'main'),
+            functionText(listing, '_Znwm@plt'),
+            ...lines.filter(
+                (line, i) => listing.lines.kinds[i] === LINE_KIND.data && line.includes(' ; ')
+            ),
+            ''
+        ].join('\n')
+        expectSnapshot('cpp.excerpt.asm', excerpt)
+
+        const main = functionText(listing, 'main')
+        // A call, its signature beside it; one over 100 characters as its short name and `(…)`.
+        expect(main).toContain(
+            '\n    call _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev ; std::string::~basic_string()\n'
+        )
+        expect(main).toContain(
+            '\n    call _ZNSt6vectorINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESaIS5_EEC1ESt16initializer_listIS5_ERKS6_ ; std::vector<std::string>::vector(…)\n'
+        )
+        // A label line, a PLT stub's jump through its GOT slot, the slot, and data.
+        expect(listing.text).toMatch(/\n_Znwm@plt: +; operator new\(unsigned long\)\n/)
+        expect(listing.text).toMatch(
+            /\n {4}jmp qword \[rel _Znwm@got\] +; operator new\(unsigned long\)\n/
+        )
+        // The slot's own name and the stub it points to say the same: once.
+        expect(listing.text).toMatch(
+            /\n_Znwm@got: dq _Znwm@plt_resolver +; operator new\(unsigned long\)\n/
+        )
+        expect(listing.text).toMatch(/\n_ZSt4cout@GLIBCXX_3\.4: resb 272 +; std::cout\n/)
+        expect(listing.text).toMatch(
+            /\n_ZTISt13runtime_error@GLIBCXX_3\.4: dq 0 +; typeinfo for std::runtime_error\n/
+        )
+    })
+
+    it("gives the cpp fixture's labels their demangled forms and its functions their list forms", () => {
+        const listing = listingOf(fixture('cpp'), 'cpp', PIE_BASE, demangler)
+        const label = (name: string) => listing.labels.find((candidate) => candidate.name === name)!
+        expect(label('_Znwm@plt')).toMatchObject({
+            name: '_Znwm@plt',
+            fullName: '_Znwm@plt',
+            kind: 'function',
+            origin: 'plt',
+            demangled: {
+                kind: 'function',
+                mangled: '_Znwm',
+                suffix: '@plt',
+                short: 'operator new@plt',
+                signature: 'operator new(unsigned long)@plt',
+                comment: 'operator new(unsigned long)',
+                text: 'operator new(unsigned long)',
+                list: 'operator new@plt',
+                pseudocode: { namespace: [], name: 'operator new', symbol: '_Znwm' }
+            }
+        })
+        expect(label('_ZSt4cout@GLIBCXX_3.4').demangled).toMatchObject({
+            kind: 'data',
+            short: 'std::cout@GLIBCXX_3.4',
+            comment: 'std::cout',
+            pseudocode: { namespace: ['std'], name: 'cout', symbol: '_ZSt4cout' }
+        })
+        expect(label('main').demangled).toBeUndefined()
+        expect(listing.labels.filter((each) => each.kind === 'block' && each.demangled)).toEqual([])
+
+        const fn = (name: string) => listing.functions.find((candidate) => candidate.name === name)!
+        expect(fn('main').list).toBeUndefined()
+        expect(fn('_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev').list).toBe(
+            'std::string::~basic_string'
+        )
+        // Two stubs of one name's overloads read alike as short names: their signatures tell them
+        // apart.
+        expect(fn('_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c@plt').list).toBe(
+            'std::operator<<<std::char_traits<char>>(std::ostream&, char)@plt'
+        )
+        expect(fn('_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc@plt').list).toBe(
+            'std::operator<<<std::char_traits<char>>(std::ostream&, char const*)@plt'
+        )
+        for (const each of listing.functions) {
+            const named = label(each.name).demangled
+            expect(each.list, each.name).toBe(named?.list)
+        }
+    })
+
+    it('comments calls, an absolute address, a vtable and label lines, and escapes quotes', () => {
+        const bytes = handBuiltCpp()
+        const quoted: Demangler = {
+            describe: (mangled) => {
+                const read = demangler.describe(mangled)
+                return mangled === '_Z1gv' && read
+                    ? { ...read, name: `g${OPEN}"x"${CLOSE}`, text: 'int g<"x">()' }
+                    : read
+            }
+        }
+        const listing = listingOf(bytes, 'hand-built C++', 0, quoted)
+        expectConsistent(listing, bytes)
+        expect(functionText(listing, 'main')).toBe(
+            [
+                'main:',
+                "    call _ZZ4mainENKUliE_clEi           ; main::'lambda'(int)::operator()(int) const",
+                '    mov edi, 0x400098                   ; _ZTVN4game4BossE vtable for game::Boss',
+                '    call _Z1gv                          ; g<\\"x\\">()',
+                '    ret'
+            ].join('\n')
+        )
+        expect(functionText(listing, '_Z1gv')).toBe(
+            [
+                '_Z1gv:                                  ; g<\\"x\\">()',
+                '    ret',
+                '    nop',
+                '    nop',
+                '_ZTVN4game4BossE:                       ; vtable for game::Boss',
+                '    dq _ZN4game4BossD0Ev                ; game::Boss::~Boss() [deleting]',
+                '    dq _ZNK4game4Boss5bonusEv           ; game::Boss::bonus() const'
+            ].join('\n')
+        )
+    })
+
+    it("keeps the words of a comment's demangled name from reading as names", () => {
+        const listing = listingOf(handBuiltCpp(), 'hand-built C++', 0, demangler)
+        const index = ListingIndex.of(listing)
+        const lines = linesOf(listing)
+        const call = lines.findIndex((line) => line.startsWith('    call _ZZ4main'))
+        const text = lines[call]
+        // The operand is a name; `main` in the comment is a word of the lambda's name, though a
+        // label has it.
+        const operand = listingTokenAt(text, text.indexOf('_ZZ4main') + 2)!
+        expect(index.inDemangledComment(text, call, operand.start)).toBe(false)
+        expect(index.label(operand.text, call)?.address).toBe(0x400090)
+        const word = listingTokenAt(text, text.indexOf('main::') + 1)!
+        expect(word.text).toBe('main')
+        expect(index.label(word.text, call)).toBeDefined()
+        expect(index.inDemangledComment(text, call, word.start)).toBe(true)
+        const main = index.label('main', call)!
+        // The header's `(main)` and main's own label, not the lambda's name.
+        expect(index.references(main).map((span) => span.line)).toEqual([
+            lines.findIndex((line) => line.startsWith('; Entry point')),
+            main.line
+        ])
+        // An absolute address's comment names its label raw, then says its demangled name.
+        const move = lines.findIndex((line) => line.startsWith('    mov edi'))
+        const moved = lines[move]
+        const raw = moved.indexOf('_ZTVN4game4BossE')
+        expect(index.inDemangledComment(moved, move, raw)).toBe(false)
+        expect(index.inDemangledComment(moved, move, moved.indexOf('game::'))).toBe(true)
+        expect(
+            index.references(index.label('_ZTVN4game4BossE', move)!).map((span) => span.line)
+        ).toEqual([move, lines.findIndex((line) => line.startsWith('_ZTVN4game4BossE:'))])
+        // A label line's comment, and a Listing without demangled names, mask nothing.
+        const lambda = lines.findIndex((line) => line.startsWith('_ZZ4main'))
+        expect(
+            index.inDemangledComment(lines[lambda], lambda, lines[lambda].indexOf('main::'))
+        ).toBe(true)
+        const plain = listingOf(handBuiltCpp(), 'hand-built C++', 0)
+        expect(ListingIndex.of(plain).inDemangledComment('    call x ; main', 0, 12)).toBe(false)
     })
 })

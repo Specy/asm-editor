@@ -138,11 +138,15 @@ export class ListingClient {
     }
 
     private async generateHere(order: ListingOrder, version: ListingNameVersion) {
-        const [{ loadDecoder }, { generateListing }] = await Promise.all([
+        const [{ loadDecoder }, { generateListing }, { demanglerFor }] = await Promise.all([
             import('./decoder'),
-            import('./generateListing')
+            import('./generateListing'),
+            import('./listingService')
         ])
-        return generateListing(await loadDecoder(), { ...order, version })
+        const decoder = await loadDecoder()
+        const analysis = decoder.analyze(order.bytes)
+        const demangler = await demanglerFor(analysis)
+        return generateListing(decoder, { ...order, version, analysis, demangler })
     }
 
     private post(request: ListingRequest, transfer: Transferable[]) {

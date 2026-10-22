@@ -1,17 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { loadDemangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder } from './decoder'
+import { generateListing } from './generateListing'
 import { ListingError } from './listing'
 import { ListingClient } from './listingClient'
 import { createListingService, PROGRESS_DELAY_MS, startListingWorker } from './listingService'
 import type { ListingRequest, ListingResponse } from './protocol'
 
-const crackme = () =>
+const fixture = (name: string) => () =>
     new Uint8Array(
         readFileSync(
-            new URL('../../../../x86/blink-js/tests/fixtures/elf/crackme', import.meta.url)
+            new URL(`../../../../x86/blink-js/tests/fixtures/elf/${name}`, import.meta.url)
         )
     )
+const crackme = fixture('crackme')
+const cpp = fixture('cpp')
 
 function request(id: number, bytes = crackme()): ListingRequest {
     return { type: 'generate', id, bytes, name: 'crackme', base: 0x555555554000, version: 'v1' }
@@ -69,6 +73,39 @@ describe('the Listing service', () => {
         expect(responses).toEqual([
             { type: 'failure', id: 7, message: expect.stringMatching(/32-bit/), listing: true }
         ])
+    })
+
+    it('loads the demangler only for a program with C++ names, and names its labels', async () => {
+        const responses: ListingResponse[] = []
+        const demangler = vi.fn(loadDemangler)
+        const service = createListingService((response) => responses.push(response), {
+            demangler
+        })
+        await service.handle(request(1))
+        expect(demangler).not.toHaveBeenCalled()
+        await service.handle({ ...request(2, cpp()), name: 'cpp' })
+        expect(demangler).toHaveBeenCalledTimes(1)
+        const [c, named] = responses as Extract<ListingResponse, { type: 'listing' }>[]
+        expect(c.listing.labels.some((label) => label.demangled)).toBe(false)
+        expect(
+            named.listing.labels.find((label) => label.name === '_Znwm@plt')?.demangled
+        ).toMatchObject({ short: 'operator new@plt' })
+        expect(named.listing.text).toMatch(/\n {4}jmp qword \[rel _Znwm@got\] +; operator new/)
+    })
+
+    it('makes the Listing with raw names when the demangler fails to load', async () => {
+        const responses: ListingResponse[] = []
+        const service = createListingService((response) => responses.push(response), {
+            demangler: () => Promise.reject(new Error('the demangler failed to load'))
+        })
+        await service.handle({ ...request(3, cpp()), name: 'cpp' })
+        const raw = generateListing(await loadDecoder(), {
+            bytes: cpp(),
+            name: 'cpp',
+            base: 0x555555554000,
+            version: 'v1'
+        })
+        expect(responses).toEqual([{ type: 'listing', id: 3, listing: raw }])
     })
 
     it('says when a failure is not the bytes', async () => {
@@ -213,5 +250,11 @@ describe('the Listing client', () => {
             base: 0x555555554000n
         })
         expect(listing.text).toContain('\nmain:\n')
+        const named = await new ListingClient().generate({
+            bytes: cpp(),
+            name: 'cpp',
+            base: 0x555555554000n
+        })
+        expect(named.functions.find((fn) => fn.name === '_Znwm@plt')?.list).toBe('operator new@plt')
     })
 })

@@ -1,3 +1,4 @@
+import type { DemangledName } from '#lib/languages/demangle/demangledNames.ts'
 import type { ListingHolders } from './addressNames'
 
 /**
@@ -82,6 +83,13 @@ export type ListingLabel = {
     address: number
     /** The 0-based line that defines it. */
     line: number
+    /**
+     * The readable forms of a C++ symbol's name, for a label whose raw name the demangler reads
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decisions 2 and 5): the
+     * raw `name` stays the label, which the text, operands and every lookup use. Its `list` is the
+     * function's {@link ListingFunction.list} for a function's label, else its short name.
+     */
+    demangled?: DemangledName
 }
 
 export type ListingFunction = {
@@ -93,6 +101,12 @@ export type ListingFunction = {
     /** The 0-based line of its label, and the line after its last one. */
     line: number
     endLine: number
+    /**
+     * What a list names it by, for a function whose label is demangled: its short name, or where
+     * another of the Listing's functions shares that, its signature, then its constructor's or
+     * destructor's variant (`listForms`, cpp-demangling.md decision 7). Absent for a raw name.
+     */
+    list?: string
 }
 
 export type Listing = {

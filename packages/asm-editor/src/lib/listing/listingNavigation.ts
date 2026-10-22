@@ -6,6 +6,7 @@ import {
     type ListingLabel,
     type ListingNameOrigin
 } from './listing'
+import { demangledComment } from './listingText'
 
 /**
  * Reading a Listing's text for navigation: the name under the cursor, the label it means, every
@@ -36,6 +37,16 @@ function insideString(line: string, column: number): boolean {
     return inside
 }
 
+/** Where a line's comment starts: its first `;` outside a string, or the line's length. */
+function commentStart(line: string): number {
+    let inside = false
+    for (let i = 0; i < line.length; ++i) {
+        if (line[i] === '"' && line[i - 1] !== '\\') inside = !inside
+        else if (line[i] === ';' && !inside) return i
+    }
+    return line.length
+}
+
 /**
  * The name or number under a column: `strcmp@plt`, `FUN_brave_otter.LAB_3`, `.LAB_2`, `stdin`
  * of `[rel stdin+0x8]`, `0x555555555149`. Nothing inside a string.
@@ -53,6 +64,7 @@ export function listingTokenAt(line: string, column: number): ListingToken | und
 export class ListingIndex {
     private labelsByName?: Map<string, ListingLabel>
     private lineStarts?: Uint32Array
+    private demangles?: boolean
 
     constructor(readonly listing: Listing) {}
 
@@ -78,6 +90,41 @@ export class ListingIndex {
             return owner ? this.labelsByName.get(owner.name + name) : undefined
         }
         return this.labelsByName.get(name)
+    }
+
+    /**
+     * Whether a column of a line's text is in a comment's demangled name
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 9): text, whose
+     * words are no names even where one is also a label's, as `main` in
+     * `; main::'lambda'(int)::operator()(int) const`. A comment says the demangled name of a
+     * label the line names (in its code, or in an earlier comment, `; _ZSt4cout std::cout`) or
+     * defines, then any offset (`+0x10`).
+     */
+    inDemangledComment(text: string, line: number, column: number): boolean {
+        this.demangles ??= this.listing.labels.some((label) => label.demangled)
+        if (!this.demangles) return false
+        const comment = commentStart(text)
+        if (column <= comment) return false
+        for (let at = 0; at < text.length;) {
+            if (!NAME_CHARACTER.test(text[at])) {
+                ++at
+                continue
+            }
+            const start = at
+            while (at < text.length && NAME_CHARACTER.test(text[at])) ++at
+            const demangled = this.label(text.slice(start, at), line)?.demangled
+            if (!demangled) continue
+            const said = demangledComment(demangled)
+            for (
+                let found = text.indexOf(said, comment);
+                found >= 0 && found <= column;
+                found = text.indexOf(said, found + 1)
+            ) {
+                const offset = /^[+-]0x[\da-f]+/.exec(text.slice(found + said.length))
+                if (column < found + said.length + (offset?.[0].length ?? 0)) return true
+            }
+        }
+        return false
     }
 
     /** The line a number names, when it is a run-time address the Listing covers. */
@@ -122,8 +169,14 @@ export class ListingIndex {
             if (at > 0 && NAME_CHARACTER.test(text[at - 1])) continue
             if (end < text.length && NAME_CHARACTER.test(text[end])) continue
             const line = this.lineOfOffset(at)
-            const start = at - this.offsetOfLine(line)
-            if (insideString(text.slice(this.offsetOfLine(line), at), start)) continue
+            const lineStart = this.offsetOfLine(line)
+            const start = at - lineStart
+            if (insideString(text.slice(lineStart, at), start)) continue
+            if (this.demangles !== false) {
+                const lineEnd = text.indexOf('\n', at)
+                const lineText = text.slice(lineStart, lineEnd < 0 ? undefined : lineEnd)
+                if (this.inDemangledComment(lineText, line, start)) continue
+            }
             spans.push({ line, start, end: start + name.length })
         }
         return spans

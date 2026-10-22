@@ -1,3 +1,5 @@
+import type { DemangledName } from '#lib/languages/demangle/demangledNames.ts'
+
 /**
  * How a Listing writes an instruction line and its comments, shared by the generator and by the
  * lines a patch rewrites, so a patched line reads like every other.
@@ -28,8 +30,35 @@ export function quotedString(text: string): string {
     return `"${cEscape(shown)}"`
 }
 
+/** A line's code with its comments, if any, from {@link COMMENT_COLUMN}. */
+export function commentedLine(code: string, comments: readonly string[]): string {
+    return comments.length ? `${code.padEnd(COMMENT_COLUMN - 1)} ; ${comments.join(', ')}` : code
+}
+
 /** An instruction line: indented, with its comments, if any, from {@link COMMENT_COLUMN}. */
 export function instructionLineText(instruction: string, comments: readonly string[]): string {
-    const text = `    ${instruction}`
-    return comments.length ? `${text.padEnd(COMMENT_COLUMN - 1)} ; ${comments.join(', ')}` : text
+    return commentedLine(`    ${instruction}`, comments)
+}
+
+/**
+ * What a comment says for a label with a demangled name
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 9): its comment
+ * form, then the offset an operand adds (`vtable for game::Boss+0x10`), with `"` escaped as `\"`,
+ * so a template argument's string (`g<Fixed{"hello"}>()`) never reads as a string's quote.
+ */
+export function demangledComment(demangled: Pick<DemangledName, 'comment'>, offset = ''): string {
+    return `${demangled.comment}${offset}`.replaceAll('"', '\\"')
+}
+
+/**
+ * The comment for a name an operand or a pointer is written with, `name` or `name+0x10`, when the
+ * label it names has a demangled name, else undefined: blocks, numbers and raw names get none.
+ */
+export function nameComment(
+    written: string,
+    demangledOf: (name: string) => DemangledName | undefined
+): string | undefined {
+    const match = /^([^+-]+)([+-]0x[\da-f]+)?$/.exec(written)
+    const demangled = match ? demangledOf(match[1]) : undefined
+    return demangled && demangledComment(demangled, match![2])
 }

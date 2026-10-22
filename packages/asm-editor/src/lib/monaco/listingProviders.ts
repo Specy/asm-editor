@@ -147,8 +147,10 @@ export function listingNameAt(
     const registered = modelListing(model.uri)
     if (!registered) return undefined
     const line = position.lineNumber - 1
-    const token = listingTokenAt(model.getLineContent(position.lineNumber), position.column - 1)
-    if (!token) return undefined
+    const text = model.getLineContent(position.lineNumber)
+    const token = listingTokenAt(text, position.column - 1)
+    //a comment's demangled name is text, whose words are no names
+    if (!token || registered.index.inDemangledComment(text, line, token.start)) return undefined
     const label = registered.index.label(token.text, line)
     const addressLine = label ? -1 : registered.index.addressLine(token.text)
     if (!label && addressLine < 0) return undefined

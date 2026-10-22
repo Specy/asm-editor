@@ -15,7 +15,7 @@ import {
     NO_HOLDERS,
     stringComment as sharedStringComment
 } from './addressNames'
-import { instructionLineText } from './listingText'
+import { instructionLineText, nameComment } from './listingText'
 import { withoutComment } from './patchResolver'
 
 /**
@@ -155,26 +155,46 @@ export function labelledText(
 }
 
 /**
- * The text of the string a RIP-relative operand reaches, from there to its end, quoted as the
- * generator's comments quote one.
+ * The comments an instruction's operands get, as the generator writes them: for each branch or
+ * RIP-relative target a label with a demangled name names, that name
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 9); and the text of
+ * the first string a RIP-relative operand reaches, from there to its end, quoted, after the name
+ * of the same operand if it has one.
  */
-function stringComment(
+function operandComments(
     listing: Listing,
     bytes: Uint8Array,
-    decoded: DecodedInstruction
-): string | undefined {
+    decoded: DecodedInstruction,
+    line: number,
+    hints?: NameHints
+): string[] {
+    const index = ListingIndex.of(listing)
+    const demangledOf = (name: string) => index.label(name, line)?.demangled
     const offsetOf = (address: number) => {
-        const line = lineOfAddress(listing, address)
-        const offset = line < 0 ? -1 : listing.lines.offsets[line]
-        return offset < 0 ? -1 : offset + address - listing.lines.addresses[line]
+        const at = lineOfAddress(listing, address)
+        const offset = at < 0 ? -1 : listing.lines.offsets[at]
+        return offset < 0 ? -1 : offset + address - listing.lines.addresses[at]
     }
+    const comments: string[] = []
+    let quoted = false
     for (const operand of decoded.operands) {
-        if (operand.memoryTarget === undefined) continue
-        const address = Number(operand.memoryTarget - BigInt(listing.base))
-        const comment = sharedStringComment(listing.holders ?? NO_HOLDERS, bytes, address, offsetOf)
-        if (comment) return comment
+        const target = operand.branchTarget ?? operand.memoryTarget
+        if (target === undefined) continue
+        const written =
+            operand.textStart === undefined || operand.textEnd === undefined
+                ? undefined
+                : addressName(listing, target, line, hints)
+        const said = written === undefined ? undefined : nameComment(written, demangledOf)
+        let string: string | undefined
+        if (operand.branchTarget === undefined && !quoted) {
+            const address = Number(target - BigInt(listing.base))
+            string = sharedStringComment(listing.holders ?? NO_HOLDERS, bytes, address, offsetOf)
+            quoted = string !== undefined
+        }
+        if (said !== undefined || string !== undefined)
+            comments.push([said, string].filter((part) => part !== undefined).join(' '))
     }
-    return undefined
+    return comments
 }
 
 /** What a Listing line's bytes hold, decoded: the first instruction, and what follows it. */
@@ -183,7 +203,10 @@ export type DescribedLine = {
     instruction: string
     /** The single-byte `nop`s and any other instructions after it, in the line's bytes. */
     rest: string[]
-    /** The comments the line shows: a string the instruction reaches, then {@link rest}. */
+    /**
+     * The comments the line shows: the demangled names of the labels its operands name and a
+     * string one reaches, then {@link rest}.
+     */
     comments: string[]
     /** The whole line, indented, as the Listing shows it. */
     text: string
@@ -217,8 +240,10 @@ export function describeLine(
         }
     }
     flush()
-    const string = first ? stringComment(listing, bytes, first) : undefined
-    const comments = [...(string ? [string] : []), ...rest]
+    const comments = [
+        ...(first ? operandComments(listing, bytes, first, line, hints) : []),
+        ...rest
+    ]
     return { instruction, rest, comments, text: instructionLineText(instruction, comments) }
 }
 

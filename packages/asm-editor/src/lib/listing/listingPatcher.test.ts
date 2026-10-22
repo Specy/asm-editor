@@ -6,10 +6,12 @@
  */
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vite-plus/test'
+import { loadDemangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from './decoder'
 import { generateListing } from './generateListing'
-import { lineOfAddress, type Listing } from './listing'
+import { LINE_KIND, lineOfAddress, type Listing } from './listing'
 import type { ListingDocument } from './listingDocuments.svelte'
+import { ListingIndex } from './listingNavigation'
 import { ListingPatcher, type PatchPreview } from './listingPatcher.svelte'
 import {
     addressName,
@@ -185,6 +187,73 @@ describe('naming a patched line’s targets', () => {
         const inside = describeLine(decoder.disassemble(into, runTime(lea)), listing, bytes, lea)
         expect(inside.instruction).toBe('lea rax, [rel s_Wrong+0x2]')
         expect(inside.comments).toEqual(['"ong!"'])
+    })
+
+    it("says a C++ program's demangled names as the Listing does, offsets and all", async () => {
+        const cpp = new Uint8Array(
+            readFileSync(
+                new URL('../../../../x86/blink-js/tests/fixtures/elf/cpp', import.meta.url)
+            )
+        )
+        const named = generateListing(decoder, {
+            bytes: cpp,
+            name: 'cpp',
+            base: PIE_BASE,
+            version: 'v1',
+            demangler: await loadDemangler()
+        })
+        const lines = named.text.split('\n')
+        const { kinds, offsets, sizes } = named.lines
+        const own = (line: number) => cpp.subarray(offsets[line], offsets[line] + sizes[line])
+        const described = (code: Uint8Array, line: number) =>
+            describeLine(
+                decoder.disassemble(code, BigInt(named.lines.addresses[line] + PIE_BASE)),
+                named,
+                cpp,
+                line
+            )
+        //every commented instruction, described from its own bytes, reads as the Listing has it
+        let commented = 0
+        lines.forEach((text, line) => {
+            if (kinds[line] !== LINE_KIND.instruction || !text.includes(' ; ')) return
+            commented++
+            expect(described(own(line), line).text, text).toBe(text)
+        })
+        expect(commented).toBeGreaterThan(50)
+        //a call made to go elsewhere says its new target
+        const label = (name: string) => named.labels.find((candidate) => candidate.name === name)!
+        const call = lines.findIndex((text) =>
+            text.startsWith('    call _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev ')
+        )
+        const retargeted = own(call).slice()
+        const target = label('_Znwm@plt').address
+        new DataView(retargeted.buffer).setInt32(
+            1,
+            target - (named.lines.addresses[call] + sizes[call]),
+            true
+        )
+        expect(described(retargeted, call)).toMatchObject({
+            instruction: 'call _Znwm@plt',
+            comments: ['operator new(unsigned long)'],
+            text: `${'    call _Znwm@plt'.padEnd(39)} ; operator new(unsigned long)`
+        })
+        //and an operand reaching into a datum with a demangled name says the offset
+        const lea = lines.findIndex((text) =>
+            text.startsWith('    lea rax, [rel _ZTISt13runtime_error@GLIBCXX_3.4]')
+        )
+        const into = own(lea).slice()
+        const view = new DataView(into.buffer)
+        view.setInt32(3, view.getInt32(3, true) + 8, true)
+        const inside = described(into, lea)
+        expect(inside.instruction).toBe('lea rax, [rel _ZTISt13runtime_error@GLIBCXX_3.4+0x8]')
+        expect(inside.comments).toEqual(['typeinfo for std::runtime_error+0x8'])
+        //the patched Listing's text still keeps the comment's words from reading as names
+        const patched = withLines(named, [[lea, inside.text]])
+        const shown = patched.text.split('\n')[lea]
+        const index = ListingIndex.of(patched)
+        expect(index.inDemangledComment(shown, lea, shown.indexOf('std::'))).toBe(true)
+        expect(index.inDemangledComment(shown, lea, shown.indexOf('+0x8]') + 2)).toBe(false)
+        expect(index.inDemangledComment(shown, lea, shown.lastIndexOf('+0x8') + 2)).toBe(true)
     })
 
     it('titles a patch by its mnemonics when only they changed', () => {

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from './Monaco'
+import { loadDemangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
 import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
@@ -246,6 +247,80 @@ describe('hovers in a Listing', () => {
         const other = model('asm-editor://session/live/main.asm')
         expect(providers().hover.provideHover(other, at(0, 'crackme'), token)).toBeNull()
         expect(providers().definition.provideDefinition(other, at(0, 'crackme'), token)).toBeNull()
+    })
+})
+
+describe('a Listing whose comments say C++ names', () => {
+    const CPP_URI = 'asm-editor://session/build-3/cpp'
+    let cppLines: string[]
+    let cpp: Listing
+
+    beforeAll(async () => {
+        const bytes = new Uint8Array(
+            readFileSync(
+                new URL('../../../../x86/blink-js/tests/fixtures/elf/cpp', import.meta.url)
+            )
+        )
+        cpp = generateListing(await loadDecoder(), {
+            bytes,
+            name: 'cpp',
+            base: PIE_LOAD_BASE,
+            version: 'v1',
+            demangler: await loadDemangler()
+        })
+        cppLines = cpp.text.split('\n')
+        setModelListing(CPP_URI, { listing: cpp, bytes, library: false })
+    })
+
+    const cppModel = () =>
+        ({
+            uri: { toString: () => CPP_URI },
+            getLineContent: (lineNumber: number) => cppLines[lineNumber - 1],
+            getLineMaxColumn: (lineNumber: number) => cppLines[lineNumber - 1].length + 1
+        }) as unknown as monaco.editor.ITextModel
+    const cppAt = (line: number, text: string, from = 0) =>
+        ({
+            lineNumber: line + 1,
+            column: cppLines[line].indexOf(text, from) + 2
+        }) as monaco.Position
+
+    it('goes, hovers and follows from the raw names, and not from the words of a comment', () => {
+        const call = cppLines.findIndex((line) => line.startsWith('    call _Znwm@plt '))
+        expect(cppLines[call]).toMatch(/ ; operator new\(unsigned long\)$/)
+        const stub = cppLines.findIndex((line) => line.startsWith('_Znwm@plt:'))
+        const definition = providers().definition.provideDefinition(
+            cppModel(),
+            cppAt(call, '_Znwm@plt'),
+            token
+        ) as monaco.languages.Location
+        expect(definition.range.startLineNumber - 1).toBe(stub)
+        expect(followableNameAt(monacoStub, cppModel(), cppAt(call, '_Znwm@plt'))?.line).toBe(
+            stub + 1
+        )
+        const hover = (position: monaco.Position) =>
+            (providers().hover.provideHover(cppModel(), position, token) as monaco.languages.Hover)
+                .contents
+        expect(hover(cppAt(call, '_Znwm@plt'))).toHaveLength(2)
+        //the comment's words: the line's bytes only, no definition, no link
+        const word = cppAt(call, 'new', cppLines[call].indexOf(';'))
+        expect(hover(word)).toHaveLength(1)
+        expect(providers().definition.provideDefinition(cppModel(), word, token)).toBeNull()
+        expect(followableNameAt(monacoStub, cppModel(), word)).toBeUndefined()
+        //a label line's comment as well; the label itself still hovers
+        const comment = cppAt(stub, 'operator')
+        expect(providers().hover.provideHover(cppModel(), comment, token)).toBeNull()
+        expect(hover(cppAt(stub, '_Znwm@plt'))).toHaveLength(1)
+        const references = providers().references.provideReferences(
+            cppModel(),
+            cppAt(call, '_Znwm@plt'),
+            { includeDeclaration: true },
+            token
+        ) as monaco.languages.Location[]
+        expect(references.map((reference) => reference.range.startLineNumber - 1)).toEqual(
+            cppLines.flatMap((line, i) =>
+                /^(?:_Znwm@plt:| {4}call _Znwm@plt\b)/.test(line) ? [i] : []
+            )
+        )
     })
 })
 
