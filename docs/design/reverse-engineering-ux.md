@@ -6,29 +6,29 @@ Status: decided 2026-10-21 by the owner, from [the usability study](../research/
 
 ### When a run goes wrong
 
-1. **AVX.** *(Superseded 2026-10-21: the Core now runs VEX, so this note applies to EVEX, AVX-512, only, and reads "AVX-512 instructions are not currently supported". See docs/research/x86-avx-support.md.)* A program that stops on an illegal instruction whose encoding is AVX (VEX or EVEX) gets the run status "AVX instructions are not currently supported" instead of "Illegal instruction (signal 4)". The Log note names the instruction and its address, then says the same sentence and nothing more. The editor recognises the encoding from the instruction's bytes, so no **Core** change is needed: in 64-bit mode, after any segment or address-size prefixes, a first opcode byte of `C4` or `C5` is VEX and `62` is EVEX. Nothing warns before a run, because a program can carry AVX paths it never takes (glibc picks them by CPUID).
+1. **AVX.** _(Superseded 2026-10-21: the Core now runs VEX, so this note applies to EVEX, AVX-512, only, and reads "AVX-512 instructions are not currently supported". See docs/research/x86-avx-support.md.)_ A program that stops on an illegal instruction whose encoding is AVX (VEX or EVEX) gets the run status "AVX instructions are not currently supported" instead of "Illegal instruction (signal 4)". The Log note names the instruction and its address, then says the same sentence and nothing more. The editor recognises the encoding from the instruction's bytes, so no **Core** change is needed: in 64-bit mode, after any segment or address-size prefixes, a first opcode byte of `C4` or `C5` is VEX and `62` is EVEX. Nothing warns before a run, because a program can carry AVX paths it never takes (glibc picks them by CPUID).
 2. **A Build never waits silently.**
-   - While a Build runs, the dock says what it is waiting for, such as downloading a Bundled library, loading the program or starting it. Other languages show a plain "Building…".
-   - It offers Cancel.
-   - A download that fails, or that receives no bytes for 20 s, ends the Build. The error names what could not be loaded and says to Build again, and Build is pressable again. Today a stuck download leaves Build disabled with a clock icon and no message.
+    - While a Build runs, the dock says what it is waiting for, such as downloading a Bundled library, loading the program or starting it. Other languages show a plain "Building…".
+    - It offers Cancel.
+    - A download that fails, or that receives no bytes for 20 s, ends the Build. The error names what could not be loaded and says to Build again, and Build is pressable again. Today a stuck download leaves Build disabled with a clock icon and no message.
 3. **Keep the place after exit.** When an Executable's program exits normally, the **Listing** and **Pseudocode** stay where they were and the program-counter highlight goes away. They no longer jump to `_start`'s `call __libc_start_main`. A run that ends on a signal still reveals where it stopped, as today. Assembled programs and other languages are unchanged.
 4. **The memory view's address box takes the Listing's names:** **Invented names** (`FUN_…`, `DAT_…`) and `s_` string labels, resolved through the Listing to their run-time address. Its fixed `0x` prefix shows only while the text is a number, so `DAT_singing_perch` no longer reads as `0xsinging_perch`.
 
 ### Reading the Listing and the Pseudocode
 
 5. **Numbers on hover in the Pseudocode.**
-   - A constant shows the card the Listing already shows: decimal, hexadecimal, binary.
-   - Both cards gain a **Text** line when the value's bytes, little-endian at the constant's size, are at least two printable ASCII characters. For example, `0x4c75257240343a41` reads `A:4@r%uL`.
+    - A constant shows the card the Listing already shows: decimal, hexadecimal, binary.
+    - Both cards gain a **Text** line when the value's bytes, little-endian at the constant's size, are at least two printable ASCII characters. For example, `0x4c75257240343a41` reads `A:4@r%uL`.
 6. **Ghidra's words on hover**, each with a short plain explanation and a link to the Documentation's Pseudocode section:
-   - `undefined` and `undefined1`–`undefined8` types;
-   - the decompiler's variable names (`uStack_48`, `local_10`, `param_1`, `iVar1`, `in_FS_OFFSET`, `unaff_…`, `extraout_…`);
-   - Invented names.
+    - `undefined` and `undefined1`–`undefined8` types;
+    - the decompiler's variable names (`uStack_48`, `local_10`, `param_1`, `iVar1`, `in_FS_OFFSET`, `unaff_…`, `extraout_…`);
+    - Invented names.
 7. **Double-click follows a name**, as in Ghidra and IDA. In the Pseudocode it works on a function or data name; in the Listing on a label or a call or jump target. It does what Go to Definition (F12, Ctrl+click) already does. Such names get a link underline and pointer cursor on hover. A single click still only places the cursor.
 8. **Back and forward.**
-   - Each editor pane keeps a navigation history of Listing and Pseudocode positions.
-   - Every jump adds to it: double-click, Go to Definition, Go to Symbol, Show in Listing, the Symbols panel.
-   - Alt+← and Alt+→ (and the mouse's back and forward buttons) move through it. Go Back and Go Forward also appear in the context menu.
-   - Esc is not used, because Monaco's widgets already take it.
+    - Each editor pane keeps a navigation history of Listing and Pseudocode positions.
+    - Every jump adds to it: double-click, Go to Definition, Go to Symbol, Show in Listing, the Symbols panel.
+    - Alt+← and Alt+→ (and the mouse's back and forward buttons) move through it. Go Back and Go Forward also appear in the context menu.
+    - Esc is not used, because Monaco's widgets already take it.
 9. **A "?" in the Listing's and the Pseudocode's notices** opens the Documentation panel at the Executables chapter's Listing or Pseudocode section.
 
 ### The dock and debugging
