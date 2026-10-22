@@ -380,15 +380,15 @@ After P1. `X86Emulator.svelte.ts` is shared with other work; coordinate before e
 
 ## Open questions
 
-For phase 1, to settle before implementing:
+Settled by the owner on 2026-10-22, before implementing phase 1:
 
-1. **Variant words.** `[deleting]` in comments and hovers for `D0`, with the others only in hovers and list collisions (decision 8): or none in comments, as `c++filt` prints?
-2. **Function template arguments in short names.** Kept (decision 5): `std::operator<<<char, std::char_traits<char>, std::allocator<char>>`, `std::make_unique<game::Boss, char const (&) [5]>`. Dropping them reads like source (`std::operator<<`, `std::make_unique`) but loses `game::Boss`, and turns `clampTo<int>` and `clampTo<long>` into overloads.
-3. **libstdc++'s two string ABIs** read alike after shortening, 2,148 functions told apart only by address and the hover. Acceptable, or keep `__cxx11` visible where both ABIs are in one Listing?
-4. **Comments on label lines** (decision 9, an addition to the proposal), and the 100-character limit.
-5. **Two spellings for special data** (decision 16): `vtable for game::Boss` in the Listing and `game::Boss::vtable` in the Pseudocode, or one of them everywhere?
-6. **The decompiler's version:** 1.1.0, or folded into the unpublished 1.0.0; and whether to raise Ghidra's line width (`maxlinewidth`) while there, since long qualified names break lines after `std::`.
-7. **The main thread loads the module too** (decision 12) for memory labels and library frames, about 100 KB more per C++ Debug session. The alternative, taking the memory labels from the Listing, waits on a Listing a Build does not wait for.
+1. **Variant words:** as decision 8 says (`[deleting]` in comments and hovers for `D0`, the others only in hovers and list collisions). Owner's default, not asked.
+2. **Function template arguments in short names:** kept (decision 5).
+3. **libstdc++'s two string ABIs:** accepted as reading alike; the hover's exact text and the address tell them apart.
+4. **Comments on label lines** and the 100-character limit: as decision 9. Owner's default, not asked.
+5. **Special data:** two spellings, as decision 16 (`vtable for game::Boss` in the Listing, lists and hovers; `game::Boss::vtable` in the Pseudocode).
+6. **The decompiler's version:** folded into the unpublished 1.0.0. Ghidra's `maxlinewidth` stays at its default for now.
+7. **The main thread loads the module too:** as decision 12. Owner's default, not asked.
 
 Not demangling, found on the way: the deployed site ships no third-party notices, Ghidra's `NOTICE` among them ([Licensing](#licensing)).
 
