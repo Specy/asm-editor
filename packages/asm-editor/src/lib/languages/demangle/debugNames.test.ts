@@ -55,3 +55,16 @@ it('names data labels by their one form, keeping the version the symbol table gi
     expect(memoryLabelName('completed.0', describe)).toBeUndefined()
     expect(memoryLabelName('_ZSt4cout@GLIBCXX_3.4', undefined)).toBeUndefined()
 })
+
+it('gives a name raw when reading it fails, rather than failing the Build or the step', () => {
+    expect(memoryLabelName('_ZNSt9__proto__IiE1xE', describe)).toBe('std::__proto__<int>::x')
+    expect(debugName('_ZNSt11constructorIiiE1fEv', describe)).toEqual({
+        name: 'std::constructor<int, int>::f',
+        detail: 'std::constructor<int, int>::f()\n_ZNSt11constructorIiiE1fEv'
+    })
+    const broken: Describe = () => {
+        throw new Error('unreachable')
+    }
+    expect(debugName('_ZNSolsEi@plt', broken, '+0x4')).toEqual({ name: '_ZNSolsEi@plt+0x4' })
+    expect(memoryLabelName('_ZSt4cout@GLIBCXX_3.4', broken)).toBeUndefined()
+})

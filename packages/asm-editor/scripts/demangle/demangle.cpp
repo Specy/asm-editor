@@ -156,12 +156,46 @@ constexpr std::string_view Close = "\x02";
 constexpr std::string_view Separator = "\x03";
 constexpr char Field = '\x1f';
 
+// The most text each part of a name may print to, and the most nodes printing one part may visit.
+// A name can be made to print far more than it is long: `B<T, T>` nested, each level doubling the
+// text, prints 25 MB from 162 characters. Past either, `describe` reads nothing.
+constexpr size_t LongestText = 64 * 1024;
+constexpr size_t MostPrints = 1 << 20;
+
+/// Prints as LLVM does until its text is over `LongestText` or it has visited `MostPrints` nodes,
+/// then prints nothing more and says it `overflowed`.
+class CappedBuffer : public OutputBuffer {
+  size_t prints = 0;
+
+protected:
+  /// Whether to print nothing more, counting the print about to be made.
+  bool full() {
+    if (getCurrentPosition() > LongestText || ++prints > MostPrints)
+      overflowed = true;
+    return overflowed;
+  }
+
+public:
+  bool overflowed = false;
+
+  void printLeft(const Node &node) override {
+    if (!full())
+      OutputBuffer::printLeft(node);
+  }
+
+  void printRight(const Node &node) override {
+    if (!full())
+      OutputBuffer::printRight(node);
+  }
+};
+
 /// Prints as LLVM does, except that template argument lists are bracketed by `Open` and `Close`,
 /// their arguments (a pack's elements each one) parted by `Separator`, `std::string` and the
 /// stream substitutions spelled as the templates they stand for, `[abi:…]` tags left out, and a
 /// function's encoding inside a name (the function a local entity is in) without its return type:
 /// `std::string::_M_construct<char const*>(char const*, …)::_Guard`, not `void std::string::…`.
-class MarkedBuffer final : public OutputBuffer {
+/// Capped as `CappedBuffer` is.
+class MarkedBuffer final : public CappedBuffer {
   void printArguments(NodeArray arguments, bool &first) {
     for (size_t i = 0; i != arguments.size(); ++i) {
       const Node *argument = arguments[i];
@@ -224,6 +258,8 @@ class MarkedBuffer final : public OutputBuffer {
 
 public:
   void printLeft(const Node &node) override {
+    if (full())
+      return;
     switch (node.getKind()) {
     case Node::KTemplateArgs:
       static_cast<const TemplateArgs &>(node).match([&](NodeArray parameters, Node *) {
@@ -250,6 +286,8 @@ public:
   }
 
   void printRight(const Node &node) override {
+    if (full())
+      return;
     if (node.getKind() != Node::KFunctionEncoding) {
       OutputBuffer::printRight(node);
       return;
@@ -262,25 +300,33 @@ public:
   }
 };
 
-std::string text(OutputBuffer &out) {
-  std::string printed(out.getBuffer() == nullptr ? "" : out.getBuffer(), out.getCurrentPosition());
-  std::free(out.getBuffer());
-  return printed;
-}
+/// Prints the parts of a name, and remembers whether any of them was cut short.
+struct Printer {
+  bool overflowed = false;
 
-/// The demangler's own text of a node.
-std::string plain(const Node *node) {
-  OutputBuffer out;
-  node->print(out);
-  return text(out);
-}
+  /// What a buffer printed, which it frees; '' once it overflowed.
+  std::string text(CappedBuffer &out) {
+    overflowed |= out.overflowed || out.getCurrentPosition() > LongestText;
+    std::string printed(overflowed || out.getBuffer() == nullptr ? "" : out.getBuffer(),
+                        overflowed ? 0 : out.getCurrentPosition());
+    std::free(out.getBuffer());
+    return printed;
+  }
 
-/// The marked text of a node (`MarkedBuffer`).
-std::string marked(const Node *node) {
-  MarkedBuffer out;
-  node->print(out);
-  return text(out);
-}
+  /// The demangler's own text of a node.
+  std::string plain(const Node *node) {
+    CappedBuffer out;
+    node->print(out);
+    return text(out);
+  }
+
+  /// The marked text of a node (`MarkedBuffer`).
+  std::string marked(const Node *node) {
+    MarkedBuffer out;
+    node->print(out);
+    return text(out);
+  }
+};
 
 /// The constructor or destructor a function's name ends in, as its mangled variant: `C1`, `C2`,
 /// `C3`, `CI1`, `CI2`, `D0`, `D1`, `D2` (and GCC's `C4`, `C5`, `D4`, `D5`), or '' for none.
@@ -338,7 +384,8 @@ std::string ctorDtorVariant(const Node *name, const Parser &parser) {
 /// 8. a constructor's or destructor's variant, unmarked (`ctorDtorVariant`);
 /// 9. a GCC clone suffix, unmarked: `.isra.0.cold`.
 ///
-/// The caller frees the result.
+/// Null too when a part prints over `LongestText` or visits `MostPrints` nodes. The caller frees
+/// the result.
 extern "C" char *describe(const char *mangled) {
   size_t length = std::strlen(mangled);
   // Only `_Z` names: LLVM's `parse` reads a type too, so `i` alone would read as `int`.
@@ -349,8 +396,11 @@ extern "C" char *describe(const char *mangled) {
   if (root == nullptr)
     return nullptr;
 
-  std::string kind = "data", whole = plain(root), special, name, parameters, returns, cvQualifiers,
-              variant, clone;
+  Printer print;
+  std::string whole = print.plain(root);
+  if (print.overflowed)
+    return nullptr;
+  std::string kind = "data", special, name, parameters, returns, cvQualifiers, variant, clone;
   const Node *node = root;
   if (node->getKind() == Node::KDotSuffix)
     static_cast<const DotSuffix *>(node)->match([&](const Node *prefix, std::string_view suffix) {
@@ -366,24 +416,26 @@ extern "C" char *describe(const char *mangled) {
     special = "construction vtable for ";
     static_cast<const CtorVtableSpecialName *>(node)->match(
         [&](const Node *first, const Node *second) {
-          name = marked(first) + "-in-" + marked(second);
+          name = print.marked(first) + "-in-" + print.marked(second);
         });
   } else if (node->getKind() == Node::KFunctionEncoding) {
     auto *function = static_cast<const FunctionEncoding *>(node);
     kind = "function";
-    name = marked(function->getName());
+    name = print.marked(function->getName());
     MarkedBuffer out;
     out += '(';
     function->getParams().printWithComma(out);
     out += ')';
-    parameters = text(out);
+    parameters = print.text(out);
     if (function->getReturnType() != nullptr)
-      returns = marked(function->getReturnType());
+      returns = print.marked(function->getReturnType());
     cvQualifiers = qualifiers(*function);
     variant = ctorDtorVariant(function->getName(), parser);
   } else {
-    name = marked(node);
+    name = print.marked(node);
   }
+  if (print.overflowed)
+    return nullptr;
 
   std::string out = kind;
   for (const std::string *part :

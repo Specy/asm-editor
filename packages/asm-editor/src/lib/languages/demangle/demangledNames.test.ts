@@ -110,8 +110,8 @@ describe('the demangler module', () => {
         expect(read('_ZNSaIcEC1Ev@plt')).toBeUndefined()
     })
 
-    it('comes back from a name nested deeper than its stack, and leaves very long names', () => {
-        expect(read(`_Z1f${'P'.repeat(LONGEST_MANGLED_NAME - 10)}i`)).toBeUndefined()
+    // A name nested deeper than the module's stack: `loadDemangler.test.ts`.
+    it('leaves very long names', () => {
         expect(read(`_Z1f${'P'.repeat(LONGEST_MANGLED_NAME)}i`)).toBeUndefined()
         expect(read('_ZNSaIcEC1Ev')?.text).toBe('std::allocator<char>::allocator()')
     })
@@ -344,6 +344,39 @@ describe('splitLabel', () => {
         })
         expect(formsOf('_ZSt4cout@@GLIBCXX_3.4').short).toBe('std::cout@@GLIBCXX_3.4')
     })
+
+    it('takes the numbering the Listing says it added, which a local name reads with too', () => {
+        // The demangler reads the `_2` as a discriminator, so the guess keeps it in the name.
+        expect(splitLabel('_ZZL8greetingvE4text_2', read)).toEqual({
+            mangled: '_ZZL8greetingvE4text_2',
+            suffix: ''
+        })
+        expect(splitLabel('_ZZL8greetingvE4text_2', read, '_2')).toEqual({
+            mangled: '_ZZL8greetingvE4text',
+            suffix: '_2'
+        })
+        expect(splitLabel('_ZZ4mainE1x_0', read, '')).toEqual({
+            mangled: '_ZZ4mainE1x_0',
+            suffix: ''
+        })
+        expect(splitLabel('_ZNSolsEi@plt_2', read, '_2')).toEqual({
+            mangled: '_ZNSolsEi',
+            suffix: '@plt_2'
+        })
+        expect(splitLabel('_Z3sumRKSt6vectorIiSaIiEE_2', read, '')).toEqual({
+            mangled: '_Z3sumRKSt6vectorIiSaIiEE_2',
+            suffix: ''
+        })
+        expect(demangledName('_ZZL8greetingvE4text', read, '')).toMatchObject({
+            short: 'greeting()::text',
+            pseudocode: { name: 'text', symbol: '_ZZL8greetingvE4text' }
+        })
+        expect(demangledName('_ZZL8greetingvE4text_2', read, '_2')).toMatchObject({
+            short: 'greeting()::text_2',
+            comment: 'greeting()::text',
+            pseudocode: { name: 'text', symbol: '_ZZL8greetingvE4text' }
+        })
+    })
 })
 
 describe('shortening', () => {
@@ -483,6 +516,20 @@ describe('shortening', () => {
         )
         // `__cxx11` stays in names that are not template-ids.
         expect(formsOf('_ZNSt7__cxx119to_stringEi').short).toBe('std::__cxx11::to_string')
+    })
+
+    it('finds nothing under the names every object has', () => {
+        // `__proto__` threw, `constructor` dropped an argument as its default, and a string of
+        // `constructor`s read `std::function Object() { [native code] }string`.
+        expect(formsOf('_ZNSt9__proto__IiE1xE').short).toBe('std::__proto__<int>::x')
+        expect(formsOf('_ZNSt11constructorIiiE1fEv').signature).toBe(
+            'std::constructor<int, int>::f()'
+        )
+        expect(
+            formsOf('_ZN2ns1fESt12basic_stringI11constructorSt11char_traitsIS1_ESaIS1_EE').signature
+        ).toBe(
+            'ns::f(std::basic_string<constructor, std::char_traits<constructor>, std::allocator<constructor>>)'
+        )
     })
 
     it('drops __cxx11 and libc++’s __1 from template-ids directly in std', () => {
@@ -637,6 +684,38 @@ describe('the Pseudocode’s names', () => {
             'operator std::string()',
             'x'
         ])
+    })
+
+    it('reads the brackets and quotes inside a string literal as its text', () => {
+        expect(splitScope(marked('ns::S<Fixed{"a(b"}>::f'))).toEqual([
+            'ns',
+            marked('S<Fixed{"a(b"}>'),
+            'f'
+        ])
+        expect(splitScope(marked('ns::S<Fixed{"x)\\"::"}>::f'))).toEqual([
+            'ns',
+            marked('S<Fixed{"x)\\"::"}>'),
+            'f'
+        ])
+        expect(splitScope(marked('S<Fixed{"a\\\\"}>::f'))).toEqual([
+            marked('S<Fixed{"a\\\\"}>'),
+            'f'
+        ])
+        // `template<Fixed F> int ns::S<F>::f()` and its static `v`, with `Fixed{"a(b"}` and
+        // `Fixed{"x)y"}`
+        expect(formsOf('_ZN2ns1SIXtl5FixedILi4EEtlA4_cLc97ELc40ELc98EEEEE1fEv').pseudocode).toEqual(
+            {
+                namespace: ['ns', 'S<Fixed<4>{"a(b"}>'],
+                name: 'f',
+                symbol: '_ZN2ns1SIXtl5FixedILi4EEtlA4_cLc97ELc40ELc98EEEEE1fEv'
+            }
+        )
+        expect(
+            formsOf('_ZN2ns1SIXtl5FixedILi4EEtlA4_cLc120ELc41ELc121EEEEE1fEv').pseudocode
+        ).toMatchObject({ namespace: ['ns', 'S<Fixed<4>{"x)y"}>'], name: 'f' })
+        expect(
+            formsOf('_ZGVN2ns1SIXtl5FixedILi4EEtlA4_cLc97ELc40ELc98EEEEE1vE').pseudocode
+        ).toMatchObject({ namespace: ['ns', 'S<Fixed<4>{"a(b"}>', 'v'], name: 'guard' })
     })
 })
 

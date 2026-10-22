@@ -796,6 +796,37 @@ describe('C++ names', () => {
         )
     })
 
+    it('numbers a second local static of one name apart, as its label is numbered', () => {
+        // Two translation units' `static const char *greeting() { static … text; }`. The demangler
+        // reads `_ZZL8greetingvE4text_2` too, its `_2` a discriminator.
+        // prettier-ignore
+        const text = [
+            0x48, 0x8b, 0x05, 0x09, 0x00, 0x00, 0x00, // 0x400080 mov rax, [rel 0x400090]
+            0x48, 0x8b, 0x05, 0x0a, 0x00, 0x00, 0x00, // 0x400087 mov rax, [rel 0x400098]
+            0xc3, 0x90, //                                0x40008e ret; nop
+            ...Array<number>(16).fill(0) //               0x400090, 0x400098 the two `text`s
+        ]
+        const bytes = buildElf(text, [
+            { name: '_ZZL8greetingvE4text', info: 0x01, value: 0x400090, size: 8 },
+            { name: '_ZZL8greetingvE4text', info: 0x01, value: 0x400098, size: 8 },
+            { name: '_start', info: 0x12, value: 0x400080, size: 0x10 }
+        ])
+        const listing = listingOf(bytes, 'statics', 0, demangler)
+        expectConsistent(listing, bytes)
+        const label = (name: string) => listing.labels.find((each) => each.name === name)
+        expect(label('_ZZL8greetingvE4text')?.demangled).toMatchObject({
+            mangled: '_ZZL8greetingvE4text',
+            suffix: '',
+            short: 'greeting()::text'
+        })
+        expect(label('_ZZL8greetingvE4text_2')?.demangled).toMatchObject({
+            mangled: '_ZZL8greetingvE4text',
+            suffix: '_2',
+            short: 'greeting()::text_2',
+            pseudocode: { namespace: ['greeting()'], name: 'text' }
+        })
+    })
+
     it("keeps the words of a comment's demangled name from reading as names", () => {
         const listing = listingOf(handBuiltCpp(), 'hand-built C++', 0, demangler)
         const index = ListingIndex.of(listing)

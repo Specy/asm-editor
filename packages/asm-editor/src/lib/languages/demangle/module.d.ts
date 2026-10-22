@@ -2,7 +2,5 @@ export type DemangleModule = {
     ccall(name: 'describe', result: 'number', types: ['string'], arguments_: [string]): number
     UTF8ToString(pointer: number): string
     _free(pointer: number): void
-    stackSave(): number
-    stackRestore(pointer: number): void
 }
 export default function createModule(): Promise<DemangleModule>

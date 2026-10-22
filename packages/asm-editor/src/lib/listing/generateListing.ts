@@ -133,12 +133,17 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
 
     // Names the file gives, by address; invented ones come later, once the starts are known.
     const used = new Map<string, number>()
+    // The `_N` a name was numbered with where another had taken it. Its demangled forms are told
+    // rather than left to guess it, since the demangler reads `_ZZL8greetingvE4text_2` as
+    // `greeting()::text` too, its `_2` a discriminator.
+    const numbering = new Map<string, string>()
     const namesAt = new Map<number, Name[]>()
     const taken = (name: string) => used.has(name)
     const claim = (address: number, name: string, origin: ListingNameOrigin) => {
         if (used.get(name) === address) return
         const unique = numberedName(name, taken)
         used.set(unique, address)
+        if (unique !== name) numbering.set(unique, unique.slice(name.length))
         const names = namesAt.get(address) ?? []
         names.push({ name: unique, origin })
         namesAt.set(address, names)
@@ -521,7 +526,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         for (const name of used.keys()) {
             if (!name.startsWith('_Z')) continue
             try {
-                const forms = demangledName(name, describe)
+                const forms = demangledName(name, describe, numbering.get(name) ?? '')
                 if (forms) demangled.set(name, forms)
             } catch {
                 // Shown raw.

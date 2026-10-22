@@ -13,8 +13,11 @@ LLVM's `ItaniumPartialDemangler` does: the demangler's whole text (what `__cxa_d
 the special name's words, the qualified name, the parameters, the return type, the qualifiers, the
 constructor or destructor variant and a GCC clone suffix. Template argument lists in the parts are
 marked with control characters so `demangledNames.ts` can shorten standard templates without
-reading `operator<` as a bracket. The result is a malloc'd string the caller frees; `loadDemangler.ts`
-always frees it and restores the stack if a name nested deeper than it makes the module throw.
+reading `operator<` as a bracket. The result is a malloc'd string the caller frees, which
+`loadDemangler.ts` always does. A part whose text passes 64 KiB, or whose printing visits a million
+nodes, makes the result null, since a name of a few hundred characters can be made to print
+gigabytes. The stack is linked below the data (`--stack-first`), so a name nested past the 1 MB stack
+traps rather than overwriting them, and `loadDemangler.ts` discards a module that throws.
 
 To regenerate with the Emscripten SDK on PATH (`source /home/dev/emsdk/emsdk_env.sh`):
 
@@ -22,7 +25,7 @@ To regenerate with the Emscripten SDK on PATH (`source /home/dev/emsdk/emsdk_env
 bash scripts/demangle/build.sh
 ```
 
-The generated module is about 101 KB uncompressed, 39 KB gzipped. `demangle.cpp` is
+The generated module is about 104 KB uncompressed, 39 KB gzipped. `demangle.cpp` is
 `Apache-2.0 WITH LLVM-exception`, as the libc++abi code it builds on; the build script copies the
 matching license to `src/lib/languages/demangle/LICENSE.txt`. `module.d.ts` declares only the runtime
 calls the editor uses.

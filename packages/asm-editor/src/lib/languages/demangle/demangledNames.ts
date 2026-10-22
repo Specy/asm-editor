@@ -90,15 +90,15 @@ const MARKS: Partial<Record<CtorDtorVariant, string>> = {
  * tree files them (decision 16): `vtable for game::Boss` is `game::Boss::vtable`. A construction
  * vtable, `construction vtable for A-in-B`, is filed under `B`.
  */
-const SPECIAL_DATA: Record<string, string> = {
-    'vtable for ': 'vtable',
-    'VTT for ': 'VTT',
-    'typeinfo for ': 'typeinfo',
-    'typeinfo name for ': 'typeinfo_name',
-    'guard variable for ': 'guard',
-    'reference temporary for ': 'reference_temporary',
-    'construction vtable for ': 'construction_vtable'
-}
+const SPECIAL_DATA = new Map([
+    ['vtable for ', 'vtable'],
+    ['VTT for ', 'VTT'],
+    ['typeinfo for ', 'typeinfo'],
+    ['typeinfo name for ', 'typeinfo_name'],
+    ['guard variable for ', 'guard'],
+    ['reference temporary for ', 'reference_temporary'],
+    ['construction vtable for ', 'construction_vtable']
+])
 
 /**
  * Special names of functions that stand for another function or variable, and take its name in
@@ -209,11 +209,21 @@ export type LabelParts = { mangled: string; suffix: string }
 /**
  * Splits off what the Listing adds to a symbol's name, which makes it unreadable to the demangler
  * (decision 4): everything from the first `@` (`@plt`, `@plt_resolver`, `@got`, a version, and any
- * `_N` after them), or a trailing `_N` the Listing numbered a duplicate with, when the name without
- * it can be read and with it cannot, or when it follows a GCC clone suffix, whose parts never end
- * in `_` and digits. A name with nothing to split comes back whole.
+ * `_N` after them), and the `_N` the Listing numbered a duplicate with. The Listing says which
+ * `_N` it added (`numbering`, '' for none), since a name can read with one as well as without:
+ * `_ZZL8greetingvE4text_2` reads as `greeting()::text`, the `_2` a discriminator. Without it, a
+ * trailing `_N` is split off when the name without it can be read and with it cannot, or when it
+ * follows a GCC clone suffix, whose parts never end in `_` and digits. A name with nothing to split
+ * comes back whole.
  */
-export function splitLabel(label: string, describe: Describe): LabelParts {
+export function splitLabel(label: string, describe: Describe, numbering?: string): LabelParts {
+    if (numbering !== undefined) {
+        const named = numbering ? label.slice(0, -numbering.length) : label
+        const at = named.indexOf('@')
+        return at > 0
+            ? { mangled: named.slice(0, at), suffix: named.slice(at) + numbering }
+            : { mangled: named, suffix: numbering }
+    }
     const at = label.indexOf('@')
     if (at > 0) return { mangled: label.slice(0, at), suffix: label.slice(at) }
     const numbered = /_\d+$/.exec(label)
@@ -245,15 +255,22 @@ function read(mangled: string, describe: Describe): Description | undefined {
 /**
  * The readable forms of a Listing label or a symbol's name, or undefined for a name that is not
  * mangled (`main`, `FUN_brave_otter`) or that the demangler cannot read (Rust's v0 names,
- * `_ZTIPKDF64x`, names over 8,192 characters), which show raw.
+ * `_ZTIPKDF64x`, names over 8,192 characters), which show raw. `numbering` is the `_N` the Listing
+ * numbered the label with, '' for none, where the caller knows it ({@link splitLabel}).
  */
-export function demangledName(label: string, describe: Describe): DemangledName | undefined {
+export function demangledName(
+    label: string,
+    describe: Describe,
+    numbering?: string
+): DemangledName | undefined {
     if (!label.startsWith('_Z')) return undefined
-    const { mangled, suffix } = splitLabel(label, describe)
+    const { mangled, suffix } = splitLabel(label, describe, numbering)
     const description = read(mangled, describe)
     if (!description) return undefined
     const { special, qualifiers } = description
-    const variant = VARIANTS[description.variant] as CtorDtorVariant | undefined
+    const variant = Object.hasOwn(VARIANTS, description.variant)
+        ? VARIANTS[description.variant]
+        : undefined
     const mark = variant && MARKS[variant] ? ` [${MARKS[variant]}]` : ''
     const clone = description.clone ? ` [clone ${description.clone}]` : ''
     const shortened = shortenTemplates(description.name)
@@ -300,7 +317,7 @@ function pseudocodeName(
         ? description.special.slice(TRANSACTION_CLONE.length)
         : description.special
     const clone = description.clone ? ` [clone ${description.clone}]` : ''
-    const identifier = SPECIAL_DATA[special]
+    const identifier = SPECIAL_DATA.get(special)
     if (identifier) {
         const target =
             special === 'construction vtable for '
@@ -358,11 +375,27 @@ const closes = (character: string) => character === CLOSE || ')]}'.includes(char
 const conversionAt = (marked: string, at: number) =>
     /^operator (?!new\b|delete\b|co_await\b)[^\s(]/.test(marked.slice(at, at + 20))
 
-/** Where `needle` first stands outside every template argument list and bracket, or -1. */
+/**
+ * Where the string literal opening at `open` ends, past its closing quote: a template argument
+ * made from a string reads `Fixed<4>{"a(b"}`, `\"` and `\\` escaped, and its brackets are text.
+ */
+function stringEnd(text: string, open: number): number {
+    for (let i = open + 1; i < text.length; i++) {
+        if (text[i] === '\\') i++
+        else if (text[i] === '"') return i + 1
+    }
+    return text.length
+}
+
+/**
+ * Where `needle` first stands outside every template argument list, bracket and string literal,
+ * or -1.
+ */
 function topLevelIndexOf(text: string, needle: string): number {
     let depth = 0
     for (let i = 0; i < text.length; i++) {
-        if (opens(text[i])) depth++
+        if (text[i] === '"') i = stringEnd(text, i) - 1
+        else if (opens(text[i])) depth++
         else if (closes(text[i])) depth--
         else if (depth === 0 && text.startsWith(needle, i)) return i
     }
@@ -370,10 +403,11 @@ function topLevelIndexOf(text: string, needle: string): number {
 }
 
 /**
- * A marked qualified name's parts, split at its top-level `::` only: `['std',
- * 'vector<std::string>', 'push_back']`, `['main', "'lambda'(int)", 'operator()']`,
- * `['(anonymous namespace)', 'hidden']`, `['greeting()', 'text']`. A conversion operator's type
- * stays whole up to its parameters: `['Foo', 'operator std::string']`.
+ * A marked qualified name's parts, split at its top-level `::` only, never inside a string
+ * literal: `['std', 'vector<std::string>', 'push_back']`, `['main', "'lambda'(int)",
+ * 'operator()']`, `['(anonymous namespace)', 'hidden']`, `['greeting()', 'text']`,
+ * `['ns', 'S<Fixed<4>{"a(b"}>', 'f']`. A conversion operator's type stays whole up to its
+ * parameters: `['Foo', 'operator std::string']`.
  */
 export function splitScope(marked: string): string[] {
     const parts: string[] = []
@@ -382,7 +416,9 @@ export function splitScope(marked: string): string[] {
     let conversion = conversionAt(marked, 0)
     for (let i = 0; i < marked.length; i++) {
         const character = marked[i]
-        if (opens(character)) {
+        if (character === '"') {
+            i = stringEnd(marked, i) - 1
+        } else if (opens(character)) {
             if (character === '(' && depth === 0) conversion = false
             depth++
         } else if (closes(character)) {
@@ -398,13 +434,16 @@ export function splitScope(marked: string): string[] {
     return parts
 }
 
-const CHARACTER_PREFIXES: Record<string, string> = {
-    char: '',
-    wchar_t: 'w',
-    char8_t: 'u8',
-    char16_t: 'u16',
-    char32_t: 'u32'
-}
+// The tables a template's names are looked up in are maps: a binary's names can be anything,
+// `std::__proto__<int>` and `std::constructor<int, int>` included, and an object would find what
+// every object inherits under them.
+const CHARACTER_PREFIXES = new Map([
+    ['char', ''],
+    ['wchar_t', 'w'],
+    ['char8_t', 'u8'],
+    ['char16_t', 'u16'],
+    ['char32_t', 'u32']
+])
 const STREAMS = new Set([
     'ios',
     'streambuf',
@@ -422,55 +461,59 @@ const template = (head: string, ...args: string[]) =>
     `${head}${OPEN}${args.join(SEPARATOR)}${CLOSE}`
 const allocatorOf = (type: string) => template('std::allocator', type)
 const pairOf = (key: string, value: string) => template('std::pair', `${key} const`, value)
+type Defaults = (args: readonly string[]) => (string | undefined)[]
 /**
  * Each container's and adaptor's arguments' defaults, built from the (shortened) arguments before
  * them; `undefined` for an argument without one.
  */
-const DEFAULTS: Record<string, (args: readonly string[]) => (string | undefined)[]> = {
-    vector: ([t]) => [undefined, allocatorOf(t)],
-    deque: ([t]) => [undefined, allocatorOf(t)],
-    list: ([t]) => [undefined, allocatorOf(t)],
-    forward_list: ([t]) => [undefined, allocatorOf(t)],
-    set: ([k]) => [undefined, template('std::less', k), allocatorOf(k)],
-    multiset: ([k]) => [undefined, template('std::less', k), allocatorOf(k)],
-    map: ([k, v]) => [undefined, undefined, template('std::less', k), allocatorOf(pairOf(k, v))],
-    multimap: ([k, v]) => [
-        undefined,
-        undefined,
-        template('std::less', k),
-        allocatorOf(pairOf(k, v))
+const DEFAULTS = new Map<string, Defaults>([
+    ['vector', ([t]) => [undefined, allocatorOf(t)]],
+    ['deque', ([t]) => [undefined, allocatorOf(t)]],
+    ['list', ([t]) => [undefined, allocatorOf(t)]],
+    ['forward_list', ([t]) => [undefined, allocatorOf(t)]],
+    ['set', ([k]) => [undefined, template('std::less', k), allocatorOf(k)]],
+    ['multiset', ([k]) => [undefined, template('std::less', k), allocatorOf(k)]],
+    [
+        'map',
+        ([k, v]) => [undefined, undefined, template('std::less', k), allocatorOf(pairOf(k, v))]
     ],
-    unordered_set: ([k]) => [
-        undefined,
-        template('std::hash', k),
-        template('std::equal_to', k),
-        allocatorOf(k)
+    [
+        'multimap',
+        ([k, v]) => [undefined, undefined, template('std::less', k), allocatorOf(pairOf(k, v))]
     ],
-    unordered_multiset: ([k]) => [
-        undefined,
-        template('std::hash', k),
-        template('std::equal_to', k),
-        allocatorOf(k)
+    [
+        'unordered_set',
+        ([k]) => [undefined, template('std::hash', k), template('std::equal_to', k), allocatorOf(k)]
     ],
-    unordered_map: ([k, v]) => [
-        undefined,
-        undefined,
-        template('std::hash', k),
-        template('std::equal_to', k),
-        allocatorOf(pairOf(k, v))
+    [
+        'unordered_multiset',
+        ([k]) => [undefined, template('std::hash', k), template('std::equal_to', k), allocatorOf(k)]
     ],
-    unordered_multimap: ([k, v]) => [
-        undefined,
-        undefined,
-        template('std::hash', k),
-        template('std::equal_to', k),
-        allocatorOf(pairOf(k, v))
+    [
+        'unordered_map',
+        ([k, v]) => [
+            undefined,
+            undefined,
+            template('std::hash', k),
+            template('std::equal_to', k),
+            allocatorOf(pairOf(k, v))
+        ]
     ],
-    unique_ptr: ([t]) => [undefined, template('std::default_delete', t)],
-    stack: ([t]) => [undefined, template('std::deque', t)],
-    queue: ([t]) => [undefined, template('std::deque', t)],
-    priority_queue: ([t]) => [undefined, template('std::vector', t), template('std::less', t)]
-}
+    [
+        'unordered_multimap',
+        ([k, v]) => [
+            undefined,
+            undefined,
+            template('std::hash', k),
+            template('std::equal_to', k),
+            allocatorOf(pairOf(k, v))
+        ]
+    ],
+    ['unique_ptr', ([t]) => [undefined, template('std::default_delete', t)]],
+    ['stack', ([t]) => [undefined, template('std::deque', t)]],
+    ['queue', ([t]) => [undefined, template('std::deque', t)]],
+    ['priority_queue', ([t]) => [undefined, template('std::vector', t), template('std::less', t)]]
+])
 
 /** An argument as the table compares it: libc++'s `std::__1::` read as `std::`. */
 const canonical = (argument: string) => argument.replaceAll('std::__1::', 'std::')
@@ -482,7 +525,7 @@ function shortTemplate(head: string, args: readonly string[]): string {
     const name = standard[1]
     const compared = args.map(canonical)
     const [character] = compared
-    const prefix = CHARACTER_PREFIXES[character]
+    const prefix = CHARACTER_PREFIXES.get(character)
     if (prefix !== undefined) {
         const traits = template('std::char_traits', character)
         const allocator = allocatorOf(character)
@@ -498,7 +541,7 @@ function shortTemplate(head: string, args: readonly string[]): string {
             if (STRING_STREAMS.has(stream) && withAllocator) return `std::${prefix}${stream}`
         }
     }
-    const defaults = DEFAULTS[name]?.(args)
+    const defaults = DEFAULTS.get(name)?.(args)
     let kept = args.length
     if (defaults)
         while (
