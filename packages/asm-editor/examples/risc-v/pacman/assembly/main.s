@@ -16,10 +16,11 @@
 #
 # The program is in several Files, which RARS's .include joins into one before assembling it:
 #
-#   constants.s   names for numbers         game.s     states, score, input, frame timing
+#   constants.s   names for numbers         maze.s     the maze
 #   data.s        variables and tables      pacman.s   Pac-Man
 #   assets.s      reading the Files         ghosts.s   the ghosts
-#   video.s       drawing                   maze.s     the maze
+#   video.s       drawing                   game.s     states, score, input, frame timing
+#   sound.s       the music and the sound effects
 
         .include "constants.s"
 
@@ -47,6 +48,7 @@ main_loop:
         jal     read_input
         jal     update_game
         jal     render_sprites
+        jal     update_sounds
         jal     wait_frame
         j       main_loop
 
@@ -56,3 +58,4 @@ main_loop:
         .include "pacman.s"
         .include "ghosts.s"
         .include "game.s"
+        .include "sound.s"

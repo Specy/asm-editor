@@ -796,6 +796,7 @@ cc_loop:
         jal     eat_ghost
         j       cc_done
 cc_caught:
+        jal     stop_sounds                     # the game stands still in silence
         li      a0, ST_DYING
         jal     enter_state
         j       cc_done
@@ -833,6 +834,9 @@ eat_ghost:
         sw      s0, 0(t0)
         li      a0, ST_EAT_GHOST
         jal     enter_state
+        li      a0, CHANNEL_3
+        la      a1, sound_ghost
+        jal     play_sound
         lw      ra, 12(sp)
         lw      s0, 8(sp)
         addi    sp, sp, 16

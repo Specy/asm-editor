@@ -216,17 +216,29 @@ export const Z80_PORTS = {
     /** Waits for the next animation frame and answers 0: the pacing of an animated program. */
     TIME_FRAME: 0x51,
     /** One byte of the hundredths of a second since the run started; B selects the byte, 0 lowest. */
-    TIME_NOW: 0x52
+    TIME_NOW: 0x52,
+
+    /** Plays a Note at the written pitch with the instrument, volume and duration set, and goes on. */
+    NOTE_PLAY: 0x60,
+    /** Plays a Note at the pitch in B, waits its duration and answers 0. */
+    NOTE_PLAY_WAIT: 0x61,
+    /** The General MIDI instrument of the next Notes, 0 to 127. */
+    NOTE_INSTRUMENT: 0x62,
+    /** The volume of the next Notes, 0 to 127. */
+    NOTE_VOLUME: 0x63,
+    /** The duration of the next Notes in milliseconds: B the high byte, the written value the low. */
+    NOTE_DURATION: 0x64
 } as const
 
 export type Z80PortName = keyof typeof Z80_PORTS
 
 /** The peripheral a port belongs to. The documentation page and the agent prompt group by it. */
-export type Z80PortGroup = 'console' | 'screen' | 'keyboard' | 'mouse' | 'time'
+export type Z80PortGroup = 'console' | 'screen' | 'keyboard' | 'mouse' | 'time' | 'audio'
 
 /**
- * The four groups of [ADR 0011](../../../../../../docs/adr/0011-z80-peripherals-through-the-port-map.md)
- * plus the console ports they extend, in the order the documentation shows them.
+ * The groups of [ADR 0011](../../../../../../docs/adr/0011-z80-peripherals-through-the-port-map.md),
+ * the audio one of its 2026-10-23 update included, plus the console ports they extend, in the order
+ * the documentation shows them.
  */
 export const Z80_PORT_GROUP_DOCS: {
     group: Z80PortGroup
@@ -268,6 +280,13 @@ export const Z80_PORT_GROUP_DOCS: {
         range: '0x50 - 0x52',
         description:
             'Delay the program, synchronize animation frames, or read elapsed time. Waits leave the editor responsive: Stop still works and the Screen can repaint.'
+    },
+    {
+        group: 'audio',
+        title: 'Audio',
+        range: '0x60 - 0x64',
+        description:
+            'Play notes with a pitch, instrument sound, and volume, each numbered from 0 to 127, and a duration in milliseconds. General MIDI is the standard list of instrument sounds. Write a pitch to NOTE_PLAY (0x60) to start a note and continue immediately, allowing notes to overlap as a chord. Read NOTE_PLAY_WAIT (0x61) with the pitch in B to play a note and wait for its requested duration; a sequence of these reads can play a melody. Testcases are silent, and waits complete immediately while advancing the virtual clock.'
     }
 ]
 
@@ -896,6 +915,95 @@ loop:   push bc
         out (0x11), a
         halt`,
         exampleShows: 'the hundredths of a second the program has been running, about 10.'
+    },
+    {
+        name: 'NOTE_PLAY',
+        port: Z80_PORTS.NOTE_PLAY,
+        group: 'audio',
+        title: 'Play a note',
+        write: 'Writing a pitch starts a note and continues immediately, so notes can overlap. Pitch runs from 0 to 127: 60 is middle C, 62 is D, 64 is E, and each step is one semitone. The note uses the instrument, volume, and duration last set through the other audio ports. A pitch of 128 or more becomes 60, as in MARS service 31. The first note or MIDI-file request after opening or reloading the editor page waits while the browser loads the sound bank, the collection of instrument sounds; later runs share it.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 60        ; C
+        out (0x60), a
+        ld a, 64        ; E, sounding with it
+        out (0x60), a
+        ld a, 67        ; G: a C major chord
+        out (0x60), a
+        halt`,
+        exampleShows:
+            'No text output; plays a C major chord on the piano for one second, continuing after the program ends.'
+    },
+    {
+        name: 'NOTE_PLAY_WAIT',
+        port: Z80_PORTS.NOTE_PLAY_WAIT,
+        group: 'audio',
+        title: 'Play a note and wait',
+        write: 'Ignored.',
+        read: 'Read with `in r,(c)` and the pitch in B to play a note using the instrument, volume, and duration already set. Waits for the requested duration, then returns 0, like MARS service 33. A sequence of these reads can play a melody. Muting or stopping the audible note does not shorten the wait. Testcases are silent; the wait completes immediately and advances the virtual clock by the duration.',
+        example: `        .org 0x8000
+        ld b, 0
+        ld a, 150       ; 150 ms per note
+        ld c, 0x64
+        out (c), a
+        ld c, 0x61
+        ld b, 60        ; C
+        in a, (c)
+        ld b, 64        ; then E
+        in a, (c)
+        ld b, 67        ; then G
+        in a, (c)
+        ld a, '!'
+        out (0x10), a
+        halt`,
+        exampleOutput: '!'
+    },
+    {
+        name: 'NOTE_INSTRUMENT',
+        port: Z80_PORTS.NOTE_INSTRUMENT,
+        group: 'audio',
+        title: 'Instrument',
+        write: 'Selects the instrument sound for later notes from the General MIDI list, numbered from 0 to 127: 0 is acoustic grand piano, 40 violin, 56 trumpet, and 73 flute. Values of 128 or more select 0 (piano), as in MARS. Every run starts at 0 (piano).',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 40        ; violin
+        out (0x62), a
+        ld a, 69        ; A above middle C
+        out (0x60), a
+        halt`,
+        exampleShows: 'No text output; plays an A on the violin for one second.'
+    },
+    {
+        name: 'NOTE_VOLUME',
+        port: Z80_PORTS.NOTE_VOLUME,
+        group: 'audio',
+        title: 'Volume',
+        write: 'Sets the volume for later notes, from 0 (silent) to 127 (loudest). Values of 128 or more become 100, the MARS default. Every run starts at 100.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 30        ; quietly
+        out (0x63), a
+        ld a, 60
+        out (0x60), a
+        halt`,
+        exampleShows: 'No text output; plays a quiet middle C.'
+    },
+    {
+        name: 'NOTE_DURATION',
+        port: Z80_PORTS.NOTE_DURATION,
+        group: 'audio',
+        title: 'Duration',
+        write: 'Sets the duration for later notes in milliseconds. Use `out (c),r` with C = 0x64: B supplies the high byte and the written register supplies the low byte, giving a duration up to 65,535 milliseconds. Every run starts at 1000 milliseconds, the MARS default.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld b, 0x07      ; 0x07D0 = 2000 ms
+        ld a, 0xd0
+        ld c, 0x64
+        out (c), a
+        ld a, 48        ; a low C for two seconds
+        out (0x60), a
+        halt`,
+        exampleShows: 'No text output; plays a low C for two seconds.'
     }
 ]
 

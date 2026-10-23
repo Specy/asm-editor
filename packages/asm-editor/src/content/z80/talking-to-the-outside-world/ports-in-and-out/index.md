@@ -165,6 +165,74 @@ done:
 Type `hi there` and press Enter. The console shows `8`, the number of characters before the
 newline.
 
+## Making sound
+
+Ports `0x60` to `0x64` let a program play sounds. Each sound has a **pitch**, which describes how
+high or low it sounds. Pitches are numbered from 0 to 127: higher numbers give higher sounds.
+For example, 60 is middle C, 64 is E and 67 is G.
+
+Three ports set how later sounds will play:
+
+- Write an instrument number to `0x62`. The numbers run from 0 to 127: 0 is piano, 40 is violin,
+  56 is trumpet and 73 is flute. For example, put `40` in `a` and use `out (0x62), a` to select
+  the violin.
+- Write a volume from 0 to 127 to `0x63`, where 0 is silent and 127 is loudest. To choose volume
+  80, put `80` in `a` and use `out (0x63), a`.
+- Write a duration in milliseconds to `0x64`. As with the 16-bit number port, use `out (c), a`
+  with `c = 0x64`: `b` supplies the high byte and `a` the low byte. This allows durations up to
+  65,535 milliseconds.
+
+A run starts with instrument 0 (piano), volume 100 and a duration of 1000 milliseconds, or one
+second. Each setting stays in effect until you write a new value to its port. Once the duration
+has been written, you can reuse `b` for something else.
+
+Writing a pitch to `0x60` starts a sound and lets the program continue while it plays. Several
+writes can therefore start sounds that overlap. If the instrument sounds have not loaded yet,
+the program pauses at that request until the browser finishes loading them. Later runs share the
+loaded sounds.
+
+To play sounds one after another, use port `0x61`. This needs another form of `in`:
+
+- **`in a, (c)`** reads from the port whose number is in `c` and puts the returned byte in `a`.
+  As with `out (c), r`, `b` supplies the high byte of the address bus.
+
+For this playground's port `0x61`, set `c` to `0x61` and put the pitch in `b`. The read starts that
+sound, waits for the duration you set, then replaces `a` with `0`. The example can ignore this
+returned zero. This play-and-wait behavior belongs to the playground's sound device; it is not a
+general rule about `in`.
+
+The example sets a duration of 300 milliseconds, then reuses `b` for each pitch:
+
+```z80|playground|no-flags
+    .org 0x8000
+    ld b, 0x01      ; duration 0x012C = 300 ms: b is the high byte
+    ld a, 0x2c      ; and the byte sent the low byte
+    ld c, 0x64
+    out (c), a
+    ld c, 0x61      ; play the pitch in b, then wait for its duration
+    ld b, 60        ; middle C
+    in a, (c)
+    ld b, 64        ; E
+    in a, (c)
+    ld b, 67        ; G
+    in a, (c)
+    ld a, 60        ; C, E and G again, together: a chord
+    out (0x60), a
+    ld a, 64
+    out (0x60), a
+    ld a, 67
+    out (0x60), a
+    halt
+```
+
+The three reads of `0x61` play C, E and G one after another, 300 milliseconds each. The three writes
+to `0x60` start them within a few instructions of each other, so they sound together as a chord.
+The chord keeps playing after `halt` and stops when its duration is over.
+
+Once a program has made a sound, a **Sound** button in the execution dock turns sound off and on.
+Testcases are silent, and each read of `0x61` completes immediately while advancing the simulator's
+clock by the requested duration.
+
 ## Unconnected ports
 
 In this playground, writing to an unconnected port has no effect and reading one produces `0xFF`.

@@ -22,6 +22,7 @@
         type DockView,
         type DockViews
     } from '#cmp/specific/project/ExecutionDock.svelte'
+    import { DockSoundState } from '#cmp/specific/project/dockSound.svelte.ts'
     import type { FileView } from '#lib/fileViews.ts'
     import FaTh from '~icons/fa-solid/th'
     import FaListOl from '~icons/fa-solid/list-ol'
@@ -177,6 +178,8 @@
         }
     })
 
+    const sound = new DockSoundState(() => emulator.audioActivity)
+
     function test() {
         //the session's Program, read before Stop forgets which it was
         const entry = program
@@ -203,6 +206,7 @@
     executionDisabled={session.executionDisabled}
     undoDisabled={session.undoDisabled}
     canUndo={emulator.canUndo}
+    sound={sound.value}
     hasTests={program !== undefined && !!session.project.program(program)?.testcases.length}
     onBuild={() => session.build(program, pane)}
     onStop={() => session.stop()}

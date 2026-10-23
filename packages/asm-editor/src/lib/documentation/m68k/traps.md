@@ -2,7 +2,7 @@
 
 The 68000 instruction set includes `trap #n`, which transfers control to an exception handler. This editor uses `trap #15` for the tasks on this page: put the task number in `D0.B`, put its arguments in the listed input registers, then read any answer from the output registers. Other trap numbers are not implemented here.
 
-The simulator supplies these tasks for the console, screen, keyboard, mouse, clock, and project files. Undo reverses a task's changes along with the instruction's register and memory changes, the text it printed included; a read that is undone asks for its input again when you step it. Testcases use scripted input and their own copy of the project's files.
+The simulator supplies these tasks for the console, screen, keyboard, mouse, clock, project files, and sound. Undo reverses a task's changes along with the instruction's register and memory changes, the text it printed included; a read that is undone asks for its input again when you step it. Testcases use scripted input and their own copy of the project's files.
 
 ## Input routing {#differences}
 
@@ -24,6 +24,20 @@ A color is a long written `$00BBGGRR`: blue in bits 23-16, green in bits 15-8 an
 {keyCodeRules}
 
 {keyCodes}
+
+## Sound in this editor {#sound-differences}
+
+After a program requests sound, the **Sound** button appears in the execution dock as a mute/unmute control. It sets **Play sound** in **Preferences**, where **Sound volume** is also available. Both settings apply across projects. Muting leaves program-visible timing and results unchanged.
+
+The DirectX player is the name of an EASy68K-compatible interface in this editor; it does not require Windows or a DirectX installation. It mixes WAV audio files and MIDI files, which describe notes and instruments to play.
+
+Sound differs from EASy68K in these ways:
+
+- At most 64 sounds play at once, including at most 4 MIDI files. Starting another stops the oldest sound that is not looping, or the oldest loop if every sound loops. A fifth MIDI file stops the oldest MIDI file using the same rule. These limits do not change the task results.
+- MIDI files use the editor's General MIDI sound bank, its collection of instrument sounds. They can sound different from EASy68K, which uses the Windows synthesizer. The browser loads the bank automatically on the first note or MIDI-file request after opening or reloading the editor page; that request waits for loading. Later runs and projects share the loaded bank.
+- Loops stop when the program ends; EASy68K keeps them playing until another program is loaded. Sounds played once finish even after the program ends.
+- Task 77 with control 3 stops every DirectX sound even if its supplied slot is empty. EASy68K stops nothing in that case. Both return 0 in D0.W for the empty slot.
+- DirectMusic segment files are unsupported: tasks 73 and 74 return 0, and the **Log** explains why.
 
 ## Unsupported tasks {#unsupported}
 

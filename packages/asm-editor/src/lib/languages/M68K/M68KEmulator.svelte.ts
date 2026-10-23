@@ -40,11 +40,11 @@ import {
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
+import type { OpenedSound } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
-    describeUnsupportedTrapTask,
     easy68kColorOf,
     M68K_DRAWING_MODES,
     M68K_MIN_SCREEN_HEIGHT,
@@ -118,25 +118,8 @@ const INTERRUPT_INPUT_QUESTIONS: Partial<Record<Interrupt['type'], string>> = {
 const EASY68K_FILE_DESCRIPTORS: FileDescriptorOptions = { firstDescriptor: 0, maxOpen: 8 }
 
 /**
- * The sound tasks, by the interrupt the Core raises for each. Nothing can play them until the
- * Audio Peripheral exists ([the plan](../../../../../../docs/design/environment-library-plan.md), Later),
- * so each one ends the program with the reason from the trap table.
- */
-const SOUND_TASKS = {
-    PlaySound: 70,
-    LoadSound: 71,
-    PlayLoadedSound: 72,
-    PlaySoundDirectX: 73,
-    LoadSoundDirectX: 74,
-    PlayLoadedSoundDirectX: 75,
-    ControlSound: 76,
-    ControlSoundDirectX: 77
-} as const satisfies Partial<Record<Interrupt['type'], number>>
-
-/**
- * How the program ended when the editor answered a task with `Terminate`, which it does only for a
- * task it cannot carry out (sound). The run ends on the error that names the task, which is what the
- * Log and the console show; this is the Core's own account of the same end.
+ * How the program ended when the editor answered a task with `Terminate`, which it no longer does for
+ * any task since sound plays; kept so the Core's account of such an end still reads as an error.
  */
 const ENDED_BY_THE_EDITOR = 'The editor ended the program at a trap #15 task it cannot carry out'
 
@@ -303,6 +286,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //a trap's output and reads are journaled under its step id, as its drawing is
         //([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
         this._peripherals.terminal.trackHistory(() => interpreter.getLastStepId(), undoSize)
+        //and so are the Sounds it plays and the slots it loads
+        //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
+        this._peripherals.audio.track(() => interpreter.getLastStepId(), undoSize)
     }
 
     _dispose(): void {
@@ -577,6 +563,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.screenInstructions?.undoAfter(step.id - 1)
         this.fileSystemSession?.undoAfter(step.id)
         this._peripherals.terminal.undoAfter(step.id - 1)
+        this._peripherals.audio.undoAfter(step.id - 1)
     }
 
     /**
@@ -871,6 +858,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 case 'FileDialog': {
                     //modal in its reference, so it is the app's Prompt rather than the console
                     const { mode, title, filter, path } = interrupt.value
+                    //what the program played is heard while the dialog waits
+                    this._peripherals.audio.flush()
                     const answer = await this._peripherals.terminal.inputDialog(
                         fileDialogQuestion(mode, title, filter),
                         execution,
@@ -883,19 +872,44 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 }
 
                 // ------------------------------------------------------------ sound
+                //the outcome is the editor's, D0.W the Core's: EASy68K leaves it alone for a File
+                //that is not there, which only the Core knows to do
+                //([audio.md](../../../../../../docs/design/audio.md#easy68ks-files-and-answers))
                 case 'PlaySound':
+                case 'PlaySoundDirectX': {
+                    const sound = await this.openSound(interrupt.value, execution)
+                    const player = type === 'PlaySound' ? 'standard' : 'directx'
+                    const value = this._peripherals.audio.playFile(player, sound)
+                    interpreter.answerInterrupt({ type, value })
+                    break
+                }
                 case 'LoadSound':
+                case 'LoadSoundDirectX': {
+                    const sound = await this.openSound(interrupt.value.path, execution)
+                    const player = type === 'LoadSound' ? 'standard' : 'directx'
+                    const value = this._peripherals.audio.loadSlot(
+                        player,
+                        interrupt.value.index,
+                        sound
+                    )
+                    if (type === 'LoadSound') interpreter.answerInterrupt({ type })
+                    else interpreter.answerInterrupt({ type, value })
+                    break
+                }
                 case 'PlayLoadedSound':
-                case 'PlaySoundDirectX':
-                case 'LoadSoundDirectX':
-                case 'PlayLoadedSoundDirectX':
+                case 'PlayLoadedSoundDirectX': {
+                    const player = type === 'PlayLoadedSound' ? 'standard' : 'directx'
+                    const value = this._peripherals.audio.playSlot(player, interrupt.value)
+                    interpreter.answerInterrupt({ type, value })
+                    break
+                }
                 case 'ControlSound':
                 case 'ControlSoundDirectX': {
-                    //nothing can play them until the Audio Peripheral exists. `Terminate` is the
-                    //Core's answer for a host without sound, and the run ends on an error saying so
-                    //rather than as though the program had finished
-                    interpreter.answerInterrupt({ type: 'Terminate' })
-                    throw new Error(describeUnsupportedTrapTask(SOUND_TASKS[type]))
+                    const player = type === 'ControlSound' ? 'standard' : 'directx'
+                    const { index, control } = interrupt.value
+                    const value = this._peripherals.audio.control(player, index, control)
+                    interpreter.answerInterrupt({ type, value })
+                    break
                 }
 
                 // --------------------------------------------------- keyboard and mouse
@@ -1150,6 +1164,28 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             this.state.interrupt = undefined
         }
         return undefined
+    }
+
+    /**
+     * Reads a Sound File the program named, through the Build's FileSystem as the file tasks do, and
+     * holds the program while its sound decodes or the sound bank loads. Undefined, and a note in
+     * the Log as EASy68K's Message window had it, when no File has the path.
+     */
+    private async openSound(
+        path: string,
+        execution: ExecutionGeneration
+    ): Promise<OpenedSound | undefined> {
+        const audio = this._peripherals.audio
+        const bytes = this.fileSystemSession?.readWhole(path)
+        if (bytes === undefined) {
+            audio.noteMissing(path)
+            return undefined
+        }
+        const sound = audio.open({ path, bytes })
+        const loading = sound && audio.prepare(sound)
+        if (loading) await this.executionController.waitFor(execution, () => loading)
+        this.executionController.ensureCurrent(execution)
+        return sound
     }
 
     /**

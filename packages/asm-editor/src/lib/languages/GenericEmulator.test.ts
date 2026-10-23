@@ -36,6 +36,9 @@ import type { Testcase } from '#lib/Project.svelte.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import { Audio, marsNote } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
+import { makeWav } from '#lib/languages/peripherals/audio/soundFixtures.ts'
 
 /**
  * The scheduler, the injection, the reset path and the Undo rule of phase 3, exercised through a
@@ -1443,6 +1446,64 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
         expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+})
+
+describe('audio', () => {
+    function withAudio(): { emulator: FakeEmulator; audio: Audio; output: RecordingAudioOutput } {
+        const output = new RecordingAudioOutput()
+        const audio = new Audio({ output })
+        const emulator = new FakeEmulator({ peripherals: { audio } })
+        return { emulator, audio, output }
+    }
+
+    it('runs a Testcase on a silent Audio and gives the interactive one back', async () => {
+        const { emulator, audio } = withAudio()
+        let silentInside = false
+        emulator._runTestcase = async () => {
+            silentInside = emulator.peripherals.audio.silent
+        }
+        await emulator.runTestcase(emptyTestcase, 100)
+        expect(silentInside).toBe(true)
+        expect(emulator.peripherals.audio).toBe(audio)
+    })
+
+    it('sends what a slice started once the slice is over', async () => {
+        const { emulator, audio, output } = withAudio()
+        emulator.behavior = () => {
+            audio.playNote(marsNote(60, 500, 0, 100))
+            expect(output.batches).toEqual([])
+            emulator.hasEnded = true
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(100)
+        expect(output.commands.filter((c) => c.type === 'note')).toHaveLength(1)
+        expect(emulator.audioActivity.soundsStarted).toBe(1)
+    })
+
+    it('stops loops when the program ends, and silences everything on a clear', async () => {
+        const { emulator, audio, output } = withAudio()
+        audio.loadSlot('directx', 0, audio.open({ path: 'loop.wav', bytes: makeWav() }))
+        emulator.behavior = () => {
+            audio.control('directx', 0, 1)
+            audio.playNote(marsNote(60, 5000, 0, 100))
+            emulator.hasEnded = true
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(100)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+        expect(emulator.audioActivity.playingForMs).toBeGreaterThan(0)
+        emulator.clear()
+        expect(output.batches.at(-1)).toEqual([{ type: 'stopAll' }])
+        expect(audio.playSlot('directx', 0)).toBe('Missing')
+    })
+
+    it('writes what Audio has to say into the Log', () => {
+        const { emulator, audio } = withAudio()
+        audio.noteMissing('roger.wav')
+        expect(emulator.notes.map((n) => [n.tone, n.text])).toEqual([
+            ['warning', "Sound File 'roger.wav' not found"]
+        ])
     })
 })
 

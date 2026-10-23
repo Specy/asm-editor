@@ -231,6 +231,7 @@ import {
     type EditorFileDrag
 } from './editorFileDrag'
 import { writeUploads } from './fileUploads'
+import { wakeAudio } from '#lib/languages/peripherals/audio/audioContext.ts'
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
@@ -3900,6 +3901,7 @@ export class WorkbenchSession {
      * and its first stop open there rather than in a pane that may show another Program.
      */
     async build(entry?: string, group?: EditorGroup) {
+        this.wakeAudio()
         if (this.host.readonly || this.building || this.running || this.compiling) return
         if (this.fileSystemLocked) {
             //The Build button is hidden in this state, but the shortcut is not, and returning here
@@ -4049,6 +4051,7 @@ export class WorkbenchSession {
      * to Cursor's, it also stops before those.
      */
     async run(targets?: readonly SourceBreakpoint[]) {
+        this.wakeAudio()
         if (this.building || this.running || this.compiling) return
         this.running = true
         this.testcasesResult = []
@@ -4064,7 +4067,17 @@ export class WorkbenchSession {
         this.emulator.pause()
     }
 
+    /**
+     * Unlocks the page's sound inside the click or key press that starts a Build, Run or Step,
+     * before anything awaits, which is when every browser allows it
+     * ([audio.md](../../../../../docs/design/audio.md#autoplay-mute-and-volume)). x86 plays nothing.
+     */
+    private wakeAudio(): void {
+        if (this.project.language !== 'X86') wakeAudio()
+    }
+
     async step() {
+        this.wakeAudio()
         //the Build's run to `main` owns the Core until it stops there, as a Run does
         if (this.building || this.running) return
         try {

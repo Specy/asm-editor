@@ -1005,6 +1005,26 @@ export class FileSystemSession {
         if (found.kind === 'directory') return { kind: 'directory', size: 0 }
         return undefined
     }
+    /**
+     * The whole of the File at `path` as it is now, or undefined when there is none: the Audio
+     * Peripheral's Sound Files, read in one go. It changes nothing, so it journals nothing.
+     *
+     * The File's own bytes, not a copy, which a caller must never change and must copy to keep: an
+     * append after an Undo can reuse their buffer. Every write gives the File a new array, so the
+     * same array read again is the same content, which spares EASy68K's retry-while-busy loop a copy
+     * of the whole Sound on every try.
+     */
+    readWhole(path: string): Uint8Array | undefined {
+        this.ensureActive()
+        let resolved: string
+        try {
+            resolved = resolveSessionPath(path)
+        } catch {
+            return undefined
+        }
+        const found = this.lookup(resolved)
+        return found.kind === 'file' ? found.node.bytes : undefined
+    }
     /** `stat` through a descriptor, which reaches its File even after the path was removed. */
     fstat(fd: number): FileStat {
         return { kind: 'file', size: this.handle(fd).node.bytes.length }

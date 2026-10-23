@@ -48,7 +48,7 @@ enum GameState {
     READY,      /* READY! for two seconds, after PLAYER ONE at the start of a game */
     PLAY,       /* the game itself */
     EAT_GHOST,  /* a second's pause showing a ghost's points */
-    DYING,      /* a second's pause, then Pac-Man shrivels away */
+    DYING,      /* a second's pause, then Pac-Man shrivels away and pops */
     LEVEL_DONE, /* a second's pause, then the maze flashes */
     GAME_OVER   /* GAME OVER for five seconds, or until a key */
 };
@@ -112,6 +112,23 @@ struct Level {
 };
 #define LEVEL_TABLE_LAST 21
 
+/* The sound: three channels play at once, as the arcade's three voices did (sound.c). */
+enum SoundChannel {
+    CHANNEL_1, /* the start music's bass, the extra life */
+    CHANNEL_2, /* the start music's tune, the siren, the frightened ghosts, the eyes going home */
+    CHANNEL_3, /* the dots, the fruit, a ghost eaten, the death */
+    CHANNEL_COUNT
+};
+/*
+ * The General MIDI instruments the tables play. In the editor's sound bank, timpani is a nearly
+ * pure tone that dies away quickly, which keeps a Note a frame sounding like one sweep.
+ */
+#define INSTRUMENT_PIANO 0
+#define INSTRUMENT_BASS 32
+#define INSTRUMENT_TIMPANI 47
+#define SOUND_END 0      /* in place of a pitch: the table is over */
+#define SOUND_REPEAT 255 /* in place of a pitch: back to the table's first event */
+
 /* assets.c */
 static void load_assets(void);
 
@@ -161,5 +178,11 @@ static void update_game(void);
 static void add_score(int points);
 static void read_input(void);
 static void wait_frame(void);
+
+/* sound.c */
+static void play_sound(int channel, const uint8_t *script);
+static void stop_sounds(void);
+static void play_chomp(void);
+static void update_sounds(void);
 
 #endif

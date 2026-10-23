@@ -1,0 +1,43 @@
+// The `workbench` variant of `Button` and `ButtonLink` (buttonVariant.ts), included inside their
+// `.btn` rule. `$disabled` is how each marks a disabled button: the attribute on a button, a class
+// on a link.
+
+@mixin workbench($disabled) {
+    &.workbench {
+        padding: 0.5rem 0.9rem;
+        border: 1px solid transparent;
+        border-radius: var(--wb-radius, 0.4rem);
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition:
+            background-color 0.15s,
+            border-color 0.15s,
+            color 0.15s;
+
+        &:hover {
+            filter: none;
+            background-color: color-mix(in srgb, var(--btn-color) 85%, white);
+        }
+
+        &.surface:hover {
+            background-color: color-mix(in srgb, var(--tertiary) 55%, var(--btn-color));
+        }
+
+        &.active:hover {
+            background-color: color-mix(in srgb, var(--accent) 85%, white);
+        }
+
+        &#{$disabled}:hover {
+            background-color: var(--btn-color);
+        }
+
+        &.bordered {
+            border-color: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+    }
+}

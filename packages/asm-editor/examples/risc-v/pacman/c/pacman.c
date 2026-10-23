@@ -9,10 +9,12 @@
  * below are pasted in here and compiled as one program: each is an ordinary .c File, kept apart
  * only to be read apart. pacman.h declares what they share.
  *
- *   state.c    variables and the arcade's tables    player.c   Pac-Man
- *   assets.c   reading the Files                    ghosts.c   the ghosts
- *   video.c    drawing                              game.c     states, score, input, frame timing
- *   maze.c     the maze
+ *   state.c    variables and the arcade's tables    sound.c    the music and the sound effects
+ *   assets.c   reading the Files                    player.c   Pac-Man
+ *   video.c    drawing                              ghosts.c   the ghosts
+ *   maze.c     the maze                             game.c     states, score, input, frame timing
+ *
+ * sound.c comes before the parts that play its sounds, which name its tables.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +29,7 @@ SIM_SCREEN(display, GAME_W, GAME_H, 1);
 #include "assets.c"
 #include "video.c"
 #include "maze.c"
+#include "sound.c"
 #include "player.c"
 #include "ghosts.c"
 #include "game.c"
@@ -44,6 +47,7 @@ int main(void) {
         read_input();
         update_game();
         render_sprites();
+        update_sounds();
         wait_frame();
     }
 }

@@ -46,8 +46,12 @@ static void start_game(void) {
     start_level(1);
 }
 
-/* Everyone back at the start, and READY!, after PLAYER ONE when `intro` says so. */
+/*
+ * Everyone back at the start, and READY!, after PLAYER ONE when `intro` says so: then the start
+ * music plays, and the two last as long as it does.
+ */
 static void begin_life(int intro) {
+    stop_sounds();
     reset_pacman();
     reset_ghosts();
     mode_index = 0;
@@ -57,8 +61,12 @@ static void begin_life(int intro) {
     draw_energizers(1);
     draw_text("READY!", 11, 20, COLOR_YELLOW);
     show_actors = !intro; /* no one on the maze until PLAYER ONE goes */
-    ready_intro = intro ? 120 : 0;
-    if (intro) draw_text("PLAYER ONE", 9, 14, COLOR_CYAN);
+    ready_intro = intro ? 136 : 0;
+    if (intro) {
+        draw_text("PLAYER ONE", 9, 14, COLOR_CYAN);
+        play_sound(CHANNEL_1, music_bass);
+        play_sound(CHANNEL_2, music_melody);
+    }
     enter_state(READY);
 }
 
@@ -93,8 +101,15 @@ static void play_update(void) {
     if (frame_count % 10 == 0) draw_energizers(energizers_lit = !energizers_lit);
 }
 
+/*
+ * The arcade's death: everything still for a second, Pac-Man alone for half a second, then nine
+ * frames of shrivelling to the falling wobble, and the pop as he vanishes.
+ */
 static void dying_update(void) {
-    if (++state_timer < 180) return; /* 1 s still, 1.5 s shrivelling, 0.5 s empty */
+    int t = ++state_timer;
+    if (t == 90) play_sound(CHANNEL_3, sound_death);
+    if (t == 225) play_sound(CHANNEL_3, sound_pop);
+    if (t < 300) return;
     if (!lives) {
         draw_text("GAME  OVER", 9, 20, COLOR_RED);
         enter_state(GAME_OVER);
@@ -138,6 +153,7 @@ static void add_score(int points) {
         extra_life_given = 1;
         lives++;
         draw_lives();
+        play_sound(CHANNEL_1, sound_extra_life);
     }
     if (score > high_score) {
         high_score = score;
@@ -199,7 +215,7 @@ static void compose_sprites(void) {
     case EAT_GHOST: /* Pac-Man is hidden while the points show */
         fruit = ghosts_shown = 1;
         break;
-    case DYING: /* a second still, then the shrivelling alone */
+    case DYING: /* a second still, then Pac-Man alone */
         fruit = ghosts_shown = state_timer < 60;
         pacman = state_timer < 60 ? 2 : 3;
         break;
@@ -215,8 +231,10 @@ static void compose_sprites(void) {
     const uint32_t *pacman_cell = 0;
     if (pacman == 1) pacman_cell = sheet_cell(0, 0);
     else if (pacman == 2) pacman_cell = pacman_frame();
-    else if (pacman == 3 && (state_timer - 60) / 8 < 11) /* eleven frames of eight */
-        pacman_cell = sheet_cell((state_timer - 60) / 8, 1);
+    else if (pacman == 3 && state_timer < 255) { /* the first, nine of 15 frames, then the pop */
+        int cell = state_timer < 90 ? 0 : state_timer < 225 ? 1 + (state_timer - 90) / 15 : 10;
+        pacman_cell = sheet_cell(cell, 1);
+    }
     if (pacman_cell) set_slot(SLOT_PACMAN, pacman_cell, pac_x, pac_y);
     if (!ghosts_shown) return;
     for (int number = 0; number < 4; number++) {

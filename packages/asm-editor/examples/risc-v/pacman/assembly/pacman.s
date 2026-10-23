@@ -240,6 +240,7 @@ pe_eaten:
         mv      a1, s1
         jal     eat_tile
         jal     dot_eaten
+        jal     play_chomp
         j       pe_done
 pe_fruit:
         la      t0, fruit_timer
@@ -259,6 +260,9 @@ pe_fruit:
         lw      t0, 0(t0)
         lw      a0, LV_FRUIT_POINTS(t0)
         jal     add_score
+        li      a0, CHANNEL_3
+        la      a1, sound_fruit
+        jal     play_sound
 pe_done:
         lw      ra, 12(sp)
         lw      s0, 8(sp)

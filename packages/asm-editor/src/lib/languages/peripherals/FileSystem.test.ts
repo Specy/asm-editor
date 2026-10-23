@@ -509,6 +509,24 @@ describe('FileSystemSession guest failures', () => {
     })
 })
 
+describe('FileSystemSession readWhole', () => {
+    it("hands over a File's own bytes, new ones after a write, and nothing where there is no File", () => {
+        const { run, step } = steppedSession({ 'beep.wav': 'abc' })
+        const first = run.readWhole('beep.wav')!
+        expect(new TextDecoder().decode(first)).toBe('abc')
+        //the same array while the File is unchanged, which is how Audio tells it has not changed
+        expect(run.readWhole('beep.wav')).toBe(first)
+        const fd = step(() => run.open('beep.wav', 'append'))
+        step(() => run.write(fd, new TextEncoder().encode('d')))
+        const second = run.readWhole('beep.wav')!
+        expect(second).not.toBe(first)
+        expect(new TextDecoder().decode(second)).toBe('abcd')
+        expect(new TextDecoder().decode(first)).toBe('abc')
+        expect(run.readWhole('missing.wav')).toBeUndefined()
+        expect(run.readWhole('../outside.wav')).toBeUndefined()
+    })
+})
+
 describe('FileSystemSession stat and list', () => {
     it('stats Files and Directories, which exist while they hold Files', () => {
         const { run, step, undo } = steppedSession({

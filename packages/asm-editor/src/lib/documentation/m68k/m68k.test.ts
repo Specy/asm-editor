@@ -69,8 +69,9 @@ describe('the M68K Documentation', () => {
             //the explanation's two sections, then the 16 codes
             'condition-codes': 18,
             'shift-directions': 1,
-            //the introduction, 5 groups, the colors, the key codes, 51 tasks and the 2 closing sections
-            'trap-tasks': 61,
+            //the introduction, 6 groups, the colors, the key codes, how sound differs, 59 tasks and
+            //the 2 closing sections
+            'trap-tasks': 71,
             exceptions: 4,
             directives: 18,
             'assembler-features': 1
@@ -106,7 +107,7 @@ describe('the M68K Documentation', () => {
     })
 
     it('has every trap task at the anchor the page has always given it', () => {
-        expect(M68K_TRAP_DOCS).toHaveLength(51)
+        expect(M68K_TRAP_DOCS).toHaveLength(59)
         for (const task of M68K_TRAP_DOCS) {
             const found = entry('trap-tasks', `task-${task.task}`)
             expect(found.kind).toBe('trap-task')
@@ -122,6 +123,8 @@ describe('the M68K Documentation', () => {
             'input',
             'time',
             'files',
+            'sound',
+            'sound-differences',
             'unsupported',
             'differences'
         ]) {
@@ -189,14 +192,13 @@ describe('the M68K Documentation', () => {
         }
     })
 
-    it('groups rejected tasks by reason and distinguishes timing and audio limits', () => {
+    it('groups rejected tasks by reason and leaves the sound tasks out of them', () => {
         const text = markdownOf(entry('trap-tasks', 'unsupported')).join('\n')
         const lines = text.split('\n')
         expect(lines.find((line) => line.includes('`30`'))).toContain('`31`')
         expect(lines.find((line) => line.includes('`30`'))).toContain('cycle count')
-        expect(lines.find((line) => line.includes('`70`'))).toContain('`77`')
-        expect(lines.find((line) => line.includes('`70`'))).toContain('audio output')
-        expect(text).not.toMatch(/`(?:12|16|5[0-9])`/)
+        expect(lines.find((line) => line.includes('`100`'))).toContain('`107`')
+        expect(text).not.toMatch(/`(?:12|16|5[0-9]|7[0-7])`/)
         expect(markdownOf(entry('trap-tasks', 'text')).join('\n')).toContain('Windows-1252')
     })
 

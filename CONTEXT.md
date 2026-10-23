@@ -95,6 +95,41 @@ The Peripheral representing keyboard input for a program interacting with the **
 
 The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom.
 
+## Audio
+
+The Peripheral that plays a program's **Notes** and **Sounds** through its **Reference environment**'s sound services: MARS's and RARS's MIDI services, EASy68K's sound tasks and the **Port map**'s audio group. What a program can observe of it, such as whether EASy68K's standard player is busy, follows **Program time**; muting it never changes what a program observes, and in a **Testcase** it is silent and nothing is ever playing.
+_Avoid_: sound player, speaker, sound device
+
+## Note
+
+A pitch played on a General MIDI instrument at a volume for a duration, each 0 to 127 apart from the duration in milliseconds, as MARS's and RARS's MIDI services and the Z80's audio ports ask for it. Distinct from a **Sound**, which comes from a File.
+_Avoid_: tone, beep, MIDI event
+
+## Sound
+
+Audio from a **File**, a WAV, or a MIDI File for EASy68K's DirectX tasks, which a program plays straight from the File or loads into one of 256 numbered slots and plays from there, once or in a loop. Distinct from a **Note**, which the program describes by its pitch rather than a File.
+_Avoid_: clip, wave, sample, audio file (when the playing thing, not the File, is meant)
+
+## Sound chip
+
+The AY-3-8910 the Z80 reaches through the **Port map** at an MSX's ports, 0xA0 to select a register, 0xA1 to write it and 0xA2 to read it: three square-wave tone channels, a noise generator, a mixer, volumes and one hardware envelope, a real chip emulated so that its registers are the lesson. The Z80's waveform sound, where MIPS, RISC-V and the M68K have the **Synth**. See [ADR 0060](./docs/adr/0060-the-z80-gets-a-real-sound-chip-the-others-a-synth.md).
+_Avoid_: PSG (except when naming the chip's family), sound card, synth (for the Z80's chip)
+
+## Synth
+
+The waveform device of MIPS, RISC-V and the M68K, of this project's own design but one a 1980s chip maker could have built: eight **Synth channels** on a 65,536 Hz clock, played by setting their registers. An extension beyond MARS, RARS and EASy68K, which have nothing like it. See [ADR 0061](./docs/adr/0061-the-synth-is-a-chip-that-could-have-been-built.md).
+_Avoid_: synthesizer (for this device; spessasynth is the synthesizer that plays **Notes**), sound chip (that is the Z80's)
+
+## Synth channel
+
+One of the **Synth**'s eight voices: a frequency in Hz, a waveform (pulse with its width, triangle, sawtooth, sine, noise, its own 32-sample wavetable, or samples from **Sample memory**), a volume and an envelope, sounding while its gate is on and fading through its release once it is off.
+_Avoid_: voice (the Audio code's word for any Note or Sound that plays), oscillator, track
+
+## Sample memory
+
+The **Synth**'s own 64 KB of 8-bit signed samples, which a program fills by uploading a buffer from its own memory and a **Synth channel** plays at a rate in samples a second, as the SNES's sound chip plays from its own memory. Distinct from a **Sound**, which plays a File.
+_Avoid_: sample buffer, sample RAM (except when comparing with real chips), DMA buffer
+
 ## Terminal
 
 The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin. Instruction Undo puts the Terminal back as the instruction found it, its output and echo included, and a read it takes back asks again ([ADR 0057](./docs/adr/0057-restore-the-terminal-on-undo.md)).
@@ -143,7 +178,7 @@ _Avoid_: RNG, entropy source, random seed (when the source, not one seed, is mea
 
 ## Port map
 
-The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port numbers, read and written with `in` and `out`, grouped by peripheral: the **Console ports** for the **Terminal**, and the ports for the **Screen**, **Keyboard**, **Mouse** and program time. Every port outside the map is an empty bus: writes are ignored and reads return 0xFF. See `docs/adr/0011-z80-peripherals-through-the-port-map.md`.
+The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port numbers, read and written with `in` and `out`, grouped by peripheral: the **Console ports** for the **Terminal**, and the ports for the **Screen**, **Keyboard**, **Mouse**, program time and **Audio**. Every port outside the map is an empty bus: writes are ignored and reads return 0xFF. See `docs/adr/0011-z80-peripherals-through-the-port-map.md`.
 
 ## Console port
 

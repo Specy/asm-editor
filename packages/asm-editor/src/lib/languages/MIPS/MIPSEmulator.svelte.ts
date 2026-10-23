@@ -495,10 +495,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         this.devices.attach(mips, this.display)
         //what an instruction does to the Terminal, a handler's or a device's, is journaled under the
         //serial its Undo group carries ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
-        this._peripherals.terminal.trackHistory(() => {
+        const instruction = () => {
             const serial = mips.getCurrentInstructionSerial()
             return serial === null ? null : BigInt(serial)
-        }, normalizeUndoSize(undoSize))
+        }
+        this._peripherals.terminal.trackHistory(instruction, normalizeUndoSize(undoSize))
+        //and so are the Notes it plays
+        //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
+        this._peripherals.audio.track(instruction, normalizeUndoSize(undoSize))
     }
 
     _dispose(): void {
@@ -921,6 +925,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         if (serial === undefined) return
         this.fileSystemSession?.undoAfter(serial)
         this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
+        this._peripherals.audio.undoAfter(BigInt(serial) - 1n)
     }
 
     /**

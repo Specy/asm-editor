@@ -224,7 +224,7 @@ Both Cores, mirrored unless noted:
 
 ### Later
 
-- **The Audio Peripheral**, after its own design pass (Undo, Testcases, autoplay policy): EASy68K 70–77, MARS and RARS MIDI 31 and 33 (`midiOut(pitch, duration, instrument, volume)` and a Promise-returning `midiOutSync`, shaped like `sleep`).
+- **The Audio Peripheral**: done on 2026-10-23, for EASy68K 70–77, MARS and RARS MIDI 31 and 33 and the Z80's audio ports. The decisions are in [audio.md](./audio.md) and the plan in [audio-plan.md](./audio-plan.md); 33 calls `midiOut` and then `sleep`, not the `midiOutSync` sketched here.
 - **The 68000 cycle-timing model** for EASy68K 30 and 31.
 - **x86 Undo of File and standard-input effects** (ADR 0015), replacing decision 7's irreversible marking.
 

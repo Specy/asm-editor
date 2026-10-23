@@ -1,10 +1,11 @@
-:where(.workbench, .project-top-bar, .playground) {
+:where(.workbench, .project-top-bar, .playground, .wb-cards) {
     --wb-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
 }
 
 /* the Cards surface style, which the Workbench's Lines overrides, and which a Playground's panels
-   are drawn in so that they look like the Workbench's */
-:where(.workbench, .playground) {
+   and the cards of a page outside the editor (`.wb-cards`, like the projects page) are drawn in so
+   that they look like the Workbench's */
+:where(.workbench, .playground, .wb-cards) {
     --wb-gap: 0.25rem;
     --wb-radius: 0.4rem;
     /* the height of the execution controls' tray over the editor */

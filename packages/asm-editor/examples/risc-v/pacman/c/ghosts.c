@@ -271,8 +271,12 @@ static void check_collisions(void) {
     for (int i = 0; i < 4; i++) {
         struct Ghost *ghost = &ghosts[i];
         if (ghost->state != ACTIVE || ghost->x >> 3 != column || ghost->y >> 3 != row) continue;
-        if (ghost->fright) eat_ghost(ghost);
-        else enter_state(DYING);
+        if (ghost->fright) {
+            eat_ghost(ghost);
+        } else {
+            stop_sounds(); /* the game stands still in silence */
+            enter_state(DYING);
+        }
         return;
     }
 }
@@ -288,6 +292,7 @@ static void eat_ghost(struct Ghost *ghost) {
     ghost->fright = 0;
     eaten_ghost = ghost;
     enter_state(EAT_GHOST);
+    play_sound(CHANNEL_3, sound_ghost);
 }
 
 /*

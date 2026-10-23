@@ -38,6 +38,7 @@
         .eqv    SYS_PRINT_STRING, 4
         .eqv    SYS_EXIT, 10
         .eqv    SYS_TIME, 30
+        .eqv    SYS_MIDI_OUT, 31                # plays a Note and goes on at once
         .eqv    SYS_SLEEP, 32
         .eqv    SYS_CLOSE, 57
         .eqv    SYS_READ, 63
@@ -135,6 +136,29 @@
         .eqv    LV_CLYDE_DOTS, 60
         .eqv    LV_SIZE, 64
         .eqv    LEVEL_TABLE_LAST, 21            # levels past 21 play like 21
+
+# ---------------------------------------------------------------- sound
+# Three channels play at once, as the arcade's three voices did (sound.s).
+        .eqv    CHANNEL_1, 0                    # the start music's bass, the extra life
+        .eqv    CHANNEL_2, 1                    # the tune, the siren, frightened, eyes going home
+        .eqv    CHANNEL_3, 2                    # the dots, the fruit, a ghost eaten, the death
+        .eqv    CHANNEL_COUNT, 3
+
+# One channel record: a word per field.
+        .eqv    CH_NEXT, 0                      # the next event, 0 when the channel is silent
+        .eqv    CH_START, 4                     # the first event, where SOUND_REPEAT goes back to
+        .eqv    CH_WAIT, 8                      # frames before the next event
+        .eqv    CH_INSTRUMENT, 12
+        .eqv    CH_SIZE, 16
+
+# The General MIDI instruments the tables play. In the editor's sound bank, timpani is a nearly pure
+# tone that dies away quickly, which keeps a Note a frame sounding like one sweep.
+        .eqv    INSTRUMENT_PIANO, 0
+        .eqv    INSTRUMENT_BASS, 32
+        .eqv    INSTRUMENT_TIMPANI, 47
+
+        .eqv    SOUND_END, 0                    # in place of a pitch: the table is over
+        .eqv    SOUND_REPEAT, 255               # in place of a pitch: back to the first event
 
         .eqv    EYES_SPEED, 384
         .eqv    HOUSE_SPEED, 128

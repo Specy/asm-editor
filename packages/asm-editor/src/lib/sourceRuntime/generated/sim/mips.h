@@ -166,11 +166,31 @@ static inline long long sim_time(void) {
     return (long long)(((unsigned long long)(unsigned)a1 << 32) | (unsigned)a0);
 }
 
+/** MIDI out, service 31. Takes $a0, pitch, 0 to 127: 60 is middle C, 62 is D, 64 is E; each step is one semitone; $a1, duration in milliseconds; $a2, instrument sound from the General MIDI list, numbered from 0 to 127: 0 piano, 40 violin, 56 trumpet, 73 flute; $a3, volume, 0 (silent) to 127 (loudest). */
+static inline void sim_midi_out(int pitch, int duration, int instrument, int volume) {
+    register int v0 __asm__("$2") = 31;
+    register int a0 __asm__("$4") = pitch;
+    register int a1 __asm__("$5") = duration;
+    register int a2 __asm__("$6") = instrument;
+    register int a3 __asm__("$7") = volume;
+    __asm__ volatile("syscall" : : "r"(v0), "r"(a0), "r"(a1), "r"(a2), "r"(a3) : "memory");
+}
+
 /** Sleep, service 32. Takes $a0, the length of time to sleep in milliseconds. */
 static inline void sim_sleep(int milliseconds) {
     register int v0 __asm__("$2") = 32;
     register int a0 __asm__("$4") = milliseconds;
     __asm__ volatile("syscall" : : "r"(v0), "r"(a0) : "memory");
+}
+
+/** MIDI out synchronous, service 33. Takes $a0, pitch, 0 to 127: 60 is middle C, 62 is D, 64 is E; each step is one semitone; $a1, duration in milliseconds; $a2, instrument sound from the General MIDI list, numbered from 0 to 127: 0 piano, 40 violin, 56 trumpet, 73 flute; $a3, volume, 0 (silent) to 127 (loudest). */
+static inline void sim_midi_out_sync(int pitch, int duration, int instrument, int volume) {
+    register int v0 __asm__("$2") = 33;
+    register int a0 __asm__("$4") = pitch;
+    register int a1 __asm__("$5") = duration;
+    register int a2 __asm__("$6") = instrument;
+    register int a3 __asm__("$7") = volume;
+    __asm__ volatile("syscall" : : "r"(v0), "r"(a0), "r"(a1), "r"(a2), "r"(a3) : "memory");
 }
 
 /** Print integer in hexadecimal, service 34. Takes $a0, integer to print. */

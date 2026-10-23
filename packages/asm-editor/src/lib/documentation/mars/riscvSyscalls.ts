@@ -372,6 +372,38 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             returns: { type: 'long long', low: 'a0', high: 'a1' }
         }
     },
+    [31]: {
+        name: 'MIDI out',
+        code: 31,
+        arguments: [
+            {
+                name: 'a0',
+                description:
+                    'pitch, 0 to 127: 60 is middle C, 62 is D, 64 is E; each step is one semitone'
+            },
+            { name: 'a1', description: 'duration in milliseconds' },
+            {
+                name: 'a2',
+                description:
+                    'instrument sound from the General MIDI list, numbered from 0 to 127: 0 piano, 40 violin, 56 trumpet, 73 flute'
+            },
+            { name: 'a3', description: 'volume, 0 (silent) to 127 (loudest)' }
+        ],
+        result: {
+            other: 'Plays a note and continues immediately, allowing notes to overlap. Values outside 0 to 127 use these defaults: invalid pitch becomes 60 (middle C), invalid instrument becomes 0 (piano), and invalid volume becomes 100. A negative duration becomes 1000 milliseconds, as in RARS. The first note or MIDI-file request after opening or reloading the editor page waits while the browser loads the sound bank, the collection of instrument sounds; later runs share it. At most 64 notes sound at once, where RARS has no limit: starting another stops the oldest. Notes finish their duration after the program exits. Testcases are silent.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_midi_out',
+            parameters: [
+                { name: 'pitch', type: 'int', register: 'a0' },
+                { name: 'duration', type: 'int', register: 'a1' },
+                { name: 'instrument', type: 'int', register: 'a2' },
+                { name: 'volume', type: 'int', register: 'a3' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
     [32]: {
         name: 'sleep',
         code: 32,
@@ -383,6 +415,38 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         binding: {
             name: 'sim_sleep',
             parameters: [{ name: 'milliseconds', type: 'int', register: 'a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [33]: {
+        name: 'MIDI out synchronous',
+        code: 33,
+        arguments: [
+            {
+                name: 'a0',
+                description:
+                    'pitch, 0 to 127: 60 is middle C, 62 is D, 64 is E; each step is one semitone'
+            },
+            { name: 'a1', description: 'duration in milliseconds' },
+            {
+                name: 'a2',
+                description:
+                    'instrument sound from the General MIDI list, numbered from 0 to 127: 0 piano, 40 violin, 56 trumpet, 73 flute'
+            },
+            { name: 'a3', description: 'volume, 0 (silent) to 127 (loudest)' }
+        ],
+        result: {
+            other: 'Plays a note with the same argument defaults as service 31, then waits for the requested duration before the next instruction. A sequence of these calls can play a melody. Muting or stopping the audible note does not shorten the wait. Testcases are silent; the wait completes immediately and advances the virtual clock by the duration.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_midi_out_sync',
+            parameters: [
+                { name: 'pitch', type: 'int', register: 'a0' },
+                { name: 'duration', type: 'int', register: 'a1' },
+                { name: 'instrument', type: 'int', register: 'a2' },
+                { name: 'volume', type: 'int', register: 'a3' }
+            ],
             returns: { type: 'void' }
         }
     },

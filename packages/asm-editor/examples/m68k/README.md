@@ -6,7 +6,7 @@ Programs for the manual verification matrix in [`docs/manual-verification.md`](.
 
 | File                  | What it exercises                                                                                     |
 | --------------------- | ----------------------------------------------------------------------------------------------------- |
-| `graphics-tour.x68`   | Every drawing task: 80 to 96, plus the text cursor of task 11 and the screen size of task 33          |
+| `graphics-tour.x68`   | Every drawing task: 80 to 96, plus the text cursor of task 11, the screen size of task 33 and the standard player's sound tasks 70 to 72 |
 | `bouncing-ball.x68`   | Double buffering (task 92 mode 17 and task 94) and program time (task 23)                             |
 | `keyboard-move.x68`   | Key state polling (task 19) and text printed to the transcript and the screen at once                 |
 | `mouse-paint.x68`     | Mouse reading (task 61), its flags byte and its screen pixel coordinates                              |
@@ -25,7 +25,7 @@ The M68K course's [Flappy bird](../../src/content/m68k/examples/flappy-bird/inde
 
 `easy68k/` holds three of EASy68K's own example programs, unchanged apart from their line endings. They are the compatibility reference of [ADR 0003](../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md): what a task draws here is compared against what these draw in EASy68K itself.
 
-They are compatibility inputs rather than runnable examples. The assembler now accepts their `SIMHALT`, `END START`, `OPT` and `SECTION` directives; the remaining build errors identify the macros and structured-control statements (`if.l … endi`, `repeat … until`) that are deliberately not implemented. They also call simulator tasks this editor rejects at runtime on purpose (sound, the hardware window, the mouse IRQ). `graphics-tour.x68` is the runnable port of `graphicSound.X68`, and `mouse-paint.x68` covers what `mouseWindowSize.X68` demonstrates about task 61.
+They are compatibility inputs rather than runnable examples. The assembler now accepts their `SIMHALT`, `END START`, `OPT` and `SECTION` directives; the remaining build errors identify the macros and structured-control statements (`if.l … endi`, `repeat … until`) that are deliberately not implemented. They also call simulator tasks this editor rejects at runtime on purpose (the hardware window, the mouse IRQ), and `graphicSound.X68` plays WAV Files from EASy68K's own folder, which are not carried here. `graphics-tour.x68` is the runnable port of `graphicSound.X68`, writing its own WAV Files, and `mouse-paint.x68` covers what `mouseWindowSize.X68` demonstrates about task 61.
 
 | File                       | Author       | Demonstrates                                              |
 | -------------------------- | ------------ | --------------------------------------------------------- |

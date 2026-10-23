@@ -38,7 +38,7 @@ const { compilationInputs } = await import('../src/lib/sourceCompilation/compila
 const { fileFingerprint } = await import('../src/lib/sourceCompilation/fingerprints.ts')
 
 /** Files the editor keeps as bytes; everything else is UTF-8 text. */
-const BINARY = /\.(bmp|png|jpe?g|gif|bin)$/i
+const BINARY = /\.(bmp|png|jpe?g|gif|bin|wav|mid)$/i
 /** A fixed time, so packing an unchanged folder gives the same archive. */
 const PACKED_AT = Date.UTC(2026, 9, 23)
 
@@ -48,7 +48,7 @@ const EXAMPLES = [
         archive: 'pacman.asmproj',
         name: 'Pac-Man',
         description:
-            'The arcade game at its own 224 × 288 pixels, twice: in RISC-V assembly and in C. Both read their pictures from the same BMP Files when they start.',
+            'The arcade game at its own 224 × 288 pixels, with its music and sounds, twice: in RISC-V assembly and in C. Both read their pictures from the same BMP Files when they start.',
         language: 'RISC-V',
         programs: {
             //what the Entry's @screen directive configures, so the Screen is right before a Build

@@ -1,19 +1,26 @@
 <script lang="ts">
+    /**
+     * A Project on the projects page, drawn as one of the Workbench's cards: a header band with the
+     * name and the card's own actions, the description and when it was last edited in the body, and
+     * the language beside Open at the bottom. The name and description are edited in place and
+     * saved when they lose the focus.
+     */
     import { languageLabel } from '#lib/languages/languageLabel.ts'
+    import { languageAccent } from '#lib/languages/languageColors.ts'
     import type { Project } from '#lib/Project.svelte.ts'
     import timeAgo from 's-ago'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import { ThemeStore } from '#stores/themeStore.svelte.ts'
     import FaTrashAlt from '~icons/fa-solid/trash-alt'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
-    import { Prompt } from '#stores/promptStore.svelte.ts'
-    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import Button from '#cmp/shared/button/Button.svelte'
     import FaDownload from '~icons/fa-solid/download'
-    import { createEventDispatcher } from 'svelte'
-    import { BUILTIN_THEMES, ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import FaShareAlt from '~icons/fa-solid/share-alt'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
+    import { Prompt } from '#stores/promptStore.svelte.ts'
+    import { createEventDispatcher } from 'svelte'
     import { isSingleSourceProject } from '#lib/projectArchive.ts'
+    import { resolve } from '$app/paths'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
 
     interface Props {
         project: Project
@@ -29,9 +36,11 @@
     /** One File travels as its source text; anything more only survives as the archive. */
     const singleSource = $derived(isSingleSourceProject(project))
 
-    const colors = $derived(
-        BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
-    )
+    /** Open's fill: the language's own colour, the one its theme, Documentation and Courses wear. */
+    const accent = $derived(languageAccent(project.language))
+    const created = $derived(new Date(project.createdAt))
+    const edited = $derived(new Date(project.updatedAt))
+
     function save() {
         project.name = textContent
         project.description = descriptionContent
@@ -46,146 +55,239 @@
 </script>
 
 <article class="project-card">
-    <div
-        class="project-title"
-        contenteditable
-        bind:textContent
-        spellcheck="false"
-        onblur={save}
-    ></div>
-    <div
-        class="description"
-        contenteditable
-        bind:textContent={descriptionContent}
-        spellcheck="false"
-        onblur={save}
-    ></div>
-    <div class="project-dates">
-        <div>Created</div>
-        <div>
-            {timeAgo(new Date(project.createdAt))}
-        </div>
-        <div>Edited</div>
-        <div>
-            {timeAgo(new Date(project.updatedAt))}
-        </div>
-    </div>
-    <div class="project-footer">
-        <div style="margin-left: 0.4rem">
-            {languageLabel(project.language)}
-        </div>
-        <div style="display: flex; gap: 0.2rem; align-items: center;">
-            <button class="trash-icon" onclick={deleteProject} title="Delete this project">
-                <Icon>
-                    <FaTrashAlt />
-                </Icon>
-            </button>
-            <Button
-                cssVar="secondary"
-                style="width: 2.2rem; height: 2.2rem;"
+    <header class="card-header">
+        <div
+            class="name editable"
+            title={textContent}
+            contenteditable
+            bind:textContent
+            spellcheck="false"
+            role="textbox"
+            aria-label="Project name"
+            tabindex="0"
+            onblur={save}
+        ></div>
+        <div class="card-actions">
+            <button
+                class="card-action"
                 title="Share this project"
-                onClick={() => dispatcher('share', project)}
+                aria-label="Share this project"
+                onclick={() => dispatcher('share', project)}
             >
-                <Icon>
-                    <FaShareAlt />
-                </Icon>
-            </Button>
-            <Button
-                cssVar="secondary"
-                style="width: 2.2rem; height: 2.2rem;"
+                <FaShareAlt />
+            </button>
+            <button
+                class="card-action"
                 title={singleSource
                     ? 'Download this project as a source file'
                     : 'Download this project as an archive'}
-                onClick={() => dispatcher('download', project)}
+                aria-label="Download this project"
+                onclick={() => dispatcher('download', project)}
             >
-                <Icon>
-                    <FaDownload />
-                </Icon>
-            </Button>
-
-            <ButtonLink
-                bg={colors.theme.accent2.color}
-                color={ThemeStore.textOfColor(colors.theme.accent2.color)}
-                href={`/projects/${project.id}`}
-                title="Open this project"
+                <FaDownload />
+            </button>
+            <button
+                class="card-action delete"
+                title="Delete this project"
+                aria-label="Delete this project"
+                onclick={deleteProject}
             >
-                Open
-            </ButtonLink>
+                <FaTrashAlt />
+            </button>
         </div>
+    </header>
+    <div class="card-body">
+        <div
+            class="description editable"
+            contenteditable
+            bind:textContent={descriptionContent}
+            spellcheck="false"
+            role="textbox"
+            aria-label="Project description"
+            aria-multiline="true"
+            tabindex="0"
+            data-placeholder="Add a description"
+            onblur={save}
+        ></div>
+        <span
+            class="edited ellipsis"
+            title={`Created ${created.toLocaleString()}\nEdited ${edited.toLocaleString()}`}
+        >
+            Edited {timeAgo(edited)}
+        </span>
     </div>
+    <footer class="card-footer">
+        <span class="language">{languageLabel(project.language)}</span>
+        <ButtonLink
+            bg={accent}
+            color={ThemeStore.textOfColor(accent)}
+            href={resolve('/projects/[project]', { project: project.id })}
+            style="gap: 0.45rem; padding: 0.3rem 0.75rem; font-size: 0.85rem"
+            title="Open this project"
+        >
+            Open
+            <Icon size={0.7}>
+                <FaArrowRight />
+            </Icon>
+        </ButtonLink>
+    </footer>
 </article>
 
 <style lang="scss">
-    .description {
-        padding: 0.5rem;
-        margin: 0.5rem 0;
-        background-color: transparent;
-        transition: all 0.2s;
-        border-radius: 0.4rem;
-        &:hover,
+    /* a Workbench card (workbench.css): the page's surface inside a 1px edge, with a header band a
+       shade lighter than the card */
+    .project-card {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        height: 100%;
+        background-color: var(--wb-surface);
+        color: var(--secondary-text);
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
+        overflow: hidden;
+    }
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: none;
+        min-height: 2.4rem;
+        padding: 0 0.3rem 0 0.7rem;
+        background-color: var(--wb-section-header);
+        border-bottom: 1px solid var(--wb-line);
+    }
+
+    /* text that reads as text until it is pointed at or edited */
+    .editable {
+        /* the page around it takes no selection (projects/+page.svelte) */
+        user-select: text;
+        border-radius: 0.25rem;
+        outline: 1px solid transparent;
+        outline-offset: 0;
+        transition:
+            background-color 0.15s,
+            outline-color 0.15s;
+
+        &:hover {
+            background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+        }
+
         &:focus {
-            background-color: var(--secondary);
-            color: var(--secondary-text);
-            filter: brightness(1.2);
+            background-color: var(--background);
+            outline-color: color-mix(in srgb, var(--accent) 70%, transparent);
         }
     }
 
-    .project-dates {
-        color: var(--hint);
-        font-size: 0.8rem;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        margin-left: 0.4rem;
-        column-gap: 0.5rem;
-        row-gap: 0.3rem;
-        margin-bottom: 0.5rem;
-    }
-    .trash-icon {
-        border-radius: 0.4rem;
-        background-color: var(--secondary);
-        color: var(--red);
-        width: 2.2rem;
-        cursor: pointer;
-        height: 2.2rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        transition: all 0.2s;
-        &:hover {
-            background-color: var(--red);
-            color: var(--red-text);
-        }
-    }
-    .project-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .project-card {
-        width: 100%;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-        padding: 0.6rem;
-        border-radius: 0.6rem;
-        height: fit-content;
-    }
-    .project-title {
-        font-size: 1.3rem;
+    .name {
+        flex: 1;
+        min-width: 0;
+        padding: 0.2rem 0.3rem;
+        margin-left: -0.3rem;
+        font-size: 0.95rem;
+        font-weight: 600;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        text-align: center;
-        padding: 0.4rem;
-        justify-content: center;
-        border-radius: 0.4rem;
-        background-color: transparent;
-        transition: all 0.2s;
-        &:hover,
+
         &:focus {
-            background-color: var(--secondary);
-            color: var(--secondary-text);
-            filter: brightness(1.2);
+            text-overflow: clip;
         }
+    }
+
+    .card-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.1rem;
+        flex: none;
+    }
+
+    .card-action {
+        display: grid;
+        place-items: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        padding: 0.42rem;
+        border-radius: 0.25rem;
+        background: transparent;
+        color: inherit;
+        opacity: 0.75;
+        cursor: pointer;
+        transition:
+            background-color 0.15s,
+            color 0.15s,
+            opacity 0.15s;
+
+        :global(svg) {
+            width: 100%;
+            height: 100%;
+        }
+
+        &:hover {
+            opacity: 1;
+            background-color: var(--tertiary);
+        }
+
+        &:focus-visible {
+            opacity: 1;
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+
+        &.delete:hover {
+            color: var(--red);
+            background-color: color-mix(in srgb, var(--red) 15%, transparent);
+        }
+    }
+
+    .card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        flex: 1;
+        padding: 0.6rem 0.7rem 0.5rem;
+    }
+
+    .description {
+        flex: 1;
+        min-height: 2.6rem;
+        padding: 0.25rem 0.3rem;
+        margin: -0.25rem -0.3rem;
+        font-size: 0.85rem;
+        line-height: 1.45;
+        color: var(--secondary-text-muted, var(--secondary-text));
+        overflow-wrap: anywhere;
+
+        &:empty::before {
+            content: attr(data-placeholder);
+            color: var(--hint);
+            opacity: 0.7;
+        }
+    }
+
+    .card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex: none;
+        padding: 0.4rem 0.4rem 0.4rem 0.7rem;
+        border-top: 1px solid var(--wb-line);
+    }
+
+    .edited {
+        align-self: flex-end;
+        max-width: 100%;
+        font-size: 0.75rem;
+        color: var(--hint);
+    }
+
+    .language {
+        flex: none;
+        color: var(--hint);
+        font-size: 0.85rem;
+        font-weight: 500;
+        white-space: nowrap;
     }
 </style>

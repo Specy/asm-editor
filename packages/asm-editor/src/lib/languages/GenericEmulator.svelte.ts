@@ -21,6 +21,7 @@ import {
     createMemoryTab,
     resetMemoryTab,
     type Diagnostic,
+    type EmulatorInterrupt,
     type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
@@ -52,6 +53,7 @@ import {
 } from '#lib/languages/peripherals/peripheralSet.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import { Audio, QUIET_AUDIO, type AudioActivity } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import {
     afterNextPaint,
@@ -258,6 +260,13 @@ export abstract class GenericEmulator<T, R extends string>
      * in a seeded one, and adapters read `_peripherals.random` at the point of use.
      */
     private readonly interactiveRandom: RandomSource
+    /**
+     * The Audio of interactive runs, kept for the same reason: a Testcase swaps in a silent one
+     * ([audio.md](../../../../../docs/design/audio.md#how-long-a-note-or-sound-plays)), and adapters
+     * read `_peripherals.audio` at the point of use.
+     */
+    private readonly interactiveAudio: Audio
+    private audioActivityState = $state.raw<AudioActivity>(QUIET_AUDIO)
     private semanticCheckId = 0
     /**
      * What the slices of the current run have taught about how fast this program runs, multiplied
@@ -370,6 +379,11 @@ export abstract class GenericEmulator<T, R extends string>
         }
         this.interactiveClock = this._peripherals.clock
         this.interactiveRandom = this._peripherals.random
+        this.interactiveAudio = this._peripherals.audio
+        this.interactiveAudio.onNote = (text) => this.addNote({ tone: 'warning', text })
+        //an injected Audio may have played already
+        this.audioActivityState = this.interactiveAudio.activity
+        this.interactiveAudio.subscribe((activity) => (this.audioActivityState = activity))
 
         this.state = $state({
             systemSize: options.systemSize,
@@ -795,12 +809,21 @@ export abstract class GenericEmulator<T, R extends string>
      * A line, through the Terminal's Line discipline. `options` are how the program set up its
      * reads to show what is typed, where its environment lets it (EASy68K's tasks 12 and 16).
      */
+    /**
+     * Shows the read the program now waits on, after sending what it played: the person may take a
+     * while to answer, and a beep before a prompt has to be heard before the answer, not after.
+     */
+    private waitOnInput(interrupt: EmulatorInterrupt): void {
+        this._peripherals.audio.flush()
+        this.state.interrupt = interrupt
+    }
+
     protected async requestInput(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.state.interrupt = { type: 'ReadInput', message: question }
+        this.waitOnInput({ type: 'ReadInput', message: question })
         try {
             return await this._peripherals.terminal.readAsync(question, execution, options)
         } finally {
@@ -818,7 +841,7 @@ export abstract class GenericEmulator<T, R extends string>
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.state.interrupt = { type: 'ReadInput', message: question }
+        this.waitOnInput({ type: 'ReadInput', message: question })
         try {
             return await this._peripherals.terminal.readCharAsync(question, execution, options)
         } finally {
@@ -835,7 +858,7 @@ export abstract class GenericEmulator<T, R extends string>
         question: string,
         execution: ExecutionGeneration
     ) {
-        this.state.interrupt = { type: 'StandardInput', message: question }
+        this.waitOnInput({ type: 'StandardInput', message: question })
         try {
             return await this._peripherals.terminal.readStandardInput(length, question, execution)
         } finally {
@@ -848,7 +871,7 @@ export abstract class GenericEmulator<T, R extends string>
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
     protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.state.interrupt = { type: 'ReadInput', message: question }
+        this.waitOnInput({ type: 'ReadInput', message: question })
         try {
             return await this._peripherals.terminal.readByte(question, execution)
         } finally {
@@ -943,6 +966,8 @@ export abstract class GenericEmulator<T, R extends string>
         const noted = this.endNoted
         this.endNoted = terminated
         if (terminated && !noted) {
+            //a program that ended on its own lets its Notes and one-shots play out, never its loops
+            this._peripherals.audio.stopLoops()
             try {
                 for (const note of this._terminationNotes?.() ?? []) this.addNote(note)
             } catch (e) {
@@ -953,6 +978,7 @@ export abstract class GenericEmulator<T, R extends string>
 
     /** Ends the program on a runtime error, which `readTermination` then leaves standing. */
     private endWithError(message: string): void {
+        this._peripherals.audio.stopLoops()
         this.state.terminated = true
         this.state.termination = { kind: 'error', message }
     }
@@ -1019,7 +1045,8 @@ export abstract class GenericEmulator<T, R extends string>
      * termination and only loses it here, which is what the design record asks for.
      */
     private resetPeripherals(): void {
-        const { terminal, screen, keyboard, mouse, clock, random } = this._peripherals
+        const { terminal, screen, keyboard, mouse, clock, random, audio } = this._peripherals
+        audio.reset()
         terminal.clear()
         terminal.useInteractiveInput()
         this.applyScreenHistoryBudget()
@@ -1268,6 +1295,7 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.clock = new ProgramClock({ mode: 'virtual' })
         this._peripherals.clock.start()
         this._peripherals.random = new RandomSource({ mode: 'seeded' })
+        this._peripherals.audio = new Audio({ silent: true })
     }
 
     /**
@@ -1282,6 +1310,7 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.clock.reset()
         this._peripherals.random = this.interactiveRandom
         this._peripherals.random.reset()
+        this._peripherals.audio = this.interactiveAudio
     }
 
     // ----- public api ----- //
@@ -1787,6 +1816,8 @@ export abstract class GenericEmulator<T, R extends string>
                 throw error
             }
             firstSlice = false
+            //what the slice started or stopped is heard now, a slice late at most
+            this._peripherals.audio.flush()
             this.learnSliceSpeed(
                 slice,
                 targetMs,
@@ -2237,9 +2268,11 @@ export abstract class GenericEmulator<T, R extends string>
             } catch (lookupError) {
                 console.error(lookupError)
             }
+            this._peripherals.audio.flush()
             this.reportRuntimeFailure(e, failed)
             throw e
         }
+        this._peripherals.audio.flush()
         this.refreshCoreViews()
         return this._hasTerminated()
     }
@@ -2761,6 +2794,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get notes(): readonly EmulatorNote[] {
         return this.noteList
+    }
+
+    get audioActivity(): AudioActivity {
+        return this.audioActivityState
     }
 
     /** The Entry path of the sources currently set, which a single-source host never names itself. */

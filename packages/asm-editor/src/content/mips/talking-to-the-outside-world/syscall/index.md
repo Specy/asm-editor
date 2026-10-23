@@ -117,6 +117,67 @@ result register. Playground services preserve all other general-purpose and floa
 registers; a service with a documented memory result can still change that memory. Move a register
 result somewhere safe before loading another service number into `$v0`.
 
+## Making sound
+
+Services 31 and 33 play a musical note. Both take the same four inputs:
+
+- `$a0` chooses the **pitch**, or how high or low the note sounds. Use a number from 0 to 127.
+  The example starts at 60, a note called middle C. Adding 1 moves to the next higher note;
+  subtracting 1 moves to the next lower note. Each of these small steps is called a **semitone**.
+- `$a1` gives the **duration** in milliseconds. For example, 300 lasts three tenths of a second,
+  and 1000 lasts one second.
+- `$a2` chooses the **instrument**, using a number from 0 to 127 in the General MIDI instrument
+  list. The example uses 0 for an acoustic grand piano; try changing this number to hear other
+  instrument sounds.
+- `$a3` sets the **volume**, from 0 to 127. Larger values are louder; the example uses 100.
+
+Service 33 waits for the note to end before running the next instruction. Service 31 continues
+without waiting. If you use service 31 again while a previous note is still sounding, the notes
+overlap.
+
+```mips|playground
+.text
+.globl main
+main:
+    li $a1, 300             # each note lasts 300 milliseconds
+    li $a2, 0               # instrument 0, the acoustic grand piano
+    li $a3, 100             # volume 100
+
+    li $v0, 33              # service 33: play a note, then wait for it to end
+    li $a0, 60              # middle C
+    syscall
+    li $a0, 64              # E
+    syscall
+    li $a0, 67              # G
+    syscall
+
+    li $v0, 31              # service 31: play a note and go on at once
+    li $a1, 1000
+    li $a0, 60              # C, E and G again, together: a chord
+    syscall
+    li $a0, 64
+    syscall
+    li $a0, 67
+    syscall
+
+    li $v0, 10
+    syscall
+```
+
+The first three calls use service 33 to play the notes C, E and G one after another. The next
+three calls use service 31 to start those same notes within a few instructions of each other.
+They sound together as a **chord** and finish their one-second duration even though the program
+has already ended.
+
+Neither sound service changes a register, so `$v0` and the other arguments keep their values
+between calls. That is why the example sets the instrument and volume only once. If a pitch,
+instrument or volume is outside 0 to 127, the service uses middle C, the piano or volume 100,
+respectively.
+
+Once a program has made a sound, a **Sound** button in the execution dock turns sound off and on.
+Testcases run silently, and service 33 finishes immediately without a real delay. The testcase
+still counts the note's duration as elapsed program time.
+
 ## More Playground services
 
 You do not need to memorize this reference. Use it to find the registers for a service before you
@@ -162,6 +223,7 @@ than 1 it writes nothing.
   instruction. The Playground stays responsive, and the service avoids a busy-wait loop that would
   repeatedly spend the program's instruction budget. In a testcase, the clock starts at zero and
   service 32 advances it immediately without a real delay.
+- Services 31 and 33 play a note, as shown above.
 - Service 9 allocates bytes from the heap and returns their address in `$v0`. Under the Playground's
   default memory layout, that heap begins at `0x10040000`; a different memory layout can place it
   elsewhere.

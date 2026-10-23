@@ -1,5 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vite-plus/test'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
+import { makeMidi, makeWav } from '#lib/languages/peripherals/audio/soundFixtures.ts'
 import type { InputSettings } from '@specy/s68k'
 import { M68KEmulator } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
@@ -1196,33 +1199,179 @@ describe('M68K file tasks', () => {
     })
 })
 
+/**
+ * EASy68K's sound tasks against real Files: the editor reports what happened and the Core writes
+ * D0.W as EASy68K does ([audio.md](../../../../../../docs/design/audio.md#easy68ks-files-and-answers)).
+ * The Audio's clock stands still, so a Sound the standard player started is busy for the whole test.
+ */
 describe('M68K sound tasks', () => {
-    it.each([70, 71, 72, 73, 74, 75, 76, 77])(
-        'ends task %s with its no-audio reason',
-        async (task) => {
-            const code =
-                ORG +
-                trap(task, ['    lea name,a1']) +
-                '    move.l #1,d5\n' +
-                trap(9) +
-                "name: dc.b 'ding.wav',0\n"
-            const emulator = M68KEmulator(code)
-            await emulator.compile(200, code)
-            await emulator.run(INSTRUCTION_LIMIT)
-            expect(emulator.terminated).toBe(true)
-            expect(emulator.termination?.kind).toBe('error')
-            expect(emulator.errors.join('\n')).toContain(`Trap task ${task}`)
-            expect(emulator.errors.join('\n')).toContain(
-                'the editor provides no audio output for these tasks'
-            )
-            //the program stopped at the task rather than finishing as though it had played
-            expect(registerOf(emulator, 'D5')).toBe(0n)
-            //and Undo takes the end back with the task
-            expect(emulator.undo(1)).toBe(1)
-            expect(emulator.terminated).toBe(false)
-            expect(emulator.termination).toBeUndefined()
+    const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
+    const FILES: ProjectFiles = {
+        'beep.wav': { encoding: 'base64', content: base64(makeWav({ lengthMs: 500 })) },
+        'song.mid': { encoding: 'base64', content: base64(makeMidi(4)) },
+        'notes.txt': { encoding: 'plain', content: 'hello' }
+    }
+    const NAMES =
+        "beep: dc.b 'beep.wav',0\nsong: dc.b 'song.mid',0\ntext: dc.b 'notes.txt',0\n" +
+        "nope: dc.b 'nope.wav',0\n"
+
+    async function withSounds(body: string) {
+        const code = ORG + body + trap(9) + NAMES
+        const output = new RecordingAudioOutput()
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem: new FileSystem(FILES), audio: new Audio({ output }) }
+        })
+        await emulator.compile(200, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        return { emulator, output }
+    }
+    const sounds = (output: RecordingAudioOutput) =>
+        output.commands.filter((c) => c.type === 'sound').length
+    /** D0.W after the task, kept in D5 before the next one overwrites it. */
+    const keep = (register: string) => `    move.l d0,${register}\n`
+
+    it('plays a File on the standard player, busy for its length, and leaves D0 for a missing one', async () => {
+        const { emulator, output } = await withSounds(
+            trap(70, ['    lea beep,a1']) +
+                keep('d5') +
+                trap(70, ['    lea beep,a1']) +
+                keep('d6') +
+                trap(70, ['    lea nope,a1']) +
+                keep('d7')
+        )
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(1n)
+        expect(registerOf(emulator, 'D6') & 0xffffn).toBe(0n)
+        //EASy68K writes nothing for a File that is not there, so D0 still holds the task number
+        expect(registerOf(emulator, 'D7') & 0xffffn).toBe(70n)
+        expect(sounds(output)).toBe(1)
+        expect(emulator.notes.map((n) => n.text)).toEqual(["Sound File 'nope.wav' not found"])
+    })
+
+    it('loads slots and plays them, leaving D0 alone for an empty one', async () => {
+        const { emulator } = await withSounds(
+            trap(71, ['    lea beep,a1', '    move.b #3,d1']) +
+                keep('d4') +
+                trap(72, ['    move.b #3,d1']) +
+                keep('d5') +
+                trap(72, ['    move.b #9,d1']) +
+                keep('d6')
+        )
+        //task 71 writes nothing
+        expect(registerOf(emulator, 'D4') & 0xffffn).toBe(71n)
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(1n)
+        expect(registerOf(emulator, 'D6') & 0xffffn).toBe(72n)
+    })
+
+    it('mixes WAV and MIDI Files on the DirectX player and refuses what it cannot play', async () => {
+        const { emulator, output } = await withSounds(
+            trap(73, ['    lea beep,a1']) +
+                keep('d4') +
+                trap(73, ['    lea song,a1']) +
+                keep('d5') +
+                trap(74, ['    lea text,a1', '    move.b #1,d1']) +
+                keep('d6') +
+                trap(75, ['    move.b #1,d1']) +
+                keep('d7')
+        )
+        expect(registerOf(emulator, 'D4') & 0xffffn).toBe(1n)
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(1n)
+        expect(registerOf(emulator, 'D6') & 0xffffn).toBe(0n)
+        expect(registerOf(emulator, 'D7') & 0xffffn).toBe(0n)
+        expect(sounds(output)).toBe(2)
+        expect(emulator.notes.map((n) => n.text)).toEqual([
+            "Sound File 'notes.txt' is neither a WAV nor a MIDI File, which cannot be played"
+        ])
+    })
+
+    it('loops with task 76 until the program ends', async () => {
+        const { emulator, output } = await withSounds(
+            trap(71, ['    lea beep,a1', '    move.b #0,d1']) +
+                trap(76, ['    move.b #0,d1', '    move.l #1,d2']) +
+                keep('d5')
+        )
+        expect(registerOf(emulator, 'D5') & 0xffffn).toBe(1n)
+        expect(output.commands.some((c) => c.type === 'sound' && c.loop)).toBe(true)
+        //the program ended on its own, which stops its loops
+        expect(output.commands.at(-1)?.type).toBe('stop')
+    })
+
+    it('stops everything with control 3, and sends nothing a slice started and stopped', async () => {
+        const { emulator, output } = await withSounds(
+            trap(71, ['    lea beep,a1', '    move.b #0,d1']) +
+                trap(76, ['    move.b #0,d1', '    move.l #1,d2']) +
+                trap(76, ['    move.b #0,d1', '    move.l #3,d2']) +
+                keep('d6')
+        )
+        expect(registerOf(emulator, 'D6') & 0xffffn).toBe(1n)
+        expect(output.commands.filter((c) => c.type !== 'stopAll')).toEqual([])
+    })
+
+    it('lets EASy68K’s busy loop finish in a Testcase, where nothing is ever playing', async () => {
+        const body =
+            trap(71, ['    lea beep,a1', '    move.b #0,d1']) +
+            trap(72, ['    move.b #0,d1']) +
+            'wait:\n' +
+            trap(72, ['    move.b #0,d1']) +
+            '    tst.w d0\n    beq wait\n' +
+            '    lea done,a1\n' +
+            trap(14) +
+            trap(9) +
+            NAMES +
+            "done: dc.b 'done',0\n"
+        const code = ORG + body
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem: new FileSystem(FILES), audio: new Audio() }
+        })
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: 'done',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+    })
+
+    it('sends a Sound played before a read while the read waits, not once it is answered', async () => {
+        const code = ORG + trap(70, ['    lea beep,a1']) + trap(4) + trap(9) + NAMES
+        const output = new RecordingAudioOutput()
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem: new FileSystem(FILES), audio: new Audio({ output }) }
+        })
+        await emulator.compile(200, code)
+        const run = emulator.run(INSTRUCTION_LIMIT)
+        for (let i = 0; i < 200 && emulator.interrupt === undefined; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 5))
         }
-    )
+        expect(emulator.interrupt).toBeDefined()
+        expect(sounds(output)).toBe(1)
+        emulator.peripherals.terminal.insertText('7')
+        emulator.peripherals.terminal.pressEnter()
+        await run
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('takes a Sound back with the trap that played it', async () => {
+        const code = ORG + trap(70, ['    lea beep,a1']) + '    nop\n' + trap(9) + NAMES
+        const output = new RecordingAudioOutput()
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem: new FileSystem(FILES), audio: new Audio({ output }) }
+        })
+        await emulator.compile(200, code)
+        for (let i = 0; i < 6 && sounds(output) === 0; i++) await emulator.step()
+        expect(sounds(output)).toBe(1)
+        emulator.undo(1)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+    })
 })
 
 describe('M68K breakpoints', () => {
@@ -1709,7 +1858,7 @@ describe('M68K slices', () => {
 describe('M68K trap documentation', () => {
     it('documents a task for every group', async () => {
         const groups = new Set(M68K_TRAP_DOCS.map((doc) => doc.group))
-        expect([...groups].sort()).toEqual(['files', 'graphics', 'input', 'text', 'time'])
+        expect([...groups].sort()).toEqual(['files', 'graphics', 'input', 'sound', 'text', 'time'])
     })
 
     it('converts EASy68K colors both ways', () => {

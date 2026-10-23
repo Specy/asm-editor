@@ -603,6 +603,12 @@ export type BaseEmulatorDerivedState = {
     /** What the Log should say about the current program's run, oldest first; see `EmulatorNote`. */
     readonly notes: readonly EmulatorNote[]
     /**
+     * What the Audio Peripheral is doing, for the execution dock's speaker button: how many Notes
+     * and Sounds have played since the Emulator was made, whether a program waits for the sound
+     * bank, and how much longer something is heard.
+     */
+    readonly audioActivity: import('#lib/languages/peripherals/audio/Audio.ts').AudioActivity
+    /**
      * What the Build in progress is waiting for, in words, such as "Downloading libc.so.6…";
      * undefined when there is nothing more to say than that it builds.
      */

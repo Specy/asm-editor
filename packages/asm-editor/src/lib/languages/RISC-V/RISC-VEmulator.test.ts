@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { RISCV } from '@specy/risc-v'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
@@ -57,6 +59,7 @@ type Options = {
     virtualClock?: boolean
     limit?: number
     fileSystem?: FileSystem
+    audio?: Audio
 }
 
 async function build(code: string, options: Options = {}) {
@@ -66,7 +69,8 @@ async function build(code: string, options: Options = {}) {
         peripherals: {
             keyboard,
             clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined,
-            fileSystem: options.fileSystem
+            fileSystem: options.fileSystem,
+            audio: options.audio
         }
     })
     //the constructor starts a semantic check, and `_checkCode` assembles a throwaway Core whose
@@ -979,11 +983,14 @@ describe('the RISC-V examples', () => {
         async function toTitle(entry: string) {
             const sources = programBuildSources(project, entry)
             const keyboard = new Keyboard()
+            const clock = new ProgramClock({ mode: 'virtual' })
+            const output = new RecordingAudioOutput()
             const emulator = RISCVEmulator(sources, {
                 peripherals: {
                     keyboard,
-                    clock: new ProgramClock({ mode: 'virtual' }),
-                    fileSystem: new FileSystem(project.files)
+                    clock,
+                    fileSystem: new FileSystem(project.files),
+                    audio: new Audio({ clock, output })
                 }
             })
             await emulator.check()
@@ -1003,8 +1010,20 @@ describe('the RISC-V examples', () => {
             }
             //the title, once the Files are read: PUSH SPACE in orange from tile 9 of row 14
             await runUntil(() => at(72, 112) === 0xffb852)
-            return { keyboard, at, runUntil }
+            const notes = () =>
+                output.commands.flatMap((c) =>
+                    c.type === 'note' ? [[c.pitch, c.durationMs, c.instrument, c.volume]] : []
+                )
+            //the title is silent: the sound starts with a game
+            expect(notes()).toEqual([])
+            return { keyboard, at, runUntil, notes }
         }
+
+        /** The start music's first chord: C on piano for the bass, and the tune's C on timpani. */
+        const FIRST_CHORD = [
+            [48, 136, 0, 106],
+            [72, 68, 47, 127]
+        ]
 
         it('is the folder, packed, with its two Programs', () => {
             //scripts/pack-example-projects.mjs packs the archive from the folder: the two must agree
@@ -1035,7 +1054,7 @@ describe('the RISC-V examples', () => {
         })
 
         it('plays the assembly version, reading its pictures from its Files', async () => {
-            const { keyboard, at, runUntil } = await toTitle('assembly/main.s')
+            const { keyboard, at, runUntil, notes } = await toTitle('assembly/main.s')
             //every lit pixel of maze.bmp, a 24 bit bottom-up BMP, is on the Screen under the score
             const bmp = readFileSync(`${folder}/assets/maze.bmp`)
             const pixels = bmp.readUInt32LE(10)
@@ -1054,13 +1073,17 @@ describe('the RISC-V examples', () => {
             keyboard.typeText(' ')
             await runUntil(() => at(111, 211) === 0xffff00)
             expect(at(88, 160)).toBe(0xffff00)
+            //with the start music, played with ecall 31
+            expect(notes().slice(0, 2)).toEqual(FIRST_CHORD)
         }, 60_000)
 
         it('plays the C version from the assembly it comes with', async () => {
-            const { keyboard, at, runUntil } = await toTitle('c/pacman.c.riscv')
+            const { keyboard, at, runUntil, notes } = await toTitle('c/pacman.c.riscv')
             keyboard.typeText(' ')
             await runUntil(() => at(111, 211) === 0xffff00)
             expect(at(88, 160)).toBe(0xffff00)
+            //with the start music, played with sim_midi_out
+            expect(notes().slice(0, 2)).toEqual(FIRST_CHORD)
         }, 60_000)
     })
 
@@ -2372,5 +2395,98 @@ target:
         //the write syscall is still the entry under it, and undoing far enough still takes it back
         for (let step = 0; step < 16 && written() === 'hello'; step++) emulator.undo(1)
         expect(written()).toBe('')
+    })
+})
+
+describe('RISC-V MIDI services', () => {
+    const notes = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) =>
+            c.type === 'note' ? [[c.pitch, c.durationMs, c.instrument, c.volume]] : []
+        )
+
+    it('plays 31 and 33 with MARS ranges and defaults applied', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            DATA +
+                `        li      a0, 200
+        li      a1, 50
+        li      a2, 40
+        li      a3, 90
+        li      a7, 31
+        ecall
+        li      a0, 64
+        li      a1, 30
+        li      a7, 33
+        ecall
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(notes(output)).toEqual([
+            [60, 50, 40, 90],
+            [64, 30, 40, 90]
+        ])
+    })
+
+    it('waits out a 33 on a testcase virtual clock, in silence', async () => {
+        const output = new RecordingAudioOutput()
+        const code =
+            DATA +
+            `        li      a0, 60
+        li      a1, 5000
+        li      a2, 0
+        li      a3, 100
+        li      a7, 33
+        ecall
+        li      a7, 30
+        ecall
+        li      a7, 1
+        ecall
+` +
+            EXIT
+        const emulator = await build(code, { audio: new Audio({ output }) })
+        const started = performance.now()
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: String((946684800000 + 5000) | 0),
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(performance.now() - started).toBeLessThan(2000)
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(notes(output)).toEqual([])
+    })
+
+    it('takes a Note back with the syscall that played it', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(
+            DATA +
+                `        li      a0, 60
+        li      a1, 5000
+        li      a2, 0
+        li      a3, 100
+        li      a7, 31
+        ecall
+        nop
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        //`li` of a large value is two instructions on RISC-V, so step until the service has run
+        for (let i = 0; i < 10 && notes(output).length === 0; i++) await emulator.step()
+        expect(notes(output)).toEqual([[60, 5000, 0, 100]])
+        emulator.undo(1)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
     })
 })

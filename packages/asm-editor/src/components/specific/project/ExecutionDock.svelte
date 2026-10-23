@@ -53,6 +53,18 @@
         title: string
     }
 
+    /**
+     * The speaker button, at the far end: the host passes it once the program has made a sound
+     * ([audio.md](../../../../../../docs/design/audio.md#autoplay-mute-and-volume)).
+     */
+    export interface DockSound {
+        muted: boolean
+        /** Something is heard right now, which lights the button. */
+        playing: boolean
+        /** The program waits while the sound bank loads. */
+        loading: boolean
+        onToggle: () => void
+    }
     /** One button of the view switch: a way the pane can show its File. */
     export interface DockView {
         id: string
@@ -95,6 +107,8 @@
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
     import FaSpinner from '~icons/fa-solid/spinner'
+    import FaVolumeUp from '~icons/fa-solid/volume-up'
+    import FaVolumeMute from '~icons/fa-solid/volume-mute'
 
     interface Props {
         /** Built: Stop, Run, Undo and Step in place of Build. */
@@ -126,6 +140,8 @@
         compilation?: DockCompilation
         /** The pane's view switch, shown during a Debug session too. */
         views?: DockViews
+        /** The speaker button, once the program has made a sound. */
+        sound?: DockSound
         /** The displayed File is source, so Compile takes the place of Build. */
         compileOnly?: boolean
         /** Compilation-only docks in another pane share one project execution dock. */
@@ -157,6 +173,7 @@
         buildButton = { label: 'Build', title: 'Assemble the program and start debugging it' },
         compilation,
         views,
+        sound,
         compileOnly = false,
         showExecution = true,
         onBuild,
@@ -168,7 +185,7 @@
         onTest
     }: Props = $props()
 
-    const hasEnd = $derived(showExecution && (hasTests || actions.length > 0))
+    const hasEnd = $derived(showExecution && (hasTests || actions.length > 0 || !!sound))
     /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
     const beforeViews = $derived(
         debugging ? showExecution : (showExecution && !compileOnly) || !!compilation
@@ -374,6 +391,31 @@
     {#if hasEnd}
         <div class="toolbar end">
             <span class="divider fill-only" aria-hidden="true"></span>
+            {#if sound}
+                <button
+                    type="button"
+                    class="tool sound"
+                    class:playing={sound.playing && !sound.muted}
+                    onclick={sound.onToggle}
+                    aria-pressed={!sound.muted}
+                    title={sound.loading
+                        ? 'Loading sounds…'
+                        : sound.muted
+                          ? 'Turn sound on'
+                          : 'Turn sound off'}
+                >
+                    <Icon size={0.9}>
+                        {#if sound.loading}
+                            <span class="busy-spinner"><FaSpinner /></span>
+                        {:else if sound.muted}
+                            <FaVolumeMute />
+                        {:else}
+                            <FaVolumeUp />
+                        {/if}
+                    </Icon>
+                    <span class="label">{sound.loading ? 'Loading…' : 'Sound'}</span>
+                </button>
+            {/if}
             {#if hasTests}
                 <button
                     type="button"
@@ -495,6 +537,10 @@
 
     .red {
         color: var(--red);
+    }
+
+    .sound.playing {
+        color: var(--accent);
     }
 
     .green {

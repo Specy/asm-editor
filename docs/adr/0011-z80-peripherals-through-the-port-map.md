@@ -18,3 +18,9 @@ The Z80 reaches the **Screen**, **Keyboard** and **Mouse** through a port-mapped
 
 - A memory-mapped framebuffer, as on real Z80 micros: fast fills with `ldir` and Undo for free through the Core's RAM rollback, but a tiny resolution or a bit-packed format, a device inside the address space that ADR 0002 deliberately kept empty, and a second pixel format for the Screen to support.
 - Both idioms in the first version: the framebuffer half adds a Screen mode and a display configuration without adding a capability the ports lack.
+
+## Update 2026-10-23: an audio group
+
+A fifth group, at 0x60 to 0x64, reaches the **Audio** Peripheral: `NOTE_PLAY` (an `out` of the pitch plays a Note and returns), `NOTE_PLAY_WAIT` (an `in r,(c)` with the pitch in B plays it and waits its duration, the play-and-wait being a read because only a read can wait), and `NOTE_INSTRUMENT`, `NOTE_VOLUME` and `NOTE_DURATION`, the last 16 bits of milliseconds through B. It plays MARS's MIDI Note with MARS's ranges and defaults, as the Screen group plays EASy68K's drawing commands. The group must stay within 0x60 to 0x6F: 0x75 and 0x79 are the TRS-80's Orchestra-90 card. Decided in the [Audio design record](../design/audio.md#the-z80-audio-ports).
+
+A **Sound chip** group followed on the same day, at the MSX's own ports rather than in the editor's 0x10 to 0x6F range: 0xA0 selects an AY-3-8910 register, 0xA1 writes it and 0xA2 reads it, free in this map and in the TRS-80's decoding, so MSX sound code runs unchanged ([ADR 0060](./0060-the-z80-gets-a-real-sound-chip-the-others-a-synth.md), [waveform-sound.md](../design/waveform-sound.md#the-sound-chip-on-the-z80)). A real machine's ports, where one exists, are worth more than keeping the editor's groups contiguous.

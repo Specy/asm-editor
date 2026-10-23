@@ -24,6 +24,8 @@ export type PreferenceValue<T> = {
     section: PreferenceSection
     /** The values a `choice` can take, in the order the panel lists them. */
     options?: PreferenceOption<T>[]
+    /** A `number` set with a slider between these, rather than typed. */
+    range?: { min: number; max: number; step: number }
 }
 
 /** Panels as separate rounded cards, or edge to edge with dividers. */
@@ -44,6 +46,8 @@ export type PreferenceValues = {
     panelStyle: PreferenceValue<PanelStyle>
     debugTools: PreferenceValue<DebugToolsPlacement>
     memoryPanelSize: PreferenceValue<MemoryPanelSize>
+    sound: PreferenceValue<boolean>
+    soundVolume: PreferenceValue<number>
 }
 
 export type PreferenceKey = keyof PreferenceValues
@@ -59,6 +63,14 @@ function createValue<T>(name: string, value: T, onlyFor?: AvailableLanguages) {
         onlyFor,
         section: 'preferences'
     } as PreferenceValue<T>
+}
+
+function createRange(
+    name: string,
+    value: number,
+    range: { min: number; max: number; step: number }
+): PreferenceValue<number> {
+    return { name, value, type: 'number', range, section: 'preferences' }
 }
 
 function createChoice<T extends string | number>(
@@ -86,6 +98,11 @@ export function defaultPreferences(): PreferenceValues {
             'Show the drawing buffer of a double buffered screen',
             false
         ),
+        //what a program plays: a Preference, so muting never changes what a program observes
+        //([the design record](../../../../docs/design/audio.md#autoplay-mute-and-volume)). Half
+        //volume by default, because MARS's default Note plays at 100 of 127
+        sound: createValue('Play sound', true),
+        soundVolume: createRange('Sound volume', 50, { min: 0, max: 100, step: 5 }),
         //the two variants the redesign brief explored, kept as the person's choice
         //([the design record](../../../../docs/design/workbench.md), Layout Preferences)
         panelStyle: createChoice<PanelStyle>(

@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { MIPS } from '@specy/mips'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
@@ -48,6 +50,7 @@ type Options = {
     virtualClock?: boolean
     limit?: number
     fileSystem?: FileSystem
+    audio?: Audio
 }
 
 async function build(code: string, options: Options = {}) {
@@ -57,7 +60,8 @@ async function build(code: string, options: Options = {}) {
         peripherals: {
             keyboard,
             clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined,
-            fileSystem: options.fileSystem
+            fileSystem: options.fileSystem,
+            audio: options.audio
         }
     })
     //the constructor starts a semantic check, and `_checkCode` assembles a throwaway Core whose
@@ -2240,5 +2244,98 @@ target:
         //the write syscall is still the entry under it, and undoing far enough still takes it back
         for (let step = 0; step < 16 && written() === 'hello'; step++) emulator.undo(1)
         expect(written()).toBe('')
+    })
+})
+
+describe('MIPS MIDI services', () => {
+    const notes = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) =>
+            c.type === 'note' ? [[c.pitch, c.durationMs, c.instrument, c.volume]] : []
+        )
+
+    it('plays 31 and 33 with MARS ranges and defaults applied', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            DATA +
+                `        li      $a0, 200
+        li      $a1, 50
+        li      $a2, 40
+        li      $a3, 90
+        li      $v0, 31
+        syscall
+        li      $a0, 64
+        li      $a1, 30
+        li      $v0, 33
+        syscall
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(notes(output)).toEqual([
+            [60, 50, 40, 90],
+            [64, 30, 40, 90]
+        ])
+    })
+
+    it('waits out a 33 on a testcase virtual clock, in silence', async () => {
+        const output = new RecordingAudioOutput()
+        const code =
+            DATA +
+            `        li      $a0, 60
+        li      $a1, 5000
+        li      $a2, 0
+        li      $a3, 100
+        li      $v0, 33
+        syscall
+        li      $v0, 30
+        syscall
+        li      $v0, 1
+        syscall
+` +
+            EXIT
+        const emulator = await build(code, { audio: new Audio({ output }) })
+        const started = performance.now()
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: String((946684800000 + 5000) | 0),
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(performance.now() - started).toBeLessThan(2000)
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(notes(output)).toEqual([])
+    })
+
+    it('takes a Note back with the syscall that played it', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(
+            DATA +
+                `        li      $a0, 60
+        li      $a1, 5000
+        li      $a2, 0
+        li      $a3, 100
+        li      $v0, 31
+        syscall
+        nop
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        //`li` of a large value is two instructions on RISC-V, so step until the service has run
+        for (let i = 0; i < 10 && notes(output).length === 0; i++) await emulator.step()
+        expect(notes(output)).toEqual([[60, 5000, 0, 100]])
+        emulator.undo(1)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
     })
 })

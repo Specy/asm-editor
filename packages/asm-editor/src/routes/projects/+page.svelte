@@ -3,11 +3,10 @@
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
     import { onMount } from 'svelte'
-    import Button from '#cmp/shared/button/Button.svelte'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaPlus from '~icons/fa-solid/plus'
-    import Title from '#cmp/shared/layout/Header.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import { scale } from 'svelte/transition'
     import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
     import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
@@ -15,11 +14,11 @@
     import { toast } from '#stores/toastStore.ts'
     import { goto } from '$app/navigation'
     import Page from '#cmp/shared/layout/Page.svelte'
-    import Row from '#cmp/shared/layout/Row.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
     import { projectDownload } from '#lib/projectArchive.ts'
     import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
+    import '#cmp/specific/workbench/workbench.css'
 
     let hasFileHandleSupport = false
     let fileInput: HTMLInputElement | undefined
@@ -130,15 +129,13 @@
 
 <DefaultNavbar />
 <Page hasNavbar>
-    <div class="project-display">
+    <div class="project-display wb-cards">
         <div class="content">
             <div class="top-row">
-                <Row align="center">
-                    <Title style="margin: 0">Your projects</Title>
-                </Row>
-                <div class="row top-row-buttons">
-                    <Button cssVar="secondary" onClick={pickAndImport}>
-                        <Icon style="margin-right: 0.4rem" size={1}>
+                <h1 class="page-title">Your projects</h1>
+                <div class="top-row-buttons">
+                    <Button cssVar="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
+                        <Icon size={0.85}>
                             <FaUpload />
                         </Icon>
                         Import
@@ -151,16 +148,19 @@
                             accept=""
                             hidden
                             bind:this={fileInput}
-                            on:change={(event) => {
+                            onchange={(event) => {
                                 const files = [...(event.currentTarget.files ?? [])]
                                 event.currentTarget.value = ''
                                 void importFiles(files)
                             }}
                         />
                     {/if}
-
-                    <ButtonLink href="/projects/create" title="Create a new project">
-                        <Icon style="margin-right: 0.3rem" size={1}>
+                    <ButtonLink
+                        href={resolve('/projects/create')}
+                        style="gap: 0.5rem"
+                        title="Create a new project"
+                    >
+                        <Icon size={0.85}>
                             <FaPlus />
                         </Icon>
                         Create
@@ -176,13 +176,17 @@
                 />
             </div>
             {#if ProjectStore.projects.length === 0}
-                <h3 style="margin-top: 1rem; margin-left: 2rem; font-weight:unset">
-                    You seem to have no projects, create one!
-                </h3>
+                <div class="empty">
+                    <div class="empty-title">No projects yet</div>
+                    <div class="empty-hint">
+                        Create one from a language and a template, or import a file.
+                    </div>
+                </div>
             {/if}
             <div class="project-grid">
                 {#each ProjectStore.projects as project, i (project.id)}
                     <div
+                        class="project-cell"
                         in:scale|global={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
                         out:scale={{ duration: 300, start: 0.8 }}
                     >
@@ -232,12 +236,6 @@
                         />
                     </div>
                 {/each}
-                <div class="add-project">
-                    <Icon size={2.5}>
-                        <FaPlus />
-                    </Icon>
-                    <div>Create project</div>
-                </div>
             </div>
         </div>
     </div>
@@ -249,48 +247,73 @@
         margin-top: 2rem;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 2rem;
+        gap: 1rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.8rem;
+        white-space: nowrap;
     }
 
     .top-row-buttons {
-        gap: 0.8rem;
+        display: flex;
+        gap: 0.4rem;
     }
 
     .import-drop {
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
 
-    .add-project {
-        display: none;
-        justify-content: center;
+    .empty {
+        display: flex;
         flex-direction: column;
-        gap: 1rem;
-        align-items: center;
-        height: 100%;
-        border-radius: 0.6rem;
-        color: var(--accent);
-        border: solid 0.1rem var(--accent);
+        gap: 0.3rem;
+        padding: 1rem;
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
+        background-color: var(--wb-surface);
+        color: var(--secondary-text);
     }
 
+    .empty-title {
+        font-weight: 600;
+    }
+
+    .empty-hint {
+        font-size: 0.85rem;
+        color: var(--hint);
+    }
+
+    /* nothing on the page is selected by a click on its empty space: Chrome would otherwise put the
+       caret in the nearest text there is, which is a card's name or description, and so start
+       editing it from a click beside the card */
     .project-display {
+        user-select: none;
         display: flex;
         flex-direction: column;
         align-items: center;
         height: 100%;
+        padding: 0 1rem;
     }
 
     .project-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+        gap: 0.5rem;
         margin-bottom: 2rem;
-        justify-content: space-between;
+    }
+
+    /* the transition's wrapper, which the card fills so that a row's cards are as tall as each other */
+    .project-cell {
+        min-width: 0;
     }
 
     .content {
         display: flex;
         flex-direction: column;
-        max-width: 40rem;
+        max-width: 60rem;
         width: 100%;
     }
 
@@ -299,17 +322,17 @@
             display: none;
         }
         .top-row {
-            margin-top: 0.5rem;
-            margin-bottom: 1rem;
             flex-direction: column;
-            align-items: unset;
-            gap: 1rem;
+            align-items: stretch;
+            gap: 0.8rem;
+            margin-top: 1rem;
+            margin-bottom: 0.8rem;
         }
-        .top-row-buttons {
-            justify-content: flex-end;
+        .page-title {
+            font-size: 1.5rem;
         }
-        .project-display {
-            padding: 1rem;
+        .top-row-buttons > :global(*) {
+            flex: 1;
         }
         .project-grid {
             grid-template-columns: minmax(0, 1fr);

@@ -302,7 +302,7 @@ function taskEntry(task: M68KTrapDoc, href: string): DocumentationEntry {
 
 /**
  * The tasks that are not supported, one line per reason: neighbouring tasks that share one, such as
- * the eight sound tasks, are listed together before it.
+ * the eight network tasks, are listed together before it.
  */
 function rejectedTaskList(): string {
     const lines: { tasks: string[]; reason: string }[] = []
@@ -317,8 +317,8 @@ function rejectedTaskList(): string {
 
 /**
  * The Chapter in the page's order: the introduction, then each group of tasks after its own
- * introduction (the colors beside the graphics tasks, the key codes beside the keyboard ones), then
- * the tasks that are not supported.
+ * introduction (the colors beside the graphics tasks, the key codes beside the keyboard ones, how
+ * sound differs from EASy68K beside the sound ones), then the tasks that are not supported.
  */
 function trapTasks(): Chapter {
     const href = `${BASE}/traps`
@@ -341,7 +341,8 @@ function trapTasks(): Chapter {
     }
     const beside: Partial<Record<M68KTrapGroup, DocumentationEntry[]>> = {
         graphics: take('colors').map(withSwatches),
-        input: take('key-codes')
+        input: take('key-codes'),
+        sound: take('sound-differences')
     }
     const closing = take('unsupported')
     const entries = [

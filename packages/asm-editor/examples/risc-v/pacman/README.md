@@ -1,8 +1,8 @@
 # Pac-Man
 
-The 1980 arcade game at the arcade's own 224 × 288 pixels, written twice: in RISC-V assembly in
-`assembly/`, and in C in `c/`. Both are the same game, and both read their pictures and maze from
-the Files in `assets/` when they start.
+The 1980 arcade game at the arcade's own 224 × 288 pixels, with its music and sound effects,
+written twice: in RISC-V assembly in `assembly/`, and in C in `c/`. Both are the same game, and
+both read their pictures and maze from the Files in `assets/` when they start.
 
 ## Playing
 
@@ -11,6 +11,10 @@ the Files in `assets/` when they start.
 2. **Build**, then **Run**.
 3. Click the Screen so it receives the keyboard, then press space.
 4. Move with **W A S D**, or **Z Q S D**, or **8 4 5 6** on the number pad. **P** pauses.
+
+Turn your sound on. The first sound of a game waits a moment while the editor loads its sound
+bank, the first time on a page. Once the game has made a sound, the **Sound** button at the end of
+the bar with **Build** and **Run** turns it off and on, and **Sound volume** is in **Preferences**.
 
 The arrow keys do not type a character, so the program never sees them. Pac-Man keeps going until
 a wall stops him, and he remembers the last direction you pressed, taking it at the next opening.
@@ -42,14 +46,16 @@ assembling, and finds them beside it.
 | `pacman.s`    | Pac-Man's movement and eating                                                |
 | `ghosts.s`    | The ghosts: the house, their targets, frightened mode, collisions            |
 | `game.s`      | The game's states, the score, the keyboard and the frame timing              |
+| `sound.s`     | The music and the sound effects, and the player that plays them (ecall 31)   |
 
 ## The C version
 
 `c/pacman.c` includes `pacman.h` and then each other `.c` File with `#include "video.c"` and so
-on. **Compile** sends Compiler Explorer the source and every File its quoted includes reach, so the
-parts are pasted into `pacman.c` and compiled as one program, as the assembly version is assembled
-as one. The pictures never go to Compiler Explorer: the program reads them in the editor when it
-runs, with `fopen` and `fread`.
+on, `sound.c` before the parts that play its sounds, since they name its tables. **Compile** sends
+Compiler Explorer the source and every File its quoted includes reach, so the parts are pasted
+into `pacman.c` and compiled as one program, as the assembly version is assembled as one. The
+pictures never go to Compiler Explorer: the program reads them in the editor when it runs, with
+`fopen` and `fread`.
 
 | File       | What it holds                                                          |
 | ---------- | ---------------------------------------------------------------------- |
@@ -62,6 +68,7 @@ runs, with `fopen` and `fread`.
 | `player.c` | Pac-Man                                                                |
 | `ghosts.c` | The ghosts                                                             |
 | `game.c`   | The game's states, the score, the keyboard and the frame timing        |
+| `sound.c`  | The music and the sound effects, and the player that plays them        |
 
 `c/pacman.c.riscv` is the program **Build** assembles: Clang's output for `pacman.c` at **-O2**,
 which the Project comes with so the C version runs without compiling first. Compile again after
@@ -118,3 +125,50 @@ is then two copies:
 
 Each frame ends with a sleep until the next 1/60 of a second. The sleep is also when the editor
 puts the frame on the Screen.
+
+## How it sounds
+
+Every sound is a Note played with RARS's MIDI service 31, `sim_midi_out` in C: a pitch on a General
+MIDI instrument, at a volume, for a duration. Service 31 starts the Note and goes on at once, so
+the game never waits for its sound. Service 33, which waits for the Note to end, would stop the
+game for every Note.
+
+The sounds are the arcade's own. The arcade played them on a sound chip with three voices, giving
+each voice a new frequency every 1/60 s, so most of its sounds are sweeps: the siren goes up and
+down more than an octave several times a second, and each dot is a fall or a rise of two octaves in
+five frames. The tables at the top of `sound.s` and `sound.c`, the same numbers in both, hold each
+sound frame by frame, each frame's frequency as the nearest Note. A sweep is therefore a Note a
+frame, and frames that keep one pitch are one longer Note. They were made from the arcade's sound
+data as Frédéric Vecoven's commented listing of its sound code gives it, at
+[vecoven.com](https://vecoven.com/elec/pacman/pacman.html).
+
+A table starts with its instrument, then has events of four bytes: the pitch (60 is middle C, each
+step a semitone), how many frames the Note lasts, its volume from 0 to 127, and how many frames to
+wait before the next event. A wait of 0 plays the next event with it, as a chord. A table ends with
+`SOUND_END`, or with `SOUND_REPEAT` to play again from its first event, as the sirens do.
+
+The instruments are the editor's sound bank's closest to the arcade's tones. In that bank timpani is
+a nearly pure tone that dies away quickly, so a Note a frame stays one sweep instead of blurring
+into a chord; most tables use it. The start music's bass is a piano, and the extra life and the
+death an acoustic bass. The low Notes of a sweep are played softer, because they ring the longest
+and would drown the rest.
+
+Three channels play together, as the arcade's three voices did, each one table at a time. A new
+sound on a channel replaces the old one:
+
+| Channel | Plays                                                                                         |
+| ------- | --------------------------------------------------------------------------------------------- |
+| 1       | The start music's bass; the extra life at 10,000 points                                       |
+| 2       | The start music's tune; under the game, the siren, the frightened ghosts, the eyes going home |
+| 3       | A dot or an energizer eaten, "wa" and "ka" in turn; the fruit; a ghost; the death             |
+
+Once a frame, just before the sleep, `update_sounds` picks what plays under the game and plays
+every event that falls due. The sound counts frames as the game does, so it keeps time with the
+game and pauses with it. Things happen when they do in the arcade:
+
+- The siren speeds up and rises after 116, 180, 212 and 228 dots.
+- The eyes' sound takes the place of the frightened one, which takes the place of the siren.
+- PLAYER ONE and READY! last 256 frames between them at the start of a game: as long as the start
+  music.
+- When Pac-Man is caught, everything stands still in silence for a second, and he is alone for half
+  a second. He then shrivels for nine frames of 15 to a sinking wobble, and pops as he vanishes.

@@ -1,0 +1,6 @@
+{
+    "name": "Play a tune",
+    "description": "Play the first phrase of Ode to Joy from a table of pitches and durations, one note at a time with service 33.",
+    "order": 26,
+    "topic": "play-a-tune"
+}

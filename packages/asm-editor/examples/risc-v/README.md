@@ -32,7 +32,9 @@ own 224 × 288 pixels, a size RARS's tool does not offer and this editor does, w
 assembly (`assembly/`, Entry `main.s`) and once in C (`c/pacman.c`, which `#include`s its other
 `.c` Files). Both read their sprites, letters and maze from `assets/` (`sprites.bmp`, `tiles.bmp`,
 `maze.bmp`, `maze.txt`) when they start, through the file services, so the pictures can be viewed
-in the Preview and changed without touching the code. Import `pacman/pacman.asmproj` on the
+in the Preview and changed without touching the code. Its music and sound effects are Notes played
+with RARS's MIDI service 31, which the C version calls as `sim_midi_out`, from tables both versions
+share note for note. Import `pacman/pacman.asmproj` on the
 Projects page, pick a Program, Build and Run, then click the Screen and press space. The Project's
 own `README.md` describes the controls and the Files.
 

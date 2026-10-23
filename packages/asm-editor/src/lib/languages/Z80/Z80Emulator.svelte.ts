@@ -132,6 +132,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * Null when no input is being served.
      */
     private inputPosition: number | null = null
+    /**
+     * What the program waits for after a `NOTE_PLAY` paused the machine: the sound bank, then the
+     * Note. An `out` cannot wait, so the device asks for a pause and the slice ends on this wait.
+     */
+    private audioHold: Promise<void> | null = null
     private sourceLines: Record<string, string[]> = {}
     /**
      * One past the last byte of every assembled segment. The Z80 has no "end of program": running
@@ -277,6 +282,17 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             screen: peripherals.screen,
             keyboard: peripherals.keyboard,
             mouse: peripherals.mouse,
+            //swapped for a silent one during a testcase, so read per call like the clock
+            audio: () => this._peripherals.audio,
+            holdForAudio: (loading, play) => {
+                //the Note plays only for the run that asked for it: a Stop meanwhile supersedes it,
+                //and the hold then rejects for whoever takes it, or for nobody
+                const execution = this.executionController.capture()
+                const hold = this.executionController.waitFor(execution, () => loading).then(play)
+                hold.catch(() => {})
+                this.audioHold = hold
+                machine.pause()
+            },
             cells: trs80,
             onGraphicalUse: () =>
                 peripherals.terminal.useKeyboardInput(peripherals.keyboard, (text) =>
@@ -338,6 +354,13 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //what an `in` or an `out` does to the Terminal is journaled by t-state, as its drawing is
         //([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
         peripherals.terminal.trackHistory(
+            () => this.inputPosition ?? machine.tStateCount,
+            normalizeUndoSize(undoSize)
+        )
+        //and so are the Notes it plays and the audio ports it sets
+        //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
+        this.audioHold = null
+        peripherals.audio.track(
             () => this.inputPosition ?? machine.tStateCount,
             normalizeUndoSize(undoSize)
         )
@@ -410,6 +433,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         if (record && !isPokeRecord(record)) {
             this.screenInstructions?.undoAfter(record.tStateCountBefore)
             this._peripherals.terminal.undoAfter(record.tStateCountBefore)
+            this._peripherals.audio.undoAfter(record.tStateCountBefore)
         }
         // The core restores registers but not instructionAddress. A Poke keeps the remembered
         // address; an instruction restores it from the newest entry's address or Poke checkpoint.
@@ -496,17 +520,28 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 this.sliceChunk = nextSliceChunk(this.sliceChunk, chunkTargetMs, spentMs, chunkCap)
                 this.trackLastInstruction(result.instructions > 0, result.reason)
                 instructions += result.instructions
+                //a `NOTE_PLAY` that waits for the sound bank paused the machine after its `out`. A
+                //Breakpoint on the next instruction or the program's end wins over the pause, and
+                //still stops the run once the wait is over
+                const hold = this.takeAudioHold()
+                if (hold) {
+                    if (result.reason === StopReason.PAUSED) {
+                        return { reason: 'wait', instructions, wait: hold }
+                    }
+                    await this.executionController.waitFor(execution, () => hold)
+                }
                 if (result.reason === StopReason.WAITING_FOR_INPUT) {
                     //a stop on a time port is a program-requested wait, which the scheduler owns: it
                     //awaits the clock through the execution generation so Stop still answers, and the
                     //re-executed `in` finds the wait granted (ADR 0007, ADR 0010). Console input is
                     //served here instead, because the program is suspended on the Terminal, not on time
-                    const wait = this.pendingWait()
+                    const wait = this.pendingWait(execution)
                     if (wait) return { reason: 'wait', instructions, wait }
                     this.trs80?.flush()
                     await this.provideInput(execution)
                     continue
                 }
+                if (result.reason === StopReason.PAUSED) continue
                 if (this._hasTerminated()) return { reason: 'terminated', instructions }
                 //anything else the machine stopped for is a breakpoint: the user's, or a cliff one that
                 //`_hasTerminated` did not recognize as the end of the program
@@ -545,6 +580,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const execution = this.executionController.capture()
         let reason = machine.step()
         this.trs80?.flush()
+        const hold = this.takeAudioHold()
+        if (hold) await this.executionController.waitFor(execution, () => hold)
         if (reason === StopReason.WAITING_FOR_INPUT) {
             //the `in` was rolled back, so nothing has executed yet: feed the device (or let the
             //wait it asked for elapse) and retry it
@@ -811,6 +848,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             //the budget is shared by every slice of one run, so a program that stops for input ten
             //times still gets the halt limit it was given, not ten times it
             remaining -= result.instructions
+            const hold = this.takeAudioHold()
+            if (hold) {
+                await this.executionController.waitFor(execution, () => hold)
+                continue
+            }
             if (result.reason !== StopReason.WAITING_FOR_INPUT) return
             //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
             //which waits complete at once (ADR 0010)
@@ -824,7 +866,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * sliced run path reports waits to the scheduler instead, which is what ADR 0007 asks for.
      */
     private async serveInputStop(execution: ExecutionGeneration): Promise<void> {
-        const wait = this.pendingWait()
+        const wait = this.pendingWait(execution)
         if (wait) {
             await this.executionController.waitFor(execution, () => wait)
             return
@@ -835,18 +877,48 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     /**
      * The clock wait the pending `in` is asking for, or null when it is asking for input. Granting
      * it also tells the device to answer the instruction when it re-executes, and only then: a wait
-     * that is cancelled (Stop resolves pending waits) leaves a run that is superseded anyway.
+     * that is cancelled (Stop resolves pending waits) leaves a run that is superseded anyway, and
+     * a Note waiting for the sound bank plays only if `execution` is still the run when it loads.
      */
-    private pendingWait(): Promise<void> | null {
-        const port = this.requireMachine().pendingInputPort ?? 0
+    private pendingWait(execution: ExecutionGeneration): Promise<void> | null {
+        const machine = this.requireMachine()
+        const port = machine.pendingInputPort ?? 0
         if (!Z80Device.isWaitPort(port)) return null
         const device = this.requireDevice()
         const clock = this._peripherals.clock
+        if (Z80Device.portNameOf(port) === 'NOTE_PLAY_WAIT') {
+            const audio = this._peripherals.audio
+            const note = device.noteToWaitFor(port)
+            const play = () => {
+                //journaled inside the `in`, which re-executes from this t-state count, as a read's
+                //echo is in `provideInput`
+                this.inputPosition = machine.tStateCount + 1
+                try {
+                    audio.playNote(note)
+                } finally {
+                    this.inputPosition = null
+                }
+                audio.flush()
+                return clock.wait(note.duration)
+            }
+            const loading = audio.prepare('note')
+            const played = loading
+                ? this.executionController.waitFor(execution, () => loading).then(play)
+                : play()
+            return played.then(() => device.completeWait(port))
+        }
         const wait =
             Z80Device.portNameOf(port) === 'TIME_FRAME'
                 ? clock.nextFrame()
                 : clock.waitHundredths(Z80Device.waitHundredthsOf(port))
         return wait.then(() => device.completeWait(port))
+    }
+
+    /** The hold a `NOTE_PLAY` asked for, handed over once. */
+    private takeAudioHold(): Promise<void> | null {
+        const hold = this.audioHold
+        this.audioHold = null
+        return hold
     }
 
     /**

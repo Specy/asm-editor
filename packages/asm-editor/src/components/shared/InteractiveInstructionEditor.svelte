@@ -19,6 +19,8 @@
         type DockAction,
         type DockCompilation
     } from '#cmp/specific/project/ExecutionDock.svelte'
+    import { DockSoundState } from '#cmp/specific/project/dockSound.svelte.ts'
+    import { wakeAudio } from '#lib/languages/peripherals/audio/audioContext.ts'
     import { clampBigInt } from '#lib/utils.ts'
     import { terminationSummary } from '#lib/languages/termination.ts'
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
@@ -456,7 +458,15 @@
         showPc || showRegisters || (showFlags && emulator.statusRegisters?.length > 0)
     )
 
+    const sound = new DockSoundState(() => emulator.audioActivity)
+
+    /** Sound is unlocked inside the press that starts a Build, Run or Step, as the Workbench does. */
+    function wakeSound() {
+        if (language !== 'X86') wakeAudio()
+    }
+
     async function buildCode() {
+        wakeSound()
         if (building || running || compiling || buildDisabled) return
         try {
             running = false
@@ -484,6 +494,7 @@
      * turns the Run button into Pause here too, and what keeps Step and Undo out of a run.
      */
     async function startRun() {
+        wakeSound()
         if (building || running || compiling) return
         running = true
         if (layout === 'fullscreen') {
@@ -501,6 +512,7 @@
     }
 
     async function stepCode() {
+        wakeSound()
         try {
             await emulator.step()
         } catch (e) {
@@ -630,6 +642,7 @@
                 compileOnly={selectedIsSource}
                 executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
                 canUndo={emulator.canUndo}
+                sound={sound.value}
                 hasTests={offersTest}
                 actions={allDockActions}
                 onBuild={buildCode}

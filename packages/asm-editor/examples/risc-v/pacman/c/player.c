@@ -71,10 +71,12 @@ static void pac_eat(void) {
         if (energizer) energize();
         eat_tile(column, row);
         dot_eaten();
+        play_chomp();
     } else if (fruit_timer && row == 20 && (column == 13 || column == 14)) {
         fruit_timer = 0;
         fruit_score_timer = 120; /* its points show for two seconds */
         add_score(level_info->fruit_points);
+        play_sound(CHANNEL_3, sound_fruit);
     }
 }
 

@@ -397,7 +397,8 @@ function inputOutput(): Chapter {
             section('the-trs-80-display'),
             colorsEntry(section('colors'))
         ],
-        mouse: [section('mouse-views')]
+        mouse: [section('mouse-views')],
+        audio: [section('sound')]
     }
     return {
         id: 'input-output',
@@ -405,7 +406,7 @@ function inputOutput(): Chapter {
         title: 'Input/Output',
         href,
         description:
-            'The ports that connect a program to the terminal, the Screen, the keyboard, the mouse and the clock.',
+            'The ports that connect a program to the terminal, the Screen, the keyboard, the mouse, the clock and Audio.',
         entries: [
             section('ports'),
             ...Z80_PORT_GROUP_DOCS.flatMap((group) => [

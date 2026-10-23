@@ -5,6 +5,7 @@ import type {
 } from '#lib/languages/ExecutionController.ts'
 import { guestFileFailure, type FileSystemSession } from '#lib/languages/peripherals/FileSystem.ts'
 import type { EmulatorPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
+import type { Note } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { MarsDevices } from './MarsDevices'
 
 /**
@@ -69,6 +70,12 @@ export type MarsHandlerMap = {
     stdIn: (length: number) => Promise<[count: number, buffer: number[]]>
     seekFile: (descriptor: number, offset: number, whence: number) => number
     sleep: (milliseconds: number) => Promise<void>
+    midiOut: (
+        pitch: number,
+        duration: number,
+        instrument: number,
+        volume: number
+    ) => Promise<void> | void
     time: () => number
     randomSeed: (generator: number) => number
 }
@@ -79,7 +86,7 @@ export type MarsHandlerHost = {
      * The Terminal, the program clock and the Random source. A Testcase swaps the clock for a
      * virtual one and the Random source for a seeded one, so both are read at the point of use.
      */
-    peripherals: Pick<EmulatorPeripherals, 'terminal' | 'clock' | 'random'>
+    peripherals: Pick<EmulatorPeripherals, 'terminal' | 'clock' | 'random' | 'audio'>
     /** What ties a wait or a read to the run that asked for it. */
     executionController: ExecutionController
     /** The bitmap display, whose picture catches up before the program sleeps or waits on the user. */
@@ -236,6 +243,8 @@ export class MarsHandlers {
             },
 
             sleep: (milliseconds) => this.sleep(milliseconds),
+            midiOut: (pitch, duration, instrument, volume) =>
+                this.midiOut({ pitch, duration, instrument, volume }),
             //Service 30 and RISC-V time/timeh: Unix epoch milliseconds.
             //Testcases use the fixed Y2K epoch plus virtual waits (ADR 0040).
             time: () => this.host.peripherals.clock.calendarNow(),
@@ -276,10 +285,28 @@ export class MarsHandlers {
     private async sleep(milliseconds: number): Promise<void> {
         const execution = this.execution
         this.host.devices.flush()
+        //a Note the program played just before, 33's own included, is heard as the wait starts
+        this.host.peripherals.audio.flush()
         this.host.pauseAtSleep()
         //read the clock at the point of use: a Testcase swaps a virtual one in and the injected one back
         const clock = this.host.peripherals.clock
         await this.host.executionController.waitFor(execution, () => clock.wait(milliseconds))
+    }
+
+    /**
+     * Services 31 and 33, with MARS's ranges and defaults already applied by the Core, which calls
+     * `sleep` after this for 33 ([audio-plan.md](../../../../../../docs/design/audio-plan.md),
+     * decision 1). The first Note of a page holds the program while the sound bank loads, through
+     * the same wait a `sleep` takes, and plays once it has.
+     */
+    private midiOut(note: Note): Promise<void> | void {
+        const audio = this.host.peripherals.audio
+        const loading = audio.prepare('note')
+        if (loading === null) return audio.playNote(note)
+        const execution = this.execution
+        return this.host.executionController
+            .waitFor(execution, () => loading)
+            .then(() => audio.playNote(note))
     }
 
     /**
@@ -298,6 +325,8 @@ export class MarsHandlers {
     ): Promise<T> {
         const execution = this.execution
         this.host.devices.flush()
+        //and a Note played before the prompt is heard while it waits, not once it is answered
+        this.host.peripherals.audio.flush()
         this.host.setInterrupt({ type, message })
         try {
             return await answer(execution)

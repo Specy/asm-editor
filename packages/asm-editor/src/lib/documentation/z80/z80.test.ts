@@ -70,7 +70,7 @@ describe('the Z80 Documentation', () => {
 
     it('keeps every port at the anchor the page has always given it', () => {
         const ports = ofKind('input-output', 'port')
-        expect(ports).toHaveLength(27)
+        expect(ports).toHaveLength(32)
         expect(ports.map((entry) => entry.anchor)).toEqual(
             Z80_PORT_DOCS.map((port) => port.name.toLowerCase())
         )
@@ -100,7 +100,7 @@ describe('the Z80 Documentation', () => {
             expect(registers.has(anchor), anchor).toBe(true)
         }
         const io = anchorsOf('input-output')
-        for (const anchor of ['console', 'screen', 'keyboard', 'mouse', 'time']) {
+        for (const anchor of ['console', 'screen', 'keyboard', 'mouse', 'time', 'audio']) {
             expect(io.has(anchor), anchor).toBe(true)
         }
     })

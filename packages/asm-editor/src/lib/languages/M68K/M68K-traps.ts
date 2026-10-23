@@ -16,7 +16,7 @@
 import { KEY_CODES } from '../peripherals/keyCodes'
 import { rgb, type ScreenColor } from '../peripherals/screen/color'
 
-export type M68KTrapGroup = 'text' | 'graphics' | 'input' | 'time' | 'files'
+export type M68KTrapGroup = 'text' | 'graphics' | 'input' | 'time' | 'files' | 'sound'
 
 /** The groups the documentation page and the coding agent's prompt show, in that order. */
 export const M68K_TRAP_GROUP_DOCS: {
@@ -53,6 +53,12 @@ export const M68K_TRAP_GROUP_DOCS: {
         title: 'Files',
         description:
             'Reading and writing the Project’s Files. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. A reported file error leaves execution running. Undo restores changes made by a file task, and each testcase works on its own copy of the Files.'
+    },
+    {
+        group: 'sound',
+        title: 'Sound',
+        description:
+            'Play sound files from the project using two separate players.\n\nThe **standard player** (tasks 70, 71, 72 and 76) plays one WAV file at a time. While it is busy, another play request returns 0 in D0.W. The **DirectX player** (tasks 73, 74, 75 and 77) mixes WAV and MIDI files; this is an EASy68K-compatible interface supplied by the editor, with no Windows or DirectX installation required.\n\nEach player has its own 256 slots, numbered by D1.B. Loading a file into a slot makes it available for later playback on that player. Paths follow the [file-task rules](/documentation/m68k/traps#files) and are relative to the project root.\n\nA `.wav` extension alone does not guarantee compatibility: the audio samples stored in the file must use a supported encoding, either 8-, 16-, 24-, or 32-bit integer PCM, or 32-bit floating point. These are different ways of storing each sample as a number. The **Log** identifies missing or unplayable files.\n\nTestcases are silent and have no active playback, so the standard player is never busy; file and slot results are otherwise unchanged. Undo stops sounds started by the task and restores slots it changed. [Sound in this editor](/documentation/m68k/traps#sound-differences) lists the differences from EASy68K.'
     }
 ]
 
@@ -363,6 +369,83 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
             'The pointer position is in screen pixels with the same origin drawing uses, whatever the panel’s zoom. The release and press states persist until the next one, so a program that polls slowly still sees every click; the double bit is only ever set on a press.'
     },
     {
+        task: 70,
+        group: 'sound',
+        title: 'Play a sound file',
+        input: 'A1 = NUL terminated path',
+        output: 'D0.W = 1 if the play request succeeds; 0 if the player is busy or the file exists but cannot be played. If the path does not exist, D0 is unchanged.',
+        description:
+            'Plays the WAV file at the path once on the standard player. If it is busy, nothing starts and D0.W is 0; a program that needs playback must try again later. A missing path leaves D0 unchanged, so checking only for zero does not detect every failure.'
+    },
+    {
+        task: 71,
+        group: 'sound',
+        title: 'Load a sound file',
+        input: 'A1 = NUL terminated path, D1.B = slot',
+        description:
+            'Loads the file into a standard-player slot for task 72 or 76, and returns no value. An existing but unplayable file is stored anyway; playing that slot returns 0. If the path does not exist, the slot is unchanged.'
+    },
+    {
+        task: 72,
+        group: 'sound',
+        title: 'Play a loaded sound',
+        input: 'D1.B = slot',
+        output: 'D0.W = 1 if the play request succeeds; 0 if the player is busy or the loaded file cannot be played. If the slot is empty, D0 is unchanged.',
+        description:
+            'Plays the file loaded by task 71 once on the standard player. An empty slot leaves D0 unchanged, so checking only for zero does not detect every failure.'
+    },
+    {
+        task: 73,
+        group: 'sound',
+        title: 'Play a sound file with DirectX',
+        input: 'A1 = NUL terminated path',
+        output: 'D0.W = 1 if the play request succeeds; 0 if the path does not exist or the file cannot be played',
+        description:
+            'Plays the WAV or MIDI file once on the DirectX player, mixed with any other sounds already playing.',
+        deviation:
+            'MIDI files can sound different from EASy68K because the editor uses its own instrument sound bank instead of the Windows synthesizer. DirectMusic segment files cannot be played.'
+    },
+    {
+        task: 74,
+        group: 'sound',
+        title: 'Load a sound file with DirectX',
+        input: 'A1 = NUL terminated path, D1.B = slot',
+        output: 'D0.W = 1 if the file is loaded; 0 if the path does not exist or the file cannot be played',
+        description:
+            'Loads the WAV or MIDI file into a DirectX-player slot for task 75 or 77. An existing but unplayable file empties the slot. If the path does not exist, the slot is unchanged.'
+    },
+    {
+        task: 75,
+        group: 'sound',
+        title: 'Play a loaded DirectX sound',
+        input: 'D1.B = slot',
+        output: 'D0.W = 1 if the play request succeeds; 0 if the slot is empty',
+        description:
+            'Plays the file loaded by task 74 once, mixed with any other sounds already playing.'
+    },
+    {
+        task: 76,
+        group: 'sound',
+        title: 'Control the sound player',
+        input: 'D1.B = slot, D2.L = 0 to play once, 1 to loop, 2 to stop, 3 to stop all',
+        output: 'D0.W: **control 0 or 1** returns 1 if playback starts, or 0 for an empty slot, unplayable file, or busy player; **control 2** returns 1 for the last nonempty slot requested by task 72 or task 76 control 0/1, even if that request failed or playback has ended, or 0 otherwise; **control 3** always returns 1. Other controls return 0.',
+        description:
+            'Controls the standard player using a slot loaded by task 71. Controls 0 and 1 play once or loop; they cannot start playback while the player is busy.\n\nControl 2 stops the player only if the supplied slot is nonempty and is the last nonempty slot requested by task 72 or by control 0 or 1 of task 76. That slot selection changes even if the play request fails or the player is busy, so it can differ from the slot actually playing. Control 3 stops the player regardless of the supplied slot. A loop continues until stopped or the program ends.',
+        deviation:
+            'Loops stop when the program ends; EASy68K keeps them playing until another program is loaded.'
+    },
+    {
+        task: 77,
+        group: 'sound',
+        title: 'Control the DirectX sound player',
+        input: 'D1.B = slot, D2.L = 0 to play once, 1 to loop, 2 to stop, 3 to stop all',
+        output: 'D0.W: **controls 0, 1 and 2** return 1 for a nonempty slot, or 0 for an empty slot; control 2 returns 1 even if no sound from that slot is playing. **Control 3** stops all DirectX sounds and returns 1 for a nonempty supplied slot, or 0 for an empty slot. Other controls return 0.',
+        description:
+            'Controls the DirectX player using a slot loaded by task 74. Controls 0 and 1 play once or loop, mixed with any other sounds already playing. Control 2 stops every sound started from the supplied nonempty slot. Control 3 stops every DirectX sound, including sounds started directly from a file by task 73. A loop continues until stopped or the program ends.',
+        deviation:
+            'Control 3 stops every DirectX sound even if the supplied slot is empty; EASy68K stops nothing in that case. Both return 0 in D0.W for the empty slot. Loops stop when the program ends; EASy68K keeps them playing until another program is loaded.'
+    },
+    {
         task: 80,
         group: 'graphics',
         title: 'Set pen color',
@@ -501,16 +584,14 @@ const NO_CYCLE_TIMING =
     'instruction timing is not modeled, so these tasks cannot report a 68000 cycle count'
 const NO_TEXT_GRID = 'the screen holds pixels, not a grid of characters'
 const NO_SERIAL_PORT = 'no serial device is available to a program'
-const NO_AUDIO = 'the editor provides no audio output for these tasks'
 const NO_NETWORK = 'programs in this editor cannot open network connections'
 
 /**
  * The tasks that stop the program with an error naming them, each with the reason the error gives,
  * so a user reads why rather than only what. Each either drives something a page in a browser
  * cannot have (a printer, a serial port, the network), or something the editor does not have yet
- * (the cycle counter, sound), or configures what the editor decides for itself (fonts,
- * interrupts). Tasks 70 to 77 reach the editor and are refused there; the Core refuses the others
- * itself, as `UnsupportedTrapTask`.
+ * (the cycle counter), or configures what the editor decides for itself (fonts, interrupts). The
+ * Core refuses them itself, as `UnsupportedTrapTask`.
  */
 export const M68K_REJECTED_TRAP_TASKS: { task: number; title: string; reason: string }[] = [
     { task: 10, title: 'print to the printer', reason: 'the editor has no printer' },
@@ -542,14 +623,6 @@ export const M68K_REJECTED_TRAP_TASKS: { task: number; title: string; reason: st
         title: 'enable the keyboard IRQ',
         reason: 'keyboard input is polled with tasks 7 and 19, not delivered as an interrupt'
     },
-    { task: 70, title: 'play a sound file', reason: NO_AUDIO },
-    { task: 71, title: 'load a sound file', reason: NO_AUDIO },
-    { task: 72, title: 'play a loaded sound', reason: NO_AUDIO },
-    { task: 73, title: 'play a sound file with DirectX', reason: NO_AUDIO },
-    { task: 74, title: 'load a sound file with DirectX', reason: NO_AUDIO },
-    { task: 75, title: 'play a loaded DirectX sound', reason: NO_AUDIO },
-    { task: 76, title: 'control the sound player', reason: NO_AUDIO },
-    { task: 77, title: 'control the DirectX sound player', reason: NO_AUDIO },
     { task: 100, title: 'create a network client', reason: NO_NETWORK },
     { task: 101, title: 'create a network server', reason: NO_NETWORK },
     { task: 102, title: 'send over the network', reason: NO_NETWORK },
@@ -564,10 +637,9 @@ const REJECTED_BY_TASK = new Map(M68K_REJECTED_TRAP_TASKS.map((doc) => [doc.task
 const SUPPORTED_BY_TASK = new Map(M68K_TRAP_DOCS.map((doc) => [doc.task, doc]))
 
 /**
- * Why the Core stopped at a task it does not carry out (`UnsupportedTrapTask`), or the editor at a
- * sound task. The Core knows only the number; this knows whether the number is a task the editor
- * deliberately does not support, and says why, which is the difference between a dead end and a
- * documented one.
+ * Why the Core stopped at a task it does not carry out (`UnsupportedTrapTask`). The Core knows
+ * only the number; this knows whether the number is a task the editor deliberately does not
+ * support, and says why, which is the difference between a dead end and a documented one.
  */
 export function describeUnsupportedTrapTask(task: number): string {
     const rejected = REJECTED_BY_TASK.get(task)

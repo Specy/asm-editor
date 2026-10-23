@@ -4,7 +4,7 @@
 #   ready       READY! for two seconds, after PLAYER ONE at the start of a game
 #   play        the game itself
 #   eat ghost   a second's pause showing a ghost's points
-#   dying       a second's pause, then Pac-Man shrivels away
+#   dying       a second's pause, then Pac-Man shrivels away and pops
 #   level done  a second's pause, then the maze flashes
 #   game over   GAME OVER for five seconds, or until a key
 
@@ -169,12 +169,14 @@ sl_entry:
         addi    sp, sp, 16
         ret
 
-# begin_life(a0 = 1 to show PLAYER ONE first): everyone back at the start, and READY!
+# begin_life(a0 = 1 to show PLAYER ONE first): everyone back at the start, and READY!. With PLAYER
+# ONE the start music plays, and the two last as long as it does.
 begin_life:
         addi    sp, sp, -16
         sw      ra, 12(sp)
         sw      s0, 8(sp)
         mv      s0, a0
+        jal     stop_sounds
         jal     reset_pacman
         jal     reset_ghosts
         la      t0, mode_index
@@ -210,8 +212,14 @@ begin_life:
         li      a2, 14
         li      a3, COLOR_CYAN
         jal     draw_text
+        li      a0, CHANNEL_1
+        la      a1, music_bass
+        jal     play_sound
+        li      a0, CHANNEL_2
+        la      a1, music_melody
+        jal     play_sound
         li      t1, 0                           # no one on the maze until PLAYER ONE goes
-        li      t2, 120
+        li      t2, 136
 bl_state:
         la      t0, show_actors
         sw      t1, 0(t0)
@@ -330,11 +338,27 @@ eat_ghost_update:
 egu_done:
         ret
 
+# dying_update: the arcade's death. Everything still for a second, Pac-Man alone for half a second,
+# then nine frames of shrivelling to the falling wobble, and the pop as he vanishes.
 dying_update:
         addi    sp, sp, -16
         sw      ra, 12(sp)
         jal     tick
-        li      t2, 180                         # 1 s still, 1.5 s shrivelling, 0.5 s empty
+        li      t2, 90
+        bne     t1, t2, du_pop
+        li      a0, CHANNEL_3
+        la      a1, sound_death
+        jal     play_sound
+        j       du_done
+du_pop:
+        li      t2, 225
+        bne     t1, t2, du_timer
+        li      a0, CHANNEL_3
+        la      a1, sound_pop
+        jal     play_sound
+        j       du_done
+du_timer:
+        li      t2, 300
         blt     t1, t2, du_done
         la      t0, lives
         lw      t1, 0(t0)
@@ -441,6 +465,9 @@ add_score:
         addi    t3, t3, 1
         sw      t3, 0(t2)
         jal     draw_lives
+        li      a0, CHANNEL_1
+        la      a1, sound_extra_life
+        jal     play_sound
 as_high:
         la      t0, score
         lw      t1, 0(t0)
@@ -712,11 +739,20 @@ cs_pacman:
 cs_pac_moving:
         jal     pacman_frame
         j       cs_pac_slot
-cs_pac_dying:
-        addi    a0, s1, -60                     # eleven frames of eight
-        srli    a0, a0, 3
-        li      t0, 11
-        bge     a0, t0, cs_ghosts
+cs_pac_dying:                                   # the first, nine of 15 frames, then the pop
+        li      t0, 255
+        bge     s1, t0, cs_ghosts
+        li      a0, 0
+        li      t0, 90
+        blt     s1, t0, cs_pac_cell
+        li      a0, 10
+        li      t0, 225
+        bge     s1, t0, cs_pac_cell
+        addi    a0, s1, -90
+        li      t0, 15
+        divu    a0, a0, t0
+        addi    a0, a0, 1
+cs_pac_cell:
         li      a1, 1
         jal     sheet_cell
 cs_pac_slot:
