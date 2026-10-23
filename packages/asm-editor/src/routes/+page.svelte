@@ -134,7 +134,7 @@
                             </Icon>
                         </ButtonLink>
                         <Button
-                            style={`${shadow} gap: 0.5rem; ${!installEvent ? 'pointer-events: none; opacity: 0' : ''}`}
+                            style={`${shadow} gap: 0.5rem; min-width: 10.88rem; ${!installEvent ? 'pointer-events: none; opacity: 0' : ''}`}
                             cssVar="secondary"
                             onClick={async () => {
                                 try {
