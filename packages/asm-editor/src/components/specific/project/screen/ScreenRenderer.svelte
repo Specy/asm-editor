@@ -118,9 +118,11 @@
     let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
 
     //the stage's width is the one measurement that does not depend on its height, so the height a
-    //fitted Screen needs to fill it comes from it alone
+    //fitted Screen needs to fill it comes from it alone. It belongs to the page's container: the
+    //floating window has a box of its own, and a stage held taller than it would fit the width
+    //alone and push the bottom of a tall Screen out of the window
     let widthFitHeight = $derived(
-        heightFromWidth && fitToPanel && viewportWidth > 0 && logicalWidth > 0
+        heightFromWidth && !expanded && fitToPanel && viewportWidth > 0 && logicalWidth > 0
             ? Math.floor((viewportWidth * logicalHeight) / logicalWidth)
             : 0
     )
