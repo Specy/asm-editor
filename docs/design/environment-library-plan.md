@@ -37,7 +37,7 @@ Recommended by the planning pass and confirmed by the owner on 2026-10-05.
 9. **The EASy68K cycle counter (30, 31) needs a 68000 cycle-timing model.** It is a later milestone, and the tasks stay rejected with a reason until then. An instruction count would be a deviation that does not help the learner.
 10. **A read in a host whose console is hidden reveals it.** The Interactive editor opens its console; the Workbench selects and unfolds the Terminal; the input caret takes focus.
 11. **`<sim.h>` is a committed, generated asset per Target**, with a test that regenerates it from the data and compares. Only the Target's text is uploaded. It stays out of `include.json`, which is versioned with the Runtime ABI and rebuilt over the network.
-12. **The Terminal transcript is not rewound by Undo.** That gap predates this work and is left out of it.
+12. **The Terminal transcript is not rewound by Undo.** That gap predates this work and is left out of it. Superseded on 2026-10-23 by [ADR 0057](../adr/0057-restore-the-terminal-on-undo.md): Undo now puts the Terminal back with the Core.
 
 ## Milestones
 

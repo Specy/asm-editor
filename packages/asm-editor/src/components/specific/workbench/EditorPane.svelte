@@ -34,6 +34,8 @@
     import MarkdownPreview from './preview/MarkdownPreview.svelte'
     import { isPreviewKind } from '#lib/fileKinds.ts'
     import { useWorkbench } from './workbenchContext'
+    import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
+    import FaUpload from '~icons/fa-solid/upload'
 
     let {
         group,
@@ -57,6 +59,19 @@
         }
     })
     const SPLIT_ZONE = 1 / 3
+    /**
+     * Files from the computer dragged over the pane: a drop adds them to the Project's root and
+     * opens them here, or in a new pane on the right as a dragged File would. Counted as the File
+     * drag is; once the overlay is up it alone takes the drag, so neither Monaco nor a PDF's frame
+     * does.
+     */
+    let uploadDepth = $state(0)
+    let uploadSplit = $state(false)
+    const explorer = $derived(workbench.rail.find((entry) => entry.id === 'explorer'))
+    /** Why a drop would add nothing, said by the overlay in place of what it would do. */
+    const uploadRefusal = $derived(
+        explorer?.access === 'on' ? session.uploadRefusal() : 'Files cannot be added here'
+    )
 
     /**
      * The displayed Listing, once generated, as the editor and the Listing providers read it: with
@@ -252,19 +267,39 @@
         return state
     }
 
-    function overSplitZone(event: DragEvent) {
-        if (!session.canSplitWithDrop()) return false
+    function inSplitZone(event: DragEvent) {
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
         return event.clientX > rect.right - rect.width * SPLIT_ZONE
     }
 
+    function overSplitZone(event: DragEvent) {
+        return session.canSplitWithDrop() && inSplitZone(event)
+    }
+
+    function overUploadSplitZone(event: DragEvent) {
+        return !uploadRefusal && session.groups.length === 1 && inSplitZone(event)
+    }
+
     function enter(event: DragEvent) {
+        if (carriesComputerFiles(event)) {
+            event.preventDefault()
+            event.stopPropagation()
+            uploadDepth += 1
+            return
+        }
         if (!session.canDropFile(event)) return
         event.preventDefault()
         event.stopPropagation()
         dragDepth += 1
     }
     function over(event: DragEvent) {
+        if (carriesComputerFiles(event)) {
+            event.preventDefault()
+            event.stopPropagation()
+            event.dataTransfer!.dropEffect = uploadRefusal ? 'none' : 'copy'
+            uploadSplit = overUploadSplitZone(event)
+            return
+        }
         if (!session.canDropFile(event)) return
         event.preventDefault()
         event.stopPropagation()
@@ -272,11 +307,25 @@
         splitTarget = overSplitZone(event)
     }
     function leave(event: DragEvent) {
+        if (carriesComputerFiles(event)) {
+            uploadDepth = Math.max(0, uploadDepth - 1)
+            return
+        }
         if (!session.canDropFile(event)) return
         dragDepth = Math.max(0, dragDepth - 1)
         if (dragDepth === 0) splitTarget = false
     }
     function drop(event: DragEvent) {
+        if (carriesComputerFiles(event)) {
+            event.preventDefault()
+            event.stopPropagation()
+            uploadDepth = 0
+            uploadSplit = false
+            if (uploadRefusal) return
+            const files = droppedFiles(event.dataTransfer!)
+            if (files.length) void session.uploadFiles(files, group, overUploadSplitZone(event))
+            return
+        }
         if (!session.canDropFile(event)) return
         event.preventDefault()
         event.stopPropagation()
@@ -306,9 +355,10 @@
             <ListingNotice
                 document={group.displayedListing}
                 library={group.displayedLibraryListing}
-                built={group.displayedBuildOutput}
+                builtFrom={group.displayedBuildOutputEntry}
                 patchable={!group.displayedLibraryListing &&
-                    !group.displayedBuildOutput &&
+                    session.emulator.listings?.session.get(group.displayedPath) ===
+                        group.displayedListing &&
                     session.emulator.patcher !== undefined &&
                     group.sourceView === 'snapshot' &&
                     session.debugSession}
@@ -529,6 +579,18 @@
             </div>
         {/if}
     </div>
+    {#if uploadDepth > 0}
+        <div class="upload-target" role="presentation">
+            <div
+                class="upload-frame"
+                class:split={uploadSplit}
+                class:refused={uploadRefusal !== undefined}
+            >
+                <FaUpload />
+                <span>{uploadRefusal ?? 'Drop to add to the Project'}</span>
+            </div>
+        </div>
+    {/if}
 </section>
 
 <style lang="scss">
@@ -560,6 +622,48 @@
         border: 2px dashed var(--accent);
         background: color-mix(in srgb, var(--accent) 16%, transparent);
         pointer-events: none;
+    }
+    /* over the whole pane, so the drag stays on it, whatever is under it */
+    .upload-target {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+    }
+    .upload-frame {
+        /* inherited by everything in it, the icon's own elements too */
+        pointer-events: none;
+        position: absolute;
+        inset: 1px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        padding: 1rem;
+        border: 2px dashed var(--accent);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        color: var(--accent);
+        font-weight: 600;
+        text-align: center;
+        :global(svg) {
+            width: 1.6rem;
+            height: 1.6rem;
+        }
+        span {
+            padding: 0.3rem 0.7rem;
+            border-radius: 0.4rem;
+            background: var(--secondary);
+        }
+        /* the pane the drop would open, over the right half where it will be */
+        &.split {
+            left: 50%;
+            background: color-mix(in srgb, var(--accent) 16%, transparent);
+        }
+        &.refused {
+            border-color: var(--hint);
+            background: color-mix(in srgb, var(--hint) 8%, transparent);
+            color: var(--secondary-text);
+        }
     }
     .code-area {
         display: flex;

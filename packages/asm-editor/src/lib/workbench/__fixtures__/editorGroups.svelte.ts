@@ -9,7 +9,7 @@ import {
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
-import type { BuildOutput } from '#lib/buildOutput.ts'
+import type { BuildOutputHost } from '#lib/buildOutput.ts'
 import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
@@ -32,6 +32,7 @@ export function editorGroupsFixture(
     let breakpointResolver:
         | ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[])
         | undefined
+    let buildOutputHost: BuildOutputHost | undefined
     const emulator = $state({
         pc: 0n,
         systemSize: 4,
@@ -45,7 +46,6 @@ export function editorGroupsFixture(
         errors: [] as string[],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
-        buildOutput: undefined as BuildOutput | undefined,
         notes: [] as EmulatorNote[],
         /** What the Build in progress says it waits for, as an adapter that reports one sets it. */
         buildPhase: undefined as string | undefined,
@@ -79,6 +79,9 @@ export function editorGroupsFixture(
         setBreakpointResolver: (resolver: typeof breakpointResolver) => {
             breakpointResolver = resolver
         },
+        setBuildOutputHost: (host: BuildOutputHost | undefined) => {
+            buildOutputHost = host
+        },
         setGlobalMemorySize: (_pageSize: number, _rowSize: number) => {},
         clear: () => {}
     })
@@ -96,6 +99,8 @@ export function editorGroupsFixture(
         session,
         /** The Breakpoints the Core would run with, as the session resolves them. */
         coreBreakpoints: () => breakpointResolver?.(emulator.breakpoints) ?? emulator.breakpoints,
+        /** What the session does with a linked program, as an x86 Build hands it over. */
+        buildOutputHost: () => buildOutputHost!,
         dispose: () => {
             disposeEffects()
             session.models.dispose()

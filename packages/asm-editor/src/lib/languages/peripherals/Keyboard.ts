@@ -167,6 +167,11 @@ export class Keyboard {
         return code === undefined ? undefined : String.fromCodePoint(code)
     }
 
+    /** Puts back a character a polled device took, at the front of the queue, for Undo. */
+    unreadCharacter(character: string): void {
+        this.typed.unshift(character.codePointAt(0) ?? 0)
+    }
+
     /**
      * Dequeues one typed character as its Unicode code point, for the environments whose register
      * holds a number. A character outside their byte is the adapter's problem, as in the Z80

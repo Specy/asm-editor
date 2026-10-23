@@ -809,6 +809,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         core.initialize(this.undoSize)
         this.recordingRandom = true
         this.undoRecording = true
+        //what an instruction prints is journaled under its serial while the Core records it, so
+        //Undo takes the output back with the instruction (ADR 0057); start-up code is no history
+        this._peripherals.terminal.trackHistory(() => {
+            if (!this.undoRecording || this.core !== core) return null
+            const serial = core.getCurrentInstructionSerial()
+            return serial === null ? null : BigInt(serial)
+        }, this.undoSize)
     }
 
     _dispose(): void {
@@ -1591,6 +1598,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const position = step && this.randomPositions.get(step.serial)
         if (position !== undefined) this._peripherals.random.seek(position)
         if (step) this.randomPositions.delete(step.serial)
+        //serials only grow, so a Poke's is past every instruction it could take output back from
+        if (step) this._peripherals.terminal.undoAfter(BigInt(step.serial) - 1n)
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {

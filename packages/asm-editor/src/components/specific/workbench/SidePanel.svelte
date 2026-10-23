@@ -189,11 +189,7 @@
                         onDeleted={(path) => session.fileDeleted(path)}
                         onFilesAdded={(paths) => session.filesAdded(paths)}
                         libraryFiles={Object.keys(emulator.buildLibraryFiles ?? {})}
-                        buildOutput={session.buildOutput && {
-                            path: session.buildOutput.path,
-                            bytes: session.buildOutput.bytes,
-                            stale: session.buildOutputStale
-                        }}
+                        buildOutputs={session.buildOutputs}
                         hints={context.documentationLinks}
                     />
                 {:else if entry.id === 'symbols'}

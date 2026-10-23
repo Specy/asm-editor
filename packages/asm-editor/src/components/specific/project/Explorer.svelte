@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { executableKind } from '#lib/executables.ts'
     /**
      * The Project's Files as a tree, with the controls that manage them: create, upload, rename or
      * move, delete, download, and make a File a Program's Entry or remove that Program: the
@@ -16,13 +15,18 @@
      * `hints`, a dismissible card under the tree offers to create a C file where the language
      * compiles C, to upload an ELF on x86, and links one tip about the language (two where there
      * is no action to offer), picked at every page load. The Runtime library members a Build
-     * linked and the program it linked, its Build output, are listed apart under the tree: they
-     * are no Files of the Project.
+     * linked are listed apart under the tree: they are no Files of the Project. A Build output, the
+     * File a Build saved the program it linked in, is dimmed and marked From an earlier Build once
+     * its sources have changed.
      */
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { ProgramChoice } from '#lib/workbench/WorkbenchSession.svelte.ts'
+    import type { BuildOutputState } from '#lib/buildOutput.ts'
     import { editorFileKind } from '#lib/workbench/editorFileRouting.ts'
+    import { executableKind } from '#lib/executables.ts'
+    import { writeUploads } from '#lib/workbench/fileUploads.ts'
+    import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
     import { fileBytes, type ProjectFiles } from '#lib/projectFiles.ts'
     import { bytesDownloader } from '#lib/utils.ts'
@@ -43,7 +47,6 @@
     import FaFolder from '~icons/fa-solid/folder'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaFileAlt from '~icons/fa-solid/file-alt'
-    import FaFileImport from '~icons/fa-solid/file-import'
     import FaPen from '~icons/fa-solid/pen'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTimes from '~icons/fa-solid/times'
@@ -95,7 +98,7 @@
         /** A File deleted by the Explorer, or replaced by one moved onto its path. */
         onDeleted?: (path: string) => void
         /**
-         * Files the Explorer added, by New file, an upload, a drop or Keep as File: a Project with
+         * Files the Explorer added, by New file, an upload or a drop: a Project with
          * no Program makes its first from them
          * ([programs.md](../../../../../../docs/design/programs.md), decision 8).
          */
@@ -108,12 +111,11 @@
          */
         libraryFiles?: readonly string[]
         /**
-         * The program the last Build linked, listed read-only under the tree, to open, download
-         * or keep as a File: it is no File of the Project and is never saved
-         * ([ADR 0050](../../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
-         * `stale` once the sources would no longer build it.
+         * The Build outputs nobody changed since their Build, by path: Files Builds saved the
+         * programs they linked in, marked when their sources have changed since
+         * ([ADR 0056](../../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
          */
-        buildOutput?: { path: string; bytes: Uint8Array; stale: boolean }
+        buildOutputs?: ReadonlyMap<string, BuildOutputState>
         /** Whether to show the hints card under the tree. */
         hints?: boolean
     }
@@ -141,7 +143,7 @@
         onFileDragStart,
         onFileDragEnd,
         libraryFiles = [],
-        buildOutput,
+        buildOutputs = new Map(),
         hints = false
     }: Props = $props()
 
@@ -412,7 +414,7 @@
 
     /** Whether the drag carries files from the computer rather than one of the tree's own. */
     function draggingUploads(event: DragEvent): boolean {
-        return draggedPath === null && !!event.dataTransfer?.types.includes('Files')
+        return draggedPath === null && carriesComputerFiles(event)
     }
 
     function onTreeDragOver(event: DragEvent) {
@@ -446,7 +448,7 @@
             event.preventDefault()
             setDropFolder(null)
             if (folder === null || locked) return
-            void uploadFiles(Array.from(event.dataTransfer?.files ?? []), folder)
+            void uploadFiles(droppedFiles(event.dataTransfer!), folder)
             return
         }
         const from = draggedPath
@@ -565,46 +567,25 @@
     }
 
     /**
-     * Writes files from the computer into `folder` ('' is the root), showing the last one. In an
-     * x86 Project that has a Program already, an Executable that is no Entry is offered a Program
-     * of its own ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 12);
-     * one with none makes its first Program from the upload without asking.
+     * Writes files from the computer into `folder` ('' is the root), showing the last one; see
+     * `writeUploads` for the Program an Executable is offered.
      */
     async function uploadFiles(uploaded: Iterable<File>, folder = '') {
         if (locked) return
-        const hadProgram = programs.length > 0
-        const added: string[] = []
-        let last: string | null = null
-        let executable: string | null = null
-        for (const file of uploaded) {
-            const path = joinPath(folder, file.name)
-            try {
-                if (files[path]) {
-                    const replace = await Prompt.confirm(`${path} already exists. Replace it?`)
-                    if (!replace) continue
-                }
-                const bytes = new Uint8Array(await file.arrayBuffer())
-                fileSystem.writeBytes(path, bytes, true)
-                added.push(path)
-                last = path
-                //only an x86 Project runs ELFs: elsewhere an ELF is just a File
-                if (language !== 'X86') continue
-                const kind = executableKind(bytes)
-                if (kind === 'supported') executable = path
-                else if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
-            } catch (error) {
-                reportFailure(error)
-            }
-        }
-        if (last === null) return
-        onFilesAdded?.(added)
-        expandParents(last)
-        onSelect(last)
-        if (hadProgram && executable && onNewProgram && !entries.has(executable)) {
-            //a Debug session may have started while the question was open
-            if ((await Prompt.confirm(`Create a program for ${executable}?`)) && !locked)
-                onNewProgram(executable)
-        }
+        await writeUploads(uploaded, folder, {
+            fileSystem,
+            language,
+            hadProgram: programs.length > 0,
+            isEntry: (path) => entries.has(path),
+            locked: () => locked,
+            onAdded: (added) => {
+                onFilesAdded?.(added)
+                const last = added[added.length - 1]
+                expandParents(last)
+                onSelect(last)
+            },
+            onNewProgram
+        })
     }
 
     let uploadInput: HTMLInputElement
@@ -734,55 +715,6 @@
         const file = files[targetPath]
         if (!file) return
         bytesDownloader(fileBytes(file), basename(targetPath))
-    }
-
-    function downloadBuildOutput() {
-        if (buildOutput) bytesDownloader(buildOutput.bytes, basename(buildOutput.path))
-    }
-
-    /**
-     * Copies the Build output into the Project as a File stored as bytes, an Executable like an
-     * uploaded one, under a name asked for, which starts as its own path; a name a File has is
-     * refused rather than replaced.
-     */
-    async function keepBuildOutput() {
-        const output = buildOutput
-        if (!output || locked) return
-        const answer = await Prompt.askText(
-            'Keep the built program as the File',
-            true,
-            output.path,
-            output.path
-        )
-        const path = answer?.trim()
-        //a Debug session may have started while the question was open
-        if (!path || locked) return
-        try {
-            if (files[path]) throw new Error(`${path} already exists`)
-            fileSystem.writeBytes(path, output.bytes, false, 'base64')
-            onFilesAdded?.([path])
-            expandParents(path)
-            onSelect(path)
-        } catch (error) {
-            reportFailure(error)
-        }
-    }
-
-    function buildOutputItems(): ContextMenuEntry[] {
-        return [
-            {
-                label: 'Open',
-                icon: FaFileAlt,
-                onSelect: () => buildOutput && onSelect(buildOutput.path)
-            },
-            { label: 'Download', icon: FaDownload, onSelect: downloadBuildOutput },
-            {
-                label: 'Keep as File',
-                icon: FaFileImport,
-                disabled: locked,
-                onSelect: () => void keepBuildOutput()
-            }
-        ]
     }
 </script>
 
@@ -943,6 +875,7 @@
                         </div>
                     </div>
                 {:else}
+                    {@const built = buildOutputs.get(row.path)}
                     <!-- the keyboard opens the menu from the row's focused button, with Shift+F10 or the Menu key -->
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div
@@ -954,7 +887,13 @@
                         class:binary={files[row.path]?.encoding === 'base64'}
                         class:dragging={draggedPath === row.path}
                         class:menu-open={contextMenu !== null && menuPath === row.path}
-                        title={row.path}
+                        class:built={built !== undefined}
+                        class:stale={built?.stale}
+                        title={!built
+                            ? row.path
+                            : built.stale
+                              ? `${row.path}: from an earlier Build of ${built.entry}; its sources have changed since`
+                              : `${row.path}: built from ${built.entry}`}
                         data-folder={dirname(row.path)}
                         oncontextmenu={(event) => {
                             menuPath = row.path
@@ -972,6 +911,9 @@
                             <span class="disclosure-spacer"></span>
                             <SourceFileIcon path={row.path} {language} file={files[row.path]} />
                             <span class="ellipsis">{row.name}</span>
+                            {#if built?.stale}
+                                <span class="stale-note">From an earlier Build</span>
+                            {/if}
                             {#if diagnosticCounts[row.path]?.errors}
                                 <span
                                     class="diagnostic-count error"
@@ -1045,61 +987,6 @@
                 {/if}
             {/each}
         </div>
-        {#if buildOutput}
-            {@const output = buildOutput}
-            <div class="library-files" aria-label="The program the last Build linked">
-                <div
-                    class="library-title"
-                    title="Linked by the last Build; read-only and never saved"
-                >
-                    Build output
-                </div>
-                <div class="library-list">
-                    <!-- the keyboard opens the menu from the row's focused button, with Shift+F10 or the Menu key -->
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div
-                        class="tree-row file built"
-                        class:selected={selectedPaths
-                            ? selectedPaths.includes(output.path)
-                            : output.path === selectedPath}
-                        class:stale={output.stale}
-                        class:menu-open={contextMenu !== null && menuPath === output.path}
-                        title={output.stale
-                            ? `${output.path}: from an earlier Build; the sources have changed since`
-                            : `${output.path} (read-only)`}
-                        oncontextmenu={(event) => {
-                            menuPath = output.path
-                            openContextMenu(event, buildOutputItems())
-                        }}
-                    >
-                        <button
-                            class="file-select"
-                            style:padding-left="0.35rem"
-                            onclick={() => onPreview(output.path)}
-                        >
-                            <span class="disclosure-spacer"></span>
-                            <SourceFileIcon path={output.path} {language} file={output.bytes} />
-                            <span class="ellipsis">{output.path}</span>
-                            {#if output.stale}
-                                <span class="stale-note">From an earlier Build</span>
-                            {/if}
-                        </button>
-                        <div class="row-actions">
-                            <button title="Download" onclick={downloadBuildOutput}>
-                                <FaDownload />
-                            </button>
-                            <button
-                                disabled={locked}
-                                title="Keep as File"
-                                onclick={() => void keepBuildOutput()}
-                            >
-                                <FaFileImport />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        {/if}
         {#if libraryFiles.length > 0}
             <div class="library-files" aria-label="Runtime library members this Build linked">
                 <div class="library-title" title="Linked by this Build; read-only">

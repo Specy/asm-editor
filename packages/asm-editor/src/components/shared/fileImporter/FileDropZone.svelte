@@ -7,7 +7,7 @@
      * shares it, and otherwise one of the area's own.
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import { toast } from '#stores/toastStore.ts'
+    import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import { fade } from 'svelte/transition'
     import FaUpload from '~icons/fa-solid/upload'
 
@@ -25,15 +25,9 @@
 
     let dragging = $state(false)
     let input: HTMLInputElement | null = $state(null)
-    /** Set while something on the page itself is dragged: an image dragged off it carries files too. */
-    let draggingFromPage = false
-
-    function carriesFiles(event: DragEvent) {
-        return !draggingFromPage && !!event.dataTransfer?.types.includes('Files')
-    }
 
     function over(event: DragEvent) {
-        if (!carriesFiles(event)) return
+        if (!carriesComputerFiles(event)) return
         event.preventDefault()
         event.dataTransfer!.dropEffect = 'copy'
         dragging = true
@@ -42,20 +36,10 @@
     //on the window, so a drop that lands before the overlay covers the page is still taken rather
     //than opened by the browser in place of the page
     function drop(event: DragEvent) {
-        if (!carriesFiles(event)) return
+        if (!carriesComputerFiles(event)) return
         event.preventDefault()
         dragging = false
-        const files: File[] = []
-        for (const item of event.dataTransfer!.items) {
-            if (item.kind !== 'file') continue
-            const file = item.getAsFile()
-            if (!file) continue
-            if (item.webkitGetAsEntry?.()?.isDirectory) {
-                toast.error(`${file.name} is a folder: drop the files in it instead`)
-                continue
-            }
-            files.push(file)
-        }
+        const files = droppedFiles(event.dataTransfer!)
         if (files.length) onFiles(files)
     }
 
@@ -79,13 +63,7 @@
     {/each}
 {/snippet}
 
-<svelte:window
-    ondragstart={() => (draggingFromPage = true)}
-    ondragend={() => (draggingFromPage = false)}
-    ondragenter={over}
-    ondragover={over}
-    ondrop={drop}
-/>
+<svelte:window ondragenter={over} ondragover={over} ondrop={drop} />
 
 <button
     type="button"

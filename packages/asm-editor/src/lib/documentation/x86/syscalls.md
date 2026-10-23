@@ -22,7 +22,7 @@ Vector I/O has specific partial-effect rules: see [`readv`](#syscall-readv), [`w
 
 Standard streams are a terminal with line-based input and UTF-8 bytes. Enter submits a line. Ctrl+D on an empty line submits one end-of-input token. Duplicated descriptors and `readv` share the same input queue. Programs cannot switch the Terminal to raw mode. SGR color changes and clear-screen sequences are displayed, but full cursor positioning and a fixed character grid are unavailable. When a timer signal interrupts a read, the handler preserves queued bytes and a partially typed line. The call follows Linux's `EINTR` rule (return an interrupted-call error) and `SA_RESTART` option (automatically resume selected calls).
 
-Undo restores CPU state and the Random source position for reversible instructions. Printing is reversible, and printed transcript remains visible after Undo. Consuming standard input or changing Files, descriptors, pipes, memory mappings, credentials, resource limits, signal actions, or timers is an Undo barrier. The instruction appears in History, but Undo stops before it and leaves both CPU and peripheral state as they were. This also applies when a barrier occurs inside a grouped library call.
+Undo restores CPU state and the Random source position for reversible instructions. Printing is reversible: Undo takes the printed text back out of the Terminal. Consuming standard input or changing Files, descriptors, pipes, memory mappings, credentials, resource limits, signal actions, or timers is an Undo barrier. The instruction appears in History, but Undo stops before it and leaves both CPU and peripheral state as they were. This also applies when a barrier occurs inside a grouped library call.
 
 ## Program arguments {#arguments}
 

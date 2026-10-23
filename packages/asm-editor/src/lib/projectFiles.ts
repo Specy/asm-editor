@@ -415,9 +415,15 @@ function savedLocalProblem(name: unknown): string | undefined {
 const damagedAnnotations = (path: string) =>
     new ProjectFormatError(`${path} has damaged renames or comments and can't be opened.`)
 
-/** A File's saved rename or comment at a key that is no address or variable id. */
+/** A File's saved rename or comment at a key that is no address. */
 const misplacedAnnotation = (path: string, key: string) =>
     new ProjectFormatError(`${path} has a rename or comment at a bad address (${key}).`)
+
+/** A File's saved local name under a key that is no variable id, shown quoted and cut short. */
+const misplacedLocal = (path: string, id: string) =>
+    new ProjectFormatError(
+        `${path} has a renamed variable with a bad id (${JSON.stringify(id.length > 40 ? `${id.slice(0, 40)}…` : id)}).`
+    )
 
 /** One map of texts by address, checked, in address order; undefined when absent or empty. */
 function cleanAddressTexts(
@@ -475,7 +481,7 @@ export function cleanAnnotations(path: string, value: unknown): Annotations | un
             if (!isFileAddress(key)) throw misplacedAnnotation(path, key)
             if (!isPlainRecord(variables)) throw damagedAnnotations(path)
             const named = Object.entries(variables).map(([id, name]) => {
-                if (!isVariableId(id)) throw misplacedAnnotation(path, key)
+                if (!isVariableId(id)) throw misplacedLocal(path, id)
                 const problem = savedLocalProblem(name)
                 if (problem)
                     throw new ProjectFormatError(
@@ -733,9 +739,10 @@ export function cleanFiles(raw: unknown): ProjectFiles {
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
         const annotations = cleanAnnotations(path, value.annotations)
         annotated += annotationsSize(annotations)
+        //met when a Project is opened or imported: saving is refused earlier, by the FileSystem
         if (annotated > ANNOTATIONS_BYTE_LIMIT)
             throw new ProjectFormatError(
-                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+                "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
             )
         files[path] = Object.freeze({
             encoding: value.encoding,
@@ -817,6 +824,22 @@ export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildC
             Object.keys(a).every((path) => hasOwn(b, path) && a[path] === b[path])
         )
     })
+}
+
+/**
+ * A text naming a Build configuration, the same for two that `buildConfigurationsEqual` holds
+ * equal, for a saved record to keep in place of the configuration.
+ */
+export function buildConfigurationKey(configuration: BuildConfiguration): string {
+    return JSON.stringify(
+        (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).map((key) => {
+            if (key !== 'compiledLanguages') return configuration[key] ?? null
+            const languages = configuration.compiledLanguages ?? {}
+            return Object.keys(languages)
+                .sort()
+                .map((path) => [path, languages[path]])
+        })
+    )
 }
 
 export function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {

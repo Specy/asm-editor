@@ -29,6 +29,7 @@ import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { fileViewIdentity } from '#lib/languages/service/uri.ts'
 import { liveSource } from '#lib/monaco/projectSourceSelection.ts'
 import type { StoredProject } from '#lib/Project.svelte.ts'
+import { makeBuildRecord } from '#lib/buildOutput.ts'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
 import PseudocodeNotice from '#cmp/specific/workbench/PseudocodeNotice.svelte'
 import PseudocodeStatus from '#cmp/specific/workbench/PseudocodeStatus.svelte'
@@ -90,6 +91,18 @@ const BASE = 0x555555554000
 const HUNTER2 = 0x2017
 /** The decompiler package's FactCheck-like C++ program (g++ -O0), a PIE. */
 const factcheck = readFileSync('../decompiler/js/tests/fixtures/elf/factcheck').toString('base64')
+
+/**
+ * crackme saved as `main`, the Build output of a Build of `entry`, as an x86 Build saves the
+ * program it links ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+ */
+function saveBuildOutput(session: WorkbenchSession, entry: string) {
+    const { project } = session
+    project.fileSystem.writeBytes('main', new Uint8Array(crackmeBytes), true, 'base64')
+    const sources = { entry, files: { ...project.files } }
+    project.recordBuild(makeBuildRecord(sources, 'main', project.files.main, []))
+    flushSync()
+}
 
 let decoder: ListingDecoder
 let demangler: Demangler
@@ -885,25 +898,18 @@ describe('Breakpoints on Pseudocode lines', () => {
         expect(listingPane.displayedBreakpoints).toEqual([])
     })
 
-    it('are not taken by the Build output’s Pseudocode', async () => {
+    it('are taken by a Build output’s Pseudocode, for when it runs as a Program of its own', async () => {
         const { session, emulator } = setup()
-        emulator.buildOutput = {
-            path: 'main',
-            bytes: new Uint8Array(crackmeBytes),
-            generation: 1,
-            sources: { entry: 'crackme', files: {} }
-        }
-        flushSync()
+        saveBuildOutput(session, 'crackme')
         const pane = show(session, 'main')
-        expect(pane.displayedBuildOutput).toBe(true)
+        expect(pane.displayedBuildOutputEntry).toBe('crackme')
         session.decompile(pane)
         flushSync()
         const document = await decompiled(pane)
         expect(document.status).toBe('ready')
-        expect(pane.breakpointsEditable).toBe(false)
+        expect(pane.breakpointsEditable).toBe(true)
         session.toggleBreakpoint(lineWith(document, 'if (iVar1 == 0)'), pane)
-        expect(emulator.breakpoints).toEqual([])
-        expect(pane.displayedBreakpoints).toEqual([])
+        expect(emulator.breakpoints).toEqual([{ file: 'main', address: expect.any(Number) }])
     })
 })
 
@@ -1227,13 +1233,7 @@ describe('the Pseudocode in a Debug session', () => {
         const source = 'global _start\n_start:\n    mov rax, 60\n    syscall\n'
         const files = { 'main.asm': { encoding: 'plain' as const, content: source } }
         const { session, emulator } = setup({ entry: 'main.asm', files })
-        emulator.buildOutput = {
-            path: 'main',
-            bytes: new Uint8Array(crackmeBytes),
-            generation: 1,
-            sources: { entry: 'main.asm', files }
-        }
-        flushSync()
+        saveBuildOutput(session, 'main.asm')
         const pane = show(session, 'main')
         session.decompile(pane)
         flushSync()
@@ -1241,7 +1241,7 @@ describe('the Pseudocode in a Debug session', () => {
         await decompiled(pane)
         //a Debug session of main.asm, whose Step shows its source: in the pane beside, which
         //showed the Build output's Listing, never in place of a Pseudocode
-        emulator.buildSources = { entry: 'main.asm', files }
+        emulator.buildSources = { entry: 'main.asm', files: { ...session.project.files } }
         emulator.canExecute = true
         flushSync()
         await session.revealSourceLocation('main.asm', 2)
@@ -1683,7 +1683,7 @@ describe('renames and comments in the Pseudocode', () => {
         await shownWith(pane, 'strcmp(password,')
     })
 
-    it('takes none in a read-only Workbench, nor in the Build output’s Pseudocode', async () => {
+    it('takes none in a read-only Workbench, and some in a Build output’s Pseudocode', async () => {
         const { session, pane, document } = await paired({ readonly: true })
         const name = at(document, 'iVar1 = strcmp(acStack_98', 'acStack_98')
         expect(session.annotatablePath(pane)).toBeUndefined()
@@ -1692,22 +1692,18 @@ describe('renames and comments in the Pseudocode', () => {
         expect(session.openRenamePrompt(pane, name.line, name.column)).toBe(false)
         expect(session.openCommentPrompt(pane, name.line)).toBe(false)
 
+        //the program a Build saved is a File of the Project: a later Build asks before it replaces
+        //what the person named
         const built = setup()
-        built.emulator.buildOutput = {
-            path: 'main',
-            bytes: new Uint8Array(crackmeBytes),
-            generation: 1,
-            sources: { entry: 'crackme', files: {} }
-        }
-        flushSync()
+        saveBuildOutput(built.session, 'crackme')
         const output = show(built.session, 'main')
         built.session.decompile(output)
         flushSync()
         const decompiledOutput = await decompiled(output)
         const local = at(decompiledOutput, 'iVar1 = strcmp(acStack_98', 'acStack_98')
-        expect(output.displayedBuildOutput).toBe(true)
-        expect(built.session.annotatablePath(output)).toBeUndefined()
-        expect(built.session.canRenameAt(output, local.line, local.column)).toBe(false)
+        expect(output.displayedBuildOutputEntry).toBe('crackme')
+        expect(built.session.annotatablePath(output)).toBe('main')
+        expect(built.session.canRenameAt(output, local.line, local.column)).toBe(true)
     })
 
     it('is refused while a Build, a Run or the Testcases run, with the reason', async () => {

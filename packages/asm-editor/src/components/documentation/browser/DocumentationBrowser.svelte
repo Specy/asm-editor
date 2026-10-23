@@ -498,17 +498,24 @@
         flex: 1;
         min-width: 0;
     }
+    /* as tall as the search field beside it, and as wide as the field's own height */
     .back {
         display: flex;
         flex: none;
-        width: 2rem;
-        height: 2rem;
-        padding: 0.55rem;
+        align-self: stretch;
+        align-items: center;
+        justify-content: center;
+        width: calc(1.4rem + 0.9rem);
+        padding: 0;
         border: none;
-        border-radius: 0.4rem;
+        border-radius: 0.5rem;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         cursor: pointer;
+    }
+    .back :global(svg) {
+        width: 0.9rem;
+        height: 0.9rem;
     }
     .note {
         margin: 0;

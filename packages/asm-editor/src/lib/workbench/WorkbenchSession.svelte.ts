@@ -40,9 +40,14 @@ import { AnnotationHistory, type AnnotationChange } from '#lib/annotations/annot
 import { commentProblem, normalizeComment } from '#lib/annotations/comments.ts'
 import {
     buildOutputCollision,
-    buildOutputFile,
+    buildOutputNote,
+    buildOutputQuestion,
     buildOutputStale,
-    type BuildOutput
+    buildRecordAt,
+    isUntouchedBuildOutput,
+    makeBuildRecord,
+    type BuildOutputClaim,
+    type BuildOutputState
 } from '#lib/buildOutput.ts'
 import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
 import {
@@ -225,6 +230,7 @@ import {
     writeEditorFileDrag,
     type EditorFileDrag
 } from './editorFileDrag'
+import { writeUploads } from './fileUploads'
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
@@ -417,9 +423,7 @@ export class WorkbenchSession {
         }
         return listings.openExecutable(
             path,
-            (selection.sourceKind === 'build'
-                ? this.snapshotFile(path)
-                : this.project.files[path]) ?? this.buildOutputAt(path)
+            selection.sourceKind === 'build' ? this.snapshotFile(path) : this.project.files[path]
         )
     }
 
@@ -454,11 +458,7 @@ export class WorkbenchSession {
     }
 
     groupForFile(path: string) {
-        return editorGroupForFile(
-            path,
-            this.groups,
-            this.project.files[path] ?? this.buildOutputAt(path)
-        )
+        return editorGroupForFile(path, this.groups, this.project.files[path])
     }
 
     /**
@@ -472,16 +472,7 @@ export class WorkbenchSession {
     /** What the File at a path is, in the version a Debug session shows or else the live one. */
     kindAt(path: string): ProjectFileKind | undefined {
         const built = this.debugSession ? this.emulator.buildSources?.files[path] : undefined
-        return this.fileKindOf(built ?? this.project.files[path] ?? this.buildOutputAt(path), path)
-    }
-
-    /**
-     * The Build output's record when it is at `path`
-     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)):
-     * read-only, outside the Project, and shown like an Executable.
-     */
-    buildOutputAt(path: string): ProjectFile | undefined {
-        return this.buildOutput?.path === path ? this.buildOutputFile : undefined
+        return this.fileKindOf(built ?? this.project.files[path], path)
     }
 
     /**
@@ -677,17 +668,30 @@ export class WorkbenchSession {
                 missing: !Object.hasOwn(this.project.files, entry)
             }))
         )
-        this.buildOutput = $derived.by(() => {
-            const output = this.emulator.buildOutput
-            //a File or folder made at its path since the Build wins, as one there at the Build did
-            return output && !buildOutputCollision(this.project.files, output.path)
-                ? output
-                : undefined
+        this.buildOutputs = $derived.by(() => {
+            const project = this.project
+            const files = project.files
+            // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Made whole on each change and never changed after: a new one replaces it.
+            const outputs = new Map<string, BuildOutputState>()
+            for (const record of project.builds) {
+                if (!isUntouchedBuildOutput(record, files[record.outputPath])) continue
+                //what its Program would build from now, none once the Program is gone
+                let live: BuildSources | undefined
+                try {
+                    live =
+                        record.entry === project.selectedProgram
+                            ? this.sourceInput
+                            : programBuildSources(project, record.entry)
+                } catch {
+                    live = undefined
+                }
+                outputs.set(record.outputPath, {
+                    entry: record.entry,
+                    stale: buildOutputStale(record, live, files)
+                })
+            }
+            return outputs
         })
-        this.buildOutputFile = $derived(this.buildOutput && buildOutputFile(this.buildOutput))
-        this.buildOutputStale = $derived(
-            !!this.buildOutput && buildOutputStale(this.buildOutput, this.sourceInput)
-        )
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
@@ -757,13 +761,9 @@ export class WorkbenchSession {
                           ]
                 })
             const build = buildSource('', this.buildGeneration)
-            const output = this.buildOutput
-            const outputFiles = output ? { [output.path]: this.buildOutputFile! } : {}
             return [
                 ...keys(this.project.files, liveSource('')),
                 ...keys(this.emulator.buildSources?.files ?? {}, build),
-                ...keys(outputFiles, liveSource('')),
-                ...(this.emulator.buildSources ? keys(outputFiles, build) : []),
                 //the libraries' Listings, kept while the session lasts so a tab comes back as left
                 ...[...(this.emulator.listings?.session.keys() ?? [])]
                     .filter((path) => this.emulator.listings!.isLibrary(path))
@@ -878,6 +878,11 @@ export class WorkbenchSession {
                 ? coreBreakpoints(breakpoints, breakpointSourceMaps, this.project.language)
                 : [...breakpoints]
         )
+        emulator.setBuildOutputHost({
+            claim: (path, signal) => this.claimBuildOutput(path, signal),
+            save: (sources, path, bytes) => this.saveBuildOutput(sources, path, bytes),
+            isBuildOutput: (path) => this.buildOutputs.has(path)
+        })
         this.executionSourceLocation = $derived.by(() => {
             const pair = this.linePairing
             return pair?.locationAt(pair.assembly.instructionLine)
@@ -1134,16 +1139,11 @@ export class WorkbenchSession {
      */
     declare readonly programChoices: ProgramChoice[]
     /**
-     * The program the last Build linked, listed beside the Project's Files and shown like an
-     * Executable, read-only, until the next Build starts
-     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
-     * None while a File or folder of the Project has its path.
+     * The Build outputs nobody changed since their Build, by path: the Files Builds saved the
+     * programs they linked in ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)),
+     * each with its Program's Entry and whether its sources have changed since.
      */
-    declare readonly buildOutput: BuildOutput | undefined
-    /** The Build output as the record the views read a File from, stored as bytes. */
-    declare readonly buildOutputFile: ProjectFile | undefined
-    /** Whether the live sources would no longer build the Build output, see `buildOutputStale`. */
-    declare readonly buildOutputStale: boolean
+    declare readonly buildOutputs: ReadonlyMap<string, BuildOutputState>
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
@@ -1303,8 +1303,7 @@ export class WorkbenchSession {
             target = liveSource(identity.path)
             view = undefined
         } else {
-            if (!this.project.files[identity.path] && !this.buildOutputAt(identity.path))
-                return false
+            if (!this.project.files[identity.path]) return false
             target = liveSource(identity.path)
         }
         this.recordJump(group)
@@ -1707,7 +1706,7 @@ export class WorkbenchSession {
         const view = group.displayedView
         if (view === 'listing' ? !group.displayedListing : view !== 'pseudocode') return undefined
         if (view === 'pseudocode' && !group.displayedPseudocode) return undefined
-        if (group.displayedLibraryListing || group.displayedBuildOutput) return undefined
+        if (group.displayedLibraryListing) return undefined
         return this.annotatableFile(group.sourceSelection)
     }
 
@@ -2291,9 +2290,6 @@ export class WorkbenchSession {
     }
 
     startFileDrag(event: DragEvent, path: string, origin?: EditorGroup) {
-        //the Build output goes nowhere: it is no File of the Project to move, and a pane opens it
-        //from the Explorer
-        if (this.buildOutputAt(path)) return event.preventDefault()
         if (!event.dataTransfer || (!this.project.files[path] && !this.existsInBuild(path))) return
         const file = {
             sessionId: this.languageSessionId,
@@ -2349,6 +2345,41 @@ export class WorkbenchSession {
         else this.selectFile(file.path, other)
     }
 
+    /**
+     * Why files from the computer cannot be added to the Project now, or undefined when they can:
+     * never in a read-only Workbench, nor while the Files are locked (`filesLocked`).
+     */
+    uploadRefusal(): string | undefined {
+        if (this.host.readonly) return 'This Project is read-only'
+        if (this.testing) return 'The Testcases are running: add files once they end'
+        if (this.filesLocked) return 'Stop the Debug session to add files'
+        return undefined
+    }
+
+    /**
+     * Files from the computer dropped on the pane `group`: written into the Project's root and
+     * opened there, or with `split` in a new pane on the right of the only one, as a File dragged
+     * from the Explorer opens (`writeUploads`).
+     */
+    async uploadFiles(uploaded: Iterable<File>, group: EditorGroup, split = false) {
+        if (this.uploadRefusal() !== undefined) return
+        await writeUploads(uploaded, '', {
+            fileSystem: this.project.fileSystem,
+            language: this.project.language,
+            hadProgram: Object.keys(this.project.programs).length > 0,
+            isEntry: (path) => this.project.program(path) !== undefined,
+            locked: () => this.uploadRefusal() !== undefined,
+            onAdded: (paths) => {
+                this.filesAdded(paths)
+                //the pane may have closed while a question was open
+                let destination = this.groups.includes(group) ? group : this.focusedGroup
+                if (split && this.groups.length === 1) destination = this.createGroup()
+                for (const path of paths) this.selectFile(path, destination)
+            },
+            onNewProgram: (path) => this.createProgram(path)
+        })
+    }
+
     async transferTab(path: string, origin: EditorGroup, destination: EditorGroup) {
         if (
             !this.groups.includes(origin) ||
@@ -2400,17 +2431,14 @@ export class WorkbenchSession {
     }
 
     /**
-     * Whether the Build has this File: its own, a Runtime library member it linked, the program it
-     * linked (its Build output), or the Listing of a library the running program loaded. With a
+     * Whether the Build has this File: its own, the program it saved (its Build output), a Runtime
+     * library member it linked, or the Listing of a library the running program loaded. With a
      * view, whether it has the File in that view: a library's Listing is only ever a Listing, and
      * a File of the Build only in a view its kind offers.
      */
     private existsInBuild(path: string, view?: FileView) {
         const file =
-            this.emulator.buildSources?.files[path] ??
-            this.emulator.buildLibraryFiles?.[path] ??
-            //while a Debug session lasts, the Build output is its Build's: a Build replaces it
-            (this.emulator.buildSources ? this.buildOutputAt(path) : undefined)
+            this.emulator.buildSources?.files[path] ?? this.emulator.buildLibraryFiles?.[path]
         if (!file)
             return (view ?? 'listing') === 'listing' && !!this.emulator.listings?.session.has(path)
         return !view || fileViewsOf(this.fileKindOf(file, path)).includes(view)
@@ -2672,17 +2700,12 @@ export class WorkbenchSession {
     }
 
     /**
-     * After Stop: every tab shows the live File again, and tabs of Files that are gone close. The
-     * Build output's stay, since it outlasts the session.
+     * After Stop: every tab shows the live File again, and tabs of Files that are gone close.
      */
     returnToLiveFiles() {
         const files = this.project.files
         for (const group of this.groups) {
-            group.tabs = retainTabs(
-                group.tabs,
-                (path) => files[path] !== undefined || this.buildOutputAt(path) !== undefined,
-                ''
-            )
+            group.tabs = retainTabs(group.tabs, (path) => files[path] !== undefined, '')
             const next = liveSource(group.tabs.active)
             if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
                 group.sourceSelection = next
@@ -2780,7 +2803,7 @@ export class WorkbenchSession {
     }
 
     /**
-     * Files a host action added: New file, an upload, a drop, Keep as File, the Coding agent's
+     * Files a host action added: New file, an upload, a drop, the Coding agent's
      * writes. While the Project has no Program, the first one makes itself from them and is
      * selected ([programs.md](../../../../../docs/design/programs.md), decision 8); once it has
      * one, new Files make none on their own. A running program's writes never come here.
@@ -3512,7 +3535,7 @@ export class WorkbenchSession {
         const { path } = selection
         if (selection.sourceKind === 'build' && this.existsInBuild(path, view))
             return buildSource(path, this.buildGeneration)
-        const file = this.project.files[path] ?? this.buildOutputAt(path)
+        const file = this.project.files[path]
         return file && fileViewsOf(this.fileKindOf(file, path)).includes(view)
             ? liveSource(path)
             : undefined
@@ -3628,9 +3651,8 @@ export class WorkbenchSession {
             return
         }
         //a Listing's Breakpoint is the address of the instruction on the line, in its Executable
-        //(decision 5); a line without an instruction takes none, nor does a library (decision 11),
-        //nor the Build output, whose program the debugger follows in its source
-        if (!listing.listing || group.displayedLibraryListing || group.displayedBuildOutput) return
+        //(decision 5); a line without an instruction takes none, nor does a library (decision 11)
+        if (!listing.listing || group.displayedLibraryListing) return
         const address = instructionAddressAt(listing.listing, line)
         if (address !== undefined)
             this.emulator.toggleAddressBreakpoint(address, group.displayedPath)
@@ -3743,6 +3765,46 @@ export class WorkbenchSession {
         this.compilationController?.abort()
     }
 
+    /** Asks `question`, which an aborted `signal` takes back, as a dismissal answers it. */
+    private confirm(question: string, signal: AbortSignal): Promise<boolean | null> {
+        const pending = Prompt.confirm(question)
+        const id = Prompt.id
+        const cancel = () => {
+            if (Prompt.id === id && Prompt.promise) Prompt.cancel()
+        }
+        signal.addEventListener('abort', cancel, { once: true })
+        return pending.finally(() => signal.removeEventListener('abort', cancel))
+    }
+
+    /**
+     * What a Build does with the program it linked for `path`
+     * ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)):
+     * saves it as the Build output, at once over nothing or over a Build output nobody changed
+     * since, else once the person agrees to replace the File there, which keeps it when they do
+     * not. A folder keeps it out, and a Project that cannot change only shows it to the program.
+     */
+    private async claimBuildOutput(path: string, signal: AbortSignal): Promise<BuildOutputClaim> {
+        if (this.host.readonly) return 'present'
+        const files = this.project.files
+        const collision = buildOutputCollision(files, path)
+        if (collision === 'folder') return { note: buildOutputNote(path, 'folder') }
+        const record = buildRecordAt(this.project.builds, path)
+        if (!collision || (record && isUntouchedBuildOutput(record, files[path]))) return 'save'
+        const replace = await this.confirm(buildOutputQuestion(path, record), signal)
+        return replace ? 'save' : { note: buildOutputNote(path, 'kept') }
+    }
+
+    /**
+     * Saves the program a Build of `sources` linked as the Build output at `path`, stored as bytes
+     * as an uploaded Executable is, with the record of what it was built from.
+     */
+    private saveBuildOutput(sources: BuildSources, path: string, bytes: Uint8Array) {
+        const fileSystem = this.project.fileSystem
+        const outputs = this.project.builds.map((record) => record.outputPath)
+        fileSystem.writeBytes(path, bytes, true, 'base64')
+        this.project.recordBuild(makeBuildRecord(sources, path, fileSystem.files[path], outputs))
+    }
+
     async compileDisplayedSource(origin = this.groups[0]) {
         const path = origin.compilablePath
         if (origin.sourceCompileDisabled || !path) return
@@ -3763,15 +3825,7 @@ export class WorkbenchSession {
                 signal,
                 sourceAnnotations: preferencesStore.values.sourceAnnotations.value,
                 compiler,
-                confirm: (question) => {
-                    const pending = Prompt.confirm(question)
-                    const id = Prompt.id
-                    const cancel = () => {
-                        if (Prompt.id === id && Prompt.promise) Prompt.cancel()
-                    }
-                    signal.addEventListener('abort', cancel, { once: true })
-                    return pending.finally(() => signal.removeEventListener('abort', cancel))
-                }
+                confirm: (question) => this.confirm(question, signal)
             })
             if (!result) return
             this.sourceDiagnostics = result.diagnostics
@@ -3860,8 +3914,6 @@ export class WorkbenchSession {
         const started = performance.now()
         //the Selected program's, read after selecting it: a derived is brought up to date as read
         const sources = this.sourceInput
-        //the Build output this Build replaces, whose tabs it closes if it places none there
-        const replaced = this.buildOutput?.path
         this.failedBuild = undefined
         let failure: Diagnostic[] | undefined
         //what the Debug session's Command line shows, locked, for as long as it lasts
@@ -3911,7 +3963,7 @@ export class WorkbenchSession {
             //before it, or a long start): the person ended it, so it neither failed nor built, and
             //the Log says nothing
             if (clears === this.executionClears)
-                this.finishBuild(sources, started, failure, replaced, problem)
+                this.finishBuild(sources, started, failure, problem)
         }
     }
 
@@ -3949,20 +4001,13 @@ export class WorkbenchSession {
         this.clearExecution()
     }
 
-    /**
-     * What a Build that was not stopped part way leaves: its Log entry, and where it is shown. The
-     * tabs of the Build output it `replaced` close when it left no program at that path, as a
-     * failed Build does.
-     */
+    /** What a Build that was not stopped part way leaves: its Log entry, and where it is shown. */
     private finishBuild(
         sources: BuildSources,
         started: number,
         failure: Diagnostic[] | undefined,
-        replaced: string | undefined,
         problem: string | undefined
     ) {
-        if (replaced && !this.buildOutputAt(replaced) && !this.project.files[replaced])
-            for (const group of [...this.groups]) this.closeTab(replaced, group)
         const ok = this.emulator.canExecute
         if (this.startedCommandLine)
             this.startedCommandLine = ok

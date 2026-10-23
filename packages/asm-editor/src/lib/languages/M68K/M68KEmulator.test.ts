@@ -691,11 +691,13 @@ describe('M68K input typed in the Terminal', () => {
             //Task 9 and its move ran after the input; neither pops its echo.
             expect(emulator.undo(2)).toBe(2)
             expect(inkCount(emulator)).toBeGreaterThan(0)
+            expect(emulator.stdOut).toBe('ab\n')
             expect(emulator.undo(1)).toBe(1)
             expect(inkCount(emulator)).toBe(0)
             expect(screen.cursorRow).toBe(0)
-            //The transcript deliberately survives Undo.
-            expect(emulator.stdOut).toBe('ab\n')
+            //the transcript loses the echo too, and the read asks again (ADR 0057)
+            expect(emulator.stdOut).toBe('')
+            expect(terminal.hasPendingInput()).toBe(false)
         } finally {
             emulator.dispose()
         }

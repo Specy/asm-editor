@@ -883,7 +883,62 @@ describe('Byte edits in the FileSystem', () => {
     })
 })
 
-describe('the Build output in a FileSystemSession', () => {
+describe('the saved Build output in a FileSystemSession', () => {
+    const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
+    /** `main.asm` and the program a Build saved from it as `main`, in a Debug session. */
+    function saved() {
+        const fs = new FileSystem({ 'main.asm': { encoding: 'plain', content: 'nop' } })
+        fs.writeBytes('main', program, false, 'base64')
+        const run = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: () => T): T => run.performInstruction(steps++, operation)
+        return { fs, run, step }
+    }
+
+    it('is kept from the program, which reads it but changes nothing of it', () => {
+        const { fs, run, step } = saved()
+        expect(run.protectBuildOutput('./main')).toBe(true)
+        expect(run.buildOutputPath).toBe('main')
+        const reader = step(() => run.open('main', 'read'))
+        expect([...step(() => run.read(reader, 4))]).toEqual([0x7f, 0x45, 0x4c, 0x46])
+        const before = fs.files
+        const cases: [FileErrorCode, () => unknown][] = [
+            [FileErrorCode.TextBusy, () => run.open('main', 'write')],
+            [FileErrorCode.TextBusy, () => run.open('main', { access: 'read', truncate: true })],
+            [FileErrorCode.TextBusy, () => run.truncate('main', 0)],
+            [FileErrorCode.Busy, () => run.remove('main')],
+            [FileErrorCode.Busy, () => run.rename('main', 'other')],
+            [FileErrorCode.Busy, () => run.rename('main.asm', 'main')]
+        ]
+        for (const [code, operation] of cases) expect(failure(() => step(operation))).toBe(code)
+        expect(fs.files).toBe(before)
+    })
+
+    it('stays a File of the Project, published with the rest and counted toward its limits', () => {
+        const { fs, run, step } = saved()
+        run.protectBuildOutput('main')
+        const fd = step(() => run.open('out.txt', 'write'))
+        step(() => run.write(fd, encode('written')))
+        expect(Object.keys(fs.files).sort()).toEqual(['main', 'main.asm', 'out.txt'])
+        //with `main` counted, out.txt growing to the limit less main.asm's 3 bytes passes it
+        const fill = new Uint8Array(FILE_BYTE_LIMIT - 'written'.length - 'nop'.length)
+        expect(failure(() => step(() => run.write(fd, fill)))).toBe(FileErrorCode.NoSpace)
+        //and takes Annotations, as any File of the Project
+        fs.annotate('main', { names: { '0x401000': 'start' } })
+        expect(fs.files.main.annotations).toEqual({ names: { '0x401000': 'start' } })
+    })
+
+    it('is kept only where a File is, and only one', () => {
+        const { run } = saved()
+        expect(run.protectBuildOutput('missing')).toBe(false)
+        expect(run.protectBuildOutput('main')).toBe(true)
+        expect(run.protectBuildOutput('main.asm')).toBe(false)
+        expect(run.presentBuildOutput('other', program)).toBe(false)
+        expect(run.buildOutputPath).toBe('main')
+    })
+})
+
+describe('a program presented by a FileSystemSession', () => {
     const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
 
     it('is a File the program lists, stats, opens and reads at its path', () => {
@@ -1075,7 +1130,7 @@ describe('Annotations in the FileSystem', () => {
         session.undo(--steps)
         expect(fs.files['out.txt']).toEqual({ encoding: 'plain', content: '' })
         expect(fs.files.chall.annotations).toEqual(names('verify'))
-        //the Build output is no File of the Project, and takes none
+        //a program only presented is no File of the Project, and takes none
         session.presentBuildOutput('program', new Uint8Array([0x7f]))
         expect(failure(() => fs.annotate('program', names('x')))).toBe(FileErrorCode.NotFound)
         expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)

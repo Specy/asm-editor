@@ -67,6 +67,6 @@ The **Explorer** is the file list for the current Build. It includes linked libr
 
 ## Stepping {#stepping}
 
-A runtime error stops execution. Undo reverses recorded program state and keeps the Terminal transcript visible; Stop or Build ends the run.
+A runtime error stops execution. Undo reverses recorded program state, what the program printed included; Stop or Build ends the run.
 
 By default, **Step** over `jal printf` runs the whole library call, and one **Undo** reverses that call. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. For programs compiled in the editor, enabling this Preference begins execution in Runtime startup at `_start`, so you can step through startup too.

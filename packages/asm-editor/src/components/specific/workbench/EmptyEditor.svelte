@@ -1,7 +1,6 @@
 <script lang="ts">
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
-    import { executableKind } from '#lib/executables.ts'
     import {
         isCompilationTarget,
         sourceLanguage,
@@ -67,43 +66,11 @@
 
     let elfInput = $state<HTMLInputElement>()
 
-    /**
-     * Writes the chosen ELF into the root and shows it. A Project with no Program makes it its
-     * first; one with Programs is asked whether it gets one of its own, unless it is an Entry
-     * already ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 12).
-     */
+    /** Writes the chosen ELF into the root and shows it, as a drop on the pane does. */
     async function uploadElf() {
         const file = elfInput?.files?.[0]
         if (elfInput) elfInput.value = ''
-        if (!file || !canCreate) return
-        try {
-            const path = file.name
-            if (
-                project.files[path] &&
-                !(await Prompt.confirm(`${path} already exists. Replace it?`))
-            )
-                return
-            const bytes = new Uint8Array(await file.arrayBuffer())
-            const hadProgram = session.programChoices.length > 0
-            project.fileSystem.writeBytes(path, bytes, true)
-            session.filesAdded([path])
-            session.selectFile(path, group)
-            const kind = executableKind(bytes)
-            if (kind !== 'supported') {
-                if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
-                return
-            }
-            if (!hadProgram || project.program(path)) return
-            //a Debug session may have started while the question was open
-            if (
-                (await Prompt.confirm(`Create a program for ${path}?`)) &&
-                !session.fileSystemLocked
-            )
-                session.createProgram(path)
-        } catch (error) {
-            console.error(error)
-            toast.error(error instanceof Error ? error.message : 'File operation failed')
-        }
+        if (file && canCreate) await session.uploadFiles([file], group)
     }
 
     function name(path: string) {
@@ -203,6 +170,11 @@
                                 disassemble it and decompile it
                             </button>
                             <input type="file" hidden bind:this={elfInput} onchange={uploadElf} />
+                        </li>
+                    {/if}
+                    {#if canCreate}
+                        <li>
+                            Drop files from your computer onto an editor to add them to the Project.
                         </li>
                     {/if}
                     <li>Drag a file from the Explorer onto an editor to open it there.</li>

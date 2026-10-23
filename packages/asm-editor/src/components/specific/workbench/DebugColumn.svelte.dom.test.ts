@@ -2,7 +2,8 @@
  * The debug column collapsing to a strip
  * ([the design record](../../../../../../docs/design/reverse-engineering-ux.md), decision 19): the
  * button at the end of memory's controls collapses it, the strip opens it again, each hands the
- * focus to the other, the choice is the layout's, and the column is only hidden meanwhile.
+ * focus to the other, the choice is the layout's, the column is only hidden meanwhile, and the
+ * strip names everything collapsing hid.
  */
 import { afterEach, beforeAll, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
@@ -37,15 +38,22 @@ beforeAll(() => {
     } as unknown as typeof ResizeObserver
 })
 
+//the debug column's sections, folded so that a test builds none of what they hold
+const SECTIONS = ['debug:screen', 'debug:memory-stack', 'debug:history', 'debug:callstack']
+
 const disposers: (() => void)[] = []
 afterEach(() => {
     disposers.splice(0).forEach((dispose) => dispose())
     workbenchLayout.setDebugCollapsed(false)
+    SECTIONS.forEach((id) => workbenchLayout.setCollapsed(id, id === 'debug:screen'))
     document.body.replaceChildren()
 })
 
-/** An x86 session reduced to what registers and memory draw: x86 has no Screen to draw too. */
-function column() {
+/**
+ * A session reduced to what registers and memory draw, x86's by default: x86 has no Screen to
+ * draw too, and its Debug tools float in windows of their own.
+ */
+function column({ language = 'X86', floating = true } = {}) {
     const registers = [
         makeRegister('rax', 0x401000n, RegisterSize.Double),
         makeRegister('rsp', 0x7ffffffde000n, RegisterSize.Double)
@@ -75,7 +83,7 @@ function column() {
                 endianess: 'little',
                 data: { current: page, prevState: page, unreadable: null }
             },
-            tabs: []
+            tabs: [{ id: 'stack', name: 'Stack' }]
         },
         memoryRegions: [],
         dataLabels: [],
@@ -88,11 +96,11 @@ function column() {
     }
     const session = {
         emulator,
-        project: { language: 'X86' },
+        project: { language },
         pc: makeRegister('PC', 0x401000n, RegisterSize.Double),
         pokeable: false
     } as unknown as WorkbenchSession
-    const ui = { floatingDebugTools: true, memoryMark: null } as unknown as WorkbenchUi
+    const ui = { floatingDebugTools: floating, memoryMark: null } as unknown as WorkbenchUi
     const target = document.createElement('div')
     document.body.append(target)
     const app = mount(WorkbenchPartHarness, {
@@ -125,7 +133,8 @@ it('collapses to a strip from its button and opens again from the strip', async 
     expect(workbenchLayout.values.debugCollapsed).toBe(true)
     expect(aside.classList.contains('collapsed')).toBe(true)
     const strip = debug.strip()!
-    expect(strip.textContent).toContain('Registers · Memory')
+    //x86 has no Screen, and its Debug tools are windows that collapsing leaves where they are
+    expect(strip.textContent!.trim()).toBe('Registers · Memory')
     expect(strip.getAttribute('aria-expanded')).toBe('false')
     expect(strip.getAttribute('aria-controls')).toBe(aside.id)
     expect(document.activeElement).toBe(strip)
@@ -146,4 +155,13 @@ it('opens collapsed when the layout was left collapsed', () => {
     const debug = column()
     expect(debug.strip()).not.toBe(null)
     expect(debug.aside().classList.contains('collapsed')).toBe(true)
+})
+
+it('names the Screen and the Debug tools on the strip where it hides them too', async () => {
+    SECTIONS.forEach((id) => workbenchLayout.setCollapsed(id, true))
+    workbenchLayout.setDebugCollapsed(true)
+    const debug = column({ language: 'M68K', floating: false })
+    expect(debug.strip()!.textContent!.trim()).toBe(
+        'Registers · Memory · Screen · Stack pointer · History · Call stack'
+    )
 })

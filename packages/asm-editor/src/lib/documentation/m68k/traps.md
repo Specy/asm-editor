@@ -2,7 +2,7 @@
 
 The 68000 instruction set includes `trap #n`, which transfers control to an exception handler. This editor uses `trap #15` for the tasks on this page: put the task number in `D0.B`, put its arguments in the listed input registers, then read any answer from the output registers. Other trap numbers are not implemented here.
 
-The simulator supplies these tasks for the console, screen, keyboard, mouse, clock, and project files. Undo reverses a task's changes along with the instruction's register and memory changes. Testcases use scripted input and their own copy of the project's files.
+The simulator supplies these tasks for the console, screen, keyboard, mouse, clock, and project files. Undo reverses a task's changes along with the instruction's register and memory changes, the text it printed included; a read that is undone asks for its input again when you step it. Testcases use scripted input and their own copy of the project's files.
 
 ## Input routing {#differences}
 

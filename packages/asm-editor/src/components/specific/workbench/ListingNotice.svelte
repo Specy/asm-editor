@@ -11,7 +11,7 @@
     let {
         document,
         library = false,
-        built = false,
+        builtFrom,
         patchable = false,
         touch = false,
         findOpen = false,
@@ -21,10 +21,10 @@
         /** A shared library's Listing, under `@lib/`, rather than the Executable's own. */
         library?: boolean
         /**
-         * The Build output's, the program the Build linked, which the debugger follows in its
-         * source rather than here.
+         * The Entry whose Build saved the Executable as its Build output, while it holds that
+         * program unchanged: the debugger follows that program in its source rather than here.
          */
-        built?: boolean
+        builtFrom?: string
         /**
          * The running Executable's own Listing in a Debug session, whose instructions take patches
          * (decision 13): the notice says how.
@@ -42,12 +42,12 @@
             return `The Listing of ${document.name} could not be generated.`
         if (library)
             return `Generated Listing of ${document.name}, a library the program loaded: read-only.`
-        if (built)
-            return `Generated Listing of ${document.name}, the program the Build linked: read-only. The debugger follows it in its source.`
         if (patchable && touch)
             return `Generated Listing of ${document.name}: read-only. While the program is paused, a long press on a line offers to patch its instruction, in memory only.`
         if (patchable)
             return `Generated Listing of ${document.name}: read-only. While the program is paused, Space or the context menu patches the instruction on a line, in memory only.`
+        if (builtFrom)
+            return `Generated Listing of ${document.name}, the program a Build of ${builtFrom} saved: read-only. While that program runs, the debugger follows it in ${builtFrom}.`
         return `Generated Listing of ${document.name}: read-only.`
     })
 </script>

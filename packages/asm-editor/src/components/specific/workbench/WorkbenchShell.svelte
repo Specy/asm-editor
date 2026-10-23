@@ -20,6 +20,7 @@
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { hasExecutable } from '#lib/executables.ts'
     import { registerDocumentationLinks } from '#lib/languages/service/navigation.ts'
+    import { carriesComputerFiles } from '#lib/fileDrops.ts'
     import './workbench.css'
 
     interface Props {
@@ -177,6 +178,16 @@
         if (activePanel === 'symbols' && !rail.some((entry) => entry.id === 'symbols')) ui.close()
     })
 
+    /**
+     * Files from the computer dropped where nothing takes them, such as the bottom panel or a
+     * locked Explorer, are refused rather than opened by the browser in place of the Workbench.
+     */
+    function refuseFiles(event: DragEvent) {
+        if (event.defaultPrevented || !carriesComputerFiles(event)) return
+        event.preventDefault()
+        event.dataTransfer!.dropEffect = 'none'
+    }
+
     setWorkbenchContext({
         session,
         ui,
@@ -215,6 +226,10 @@
     class:lines={ui.panelStyle === 'lines'}
     class:compact={ui.compact}
     data-device={viewport.deviceClass}
+    role="presentation"
+    ondragenter={refuseFiles}
+    ondragover={refuseFiles}
+    ondrop={refuseFiles}
 >
     {#if header}
         <div class="header-slot" bind:clientHeight={headerHeight}>

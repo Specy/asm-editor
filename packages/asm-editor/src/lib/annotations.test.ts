@@ -114,15 +114,15 @@ describe('saved Annotations', () => {
         ],
         [
             { locals: { '0x1139': { '': 'password' } } },
-            'chall has a rename or comment at a bad address (0x1139).'
+            'chall has a renamed variable with a bad id ("").'
         ],
         [
             { locals: { '0x1139': { 'stack:\n': 'password' } } },
-            'chall has a rename or comment at a bad address'
+            'chall has a renamed variable with a bad id ("stack:\\n").'
         ],
         [
             { locals: { '0x1139': { ['x'.repeat(257)]: 'password' } } },
-            'chall has a rename or comment at a bad address'
+            `chall has a renamed variable with a bad id ("${'x'.repeat(40)}…").`
         ],
         [
             { locals: { '0x1139': { 'stack:-0x98': 'iVar1' } } },
@@ -175,7 +175,7 @@ describe('saved Annotations', () => {
         })
         expect(storedAnnotationsSize(cleanFiles(files(32)))).toBe(65 * 4008)
         expect(formatError(() => cleanFiles(files(33)))).toBe(
-            'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
         )
     })
 })

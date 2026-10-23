@@ -667,7 +667,7 @@ function vectorInstructions(): Chapter {
  * Running a program built outside the editor: an **Executable**, shown in the **Hex editor** and
  * as its **Listing** ([binary-import.md](../../../../../../docs/design/binary-import.md),
  * [file-views.md](../../../../../../docs/design/file-views.md)), and the **Build output**, the
- * program an x86 Build links, which opens like one.
+ * program an x86 Build links and saves as one.
  */
 function executables(): Chapter {
     const href = `${BASE}/executables`

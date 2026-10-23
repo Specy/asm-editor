@@ -38,7 +38,7 @@ import {
  * to the search worker while the panel is shown; and the last results.
  *
  * - **Files**: every text File of the Project, the Generated assembly among them; not the Runtime
- *   library's members or the Build output, which are no Files, nor an Executable stored as text.
+ *   library's members, which are no Files, nor an Executable stored as text.
  * - **Listings**: each Executable File's Listing, with its renames and comments, generated in the
  *   Listing worker when no pane has made it.
  * - **Pseudocode**: every function of each Executable but its PLT stubs, from the Pseudocode

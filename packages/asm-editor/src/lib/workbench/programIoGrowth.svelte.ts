@@ -1,17 +1,12 @@
 import { untrack } from 'svelte'
-
-/**
- * How tall the bottom panel grows while a Debug session's program writes or waits for input: about
- * eight lines of the Terminal under its tabs and its Command line, where the default shows two.
- */
-export const PROGRAM_IO_HEIGHT = 232
+import { DEFAULT_BOTTOM_HEIGHT } from '#stores/workbenchLayoutStore.svelte.ts'
 
 /** The bottom panel as the growth reads and sizes it. */
 export type ProgramIoPanel = {
     /** Whether a Debug session is on, other than a test run's. */
     readonly debugging: boolean
-    /** Whether the program wrote anything to the Terminal, or waits to read from it. */
-    readonly talking: boolean
+    /** Whether the program waits to read from the Terminal. */
+    readonly reading: boolean
     /** The panel's height now. */
     readonly height: number
     /** The most the panel may take, which leaves the editor its least. */
@@ -20,23 +15,25 @@ export type ProgramIoPanel = {
 }
 
 /**
- * The bottom panel growing for a program's input and output
+ * The bottom panel growing for a program's input
  * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
- * 12): once a Debug session's program writes or waits to read, to `PROGRAM_IO_HEIGHT` as far as
- * there is room, and never back by itself. Once the person sizes it during the session, which
- * `resized` says, it is left as they chose until the next session. Its effects are the caller's,
- * so it is set up with a component.
+ * 12, as [the design record](../../../../../docs/design/workbench.md) revised it on 2026-10-23):
+ * once a Debug session's program waits to read, a panel dragged below the default height grows
+ * back to it, as far as there is room, so the line being typed shows. What the program writes
+ * moves nothing, and a panel at the default height or taller is left as it is. Once the person
+ * sizes it during the session, which `resized` says, it is left as they chose until the next
+ * session. Its effects are the caller's, so it is set up with a component.
  */
 export function growForProgramIo(panel: ProgramIoPanel): { resized: () => void } {
     let sized = false
     $effect(() => {
         if (!panel.debugging) sized = false
     })
-    const talking = $derived(panel.debugging && panel.talking)
+    const reading = $derived(panel.debugging && panel.reading)
     $effect(() => {
-        if (!talking) return
+        if (!reading) return
         untrack(() => {
-            const height = Math.min(PROGRAM_IO_HEIGHT, panel.room)
+            const height = Math.min(DEFAULT_BOTTOM_HEIGHT, panel.room)
             if (!sized && panel.height < height) panel.grow(height)
         })
     })

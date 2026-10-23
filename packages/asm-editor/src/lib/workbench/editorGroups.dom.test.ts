@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
@@ -11,6 +12,7 @@ import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 import {
     ENVIRONMENT_HEADER_PATH,
     loadedEnvironmentHeader,
@@ -693,6 +695,85 @@ describe('independent editor groups', () => {
         await session.compileDisplayedSource(session.groups[0])
         expect(session.groups.map((group) => group.tabs)).toEqual(before)
         expect(session.compiling).toBe(false)
+    })
+})
+
+describe('files dropped from the computer', () => {
+    /** A file from the computer, whose bytes jsdom's File cannot read by itself. */
+    function computerFile(name: string, content: string | Uint8Array) {
+        const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content
+        const file = new File([], name)
+        Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.slice().buffer })
+        return file
+    }
+
+    it('adds them to the root and opens them in the pane they were dropped on', async () => {
+        const { session, project } = setup()
+        const left = session.groups[0],
+            right = openSecond(session, 'main.s')
+        await session.uploadFiles(
+            [computerFile('notes.txt', 'hello'), computerFile('extra.s', 'nop')],
+            right
+        )
+        expect(project.files['notes.txt']).toBeDefined()
+        expect(new TextDecoder().decode(project.fileSystem.readBytes('extra.s'))).toBe('nop')
+        expect(left.tabs.paths).toEqual(['main.c'])
+        expect(right.tabs.paths).toEqual(['main.s', 'notes.txt', 'extra.s'])
+        expect(right.displayedPath).toBe('extra.s')
+        expect(session.focusedGroup).toBe(right)
+    })
+
+    it('opens them in a new pane on the right of the only one', async () => {
+        const { session } = setup()
+        const left = session.groups[0]
+        await session.uploadFiles([computerFile('notes.txt', 'hello')], left, true)
+        expect(session.groups).toHaveLength(2)
+        expect(left.tabs.paths).toEqual(['main.c'])
+        expect(session.groups[1].tabs.paths).toEqual(['notes.txt'])
+    })
+
+    it('asks before one replaces a File, and keeps the File when told not to', async () => {
+        const { session, project } = setup()
+        const confirm = vi.spyOn(Prompt, 'confirm').mockResolvedValue(false)
+        try {
+            await session.uploadFiles([computerFile('value.h', 'replaced')], session.groups[0])
+            expect(confirm).toHaveBeenCalledWith('value.h already exists. Replace it?')
+            expect(project.files['value.h'].content).toBe('#define VALUE 0')
+            expect(session.groups[0].tabs.paths).toEqual(['main.c'])
+        } finally {
+            confirm.mockRestore()
+        }
+    })
+
+    it('offers an x86 Executable a Program of its own', async () => {
+        const { session, project } = setup('X86')
+        const confirm = vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+        try {
+            const elf = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme')
+            await session.uploadFiles([computerFile('chall', elf)], session.groups[0])
+            expect(confirm).toHaveBeenCalledWith('Create a program for chall?')
+            expect(project.program('chall')).toBeDefined()
+            expect(session.groups[0].displayedPath).toBe('chall')
+        } finally {
+            confirm.mockRestore()
+        }
+    })
+
+    it('is refused during a Debug session, a test run and in a read-only Workbench', async () => {
+        const { session, project } = setup()
+        const run = project.fileSystem.beginSession()
+        flushSync()
+        expect(session.uploadRefusal()).toBe('Stop the Debug session to add files')
+        await session.uploadFiles([computerFile('notes.txt', 'hello')], session.groups[0])
+        expect(project.files['notes.txt']).toBeUndefined()
+        run.stop()
+        flushSync()
+        expect(session.uploadRefusal()).toBeUndefined()
+        session.testing = true
+        expect(session.uploadRefusal()).toBe('The Testcases are running: add files once they end')
+        session.testing = false
+        const readonly = setup(undefined, {}, { readonly: true })
+        expect(readonly.session.uploadRefusal()).toBe('This Project is read-only')
     })
 })
 

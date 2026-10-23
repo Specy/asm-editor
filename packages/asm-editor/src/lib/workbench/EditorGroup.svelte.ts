@@ -407,24 +407,19 @@ export class EditorGroup {
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
         //a library's Listing is no File at all
         if (this.displayedLibraryListing) return undefined
-        //the Build output is outside the Project too, and the same in either version; the Build's
-        //version of a File has the live File's renames and comments
-        return (
-            (this.sourceView === 'snapshot'
-                ? this.session.snapshotFile(this.displayedPath)
-                : this.session.project.files[this.displayedPath]) ??
-            this.session.buildOutputAt(this.displayedPath)
-        )
+        //the Build's version of a File has the live File's renames and comments
+        return this.sourceView === 'snapshot'
+            ? this.session.snapshotFile(this.displayedPath)
+            : this.session.project.files[this.displayedPath]
     }
     /**
-     * Whether the displayed File is the Build output: the program the last Build linked, which
-     * shows like an Executable but is read-only, takes no Breakpoints and never shows where the
-     * program is, since the debugger follows its source
-     * ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+     * The Entry of the Program whose Build saved the displayed File, while it is that Build's
+     * output unchanged ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+     * It is an Executable like any other: its Listing takes Breakpoints for when it runs as a
+     * Program of its own, and shows no program counter while its source runs.
      */
-    get displayedBuildOutput() {
-        const output = this.session.buildOutputAt(this.displayedPath)
-        return output !== undefined && this.displayedFile === output
+    get displayedBuildOutputEntry(): string | undefined {
+        return this.session.buildOutputs.get(this.displayedPath)?.entry
     }
     /**
      * The line this pane's editor puts the displayed Listing at when it shows it for the first time
@@ -620,13 +615,11 @@ export class EditorGroup {
     }
     get breakpointsEditable() {
         const s = this.session
-        //a Pseudocode line's go on its instructions, in the Executable's Listing (decision 10): as
-        //the Listing's, none for the Build output, whose program the debugger follows in its source
+        //a Pseudocode line's go on its instructions, in the Executable's Listing (decision 10)
         if (this.displayedView === 'pseudocode')
             return (
                 this.displayedPseudocode?.map !== undefined &&
                 !this.displayedLibraryListing &&
-                !this.displayedBuildOutput &&
                 canEditProjectBreakpoints(this.sourceSelection, {
                     readonly: s.host.readonly,
                     building: s.building,
@@ -642,7 +635,6 @@ export class EditorGroup {
         if (listing)
             return (
                 !this.displayedLibraryListing &&
-                !this.displayedBuildOutput &&
                 listing.status === 'ready' &&
                 canEditProjectBreakpoints(this.sourceSelection, {
                     readonly: s.host.readonly,
@@ -682,10 +674,10 @@ export class EditorGroup {
     }
     get displayedBreakpoints(): number[] {
         //a Pseudocode marks each line whose instructions carry one, wherever it was set
-        //(decision 10); its Build output's Listing takes none, so neither does it
+        //(decision 10)
         if (this.displayedView === 'pseudocode') {
             const document = this.displayedPseudocode
-            return document?.map && !this.displayedBuildOutput
+            return document?.map
                 ? pseudocodeBreakpointLines(
                       document.map,
                       document.listing,
@@ -761,7 +753,6 @@ export class EditorGroup {
         const map = document?.map
         if (
             !map ||
-            this.displayedBuildOutput ||
             s.emulator.line < 0 ||
             !isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
         )
@@ -807,8 +798,6 @@ export class EditorGroup {
     get bytesReadOnly(): string | undefined {
         const s = this.session
         if (s.host.readonly) return 'This Project is read-only'
-        if (this.displayedBuildOutput)
-            return 'The Build output is read-only: Keep as File copies it into the Project'
         if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
         if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
             return 'The Files are read-only during a Debug session: Stop to edit them'

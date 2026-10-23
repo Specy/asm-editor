@@ -318,10 +318,10 @@ The owner's column, settled: "current" keeps the text (adding the final period w
 - U1: `This Project is read-only.`
 - U2: `Wait for the Testcases to finish, then try again.` — U3: `Wait for the Build to finish, then try again.` — U4: `Pause the program to rename or comment.`
 - U5: `{path} is not present in this Project.`
-- U6: `This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.`
+- U6: `This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.` When a Project is opened or imported (`cleanFiles`, organiser, 2026-10-23): `This Project can't be opened: it has too many renames and comments (at most 256 KiB).`
 - U7, U8: unchanged.
 - U9: `{path} has damaged renames or comments and can't be opened.`
-- U10: `{path} has a rename or comment at a bad address ({key}).`
+- U10: `{path} has a rename or comment at a bad address ({key}).` A bad variable id (organiser, 2026-10-23): `{path} has a renamed variable with a bad id ({id}).`, the id quoted and cut to 40 characters.
 - U11: `{path} has a {what} at {key} that can't be used: {problem}` — U12: `{path} has a variable name at {key} that can't be used: {problem}`
 
 **Search panel**

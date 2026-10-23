@@ -43,10 +43,11 @@ function decodeStandalone(bytes: Uint8Array): string | null {
 /**
  * `file` caches this node's storage representation, dropped whenever `bytes` changes and put back
  * by an Undo that restores the bytes it stood for, so a File's record (its original, Byte edits and
- * Annotations) comes back as it was rather than rebuilt from its bytes. `built` marks the Build
- * output, which the program reads but never changes and which is no File of the Project.
+ * Annotations) comes back as it was rather than rebuilt from its bytes. `busy` marks the running
+ * program's own File, its Build output, which the program reads but never changes; `built` marks
+ * one only presented to it, which is no File of the Project.
  */
-type Node = { bytes: Uint8Array; file?: ProjectFile; built?: true }
+type Node = { bytes: Uint8Array; file?: ProjectFile; busy?: true; built?: true }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
 type Inverse = { bytes: number; filesChanged?: true; restore: () => void }
 /** A Core-owned instruction identity. Values are compared exactly, without numeric coercion. */
@@ -522,23 +523,38 @@ export class FileSystemSession {
         if (this.stopped) throw new Error('FileSystem session has ended')
     }
     /**
-     * Shows the program the Build output at `path`
-     * ([ADR 0050](../../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)):
-     * a File it opens and reads like any other, where the Command line says it was started from,
-     * but cannot write, truncate, rename or remove, as Linux keeps a running program's own File.
-     * It is no File of the Project, so it is never published and counts toward no limit. False,
-     * placing nothing, when a File or a folder of the session has the path already.
+     * Keeps the Build output at `path`, the File a person's Build saved the program it linked in
+     * ([ADR 0056](../../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)),
+     * from that program while it runs: it reads it like any other File, where the Command line
+     * says it was started from, but cannot write, truncate, rename or remove it, as Linux keeps a
+     * running program's own File. False, keeping nothing, when no File has the path, or the
+     * session keeps or presents one already.
+     */
+    protectBuildOutput(path: string): boolean {
+        this.ensureActive()
+        path = resolveSessionPath(path)
+        const found = this.lookup(path)
+        if (this.builtPath !== undefined || found.kind !== 'file') return false
+        found.node.busy = true
+        this.builtPath = path
+        return true
+    }
+    /**
+     * Shows the program a Build linked at `path` without saving it: a Testcase's, and a Build's
+     * in a Project that cannot change. It reads it as `protectBuildOutput`'s, but it is no File of
+     * the Project, so it is never published and counts toward no limit. False, placing nothing,
+     * when a File or a folder of the session has the path already.
      */
     presentBuildOutput(path: string, bytes: Uint8Array): boolean {
         this.ensureActive()
         path = resolveSessionPath(path)
         if (path === '' || this.builtPath !== undefined || this.lookup(path).kind !== 'missing')
             return false
-        this.paths.set(path, { bytes, built: true })
+        this.paths.set(path, { bytes, busy: true, built: true })
         this.builtPath = path
         return true
     }
-    /** Where the session presents the Build output, if it does. */
+    /** Where the session keeps or presents the running program's own File, if it does. */
     get buildOutputPath(): string | undefined {
         return this.builtPath
     }
@@ -547,8 +563,8 @@ export class FileSystemSession {
      * bytes when the program has changed them, takes `annotations`, and the session publishes it,
      * so that every later publish keeps them. It is journaled in no instruction's frame, so no
      * instruction Undo takes it back, but an Undo of a program's write puts back the record from
-     * before the write, with the Annotations it had then (decision 3). The Build output, which is
-     * no File of the Project, takes none.
+     * before the write, with the Annotations it had then (decision 3). A presented program, which
+     * is no File of the Project, takes none.
      */
     annotate(path: string, annotations: Annotations | undefined) {
         this.ensureActive()
@@ -702,7 +718,7 @@ export class FileSystemSession {
     private capacity(node?: Node, length = 0, extra = false) {
         if (length > FILE_BYTE_LIMIT)
             throw new FileSystemGuestError(FileErrorCode.TooLarge, 'File too large (16 MiB)')
-        //the Build output is no File of the Project, and never changes
+        //a presented program is no File of the Project, and never changes
         const nodes = new Set(
             [...this.paths.values(), ...Array.from(this.handles.values(), (h) => h.node)].filter(
                 (target) => !target.built
@@ -802,7 +818,7 @@ export class FileSystemSession {
         if (found.kind === 'file') {
             if (flags.create && flags.exclusive)
                 throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
-            if (found.node.built && (flags.access !== 'read' || flags.truncate))
+            if (found.node.busy && (flags.access !== 'read' || flags.truncate))
                 throw busyFile(path, FileErrorCode.TextBusy)
             node = found.node
         } else {
@@ -952,7 +968,7 @@ export class FileSystemSession {
         checkCount(length, 'file length')
         path = resolveSessionPath(path)
         const node = this.fileAt(path)
-        if (node.built) throw busyFile(path, FileErrorCode.TextBusy)
+        if (node.busy) throw busyFile(path, FileErrorCode.TextBusy)
         this.resize(node, length)
     }
     /**
@@ -1094,10 +1110,10 @@ export class FileSystemSession {
         from = resolveSessionPath(from)
         to = resolveSessionPath(to)
         const node = this.fileAt(from)
-        if (node.built) throw busyFile(from, FileErrorCode.Busy)
+        if (node.busy) throw busyFile(from, FileErrorCode.Busy)
         if (from === to) return
         const target = this.lookup(to)
-        if (target.kind === 'file' && target.node.built) throw busyFile(to, FileErrorCode.Busy)
+        if (target.kind === 'file' && target.node.busy) throw busyFile(to, FileErrorCode.Busy)
         if (target.kind === 'file')
             throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${to}`)
         if (target.kind !== 'missing') throw noFile(to, target)
@@ -1116,7 +1132,7 @@ export class FileSystemSession {
         this.ensureActive()
         path = resolveSessionPath(path)
         const node = this.fileAt(path)
-        if (node.built) throw busyFile(path, FileErrorCode.Busy)
+        if (node.busy) throw busyFile(path, FileErrorCode.Busy)
         this.record({
             bytes: node.bytes.length + path.length * 2,
             filesChanged: true,

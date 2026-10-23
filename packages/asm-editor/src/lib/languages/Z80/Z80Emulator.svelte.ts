@@ -126,6 +126,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private screenInstructions: ScreenInstructionHistory | null = null
     /** Echo is drawn while an IN is suspended; commit it with that IN when it succeeds. */
     private pendingEchoBefore: number | null = null
+    /**
+     * Where the Terminal journals the input being served for an `in` the machine rolled back: a
+     * t-state inside that `in`, which re-executes next, so Undo of it takes the read back (ADR 0057).
+     * Null when no input is being served.
+     */
+    private inputPosition: number | null = null
     private sourceLines: Record<string, string[]> = {}
     /**
      * One past the last byte of every assembled segment. The Z80 has no "end of program": running
@@ -176,6 +182,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.device?.reset()
         this.screenInstructions?.clear()
         this.pendingEchoBefore = null
+        this.inputPosition = null
         //`resetPeripherals` has just taken the Screen out of whatever mode it was in, so the device
         //must not go on believing it owns it. A Build replaces this object anyway; this keeps Stop
         //from leaving one behind that disagrees with the Screen in front of it
@@ -328,6 +335,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             onDebugRead: () => undefined
         })
         trs80.attach(machine.memory)
+        //what an `in` or an `out` does to the Terminal is journaled by t-state, as its drawing is
+        //([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
+        peripherals.terminal.trackHistory(
+            () => this.inputPosition ?? machine.tStateCount,
+            normalizeUndoSize(undoSize)
+        )
         //the mode the source asked for, in place before the program is even loaded: enabling blanks
         //video RAM the way the ROM's clear does, and a program is allowed to assemble an image
         //straight into those addresses, which the blank would otherwise wipe
@@ -396,6 +409,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         machine.undo()
         if (record && !isPokeRecord(record)) {
             this.screenInstructions?.undoAfter(record.tStateCountBefore)
+            this._peripherals.terminal.undoAfter(record.tStateCountBefore)
         }
         // The core restores registers but not instructionAddress. A Poke keeps the remembered
         // address; an instruction restores it from the newest entry's address or Poke checkpoint.
@@ -855,6 +869,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const question = device.inputQuestion(port)
         this.refreshInputState()
         this.pendingEchoBefore ??= screen.history.sequence
+        //the `in` starts at this t-state count when it re-executes and spends at least eleven, so one
+        //past it is inside the `in`, after its record's tStateCountBefore
+        this.inputPosition = machine.tStateCount + 1
         screen.beginCompoundOperation()
         try {
             if (Z80Device.isCharacterPort(port)) {
@@ -868,6 +885,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             //throws for a line that does not parse as the number the port asked for, stopping the run
             device.provideNumber(port, value)
         } finally {
+            this.inputPosition = null
             screen.endCompoundOperation()
         }
     }

@@ -50,6 +50,10 @@ export type TextStreamDecoder = {
     end(): string
     /** Forgets anything held back, for output that was cleared. */
     reset(): void
+    /** The bytes held back for a character still incomplete, empty when there are none. */
+    held(): Uint8Array
+    /** Holds back `bytes` again, as `held` gave them, for Undo. */
+    hold(bytes: Uint8Array): void
 }
 
 export function createTextStreamDecoder(encoding: TerminalEncoding): TextStreamDecoder {
@@ -115,6 +119,9 @@ const WINDOWS_1252_ENCODE = new Map<number, number>(
 )
 
 /** Every byte is a character of its own, so nothing is ever held back. */
+/** A single-byte encoding never holds a byte back. */
+const NOTHING_HELD = new Uint8Array(0)
+
 class SingleByteDecoder implements TextStreamDecoder {
     private readonly table: string[] | null
 
@@ -136,6 +143,12 @@ class SingleByteDecoder implements TextStreamDecoder {
     }
 
     reset(): void {}
+
+    held(): Uint8Array {
+        return NOTHING_HELD
+    }
+
+    hold(): void {}
 }
 
 /**
@@ -172,6 +185,15 @@ class Utf8StreamDecoder implements TextStreamDecoder {
 
     reset(): void {
         this.pending = new Uint8Array(0)
+    }
+
+    //`pending` is replaced, never written into, so handing it out is safe
+    held(): Uint8Array {
+        return this.pending
+    }
+
+    hold(bytes: Uint8Array): void {
+        this.pending = bytes
     }
 }
 

@@ -379,10 +379,19 @@ describe('the rail and the shortcut', () => {
     const ids = (access: Partial<Record<BuiltinPanelId, PanelAccess>> = {}, symbols = false) =>
         workbenchRail({ ...options, access, symbolsOffered: symbols }).map((entry) => entry.id)
 
-    it('offers Search after Symbols and before Testcases, in every Target, maximizable', () => {
+    it('offers Search after the Explorer and before Testcases, in every Target, maximizable', () => {
+        //Symbols closes the top group, so that its coming and going moves no other icon
         expect(ids({}, true)).toEqual([
             'explorer',
+            'search',
+            'testcases',
+            'documentation',
             'symbols',
+            'agent',
+            'settings'
+        ])
+        expect(ids()).toEqual([
+            'explorer',
             'search',
             'testcases',
             'documentation',

@@ -1,9 +1,9 @@
 import { buildSourcesEqual } from '#lib/projectFiles.ts'
 import {
     buildOutputCollision,
-    buildOutputCollisionNote,
+    buildOutputNote,
     buildOutputPath,
-    type BuildOutput
+    type BuildOutputHost
 } from '#lib/buildOutput.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
@@ -289,9 +289,8 @@ export abstract class GenericEmulator<T, R extends string>
      * for the debugger to open. They are never part of the Project or its FileSystem.
      */
     protected _buildLibraryFiles: ProjectFiles | undefined = $state.raw()
-    /** The program the last Build linked, see `buildOutput`; a Testcase's Builds leave it alone. */
-    private buildOutputState = $state.raw<BuildOutput | undefined>()
-    private buildOutputs = 0
+    /** Where the program a person's Build links goes, see `setBuildOutputHost`. */
+    private buildOutputHost: BuildOutputHost | undefined
     /** What the Build in progress waits for, see `buildPhase`, and the execution it belongs to. */
     private phase = $state<string | undefined>()
     private phaseExecution: ExecutionGeneration | undefined
@@ -1358,8 +1357,6 @@ export abstract class GenericEmulator<T, R extends string>
         signal?: AbortSignal
     ): Promise<void> {
         if (signal?.aborted) return
-        //a Build replaces the Build output from the moment it starts, and a failed one leaves none
-        this.buildOutputState = undefined
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(async () => {
@@ -1453,7 +1450,14 @@ export abstract class GenericEmulator<T, R extends string>
             //only now, for the Build still current: a cancelled one says nothing of its program
             this._buildLibraryFiles = result.libraryFiles
             for (const note of result.notes ?? []) this.addNote(note)
-            const output = this.placeBuildOutput(sources, result.program, stopInUserCode)
+            const output = await this.placeBuildOutput(
+                sources,
+                result.program,
+                stopInUserCode,
+                fileSystem,
+                execution
+            )
+            this.executionController.ensureCurrent(execution)
             this._initialize(historySize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
@@ -1461,8 +1465,18 @@ export abstract class GenericEmulator<T, R extends string>
                 Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
                 this.fileDescriptorOptions()
             )
-            if (output) this.fileSystemSession.presentBuildOutput(output.path, output.bytes)
-            this._buildSources = sources
+            if (output?.saved) this.fileSystemSession.protectBuildOutput(output.path)
+            else if (output) this.fileSystemSession.presentBuildOutput(output.path, output.bytes)
+            //the Build output it saved is one of the Files the Debug session shows as the Build's
+            this._buildSources = output?.saved
+                ? Object.freeze({
+                      ...sources,
+                      files: Object.freeze({
+                          ...sources.files,
+                          [output.path]: fileSystem.files[output.path]
+                      })
+                  })
+                : sources
             this._beginExecutionSession?.()
             this.addDecorations()
             this.state.canExecute = true
@@ -1531,32 +1545,64 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * Where the program a Build linked goes ([file-views.md](../../../../../docs/design/file-views.md),
-     * decisions 16 to 18): at the path the Command line names, where the run's FileSystem presents
-     * it to the program, and for a person's Build (`build`), unlike a Testcase's, it becomes the
-     * Build output. A File or folder of the Project at that path keeps it out, and the Log says why.
+     * Where the program a Build linked goes ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)):
+     * at the path the Command line names, where the run's FileSystem has it for the program. A
+     * person's Build (`build`) has its host save it there as the Build output, `saved`, before the
+     * Debug session takes the Files, asking first when that replaces something; else, or without
+     * a host, it is only presented to the program. A Testcase's program takes the place of a Build
+     * output in its own FileSystem. The Entry, a folder, or a File the person keeps there keeps it
+     * out, and for a person's Build the Log says why.
      */
-    private placeBuildOutput(
+    private async placeBuildOutput(
         sources: BuildSources,
         program: Uint8Array | undefined,
-        build: boolean
-    ): { path: string; bytes: Uint8Array } | undefined {
+        build: boolean,
+        fileSystem: FileSystem,
+        execution: ExecutionGeneration
+    ): Promise<{ path: string; bytes: Uint8Array; saved: boolean } | undefined> {
         if (!program) return undefined
         const path = buildOutputPath(sources)
-        const collision = buildOutputCollision(sources.files, path)
-        if (collision) {
-            if (build)
-                this.addNote({ tone: 'warning', text: buildOutputCollisionNote(path, collision) })
+        const note = (text: string) => {
+            if (build) this.addNote({ tone: 'warning', text })
             return undefined
         }
-        if (build)
-            this.buildOutputState = {
-                path,
-                bytes: program,
-                generation: ++this.buildOutputs,
-                sources
+        //`main` as the Entry itself would be the source it was built from
+        if (path === sources.entry || path === sources.entrySource)
+            return note(buildOutputNote(path, 'source'))
+        const host = this.buildOutputHost
+        if (build && host) {
+            const asked = new AbortController()
+            const claim = await this.executionController
+                .whileCurrent(execution, host.claim(path, asked.signal))
+                .catch((error: unknown) => {
+                    //a Build that was cancelled while it asked takes its question back
+                    asked.abort()
+                    throw error
+                })
+            this.executionController.ensureCurrent(execution)
+            if (claim === 'save') {
+                try {
+                    host.save(sources, path, program)
+                    return { path, bytes: program, saved: true }
+                } catch (error) {
+                    //a Project at its limits still runs the program it cannot keep
+                    note(buildOutputNote(path, 'unsaved', this._stringifyError(error)))
+                    return buildOutputCollision(fileSystem.files, path)
+                        ? undefined
+                        : { path, bytes: program, saved: false }
+                }
             }
-        return { path, bytes: program }
+            if (claim !== 'present') return note(claim.note)
+        }
+        const collision = buildOutputCollision(fileSystem.files, path)
+        if (!build && collision === 'file' && host?.isBuildOutput(path)) {
+            //the Testcase's own FileSystem, which nothing saves
+            fileSystem.writeBytes(path, program, true, 'base64')
+            return { path, bytes: program, saved: true }
+        }
+        if (collision)
+            return note(buildOutputNote(path, collision === 'folder' ? 'folder' : 'kept'))
+        return { path, bytes: program, saved: false }
     }
 
     dispose(): void {
@@ -2405,6 +2451,15 @@ export abstract class GenericEmulator<T, R extends string>
         this.breakpointResolver = resolver
     }
 
+    /**
+     * Where the program a person's Build links goes: the Workbench that owns the Project saves it
+     * as its Build output; with no host it is only presented to the running program, as before a
+     * Workbench takes it.
+     */
+    setBuildOutputHost(host: BuildOutputHost | undefined): void {
+        this.buildOutputHost = host
+    }
+
     toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
         this.toggleSourceBreakpoint({ file, line })
     }
@@ -2693,10 +2748,6 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildLibraryFiles() {
         return this._buildLibraryFiles
-    }
-
-    get buildOutput() {
-        return this.buildOutputState
     }
 
     get listings() {

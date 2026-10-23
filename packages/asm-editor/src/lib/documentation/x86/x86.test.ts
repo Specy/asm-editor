@@ -129,15 +129,20 @@ describe('the x86 Documentation', () => {
         expect(text('patching')).toContain('**Space**')
         expect(text('patching')).toContain('long press')
         expect(text('stepping')).toContain('**Step into library code**')
-        // the Hex editor's switch, what a Byte edit is, and the Build output's actions
+        // the Hex editor's switch, what a Byte edit is, and what the Build output is
         expect(text('hex-editor')).toContain('**Disassemble**')
         expect(text('byte-edits')).toContain('**Byte edits**')
         expect(text('byte-edits')).toContain('**Show in Hex**')
         expect(text('elf-parts')).toContain('**Show in Listing**')
         expect(text('finding')).toContain('`??`')
         expect(text('data-inspector')).toContain('**Little**')
-        for (const action of ['**Download**', '**Keep as File**', '**From an earlier Build**'])
-            expect(text('build-output')).toContain(action)
+        for (const words of [
+            '**Build output**',
+            '**From an earlier Build**',
+            '**New program from this file**',
+            'rename it'
+        ])
+            expect(text('build-output')).toContain(words)
         // Decompile: the switch's third view, Ghidra's Pseudocode, its limit and its Breakpoints
         expect(text('hex-editor')).toContain('**Decompile**')
         expect(text('decompile')).toContain('Ghidra')

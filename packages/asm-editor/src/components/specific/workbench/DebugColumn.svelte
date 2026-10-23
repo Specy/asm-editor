@@ -57,6 +57,16 @@
     const sectionsMode = $derived(!ui.floatingDebugTools)
     const hasLower = $derived(hasScreen || sectionsMode)
     const tools = $derived(debugTools(emulator.memory.tabs))
+    //what the strip names: everything collapsing hides, which is the Screen in a Target that has
+    //one and the Debug tools while they are sections here rather than windows of their own
+    const stripLabel = $derived(
+        [
+            'Registers',
+            'Memory',
+            ...(hasScreen ? ['Screen'] : []),
+            ...(sectionsMode ? tools.map((tool) => tool.title) : [])
+        ].join(' · ')
+    )
     //the grouping picked in the register panel, which is what its rows' width depends on
     let registersSize = $state(RegisterSize.Word)
     //the register column is as wide as the CPU file asks at that grouping, so the memory beside it
@@ -103,7 +113,7 @@
             onclick={() => setCollapsed(false)}
         >
             <FaAngleDoubleLeft />
-            <span class="strip-label">Registers · Memory</span>
+            <span class="strip-label">{stripLabel}</span>
         </button>
     </div>
 {/if}
@@ -286,10 +296,14 @@
         }
     }
 
-    /* read top to bottom, as a collapsed panel's title is in an IDE */
+    /* read top to bottom, as a collapsed panel's title is in an IDE, and cut short with an
+       ellipsis when the column is shorter than all it names */
     .strip-label {
         writing-mode: vertical-rl;
         white-space: nowrap;
+        min-height: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
         opacity: 0.85;
     }
 

@@ -19,7 +19,7 @@ import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
 import { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
 import { labelHoverMarkdown } from '#lib/listing/listingNavigation.ts'
 import { listingFunctions } from '#lib/listing/listingSymbols.ts'
-import { liveSource } from '#lib/monaco/projectSourceSelection.ts'
+import { makeBuildRecord } from '#lib/buildOutput.ts'
 import { makeProjectFromArchive, projectToArchive } from '#lib/projectArchive.ts'
 import type { StoredProject } from '#lib/Project.svelte.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
@@ -330,7 +330,7 @@ describe('where renames and comments are taken', () => {
         expect(session.canUndoAnnotation('crackme')).toBe(false)
     })
 
-    it('not in a library’s Listing, nor the Build output’s, which are no Files of the Project', async () => {
+    it('not in a library’s Listing, which is no File of the Project, but in a Build output', async () => {
         const { session, store, emulator } = setup()
         const library = store.open({
             name: 'libc.so.6',
@@ -355,20 +355,20 @@ describe('where renames and comments are taken', () => {
         emulator.canExecute = false
         emulator.buildSources = undefined
         emulator.listings!.clearSession()
-        emulator.buildOutput = {
-            path: 'built',
-            bytes: crackmeBytes,
-            generation: 1,
-            sources: { entry: 'crackme', files: { ...session.project.files } }
-        }
+        //the program a Build saved is a File of the Project, which the person may name and comment
+        //(ADR 0056): a later Build asks before it replaces them
+        const sources = { entry: 'crackme', files: { ...session.project.files } }
+        session.project.fileSystem.writeBytes('built', crackmeBytes, false, 'base64')
+        session.project.recordBuild(
+            makeBuildRecord(sources, 'built', session.project.files.built, [])
+        )
         flushSync()
         session.selectFile('built', group)
         group.setView('built', 'listing', false)
         flushSync()
         await until(() => group.displayedListing?.status === 'ready')
-        expect(group.displayedBuildOutput).toBe(true)
-        expect(session.annotatablePath(group)).toBeUndefined()
-        expect(session.annotatableFile(liveSource('built'))).toBeUndefined()
+        expect(group.displayedBuildOutputEntry).toBe('crackme')
+        expect(session.annotatablePath(group)).toBe('built')
     })
 
     it('refused while a Build, a Run or the Testcases run, with the reason', async () => {

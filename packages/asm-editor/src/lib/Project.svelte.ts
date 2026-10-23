@@ -24,6 +24,7 @@ import {
     type CompilationSourceMap
 } from './sourceCompilation/records'
 import { programsByLabel } from './commandLine'
+import { cleanBuildRecords, untouchedBuildOutputs, type BuildRecord } from './buildOutput'
 
 export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' | 'Z80'
 
@@ -73,6 +74,11 @@ export interface ProjectData {
     language: AvailableLanguages
     exam?: Exam
     compilations?: CompilationRecord[]
+    /**
+     * What each Build output was built from, one for each File a Build saved its program in
+     * ([ADR 0056](../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+     */
+    builds?: BuildRecord[]
     /** Open editor paths in tab order; an empty array deliberately leaves the editor empty. */
     openTabs?: string[]
     /** The last selected editor path, independent of any Entry file. */
@@ -102,6 +108,7 @@ export type StoredProject = Partial<
         | 'openTabs'
         | 'activeTab'
         | 'fileViews'
+        | 'builds'
     >
 > & {
     /** The version 1 program, and the convenience for creating a project from a template. */
@@ -121,6 +128,7 @@ export type StoredProject = Partial<
     openTabs?: unknown
     activeTab?: unknown
     fileViews?: unknown
+    builds?: unknown
 }
 
 /**
@@ -246,6 +254,10 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
     }
     const now = Date.now()
     const compilations = cleanCompilationRecords(raw?.compilations)
+    //a record is about a File the Project has, and goes with it
+    const builds = cleanBuildRecords(raw?.builds)?.filter((record) =>
+        Object.hasOwn(files, record.outputPath)
+    )
     let programs: Pick<ProjectData, 'programs' | 'selectedProgram'>
     if (raw?.programs !== undefined) {
         programs = cleanPrograms(raw.programs, raw.selectedProgram, files, compilations)
@@ -264,7 +276,30 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
         description: raw?.description ?? '',
         exam: raw?.exam,
         ...(compilations ? { compilations } : {}),
+        ...(builds?.length ? { builds } : {}),
         ...cleanEditorTabs(raw, files)
+    }
+}
+
+/**
+ * The Project as it leaves the browser, in a share link, an archive, a downloaded or linked
+ * source file: without the Build outputs nobody changed since their Build, which a Build makes
+ * again ([ADR 0056](../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)),
+ * their records, or the tabs and views that showed them.
+ */
+export function withoutBuildOutputs(data: ProjectData): ProjectData {
+    const derived = untouchedBuildOutputs(data.files, data.builds)
+    if (!derived.size) return data
+    const files: Record<string, ProjectData['files'][string]> = Object.create(null)
+    for (const [path, file] of Object.entries(data.files))
+        if (!derived.has(path)) files[path] = file
+    const { openTabs, activeTab, fileViews, builds, ...rest } = data
+    const kept = builds?.filter((record) => !derived.has(record.outputPath))
+    return {
+        ...rest,
+        files: Object.freeze(files),
+        ...(kept?.length ? { builds: kept } : {}),
+        ...cleanEditorTabs({ openTabs, activeTab, fileViews }, files)
     }
 }
 
@@ -336,6 +371,7 @@ function contentKey(project: ProjectData): string {
         selectedProgram: project.selectedProgram,
         exam: project.exam,
         compilations: project.compilations,
+        builds: project.builds,
         openTabs: project.openTabs,
         activeTab: project.activeTab,
         fileViews: project.fileViews
@@ -458,6 +494,7 @@ type ProjectMetadata = {
     settings: ProjectSettingsDecisions
     files: ProjectFiles
     compilations?: CompilationRecord[]
+    builds?: BuildRecord[]
     openTabs?: string[]
     activeTab?: string
     fileViews?: Record<string, FileView>
@@ -553,8 +590,18 @@ export function makeProject(data?: StoredProject) {
         )
         if (Object.keys(next).length !== Object.keys(sourceMaps).length) sourceMaps = next
     }
+    /** A Build output renamed or removed is no longer one: its record goes (ADR 0056). */
+    function reconcileBuilds() {
+        const builds = state.builds
+        if (!builds?.some((record) => !Object.hasOwn(state.files, record.outputPath))) return
+        const kept = builds.filter((record) => Object.hasOwn(state.files, record.outputPath))
+        if (kept.length) state.builds = kept
+        else delete state.builds
+    }
     fileSystem.subscribe((changed) => {
-        if (changed) reconcileSourceMaps()
+        if (!changed) return
+        reconcileSourceMaps()
+        reconcileBuilds()
     })
 
     function toObject(): ProjectData {
@@ -585,6 +632,7 @@ export function makeProject(data?: StoredProject) {
                 id: state.id,
                 exam: state.exam,
                 ...(state.compilations ? { compilations: state.compilations } : {}),
+                ...(state.builds ? { builds: state.builds } : {}),
                 ...(state.openTabs !== undefined ? { openTabs: state.openTabs } : {}),
                 ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {})
             }),
@@ -593,7 +641,7 @@ export function makeProject(data?: StoredProject) {
     }
 
     function toExternal() {
-        const snapshot = legacyProjectShape(toObject())
+        const snapshot = legacyProjectShape(withoutBuildOutputs(toObject()))
         if (!snapshot)
             throw new Error('Only a Project with exactly one program can be exported as one file')
         const files = Object.fromEntries(
@@ -614,6 +662,7 @@ export function makeProject(data?: StoredProject) {
             settings: snapshot.settings,
             files,
             ...(snapshot.compilations ? { compilations: snapshot.compilations } : {}),
+            ...(snapshot.builds ? { builds: snapshot.builds } : {}),
             ...(snapshot.openTabs !== undefined ? { openTabs: snapshot.openTabs } : {}),
             ...(snapshot.activeTab !== undefined ? { activeTab: snapshot.activeTab } : {}),
             ...(snapshot.fileViews !== undefined ? { fileViews: snapshot.fileViews } : {})
@@ -695,6 +744,7 @@ export function makeProject(data?: StoredProject) {
         state.openTabs = merged.openTabs
         state.activeTab = merged.activeTab
         state.fileViews = merged.fileViews
+        state.builds = merged.builds
         reconcileSourceMaps()
     }
 
@@ -837,6 +887,23 @@ export function makeProject(data?: StoredProject) {
         },
         get compilations() {
             return state.compilations ?? []
+        },
+        /** What each Build output was built from, see `BuildRecord`. */
+        get builds(): readonly BuildRecord[] {
+            return state.builds ?? []
+        },
+        /**
+         * Keeps the record of a Build that saved its program at `record.outputPath`, in place of
+         * any earlier one there; the File is written first, as Generated assembly is before its
+         * Compilation record.
+         */
+        recordBuild(record: BuildRecord) {
+            if (!Object.hasOwn(state.files, record.outputPath))
+                throw new Error(`${record.outputPath} is no File of the Project`)
+            state.builds = [
+                ...(state.builds ?? []).filter((item) => item.outputPath !== record.outputPath),
+                record
+            ]
         },
         get openTabs() {
             return state.openTabs

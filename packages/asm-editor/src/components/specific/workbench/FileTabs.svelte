@@ -36,10 +36,7 @@
         })
     })
 
-    //the Build output reads the same in either version, and no program changes it
-    const liveFile = $derived(
-        session.debugSession && group.sourceView !== 'snapshot' && !group.displayedBuildOutput
-    )
+    const liveFile = $derived(session.debugSession && group.sourceView !== 'snapshot')
 </script>
 
 <div class="file-tabs" role="tablist" aria-label="Open files">

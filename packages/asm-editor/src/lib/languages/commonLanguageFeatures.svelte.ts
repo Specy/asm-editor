@@ -600,11 +600,6 @@ export type BaseEmulatorDerivedState = {
     readonly buildSources?: BuildSources
     /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
     readonly buildLibraryFiles?: import('#lib/projectFiles.ts').ProjectFiles
-    /**
-     * x86 only: the program the last Build linked, kept after Stop until the next Build starts,
-     * and none when a File or folder of the Project had its path; see `BuildOutput`.
-     */
-    readonly buildOutput?: import('#lib/buildOutput.ts').BuildOutput
     /** What the Log should say about the current program's run, oldest first; see `EmulatorNote`. */
     readonly notes: readonly EmulatorNote[]
     /**
@@ -768,6 +763,11 @@ export type BaseEmulatorActions = {
     setBreakpointResolver: (
         resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
     ) => void
+    /**
+     * Where the program a person's Build links goes: x86 only, saved as a File of the Project by
+     * the Workbench that owns it, else only shown to the running program; see `BuildOutputHost`.
+     */
+    setBuildOutputHost: (host: import('#lib/buildOutput.ts').BuildOutputHost | undefined) => void
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
     /**

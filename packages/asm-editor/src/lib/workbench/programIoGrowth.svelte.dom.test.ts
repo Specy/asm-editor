@@ -1,18 +1,20 @@
 /**
- * The bottom panel growing for a program's input and output
- * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision 12).
- * Only a browser build runs effects, so this runs in the DOM project.
+ * The bottom panel growing for a program's input
+ * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision 12,
+ * as the design record revised it on 2026-10-23). Only a browser build runs effects, so this runs
+ * in the DOM project.
  */
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { flushSync } from 'svelte'
-import { growForProgramIo, PROGRAM_IO_HEIGHT } from './programIoGrowth.svelte'
+import { DEFAULT_BOTTOM_HEIGHT } from '#stores/workbenchLayoutStore.svelte.ts'
+import { growForProgramIo } from './programIoGrowth.svelte'
 
 const disposers: (() => void)[] = []
 afterEach(() => disposers.splice(0).forEach((dispose) => dispose()))
 
-/** A panel at the default height, its program silent, with room to grow. */
+/** A panel dragged to its least height, its program not reading, with room to grow. */
 function panel() {
-    const state = $state({ debugging: false, talking: false, height: 96, room: 600 })
+    const state = $state({ debugging: false, reading: false, height: 72, room: 600 })
     let growth!: ReturnType<typeof growForProgramIo>
     disposers.push(
         $effect.root(() => {
@@ -20,8 +22,8 @@ function panel() {
                 get debugging() {
                     return state.debugging
                 },
-                get talking() {
-                    return state.talking
+                get reading() {
+                    return state.reading
                 },
                 get height() {
                     return state.height
@@ -38,34 +40,37 @@ function panel() {
 }
 
 describe('the bottom panel', () => {
-    it("grows once a Debug session's program writes or reads, and never shrinks back", () => {
+    it("grows to the default height once a Debug session's program reads, and never shrinks back", () => {
         const { state } = panel()
-        state.talking = true
+        state.reading = true
         flushSync()
-        //the program of no Debug session, such as the last session's output, moves nothing
-        expect(state.height).toBe(96)
+        //a read outside a Debug session, such as a test run's, moves nothing
+        expect(state.height).toBe(72)
         state.debugging = true
         flushSync()
-        expect(state.height).toBe(PROGRAM_IO_HEIGHT)
-        state.talking = false
+        expect(state.height).toBe(DEFAULT_BOTTOM_HEIGHT)
+        state.reading = false
         state.debugging = false
         flushSync()
-        expect(state.height).toBe(PROGRAM_IO_HEIGHT)
-        //one taller already stays as it is
-        state.height = 400
+        expect(state.height).toBe(DEFAULT_BOTTOM_HEIGHT)
+    })
+
+    it('leaves a panel at the default height or taller as it is', () => {
+        const { state } = panel()
+        state.height = DEFAULT_BOTTOM_HEIGHT + 4
         state.debugging = true
-        state.talking = true
+        state.reading = true
         flushSync()
-        expect(state.height).toBe(400)
+        expect(state.height).toBe(DEFAULT_BOTTOM_HEIGHT + 4)
     })
 
     it('grows only as far as the editor leaves room for', () => {
         const { state } = panel()
-        state.room = 150
+        state.room = 80
         state.debugging = true
-        state.talking = true
+        state.reading = true
         flushSync()
-        expect(state.height).toBe(150)
+        expect(state.height).toBe(80)
     })
 
     it('is left as the person sized it during the session, and grows again in the next', () => {
@@ -73,18 +78,18 @@ describe('the bottom panel', () => {
         state.debugging = true
         flushSync()
         growth.resized()
-        state.height = 80
-        state.talking = true
+        state.height = 76
+        state.reading = true
         flushSync()
-        expect(state.height).toBe(80)
+        expect(state.height).toBe(76)
         //a resize outside a session leaves the next one free to grow it
         state.debugging = false
-        state.talking = false
+        state.reading = false
         flushSync()
         growth.resized()
         state.debugging = true
-        state.talking = true
+        state.reading = true
         flushSync()
-        expect(state.height).toBe(PROGRAM_IO_HEIGHT)
+        expect(state.height).toBe(DEFAULT_BOTTOM_HEIGHT)
     })
 })

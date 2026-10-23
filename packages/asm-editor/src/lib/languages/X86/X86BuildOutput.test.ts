@@ -1,19 +1,20 @@
 /**
- * The Build output: the program an x86 Build links, kept beside the Project's Files and present in
- * its own FileSystem at the path the Command line names
- * ([ADR 0050](../../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md),
- * [file-views.md](../../../../../../docs/design/file-views.md) decisions 16 to 18, the plan's E7).
+ * The Build output: the program an x86 Build links, which a person's Build hands its host to save
+ * as a File of the Project at the path the Command line names, and which the run's FileSystem keeps
+ * from the running program
+ * ([ADR 0056](../../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md),
+ * [file-views.md](../../../../../../docs/design/file-views.md) decisions 16 to 18).
  */
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
-import { buildOutputFile } from '#lib/buildOutput.ts'
+import type { BuildOutputClaim, BuildOutputHost } from '#lib/buildOutput.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
 import { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
-import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
+import { fileBytes, type BuildSources, type ProjectFiles } from '#lib/projectFiles.ts'
 import { compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { generatedAssemblyPath } from '#lib/sourceCompilation/records.ts'
 import { X86Emulator } from './X86Emulator.svelte'
@@ -91,6 +92,25 @@ async function emulatorFor(sources: BuildSources) {
     return emulator
 }
 
+/**
+ * A host that saves the program in the Emulator's FileSystem, as the Workbench saves it in the
+ * Project's, once `claim` says so: at once by default.
+ */
+function savingHost(
+    emulator: Awaited<ReturnType<typeof emulatorFor>>,
+    claim: (path: string, signal: AbortSignal) => Promise<BuildOutputClaim> = async () => 'save'
+) {
+    const host = {
+        claim: vi.fn(claim),
+        save: vi.fn((_sources: BuildSources, path: string, bytes: Uint8Array) =>
+            emulator.peripherals.fileSystem.writeBytes(path, bytes, true, 'base64')
+        ),
+        isBuildOutput: vi.fn((_path: string) => false)
+    } satisfies BuildOutputHost
+    emulator.setBuildOutputHost(host)
+    return host
+}
+
 /** A register's value as the signed number a system call returned in it. */
 function signed(emulator: Awaited<ReturnType<typeof emulatorFor>>, name: string): bigint {
     const value = emulator.registers.find((register) => register.name === name)!.value
@@ -103,41 +123,32 @@ beforeAll(async () => {
 })
 
 describe('an x86 Build of main.asm', () => {
-    it('keeps the program it linked as `main`, an Executable whose Listing names `_start`', async () => {
+    it('has its host save the program it linked as `main`, an Executable whose Listing names `_start`', async () => {
         const sources = assembledSources(NOTHING)
         const emulator = await emulatorFor(sources)
-        expect(emulator.buildOutput).toBeUndefined()
+        const host = savingHost(emulator)
         await emulator.compile(100, sources)
-        const output = emulator.buildOutput!
-        expect(output.path).toBe('main')
-        expect([...output.bytes.subarray(0, 4)]).toEqual(ELF_MAGIC)
-        expect(output.sources.files).toEqual(sources.files)
+        expect(host.claim).toHaveBeenCalledWith('main', expect.any(AbortSignal))
+        expect(host.save).toHaveBeenCalledWith(sources, 'main', expect.any(Uint8Array))
+        const saved = emulator.peripherals.fileSystem.files.main
+        expect([...fileBytes(saved).subarray(0, 4)]).toEqual(ELF_MAGIC)
+        //the Debug session shows it as one of the Build's Files
+        expect(emulator.buildSources?.files.main).toBe(saved)
+        expect(emulator.buildSources?.files['main.asm']).toEqual(sources.files['main.asm'])
         expect(emulator.notes).toEqual([])
         const listings = new ListingDocuments((order) =>
             Promise.resolve(generateListing(decoder, { ...order, version: 'v1' }))
         )
-        const listing = await listings.openExecutable('main', buildOutputFile(output))!.ready
+        const listing = await listings.openExecutable('main', saved)!.ready
         expect(listing.labels.map((label) => label.name)).toContain('_start')
     })
 
-    it('keeps it after Stop and replaces it at the next Build, which leaves none if it fails', async () => {
-        const sources = assembledSources(NOTHING)
-        const emulator = await emulatorFor(sources)
-        await emulator.compile(100, sources)
-        const first = emulator.buildOutput!
-        emulator.clear()
-        expect(emulator.buildOutput).toBe(first)
-        await emulator.compile(100, sources)
-        expect(emulator.buildOutput!.generation).toBeGreaterThan(first.generation)
-        const broken = assembledSources('global _start\n_start:\n    mov eax,')
-        await expect(emulator.compile(100, broken)).rejects.toThrow()
-        expect(emulator.buildOutput).toBeUndefined()
-    })
-
-    it('shows the program its own File, which it reads but cannot write, remove or rename', async () => {
+    it('keeps the saved program from itself: it reads it but cannot write, remove or rename it', async () => {
         const sources = assembledSources(READS_ITSELF)
         const emulator = await emulatorFor(sources)
+        savingHost(emulator)
         await emulator.compile(100, sources)
+        const saved = emulator.peripherals.fileSystem.files.main
         await emulator.run(0)
         expect(emulator.errors).toEqual([])
         expect(emulator.terminated).toBe(true)
@@ -145,13 +156,88 @@ describe('an x86 Build of main.asm', () => {
         expect(signed(emulator, 'r14')).toBe(BigInt(-ETXTBSY))
         expect(signed(emulator, 'r13')).toBe(BigInt(-EBUSY))
         expect(signed(emulator, 'r12')).toBe(BigInt(-EBUSY))
-        //and it is no File of the Project, which is as it was
+        expect(emulator.peripherals.fileSystem.files.main).toBe(saved)
+    })
+
+    it('without a host, only shows the program its own File, which is no File of the Project', async () => {
+        const sources = assembledSources(READS_ITSELF)
+        const emulator = await emulatorFor(sources)
+        await emulator.compile(100, sources)
+        await emulator.run(0)
+        expect(emulator.errors).toEqual([])
+        expect(signed(emulator, 'r15')).toBe(0x464c457fn)
+        expect(signed(emulator, 'r14')).toBe(BigInt(-ETXTBSY))
+        expect(signed(emulator, 'r13')).toBe(BigInt(-EBUSY))
+        expect(signed(emulator, 'r12')).toBe(BigInt(-EBUSY))
         expect(Object.keys(emulator.peripherals.fileSystem.files)).toEqual(['main.asm'])
     })
 
-    it("presents each Testcase's program in that Testcase's FileSystem too", async () => {
+    it('saves nothing when its host says not to, and the Log says why', async () => {
+        const sources = assembledSources(READS_ITSELF, { main: plain('a note') })
+        const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator, async (path) => ({ note: `\`${path}\` was kept` }))
+        await emulator.compile(100, sources)
+        expect(host.save).not.toHaveBeenCalled()
+        expect(emulator.notes.map((note) => note.text)).toEqual(['`main` was kept'])
+        await emulator.run(0)
+        //the File is the program's to read, and to write: it is not the program
+        expect(signed(emulator, 'r15')).toBe(0x6f6e2061n) //"a no"
+        expect(signed(emulator, 'r14')).toBeGreaterThanOrEqual(3n)
+    })
+
+    it('runs the program it could not save, which the Log says, showing it to itself', async () => {
         const sources = assembledSources(READS_ITSELF)
         const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator)
+        host.save.mockImplementation(() => {
+            throw new Error('Project exceeds the 16 MiB file limit')
+        })
+        await emulator.compile(100, sources)
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            'The built program could not be saved as `main`: Project exceeds the 16 MiB file limit'
+        ])
+        expect(emulator.canExecute).toBe(true)
+        await emulator.run(0)
+        expect(signed(emulator, 'r15')).toBe(0x464c457fn)
+        expect(Object.keys(emulator.peripherals.fileSystem.files)).toEqual(['main.asm'])
+    })
+
+    it('only shows the program to itself when its host says to present it', async () => {
+        const sources = assembledSources(READS_ITSELF)
+        const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator, async () => 'present')
+        await emulator.compile(100, sources)
+        expect(host.save).not.toHaveBeenCalled()
+        expect(emulator.notes).toEqual([])
+        await emulator.run(0)
+        expect(signed(emulator, 'r15')).toBe(0x464c457fn)
+        expect(Object.keys(emulator.peripherals.fileSystem.files)).toEqual(['main.asm'])
+    })
+
+    it('takes its question back and saves nothing when the Build is cancelled while it asks', async () => {
+        const sources = assembledSources(NOTHING)
+        const emulator = await emulatorFor(sources)
+        let asked!: AbortSignal
+        let answer!: (claim: BuildOutputClaim) => void
+        const host = savingHost(emulator, (_path, signal) => {
+            asked = signal
+            return new Promise((resolve) => (answer = resolve))
+        })
+        const building = emulator.compile(100, sources)
+        await vi.waitFor(() => expect(host.claim).toHaveBeenCalled(), { timeout: 20_000 })
+        emulator.clear()
+        await building
+        expect(asked.aborted).toBe(true)
+        answer('save')
+        await Promise.resolve()
+        expect(host.save).not.toHaveBeenCalled()
+        expect(emulator.canExecute).toBe(false)
+    }, 30_000)
+
+    it("presents each Testcase's program in that Testcase's FileSystem too, saving nothing", async () => {
+        const sources = assembledSources(READS_ITSELF)
+        const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator)
         const testcase: Testcase = {
             input: [],
             expectedOutput: '',
@@ -164,26 +250,56 @@ describe('an x86 Build of main.asm', () => {
         expect(result.errors).toEqual([])
         expect(result.passed).toBe(true)
         //a test run builds the program for each Testcase, which is no Build of the person's
-        expect(emulator.buildOutput).toBeUndefined()
+        expect(host.claim).not.toHaveBeenCalled()
+        expect(host.save).not.toHaveBeenCalled()
+        expect(Object.keys(emulator.peripherals.fileSystem.files)).toEqual(['main.asm'])
+    })
+
+    it("puts a Testcase's program in place of the Build output in its own FileSystem", async () => {
+        //an earlier Build's program, stale: the Testcase must read its own instead
+        const sources = assembledSources(READS_ITSELF, { main: plain('a note') })
+        const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator)
+        host.isBuildOutput.mockImplementation((path) => path === 'main')
+        const testcase: Testcase = {
+            input: [],
+            expectedOutput: '',
+            startingRegisters: {},
+            expectedRegisters: { r15: 0x464c457fn, r14: BigInt.asUintN(64, BigInt(-ETXTBSY)) },
+            startingMemory: [],
+            expectedMemory: []
+        }
+        const [result] = await emulator.test(sources, [testcase], 100_000)
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
+        expect(emulator.peripherals.fileSystem.files.main).toEqual(plain('a note'))
     })
 
     it.each([
-        ['File', { main: plain('a note') }],
-        ['folder', { 'main/notes.txt': plain('a note') }]
-    ])('places none where a %s of the Project is, and the Log says why', async (kind, files) => {
-        const sources = assembledSources(READS_ITSELF, files)
-        const emulator = await emulatorFor(sources)
-        await emulator.compile(100, sources)
-        expect(emulator.buildOutput).toBeUndefined()
-        expect(emulator.notes.map((note) => note.text)).toEqual([
-            `\`main\` is already a ${kind} of the Project, so the built program is not shown; rename one of them.`
-        ])
-        await emulator.run(0)
-        //the File is the program's to read, and to write: it is not the program
-        if (kind === 'File') {
-            expect(signed(emulator, 'r15')).toBe(0x6f6e2061n) //"a no"
-            expect(signed(emulator, 'r14')).toBeGreaterThanOrEqual(3n)
+        ['folder', { 'main/notes.txt': plain('a note') }, 'is a folder of the Project'],
+        ['File', { main: plain('a note') }, 'was kept']
+    ])(
+        'without a host, places none where a %s of the Project is, and the Log says why',
+        async (_kind, files, why) => {
+            const sources = assembledSources(READS_ITSELF, files)
+            const emulator = await emulatorFor(sources)
+            await emulator.compile(100, sources)
+            expect(emulator.notes.map((note) => note.text)).toEqual([
+                expect.stringContaining(`\`main\` ${why}`)
+            ])
         }
+    )
+
+    it('saves nothing over the Entry itself, when it has no extension', async () => {
+        const sources = assembledSources(NOTHING, {}, 'main')
+        const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator)
+        await emulator.compile(100, sources)
+        expect(host.claim).not.toHaveBeenCalled()
+        expect(emulator.peripherals.fileSystem.files.main).toEqual(plain(NOTHING))
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            "`main` is the program's own source, so the built program is not saved; give it an extension, such as `main.asm`."
+        ])
     })
 
     it('has none for an Executable Entry, which is a File already', async () => {
@@ -195,9 +311,10 @@ describe('an x86 Build of main.asm', () => {
             files: { crackme: { encoding: 'base64', content } }
         }
         const emulator = await emulatorFor(sources)
+        const host = savingHost(emulator)
         await emulator.compile(100, sources)
         expect(emulator.canExecute).toBe(true)
-        expect(emulator.buildOutput).toBeUndefined()
+        expect(host.claim).not.toHaveBeenCalled()
     })
 })
 
@@ -239,11 +356,12 @@ describe('a C program compiled with the Start unit', () => {
             files: { ...files, [outputPath]: plain(compiled.assembly) }
         }
         const emulator = await emulatorFor(sources)
+        savingHost(emulator)
         await emulator.compile(100, sources)
         expect(emulator.errors).toEqual([])
         expect(fixture.sourcePath).toBe('src/main.c')
-        expect(emulator.buildOutput?.path).toBe('src/main')
-        expect([...emulator.buildOutput!.bytes.subarray(0, 4)]).toEqual(ELF_MAGIC)
+        const saved = emulator.peripherals.fileSystem.files['src/main']
+        expect([...fileBytes(saved).subarray(0, 4)]).toEqual(ELF_MAGIC)
     }, 30_000)
 })
 
@@ -251,8 +369,10 @@ describe('a MIPS Build', () => {
     it('links no program, so it has no Build output', async () => {
         const emulator = MIPSEmulator('li $v0, 10\nsyscall', {})
         emulators.push(emulator)
+        const host = { claim: vi.fn(), save: vi.fn(), isBuildOutput: vi.fn() }
+        emulator.setBuildOutputHost(host)
         await emulator.compile(100, undefined)
         expect(emulator.canExecute).toBe(true)
-        expect(emulator.buildOutput).toBeUndefined()
+        expect(host.claim).not.toHaveBeenCalled()
     })
 })

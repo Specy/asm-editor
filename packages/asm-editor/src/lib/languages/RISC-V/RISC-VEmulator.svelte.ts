@@ -472,6 +472,12 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         registerHandlers(riscv, this.handlers.makeHandlerMap())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
         this.devices.attach(riscv, this.display)
+        //what an instruction does to the Terminal, a handler's or a device's, is journaled under the
+        //serial its Undo group carries ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
+        this._peripherals.terminal.trackHistory(() => {
+            const serial = riscv.getCurrentInstructionSerial()
+            return serial === null ? null : BigInt(serial)
+        }, normalizeUndoSize(undoSize))
     }
 
     _dispose(): void {
@@ -984,9 +990,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _undo(): void {
         const riscv = this.requireRiscV()
         const group = riscv.getUndoGroupsUpTo(1)[0]
-        //the FileSystem session keys its frames by the instruction serial, and a Poke has no
-        //instruction identity to undo file operations by, so it is rolled back by the Core alone
-        //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
+        //the FileSystem session and the Terminal key their records by the instruction serial, and a
+        //Poke has no instruction identity to undo their changes by, so it is rolled back by the Core
+        //alone ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
         const serial = group?.kind === 'instruction' ? group.serial : undefined
         if (serial !== undefined && !(this.fileSystemSession?.canUndoAfter(serial) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
@@ -995,7 +1001,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //undone: the Core puts the exit back itself
         riscv.undo()
         this.failedAt = null
-        if (serial !== undefined) this.fileSystemSession?.undoAfter(serial)
+        if (serial === undefined) return
+        this.fileSystemSession?.undoAfter(serial)
+        this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
     }
 
     /**

@@ -6,8 +6,10 @@ import {
     type LegacyProjectData,
     type Project,
     type ProjectData,
-    type StoredProject
+    type StoredProject,
+    withoutBuildOutputs
 } from '#lib/Project.svelte.ts'
+import { untouchedBuildOutputs } from '#lib/buildOutput.ts'
 import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
 import { serializer } from '#lib/json.ts'
 import {
@@ -68,8 +70,12 @@ type ProjectManifest = {
     files: Record<string, ArchivedFile>
 }
 
+/**
+ * The Project as a download or an archive holds it: without the Build outputs nobody changed, which
+ * a Build makes again ([ADR 0056](../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+ */
 function snapshotOf(project: Project | ProjectData): ProjectData {
-    return 'toObject' in project ? project.toObject() : project
+    return withoutBuildOutputs('toObject' in project ? project.toObject() : project)
 }
 
 /** A complete, byte-preserving Project ZIP. No running descriptor or Undo state is serialized. */
@@ -132,10 +138,12 @@ export function projectSourceName(project: Project | ProjectData): string {
 /**
  * Whether a bare source file could hold the whole Project: one plain-text File without
  * Annotations, which its text cannot carry, and it is the Entry of its one Program, which the
- * exported file's shape before Programs can say.
+ * exported file's shape before Programs can say. A Build output nobody changed does not count,
+ * since the file leaves it out.
  */
 export function isSingleSourceProject(project: Project | ProjectData): boolean {
-    const paths = Object.keys(project.files)
+    const derived = untouchedBuildOutputs(project.files, project.builds)
+    const paths = Object.keys(project.files).filter((path) => !derived.has(path))
     const entries = Object.keys(project.programs)
     if (paths.length !== 1 || entries.length !== 1 || paths[0] !== entries[0]) return false
     const file = project.files[paths[0]]

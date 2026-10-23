@@ -97,7 +97,7 @@ The Peripheral representing pointing input for a program interacting with the **
 
 ## Terminal
 
-The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin. Instruction Undo puts the Terminal back as the instruction found it, its output and echo included, and a read it takes back asks again ([ADR 0057](./docs/adr/0057-restore-the-terminal-on-undo.md)).
 
 ## Command line
 
@@ -337,8 +337,12 @@ The fixed versions of the **Files** and **Entry path** used by one Build, identi
 
 ## Build output
 
-The executable an x86 Build links from its sources, shown in the Explorer as a read-only File of that Build and present in the program's **FileSystem**, so it opens like any **Executable** and can be downloaded or run elsewhere. Each Build replaces it, and it is never saved with the **Project**; keeping one copies it into the Project as an Executable. See [ADR 0050](./docs/adr/0050-the-built-program-is-a-build-output-never-saved.md).
+The **File** an x86 Build saves the executable it links in, at the path the **Command line** runs it as (the Entry path without its extension), an **Executable** of the **Project** like an uploaded one. While it holds that program unchanged, with no **Byte edits** or **Annotations**, its **Build record** makes it derived: the next Build replaces it without asking, the Explorer marks it From an earlier Build once its sources change, and it is left out of share links, archives and downloaded files. Anything else at its path is replaced only once the person agrees, and a renamed one is the person's own File. See [ADR 0056](./docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md).
 _Avoid_: a.out, binary, compiled program, artifact (the Core's build artifacts are line data, not this File)
+
+## Build record
+
+Saved **Project** metadata on a **Build output**: the Entry its Build built, and fingerprints of the Files that Build read, of its Build configuration and of the File it saved. It tells whether the Build output is stale or changed since, and goes when the File is renamed or removed. The Build's counterpart of a **Compilation record**.
 
 ## Debug session
 

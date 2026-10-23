@@ -29,13 +29,13 @@ export type WorkbenchRailOptions = {
 
 /**
  * The rail's entries in order
- * ([the design record](../../../../../../docs/design/workbench.md), Rail): on top Explorer, Symbols
- * in a Project that has an Executable
- * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
- * 18), Search in every Target
+ * ([the design record](../../../../../../docs/design/workbench.md), Rail): on top Explorer, Search
+ * in every Target
  * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md), decision
- * 23), Testcases, Documentation and the host's panels; at the bottom the AI assistant, Share, the
- * host's links and panels, and Settings. A built-in panel the host switched off is left out.
+ * 23), Testcases, Documentation, the host's panels and, in a Project that has an Executable,
+ * Symbols ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+ * decision 18); at the bottom the AI assistant, Share, the host's links and panels, and Settings.
+ * A built-in panel the host switched off is left out.
  */
 export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
     const entries: RailEntry[] = []
@@ -66,16 +66,6 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
         }
     }
     builtin('explorer', 'Explorer', FaCopy, 'top')
-    if (options.symbolsOffered)
-        builtin(
-            'symbols',
-            'Symbols',
-            FaTags,
-            'top',
-            false,
-            undefined,
-            'Symbols: the functions and strings of the program'
-        )
     builtin(
         'search',
         'Search',
@@ -88,6 +78,18 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
     builtin('testcases', 'Testcases', FaFlask, 'top', true, options.testcasesDot)
     builtin('documentation', 'Documentation', FaBook, 'top', true)
     host('top')
+    //last of the group, since it comes and goes with the Project's Executables: appearing, it
+    //moves no other icon
+    if (options.symbolsOffered)
+        builtin(
+            'symbols',
+            'Symbols',
+            FaTags,
+            'top',
+            false,
+            undefined,
+            'Symbols: the functions and strings of the program'
+        )
     builtin('agent', 'AI assistant', SparklesIcon, 'bottom')
     if (options.onShare) {
         entries.push({

@@ -294,11 +294,15 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this._peripherals.terminal.useTerminalInput((text) =>
             echoToScreen(this._peripherals.screen, text)
         )
-        this.interpreter = new Interpreter(program, {
+        const interpreter = new Interpreter(program, {
             history_size: undoSize,
             keep_history: undoSize > 0
         })
+        this.interpreter = interpreter
         this.screenInstructions = new ScreenInstructionHistory(this._peripherals.screen, undoSize)
+        //a trap's output and reads are journaled under its step id, as its drawing is
+        //([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
+        this._peripherals.terminal.trackHistory(() => interpreter.getLastStepId(), undoSize)
     }
 
     _dispose(): void {
@@ -567,11 +571,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
         }
         const step = interpreter.undo()
-        //a Poke has no instruction identity, so neither journal hung anything on it and both must
-        //be left where they are ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
+        //a Poke has no instruction identity, so no journal hung anything on it and each must be
+        //left where it is ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
         if (step.kind === 'poke') return
         this.screenInstructions?.undoAfter(step.id - 1)
         this.fileSystemSession?.undoAfter(step.id)
+        this._peripherals.terminal.undoAfter(step.id - 1)
     }
 
     /**
