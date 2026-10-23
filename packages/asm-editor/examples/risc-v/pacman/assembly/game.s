@@ -214,10 +214,10 @@ begin_life:
         jal     draw_text
         li      a0, CHANNEL_1
         la      a1, music_bass
-        jal     play_sound
+        jal     play_song
         li      a0, CHANNEL_2
         la      a1, music_melody
-        jal     play_sound
+        jal     play_song
         li      t1, 0                           # no one on the maze until PLAYER ONE goes
         li      t2, 136
 bl_state:

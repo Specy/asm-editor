@@ -64,8 +64,8 @@ static void begin_life(int intro) {
     ready_intro = intro ? 136 : 0;
     if (intro) {
         draw_text("PLAYER ONE", 9, 14, COLOR_CYAN);
-        play_sound(CHANNEL_1, music_bass);
-        play_sound(CHANNEL_2, music_melody);
+        play_song(CHANNEL_1, music_bass);
+        play_song(CHANNEL_2, music_melody);
     }
     enter_state(READY);
 }

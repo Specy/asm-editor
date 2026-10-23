@@ -251,6 +251,52 @@ stop a slot's sound. The
 Once a program has made a sound, the **Sound** button in the execution dock turns sound off and
 on. Testcases run silently and never leave a sound playing, so the player is never busy there.
 
+### Waveforms on the Synth
+
+The tasks above play sounds stored in files. The editor also has a **Synth**: a sound chip like
+the ones inside 1980s game consoles and home computers, which the program controls directly. It is
+an extension of this editor; EASy68K does not have it.
+
+No task is involved. The Synth's controls, called **registers**, sit at memory addresses from
+`$E00100`, and the program changes them with ordinary moves, `move.w` for a word and `move.b` for a
+byte. Channel 0, one of the Synth's eight, starts at that address:
+
+- the word at offset `0` is the **frequency** in Hz, how many times a second the sound repeats:
+  440 is the A above middle C, and 262 is middle C.
+- the byte at `$11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
+  2 a sawtooth, 3 a sine and 4 noise.
+- the byte at `$12` is the volume, from 0 to 127, and the byte at `$13` the **sustain**, the level
+  a note holds at.
+- the byte at `$10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+```m68k|playground|console|no-registers|no-flags
+    lea $E00100, a0         ; channel 0 of the Synth
+    move.b #1, $11(a0)      ; waveform 1: a triangle
+    move.b #100, $12(a0)    ; volume 100
+    move.b #127, $13(a0)    ; sustain: hold the note at full volume
+
+    move.w #262, (a0)       ; middle C, in Hz
+    move.b #1, $10(a0)      ; gate on: the note starts
+    move.l #40, d1          ; four tenths of a second, in hundredths
+    move.b #23, d0          ; task 23: wait
+    trap #15
+
+    move.w #330, (a0)       ; E: a new frequency for the same note
+    trap #15                ; wait again: d0 and d1 still ask for it
+    move.w #392, (a0)       ; G
+    trap #15
+
+    move.b #0, $10(a0)      ; gate off: the note ends
+    move.b #9, d0
+    trap #15
+```
+
+The note sounds from the moment the gate goes on until it goes off; changing the frequency in
+between slides the same note to a new pitch. Change the waveform number at `$11` to hear how the
+shape changes the sound. The [Synth chapter](/documentation/m68k/synth) of the Documentation
+describes the other registers: the pulse width, the **envelope** that shapes each note's volume
+over time, wavetables, and sounds the program computes itself and plays as samples.
+
 ## Your turn
 
 Print `The answer is 42` and end the program. The string at `$2000` stops before the number; task

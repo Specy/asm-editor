@@ -32,7 +32,7 @@ Decided on 2026-10-23: [ADR 0061](../adr/0061-the-synth-is-a-chip-that-could-hav
 | Volume             | A small multiplier, as the SID multiplies its envelope into the waveform                                                                              | 0 to 127, the scale of MARS's Notes                                                                                                      |
 | Channels           | One oscillator circuit time-shared, as Namco's and Yamaha's chips do                                                                                  | 8 channels                                                                                                                               |
 
-Left out as beyond such a chip: digital filters with arbitrary coefficients (the SID's filter is analog, and varies from chip to chip), reverb and other effects, floating point, and more than a few dozen channels. The pulse width register was the owner's addition to the first proposal; the wavetable was proposed while making the design plausible and accepted. Integer Hz costs at most about 13 cents of pitch at the lowest piano C notes and under 4 from 220 Hz up, which the Documentation's note table states.
+Left out as beyond such a chip: digital filters with arbitrary coefficients (the SID's filter is analog, and varies from chip to chip), reverb and other effects, floating point, and more than a few dozen channels. The pulse width register was the owner's addition to the first proposal; the wavetable was proposed while making the design plausible and accepted. Integer Hz puts no note more than about 11 cents off pitch from C2 (65 Hz) up and less than 3 cents from 220 Hz up, which the Documentation's note table states; below C2 it grows, to 31 cents at the piano's lowest A. (Corrected on 2026-10-23 while writing the Documentation: the first figures here, 13 and 4 cents, were estimates.)
 
 ## Samples are a seventh waveform
 
@@ -143,7 +143,7 @@ Decided on 2026-10-23.
 
 ## Open decisions
 
-None. Every question was settled on 2026-10-23; the implementation plan is still to be written.
+None. Every question was settled on 2026-10-23, and the [implementation plan](./waveform-sound-plan.md) was written and carried out the same day.
 
 ## Deferred
 

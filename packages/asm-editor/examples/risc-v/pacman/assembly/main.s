@@ -34,6 +34,7 @@ main:
         li      a7, SYS_PRINT_STRING
         ecall
         jal     load_assets
+        jal     init_sounds
         li      a7, SYS_TIME                    # a different game every time
         ecall
         la      t0, rng_state

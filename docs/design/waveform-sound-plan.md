@@ -1,6 +1,6 @@
 # Waveform sound: implementation plan
 
-Written on 2026-10-23 after the design interview. The decisions are in [waveform-sound.md](./waveform-sound.md), which device on which Target in [ADR 0060](../adr/0060-the-z80-gets-a-real-sound-chip-the-others-a-synth.md), the Synth's design in [ADR 0061](../adr/0061-the-synth-is-a-chip-that-could-have-been-built.md), its placement in [ADR 0062](../adr/0062-the-synth-sits-beside-each-reference-s-own-devices.md), the vocabulary in [CONTEXT.md](../../CONTEXT.md) (**Sound chip**, **Synth**, **Synth channel**, **Sample memory**). It builds on the Audio Peripheral of [audio-plan.md](./audio-plan.md), implemented and uncommitted. The plan covers one s68k Core change, two chip emulations, their place in Audio and its browser output, three adapters, and the documentation, Lectures and Examples. Nothing is implemented.
+Written on 2026-10-23 after the design interview. The decisions are in [waveform-sound.md](./waveform-sound.md), which device on which Target in [ADR 0060](../adr/0060-the-z80-gets-a-real-sound-chip-the-others-a-synth.md), the Synth's design in [ADR 0061](../adr/0061-the-synth-is-a-chip-that-could-have-been-built.md), its placement in [ADR 0062](../adr/0062-the-synth-sits-beside-each-reference-s-own-devices.md), the vocabulary in [CONTEXT.md](../../CONTEXT.md) (**Sound chip**, **Synth**, **Synth channel**, **Sample memory**). It builds on the Audio Peripheral of [audio-plan.md](./audio-plan.md), implemented and uncommitted. The plan covers one s68k Core change, two chip emulations, their place in Audio and its browser output, three adapters, and the documentation, Lectures and Examples. It was implemented on 2026-10-23; see [the implementation record](#implementation-record) at the end.
 
 ## Starting point
 
@@ -95,3 +95,72 @@ As decided in the design record: the Synth chapter for MIPS, RISC-V and the M68K
 - **The M68K's stop per watched write.** A program writing the Synth on every iteration of a tight loop stops the Core that often. A stop is cheap beside a trap, which the adapter already handles all the time, but M7 measures it.
 - **Writes observed inside MARS's store.** The observer runs in the Java store's call stack; reading memory back from inside it is what `MarsDevices` already does for the bitmap display, and the same must hold for a byte store into a word the observer reads.
 - **CPU.** Eight Synth channels and the Sound chip per Emulator, rendered in JavaScript on the audio thread; several playgrounds on one lecture page each have their own node. M0 measures one; M7 measures a page with three.
+
+## Implementation record
+
+Implemented on 2026-10-23, uncommitted. Everything the milestones list was built; what differs from the plan, and what was found on the way, is below.
+
+### M0: the spike
+
+- Vite's `?worker&url` bundles a worklet module that `audioWorklet.addModule` loads, in the dev server (served as `/@fs/…/chipProcessor.ts?worker_file&type=module`, its imports resolved by the server) and in a production build (one self-contained ES module of about 12 KB). Checked in a scratch Vite project with the app's `worker.format: 'es'`, through an `OfflineAudioContext` in headless Chrome: a sine at 440 Hz rendered 439 rising zero crossings a second, the Sound chip at period 254 rendered 440.
+- CPU: ten seconds of all eight Synth channels plus the Sound chip rendered in 247 to 271 ms, under 3 % of one core.
+- ayumi-js was not needed: ayumi's C is 338 lines, and translating it was the smaller job, mono only (the MSX's AY is one channel of sound) and the AY's table only.
+
+### What was built
+
+| Part                  | Where                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Register model        | `languages/synthRegisters.ts`: bases, offsets, sizes and descriptions, waveforms, wavetables, upload registers. The device, the Documentation, the agent's prompt and `<sim.h>` read it                                                                |
+| Chip sound            | `peripherals/audio/chips/synthCore.ts` and `soundChipCore.ts` (ayumi translated, its MIT notice in the file), `chipProcessor.ts` the worklet, `chipMessages.ts` what it and the page say, `chipNode.ts` loading it once per context                    |
+| Program-facing models | `peripherals/audio/Synth.ts` (mirror, gate edges counted as sounds started, uploads copied and journaled) and `SoundChip.ts` (registers, select, masks, journal), both owned by `Audio` as `audio.synth` and `audio.soundChip`                         |
+| Commands              | `ChipCommand` in `AudioOutput.ts`: `synth` and `soundChip` register writes, `synthUpload`, `soundChipLoad` after an Undo, `releaseChips` at a program's own end. Consecutive writes of one chip merge into one message                                 |
+| Output                | `browserAudioOutput.ts`: a `ChipVoice` per output, made on its first chip command, keeping what is sent before the node runs, disposed by `stopAll`; the worklet reports whether it is audible, which keeps the page's context awake                   |
+| MIPS, RISC-V          | `MarsDevices` observes 0xFFFF0100 to 0xFFFF02FF and hands each store to the Synth inside the storing instruction; `rewind` silences the observer while the Core undoes, since MARS replays restored memory as ordinary stores; a "Synth" memory region |
+| M68K                  | The block zeroed and watched at every Build; the watched writes taken after every run call, step, trap answer and Poke                                                                                                                                 |
+| Z80                   | `SOUND_CHIP_SELECT`, `SOUND_CHIP_WRITE`, `SOUND_CHIP_READ` at 0xA0 to 0xA2, the `sound-chip` group (its page anchor), with a period table and three runnable examples                                                                                  |
+| Documentation         | A Synth chapter for MIPS, RISC-V and the M68K from one template (`documentation/synth.md`, `synth.ts`), with pages at `/documentation/{mips,risc-v,m68k}/synth`; "From C" on MIPS and RISC-V; links from each Sound section                            |
+| `<sim.h>`             | The Synth's constants, `SIM_SYNTH8`, `SIM_SYNTH16`, `SIM_SYNTH_TABLE` and the upload macros, `sim_synth_play`, `sim_synth_gate`, `sim_synth_upload`; the help catalogs list the three functions                                                        |
+| Lectures, Examples    | A waveform part in each language's making-sound section; "Chiptune" on all four Targets (topic `chiptune`) and "Sampled sound" on MIPS, RISC-V and the M68K (topic `sampled-sound`)                                                                    |
+
+### Decisions taken while implementing
+
+1. **The worklet gets register writes, not decoded events.** Each chip core is the chip: it takes a register and its value, already in a fixed byte order, and detects a gate's edges itself, writing a gate it already has changing nothing, as on the SID. An Undo's re-sync is then just every register written again, which changes only what differs.
+2. **The Synth's model takes a store as (offset, size, value)**, the shape both MARS's observer and s68k's watched writes report, with the Target's byte order and memory reader passed in a `SynthBus` with each store. It decodes from its mirror, so a byte stored into half of a halfword register is decoded with the other half.
+3. **The upload registers never reach the worklet.** The model copies on the start register's write; the chip only sees `synthUpload` with the bytes.
+4. **Undo of a Poke re-syncs the Synth too** (`Audio.resyncSynth`), since a Poke into the block is played like the program's own store.
+5. **Envelope times are full-scale rates**, as on the SID: decay and release are how long a fall the whole way from full to silence takes, so a release from half takes half its ticks. The envelope runs smoothly rather than in 1,024 steps a second.
+6. **A channel's mix is a quarter of full scale**, the Synth's and the Sound chip's alike, so a few channels sum before clipping; each chip has a DC blocker, the Synth's a 10 Hz pole, the Sound chip ayumi's own average.
+7. **Registers 14 and 15, and a selection of 16 or more, read 0xFF**: the I/O ports have nothing attached, and the AY ignores a register number whose high bits are not its own.
+8. **`<sim.h>`'s wavetable macro is `SIM_SYNTH_TABLE(channel)`**, since `SIM_SYNTH_WAVETABLE` is the waveform's value.
+9. **A Synth channel counts as sounding when its gate is on and its volume above 0**, for the dock's Sound button and its light. Added on 2026-10-23 with the Pac-Man example, which keeps its three gates on and plays each voice by its volume, as the arcade's chip did: counting the gate alone lit the button on the silent title screen.
+
+### The s68k Core
+
+`watchMemory(start, end)` (end excluded), `unwatchMemory()`, `takeWatchedWrites()` and the status `InterpreterStatus.WatchedWrite`, which works like `Paused`: the storing instruction has finished and is in the history, and the next run or step goes on. A watched write inside a Poke or a trap's answer is recorded too. While building it the agent found an older bug, fixed in the same unreleased 4.0.0: when the last instruction a `runWithLimit` or `runWithBreakpoints` limit allowed ended in a trap, `simhalt` or the program's end, the Core threw `ExecutionLimit` and the stop was lost; it now returns that status. Memory starts filled with $FF in s68k, which is why the adapter zeroes the block.
+
+### Verification
+
+- Under node: 25 tests of the chip cores (frequencies by zero crossings, duty cycle, envelope times and levels, retrigger, samples at two rates, a loop point, noise, the AY's tone at period 254, volume curve, mixer, envelope shapes 0, 13 and 14, a load that keeps an envelope), 23 of the models in Audio, 5 of the output's chip node, and through the real Cores 7 Synth tests on MIPS, 7 on RISC-V, 9 on the M68K (a long and a `movem`, a Breakpoint after a watched store, a Poke and its Undo) and 4 Sound chip tests on the Z80, the documented examples of each chapter included. Every new Example and Lecture playground runs in the content suite; a scratch run counted what each plays (the chiptune's 33 lead, 9 bass and 17 drum strikes, the sampled sound's upload and its eight rates).
+- The editor suite: 6,108 passed, 7 timeouts under load that pass alone. `svelte-check` 0 errors, lint and format clean, `sim.h` and help catalogs regenerated. s68k: 646 Rust tests and the ts-lib smoke test.
+- Measured with the suite running alongside: 200,000 back-to-back Synth stores cost about 1 µs each on MARS, 0.3 µs on RARS and 2 µs on s68k, where each one stops the Core (446 ms against 27 ms for the same stores to RAM). A program writing a few hundred registers a second, which is what music does, does not notice.
+- Chrome, the real app on the dev server, an analyser on the master gain: a MIPS sine at 440 Hz measured 441 Hz at an RMS of 0.0442, which is a full-volume channel through the default volume, and silence after the program's end; a RISC-V pulse at 660 Hz measured 662 Hz and kept sounding through a Pause, then silence on Stop; the Z80's Sound chip at period 254 measured 441 Hz and fell silent at `halt`; the M68K sampled sound and the MIPS chiptune were heard, the chiptune muted to 0 and back. No page errors.
+- Not checked here: Firefox and Safari, a production build served with its service worker, a phone. A Lecture page with three playgrounds sounding at once was not measured; one node renders all its chips in under 3 % of a core.
+
+### After the review
+
+A code review of the work on 2026-10-24 found eleven things, all fixed the same day:
+
+- **The M68K's instruction limit.** Each stop at a watched store counted as one instruction, as each trap always had, so a loop storing into the Synth never reached a run's limit, and a Testcase restarted its limit at every stop and never ended, holding the page. s68k 4.0.0 now counts the instructions it runs (`getExecutedInstructions()`), and the adapter takes a slice's progress and a Testcase's one limit from it. M68K limits now count real instructions, as the other Cores' do; the editor's own runs have none, and the M68K example tests, which leaned on the old count, run on the virtual clock with limits in real instructions.
+- **Batches of a tight loop.** Every register write went to the worklet; a batch past 8,192 writes is now folded to what one instant needs (`compactSynthWrites`, `compactSoundChipWrites`): the last value of each register, and of a gate its first write, its last and one strike between when it went off and on.
+- **The bitmap display at MARS's "memory map" base**, 0xffff0000, covers the Synth's block: its words are pixels then, and the Synth is off and out of the memory view's regions.
+- **Heard and running.** The worklet reports a channel heard only with a volume and a level above 0, so a program that keeps its gates on at volume 0 lets the page's context sleep, and renders while an envelope moves; a program's end releases every gate, heard or not.
+- **Pokes.** A Poke plays the Synth's registers and is heard at once, flushed by the Emulator after every Poke, but starts no upload: an upload is the running program's, and a Poke's Undo only re-reads the registers.
+- **Undo** re-sends only the registers that changed, and every one only after a program's end released the chips; the Sound chip is told only when an Undo put a register back.
+- **Low sample rates.** The Sound chip oversamples below the rate ayumi's resampler needs instead of throwing, and the worklet plays the rest of a batch past a command it cannot take.
+- **The M68K's block** is zeroed at a Build only where the program put nothing of its own, and the Log says when it did.
+- **The Documentation** says that a sample's start and length are taken at the gate, that a Poke starts no upload, and where each block meets the Target's other devices.
+- **The worklet** has tests of its own under node, with the AudioWorklet's globals stood in.
+
+### Releases
+
+`@specy/s68k` 4.0.0 now also carries `watchMemory`, `getExecutedInstructions` and the limit fix. MARS, RARS and the Z80 need nothing of their own for this.

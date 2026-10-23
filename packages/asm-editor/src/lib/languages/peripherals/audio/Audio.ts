@@ -4,9 +4,12 @@ import {
     type AudioCommand,
     type AudioNeed,
     type AudioOutput,
+    type ChipCommand,
     type SoundData
 } from './AudioOutput'
+import { compactSoundChipWrites, SoundChip } from './SoundChip'
 import { inspectSoundFile, type SoundFileInfo } from './soundFiles'
+import { compactSynthWrites, Synth, type ChipHost } from './Synth'
 
 /**
  * The **Audio** Peripheral: what a program can observe of its **Notes** and **Sounds**
@@ -26,6 +29,10 @@ import { inspectSoundFile, type SoundFileInfo } from './soundFiles'
  *   standard player is never busy, while the answers about Files and slots stay the same.
  * - Undo takes back what an instruction started and the slots it changed, and never starts anything
  *   ([ADR 0059](../../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md)).
+ * - The chips, the **Synth** of MIPS, RISC-V and the M68K and the Z80's **Sound chip**, are a state
+ *   rather than recordings ([waveform-sound.md](../../../../../../../docs/design/waveform-sound.md)):
+ *   their writes go out in the same batches, an Undo leaves them playing whatever their registers
+ *   say, and a program's own end releases them in the output only.
  *
  * Plain TypeScript with no Svelte runes, like the other peripherals, so it runs under node.
  */
@@ -54,11 +61,14 @@ export type OpenedSound = {
 }
 
 export type AudioActivity = {
-    /** How many Notes and Sounds have started since this Audio was made; never reset. */
+    /**
+     * How many Notes and Sounds have started since this Audio was made, chip channels whose gate or
+     * volume came on included; never reset.
+     */
     readonly soundsStarted: number
     /** Whether a program is held while the synthesizer, its bank or a Sound loads. */
     readonly loading: boolean
-    /** How much longer something is heard, in milliseconds; Infinity while a loop plays. */
+    /** How much longer something is heard, in milliseconds; Infinity while a loop or a chip plays. */
     readonly playingForMs: number
 }
 
@@ -69,6 +79,12 @@ export type AudioOptions = {
     /** A Testcase's Audio, where nothing ever plays. */
     silent?: boolean
 }
+
+/**
+ * How many numbers a batch's chip command holds before it is folded to what one instant needs:
+ * 8,192 register writes, more than any program that paces itself makes in a slice.
+ */
+const CHIP_WRITES_FOLDED_AT = 16_384
 
 /** What an Audio that has played nothing reports. */
 export const QUIET_AUDIO: AudioActivity = { soundsStarted: 0, loading: false, playingForMs: 0 }
@@ -156,11 +172,25 @@ export class Audio {
     private readonly listeners = new Set<(activity: AudioActivity) => void>()
     /** Where the notes for the Log go: a missing or unplayable File, a bank that did not load. */
     onNote: ((text: string) => void) | null = null
+    /** MIPS's, RISC-V's and the M68K's memory-mapped Synth. */
+    readonly synth: Synth
+    /** The Z80's AY-3-8910 behind its ports. */
+    readonly soundChip: SoundChip
+    /** Set by a program's own end, which silenced the chips in the output, until they are written again. */
+    private chipsReleased = false
 
     constructor(options: AudioOptions = {}) {
         this.clock = options.clock ?? { now: () => 0 }
         this.output = options.output ?? new SilentAudioOutput()
         this.silent = options.silent ?? false
+        const host: ChipHost = {
+            silent: this.silent,
+            send: (command) => this.sendChip(command),
+            record: (restore) => this.record(restore),
+            started: () => this.started++
+        }
+        this.synth = new Synth(host)
+        this.soundChip = new SoundChip(host)
     }
 
     /** Hands the sound to a new output, the browser's once it has loaded. */
@@ -185,9 +215,11 @@ export class Audio {
 
     /**
      * Takes back every instruction after `position`: stops what each started, if it is still
-     * playing, and restores the slots it changed. Nothing is started again.
+     * playing, and restores the slots it changed. No Note or Sound is started again; the chips play
+     * whatever their restored registers say, the Synth's read back with `readSynth` from the memory
+     * the Core has already rewound, and only when the program has used it.
      */
-    undoAfter(position: TerminalPosition): void {
+    undoAfter(position: TerminalPosition, readSynth?: () => ArrayLike<number>): void {
         this.history.undoAfter(position, (record) => {
             for (const id of record.started) {
                 if (this.voices.delete(id)) this.batch.push({ type: 'stop', voice: id })
@@ -195,6 +227,17 @@ export class Audio {
             }
             for (let i = record.restores.length - 1; i >= 0; i--) record.restores[i]()
         })
+        if (readSynth && this.synth.inUse) this.synth.resync(readSynth(), this.chipsReleased)
+        this.soundChip.resync(this.chipsReleased)
+        this.flush()
+    }
+
+    /**
+     * After the Core has rewound a Poke, which no instruction's journal holds: the Synth plays its
+     * block as memory holds it again.
+     */
+    resyncSynth(readSynth: () => ArrayLike<number>): void {
+        if (this.synth.inUse) this.synth.resync(readSynth(), this.chipsReleased)
         this.flush()
     }
 
@@ -533,14 +576,55 @@ export class Audio {
         }
     }
 
+    // ------------------------------------------------------------------ chips
+
+    /**
+     * Adds a chip's command to the batch, appending register writes to the last command when it is
+     * the same chip's, so a loop of writes is one message, and folding that message once it grows
+     * past `CHIP_WRITES_FOLDED_AT`: a program that stores into the chip in a tight loop sends what
+     * the last of its stores left, not every one.
+     */
+    private sendChip(command: ChipCommand): void {
+        if (this.silent) return
+        if (command.type !== 'releaseChips') this.chipsReleased = false
+        const last = this.batch.at(-1)
+        if (
+            (command.type === 'synth' || command.type === 'soundChip') &&
+            last?.type === command.type
+        ) {
+            for (const value of command.writes) last.writes.push(value)
+            if (last.writes.length > CHIP_WRITES_FOLDED_AT) {
+                last.writes =
+                    last.type === 'synth'
+                        ? compactSynthWrites(last.writes)
+                        : compactSoundChipWrites(last.writes)
+            }
+            return
+        }
+        this.batch.push(command)
+    }
+
+    private get chipsSounding(): boolean {
+        return !this.chipsReleased && (this.synth.sounding || this.soundChip.voiced)
+    }
+
     // ------------------------------------------------------------------ lifecycle
 
-    /** The program ended on its own: loops stop, the rest plays out. */
+    /**
+     * The program ended on its own: loops stop, the rest plays out, and the chips are released in
+     * the output, Synth gates off and Sound chip volumes to 0, while their registers keep what the
+     * program wrote, so an Undo that takes the end back plays on from them.
+     */
     stopLoops(): void {
         for (const voice of [...this.voices.values()]) {
             if (voice.loop) this.stopVoice(voice.id)
         }
         if (this.standardEndsAt === Infinity) this.standardEndsAt = this.clock.now()
+        //every gate, heard or not: a gated channel at volume 0 would keep the chip running
+        if (!this.silent && !this.chipsReleased && (this.synth.gated || this.soundChip.voiced)) {
+            this.batch.push({ type: 'releaseChips' })
+            this.chipsReleased = true
+        }
         this.flush()
     }
 
@@ -559,6 +643,9 @@ export class Audio {
         this.history.clear()
         this.noted.clear()
         this.opened.clear()
+        this.synth.reset()
+        this.soundChip.reset()
+        this.chipsReleased = false
         for (const release of [...this.holds]) release()
         if (!this.silent) this.output.send([{ type: 'stopAll' }])
         this.notify()
@@ -580,7 +667,7 @@ export class Audio {
                 stoppedHere.add(command.voice)
         }
         const kept = batch.filter(
-            (command) => command.type === 'stopAll' || !stoppedHere.has(command.voice)
+            (command) => !('voice' in command) || !stoppedHere.has(command.voice)
         )
         if (kept.length > 0 && !this.silent) this.output.send(kept)
         this.notify()
@@ -588,7 +675,7 @@ export class Audio {
 
     get activity(): AudioActivity {
         const now = this.clock.now()
-        let until = now
+        let until = this.chipsSounding ? Infinity : now
         for (const voice of this.voices.values()) until = Math.max(until, voice.endsAt)
         return {
             soundsStarted: this.started,

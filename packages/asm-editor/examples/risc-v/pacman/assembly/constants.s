@@ -38,13 +38,20 @@
         .eqv    SYS_PRINT_STRING, 4
         .eqv    SYS_EXIT, 10
         .eqv    SYS_TIME, 30
-        .eqv    SYS_MIDI_OUT, 31                # plays a Note and goes on at once
         .eqv    SYS_SLEEP, 32
         .eqv    SYS_CLOSE, 57
         .eqv    SYS_READ, 63
         .eqv    SYS_WRITE, 64
         .eqv    SYS_OPEN, 1024
         .eqv    MMIO_BASE, 0xffff0000           # keyboard: +0 control (bit 0 ready), +4 data
+        .eqv    SYNTH, 0xffff0100               # the Synth: channel n's registers at +n * 0x20
+        .eqv    SYNTH_TABLES, 0xffff0200        # channel n's wavetable at +n * 16
+        .eqv    SY_CHANNEL, 0x20                # one channel's registers
+        .eqv    SY_FREQUENCY, 0x00              # halfword: Hz
+        .eqv    SY_CONTROL, 0x10                # bit 0: the gate
+        .eqv    SY_WAVEFORM, 0x11               # 5: the channel's wavetable
+        .eqv    SY_VOLUME, 0x12                 # 0 to 127
+        .eqv    SY_SUSTAIN, 0x13                # the level while the gate is on, 0 to 127
 
 # ---------------------------------------------------------------- colors, 0x00RRGGBB
         .eqv    COLOR_WHITE, 0x00ffffff
@@ -138,27 +145,31 @@
         .eqv    LEVEL_TABLE_LAST, 21            # levels past 21 play like 21
 
 # ---------------------------------------------------------------- sound
-# Three channels play at once, as the arcade's three voices did (sound.s).
+# Three channels play at once on the Synth, as the arcade's three voices did (sound.s).
         .eqv    CHANNEL_1, 0                    # the start music's bass, the extra life
         .eqv    CHANNEL_2, 1                    # the tune, the siren, frightened, eyes going home
         .eqv    CHANNEL_3, 2                    # the dots, the fruit, a ghost eaten, the death
         .eqv    CHANNEL_COUNT, 3
 
-# One channel record: a word per field.
-        .eqv    CH_NEXT, 0                      # the next event, 0 when the channel is silent
-        .eqv    CH_START, 4                     # the first event, where SOUND_REPEAT goes back to
-        .eqv    CH_WAIT, 8                      # frames before the next event
-        .eqv    CH_INSTRUMENT, 12
-        .eqv    CH_SIZE, 16
+# One voice record, what a channel plays as the arcade keeps it: bytes, and the song's address.
+        .eqv    V_EFFECT, 0                     # the effect's 8 bytes, which it changes as it plays
+        .eqv    V_SONG, 8                       # word: the song's next byte
+        .eqv    V_PLAYING, 12                   # PLAY_SILENT, PLAY_EFFECT, PLAY_SONG_START, PLAY_SONG
+        .eqv    V_DURATION, 13                  # frames left of the run or the note
+        .eqv    V_FREQUENCY, 14                 # before the octave
+        .eqv    V_DIRECTION, 15                 # an effect's half of the round trip; a song's note
+        .eqv    V_VOLUME, 16
+        .eqv    V_FADE, 17                      # 0 steady, 1 to 4 down one every 1, 2, 4, 8 frames
+        .eqv    V_WAVEFORM, 18                  # a song's, from its F1
+        .eqv    V_OCTAVE, 19                    # from its F2
+        .eqv    V_SONG_VOLUME, 20               # from its F3
+        .eqv    V_LOADED, 21                    # the waveform in the channel's wavetable, 255 none
+        .eqv    V_SIZE, 24
 
-# The General MIDI instruments the tables play. In the editor's sound bank, timpani is a nearly pure
-# tone that dies away quickly, which keeps a Note a frame sounding like one sweep.
-        .eqv    INSTRUMENT_PIANO, 0
-        .eqv    INSTRUMENT_BASS, 32
-        .eqv    INSTRUMENT_TIMPANI, 47
-
-        .eqv    SOUND_END, 0                    # in place of a pitch: the table is over
-        .eqv    SOUND_REPEAT, 255               # in place of a pitch: back to the first event
+        .eqv    PLAY_SILENT, 0
+        .eqv    PLAY_EFFECT, 1
+        .eqv    PLAY_SONG_START, 2
+        .eqv    PLAY_SONG, 3
 
         .eqv    EYES_SPEED, 384
         .eqv    HOUSE_SPEED, 128

@@ -12,9 +12,8 @@ both read their pictures and maze from the Files in `assets/` when they start.
 3. Click the Screen so it receives the keyboard, then press space.
 4. Move with **W A S D**, or **Z Q S D**, or **8 4 5 6** on the number pad. **P** pauses.
 
-Turn your sound on. The first sound of a game waits a moment while the editor loads its sound
-bank, the first time on a page. Once the game has made a sound, the **Sound** button at the end of
-the bar with **Build** and **Run** turns it off and on, and **Sound volume** is in **Preferences**.
+Turn your sound on. Once the game has made a sound, the **Sound** button at the end of the bar with
+**Build** and **Run** turns it off and on, and **Sound volume** is in **Preferences**.
 
 The arrow keys do not type a character, so the program never sees them. Pac-Man keeps going until
 a wall stops him, and he remembers the last direction you pressed, taking it at the next opening.
@@ -46,7 +45,7 @@ assembling, and finds them beside it.
 | `pacman.s`    | Pac-Man's movement and eating                                                |
 | `ghosts.s`    | The ghosts: the house, their targets, frightened mode, collisions            |
 | `game.s`      | The game's states, the score, the keyboard and the frame timing              |
-| `sound.s`     | The music and the sound effects, and the player that plays them (ecall 31)   |
+| `sound.s`     | The music and the sound effects, and the arcade's sound program on the Synth |
 
 ## The C version
 
@@ -68,7 +67,7 @@ pictures never go to Compiler Explorer: the program reads them in the editor whe
 | `player.c` | Pac-Man                                                                |
 | `ghosts.c` | The ghosts                                                             |
 | `game.c`   | The game's states, the score, the keyboard and the frame timing        |
-| `sound.c`  | The music and the sound effects, and the player that plays them        |
+| `sound.c`  | The music and the sound effects, and the arcade's sound program        |
 
 `c/pacman.c.riscv` is the program **Build** assembles: Clang's output for `pacman.c` at **-O2**,
 which the Project comes with so the C version runs without compiling first. Compile again after
@@ -128,33 +127,39 @@ puts the frame on the Screen.
 
 ## How it sounds
 
-Every sound is a Note played with RARS's MIDI service 31, `sim_midi_out` in C: a pitch on a General
-MIDI instrument, at a volume, for a duration. Service 31 starts the Note and goes on at once, so
-the game never waits for its sound. Service 33, which waits for the Note to end, would stop the
-game for every Note.
+The sound is the arcade's own, made the arcade's way. The arcade had a Namco wavetable chip with
+three voices, each a frequency, a volume from 0 to 15 and one of eight waveforms of 32 four-bit
+samples, and its program set all three anew every 1/60 s. The editor's
+[Synth](/documentation/risc-v/synth) works the same way: three of its channels play their
+wavetables, the same 32 four-bit samples, and the game writes their frequency and volume registers,
+at 0xFFFF0100 and up, once a frame. Nothing waits for the sound, and no system call plays it: it is
+stores to memory, `sh` and `sb` in `sound.s`, `SIM_SYNTH16` and `SIM_SYNTH8` in `sound.c`.
 
-The sounds are the arcade's own. The arcade played them on a sound chip with three voices, giving
-each voice a new frequency every 1/60 s, so most of its sounds are sweeps: the siren goes up and
-down more than an octave several times a second, and each dot is a fall or a rise of two octaves in
-five frames. The tables at the top of `sound.s` and `sound.c`, the same numbers in both, hold each
-sound frame by frame, each frame's frequency as the nearest Note. A sweep is therefore a Note a
-frame, and frames that keep one pitch are one longer Note. They were made from the arcade's sound
-data as Frédéric Vecoven's commented listing of its sound code gives it, at
-[vecoven.com](https://vecoven.com/elec/pacman/pacman.html).
+`update_sounds` is the arcade's sound program, translated: the routines at 0x2D44 and 0x2E6E of
+its ROM that play songs and effects. Its tables are the arcade's bytes, as Frédéric Vecoven's
+commented listing of the sound code gives them, at
+[vecoven.com](https://vecoven.com/elec/pacman/pacman.html), the same numbers in `sound.s` and
+`sound.c`:
 
-A table starts with its instrument, then has events of four bytes: the pitch (60 is middle C, each
-step a semitone), how many frames the Note lasts, its volume from 0 to 127, and how many frames to
-wait before the next event. A wait of 0 plays the next event with it, as a chord. A table ends with
-`SOUND_END`, or with `SOUND_REPEAT` to play again from its first event, as the sirens do.
+- An **effect** is 8 bytes on one voice: a starting frequency and how much to add to it each
+  frame, how many frames a run lasts and whether it turns back at the end of each, how many runs
+  there are, the volume and how it fades, and the octave and the waveform. The siren is a run up
+  and down, again and again; a dot is one quick fall or rise.
+- A **song** is a byte a note, its pitch and its length, after a few bytes that set the waveform,
+  the octave, the volume and how each note fades. The start music is two songs played together.
 
-The instruments are the editor's sound bank's closest to the arcade's tones. In that bank timpani is
-a nearly pure tone that dies away quickly, so a Note a frame stays one sweep instead of blurring
-into a chord; most tables use it. The start music's bass is a piano, and the extra life and the
-death an acoustic bass. The low Notes of a sweep are played softer, because they ring the longest
-and would drown the rest.
+The chip's frequency becomes Hz as the chip made it: it ran at 96,000 samples a second, adding the
+frequency to a 20-bit counter whose top 5 bits picked the sample, so voice 1 sounds at frequency ×
+96000 ÷ 2²⁰ Hz, and voices 2 and 3, which hold their frequency 4 bits higher up the counter, at 16
+times that. The start music's bass is therefore 67 Hz and its tune starts at 539 Hz.
 
-Three channels play together, as the arcade's three voices did, each one table at a time. A new
-sound on a channel replaces the old one:
+The chip's eight waveforms were in a PROM. The ones here are drawn with the overtones measured from
+it, which set their color and their pitch: a waveform that holds 8 cycles in its 32 samples sounds
+3 octaves above the frequency the program sets, which is why the frightened ghosts' climb, low on
+paper, is heard high.
+
+Three channels play together, as the arcade's three voices did, each one effect or song at a time.
+A new sound on a channel replaces the old one:
 
 | Channel | Plays                                                                                         |
 | ------- | --------------------------------------------------------------------------------------------- |
@@ -162,9 +167,10 @@ sound on a channel replaces the old one:
 | 2       | The start music's tune; under the game, the siren, the frightened ghosts, the eyes going home |
 | 3       | A dot or an energizer eaten, "wa" and "ka" in turn; the fruit; a ghost; the death             |
 
-Once a frame, just before the sleep, `update_sounds` picks what plays under the game and plays
-every event that falls due. The sound counts frames as the game does, so it keeps time with the
-game and pauses with it. Things happen when they do in the arcade:
+Once a frame, just before the sleep, `update_sounds` picks what plays under the game and moves
+every channel's effect or song on by one frame. The sound counts frames as the game does, so it
+keeps time with the game; a paused game is silent and picks up where it was. Things happen when
+they do in the arcade:
 
 - The siren speeds up and rises after 116, 180, 212 and 228 dots.
 - The eyes' sound takes the place of the frightened one, which takes the place of the siren.

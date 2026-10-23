@@ -204,7 +204,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         this.devices = new MarsDevices({
             screen: this._peripherals.screen,
             keyboard: this._peripherals.keyboard,
-            terminal: this._peripherals.terminal
+            terminal: this._peripherals.terminal,
+            audio: () => this._peripherals.audio
         })
         this.devices.setDisplay(this.display)
         this.handlers = new MarsHandlers({
@@ -1031,12 +1032,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         }
         //an exit and a failure were the newest things the program did, so they are the first
         //undone: the Core puts the exit back itself
-        riscv.undo()
+        this.devices.rewind(() => riscv.undo())
         this.failedAt = null
-        if (serial === undefined) return
+        const readSynth = () => this.devices.readSynthBlock()
+        if (serial === undefined) return this._peripherals.audio.resyncSynth(readSynth)
         this.fileSystemSession?.undoAfter(serial)
         this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
-        this._peripherals.audio.undoAfter(BigInt(serial) - 1n)
+        this._peripherals.audio.undoAfter(BigInt(serial) - 1n, readSynth)
     }
 
     /**

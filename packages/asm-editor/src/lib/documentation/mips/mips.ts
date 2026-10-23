@@ -15,6 +15,7 @@ import {
     type DocumentationEntry
 } from '../entries'
 import { screenEntries } from '../mars/screen'
+import { synthEntries } from '../synth'
 import { documented, syscallFields, syscallSummary } from '../mars/syscalls'
 import directivesIntro from './directives.md?raw'
 import registersIntro from './registers.md?raw'
@@ -229,6 +230,19 @@ function screen(): Chapter {
     }
 }
 
+function synth(): Chapter {
+    const href = `${BASE}/synth`
+    return {
+        id: 'synth',
+        language: 'mips',
+        title: 'Synth',
+        href,
+        description:
+            'The memory-mapped sound chip this editor adds: eight channels of waveforms, envelopes, wavetables and Sample memory.',
+        entries: synthEntries('MIPS', 'mips', href)
+    }
+}
+
 /** The C library a Build links when the Project or its Compilation asks for it. */
 function runtimeLibrary(): Chapter {
     const href = `${BASE}/runtime-library`
@@ -306,6 +320,7 @@ export function chapters(): Chapter[] {
         syscalls(),
         registers(),
         screen(),
+        synth(),
         runtimeLibrary(),
         usingC()
     ]

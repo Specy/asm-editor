@@ -1,18 +1,19 @@
 /**
  * The Environment library, `<sim.h>`, as text: one `static inline` function for each MARS or RARS
- * service a Target's Documentation lists, the keyboard and display registers, and `SIM_SCREEN` for
- * the bitmap display ([ADR 0034](../../../../docs/adr/0034-environment-library-is-header-only.md)); for
+ * service a Target's Documentation lists, the keyboard and display registers, `SIM_SCREEN` for
+ * the bitmap display and the Synth's registers ([ADR 0034](../../../../docs/adr/0034-environment-library-is-header-only.md)); for
  * x86, one for each Linux system call its Documentation lists.
  *
  * Plain JavaScript and no imports, so `generate.mjs` runs it under Node and the editor's tests
  * regenerate the committed headers in memory from the same data. The data comes in as arguments:
  * the syscall entries of `src/lib/documentation/mars/{mips,riscv}Syscalls.ts`, the device
- * registers of `src/lib/languages/mars/MarsDevices.ts` and the display sizes and memory map of
- * `src/lib/languages/mars/marsDisplay.ts`, which the Documentation's Syscalls and Screen chapters
+ * registers of `src/lib/languages/mars/MarsDevices.ts`, the display sizes and memory map of
+ * `src/lib/languages/mars/marsDisplay.ts` and the Synth's registers of
+ * `src/lib/languages/synthRegisters.ts`, which the Documentation's Syscalls and Screen chapters
  * are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
  * its Syscalls chapter shows.
  */
-import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO } from './helpers.mjs'
+import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO, SYNTH_HELPERS } from './helpers.mjs'
 
 /** Where the committed headers live, relative to the repository. */
 export const SIM_HEADER_DIRECTORY = 'src/lib/sourceRuntime/generated/sim'
@@ -282,6 +283,66 @@ static inline ${prototypeOf(RGB_HELPER)} {
     unsigned name[(width) / (unit) * ((height) / (unit))] __attribute__((__aligned__(4)))`
 }
 
+/** The Synth: its registers as constants, two macros to reach them, and three helpers. */
+function synthSection(synth, target) {
+    const base = `${hex(synth.base)}ul`
+    const define = (name, value, comment) =>
+        `#define ${name} ${value}${comment ? ` /* ${comment} */` : ''}`
+    const registers = (list) =>
+        list.map((register) =>
+            define(
+                `SIM_SYNTH_${register.name}`,
+                `0x${register.offset.toString(16)}`,
+                `${register.bytes * 8} bits: ${register.description[0].toLowerCase()}${register.description.slice(1)}`
+            )
+        )
+    return `/*
+ * The Synth: the sound chip this editor adds beside ${target.simulator}'s devices, eight channels of
+ * waveforms whose registers are memory from ${hex(synth.base)}. Set a channel's registers, then turn its
+ * gate on to start a note and off to end it:
+ *
+ *     SIM_SYNTH8(0, SIM_SYNTH_WAVEFORM) = SIM_SYNTH_TRIANGLE;
+ *     SIM_SYNTH8(0, SIM_SYNTH_VOLUME) = 100;
+ *     SIM_SYNTH8(0, SIM_SYNTH_SUSTAIN) = 127;
+ *     sim_synth_play(0, 440);
+ *     sim_sleep(500);
+ *     sim_synth_gate(0, 0);
+ *
+ * It is an extension: ${target.simulator} has no waveform sound. The Synth chapter of the
+ * Documentation describes every register.
+ */
+${define('SIM_SYNTH_BASE', base)}
+${define('SIM_SYNTH_CHANNELS', synth.channelCount)}
+
+/* A channel's registers, from SIM_SYNTH_BASE + channel * ${hex(synth.channelSize)}. */
+${registers(synth.channelRegisters).join('\n')}
+
+/* The waveform register's values. */
+${synth.waveforms.map((waveform, value) => define(`SIM_SYNTH_${waveform.toUpperCase()}`, value)).join('\n')}
+
+/* The control register's bits. */
+${define('SIM_SYNTH_GATE', hex(synth.gate) + 'u', 'on attacks, off releases')}
+${define('SIM_SYNTH_LOOP', hex(synth.loop) + 'u', 'the sample waveform loops')}
+
+/* Each channel's wavetable: ${synth.wavetableSize} bytes of 32 four-bit samples, the first of each pair in the high half. */
+#define SIM_SYNTH_TABLE(channel) \\
+    ((volatile unsigned char *)(SIM_SYNTH_BASE + ${hex(synth.wavetables)}u + (unsigned long)(channel) * ${hex(synth.wavetableSize)}u))
+
+/* The upload into Sample memory, from SIM_SYNTH_BASE; writing the start register copies. */
+${registers(synth.uploadRegisters).join('\n')}
+
+/* A channel's register of 8 or 16 bits, to read or write. */
+#define SIM_SYNTH8(channel, offset) \\
+    (*(volatile unsigned char *)(SIM_SYNTH_BASE + (unsigned long)(channel) * ${hex(synth.channelSize)}u + (offset)))
+#define SIM_SYNTH16(channel, offset) \\
+    (*(volatile unsigned short *)(SIM_SYNTH_BASE + (unsigned long)(channel) * ${hex(synth.channelSize)}u + (offset)))
+#define SIM_SYNTH_UPLOAD8(offset) (*(volatile unsigned char *)(SIM_SYNTH_BASE + (offset)))
+#define SIM_SYNTH_UPLOAD16(offset) (*(volatile unsigned short *)(SIM_SYNTH_BASE + (offset)))
+#define SIM_SYNTH_UPLOAD32(offset) (*(volatile unsigned *)(SIM_SYNTH_BASE + (offset)))
+
+${SYNTH_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body()}\n}`).join('\n\n')}`
+}
+
 /**
  * The whole header for one Target. Services marked not implemented are left out, as the
  * Documentation leaves them out: their functions arrive with the Core release that offers them.
@@ -296,7 +357,7 @@ export function generateSimHeader(targetName, data) {
             : 'src/lib/documentation/mars/riscvSyscalls.ts'
     return `/*
  * <sim.h>: the Environment library of ${target.language}, one function for each ${target.simulator} service the
- * Documentation lists, and the keyboard, display and bitmap display.
+ * Documentation lists, the keyboard, display and bitmap display, and the Synth.
  *
  * Generated by scripts/sim-header/generate.mjs from ${source}
  * and ${target.simulator}'s device registers. Do not edit it: regenerate it.
@@ -324,6 +385,8 @@ ${services.map((syscall) => serviceFunction(syscall, target)).join('\n\n')}
 ${deviceFunctions(data.devices, target.simulator)}
 
 ${screenSection(data.display, target)}
+
+${synthSection(data.synth, target)}
 
 #ifdef __cplusplus
 }

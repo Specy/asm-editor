@@ -51,6 +51,7 @@ const { riscvSyscalls } = await load('src/lib/documentation/mars/riscvSyscalls.t
 const devices = await load('src/lib/languages/mars/MarsDevices.ts')
 const display = await load('src/lib/languages/mars/marsDisplay.ts')
 const { x86SimHeaderData } = await load('src/lib/documentation/x86/syscallBinding.ts')
+const synth = await load('src/lib/languages/synthRegisters.ts')
 
 const address = (label) =>
     display.MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label).address
@@ -72,6 +73,18 @@ const data = {
         //GNU-profile static data can grow past the default heap; the Core moves the heap after it.
         staticData: address('static data'),
         staticDataEnd: 0x10400000
+    },
+    synth: {
+        base: synth.SYNTH_BASES.mips,
+        channelCount: synth.SYNTH_CHANNEL_COUNT,
+        channelSize: synth.SYNTH_CHANNEL_SIZE,
+        channelRegisters: synth.SYNTH_CHANNEL_REGISTERS,
+        uploadRegisters: synth.SYNTH_UPLOAD_REGISTERS,
+        waveforms: synth.SYNTH_WAVEFORMS,
+        wavetables: synth.SYNTH_WAVETABLES,
+        wavetableSize: synth.SYNTH_WAVETABLE_SIZE,
+        gate: synth.SYNTH_GATE,
+        loop: synth.SYNTH_LOOP
     }
 }
 

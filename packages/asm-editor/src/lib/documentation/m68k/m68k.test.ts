@@ -53,6 +53,7 @@ describe('the M68K Documentation', () => {
             ['condition-codes', '/documentation/m68k/condition-codes'],
             ['shift-directions', '/documentation/m68k/shift-direction'],
             ['trap-tasks', '/documentation/m68k/traps'],
+            ['synth', '/documentation/m68k/synth'],
             ['exceptions', '/documentation/m68k/exceptions'],
             ['directives', '/documentation/m68k/directive'],
             ['assembler-features', '/documentation/m68k/assembler-features']
@@ -72,6 +73,8 @@ describe('the M68K Documentation', () => {
             //the introduction, 6 groups, the colors, the key codes, how sound differs, 59 tasks and
             //the 2 closing sections
             'trap-tasks': 71,
+            //the introduction and the seven sections after it
+            synth: 8,
             exceptions: 4,
             directives: 18,
             'assembler-features': 1

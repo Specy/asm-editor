@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { synthEntries } from '#lib/documentation/synth.ts'
+import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { makeMidi, makeWav } from '#lib/languages/peripherals/audio/soundFixtures.ts'
 import type { InputSettings } from '@specy/s68k'
@@ -1871,11 +1873,11 @@ describe('M68K trap documentation', () => {
 
 describe('examples/m68k', () => {
     /**
-     * Three of the four programs loop until Stop, so they are bounded by the instruction limit. An
-     * M68K slice charges one instruction per trap and a delay charges none, so a limit of a few
-     * hundred is a few dozen frames of a program that traps ten times and delays once per frame.
+     * Three of the four programs loop until Stop, so they are bounded by the instruction limit,
+     * which counts every instruction the Core runs, traps included; a delay charges none. Twenty
+     * thousand is a few dozen frames of these programs.
      */
-    const FRAME_LOOP_LIMIT = 200
+    const FRAME_LOOP_LIMIT = 20_000
 
     /**
      * A program that loops until Stop ends by exhausting the run's instruction limit, which the
@@ -1890,9 +1892,12 @@ describe('examples/m68k', () => {
         return readFileSync(new URL(`../../../../examples/m68k/${name}`, import.meta.url), 'utf8')
     }
 
-    async function runExample(name: string, limit: number, options = {}) {
+    /** Program time on the virtual clock, so a few dozen frames of delays take no real time. */
+    const virtualClock = () => ({ clock: new ProgramClock({ mode: 'virtual' }) })
+
+    async function runExample(name: string, limit: number) {
         const code = load(name)
-        const emulator = M68KEmulator(code, options)
+        const emulator = M68KEmulator(code, { peripherals: virtualClock() })
         await emulator.compile(0, code)
         await emulator.run(limit)
         return emulator
@@ -1944,8 +1949,9 @@ describe('examples/m68k', () => {
             await emulator.run(limit)
             return emulator
         }
-        const early = await runHoldingRight(60)
-        const later = await runHoldingRight(FRAME_LOOP_LIMIT)
+        //on the real clock, before the square reaches the right edge
+        const early = await runHoldingRight(600)
+        const later = await runHoldingRight(2000)
         expectStoppedAtLimit(later)
         expect(inkCentroidX(later)).toBeGreaterThan(inkCentroidX(early))
         //the title is in the transcript and on the Screen at the same time (ADR 0003)
@@ -1954,7 +1960,7 @@ describe('examples/m68k', () => {
     })
 
     it('draws the flappy bird ready screen', async () => {
-        const emulator = await runExample('flappy-bird.x68', 400)
+        const emulator = await runExample('flappy-bird.x68', 2 * FRAME_LOOP_LIMIT)
         expectStoppedAtLimit(emulator)
         expect(emulator.peripherals.screen.doubleBuffering).toBe(true)
         //the sky is a filled rectangle over the whole screen, so nothing is left at the background
@@ -1966,7 +1972,7 @@ describe('examples/m68k', () => {
 
     it('paints under the pointer while the left button is held', async () => {
         const code = load('mouse-paint.x68')
-        const emulator = M68KEmulator(code)
+        const emulator = M68KEmulator(code, { peripherals: virtualClock() })
         await emulator.compile(0, code)
         emulator.peripherals.mouse.buttonDown('left', 200, 150)
         await emulator.run(FRAME_LOOP_LIMIT)
@@ -2003,5 +2009,244 @@ after:
         const [result] = await emulator.test(code, [testcase], INSTRUCTION_LIMIT, 100)
         expect(result.errors).toEqual([])
         expect(result.passed).toBe(true)
+    })
+})
+
+describe('M68K Synth', () => {
+    const SYNTH_LOOP =
+        ['loop:', '    move.w d1,$E00100', '    addq.w #1,d1', '    bra loop'].join('\n') + '\n'
+
+    it('ends a Testcase that loops on Synth stores at its instruction limit', async () => {
+        const code = ORG + SYNTH_LOOP
+        const emulator = M68KEmulator(code, { peripherals: { audio: new Audio() } })
+        const started = performance.now()
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: '',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            3000
+        )
+        expect(results[0]?.passed).toBe(false)
+        expect(JSON.stringify(results[0]?.errors)).toContain('3000')
+        expect(performance.now() - started).toBeLessThan(5000)
+    })
+
+    it('counts every instruction a slice ran across its stops at Synth stores', async () => {
+        const code = ORG + SYNTH_LOOP
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const runner = emulator as unknown as {
+            _runSlice: (request: {
+                instructionBudget: number
+                timeBudgetMs: number
+                breakpoints: number[]
+                skipBreakpointAtPc: boolean
+                runInstructionLimit: number
+                speedCorrection: number
+            }) => Promise<unknown>
+        }
+        //a speed that gives a slice of a second 30 instructions of a run of 1000, so its deadline
+        //never comes first
+        const request = {
+            timeBudgetMs: 1000,
+            breakpoints: [],
+            skipBreakpointAtPc: true,
+            speedCorrection: 30 / 15_000_000,
+            instructionBudget: 1000,
+            runInstructionLimit: 1000
+        }
+        //30 instructions, ten of them stores that each stopped the Core, and the slice says 30
+        expect(await runner._runSlice(request)).toEqual({ reason: 'budget', instructions: 30 })
+        //the last slice of the run stops the program at the run's own limit
+        await expect(
+            runner._runSlice({ ...request, instructionBudget: 30, runInstructionLimit: 60 })
+        ).rejects.toEqual({ type: 'ExecutionLimit', value: 60 })
+    })
+
+    it('runs the Synth chapter’s example, a note that starts and fades', async () => {
+        const overview = synthEntries('M68K', 'm68k', '/documentation')[0]
+        const code = /```\w+\n([\s\S]*?)```/.exec(overview.searchText)![1]
+        const output = new RecordingAudioOutput()
+        const emulator = M68KEmulator(code, {
+            peripherals: {
+                audio: new Audio({ output }),
+                clock: new ProgramClock({ mode: 'virtual' })
+            }
+        })
+        await emulator.compile(200, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        const writes = output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+        const gates = writes.filter((value, i) => i % 2 === 1 && writes[i - 1] === 0x10)
+        expect(gates).toEqual([1, 0])
+    })
+
+    const synthWrites = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+    const uploads = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synthUpload' ? [[c.offset, ...c.bytes]] : []))
+    /** Channel 0 at 440 Hz and volume 100 with its gate on, then the frequency read back and printed. */
+    const TONE =
+        [
+            '    lea $E00100,a0',
+            '    move.w #440,(a0)',
+            '    move.b #100,$12(a0)',
+            '    move.b #1,$10(a0)',
+            '    moveq #0,d1',
+            '    move.w (a0),d1'
+        ].join('\n') +
+        '\n' +
+        trap(3)
+
+    async function withSynth(body: string, options: { run?: boolean } = {}) {
+        const code = ORG + body + trap(9)
+        const output = new RecordingAudioOutput()
+        const emulator = M68KEmulator(code, { peripherals: { audio: new Audio({ output }) } })
+        await emulator.compile(200, code)
+        if (options.run ?? true) await emulator.run(INSTRUCTION_LIMIT)
+        return { emulator, output, code }
+    }
+
+    it('hands every store in the block to the Synth as it happens, in big-endian order', async () => {
+        const { emulator, output } = await withSynth(TONE)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('440')
+        expect(synthWrites(output)).toEqual([0, 440, 0x12, 100, 0x10, 1])
+        expect(output.commands.at(-1)).toEqual({ type: 'releaseChips' })
+    })
+
+    it('names its block as a device region in the memory view', async () => {
+        const { emulator } = await withSynth('    nop\n', { run: false })
+        expect(emulator.memoryRegions.filter((region) => region.kind === 'device')).toEqual([
+            expect.objectContaining({ name: 'Synth', start: 0xe00100n, end: 0xe00300n })
+        ])
+    })
+
+    it('leaves a program’s own bytes in the block, zeroes the rest and says so', async () => {
+        const code = ORG + '    move.b #1,d0\n' + '    ORG $E00110\n' + 'table: dc.b 7,8\n'
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        expect([...emulator.readMemoryBytes(0xe00110n, 2)]).toEqual([7, 8])
+        expect([...emulator.readMemoryBytes(0xe00100n, 4)]).toEqual([0, 0, 0, 0])
+        expect([...emulator.readMemoryBytes(0xe002fcn, 4)]).toEqual([0, 0, 0, 0])
+        expect(emulator.notes.map((note) => note.text).join(' ')).toContain('$E00100 to $E002FF')
+    })
+
+    it('starts the block at zero, where the rest of memory starts at $FF', async () => {
+        const { emulator } = await withSynth(
+            ['    moveq #0,d1', '    move.w $E00100,d1'].join('\n') + '\n' + trap(3)
+        )
+        expect(emulator.stdOut).toBe('0')
+    })
+
+    it('decodes a long and a movem into the registers they cover, and keeps a gate pulse', async () => {
+        const { emulator, output } = await withSynth(
+            [
+                '    lea $E00120,a0',
+                '    move.l #$03700800,(a0)',
+                '    move.l #$00010000,d2',
+                '    move.l #$00000000,d3',
+                '    movem.l d2-d3,$10(a0)',
+                '    move.b #1,$10(a0)'
+            ].join('\n') + '\n'
+        )
+        expect(emulator.errors).toEqual([])
+        expect(synthWrites(output)).toEqual([
+            0x20, 0x370, 0x22, 0x800, 0x30, 0, 0x31, 1, 0x32, 0, 0x33, 0, 0x30, 1
+        ])
+    })
+
+    it('copies an upload when it is started, before the program changes its buffer', async () => {
+        const { emulator, output } = await withSynth(
+            [
+                '    lea $E00100,a0',
+                '    lea wave,a1',
+                '    move.l a1,$180(a0)',
+                '    move.w #4,$184(a0)',
+                '    move.w #100,$186(a0)',
+                '    move.b #0,$188(a0)',
+                '    move.b #9,(a1)',
+                '    bra done',
+                'wave: dc.b 1,2,3,4',
+                'done:'
+            ].join('\n') + '\n'
+        )
+        expect(emulator.errors).toEqual([])
+        expect(uploads(output)).toEqual([[100, 1, 2, 3, 4]])
+    })
+
+    it('stops at a Breakpoint on the instruction after a watched store', async () => {
+        const body =
+            ['    move.b #1,$E00110', '    move.l #7,d4', '    move.l #8,d5'].join('\n') + '\n'
+        const { emulator, output, code } = await withSynth(body, { run: false })
+        emulator.toggleBreakpoint(code.split('\n').indexOf('    move.l #7,d4'))
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.terminated).toBe(false)
+        expect(registerOf(emulator, 'D4')).toBe(0n)
+        expect(synthWrites(output)).toEqual([0x10, 1])
+    })
+
+    it('plays its rewound registers after an Undo', async () => {
+        const { emulator, output } = await withSynth(
+            [
+                '    move.b #100,$E00112',
+                '    move.b #1,$E00110',
+                '    move.b #0,$E00110',
+                '    nop'
+            ].join('\n') + '\n',
+            { run: false }
+        )
+        const gates = () =>
+            synthWrites(output).filter((value, i, all) => i % 2 === 1 && all[i - 1] === 0x10)
+        await emulator.step()
+        await emulator.step()
+        await emulator.step()
+        expect(gates()).toEqual([1, 0])
+        emulator.undo(1)
+        expect(gates()).toEqual([1, 0, 1])
+        expect(emulator.peripherals.audio.activity.playingForMs).toBe(Infinity)
+    })
+
+    it('plays a Poke into the block, and its Undo', async () => {
+        const { emulator, output } = await withSynth(['    nop', '    nop'].join('\n') + '\n', {
+            run: false
+        })
+        await emulator.step()
+        expect(emulator.pokeMemory(0xe00110n, Uint8Array.from([1]))).toBe(true)
+        expect(synthWrites(output)).toEqual([0x10, 1])
+        emulator.undo(1)
+        const writes = synthWrites(output)
+        expect(writes[writes.indexOf(0x10, 2) + 1]).toBe(0)
+    })
+
+    it('plays nothing in a Testcase, whose reads still see the registers', async () => {
+        const code = ORG + TONE + trap(9)
+        const output = new RecordingAudioOutput()
+        const emulator = M68KEmulator(code, { peripherals: { audio: new Audio({ output }) } })
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: '440',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(synthWrites(output)).toEqual([])
     })
 })

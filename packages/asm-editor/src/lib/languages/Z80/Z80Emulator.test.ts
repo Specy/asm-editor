@@ -675,3 +675,98 @@ describe('Z80 audio ports', () => {
         expect(pitches(output)).toEqual([60])
     })
 })
+
+describe('Z80 Sound chip', () => {
+    function withAudio(lines: string[]) {
+        const output = new RecordingAudioOutput()
+        const audio = new Audio({ output })
+        const code = ['    org $8000', ...lines].join('\n')
+        const emulator = Z80Emulator(code, { peripherals: { audio } })
+        return { emulator, output, code }
+    }
+    const writes = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'soundChip' ? c.writes : []))
+    /** An MSX's way of setting channel A to 440 Hz at full volume, and reading the period back. */
+    const TONE = [
+        '    ld a, 0',
+        '    out (0xa0), a',
+        '    ld a, 254',
+        '    out (0xa1), a',
+        '    ld a, 1',
+        '    out (0xa0), a',
+        '    ld a, 0xf0      ; only the low four bits are kept',
+        '    out (0xa1), a',
+        '    ld a, 8',
+        '    out (0xa0), a',
+        '    ld a, 15',
+        '    out (0xa1), a',
+        '    ld a, 1',
+        '    out (0xa0), a',
+        '    in a, (0xa2)',
+        '    out (0x11), a',
+        '    ld a, 14        ; the joystick port reads as nothing attached',
+        '    out (0xa0), a',
+        '    in a, (0xa2)',
+        '    out (0x13), a'
+    ]
+
+    it('writes the selected registers in order and reads them back as the chip keeps them', async () => {
+        const { emulator, output, code } = withAudio([...TONE, '    halt'])
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('0FF')
+        expect(writes(output)).toEqual([0, 254, 1, 0, 8, 15])
+        expect(emulator.peripherals.audio.activity.soundsStarted).toBe(1)
+    })
+
+    it('falls silent when the program ends', async () => {
+        const { emulator, output, code } = withAudio([...TONE, '    halt'])
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        expect(output.commands.at(-1)).toEqual({ type: 'releaseChips' })
+    })
+
+    it('puts a register back on Undo, and the chip plays from the registers', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld a, 8',
+            '    out (0xa0), a',
+            '    ld a, 15',
+            '    out (0xa1), a',
+            '    ld a, 3',
+            '    out (0xa1), a',
+            '    in a, (0xa2)',
+            '    nop'
+        ])
+        await emulator.compile(100, code)
+        for (let i = 0; i < 6; i++) await emulator.step()
+        emulator.undo(2)
+        expect(output.commands.at(-1)).toEqual({
+            type: 'soundChipLoad',
+            registers: [0, 0, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0, 0, 0]
+        })
+        expect(emulator.peripherals.audio.soundChip.read()).toBe(15)
+        await emulator.step()
+        await emulator.step()
+        expect(emulator.peripherals.audio.soundChip.read()).toBe(3)
+    })
+
+    it('answers a Testcase as an interactive run does, in silence', async () => {
+        const { emulator, output, code } = withAudio([...TONE, '    halt'])
+        await emulator.compile(100, code)
+        await emulator.runTestcase(
+            {
+                input: [],
+                expectedOutput: '0FF',
+                startingRegisters: {},
+                expectedRegisters: {},
+                startingMemory: [],
+                expectedMemory: []
+            },
+            100_000
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('0FF')
+        expect(output.commands.filter((c) => c.type !== 'stopAll')).toEqual([])
+    })
+})

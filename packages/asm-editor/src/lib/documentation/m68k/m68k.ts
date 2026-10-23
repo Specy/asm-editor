@@ -42,6 +42,7 @@ import conditionCodesMarkdown from './condition-codes.md?raw'
 import exceptionsMarkdown from './exceptions.md?raw'
 import shiftDirectionsMarkdown from './shift-directions.md?raw'
 import trapsMarkdown from './traps.md?raw'
+import { synthEntries } from '../synth'
 
 /**
  * The M68K Documentation. Instructions, directives, condition codes and trap tasks come from the
@@ -426,6 +427,19 @@ function assemblerFeatures(): Chapter {
     }
 }
 
+function synth(): Chapter {
+    const href = `${BASE}/synth`
+    return {
+        id: 'synth',
+        language: 'm68k',
+        title: 'Synth',
+        href,
+        description:
+            'The memory-mapped sound chip this editor adds: eight channels of waveforms, envelopes, wavetables and Sample memory.',
+        entries: synthEntries('M68K', 'm68k', href)
+    }
+}
+
 let cached: Chapter[] | null = null
 
 /** The M68K Documentation's Chapters. */
@@ -436,6 +450,7 @@ export function chapters(): Chapter[] {
         conditionCodes(),
         shiftDirections(),
         trapTasks(),
+        synth(),
         exceptions(),
         directives(),
         assemblerFeatures()

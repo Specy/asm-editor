@@ -31,6 +31,8 @@ After a program requests sound, the **Sound** button appears in the execution do
 
 The DirectX player is the name of an EASy68K-compatible interface in this editor; it does not require Windows or a DirectX installation. It mixes WAV audio files and MIDI files, which describe notes and instruments to play.
 
+For sound the program shapes itself, waveforms and samples it computes, this editor adds the [Synth](/documentation/m68k/synth), a sound chip whose registers are memory at `$E00100`. EASy68K does not have it.
+
 Sound differs from EASy68K in these ways:
 
 - At most 64 sounds play at once, including at most 4 MIDI files. Starting another stops the oldest sound that is not looping, or the oldest loop if every sound loops. A fifth MIDI file stops the oldest MIDI file using the same rule. These limits do not change the task results.

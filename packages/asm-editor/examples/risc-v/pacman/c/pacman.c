@@ -40,6 +40,7 @@ int main(void) {
            "Move with W A S D (Z Q S D and 8 4 5 6 work too), P pauses.\n"
            "The arrow keys do not type characters, so the game cannot see them.\n");
     load_assets();
+    init_sounds();
     rng_state ^= (uint32_t)sim_time(); /* a different game every time */
     if (!rng_state) rng_state = 1;
     enter_title();

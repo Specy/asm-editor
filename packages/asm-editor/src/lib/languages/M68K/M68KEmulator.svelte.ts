@@ -41,6 +41,8 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import type { OpenedSound } from '#lib/languages/peripherals/audio/Audio.ts'
+import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
+import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '#lib/languages/synthRegisters.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
@@ -97,6 +99,11 @@ const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
  * a trap-heavy one is bounded by the slice's deadline instead (see `_runSlice`).
  */
 const M68K_INSTRUCTIONS_PER_MS = 15_000
+
+/** The Synth's block, beside EASy68K's hardware devices at $E00000. */
+const SYNTH_BASE = SYNTH_BASES.m68k
+/** The 68000's address space: 24 bits. */
+const M68K_MEMORY_SIZE = 0x100_0000
 
 const READ_CHAR_QUESTION = 'Enter a character'
 const READ_NUMBER_QUESTION = 'Enter a number'
@@ -214,7 +221,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _endPoke(): boolean {
-        return this.requireInterpreter().endPoke()
+        const interpreter = this.requireInterpreter()
+        const changed = interpreter.endPoke()
+        //a Poke into the Synth's block plays its registers as the program's own stores would
+        this.takeSynthWrites(interpreter)
+        return changed
     }
 
     _canUndo(): boolean {
@@ -244,6 +255,22 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return result.diagnostics.map((diagnostic) =>
             s68kDiagnosticToDiagnostic(diagnostic, sources)
         )
+    }
+
+    /**
+     * How the Synth reaches this Target: big-endian, and an upload reads the 68000's 24-bit address
+     * space, where an address past its 16 MB reads as 0.
+     */
+    private readonly synthBus: SynthBus = {
+        littleEndian: false,
+        read: (address, length) => {
+            const bytes = new Uint8Array(length)
+            const start = address & (M68K_MEMORY_SIZE - 1)
+            const readable = Math.min(length, M68K_MEMORY_SIZE - start)
+            const interpreter = this.interpreter
+            if (interpreter && readable > 0) bytes.set(interpreter.readMemoryBytes(start, readable))
+            return bytes
+        }
     }
 
     _compile(sources: BuildSources): CompileResult {
@@ -282,6 +309,23 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             keep_history: undoSize > 0
         })
         this.interpreter = interpreter
+        //the Synth's registers start at 0, as a chip's do at power-on, where the Core's memory
+        //starts at $FF, except where the program put code or data of its own, which is left alone;
+        //then every store into them stops the Core, which hands it over as it happens
+        //([waveform-sound.md](../../../../../../docs/design/waveform-sound.md#memory-mapped-registers))
+        const occupied = this.programInSynthBlock()
+        let free: number = SYNTH_BASE
+        for (const [start, end] of [...occupied, [SYNTH_BASE + SYNTH_BLOCK_SIZE, 0]]) {
+            if (start > free) interpreter.writeMemoryBytes(free, new Uint8Array(start - free))
+            free = Math.max(free, end)
+        }
+        if (occupied.length > 0) {
+            this.addNote({
+                tone: 'warning',
+                text: "The program puts code or data at $E00100 to $E002FF, where the Synth's registers are: those bytes are left as the program put them, and storing there plays the Synth"
+            })
+        }
+        interpreter.watchMemory(SYNTH_BASE, SYNTH_BASE + SYNTH_BLOCK_SIZE)
         this.screenInstructions = new ScreenInstructionHistory(this._peripherals.screen, undoSize)
         //a trap's output and reads are journaled under its step id, as its drawing is
         //([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
@@ -393,6 +437,24 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
     _getStackTop() {
         return BigInt(this.interpreter?.getStackTop() ?? 0)
+    }
+    /** The parts of the Synth's block the program's own code and data take, start and end, in order. */
+    private programInSynthBlock(): [number, number][] {
+        const values = this.program?.getLayoutItems() ?? new Uint32Array()
+        const parts: [number, number][] = []
+        for (let i = 0; i < values.length; i += 5) {
+            const start = Math.max(values[i], SYNTH_BASE)
+            const end = Math.min(values[i] + values[i + 1], SYNTH_BASE + SYNTH_BLOCK_SIZE)
+            if (start < end) parts.push([start, end])
+        }
+        return parts.sort((a, b) => a[0] - b[0])
+    }
+
+    /** The Synth's registers, which the memory view names and tints as a device. */
+    _getDeviceRegions() {
+        return [
+            { name: 'Synth', start: BigInt(SYNTH_BASE), end: BigInt(SYNTH_BASE + SYNTH_BLOCK_SIZE) }
+        ]
     }
     _resolveMemoryLabel(name: string) {
         const symbol = this.program?.getSymbols()[name]
@@ -535,6 +597,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //virtual clock makes that immediate (ADR 0010)
             if (wait) await this.executionController.waitFor(execution, () => wait)
         }
+        this.takeSynthWrites(interpreter)
         this.executionController.ensureCurrent(execution)
         return { terminated: interpreter.hasTerminated() }
     }
@@ -557,20 +620,23 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
         }
         const step = interpreter.undo()
+        //the Synth plays its block as the Core rewound it, a Poke's included
+        const readSynth = () => interpreter.readMemoryBytes(SYNTH_BASE, SYNTH_BLOCK_SIZE)
         //a Poke has no instruction identity, so no journal hung anything on it and each must be
         //left where it is ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
-        if (step.kind === 'poke') return
+        if (step.kind === 'poke') return this._peripherals.audio.resyncSynth(readSynth)
         this.screenInstructions?.undoAfter(step.id - 1)
         this.fileSystemSession?.undoAfter(step.id)
         this._peripherals.terminal.undoAfter(step.id - 1)
-        this._peripherals.audio.undoAfter(step.id - 1)
+        this._peripherals.audio.undoAfter(step.id - 1, readSynth)
     }
 
     /**
-     * The Core has no instruction counter and reports an exhausted limit by throwing, so the budget
-     * is both the halt limit and the only exact progress report there is: a slice that came back
-     * with `ExecutionLimit` ran all of it. Only the last slice of a run carries the user's own
-     * instruction limit, and only that one lets the error through.
+     * The Core counts the instructions it runs, so a slice's progress is the difference of two
+     * readings whatever stopped each call: a trap, a `simhalt`, a store into the Synth's block. The
+     * budget is the halt limit of every call, less what the slice has run, and an exhausted one is
+     * reported by throwing. Only the last slice of a run carries the user's own instruction limit,
+     * and only that one lets the error through.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const interpreter = this.requireInterpreter()
@@ -585,18 +651,25 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //a loop charged five instructions a frame and ran for minutes on the budget alone. The clock
         //is looked at once per trap, which is this loop's own granularity (phase 8)
         const deadline = sliceDeadline(request)
-        let instructions = 0
+        const first = interpreter.getExecutedInstructions()
+        const ran = () => interpreter.getExecutedInstructions() - first
         //every call below the first resumes the program with the program counter on an instruction
         //that has not run, so only the first may be told to skip a breakpoint on it: the Core's
         //`runWithBreakpoints` skips the instruction it starts on, and re-entering after a trap with
         //that skip on is what made the instruction after every trap unbreakable
         let startsTheRun = request.skipBreakpointAtPc
         while (!interpreter.hasTerminated()) {
-            const remaining = budget - instructions
-            if (remaining <= 0) return { reason: 'budget', instructions }
+            const remaining = budget - ran()
+            if (remaining <= 0) {
+                //a stop on the last instruction the budget allowed, answered above, and the
+                //program would run on: past the run's own limit when this slice ends it
+                if (isLastSlice)
+                    throw { type: 'ExecutionLimit', value: request.runInstructionLimit }
+                return { reason: 'budget', instructions: ran() }
+            }
             //never without progress: a slice that ran nothing ends the whole run
-            if (instructions > 0 && performance.now() >= deadline) {
-                return { reason: 'budget', instructions }
+            if (ran() > 0 && performance.now() >= deadline) {
+                return { reason: 'budget', instructions: ran() }
             }
             try {
                 if (hasBreakpoints) {
@@ -606,40 +679,48 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     startsTheRun = false
                     //here we might have reached a breakpoint. It is paused if the status is running
                     if (interpreter.getStatus() === CoreInterpreterStatus.Running) {
-                        return { reason: 'breakpoint', instructions }
+                        return { reason: 'breakpoint', instructions: ran() }
                     }
                 } else {
                     interpreter.runWithLimit(remaining)
                 }
             } catch (error) {
                 if (!isExecutionLimitError(error)) throw error
-                if (!isLastSlice) return { reason: 'budget', instructions: budget }
+                if (!isLastSlice) return { reason: 'budget', instructions: ran() }
                 //the Core names the halt limit it was given, which is this slice's share of the
                 //run; the user set the whole run's limit and that is the number they recognize
                 throw { type: 'ExecutionLimit', value: request.runInstructionLimit }
             }
-            //an interrupt is one instruction of progress: without it a program that does nothing but
-            //trap would never reach the run's limit, which is what the old unaccounted loop did
-            instructions += 1
             //`simhalt` is a resumable program pause. End this Run here; the Core advances past the
             //directive before pausing, so a later Run or Step continues with the next instruction.
             if (interpreter.getStatus() === CoreInterpreterStatus.Paused) {
-                return { reason: 'paused', instructions }
+                return { reason: 'paused', instructions: ran() }
             }
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
             //a Delay is program time, not execution: the scheduler awaits it between slices, so the
             //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
-            if (wait) return { reason: 'wait', instructions, wait }
+            if (wait) return { reason: 'wait', instructions: ran(), wait }
         }
-        return { reason: 'terminated', instructions }
+        return { reason: 'terminated', instructions: ran() }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
         const interpreter = this.requireInterpreter()
         const limit = toHaltLimit(haltLimit)
         const execution = this.executionController.capture()
+        const first = interpreter.getExecutedInstructions()
         while (!interpreter.hasTerminated()) {
-            interpreter.runWithLimit(limit)
+            //one limit for the whole Testcase, however often a trap or a store into the Synth's
+            //block stops the Core: a program looping on either would otherwise never end
+            const remaining = limit - (interpreter.getExecutedInstructions() - first)
+            if (remaining <= 0) throw { type: 'ExecutionLimit', value: limit }
+            try {
+                interpreter.runWithLimit(remaining)
+            } catch (error) {
+                //the Core names what was left of the limit; the Testcase's is the one it set
+                if (isExecutionLimitError(error)) throw { type: 'ExecutionLimit', value: limit }
+                throw error
+            }
             //`simhalt` pauses rather than terminating, and that is where an interactive Run stops.
             //A Testcase has to observe the same state: resuming past it ran whatever follows the
             //halt — a subroutine in the usual EASy68K layout — and asserted against registers the
@@ -654,9 +735,30 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     /**
      * Answers whatever the Core stopped for, and hands back the program-requested wait when the trap
-     * was a Delay, for the caller to await where it belongs.
+     * was a Delay, for the caller to await where it belongs. A store into the Synth's block stops
+     * the Core too, and answering a trap can write there, so the Synth is handed its writes after
+     * either.
      */
     private async handleInterpreterInterruption(
+        interpreter: Interpreter,
+        execution: ExecutionGeneration
+    ): Promise<Promise<void> | undefined> {
+        const wait = await this.answerInterruption(interpreter, execution)
+        this.takeSynthWrites(interpreter)
+        return wait
+    }
+
+    /** Hands the Synth the stores the Core watched in its block, in the order they were made. */
+    private takeSynthWrites(interpreter: Interpreter): void {
+        const writes = interpreter.takeWatchedWrites()
+        if (writes.length === 0) return
+        const synth = this._peripherals.audio.synth
+        for (const write of writes) {
+            synth.store(write.address - SYNTH_BASE, write.size, write.value, this.synthBus)
+        }
+    }
+
+    private async answerInterruption(
         interpreter: Interpreter,
         execution: ExecutionGeneration
     ): Promise<Promise<void> | undefined> {

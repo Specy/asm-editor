@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { synthEntries } from '#lib/documentation/synth.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { MIPS } from '@specy/mips'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
@@ -2337,5 +2338,188 @@ describe('MIPS MIDI services', () => {
         expect(notes(output)).toEqual([[60, 5000, 0, 100]])
         emulator.undo(1)
         expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+    })
+})
+
+describe('MIPS Synth', () => {
+    it('runs the Synth chapter’s example, a note that starts and fades', async () => {
+        const overview = synthEntries('MIPS', 'mips', '/documentation')[0]
+        const example = /```\w+\n([\s\S]*?)```/.exec(overview.searchText)![1]
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + example, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        expect(emulator.errors).toEqual([])
+        const writes = output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+        const gates = writes.filter((value, i) => i % 2 === 1 && writes[i - 1] === 0x10)
+        expect(gates).toEqual([1, 0])
+    })
+
+    const synthWrites = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+    const uploads = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synthUpload' ? [[c.offset, ...c.bytes]] : []))
+    /** Channel 0 at 440 Hz and volume 100 with its gate on, then the frequency read back and printed. */
+    const TONE = `        li      $t0, 0xffff0100
+        li      $t1, 440
+        sh      $t1, 0($t0)
+        li      $t1, 100
+        sb      $t1, 0x12($t0)
+        li      $t1, 1
+        sb      $t1, 0x10($t0)
+        lhu     $a0, 0($t0)
+        li      $v0, 1
+        syscall
+`
+
+    it('hands every store in the block to the Synth, which the program reads back', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + TONE + EXIT, { audio: new Audio({ output }) })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('440')
+        expect(synthWrites(output)).toEqual([0, 440, 0x12, 100, 0x10, 1])
+        expect(output.commands.at(-1)).toEqual({ type: 'releaseChips' })
+    })
+
+    it('names its block as a device region in the memory view, beside the MMIO words', async () => {
+        const emulator = await build(DATA + TONE + EXIT, { audio: new Audio() })
+        expect(
+            emulator.memoryRegions
+                .filter((region) => region.kind === 'device')
+                .map((region) => [region.name, region.start, region.end])
+        ).toEqual([
+            ['MMIO', 0xffff0000n, 0xffff0010n],
+            ['Synth', 0xffff0100n, 0xffff0300n],
+            ['Bitmap display', 0x10010000n, 0x10010100n]
+        ])
+    })
+
+    it('is off while the bitmap display covers its block, at the memory map base', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + TONE + EXIT, {
+            audio: new Audio({ output }),
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 128, height: 128 }
+        })
+        expect(emulator.errors).toEqual([])
+        expect(synthWrites(output)).toEqual([])
+        expect(emulator.memoryRegions.map((region) => region.name)).not.toContain('Synth')
+    })
+
+    it('plays a Poke into its registers at once, and starts no upload from one', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(DATA + '        nop\n        nop\n' + EXIT, {
+            audio: new Audio({ output })
+        })
+        await emulator.step()
+        //a length, then the start register, as a program would start an upload
+        expect(emulator.pokeMemory(0xffff0284n, new Uint8Array([4, 0]))).toBe(true)
+        expect(emulator.pokeMemory(0xffff0100n, new Uint8Array([0xb8, 0x01]))).toBe(true)
+        expect(emulator.pokeMemory(0xffff0288n, new Uint8Array([1]))).toBe(true)
+        //heard while the program waits, without a Run or a Step: the Poke writes a byte at a time,
+        //and its last write leaves 440
+        expect(synthWrites(output).slice(-2)).toEqual([0, 440])
+        expect(uploads(output)).toEqual([])
+    })
+
+    it('decodes a word store into the registers it covers', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            DATA +
+                `        li      $t0, 0xffff0100
+        li      $t1, 0x08000370
+        sw      $t1, 0x20($t0)
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(synthWrites(output)).toEqual([0x20, 0x370, 0x22, 0x800])
+    })
+
+    it('keeps a gate pulsed off and on, in order', async () => {
+        const output = new RecordingAudioOutput()
+        await run(
+            DATA +
+                `        li      $t0, 0xffff0100
+        li      $t1, 1
+        sb      $t1, 0x10($t0)
+        sb      $zero, 0x10($t0)
+        sb      $t1, 0x10($t0)
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(synthWrites(output)).toEqual([0x10, 1, 0x10, 0, 0x10, 1])
+    })
+
+    it('copies an upload when it is started, before the program changes its buffer', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            `        .data
+wave:   .byte   1, 2, 3, 4
+        .text
+main:   li      $t0, 0xffff0100
+        la      $t1, wave
+        sw      $t1, 0x180($t0)
+        li      $t2, 4
+        sh      $t2, 0x184($t0)
+        li      $t2, 100
+        sh      $t2, 0x186($t0)
+        sb      $zero, 0x188($t0)
+        li      $t2, 9
+        sb      $t2, 0($t1)
+` + EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(uploads(output)).toEqual([[100, 1, 2, 3, 4]])
+    })
+
+    it('plays its rewound registers after an Undo, without uploading again', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(
+            `        .data
+wave:   .byte   1, 2
+        .text
+main:   li      $t0, 0xffff0100
+        la      $t1, wave
+        sw      $t1, 0x180($t0)
+        li      $t2, 2
+        sh      $t2, 0x184($t0)
+        sb      $zero, 0x188($t0)
+        li      $t1, 100
+        sb      $t1, 0x12($t0)
+        li      $t1, 1
+        sb      $t1, 0x10($t0)
+        sb      $zero, 0x10($t0)
+        nop
+` + EXIT,
+            { audio: new Audio({ output }) }
+        )
+        const gates = () =>
+            synthWrites(output).filter((value, i, all) => i % 2 === 1 && all[i - 1] === 0x10)
+        for (let i = 0; i < 20 && gates().length < 2; i++) await emulator.step()
+        expect(gates()).toEqual([1, 0])
+        expect(uploads(output)).toHaveLength(1)
+        emulator.undo(1)
+        //every register again, the gate back on among them
+        expect(gates()).toEqual([1, 0, 1])
+        expect(uploads(output)).toHaveLength(1)
+        expect(emulator.peripherals.audio.activity.playingForMs).toBe(Infinity)
+    })
+
+    it('plays nothing in a Testcase, whose reads still see the registers', async () => {
+        const output = new RecordingAudioOutput()
+        const code = DATA + TONE + EXIT
+        const emulator = await build(code, { audio: new Audio({ output }) })
+        const results = await emulator.test(
+            code,
+            [{ ...SCREEN_TESTCASE, expectedOutput: '440' }],
+            INSTRUCTION_LIMIT
+        )
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(synthWrites(output)).toEqual([])
     })
 })

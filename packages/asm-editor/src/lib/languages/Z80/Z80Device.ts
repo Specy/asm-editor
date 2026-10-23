@@ -280,7 +280,11 @@ export class Z80Device {
             case 'NOTE_INSTRUMENT':
             case 'NOTE_VOLUME':
             case 'NOTE_DURATION':
+            case 'SOUND_CHIP_SELECT':
+            case 'SOUND_CHIP_WRITE':
                 return Z80_UNCONNECTED_PORT_VALUE
+            case 'SOUND_CHIP_READ':
+                return this.host.audio().soundChip.read()
         }
     }
 
@@ -367,6 +371,12 @@ export class Z80Device {
             case 'NOTE_DURATION':
                 //16 bits, the high byte from B as on the WORD port
                 this.setNoteRegister('noteDuration', (parameterOf(busAddress) << 8) | byte)
+                return
+            case 'SOUND_CHIP_SELECT':
+                this.host.audio().soundChip.select(byte)
+                return
+            case 'SOUND_CHIP_WRITE':
+                this.host.audio().soundChip.write(byte)
                 return
             default:
                 //the read-only ports of the Screen, Keyboard, Mouse and time groups: a write is an

@@ -28,6 +28,24 @@ export type AudioCommand =
     | { type: 'sound'; voice: number; sound: SoundData; loop: boolean }
     | { type: 'stop'; voice: number }
     | { type: 'stopAll' }
+    | ChipCommand
+
+/**
+ * What the **Synth** and the **Sound chip** are told, in the order the program did it. A chip is a
+ * state, not a recording, so an output that is not ready yet keeps these and plays them once it is,
+ * where a Note sent too early is dropped.
+ */
+export type ChipCommand =
+    /** Register writes as pairs of an offset in the block and its value, decoded from the Target's byte order. */
+    | { type: 'synth'; writes: number[] }
+    /** Bytes copied into Sample memory from `offset`, wrapping past its end. */
+    | { type: 'synthUpload'; offset: number; bytes: Uint8Array }
+    /** Register writes as pairs of a register number and its value. */
+    | { type: 'soundChip'; writes: number[] }
+    /** Registers 0 to 13 as an Undo left them; only those that differ are written again. */
+    | { type: 'soundChipLoad'; registers: number[] }
+    /** A program's own end: every Synth gate off and every Sound chip volume to 0. */
+    | { type: 'releaseChips' }
 
 export interface AudioOutput {
     /**

@@ -22,6 +22,12 @@ import {
     UNIT_SIZE_MIN
 } from '#lib/languages/mars/marsDisplay.ts'
 import { MARS_RECEIVER_CONTROL } from '#lib/languages/mars/MarsDevices.ts'
+import {
+    SYNTH_BASES,
+    SYNTH_CHANNEL_REGISTERS,
+    SYNTH_UPLOAD_REGISTERS,
+    SYNTH_WAVEFORMS
+} from '#lib/languages/synthRegisters.ts'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -448,6 +454,25 @@ function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
     ].join('\n')
 }
 
+/**
+ * The Synth, the same chip for MIPS, RISC-V and the M68K at their own base: generated from the
+ * register model the device reads, so the agent writes exactly the registers that exist.
+ */
+function SYNTH_INFORMATION(base: string, half: string, byte: string, wait: string): string {
+    const registers = [...SYNTH_CHANNEL_REGISTERS, ...SYNTH_UPLOAD_REGISTERS]
+        .map(
+            (register) =>
+                `0x${register.offset.toString(16)} ${register.name.toLowerCase().replaceAll('_', ' ')} (${register.bytes * 8} bits: ${register.description})`
+        )
+        .join('; ')
+    return [
+        `- Waveform sound is the Synth, an extension of this editor that the reference simulator does not have: eight channels whose registers are memory from ${base}, written with plain stores (${half} for a 16-bit register, ${byte} for an 8-bit one) in the target's byte order. Channel n's 32 bytes are at ${base} + n * 0x20; the upload registers are at ${base} + 0x180.`,
+        `- Registers, as offsets: ${registers}.`,
+        `- Waveforms: ${SYNTH_WAVEFORMS.map((waveform, value) => `${value} ${waveform}`).join(', ')}. The frequency register is in Hz (440 is A4), or samples a second for the sample waveform. Set waveform, volume, sustain and the envelope, then turn the gate (control bit 0) on to start a note and off to release it; to strike a note again, turn the gate off and on. A note sounds until its gate goes off, so pace a melody with ${wait}. Each channel's wavetable is 16 bytes at ${base} + 0x100 + n * 0x10, 32 four-bit samples, high half first. Sample memory is 64 KB of signed 8-bit samples, filled by an upload, which copies when its start register is written.`,
+        "- The registers read back what was written. The program's end releases every gate; a testcase is silent."
+    ].join('\n')
+}
+
 const EMULATOR_INFORMATION = `# Emulator Information
 The editor supports projects with assembly, C/C++ sources, local headers and data files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse, and sound. There are no imported ROMs and no produced binaries.
 
@@ -459,17 +484,20 @@ The editor supports projects with assembly, C/C++ sources, local headers and dat
 - All I/O is "trap #15" with the task number in D0.B, EASy68K's interface. Text and graphics share one window: what a program prints is drawn on the screen at the text cursor as well as appended to the console transcript. The screen starts at 640 by 480 and only the program resizes it, with task 33.
 - These tasks stop the program with an error, so do not use them: ${M68K_REJECTED_TRAP_INFORMATION}. Task 92's bitwise drawing modes (0, 1, 3 and 5 to 15) stop it too.
 ${M68K_TRAP_INFORMATION}
+${SYNTH_INFORMATION(`0x${SYNTH_BASES.m68k.toString(16).toUpperCase()} ($${SYNTH_BASES.m68k.toString(16).toUpperCase()})`, 'move.w', 'move.b', 'task 23 (delay)')}
 
 ## MIPS
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - .data starts at 0x10010000. $sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('$v0', '$a0')}
+${SYNTH_INFORMATION(`0x${SYNTH_BASES.mips.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
 
 ## RISC-V
 - Uses the RARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - RISC-V is 32-bit; RISC-V-64 is 64-bit.
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('a7', 'a0')}
+${SYNTH_INFORMATION(`0x${SYNTH_BASES.riscv.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.

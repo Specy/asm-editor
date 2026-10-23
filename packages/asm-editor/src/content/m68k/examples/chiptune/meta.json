@@ -1,0 +1,6 @@
+{
+    "name": "Chiptune",
+    "description": "Play a short tune on the Synth: a pulse lead, a triangle bass and noise drums on three channels, stepped by a table in memory.",
+    "order": 26,
+    "topic": "chiptune"
+}

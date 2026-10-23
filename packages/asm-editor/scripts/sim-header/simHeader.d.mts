@@ -44,6 +44,26 @@ export type SimHeaderData = {
         staticData: number
         staticDataEnd: number
     }
+    /** The Synth's block, from `synthRegisters.ts`. */
+    synth: {
+        base: number
+        channelCount: number
+        channelSize: number
+        channelRegisters: readonly SimSynthRegister[]
+        uploadRegisters: readonly SimSynthRegister[]
+        waveforms: readonly string[]
+        wavetables: number
+        wavetableSize: number
+        gate: number
+        loop: number
+    }
+}
+
+export type SimSynthRegister = {
+    readonly name: string
+    readonly offset: number
+    readonly bytes: number
+    readonly description: string
 }
 
 export const SIM_HEADER_DIRECTORY: string

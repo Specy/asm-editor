@@ -57,6 +57,18 @@ import { parseRuntimeSourcePath } from './runtimeLibrary'
  * the device constants and the Cores.
  */
 
+import {
+    SYNTH_BASES,
+    SYNTH_CHANNEL_COUNT,
+    SYNTH_CHANNEL_REGISTERS,
+    SYNTH_CHANNEL_SIZE,
+    SYNTH_GATE,
+    SYNTH_LOOP,
+    SYNTH_UPLOAD_REGISTERS,
+    SYNTH_WAVEFORMS,
+    SYNTH_WAVETABLE_SIZE,
+    SYNTH_WAVETABLES
+} from '#lib/languages/synthRegisters.ts'
 const address = (label: string) =>
     MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label)!.address
 const DATA: Omit<SimHeaderData, 'syscalls'> = {
@@ -76,6 +88,18 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
         unitMax: UNIT_SIZE_MAX,
         staticData: address('static data'),
         staticDataEnd: 0x10400000
+    },
+    synth: {
+        base: SYNTH_BASES.mips,
+        channelCount: SYNTH_CHANNEL_COUNT,
+        channelSize: SYNTH_CHANNEL_SIZE,
+        channelRegisters: SYNTH_CHANNEL_REGISTERS,
+        uploadRegisters: SYNTH_UPLOAD_REGISTERS,
+        waveforms: SYNTH_WAVEFORMS,
+        wavetables: SYNTH_WAVETABLES,
+        wavetableSize: SYNTH_WAVETABLE_SIZE,
+        gate: SYNTH_GATE,
+        loop: SYNTH_LOOP
     }
 }
 const TARGETS = Object.keys(SIM_HEADER_TARGETS) as SimHeaderTargetName[]

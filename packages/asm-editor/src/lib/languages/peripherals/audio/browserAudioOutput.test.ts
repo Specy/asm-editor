@@ -2,9 +2,26 @@ import { describe, expect, it } from 'vite-plus/test'
 import type { AudioCommand, SoundData } from './AudioOutput'
 import { PageAudio } from './audioContext'
 import { createBrowserAudioOutput, SharedEngine } from './browserAudioOutput'
+import type { ChipMessage } from './chips/chipMessages'
+import type { ChipNode } from './chips/chipNode'
 import { makeMidi, makeWav } from './soundFixtures'
 import type { SynthesizerEngine } from './synthesizerEngine'
 import { FakeAudioContext, FakeEngine } from './webAudioFakes'
+
+/** A chip node that keeps what it is posted, made when the test lets it load. */
+class FakeChipNode implements ChipNode {
+    readonly messages: ChipMessage[] = []
+    onReport: ChipNode['onReport'] = null
+    disposed = false
+
+    post(message: ChipMessage): void {
+        this.messages.push(message)
+    }
+
+    dispose(): void {
+        this.disposed = true
+    }
+}
 
 function setup(
     options: { state?: AudioContextState; load?: () => Promise<SynthesizerEngine> } = {}
@@ -17,8 +34,16 @@ function setup(
         loads++
         return options.load?.() ?? Promise.resolve(engine)
     })
-    const output = () => createBrowserAudioOutput({ page, engine: shared })
-    return { context, page, engine, output, loads: () => loads }
+    const chipNodes: { node: FakeChipNode; load: () => Promise<void> }[] = []
+    const chips = () => {
+        const node = new FakeChipNode()
+        let load!: () => void
+        const loaded = new Promise<ChipNode>((resolve) => (load = () => resolve(node)))
+        chipNodes.push({ node, load: () => (load(), loaded.then(() => {})) })
+        return loaded
+    }
+    const output = () => createBrowserAudioOutput({ page, engine: shared, chips })
+    return { context, page, engine, output, loads: () => loads, chipNodes }
 }
 
 const wav: SoundData = { id: 1, kind: 'wav', bytes: makeWav({ lengthMs: 500 }) }
@@ -158,5 +183,65 @@ describe('autoplay', () => {
         audio.send([note(2)])
         expect(engine.voices).toHaveLength(1)
         expect(context.state).toBe('running')
+    })
+})
+
+describe('chips', () => {
+    const write = (register: number, value: number): AudioCommand => ({
+        type: 'synth',
+        writes: [register, value]
+    })
+
+    it('keeps what is sent before the node runs, and posts it in order once it does', async () => {
+        const { output, chipNodes } = setup()
+        const audio = output()
+        audio.send([write(0x10, 1)])
+        audio.send([write(0x10, 0), { type: 'soundChip', writes: [8, 15] }])
+        expect(chipNodes).toHaveLength(1)
+        await chipNodes[0].load()
+        audio.send([write(0x12, 100)])
+        expect(chipNodes[0].node.messages).toEqual([
+            {
+                type: 'commands',
+                commands: [write(0x10, 1), write(0x10, 0), { type: 'soundChip', writes: [8, 15] }]
+            },
+            { type: 'commands', commands: [write(0x12, 100)] }
+        ])
+    })
+
+    it('disposes of the node on Stop, and makes a new one for the next program', async () => {
+        const { output, chipNodes } = setup()
+        const audio = output()
+        audio.send([write(0x10, 1)])
+        await chipNodes[0].load()
+        audio.send([{ type: 'stopAll' }])
+        expect(chipNodes[0].node.disposed).toBe(true)
+        audio.send([write(0x10, 1)])
+        expect(chipNodes).toHaveLength(2)
+    })
+
+    it('disposes of a node that loads after the Stop, posting nothing to it', async () => {
+        const { output, chipNodes } = setup()
+        const audio = output()
+        audio.send([write(0x10, 1)])
+        audio.send([{ type: 'stopAll' }])
+        await chipNodes[0].load()
+        expect(chipNodes[0].node.disposed).toBe(true)
+        expect(chipNodes[0].node.messages).toEqual([])
+    })
+
+    it('keeps the chips’ state while the browser holds the context back', async () => {
+        const { output, chipNodes } = setup({ state: 'suspended' })
+        const audio = output()
+        audio.send([write(0x10, 1)])
+        await chipNodes[0].load()
+        expect(chipNodes[0].node.messages).toHaveLength(1)
+    })
+
+    it('gives each output a node of its own', () => {
+        const { output, chipNodes } = setup()
+        output().send([write(0x10, 1)])
+        output().send([write(0x10, 1)])
+        expect(chipNodes).toHaveLength(2)
     })
 })

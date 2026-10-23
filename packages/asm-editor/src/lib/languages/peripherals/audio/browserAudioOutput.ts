@@ -1,5 +1,6 @@
-import type { AudioCommand, AudioNeed, AudioOutput, SoundData } from './AudioOutput'
+import type { AudioCommand, AudioNeed, AudioOutput, ChipCommand, SoundData } from './AudioOutput'
 import { pageAudio, type AudioRoute, type PageAudio } from './audioContext'
+import type { ChipNode } from './chips/chipNode'
 import { inspectSoundFile } from './soundFiles'
 import type { EngineVoice, SynthesizerEngine } from './synthesizerEngine'
 
@@ -17,6 +18,10 @@ import type { EngineVoice, SynthesizerEngine } from './synthesizerEngine'
  *   into one note in the Log.
  * - A WAV that will not decode plays nothing, without rejecting: a rejection tells Audio the bank did
  *   not load, which would silence the Notes too.
+ * - **Chips**, the Synth and the Sound chip, play on a worklet node of the output's own, made on
+ *   their first command ([the plan](../../../../../../../docs/design/waveform-sound-plan.md),
+ *   decisions 5 and 6). A chip is a state, so what is sent before the node runs is kept and played
+ *   once it does, and nothing waits for it; Stop, Build and dispose dispose of the node.
  */
 
 /** The page's synthesizer engine, loaded on the first need for it and shared by every output. */
@@ -45,13 +50,22 @@ export type BrowserAudioOptions = {
     page?: PageAudio
     /** The page's synthesizer by default. */
     engine?: SharedEngine
+    /** Makes the chips' node; the worklet's by default. */
+    chips?: (route: AudioRoute) => Promise<ChipNode>
 }
+
+const createChipNode = async (route: AudioRoute): Promise<ChipNode> =>
+    (await import('./chips/chipNode')).createChipNode(route)
 
 /** How many decoded WAVs an output keeps; one played after it was pushed out is decoded again. */
 const DECODED_KEPT = 32
 
 export function createBrowserAudioOutput(options: BrowserAudioOptions = {}): AudioOutput {
-    return new BrowserAudioOutput(options.page ?? pageAudio(), options.engine ?? pageEngine)
+    return new BrowserAudioOutput(
+        options.page ?? pageAudio(),
+        options.engine ?? pageEngine,
+        options.chips ?? createChipNode
+    )
 }
 
 type Decoded = {
@@ -67,10 +81,12 @@ class BrowserAudioOutput implements AudioOutput {
     private readonly voices = new Map<number, EngineVoice>()
     /** Decoded WAVs by `SoundData.id`, the least recently used first. */
     private readonly decoded = new Map<number, Decoded>()
+    private chips: ChipVoice | null = null
 
     constructor(
         private readonly page: PageAudio,
-        private readonly engine: SharedEngine
+        private readonly engine: SharedEngine,
+        private readonly makeChips: (route: AudioRoute) => Promise<ChipNode>
     ) {}
 
     /** Whether anything this output started may still be heard; forgets what cannot. */
@@ -99,6 +115,7 @@ class BrowserAudioOutput implements AudioOutput {
         const route = this.page.open()
         if (route === null) return
         let audible: boolean | undefined
+        let chips: ChipCommand[] = []
         for (const command of commands) {
             switch (command.type) {
                 case 'note':
@@ -119,8 +136,19 @@ class BrowserAudioOutput implements AudioOutput {
                 case 'stopAll':
                     for (const voice of this.voices.values()) voice.stop(true)
                     this.voices.clear()
+                    chips = []
+                    this.chips?.dispose()
+                    this.chips = null
                     break
+                default:
+                    chips.push(command)
             }
+        }
+        if (chips.length > 0) {
+            const voice = (this.chips ??= new ChipVoice(this.makeChips(route)))
+            voice.send(chips)
+            //unlike a Note, a chip's state is kept while the browser holds the context back
+            this.page.use(voice.sounding)
         }
     }
 
@@ -172,6 +200,46 @@ class BrowserAudioOutput implements AudioOutput {
             this.decoded.delete(id)
         }
         return decoded
+    }
+}
+
+/**
+ * An output's chips: the commands sent before the node runs, then the node. A node that will not
+ * load plays nothing, and the program never notices.
+ */
+class ChipVoice {
+    private node: ChipNode | null = null
+    private pending: ChipCommand[] | null = []
+    private audible = false
+    private disposed = false
+
+    constructor(node: Promise<ChipNode>) {
+        node.then(
+            (node) => {
+                if (this.disposed) return node.dispose()
+                this.node = node
+                node.onReport = (report) => (this.audible = report.audible)
+                node.post({ type: 'commands', commands: this.pending ?? [] })
+                this.pending = null
+            },
+            () => this.dispose()
+        )
+    }
+
+    send(commands: ChipCommand[]): void {
+        if (this.disposed) return
+        if (this.pending === null) this.node?.post({ type: 'commands', commands })
+        else for (const command of commands) this.pending.push(command)
+    }
+
+    /** Whether the chips may be heard: while loading, and while the worklet says so. */
+    readonly sounding = (): boolean => !this.disposed && (this.pending !== null || this.audible)
+
+    dispose(): void {
+        this.disposed = true
+        this.pending = null
+        this.node?.dispose()
+        this.node = null
     }
 }
 

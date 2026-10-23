@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { synthEntries } from '#lib/documentation/synth.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { RISCV } from '@specy/risc-v'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
@@ -1010,19 +1011,42 @@ describe('the RISC-V examples', () => {
             }
             //the title, once the Files are read: PUSH SPACE in orange from tile 9 of row 14
             await runUntil(() => at(72, 112) === 0xffb852)
-            const notes = () =>
-                output.commands.flatMap((c) =>
-                    c.type === 'note' ? [[c.pitch, c.durationMs, c.instrument, c.volume]] : []
-                )
-            //the title is silent: the sound starts with a game
-            expect(notes()).toEqual([])
-            return { keyboard, at, runUntil, notes }
+            /**
+             * What the game tells the Synth's three channels, frame by frame: each frame starts
+             * with channel 1's volume, and ends with what every channel plays, its Hz and volume.
+             */
+            const frames = () => {
+                const state = [0, 1, 2].map(() => [0, 0])
+                const frames: number[][][] = []
+                for (const command of output.commands) {
+                    if (command.type !== 'synth') continue
+                    for (let i = 0; i < command.writes.length; i += 2) {
+                        const [register, value] = [command.writes[i]!, command.writes[i + 1]!]
+                        if (register >= 0x100) continue
+                        if (register === 0x12 && state.some(([, volume]) => volume)) {
+                            frames.push(state.map((channel) => [...channel]))
+                        }
+                        const channel = state[register >> 5]!
+                        if ((register & 0x1f) === 0x00) channel[0] = value
+                        if ((register & 0x1f) === 0x12) channel[1] = value
+                    }
+                }
+                return frames
+            }
+            //the title is silent: the sound starts with a game, and it is all the Synth's
+            expect(frames()).toEqual([])
+            expect(output.commands.some((command) => command.type === 'note')).toBe(false)
+            return { keyboard, at, runUntil, frames }
         }
 
-        /** The start music's first chord: C on piano for the bass, and the tune's C on timpani. */
-        const FIRST_CHORD = [
-            [48, 136, 0, 106],
-            [72, 68, 47, 127]
+        /**
+         * The start music's first frame, as the arcade's chip played it: the bass's C at 67 Hz,
+         * already fading, and the tune's C at 539 Hz, three octaves up.
+         */
+        const FIRST_FRAME = [
+            [67, 112],
+            [539, 120],
+            [0, 0]
         ]
 
         it('is the folder, packed, with its two Programs', () => {
@@ -1054,7 +1078,7 @@ describe('the RISC-V examples', () => {
         })
 
         it('plays the assembly version, reading its pictures from its Files', async () => {
-            const { keyboard, at, runUntil, notes } = await toTitle('assembly/main.s')
+            const { keyboard, at, runUntil, frames } = await toTitle('assembly/main.s')
             //every lit pixel of maze.bmp, a 24 bit bottom-up BMP, is on the Screen under the score
             const bmp = readFileSync(`${folder}/assets/maze.bmp`)
             const pixels = bmp.readUInt32LE(10)
@@ -1073,17 +1097,17 @@ describe('the RISC-V examples', () => {
             keyboard.typeText(' ')
             await runUntil(() => at(111, 211) === 0xffff00)
             expect(at(88, 160)).toBe(0xffff00)
-            //with the start music, played with ecall 31
-            expect(notes().slice(0, 2)).toEqual(FIRST_CHORD)
+            //with the start music, played on the Synth with stores
+            expect(frames()[0]).toEqual(FIRST_FRAME)
         }, 60_000)
 
         it('plays the C version from the assembly it comes with', async () => {
-            const { keyboard, at, runUntil, notes } = await toTitle('c/pacman.c.riscv')
+            const { keyboard, at, runUntil, frames } = await toTitle('c/pacman.c.riscv')
             keyboard.typeText(' ')
             await runUntil(() => at(111, 211) === 0xffff00)
             expect(at(88, 160)).toBe(0xffff00)
-            //with the start music, played with sim_midi_out
-            expect(notes().slice(0, 2)).toEqual(FIRST_CHORD)
+            //with the start music, played on the Synth through SIM_SYNTH16 and SIM_SYNTH8
+            expect(frames()[0]).toEqual(FIRST_FRAME)
         }, 60_000)
     })
 
@@ -2488,5 +2512,148 @@ describe('RISC-V MIDI services', () => {
         expect(notes(output)).toEqual([[60, 5000, 0, 100]])
         emulator.undo(1)
         expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+    })
+})
+
+describe('RISC-V Synth', () => {
+    it('runs the Synth chapter’s example, a note that starts and fades', async () => {
+        const overview = synthEntries('RISC-V', 'risc-v', '/documentation')[0]
+        const example = /```\w+\n([\s\S]*?)```/.exec(overview.searchText)![1]
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + example, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        expect(emulator.errors).toEqual([])
+        const writes = output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+        const gates = writes.filter((value, i) => i % 2 === 1 && writes[i - 1] === 0x10)
+        expect(gates).toEqual([1, 0])
+    })
+
+    const synthWrites = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+    const uploads = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synthUpload' ? [[c.offset, ...c.bytes]] : []))
+    /** Channel 0 at 440 Hz and volume 100 with its gate on, then the frequency read back and printed. */
+    const TONE = `        li      t0, 0xffff0100
+        li      t1, 440
+        sh      t1, 0(t0)
+        li      t1, 100
+        sb      t1, 0x12(t0)
+        li      t1, 1
+        sb      t1, 0x10(t0)
+        lhu     a0, 0(t0)
+        li      a7, 1
+        ecall
+`
+
+    it('hands every store in the block to the Synth, which the program reads back', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + TONE + EXIT, { audio: new Audio({ output }) })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('440')
+        expect(synthWrites(output)).toEqual([0, 440, 0x12, 100, 0x10, 1])
+        expect(output.commands.at(-1)).toEqual({ type: 'releaseChips' })
+    })
+
+    it('decodes a word store into the registers it covers', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            DATA +
+                `        li      t0, 0xffff0100
+        li      t1, 0x08000370
+        sw      t1, 0x20(t0)
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(synthWrites(output)).toEqual([0x20, 0x370, 0x22, 0x800])
+    })
+
+    it('keeps a gate pulsed off and on, in order', async () => {
+        const output = new RecordingAudioOutput()
+        await run(
+            DATA +
+                `        li      t0, 0xffff0100
+        li      t1, 1
+        sb      t1, 0x10(t0)
+        sb      zero, 0x10(t0)
+        sb      t1, 0x10(t0)
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(synthWrites(output)).toEqual([0x10, 1, 0x10, 0, 0x10, 1])
+    })
+
+    it('copies an upload when it is started, before the program changes its buffer', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            `        .data
+wave:   .byte   1, 2, 3, 4
+        .text
+main:   li      t0, 0xffff0100
+        la      t1, wave
+        sw      t1, 0x180(t0)
+        li      t2, 4
+        sh      t2, 0x184(t0)
+        li      t2, 100
+        sh      t2, 0x186(t0)
+        sb      zero, 0x188(t0)
+        li      t2, 9
+        sb      t2, 0(t1)
+` + EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(uploads(output)).toEqual([[100, 1, 2, 3, 4]])
+    })
+
+    it('plays its rewound registers after an Undo, without uploading again', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(
+            `        .data
+wave:   .byte   1, 2
+        .text
+main:   li      t0, 0xffff0100
+        la      t1, wave
+        sw      t1, 0x180(t0)
+        li      t2, 2
+        sh      t2, 0x184(t0)
+        sb      zero, 0x188(t0)
+        li      t1, 100
+        sb      t1, 0x12(t0)
+        li      t1, 1
+        sb      t1, 0x10(t0)
+        sb      zero, 0x10(t0)
+        nop
+` + EXIT,
+            { audio: new Audio({ output }) }
+        )
+        const gates = () =>
+            synthWrites(output).filter((value, i, all) => i % 2 === 1 && all[i - 1] === 0x10)
+        for (let i = 0; i < 20 && gates().length < 2; i++) await emulator.step()
+        expect(gates()).toEqual([1, 0])
+        expect(uploads(output)).toHaveLength(1)
+        emulator.undo(1)
+        //every register again, the gate back on among them
+        expect(gates()).toEqual([1, 0, 1])
+        expect(uploads(output)).toHaveLength(1)
+        expect(emulator.peripherals.audio.activity.playingForMs).toBe(Infinity)
+    })
+
+    it('plays nothing in a Testcase, whose reads still see the registers', async () => {
+        const output = new RecordingAudioOutput()
+        const code = DATA + TONE + EXIT
+        const emulator = await build(code, { audio: new Audio({ output }) })
+        const results = await emulator.test(
+            code,
+            [{ ...SCREEN_TESTCASE, expectedOutput: '440' }],
+            INSTRUCTION_LIMIT
+        )
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(synthWrites(output)).toEqual([])
     })
 })

@@ -227,18 +227,32 @@ export const Z80_PORTS = {
     /** The volume of the next Notes, 0 to 127. */
     NOTE_VOLUME: 0x63,
     /** The duration of the next Notes in milliseconds: B the high byte, the written value the low. */
-    NOTE_DURATION: 0x64
+    NOTE_DURATION: 0x64,
+
+    /** Selects which of the Sound chip's 16 registers the next write or read reaches, as on the MSX. */
+    SOUND_CHIP_SELECT: 0xa0,
+    /** Writes the selected Sound chip register. */
+    SOUND_CHIP_WRITE: 0xa1,
+    /** Reads the selected Sound chip register back. */
+    SOUND_CHIP_READ: 0xa2
 } as const
 
 export type Z80PortName = keyof typeof Z80_PORTS
 
 /** The peripheral a port belongs to. The documentation page and the agent prompt group by it. */
-export type Z80PortGroup = 'console' | 'screen' | 'keyboard' | 'mouse' | 'time' | 'audio'
+export type Z80PortGroup =
+    | 'console'
+    | 'screen'
+    | 'keyboard'
+    | 'mouse'
+    | 'time'
+    | 'audio'
+    | 'sound-chip'
 
 /**
  * The groups of [ADR 0011](../../../../../../docs/adr/0011-z80-peripherals-through-the-port-map.md),
- * the audio one of its 2026-10-23 update included, plus the console ports they extend, in the order
- * the documentation shows them.
+ * the audio and Sound chip ones of its 2026-10-23 updates included, plus the console ports they
+ * extend, in the order the documentation shows them.
  */
 export const Z80_PORT_GROUP_DOCS: {
     group: Z80PortGroup
@@ -287,6 +301,13 @@ export const Z80_PORT_GROUP_DOCS: {
         range: '0x60 - 0x64',
         description:
             'Play notes with a pitch, instrument sound, and volume, each numbered from 0 to 127, and a duration in milliseconds. General MIDI is the standard list of instrument sounds. Write a pitch to NOTE_PLAY (0x60) to start a note and continue immediately, allowing notes to overlap as a chord. Read NOTE_PLAY_WAIT (0x61) with the pitch in B to play a note and wait for its requested duration; a sequence of these reads can play a melody. Testcases are silent, and waits complete immediately while advancing the virtual clock.'
+    },
+    {
+        group: 'sound-chip',
+        title: 'Sound chip',
+        range: '0xA0 - 0xA2',
+        description:
+            'An AY-3-8910, the sound chip of the MSX, the ZX Spectrum 128 and the Amstrad CPC, at the MSX’s ports and its clock of 1.7897725 MHz, so MSX sound code runs unchanged. It has three square-wave tone channels, A, B and C, one noise generator, a mixer that turns each channel’s tone and noise on or off, a volume per channel and one envelope the channels can follow instead. Select a register through 0xA0, then write it through 0xA1 or read it through 0xA2. A tone’s frequency is 1,789,772.5 ÷ (16 × its period): period 254 is 440 Hz, the A above middle C. Registers 0 to 5 hold the three 12-bit tone periods, low byte first; 6 the 5-bit noise period; 7 the mixer, where a 0 bit turns something on: bits 0 to 2 the tones of A, B and C, bits 3 to 5 their noise; 8 to 10 the volumes of A, B and C, 0 to 15, or 16 to follow the envelope; 11 and 12 the envelope period, low byte first; 13 the envelope shape, which restarts the envelope whenever it is written. Every Build starts with every register 0, so every channel is silent.\n\n| Note | C | C♯ | D | D♯ | E | F | F♯ | G | G♯ | A | A♯ | B |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| Period from middle C | 428 | 404 | 381 | 360 | 339 | 320 | 302 | 285 | 269 | 254 | 240 | 226 |\n\nAn octave lower doubles the period and an octave higher halves it. The chip plays on while the program is paused or stopped at a breakpoint, and falls silent when the program ends. Testcases are silent, and read back what was written.'
     }
 ]
 
@@ -1004,6 +1025,83 @@ loop:   push bc
         out (0x60), a
         halt`,
         exampleShows: 'No text output; plays a low C for two seconds.'
+    },
+    {
+        name: 'SOUND_CHIP_SELECT',
+        port: Z80_PORTS.SOUND_CHIP_SELECT,
+        group: 'sound-chip',
+        title: 'Select a Sound chip register',
+        write: 'Selects the register, 0 to 15, that the next writes to SOUND_CHIP_WRITE (0xA1) and reads from SOUND_CHIP_READ (0xA2) reach; it stays selected until the next write here. Registers 14 and 15 are the chip’s two I/O ports, which the MSX wires to its joysticks: nothing is attached here, so they read 0xFF and writes to them are ignored. A number of 16 or more selects nothing, as on the chip.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 0         ; register 0: channel A's period, low byte
+        out (0xa0), a
+        ld a, 254       ; 254 is 440 Hz
+        out (0xa1), a
+        ld a, 1         ; register 1: the period's high four bits
+        out (0xa0), a
+        xor a
+        out (0xa1), a
+        ld a, 7         ; register 7: the mixer
+        out (0xa0), a
+        ld a, 0xbe      ; only channel A's tone on
+        out (0xa1), a
+        ld a, 8         ; register 8: channel A's volume
+        out (0xa0), a
+        ld a, 15        ; the loudest
+        out (0xa1), a
+        ld c, 0x50
+        ld b, 100       ; let it sound for a second
+        in a, (c)
+        halt`,
+        exampleShows:
+            'No text output; plays a square wave at 440 Hz for a second, which stops when the program ends.'
+    },
+    {
+        name: 'SOUND_CHIP_WRITE',
+        port: Z80_PORTS.SOUND_CHIP_WRITE,
+        group: 'sound-chip',
+        title: 'Write a Sound chip register',
+        write: 'Writes the selected register. Each keeps only its own bits: four of a tone period’s high register, five of the noise period and of a volume, four of the envelope shape. Writing the envelope shape, register 13, restarts the envelope, even with the shape it already has; that is how a note following the envelope is struck again.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld hl, chord    ; pairs of a register and its value
+        ld b, 10        ; ten of them
+next:   ld a, (hl)
+        out (0xa0), a
+        inc hl
+        ld a, (hl)
+        out (0xa1), a
+        inc hl
+        djnz next
+        ld c, 0x50
+        ld b, 200       ; two seconds
+        in a, (c)
+        halt
+chord:  .byte 0, 0xac, 1, 1     ; A: period 428, middle C
+        .byte 2, 0x53, 3, 1     ; B: period 339, E
+        .byte 4, 0x1d, 5, 1     ; C: period 285, G
+        .byte 7, 0xb8           ; the three tones on, no noise
+        .byte 8, 12, 9, 12      ; volumes of A and B
+        .byte 10, 12            ; and of C`,
+        exampleShows: 'No text output; plays a C major chord on the three channels for two seconds.'
+    },
+    {
+        name: 'SOUND_CHIP_READ',
+        port: Z80_PORTS.SOUND_CHIP_READ,
+        group: 'sound-chip',
+        title: 'Read a Sound chip register',
+        write: 'Ignored.',
+        read: 'Returns the selected register as the chip holds it: what was last written, less the bits the register does not keep. Registers 14 and 15, and a number of 16 or more, read 0xFF.',
+        example: `        .org 0x8000
+        ld a, 1         ; channel A's period, high bits
+        out (0xa0), a
+        ld a, 0xff
+        out (0xa1), a
+        in a, (0xa2)    ; the register keeps four bits
+        out (0x11), a
+        halt`,
+        exampleOutput: '15'
     }
 ]
 

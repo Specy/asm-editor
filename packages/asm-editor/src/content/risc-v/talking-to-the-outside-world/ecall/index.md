@@ -279,6 +279,62 @@ Once a program has made a sound, a **Sound** button in the execution dock turns 
 In a testcase nothing is heard, and service 33 completes at once, advancing the virtual clock by
 the note's duration as service 32 does.
 
+### Waveforms on the Synth
+
+Services 31 and 33 play recorded instruments. The editor also has a **Synth**: a sound chip like
+the ones inside 1980s game consoles and home computers, which the program controls directly. It is
+an extension of this editor; RARS does not have it.
+
+No service is involved. The Synth's controls, called **registers**, sit at memory addresses from
+`0xffff0100`, and the program changes them with ordinary stores, `sh` for a halfword and `sb` for a
+byte. Channel 0, one of the Synth's eight, starts at that address:
+
+- the halfword at offset `0` is the **frequency** in Hz, how many times a second the sound
+  repeats: 440 is the A above middle C, and 262 is middle C.
+- the byte at `0x11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
+  2 a sawtooth, 3 a sine and 4 noise.
+- the byte at `0x12` is the volume, from 0 to 127, and the byte at `0x13` the **sustain**, the
+  level a note holds at.
+- the byte at `0x10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+```riscv|playground
+.text
+.globl main
+main:
+    li s0, 0xffff0100     # channel 0 of the Synth
+    li t0, 1
+    sb t0, 0x11(s0)     # waveform 1: a triangle
+    li t0, 100
+    sb t0, 0x12(s0)     # volume 100
+    li t0, 127
+    sb t0, 0x13(s0)     # sustain: hold the note at full volume
+
+    li t0, 262            # middle C, in Hz
+    sh t0, 0(s0)
+    li t0, 1
+    sb t0, 0x10(s0)     # gate on: the note starts
+    li a7, 32             # service 32: wait
+    li a0, 400            # for 400 milliseconds
+    ecall
+
+    li t0, 330            # E: a new frequency for the same note
+    sh t0, 0(s0)
+    ecall                 # wait again: a7 and a0 still ask for it
+    li t0, 392            # G
+    sh t0, 0(s0)
+    ecall
+
+    sb zero, 0x10(s0)   # gate off: the note ends
+    li a7, 10
+    ecall
+```
+
+The note sounds from the moment the gate goes on until it goes off; changing the frequency in
+between slides the same note to a new pitch. Change the waveform number at `0x11` to hear how the
+shape changes the sound. The [Synth chapter](/documentation/risc-v/synth) of the Documentation
+describes the other registers: the pulse width, the **envelope** that shapes each note's volume
+over time, wavetables, and sounds the program computes itself and plays as samples.
+
 ## Common Playground services
 
 This is a curated reference for the services used most often on this page. The

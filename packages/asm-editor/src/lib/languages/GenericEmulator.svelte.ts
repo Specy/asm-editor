@@ -2710,11 +2710,17 @@ export abstract class GenericEmulator<T, R extends string>
                 return false
             }
             let recorded = false
+            const audio = this._peripherals.audio
             this._beginPoke()
+            //a Poke into the Synth's block plays its registers, but starts no upload
+            audio.synth.poking = true
             try {
                 this._writeMemoryBytes(address, bytes)
             } finally {
                 recorded = this._endPoke()
+                audio.synth.poking = false
+                //and is heard at once, while the program waits for the next Run or Step
+                audio.flush()
                 if (recorded) this.recordHistory(1)
                 //an image that lives in Core memory is re-read rather than journaled, exactly as
                 //after an Undo ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md),
