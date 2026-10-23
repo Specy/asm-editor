@@ -113,8 +113,7 @@ function typeMarkdown(word: string): string | undefined {
         const size = Number(unknown[1] ?? 1)
         return `**${word}**: ${size === 1 ? 'one byte' : `${size} bytes`} whose exact type the decompiler could not infer. ${size === 1 ? 'It' : 'They'} may hold an integer, a character, a pointer, or part of a struct.`
     }
-    if (word === 'code')
-        return "**code**: machine code. A `code *` is a pointer to a function."
+    if (word === 'code') return '**code**: machine code. A `code *` is a pointer to a function.'
     return undefined
 }
 
@@ -155,8 +154,7 @@ function variableMarkdown(word: string): string | undefined {
     const input = /^in_(.+)$/.exec(word)
     if (input)
         return `**${word}**: a value the function reads from \`${input[1]}\` before writing it, outside its detected parameter list.`
-    if (word === 'unaff_retaddr')
-        return '**unaff_retaddr**: the return address on the stack.'
+    if (word === 'unaff_retaddr') return '**unaff_retaddr**: the return address on the stack.'
     const unaffected = /^unaff_(.+)$/.exec(word)
     if (unaffected)
         return `**${word}**: the value \`${unaffected[1]}\` had when the function was called, read before being set. Because \`${unaffected[1]}\` is callee-saved, the decompiler marks its entry value \`unaff_\` (unaffected).`
@@ -204,8 +202,7 @@ export function variableStorageWords(
             : `on the stack, 0x${stack[2]} bytes above where the stack pointer was when the function was entered (in the caller's stack frame)`
     const use = /@\+0x([\da-f]+)$/.exec(variable.id)
     const first = use ? `, first set at \`0x${(entry + parseInt(use[1], 16)).toString(16)}\`` : ''
-    if (/^HASH:/i.test(storage))
-        return `in a temporary expression${first}`
+    if (/^HASH:/i.test(storage)) return `in a temporary expression${first}`
     if (variable.kind === 'parameter') return `arriving in \`${storage}\``
     return storage.includes(':')
         ? `split across \`${storage}\`${first}`
@@ -226,9 +223,7 @@ export function renamedVariableMarkdown(
     from?: string
 ): string {
     const what = variable?.kind === 'parameter' ? 'a parameter' : 'a local variable'
-    const where = variable
-        ? `Stored ${variableStorageWords(variable, entry)}.`
-        : ''
+    const where = variable ? `Stored ${variableStorageWords(variable, entry)}.` : ''
     const originally = from === undefined ? '' : ` (originally \`${from}\`)`
     return [
         `**${name}**: ${what} you renamed${originally}.${where && ` ${where}`} Use “Reset name” to restore its original name.`,

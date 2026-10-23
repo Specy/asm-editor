@@ -3,6 +3,7 @@ An **Executable** is a compiled x86-64 Linux **ELF** binary. You can import an E
 To open an Executable, click **Import** on the Projects page, or upload the ELF file in the **Explorer** of an existing x86 project and make it the **Entry** file. The editor detects ELF binaries from their header bytes, so filenames like `crackme` or `chall` need no extension.
 
 An Executable opens with three views in the execution dock switch:
+
 - **Disassemble** shows its assembly [Listing](#listing).
 - **Decompile** shows C-like [Pseudocode](#decompile) alongside the Listing.
 - **Hex** shows its raw bytes in the [Hex editor](#hex-editor).
@@ -12,6 +13,7 @@ Press **Debug** to load and run the binary.
 ## What runs {#what-runs}
 
 The emulator runs 64-bit x86 Linux ELF executables:
+
 - **Statically linked**: all library code is included inside the executable.
 - **Dynamically linked**: the executable loads shared libraries at startup from the [bundled library list](#libraries).
 - **Position-independent (PIE)** or **non-PIE**: PIE binaries load at `0x555555554000`; non-PIE binaries load at the fixed address in their ELF headers (usually `0x400000`). Shared libraries load below `0x7ffff7fff000`, and the stack starts below `0x7ffffffff000`.
@@ -24,13 +26,13 @@ The program runs in `/project`, where it can open and read or write other Files 
 
 Dynamically linked executables can use five bundled system libraries (from Ubuntu 26.04), downloaded automatically on first use:
 
-| Library                | Version    | Purpose                                                 |
-| ---------------------- | ---------- | ------------------------------------------------------- |
+| Library                | Version    | Purpose                                                  |
+| ---------------------- | ---------- | -------------------------------------------------------- |
 | `ld-linux-x86-64.so.2` | glibc 2.43 | Dynamic linker that loads libraries and resolves symbols |
-| `libc.so.6`            | glibc 2.43 | Standard C library                                      |
-| `libm.so.6`            | glibc 2.43 | Math library                                            |
-| `libstdc++.so.6`       | GCC 16     | Standard C++ library                                    |
-| `libgcc_s.so.1`        | GCC 16     | GCC runtime support (unwinding and exceptions)          |
+| `libc.so.6`            | glibc 2.43 | Standard C library                                       |
+| `libm.so.6`            | glibc 2.43 | Math library                                             |
+| `libstdc++.so.6`       | GCC 16     | Standard C++ library                                     |
+| `libgcc_s.so.1`        | GCC 16     | GCC runtime support (unwinding and exceptions)           |
 
 If an executable requires another shared library (such as `libcrypto.so.3`) or a newer `GLIBC_2.xx` symbol version, it stops at startup and reports the missing dependency in the **Log** and **Terminal**.
 
@@ -47,6 +49,7 @@ Other binary files in a project also open in the Hex editor. Media files and doc
 ## Editing bytes {#byte-edits}
 
 Click any byte in the Hex editor to place the caret:
+
 - Type hexadecimal digits in the hex column or printable ASCII characters in the text column to overwrite bytes in place (files keep their byte length).
 - Press **Tab** and **Shift+Tab** to switch between the hex and text columns.
 - Use **Undo** (**Ctrl+Z**) and **Redo** (**Ctrl+Shift+Z** or **Ctrl+Y**) to step through your byte changes.
@@ -58,6 +61,7 @@ Files are read-only while a Debug session is active. To test a quick instruction
 ## Parts of the ELF file {#elf-parts}
 
 When viewing an Executable, the Hex editor color-codes the structure of the ELF file:
+
 - **Code sections** (such as `.text`)
 - **Data sections** (such as `.rodata` and `.data`)
 - **Headers and symbol tables** (such as the ELF header, program/section headers, `.symtab`, and `.strtab`), or load segments (`load.2`, `load.3`, …) when section headers are stripped.
@@ -65,12 +69,14 @@ When viewing an Executable, the Hex editor color-codes the structure of the ELF 
 Hover over any byte (or check the status bar at the caret) to see which section it belongs to, its file offset range, and its runtime memory address range.
 
 To jump between the Hex editor and the Listing:
+
 - Right-click a byte inside a code section in the Hex editor and choose **Show in Listing** to jump to that instruction.
 - Right-click an instruction or data line in the Listing and choose **Show in Hex** to select its bytes in the Hex editor.
 
 ## Finding bytes {#finding}
 
 Use the toolbar above the Hex editor to search and navigate:
+
 - **Find** (**Ctrl+F**): Search for **Hex** bytes or case-sensitive **Text**. In Hex mode, spaces are optional and `??` matches any byte (for example, `7f 45 ?? 46`). Typing non-hex characters switches to **Text** mode automatically. Press **Enter** / **Shift+Enter** to step through matches.
 - **Go to** (**Ctrl+G**): Jump to a byte offset in hexadecimal (`0x1f40` or `1f40`) or decimal (`#8000`).
 - **Selection and copying**: Hold **Shift** with the arrow keys or drag to select bytes. Use **Copy as hex** (`7f 45 4c 46`), **Copy as text**, or **Ctrl+C** (which copies in the format of the active column).
@@ -84,6 +90,7 @@ Click **Inspector** above the Hex editor to decode the bytes starting at the car
 **Disassemble** opens the Executable's **Listing**: a read-only view of its machine code in NASM syntax followed by its data sections (`db`, `dq`, `resb`). The Listing is generated on the fly from the file's current bytes. To modify the binary permanently, [edit its bytes](#byte-edits); to annotate the code, [rename symbols](#renaming) and add [comments](#comments).
 
 Key features when reading the Listing:
+
 - **Automatic comments**: Instructions that reference `[rel …]` data display the target label and string literal in a comment, making it easy to find where a message like `"Wrong!"` is used. In C++ binaries, calls and data references also show demangled [C++ names](#cpp-names) in comments.
 - **Hovers**: Hover over an instruction for its encoding and documentation, over a label for its address and origin, or over a numeric constant for its decimal, hex, and binary values. If a constant's little-endian bytes form printable ASCII characters (such as `0x4c75257240343a41`), the hover also shows the decoded **Text** (`A:4@r%uL`).
 - **Navigation**: Press **F12**, **Ctrl+click**, or double-click any label or call/jump target to **Go to Definition**. Right-click a label and choose **Go to References** to list every instruction or data item that refers to it.
@@ -93,16 +100,16 @@ Key features when reading the Listing:
 
 When an Executable retains its symbol tables, the Listing uses those names; when symbols have been stripped, it generates deterministic names from file offsets so the same binary always shows the same labels:
 
-| Name pattern        | Meaning                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------- |
+| Name pattern        | Meaning                                                                                      |
+| ------------------- | -------------------------------------------------------------------------------------------- |
 | `main`, `_start`    | Symbols from `.symtab`/`.dynsym` (or `main` inferred from startup code in stripped binaries) |
-| `stdin@GLIBC_2.2.5` | Dynamically linked symbol with its library version suffix                                   |
-| `strcmp@plt`        | Procedure Linkage Table stub that forwards a `call` to a shared library function            |
-| `strcmp@got`        | Global Offset Table slot holding the runtime address of a shared library symbol             |
-| `FUN_brave_otter`   | Stripped function target reached by `call` (`FUN_` + two deterministic words)               |
-| `DAT_misty_tanager` | Unnamed data address referenced by code (`DAT_` + two deterministic words)                  |
-| `.LAB_1`, `.LAB_2`  | Local jump targets inside a function, numbered in address order (`func.LAB_1` from outside) |
-| `s_Enter_password`  | Null-terminated ASCII string in a data section (`s_` + leading characters)                  |
+| `stdin@GLIBC_2.2.5` | Dynamically linked symbol with its library version suffix                                    |
+| `strcmp@plt`        | Procedure Linkage Table stub that forwards a `call` to a shared library function             |
+| `strcmp@got`        | Global Offset Table slot holding the runtime address of a shared library symbol              |
+| `FUN_brave_otter`   | Stripped function target reached by `call` (`FUN_` + two deterministic words)                |
+| `DAT_misty_tanager` | Unnamed data address referenced by code (`DAT_` + two deterministic words)                   |
+| `.LAB_1`, `.LAB_2`  | Local jump targets inside a function, numbered in address order (`func.LAB_1` from outside)  |
+| `s_Enter_password`  | Null-terminated ASCII string in a data section (`s_` + leading characters)                   |
 
 Once you figure out what a generated `FUN_` or `DAT_` symbol does, you can [rename](#renaming) it without affecting any other generated names. For C++ binaries, mangled symbols are paired with readable [C++ names](#cpp-names).
 
@@ -126,6 +133,7 @@ _ZTVN4game4BossE: db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ; vtable for
 ## The Symbols panel {#symbols}
 
 Open the **Symbols** panel (the tags icon in the left rail) to browse all **Functions** and **Strings** in the current Executable:
+
 - **Filter**: Type in the filter box to match symbol names, string contents, demangled C++ signatures, mangled names, or hexadecimal addresses.
 - **Jump**: Click any row (or press **Enter** from the filter box) to jump the Listing—and any open [Pseudocode](#decompile) pane—to that function or string.
 - **Annotate**: Press **F2** or right-click a function row (or tap **⋯** on touch screens) for **Rename…**, **Comment…**, and **Reset name**.
@@ -146,20 +154,20 @@ Functions and global data share the same names as the [Listing](#names) (includi
 
 For registers, stack slots, and types that are not recorded in the binary, Ghidra generates descriptive identifiers. Hover over any of these in the Pseudocode for a quick explanation:
 
-| Identifier / Type               | Meaning in Pseudocode                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `param_1`, `param_2`, …         | Function parameters by position (first six integer/pointer arguments arrive in `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`) |
-| `iVar1`, `pcVar2`, `uVar3`      | Local register/temporary variables: prefix letters indicate the inferred type (`i` = `int`, `pc` = `char *`, `u` = unsigned/unknown, `l` = `long`, `s` = `short`/`size_t`, `b` = `bool`/`byte`, `f` = `float`, `d` = `double`) |
-| `local_10`, `acStack_98`        | Stack frame variables named by their hex byte offset below the entry stack pointer (`ac` = array of `char`)        |
-| `uStackX_8`, `stack0x...`       | Stack locations above the entry stack pointer (such as caller stack arguments) or raw stack addresses taken with `&` |
-| `undefined`, `undefined1`–`8`   | 1 to 8 bytes whose exact type could not be inferred                                                                |
-| `code`, `code *`                | Machine code or a function pointer                                                                                 |
-| `uRam00104010`, `_DAT_...`      | Unnamed global memory address, or a data access wider than the Listing label at that address                       |
-| `in_FS_OFFSET`                  | Thread-local `FS` segment base (`in_FS_OFFSET + 0x28` is the stack canary checked before returning)                |
-| `in_RAX`, `in_stack_...`        | Register or stack location read before being written, outside the function's detected parameter list               |
-| `unaff_RBX`, `unaff_retaddr`    | Callee-saved register value or return address preserved from the caller                                            |
-| `extraout_RAX`                  | Value left in a register by a called function whose prototype did not declare a return value                       |
-| `/* WARNING: ... */`            | Decompiler note about control flow or state it could not simplify completely                                       |
+| Identifier / Type             | Meaning in Pseudocode                                                                                                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `param_1`, `param_2`, …       | Function parameters by position (first six integer/pointer arguments arrive in `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`)                                                                                                         |
+| `iVar1`, `pcVar2`, `uVar3`    | Local register/temporary variables: prefix letters indicate the inferred type (`i` = `int`, `pc` = `char *`, `u` = unsigned/unknown, `l` = `long`, `s` = `short`/`size_t`, `b` = `bool`/`byte`, `f` = `float`, `d` = `double`) |
+| `local_10`, `acStack_98`      | Stack frame variables named by their hex byte offset below the entry stack pointer (`ac` = array of `char`)                                                                                                                    |
+| `uStackX_8`, `stack0x...`     | Stack locations above the entry stack pointer (such as caller stack arguments) or raw stack addresses taken with `&`                                                                                                           |
+| `undefined`, `undefined1`–`8` | 1 to 8 bytes whose exact type could not be inferred                                                                                                                                                                            |
+| `code`, `code *`              | Machine code or a function pointer                                                                                                                                                                                             |
+| `uRam00104010`, `_DAT_...`    | Unnamed global memory address, or a data access wider than the Listing label at that address                                                                                                                                   |
+| `in_FS_OFFSET`                | Thread-local `FS` segment base (`in_FS_OFFSET + 0x28` is the stack canary checked before returning)                                                                                                                            |
+| `in_RAX`, `in_stack_...`      | Register or stack location read before being written, outside the function's detected parameter list                                                                                                                           |
+| `unaff_RBX`, `unaff_retaddr`  | Callee-saved register value or return address preserved from the caller                                                                                                                                                        |
+| `extraout_RAX`                | Value left in a register by a called function whose prototype did not declare a return value                                                                                                                                   |
+| `/* WARNING: ... */`          | Decompiler note about control flow or state it could not simplify completely                                                                                                                                                   |
 
 ### Navigating and inspecting in Pseudocode
 
@@ -192,6 +200,7 @@ To restore the original name at any time, right-click the symbol or variable and
 ## Comments {#comments}
 
 You can attach notes to individual instructions/statements or to an entire function. Comments are shared between the Listing and the Pseudocode:
+
 - Press **;** or right-click a line and choose **Comment…** to add or edit a comment at that instruction or statement.
 - Choose **Function comment…** (or press **;** on the function's label/declaration line) to edit the comment at the top of the function.
 - Inside the prompt, press **Enter** to save, **Shift+Enter** to insert a newline, or **Escape** to cancel. To remove a comment, click **Delete**, choose **Delete comment** in the context menu, or save an empty comment.
@@ -205,6 +214,7 @@ You can attach notes to individual instructions/statements or to an entire funct
 ## Keeping renames and comments {#annotations}
 
 Renames and comments have their own undo history across the Listing, Pseudocode, and Symbols panel:
+
 - Press **Ctrl+Z** (**⌘Z** on Mac) or choose **Undo rename or comment** in the context menu to undo your last annotation change.
 - Press **Ctrl+Shift+Z** or **Ctrl+Y** (or **Redo rename or comment**) to redo it.
 
@@ -217,9 +227,9 @@ Press **Ctrl+Shift+F** (**⌘⇧F** on Mac) or click the magnifying glass in the
 - **Match options**: Toggle **Match case** (`Aa`, **Alt+C** / **⌥⌘C**), **Match whole word** (`ab`, **Alt+W** / **⌥⌘W**), or **Use regular expression** (`.*`, **Alt+R** / **⌥⌘R**).
 - **File filters**: Click **⋯** to filter by comma-separated **Files to include** or **Files to exclude** glob patterns (such as `*.asm, src/**`).
 - **Look in**: In projects with an Executable, choose which sources to search:
-  - **Files**: All text files in the project (assembly, C/C++, headers, notes).
-  - **Listings**: Every Executable's disassembled Listing, including your renames and comments.
-  - **Pseudocode**: Decompiled functions across your Executables.
+    - **Files**: All text files in the project (assembly, C/C++, headers, notes).
+    - **Listings**: Every Executable's disassembled Listing, including your renames and comments.
+    - **Pseudocode**: Decompiled functions across your Executables.
 
 Click any match (or navigate with the arrow keys and press **Enter**) to open the file, Listing, or Pseudocode at that line.
 
@@ -250,7 +260,7 @@ For an Executable, the Build button is labeled **Debug**. Clicking **Debug** loa
 
 Click in the gutter beside any instruction in the Listing—or press **F9** / choose **Toggle Breakpoint** in the context menu—to set or remove a Breakpoint. **Run** pauses before executing that instruction.
 
-- **Run to Cursor** (**Ctrl+F10**, **⌘F10** on Mac, or via the context menu): Continues execution until the program reaches the instruction on the current line, acting as a one-time breakpoint.
+- **Run to Cursor** (**Ctrl+F10**, **⌘F10** on Mac, or via the context menu): During a Debug session, runs the program until it reaches the instruction on the cursor's line, as if a Breakpoint were there for this Run only. It still stops earlier at any of your Breakpoints, and at the program's end. Run to Cursor from the line the program is stopped on runs until the program comes back to that instruction. It is offered only on the running program's own Listing and Pseudocode, while the program is stopped and not waiting for input.
 - **Inspecting call arguments**: Place a Breakpoint on a `call` instruction (such as `call strcmp@plt`) to inspect the arguments passed to the function. Under the x86-64 System V ABI, the first six integer or pointer arguments are in `rdi`, `rsi`, `rdx`, `rcx`, `r8`, and `r9`.
 
 ## Debugging in the Pseudocode {#pseudocode-debugging}
@@ -263,9 +273,11 @@ While debugging, the Pseudocode pane tracks the active function and highlights t
 ## Addresses in registers and memory {#memory}
 
 During a Debug session, the Memory view's address box accepts symbol names as well as hexadecimal addresses:
+
 - Type any Listing label (`main`, `FUN_brave_otter`, `s_Enter_password`, `strcmp@plt`), a renamed symbol, a unique [C++ function or data name](#cpp-names), or a label with an offset (`DAT_misty_tanager+8`).
 
 Right-click any register value in the Registers panel or any byte in the Memory view to follow addresses quickly:
+
 - **Show in memory**: Jumps the Memory view to that address and highlights the target byte.
 - **Show in Listing**: Jumps the Listing to the instruction at that address (if it lies within the Executable).
 - **Follow pointer**: Reads the 8-byte little-endian pointer at the selected memory address and jumps the Memory view to the pointed-to address.
@@ -314,6 +326,7 @@ If the replacement instruction is shorter than the original, the remaining bytes
 When you **Build** an x86 assembly or C/C++ program in the editor, the linked ELF executable is saved in the Explorer as the **Build output** (named after the Entry file without its extension, such as `main` for `main.asm`).
 
 You can use the **Build output** just like an imported Executable:
+
 - Open it in **Disassemble**, **Decompile**, or **Hex** to inspect the linked binary.
 - Download it from the Explorer to run on a 64-bit Linux machine.
 - Right-click it and choose **New program from this file** to debug the binary directly instead of stepping through your source file.
@@ -323,6 +336,7 @@ When you edit your source files, the Explorer marks the binary **From an earlier
 ## Log notes {#log-notes}
 
 The **Log** panel reports environment or instruction issues encountered during a run:
+
 - **Unimplemented syscalls**: The call returns `-ENOSYS` to the program and logs the syscall name and number once per run.
 - **Unsupported instructions**: Legacy non-`v` SSE4/AES instructions or unsupported extensions (such as AVX-512) stop execution with `SIGILL` and log the instruction and address. See [Vector instructions](/documentation/x86/vector-instructions) for supported extensions.
 - **Missing shared libraries**: Logs any dynamic library required by the ELF header that is not in the [bundled list](#libraries).

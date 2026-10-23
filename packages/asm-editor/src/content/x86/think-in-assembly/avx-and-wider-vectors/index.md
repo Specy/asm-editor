@@ -168,6 +168,7 @@ where a value can go.
 
 `vpshufb ymm1, ymm0, ymm3` builds each byte of `ymm1` using a control byte at the same position in
 `ymm3`:
+
 - Bits 0–3 of the control byte pick one of the 16 bytes in the **same 128-bit half** of `ymm0`.
 - If bit 7 of the control byte is set, that byte becomes `0`.
 
@@ -351,6 +352,7 @@ it knows the address is aligned, so the fault reveals an address that broke that
 
 Because not every x86-64 processor supports AVX, portable programs check at runtime before running
 AVX code:
+
 1. Run `cpuid` with `eax = 1` and verify that bit 27 (`OSXSAVE`) and bit 28 (`AVX`) of `ecx` are set.
 2. Run `xgetbv` with `ecx = 0` and verify that bits 1 and 2 of `eax` are set, confirming that the
    operating system saves and restores the `xmm` and `ymm` registers across context switches.

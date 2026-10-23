@@ -32,11 +32,11 @@ Instructions with only one source—such as moves, conversions, and single-regis
 
 When an instruction writes to a 128-bit `xmm` register, what happens to the high half (`bits 128–255`) of the enclosing `ymm` register depends on whether you use the `v`-prefixed AVX form or the legacy SSE form:
 
-| Instruction               | Low half (`bits 0–127`)                       | High half (`bits 128–255`) |
-| ------------------------- | --------------------------------------------- | -------------------------- |
-| `addps xmm0, xmm1`        | `xmm0 + xmm1`                                 | Unchanged                  |
-| `vaddps xmm0, xmm1, xmm2` | `xmm1 + xmm2`                                 | Set to zero                |
-| `vaddps ymm0, ymm1, ymm2` | Low 4 lanes of sum                            | High 4 lanes of sum        |
+| Instruction               | Low half (`bits 0–127`)                         | High half (`bits 128–255`) |
+| ------------------------- | ----------------------------------------------- | -------------------------- |
+| `addps xmm0, xmm1`        | `xmm0 + xmm1`                                   | Unchanged                  |
+| `vaddps xmm0, xmm1, xmm2` | `xmm1 + xmm2`                                   | Set to zero                |
+| `vaddps ymm0, ymm1, ymm2` | Low 4 lanes of sum                              | High 4 lanes of sum        |
 | `vaddss xmm0, xmm1, xmm2` | Bits 0–31: sum; bits 32–127: copied from `xmm1` | Set to zero                |
 
 Every `v`-prefixed instruction that writes to an `xmm` register clears bits 128 to 255. Scalar `v` instructions (`vaddss`, `vmovss`, `vcvtsi2sd`, and others) compute their scalar result in the lowest lane, copy the remaining bits of the low half (`32–127` or `64–127`) from their **first source** register, and zero the high half.
@@ -100,6 +100,7 @@ Be careful with `vcvtpd2ps xmm0, [rel p]`: without a size keyword, NASM defaults
 Unaligned moves (`vmovups`, `vmovupd`, `vmovdqu`), broadcasts, and memory operands inside `v`-prefixed arithmetic, comparison, or shuffle instructions (`vaddps ymm0, ymm1, [rel v]`) work at any memory address.
 
 Only the explicitly aligned move instructions require aligned addresses:
+
 - `vmovaps`, `vmovapd`, `vmovdqa`, `vmovntps`, `vmovntpd`, `vmovntdq`, and `vmovntdqa` require **16-byte alignment** for `xmm` operands and **32-byte alignment** for `ymm` operands.
 - Accessing an unaligned address with an aligned move stops the program with `SIGSEGV` (segmentation fault) at that instruction without modifying the destination.
 
@@ -160,13 +161,14 @@ section .text
 
 The three digits in the mnemonic (`132`, `213`, or `231`) refer to the three operands in order (`1` = destination, `2` = first source, `3` = second source or memory). The first two digits are multiplied, the third is added, and the result is stored in operand `1`:
 
-| Form                     | Computes            | Common use                                         |
-| ------------------------ | ------------------- | -------------------------------------------------- |
-| `vfmadd132ps y1, y2, y3` | `y1 = y1 * y3 + y2` | Multiplier in `y3` (or memory), addend in `y2`     |
-| `vfmadd213ps y1, y2, y3` | `y1 = y2 * y1 + y3` | Polynomial evaluation (`y1 = x * y1 + coeff`)      |
-| `vfmadd231ps y1, y2, y3` | `y1 = y2 * y3 + y1` | Dot products and accumulating products into `y1`   |
+| Form                     | Computes            | Common use                                       |
+| ------------------------ | ------------------- | ------------------------------------------------ |
+| `vfmadd132ps y1, y2, y3` | `y1 = y1 * y3 + y2` | Multiplier in `y3` (or memory), addend in `y2`   |
+| `vfmadd213ps y1, y2, y3` | `y1 = y2 * y1 + y3` | Polynomial evaluation (`y1 = x * y1 + coeff`)    |
+| `vfmadd231ps y1, y2, y3` | `y1 = y2 * y3 + y1` | Dot products and accumulating products into `y1` |
 
 The other FMA families use the same operand numbering:
+
 - `vfmsub`: `a * b - c`
 - `vfnmadd`: `-(a * b) + c`
 - `vfnmsub`: `-(a * b) - c`
@@ -200,6 +202,7 @@ When a program hits an unsupported instruction, execution stops with `SIGILL` an
 ## Where AVX code comes from {#sources}
 
 You can run AVX code in two ways:
+
 1. **NASM assembly files**: Write AVX instructions directly in any `.asm` file in your project.
 2. **Imported [Executables](/documentation/x86/executables)**: Import an x86-64 ELF binary compiled outside the editor (for example, with `gcc -mavx2 -mfma`). You can step through its AVX instructions in the Listing and inspect `ymm` registers while debugging.
 
