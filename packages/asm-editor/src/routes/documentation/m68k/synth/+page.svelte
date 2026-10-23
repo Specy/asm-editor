@@ -17,7 +17,7 @@
         documentationArticleLd({
             headline: 'M68K Synth',
             description:
-                'M68K programs can play waveforms on the Synth, a memory-mapped sound chip at $E00100 that this editor adds beside EASy68K: eight channels of pulse, triangle, sawtooth, sine, noise, wavetable and sampled sound, each with an envelope.',
+                'Program the M68K Synth at $E00100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
             pathname: page.url.pathname,
             section: { name: 'M68K assembly reference', pathname: '/documentation/m68k' }
         })
@@ -26,7 +26,7 @@
 
 <PageMeta
     title="M68K Synth: waveform sound chip | Asm Editor"
-    description="M68K programs can play waveforms on the Synth, a memory-mapped sound chip at $E00100 that this editor adds beside EASy68K: eight channels of pulse, triangle, sawtooth, sine, noise, wavetable and sampled sound, each with an envelope."
+    description="Program the M68K Synth at $E00100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback."
     type="article"
     {jsonLd}
 />

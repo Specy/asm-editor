@@ -17,7 +17,7 @@
         documentationArticleLd({
             headline: 'RISC-V Synth',
             description:
-                'RISC-V programs can play waveforms on the Synth, a memory-mapped sound chip at 0xFFFF0100 that this editor adds beside RARS: eight channels of pulse, triangle, sawtooth, sine, noise, wavetable and sampled sound, each with an envelope.',
+                'Program the RISC-V Synth at 0xFFFF0100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
             pathname: page.url.pathname,
             section: { name: 'RISC-V assembly reference', pathname: '/documentation/risc-v' }
         })
@@ -26,7 +26,7 @@
 
 <PageMeta
     title="RISC-V Synth: waveform sound chip | Asm Editor"
-    description="RISC-V programs can play waveforms on the Synth, a memory-mapped sound chip at 0xFFFF0100 that this editor adds beside RARS: eight channels of pulse, triangle, sawtooth, sine, noise, wavetable and sampled sound, each with an envelope."
+    description="Program the RISC-V Synth at 0xFFFF0100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback."
     type="article"
     {jsonLd}
 />

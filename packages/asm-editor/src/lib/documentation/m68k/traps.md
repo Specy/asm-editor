@@ -31,7 +31,7 @@ After a program requests sound, the **Sound** button appears in the execution do
 
 The DirectX player is the name of an EASy68K-compatible interface in this editor; it does not require Windows or a DirectX installation. It mixes WAV audio files and MIDI files, which describe notes and instruments to play.
 
-For sound the program shapes itself, waveforms and samples it computes, this editor adds the [Synth](/documentation/m68k/synth), a sound chip whose registers are memory at `$E00100`. EASy68K does not have it.
+For programmable waveforms and sample playback, this editor adds the [Synth](/documentation/m68k/synth), a sound chip whose registers are memory at `$E00100`. EASy68K does not have it.
 
 Sound differs from EASy68K in these ways:
 

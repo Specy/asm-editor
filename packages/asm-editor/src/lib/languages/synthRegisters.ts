@@ -44,13 +44,15 @@ export const SYNTH_CHANNEL_REGISTERS = [
         name: 'FREQUENCY',
         offset: 0x00,
         bytes: 2,
-        description: 'Frequency in Hz, or samples a second for the sample waveform'
+        description:
+            'Frequency in Hz, or samples per second for the sample waveform; 0 holds the phase and sample cursor still'
     },
     {
         name: 'PULSE_WIDTH',
         offset: 0x02,
         bytes: 2,
-        description: 'Pulse width, 0 to 4095; 2048 is a square wave'
+        description:
+            'Pulse width, 0 to 4095; 2048 is a square wave, and values above 4095 stay high'
     },
     {
         name: 'ATTACK',
@@ -76,19 +78,19 @@ export const SYNTH_CHANNEL_REGISTERS = [
         name: 'SAMPLE_START',
         offset: 0x0a,
         bytes: 2,
-        description: 'Where the sample waveform starts in Sample memory'
+        description: 'Absolute starting offset in shared Sample memory'
     },
     {
         name: 'SAMPLE_LENGTH',
         offset: 0x0c,
         bytes: 2,
-        description: 'How many samples it plays; 0 means all 65,536'
+        description: 'Number of samples to play, wrapping at 65,536; 0 means 65,536 samples'
     },
     {
         name: 'LOOP_START',
         offset: 0x0e,
         bytes: 2,
-        description: 'Where a looping sample goes back to in Sample memory'
+        description: 'Absolute offset in Sample memory to return to when looping'
     },
     {
         name: 'CONTROL',
@@ -102,12 +104,18 @@ export const SYNTH_CHANNEL_REGISTERS = [
         bytes: 1,
         description: 'Which waveform the channel plays, from the table of waveforms'
     },
-    { name: 'VOLUME', offset: 0x12, bytes: 1, description: 'Volume, 0 to 127' },
+    {
+        name: 'VOLUME',
+        offset: 0x12,
+        bytes: 1,
+        description: 'Volume, 0 to 127; higher values sound as 127'
+    },
     {
         name: 'SUSTAIN',
         offset: 0x13,
         bytes: 1,
-        description: 'The level the decay stops at while the gate is on, 0 to 127'
+        description:
+            'Level held while the gate is on after decay, 0 to 127; higher values sound as 127'
     }
 ] as const satisfies readonly SynthRegister[]
 
@@ -159,19 +167,19 @@ export const SYNTH_UPLOAD_REGISTERS = [
         name: 'UPLOAD_LENGTH',
         offset: 0x184,
         bytes: 2,
-        description: 'How many bytes it copies; 0 means 65,536'
+        description: 'Number of bytes to copy; 0 means 65,536'
     },
     {
         name: 'UPLOAD_DESTINATION',
         offset: 0x186,
         bytes: 2,
-        description: 'Where they go in Sample memory'
+        description: 'Destination offset in shared Sample memory; the copy wraps at 65,536'
     },
     {
         name: 'UPLOAD_START',
         offset: 0x188,
         bytes: 1,
-        description: 'Any write copies, at that instant'
+        description: 'Any program write copies immediately; a memory-view Poke does not copy'
     }
 ] as const satisfies readonly SynthRegister[]
 

@@ -17,7 +17,7 @@
         documentationArticleLd({
             headline: 'MIPS Synth',
             description:
-                'MIPS programs can play waveforms on the Synth, a memory-mapped sound chip at 0xFFFF0100 that this editor adds beside MARS: eight channels of pulse, triangle, sawtooth, sine, noise, wavetable and sampled sound, each with an envelope.',
+                'Program the MIPS Synth at 0xFFFF0100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
             pathname: page.url.pathname,
             section: { name: 'MIPS assembly reference', pathname: '/documentation/mips' }
         })
@@ -26,7 +26,7 @@
 
 <PageMeta
     title="MIPS Synth: waveform sound chip | Asm Editor"
-    description="MIPS programs can play waveforms on the Synth, a memory-mapped sound chip at 0xFFFF0100 that this editor adds beside MARS: eight channels of pulse, triangle, sawtooth, sine, noise, wavetable and sampled sound, each with an envelope."
+    description="Program the MIPS Synth at 0xFFFF0100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback."
     type="article"
     {jsonLd}
 />

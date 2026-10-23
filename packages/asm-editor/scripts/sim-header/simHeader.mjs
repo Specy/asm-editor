@@ -297,9 +297,9 @@ function synthSection(synth, target) {
             )
         )
     return `/*
- * The Synth: the sound chip this editor adds beside ${target.simulator}'s devices, eight channels of
- * waveforms whose registers are memory from ${hex(synth.base)}. Set a channel's registers, then turn its
- * gate on to start a note and off to end it:
+ * The Synth is an editor extension with eight sound channels. Its registers are memory from
+ * ${hex(synth.base)}. Set a channel's waveform, volume and envelope, then turn its gate on to start
+ * a note and off to release it:
  *
  *     SIM_SYNTH8(0, SIM_SYNTH_WAVEFORM) = SIM_SYNTH_TRIANGLE;
  *     SIM_SYNTH8(0, SIM_SYNTH_VOLUME) = 100;
@@ -308,8 +308,8 @@ function synthSection(synth, target) {
  *     sim_sleep(500);
  *     sim_synth_gate(0, 0);
  *
- * It is an extension: ${target.simulator} has no waveform sound. The Synth chapter of the
- * Documentation describes every register.
+ * ${target.simulator} does not provide this chip. The Synth chapter of the Documentation describes
+ * its registers, waveform cycles, sample playback and envelope timing.
  */
 ${define('SIM_SYNTH_BASE', base)}
 ${define('SIM_SYNTH_CHANNELS', synth.channelCount)}
@@ -328,7 +328,8 @@ ${define('SIM_SYNTH_LOOP', hex(synth.loop) + 'u', 'the sample waveform loops')}
 #define SIM_SYNTH_TABLE(channel) \\
     ((volatile unsigned char *)(SIM_SYNTH_BASE + ${hex(synth.wavetables)}u + (unsigned long)(channel) * ${hex(synth.wavetableSize)}u))
 
-/* The upload into Sample memory, from SIM_SYNTH_BASE; writing the start register copies. */
+/* Shared upload registers, with offsets from SIM_SYNTH_BASE rather than a channel's address.
+ * A program write to the start register copies immediately; a memory-view Poke does not copy. */
 ${registers(synth.uploadRegisters).join('\n')}
 
 /* A channel's register of 8 or 16 bits, to read or write. */

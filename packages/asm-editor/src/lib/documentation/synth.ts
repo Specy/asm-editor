@@ -20,7 +20,7 @@ import template from './synth.md?raw'
 type Variant = 'MIPS' | 'RISC-V' | 'M68K'
 
 const WAVEFORM_DESCRIPTIONS: Record<SynthWaveform, string> = {
-    pulse: 'High while the phase is below the pulse width out of 4096, low for the rest of the period: 2048 is a square wave, and a narrower pulse sounds thinner and buzzier.',
+    pulse: 'High while the phase counter’s top 12 bits are below the pulse width, low for the rest of the cycle: 2048 is a square wave, and a narrower pulse sounds thinner and buzzier. Widths above 4095 stay high throughout the cycle.',
     triangle: 'Rises and falls in straight lines: soft and flute-like, the classic bass.',
     sawtooth: 'Rises in a straight line and drops at once: bright and brassy.',
     sine: 'A pure tone, read from a 256-entry table.',
@@ -73,7 +73,15 @@ function fromC(variant: Variant): string {
     const route = variant === 'MIPS' ? 'mips' : 'risc-v'
     return `## From C {#from-c}
 
-\`<sim.h>\` names every register: \`SIM_SYNTH8(channel, register)\` and \`SIM_SYNTH16(channel, register)\` read and write a channel's registers of 8 and 16 bits, \`SIM_SYNTH_TABLE(channel)\` points at its wavetable, and the waveforms are \`SIM_SYNTH_PULSE\` to \`SIM_SYNTH_SAMPLE\`. Three functions do the common things: \`sim_synth_play(channel, hz)\` sets the frequency and turns the gate on, \`sim_synth_gate(channel, on)\` turns it on or off, and \`sim_synth_upload(source, length, offset)\` copies samples into Sample memory. See [Using C and C++](/documentation/${route}/using-c) for compiling.
+\`<sim.h>\` names every register. \`SIM_SYNTH8(channel, register)\` and \`SIM_SYNTH16(channel, register)\` read and write a channel's 8-bit and 16-bit registers; \`SIM_SYNTH_TABLE(channel)\` points at its wavetable. Waveform constants run from \`SIM_SYNTH_PULSE\` to \`SIM_SYNTH_SAMPLE\`.
+
+Three helpers cover common operations:
+
+- \`sim_synth_play(channel, hz)\` sets frequency and turns the gate on. It starts an attack only if the gate was off; to strike another note while it is on, call \`sim_synth_gate(channel, 0)\` first.
+- \`sim_synth_gate(channel, on)\` turns the gate on or off, starting attack or release when the gate changes.
+- \`sim_synth_upload(source, length, offset)\` immediately copies signed 8-bit sample bytes into shared Sample memory. Length 0 means 65,536 bytes, and the destination wraps at 65,536.
+
+See [Using C and C++](/documentation/${route}/using-c) for compiling. This example plays a C major scale, turning the gate off between notes.
 
 \`\`\`c
 #include <sim.h>
@@ -199,17 +207,17 @@ start:  lea     SYNTH,a0        ; channel 0
 
 const WAVETABLE_EXAMPLE: Record<Variant, string> = {
     MIPS: `        li      $s0, 0xffff0100
-        li      $t0, 0xfffffff0 # 15, 15, ... then 0, 0, ...:
-        sw      $t0, 0x100($s0) # the first eight samples of channel 0's table
+        li      $t0, 0xfffffff0 # little-endian bytes: F0 FF FF FF
+        sw      $t0, 0x100($s0) # samples: 15, 0, 15, 15, 15, 15, 15, 15
         li      $t0, 5
         sb      $t0, 0x11($s0)  # waveform 5: wavetable`,
     'RISC-V': `        li      s0, 0xffff0100
-        li      t0, 0xfffffff0  # 15, 15, ... then 0, 0, ...:
-        sw      t0, 0x100(s0)   # the first eight samples of channel 0's table
+        li      t0, 0xfffffff0  # little-endian bytes: F0 FF FF FF
+        sw      t0, 0x100(s0)   # samples: 15, 0, 15, 15, 15, 15, 15, 15
         li      t0, 5
         sb      t0, 0x11(s0)    # waveform 5: wavetable`,
     M68K: `        lea     $E00100,a0
-        move.l  #$FFFFFFF0,$100(a0) ; the first eight samples of channel 0's table
+        move.l  #$FFFFFFF0,$100(a0) ; big-endian bytes: FF FF FF F0
         move.b  #5,$11(a0)          ; waveform 5: wavetable`
 }
 
@@ -221,11 +229,11 @@ const UPLOAD_EXAMPLE: Record<Variant, string> = {
         sh      $t1, 0x184($s0) # 8,000 bytes
         sh      $zero, 0x186($s0) # to the start of Sample memory
         sb      $zero, 0x188($s0) # now
-        sh      $zero, 0xa($s0) # channel 0 plays from 0
+        sh      $zero, 0xa($s0) # channel 0 sample start: 0
         sh      $t1, 0xc($s0)   # for 8,000 samples
         li      $t0, 6
         sb      $t0, 0x11($s0)  # waveform 6: sample
-        sh      $t1, 0($s0)     # at 8,000 samples a second: one second`,
+        sh      $t1, 0($s0)     # playback rate: 8,000 samples per second`,
     'RISC-V': `        li      s0, 0xffff0100
         la      t0, sound       # a buffer of signed 8-bit samples
         sw      t0, 0x180(s0)   # copy from it
@@ -233,35 +241,35 @@ const UPLOAD_EXAMPLE: Record<Variant, string> = {
         sh      t1, 0x184(s0)   # 8,000 bytes
         sh      zero, 0x186(s0) # to the start of Sample memory
         sb      zero, 0x188(s0) # now
-        sh      zero, 0xa(s0)   # channel 0 plays from 0
+        sh      zero, 0xa(s0)   # channel 0 sample start: 0
         sh      t1, 0xc(s0)     # for 8,000 samples
         li      t0, 6
         sb      t0, 0x11(s0)    # waveform 6: sample
-        sh      t1, 0(s0)       # at 8,000 samples a second: one second`,
+        sh      t1, 0(s0)       # playback rate: 8,000 samples per second`,
     M68K: `        lea     $E00100,a0
         move.l  #sound,$180(a0) ; copy from a buffer of signed 8-bit samples
         move.w  #8000,$184(a0)  ; 8,000 bytes
         move.w  #0,$186(a0)     ; to the start of Sample memory
         move.b  #0,$188(a0)     ; now
-        move.w  #0,$A(a0)       ; channel 0 plays from 0
+        move.w  #0,$A(a0)       ; channel 0 sample start: 0
         move.w  #8000,$C(a0)    ; for 8,000 samples
         move.b  #6,$11(a0)      ; waveform 6: sample
-        move.w  #8000,(a0)      ; at 8,000 samples a second: one second`
+        move.w  #8000,(a0)      ; playback rate: 8,000 samples per second`
 }
 
 /** Where the block meets the Target's other devices. */
 const PLACEMENT_NOTE: Record<Variant, string> = {
-    MIPS: ' With the bitmap display at its "memory map" base, `0xffff0000`, the display\'s words cover these registers: they are pixels then, and the Synth is off.',
+    MIPS: ' Every register starts at 0. With the bitmap display at its "memory map" base, `0xffff0000`, the display\'s words cover these registers: they are pixels then, and the Synth is off.',
     'RISC-V':
-        ' With the bitmap display at its "memory map" base, `0xffff0000`, the display\'s words cover these registers: they are pixels then, and the Synth is off.',
-    M68K: ' The Build sets the block to 0 where the program has not put code or data of its own: a program that does keeps its bytes there, and the Log says so.'
+        ' Every register starts at 0. With the bitmap display at its "memory map" base, `0xffff0000`, the display\'s words cover these registers: they are pixels then, and the Synth is off.',
+    M68K: ' Build zeroes the register block only where the program has not placed code or data. Those occupied bytes are preserved, and the Log reports the overlap. The Synth remains available: subsequent stores in its block drive the chip and overwrite those bytes. Leave `$E00100` to `$E002FF` free when using it.'
 }
 
 const REFERENCE: Record<Variant, { name: string; notes: string }> = {
-    MIPS: { name: 'MARS', notes: '[services 31 and 33](/documentation/mips/syscalls#sound)' },
+    MIPS: { name: 'MARS', notes: '[services 31 and 33](/documentation/mips/syscall#sound)' },
     'RISC-V': {
         name: 'RARS',
-        notes: '[services 31 and 33](/documentation/risc-v/syscalls#sound)'
+        notes: '[services 31 and 33](/documentation/risc-v/syscall#sound)'
     },
     M68K: { name: 'EASy68K', notes: '[tasks 70 to 77](/documentation/m68k/traps#sound)' }
 }

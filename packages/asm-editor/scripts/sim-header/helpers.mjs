@@ -66,7 +66,7 @@ export const SYNTH_HELPERS = [
             { type: 'unsigned', name: 'hz' }
         ],
         summary:
-            'Sets a Synth channel to a frequency in Hz and turns its gate on, starting a note when the gate was off.',
+            'Sets frequency in Hz and turns the gate on. If it is already on, turn it off first with sim_synth_gate(channel, 0) to start another attack.',
         body: () =>
             'SIM_SYNTH16(channel, SIM_SYNTH_FREQUENCY) = (unsigned short)hz;\n    SIM_SYNTH8(channel, SIM_SYNTH_CONTROL) |= SIM_SYNTH_GATE;'
     },
@@ -78,7 +78,7 @@ export const SYNTH_HELPERS = [
             { type: 'int', name: 'on' }
         ],
         summary:
-            "Turns a Synth channel's gate on, which starts its attack, or off, which starts its release.",
+            "Changes a Synth channel's gate: off to on starts attack, on to off starts release. Keeping the same gate value does not retrigger.",
         body: () =>
             'unsigned char control = SIM_SYNTH8(channel, SIM_SYNTH_CONTROL);\n    SIM_SYNTH8(channel, SIM_SYNTH_CONTROL) =\n        (unsigned char)(on ? control | SIM_SYNTH_GATE : control & ~SIM_SYNTH_GATE);'
     },
@@ -91,7 +91,7 @@ export const SYNTH_HELPERS = [
             { type: 'unsigned', name: 'offset' }
         ],
         summary:
-            "Copies length bytes of signed 8-bit samples from source into the Synth's Sample memory at offset, at once.",
+            'Immediately copies signed 8-bit sample bytes from source into shared Sample memory at offset. Length 0 means 65,536 bytes; the destination wraps at 65,536.',
         body: () =>
             [
                 'SIM_SYNTH_UPLOAD32(SIM_SYNTH_UPLOAD_SOURCE) = (unsigned)(unsigned long)source;',

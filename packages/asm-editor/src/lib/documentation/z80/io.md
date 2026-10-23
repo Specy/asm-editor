@@ -34,7 +34,7 @@ Put one of these in B before reading a mouse port.
 
 The audio ports play notes with a pitch, instrument, volume, and duration. General MIDI is a standard list of instrument sounds; instrument numbers here start at **0**, with 0 for acoustic grand piano, 40 for violin, 56 for trumpet, and 73 for flute. No MIDI file or external instrument is needed. Each increase of 1 in pitch moves up one semitone (one piano-key step, counting white and black keys): 60 is middle C, 62 is D, 64 is E, and 67 is G.
 
-For sound the program shapes itself, the [Sound chip](#sound-chip) at ports `0xA0` to `0xA2` is an emulated AY-3-8910 with three square-wave channels, noise and an envelope. A program can use the audio ports, the Sound chip, or both.
+For tones, noise and volume envelopes controlled through registers, the [Sound chip](#sound-chip) at ports `0xA0` to `0xA2` is an emulated AY-3-8910 with three square-wave channels, noise and an envelope. A program can use the audio ports, the Sound chip, or both.
 
 At most 64 notes sound at once; starting another stops the oldest. The editor supplies a General MIDI sound bank, a collection of instrument sounds. The browser loads it automatically on the first note or MIDI-file request after opening or reloading the editor page; that request waits for loading. The bank is shared across later runs and projects.
 

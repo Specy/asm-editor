@@ -236,29 +236,47 @@ clock by the requested duration.
 ### A sound chip
 
 The note ports play recorded instruments. The editor also emulates a **sound chip**, the
-AY-3-8910 of the MSX, the ZX Spectrum 128 and the Amstrad CPC, at the same ports the MSX uses, so
-sound code written for an MSX runs here unchanged. It makes square waves and noise on three
-channels, A, B and C.
+AY-3-8910 used in the MSX, the ZX Spectrum 128 and the Amstrad CPC. It makes square waves and noise
+on three channels, A, B and C. Here its port addresses, register numbers and tone periods match
+the MSX interface.
 
-The chip has sixteen numbered **registers**, its settings. A program writes one in two steps: the
-register's number to port `0xA0`, then its value to port `0xA1`. Four of them play a note on
-channel A:
+The chip keeps producing sound while the CPU does other work. Its sixteen numbered **registers**
+hold the sound settings. These registers belong to the chip; the Z80's registers, such as `a`,
+carry bytes to them. To write a chip register, first send its number to port `0xA0`, then send its
+value to port `0xA1`.
 
-- registers 0 and 1 hold the **period**, low byte first: the chip's clock of 1,789,772.5 ticks a
-  second divided by 16 times the frequency. Middle C, 262 Hz, is period 428.
-- register 7 is the **mixer**, which switches each channel's tone and noise on with a 0 bit:
-  `0xBE` turns on channel A's tone and nothing else.
-- register 8 is channel A's volume, from 0 to 15.
+This example uses four chip registers to play a tone on channel A:
+
+- registers 0 and 1 hold the **period**, a 12-bit number: register 0 holds its low eight bits and
+  register 1 holds its upper four bits.
+- register 7 is the **mixer**. A 0 bit enables a tone or noise source. The supplied setting `0xBE`
+  enables channel A's tone and disables the other tones and all noise.
+- register 8 holds channel A's volume: 0 is silent and 15 is loudest.
+
+The period determines the pitch: `frequency = 1,789,772.5 / (16 × period)` Hz, using the chip's
+clock of 1,789,772.5 ticks per second. A larger period gives a lower note; doubling it lowers the
+pitch by an octave. The example supplies periods 428, 339 and 285 for middle C, E and G.
+
+The `tone` subroutine receives the period as a number in `hl` and sends its two parts to the chip.
+For example, 428 is `0x01AC`, so `l = 0xAC` goes to chip register 0 and `h = 0x01` goes to register 1.
+
+To hold each pitch before changing it, the program uses the playground's wait port `0x50`. Set
+`c = 0x50` and put a delay from 0 to 255 hundredths of a second in `b`. Then `in a, (c)` waits for
+that delay and returns 0 in `a`. The chip keeps playing during the wait. With `b = 40`, each wait
+lasts 0.4 seconds.
+
+Run the example and listen for three held tones: C, then E, then G, each lasting about 0.4 seconds.
+In this playground, the final `halt` ends the program and silences the chip.
 
 ```z80|playground
         .org 0x8000
         ld a, 7         ; register 7, the mixer:
         out (0xa0), a
-        ld a, 0xbe      ; channel A's tone on, everything else off
+        ld a, 0xbe      ; only channel A's tone enabled
         out (0xa1), a
         ld a, 8         ; register 8, channel A's volume:
         out (0xa0), a
-        ld a, 15        ; the loudest
+        ld a, 15        ; loudest fixed volume
         out (0xa1), a
         ld hl, 428      ; middle C
         call tone
@@ -272,20 +290,20 @@ tone:   ld a, 0         ; register 0, the period's low byte
         out (0xa0), a
         ld a, l
         out (0xa1), a
-        ld a, 1         ; register 1, its high four bits
+        ld a, 1         ; register 1, the period's upper four bits
         out (0xa0), a
         ld a, h
         out (0xa1), a
-        ld c, 0x50      ; wait 40 hundredths of a second
-        ld b, 40
-        in a, (c)
+        ld c, 0x50      ; wait port
+        ld b, 40        ; 40 hundredths = 0.4 seconds
+        in a, (c)       ; wait, then a = 0
         ret
 ```
 
-The chip plays whatever its registers say until they change, so the tone sounds through each wait
-and moves to the next pitch when the period is written. A larger period is a lower note: doubling
-it plays an octave lower. The [Sound chip ports](/documentation/z80/io#sound-chip) list every
-register, the envelope that shapes a note's volume, the noise generator and a table of periods.
+Each call changes the period of the same channel, so the next pitch replaces the one already
+playing. Try changing the volume written to register 8 from 15 to 6 and run it again to hear a
+quieter version. The [Sound chip ports](/documentation/z80/io#sound-chip) reference includes more
+note periods and the remaining chip settings.
 
 ## Unconnected ports
 

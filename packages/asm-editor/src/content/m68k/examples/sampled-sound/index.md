@@ -2,6 +2,25 @@ This program computes a sound, copies it into the **Synth**, the sound chip this
 `$E00100`, and plays it as a scale. EASy68K does not have the Synth. Choose **Build**, then
 **Run**, with your sound on.
 
+A **sample** is the sound's level at one instant. The Synth takes raw signed bytes, from -128 to
+127, with 0 at the centre; these have no WAV header. Unlike the unsigned 8-bit WAV samples in the
+earlier example, whose centre was 128, positive and negative values here swing around 0.
+
+The fill loop builds a fading square wave, 32 samples per period. `lsr.w #5, d2` divides the
+sample number by 32, discarding the remainder, to count completed periods. Subtracting that
+count from 125 makes the **amplitude**, the height of the wave's swing, fall by one each period.
+Bit 4 of the sample number is clear
+for the first 16 samples and set for the next 16; `neg.w d3` changes the amplitude to its negative
+for that second half. The first few boundary values are:
+
+| Sample number (`d1`) | Completed periods (`d2`) | Stored sample |
+| -------------------- | ------------------------ | ------------- |
+| 0                    | 0                        | 125           |
+| 15                   | 0                        | 125           |
+| 16                   | 0                        | -125          |
+| 31                   | 0                        | -125          |
+| 32                   | 1                        | 124           |
+
 ```m68k|playground|no-flags|allow-open
 SYNTH   equ $E00100
 COUNT   equ 4000                ; samples: half a second at 8,000 a second
@@ -59,33 +78,36 @@ pluck:
     ds.b COUNT
 ```
 
-The Synth's other waveforms come from the chip itself. The **sample** waveform plays numbers the
-program computed: each one is the sound's level at one instant, from -128 to 127, and the chip
-steps through them at the rate its frequency register gives, in samples a second.
+`pluck` reserves a 4,000-byte buffer in the program's memory. `move.b d3, (a0)+` stores the low
+byte of the signed value and advances `a0` by one byte. The loop fills the buffer with a wave
+whose amplitude falls from 125 towards 0.
 
-The program first computes the sound: 4,000 samples of a square wave, 32 samples a period, whose
-**amplitude**, the height of its swing, falls by one every period from 125 towards 0. Played at
-8,000 samples a second that is 250 periods a second, a tone of 250 Hz, fading out over half a
-second like a plucked string.
+The Synth plays from its own **Sample memory**, shared by all its channels. The **upload** sets
+the buffer's address, byte count and destination, then writes the start register to copy those
+bytes at that moment. Changing `pluck` afterwards does not change that copy.
 
-The chip cannot read the program's memory while it plays, so the samples are copied into its own
-**Sample memory** first, with an **upload**: the source address, the number of bytes and where they
-go, then a write to the start register, which copies them at that moment. Changing the buffer
-afterwards changes nothing in Sample memory.
+Channel 0 selects waveform 6 to play those bytes from sample 0, for 4,000 samples. The frequency
+register now gives the playback rate in **samples per second**, rather than the tone's pitch.
+At 8,000 samples per second, each 32-sample period produces a 250 Hz tone, and the whole fade
+lasts half a second. The rate table plays an ascending major scale starting at that pitch;
+16,000 plays twice as fast, an octave higher, and finishes in a quarter of a second.
 
-Channel 0 then plays them with the sample waveform: from sample 0, for 4,000 samples, once. Each
-note turns the gate off and on, which starts the samples again from the first, at a new rate from
-the table. Playing the same samples faster raises the pitch: 16,000 samples a second is twice
-8,000, an octave higher. The rates between follow the steps of a major scale, each a power of the
-twelfth root of 2 times 8,000. A faster rate also gets through the samples sooner, so the high
-notes are shorter: at 16,000 the sound lasts a quarter of a second.
+Each note turns the gate off and on to restart from the first sample at its new rate. Task 23
+waits 30 hundredths of a second, or 300 ms, before the next note. The lower notes therefore
+restart before their full fade has played; the highest note finishes before the wait ends.
 
 ## Try it
 
-Make the sound loop: store 3 instead of 1 in the control register at `$10`, the gate and the loop
-bit. Bit 1 makes the channel go back to its **loop start**, the word at offset `$0E`, each time it
-reaches the end; with a loop start of 0 the whole fade repeats. Give the loop start 3,840 instead,
-the last 160 samples, and the end of the fade repeats as a quiet held tone.
+First change `move.l #30, d1` to `move.l #80, d1`: 80 hundredths is 800 ms, long enough to hear
+each sound reach its end and loop before the next note restarts it. Then replace the gate-on
+store `move.b #1, $10(a0)` with `move.b #3, $10(a0)`, keeping the gate-off store
+`move.b #0, $10(a0)`. The value 3 sets both the gate and loop bits. Bit 1 makes the channel go
+back to its **loop start**, the word at offset `$0E`, whenever it reaches the end. Its initial
+value is 0, so the whole fade repeats.
+
+To repeat only the last 160 samples as a quiet held tone, insert `move.w #3840, $0E(a0)`
+immediately after `move.w #COUNT, $0C(a0)` in the channel setup, before the waveform store.
+The first pass still plays all 4,000 samples; later passes start at 3,840.
 
 Then change the sound itself. `btst #4, d1` splits each period of 32 samples in two halves;
 `btst #3, d1` makes it 16 samples a period, an octave higher. The

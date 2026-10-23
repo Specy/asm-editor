@@ -180,33 +180,40 @@ still counts the note's duration as elapsed program time.
 
 ### Waveforms on the Synth
 
-Services 31 and 33 play recorded instruments. The editor also has a **Synth**: a sound chip like
-the ones inside 1980s game consoles and home computers, which the program controls directly. It is
-an extension of this editor; MARS does not have it.
+Services 31 and 33 play recorded instrument sounds. The editor also has a **Synth**: a sound chip
+like the ones inside 1980s game consoles and home computers, which the program controls directly.
 
-No service is involved. The Synth's controls, called **registers**, sit at memory addresses from
-`0xffff0100`, and the program changes them with ordinary stores, `sh` for a halfword and `sb` for a
-byte. Channel 0, one of the Synth's eight, starts at that address:
+The Synth's controls are **device registers**: each has a memory address, and storing a value
+there changes a sound setting. The example puts the base address `0xffff0100` in the CPU register
+`$s0`, then uses `sh` and `sb` with offsets from that address to reach the device registers.
 
-- the halfword at offset `0` is the **frequency** in Hz, how many times a second the sound
-  repeats: 440 is the A above middle C, and 262 is middle C.
+The Synth has eight **channels**, each playing one sound at a time. The example uses channel 0
+and these controls:
+
+- the halfword at offset `0` is the **frequency** in Hz (hertz), how many times a second the sound
+  repeats. Middle C, named by pitch number 60 in the previous example, is about 262 Hz here.
 - the byte at `0x11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
   2 a sawtooth, 3 a sine and 4 noise.
-- the byte at `0x12` is the volume, from 0 to 127, and the byte at `0x13` the **sustain**, the
-  level a note holds at.
+- the byte at `0x12` sets the overall volume, from 0 to 127. Larger values are louder.
+- the byte at `0x13` sets the **sustain**, the level held while the sound continues, from 0 to 127.
+  Sustain 127 keeps the sound at the chosen volume; lower values reduce that level further.
 - the byte at `0x10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+The example sets volume 100 and sustain 127 so the tone holds at volume 100 until the gate goes
+off. To leave time to hear each pitch, it uses service 32: put 32 in `$v0`, the wait in milliseconds
+in `$a0`, then execute `syscall`. The stores control the sound, and the service supplies the pauses.
 
 ```mips|playground
 .text
 .globl main
 main:
-    li $s0, 0xffff0100     # channel 0 of the Synth
+    li $s0, 0xffff0100     # base address of Synth channel 0
     li $t0, 1
     sb $t0, 0x11($s0)     # waveform 1: a triangle
     li $t0, 100
     sb $t0, 0x12($s0)     # volume 100
     li $t0, 127
-    sb $t0, 0x13($s0)     # sustain: hold the note at full volume
+    sb $t0, 0x13($s0)     # sustain 127: hold at the chosen volume
 
     li $t0, 262            # middle C, in Hz
     sh $t0, 0($s0)
@@ -216,7 +223,7 @@ main:
     li $a0, 400            # for 400 milliseconds
     syscall
 
-    li $t0, 330            # E: a new frequency for the same note
+    li $t0, 330            # E: change pitch while the gate stays on
     sh $t0, 0($s0)
     syscall                 # wait again: $v0 and $a0 still ask for it
     li $t0, 392            # G
@@ -228,11 +235,12 @@ main:
     syscall
 ```
 
-The note sounds from the moment the gate goes on until it goes off; changing the frequency in
-between slides the same note to a new pitch. Change the waveform number at `0x11` to hear how the
-shape changes the sound. The [Synth chapter](/documentation/mips/synth) of the Documentation
-describes the other registers: the pulse width, the **envelope** that shapes each note's volume
-over time, wavetables, and sounds the program computes itself and plays as samples.
+The gate stays on while the frequency changes from 262 to 330 to 392 Hz. You hear C, E and G as
+one continuing tone that changes pitch, with 400 milliseconds at each pitch. Change the waveform
+number at `0x11` to hear how the shape changes the sound.
+
+The Synth is an extension of this editor; MARS does not provide these device controls. The
+[Synth chapter](/documentation/mips/synth) of the Documentation has more controls and examples.
 
 ## More Playground services
 

@@ -90,7 +90,7 @@ int main(void) {
 
 Width and height are display pixels; `unit` is the side length of each colored cell. Each row has `width / unit` cells; select a cell with `y * (width / unit) + x`. Width and height can be any whole number of pixels from 1 to 1024, and unit any from 1 to 32. MARS's own display only offers 64, 128, 256, 512 or 1024 and 1, 2, 4, 8, 16 or 32, so a program that also runs there keeps to those.
 
-For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For waveform sound it names the [Synth](/documentation/mips/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`.
+For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/mips/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`.
 
 ## Following execution {#following-execution}
 

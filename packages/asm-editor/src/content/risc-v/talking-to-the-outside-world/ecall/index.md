@@ -285,17 +285,26 @@ Services 31 and 33 play recorded instruments. The editor also has a **Synth**: a
 the ones inside 1980s game consoles and home computers, which the program controls directly. It is
 an extension of this editor; RARS does not have it.
 
-No service is involved. The Synth's controls, called **registers**, sit at memory addresses from
-`0xffff0100`, and the program changes them with ordinary stores, `sh` for a halfword and `sb` for a
-byte. Channel 0, one of the Synth's eight, starts at that address:
+The Synth has eight channels, each with its own sound controls. These are **device registers**:
+controls accessed at memory addresses. CPU registers such as `s0` and `t0` hold an address or a
+value; storing a value at a Synth control's address changes the sound.
 
-- the halfword at offset `0` is the **frequency** in Hz, how many times a second the sound
-  repeats: 440 is the A above middle C, and 262 is middle C.
+Channel 0's controls start at `0xffff0100`. The program uses `sh` to store a halfword and `sb` to
+store a byte. Each offset below is added to that starting address:
+
 - the byte at `0x11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
   2 a sawtooth, 3 a sine and 4 noise.
-- the byte at `0x12` is the volume, from 0 to 127, and the byte at `0x13` the **sustain**, the
-  level a note holds at.
+- the halfword at offset `0` sets the **frequency** in Hz, the number of repetitions per second.
+  For the triangle used below, 262 Hz is middle C and 440 Hz is the A above middle C. A higher
+  frequency gives a higher pitch.
+- the byte at `0x12` sets volume, from 0 to 127. The byte at `0x13` sets **sustain**, the level
+  held while the note sounds, also from 0 to 127. Sustain 127 holds at the selected volume;
+  sustain 64 holds at about half that level.
 - the byte at `0x10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+In the example, `s0` holds the channel's starting address. The store `sb t0, 0x11(s0)` copies a
+byte from `t0` to that address plus `0x11`, selecting the waveform. The stores control the sound;
+service 32 provides each 400-millisecond wait while it plays.
 
 ```riscv|playground
 .text
@@ -307,7 +316,7 @@ main:
     li t0, 100
     sb t0, 0x12(s0)     # volume 100
     li t0, 127
-    sb t0, 0x13(s0)     # sustain: hold the note at full volume
+    sb t0, 0x13(s0)     # sustain: hold at the selected volume
 
     li t0, 262            # middle C, in Hz
     sh t0, 0(s0)
@@ -329,11 +338,12 @@ main:
     ecall
 ```
 
-The note sounds from the moment the gate goes on until it goes off; changing the frequency in
-between slides the same note to a new pitch. Change the waveform number at `0x11` to hear how the
-shape changes the sound. The [Synth chapter](/documentation/risc-v/synth) of the Documentation
-describes the other registers: the pulse width, the **envelope** that shapes each note's volume
-over time, wavetables, and sounds the program computes itself and plays as samples.
+You hear C, E and G one after another, each held for 400 milliseconds. The gate stays on through
+both frequency changes: the pitch changes in steps within one continuing sound. The last store
+turns the gate off and ends it.
+
+Change the waveform number at `0x11` to hear how the shape changes the sound. The
+[Synth chapter](/documentation/risc-v/synth) of the Documentation describes the other controls.
 
 ## Common Playground services
 

@@ -1,11 +1,23 @@
-This program plays a short tune on the **Synth**, the sound chip this editor adds at
-`0xffff0100`; RARS does not have it. Three of its eight channels play together, the way a game
-console's music did: a pulse wave for the melody, a triangle wave for the bass, and noise for the
-drums. Choose **Build**, then **Run**, with your sound on.
+This program plays a short tune on the **Synth**, this editor's sound chip at `0xffff0100`;
+RARS does not have it. Three channels play together: a pulse wave for the melody, a triangle
+wave for the bass, and noise for the drums. Choose **Build**, then **Run**, with your sound on.
+
+Each channel repeats the same register layout every `0x20` bytes. Channels 0, 1 and 2 start at
+`s0`, `s0 + 0x20` and `s0 + 0x40`. Add a setting's offset: decay is at `0x06`, so bass decay is
+at `0x26(s0)`. `sh` writes two-byte settings; `sb` writes one-byte settings. Pulse **width**
+counts the high part of a cycle out of 4096: 1024 gives a quarter; 2048 gives half, a square wave.
+
+An **envelope** shapes a note's volume. Gate-on starts the **attack**, which rises to full
+volume; **decay** falls to the **sustain** level and holds there while the gate stays on.
+Gate-off starts the **release**, which fades to silence. Sustain ranges from 0 (silence) to 127
+(the channel's full volume). Attack, decay and release use ticks of `1/1024` second, about one
+millisecond. Decay and release values describe a fall across the whole volume range; smaller
+drops take proportionally less time. A zero time makes that phase immediate. Registers start at
+zero, so the bass's unset attack and decay are immediate, and the drum's unset sustain is silent.
 
 ```riscv|playground|allow-open
 .data
-# One row a step, an eighth of a bar: the frequencies in Hz of the lead, the bass and the drum's
+# Each triple is a step, an eighth of a bar: the frequencies in Hz of the lead, bass and drum's
 # noise. 0 leaves that channel as it is; a lead of 0xffff ends the song.
 song:
     .half 523, 131, 1200,   659, 0, 0,   784, 0, 24000,   659, 0, 0
@@ -48,7 +60,7 @@ main:
     sb t0, 0x32(s0)       # volume
     sb t0, 0x33(s0)       # sustain
 
-    # channel 2, the drums: noise that dies away at once, its sustain left at 0
+    # channel 2, the drums: noise that decays to silence, its sustain left at 0
     li t0, 4
     sb t0, 0x51(s0)       # waveform 4: noise
     li t0, 90
@@ -73,13 +85,13 @@ step:
     li a7, 32
     li a0, 150             # an eighth of a bar: 150 milliseconds
     ecall
-    addi s1, s1, 6        # the next row
+    addi s1, s1, 6        # the next three-halfword step
     j step
 
 # Plays the frequency in t0 on the channel whose registers start at a1; 0 leaves it alone.
 strike:
     beqz t0, held
-    sb zero, 0x10(a1)     # gate off, then on: the note is struck again
+    sb zero, 0x10(a1)     # gate off, then on: restart the attack from its current level
     sh t0, 0(a1)
     sb s2, 0x10(a1)
 held:
@@ -93,27 +105,33 @@ done:
     ecall
 ```
 
-The song is a table in memory, one row of three halfwords per step: the lead's frequency, the
-bass's and the drum's, in Hz. A step lasts 150 milliseconds, waited out with service 32, so the
-32 steps make four bars of eight, over the chords C, A minor, F and G. The lead plays a different
-note on every step; the bass only on the first and fifth step of a bar, its other rows holding 0,
-which leaves it sounding.
+Each table step is three halfwords: lead, bass and drum frequencies in Hz. `523, 131, 1200` is
+the first step; the first eight data lines pack four steps each. `lhu` reads their two-byte
+values at offsets 0, 2 and 4; adding 6 to `s1` reaches the next triple. A zero tells `strike` to
+leave that channel alone.
 
-Each channel is set up once, before the song starts: its waveform, its volume and its
-**envelope**, the shape its volume takes over a note. The lead is struck and decays to a level it
-holds; the bass holds at full volume; the drum's sustain is 0, so each hit decays straight to
-silence even though its gate stays on. The noise frequency sets how bright a drum sounds: 1200 is
-the low thud of a kick drum, 7000 a snare and 24000 a hi-hat.
+Service 32 waits 150 milliseconds per step. The first 32 steps make four bars of eight; the
+separate 33rd triple plays the closing chord. The following `.half -1` stores `0xffff`, the end
+marker checked in the lead position. `done` lets that chord ring for another 600 milliseconds
+before exiting. Noise frequency controls the drum's brightness: 1200 gives a low thud, 7000 a
+snare-like sound and 24000 a hi-hat-like hiss.
 
-`strike` plays one frequency on one channel. Storing the new frequency would only change the
-pitch of the note already sounding, so it turns the gate off and on around it, which attacks the
-note again: that is what makes the bass's repeated C sound twice rather than once.
+`strike` has a local register contract: its caller supplies the frequency in `t0` and the
+channel's starting address in `a1`. It reads both and uses `s2` for gate-on, 1. `jal strike`
+saves the return address in `ra`; `jr ra` jumps back to it, just like `ret`. For a nonzero
+frequency, the routine turns the gate off, stores the frequency, then turns the gate on. This
+restarts attack from the current envelope level. The bass's immediate attack and full sustain
+may therefore make repeated notes sound continuous.
 
 ## Try it
 
-Change the lead's waveform from 0 to 2, a sawtooth, for a brighter, brassier melody, or change its
-pulse width from 1024 to 2048, a square wave, for a hollower one.
+For a brighter, brassier lead, replace `sb zero, 0x11(s0)` with `li t0, 2` followed by
+`sb t0, 0x11(s0)` to select a sawtooth. Run and listen. Restore the original waveform store,
+then change `li t0, 1024` before the pulse-width store to `li t0, 2048`. Predict how the
+half-width pulse will sound, then run it to compare the hollower square wave with the original.
 
-Then make the bass shorter: give channel 1 a decay of 150 at offset `0x26` and a sustain of 0, so
-each bass note dies away like the drums. The [Synth chapter](/documentation/risc-v/synth) has the
-other registers.
+Then make the bass shorter. After its waveform store, add `li t0, 150` followed by
+`sh t0, 0x26(s0)` for decay, and replace `sb t0, 0x33(s0)` with `sb zero, 0x33(s0)` for zero
+sustain. Predict which bass notes will now have silence between them, then run and listen:
+each dies away in about 146 milliseconds, before the next 150-millisecond step. The
+[Synth chapter](/documentation/risc-v/synth) has the other registers.

@@ -435,7 +435,7 @@ function synth(): Chapter {
         title: 'Synth',
         href,
         description:
-            'The memory-mapped sound chip this editor adds: eight channels of waveforms, envelopes, wavetables and Sample memory.',
+            'Control eight sound channels through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
         entries: synthEntries('M68K', 'm68k', href)
     }
 }

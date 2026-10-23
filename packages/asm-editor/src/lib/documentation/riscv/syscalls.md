@@ -19,7 +19,7 @@ A C or C++ program reaches the same services through `<sim.h>`. Each entry names
 
 Services 31 and 33 play a note with a pitch, instrument, volume, and duration in milliseconds. Service 31 starts the note and continues immediately, so notes started close together can overlap to make a chord. Service 33 waits for the requested duration before the next instruction, which lets a sequence of notes keep time as a melody. Notes finish their duration even if the program exits; **Stop** or a new Build stops them.
 
-For sound the program shapes itself, waveforms and samples it computes, this editor adds the [Synth](/documentation/risc-v/synth), a sound chip whose registers are memory at `0xffff0100`. RARS does not have it.
+For programmable waveforms and sample playback, this editor adds the [Synth](/documentation/risc-v/synth), a sound chip whose registers are memory at `0xffff0100`. RARS does not have it.
 
 Pitch numbers run from 0 to 127. Each increase of 1 moves up a semitone: one piano-key step, counting both white and black keys. For example, 60 is middle C, 62 is D, 64 is E, 67 is G, and 72 is the C one octave above middle C.
 

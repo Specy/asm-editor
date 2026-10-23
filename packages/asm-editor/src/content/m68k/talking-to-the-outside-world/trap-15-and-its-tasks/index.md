@@ -254,26 +254,30 @@ on. Testcases run silently and never leave a sound playing, so the player is nev
 ### Waveforms on the Synth
 
 The tasks above play sounds stored in files. The editor also has a **Synth**: a sound chip like
-the ones inside 1980s game consoles and home computers, which the program controls directly. It is
-an extension of this editor; EASy68K does not have it.
+the ones inside 1980s game consoles and home computers, which the program controls directly.
+This editor extension is not available in EASy68K.
 
-No task is involved. The Synth's controls, called **registers**, sit at memory addresses from
-`$E00100`, and the program changes them with ordinary moves, `move.w` for a word and `move.b` for a
-byte. Channel 0, one of the Synth's eight, starts at that address:
+The Synth's controls, called **Synth registers**, are reached through memory addresses. Writing
+to one of these addresses directly changes a control. CPU registers such as `d0` and `a0` hold
+the values and addresses used for these writes. Use `move.w` for a word-sized control and
+`move.b` for a byte-sized one. Channel 0, one of the Synth's eight channels, starts at `$E00100`:
 
 - the word at offset `0` is the **frequency** in Hz, how many times a second the sound repeats:
   440 is the A above middle C, and 262 is middle C.
 - the byte at `$11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
   2 a sawtooth, 3 a sine and 4 noise.
-- the byte at `$12` is the volume, from 0 to 127, and the byte at `$13` the **sustain**, the level
-  a note holds at.
+- the byte at `$12` is the volume, from 0 to 127. The byte at `$13` is **sustain**, also from 0
+  to 127: 127 holds the note at the level chosen by volume, and lower values hold it more quietly.
 - the byte at `$10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
 
+Task 23 waits for the number of hundredths of a second in `d1.l`. A value of 40 waits 40/100 of
+a second, or four tenths. The Synth keeps playing during the wait.
+
 ```m68k|playground|console|no-registers|no-flags
-    lea $E00100, a0         ; channel 0 of the Synth
+    lea $E00100, a0         ; put the address $E00100 in a0
     move.b #1, $11(a0)      ; waveform 1: a triangle
     move.b #100, $12(a0)    ; volume 100
-    move.b #127, $13(a0)    ; sustain: hold the note at full volume
+    move.b #127, $13(a0)    ; sustain: hold at the chosen volume
 
     move.w #262, (a0)       ; middle C, in Hz
     move.b #1, $10(a0)      ; gate on: the note starts
@@ -281,7 +285,7 @@ byte. Channel 0, one of the Synth's eight, starts at that address:
     move.b #23, d0          ; task 23: wait
     trap #15
 
-    move.w #330, (a0)       ; E: a new frequency for the same note
+    move.w #330, (a0)       ; E: change pitch while the gate stays on
     trap #15                ; wait again: d0 and d1 still ask for it
     move.w #392, (a0)       ; G
     trap #15
@@ -291,11 +295,12 @@ byte. Channel 0, one of the Synth's eight, starts at that address:
     trap #15
 ```
 
-The note sounds from the moment the gate goes on until it goes off; changing the frequency in
-between slides the same note to a new pitch. Change the waveform number at `$11` to hear how the
-shape changes the sound. The [Synth chapter](/documentation/m68k/synth) of the Documentation
-describes the other registers: the pulse width, the **envelope** that shapes each note's volume
-over time, wavetables, and sounds the program computes itself and plays as samples.
+You should hear three successive pitches, C, E and G, each lasting four tenths of a second.
+There is no printed output. The gate stays on for all three pitches, and each frequency write
+changes the pitch immediately.
+
+Change the waveform number at `$11` to 3 to hear the same pitches with a sine wave. The
+[Synth chapter](/documentation/m68k/synth) of the Documentation describes the remaining controls.
 
 ## Your turn
 

@@ -442,9 +442,9 @@ static inline unsigned sim_rgb(int red, int green, int blue) {
     unsigned name[(width) / (unit) * ((height) / (unit))] __attribute__((__aligned__(4)))
 
 /*
- * The Synth: the sound chip this editor adds beside RARS's devices, eight channels of
- * waveforms whose registers are memory from 0xffff0100. Set a channel's registers, then turn its
- * gate on to start a note and off to end it:
+ * The Synth is an editor extension with eight sound channels. Its registers are memory from
+ * 0xffff0100. Set a channel's waveform, volume and envelope, then turn its gate on to start
+ * a note and off to release it:
  *
  *     SIM_SYNTH8(0, SIM_SYNTH_WAVEFORM) = SIM_SYNTH_TRIANGLE;
  *     SIM_SYNTH8(0, SIM_SYNTH_VOLUME) = 100;
@@ -453,25 +453,25 @@ static inline unsigned sim_rgb(int red, int green, int blue) {
  *     sim_sleep(500);
  *     sim_synth_gate(0, 0);
  *
- * It is an extension: RARS has no waveform sound. The Synth chapter of the
- * Documentation describes every register.
+ * RARS does not provide this chip. The Synth chapter of the Documentation describes
+ * its registers, waveform cycles, sample playback and envelope timing.
  */
 #define SIM_SYNTH_BASE 0xffff0100ul
 #define SIM_SYNTH_CHANNELS 8
 
 /* A channel's registers, from SIM_SYNTH_BASE + channel * 0x20. */
-#define SIM_SYNTH_FREQUENCY 0x0 /* 16 bits: frequency in Hz, or samples a second for the sample waveform */
-#define SIM_SYNTH_PULSE_WIDTH 0x2 /* 16 bits: pulse width, 0 to 4095; 2048 is a square wave */
+#define SIM_SYNTH_FREQUENCY 0x0 /* 16 bits: frequency in Hz, or samples per second for the sample waveform; 0 holds the phase and sample cursor still */
+#define SIM_SYNTH_PULSE_WIDTH 0x2 /* 16 bits: pulse width, 0 to 4095; 2048 is a square wave, and values above 4095 stay high */
 #define SIM_SYNTH_ATTACK 0x4 /* 16 bits: ticks of 1/1024 s to rise from silence to full */
 #define SIM_SYNTH_DECAY 0x6 /* 16 bits: ticks of 1/1024 s to fall the whole way from full to silence, stopping at sustain */
 #define SIM_SYNTH_RELEASE 0x8 /* 16 bits: ticks of 1/1024 s to fall the whole way from full to silence once the gate is off */
-#define SIM_SYNTH_SAMPLE_START 0xa /* 16 bits: where the sample waveform starts in Sample memory */
-#define SIM_SYNTH_SAMPLE_LENGTH 0xc /* 16 bits: how many samples it plays; 0 means all 65,536 */
-#define SIM_SYNTH_LOOP_START 0xe /* 16 bits: where a looping sample goes back to in Sample memory */
+#define SIM_SYNTH_SAMPLE_START 0xa /* 16 bits: absolute starting offset in shared Sample memory */
+#define SIM_SYNTH_SAMPLE_LENGTH 0xc /* 16 bits: number of samples to play, wrapping at 65,536; 0 means 65,536 samples */
+#define SIM_SYNTH_LOOP_START 0xe /* 16 bits: absolute offset in Sample memory to return to when looping */
 #define SIM_SYNTH_CONTROL 0x10 /* 8 bits: bit 0 gate: on attacks, off releases; bit 1 loop the sample */
 #define SIM_SYNTH_WAVEFORM 0x11 /* 8 bits: which waveform the channel plays, from the table of waveforms */
-#define SIM_SYNTH_VOLUME 0x12 /* 8 bits: volume, 0 to 127 */
-#define SIM_SYNTH_SUSTAIN 0x13 /* 8 bits: the level the decay stops at while the gate is on, 0 to 127 */
+#define SIM_SYNTH_VOLUME 0x12 /* 8 bits: volume, 0 to 127; higher values sound as 127 */
+#define SIM_SYNTH_SUSTAIN 0x13 /* 8 bits: level held while the gate is on after decay, 0 to 127; higher values sound as 127 */
 
 /* The waveform register's values. */
 #define SIM_SYNTH_PULSE 0
@@ -490,11 +490,12 @@ static inline unsigned sim_rgb(int red, int green, int blue) {
 #define SIM_SYNTH_TABLE(channel) \
     ((volatile unsigned char *)(SIM_SYNTH_BASE + 0x100u + (unsigned long)(channel) * 0x10u))
 
-/* The upload into Sample memory, from SIM_SYNTH_BASE; writing the start register copies. */
+/* Shared upload registers, with offsets from SIM_SYNTH_BASE rather than a channel's address.
+ * A program write to the start register copies immediately; a memory-view Poke does not copy. */
 #define SIM_SYNTH_UPLOAD_SOURCE 0x180 /* 32 bits: where the copy comes from, in the program's memory */
-#define SIM_SYNTH_UPLOAD_LENGTH 0x184 /* 16 bits: how many bytes it copies; 0 means 65,536 */
-#define SIM_SYNTH_UPLOAD_DESTINATION 0x186 /* 16 bits: where they go in Sample memory */
-#define SIM_SYNTH_UPLOAD_START 0x188 /* 8 bits: any write copies, at that instant */
+#define SIM_SYNTH_UPLOAD_LENGTH 0x184 /* 16 bits: number of bytes to copy; 0 means 65,536 */
+#define SIM_SYNTH_UPLOAD_DESTINATION 0x186 /* 16 bits: destination offset in shared Sample memory; the copy wraps at 65,536 */
+#define SIM_SYNTH_UPLOAD_START 0x188 /* 8 bits: any program write copies immediately; a memory-view Poke does not copy */
 
 /* A channel's register of 8 or 16 bits, to read or write. */
 #define SIM_SYNTH8(channel, offset) \
@@ -505,20 +506,20 @@ static inline unsigned sim_rgb(int red, int green, int blue) {
 #define SIM_SYNTH_UPLOAD16(offset) (*(volatile unsigned short *)(SIM_SYNTH_BASE + (offset)))
 #define SIM_SYNTH_UPLOAD32(offset) (*(volatile unsigned *)(SIM_SYNTH_BASE + (offset)))
 
-/** Sets a Synth channel to a frequency in Hz and turns its gate on, starting a note when the gate was off. */
+/** Sets frequency in Hz and turns the gate on. If it is already on, turn it off first with sim_synth_gate(channel, 0) to start another attack. */
 static inline void sim_synth_play(int channel, unsigned hz) {
     SIM_SYNTH16(channel, SIM_SYNTH_FREQUENCY) = (unsigned short)hz;
     SIM_SYNTH8(channel, SIM_SYNTH_CONTROL) |= SIM_SYNTH_GATE;
 }
 
-/** Turns a Synth channel's gate on, which starts its attack, or off, which starts its release. */
+/** Changes a Synth channel's gate: off to on starts attack, on to off starts release. Keeping the same gate value does not retrigger. */
 static inline void sim_synth_gate(int channel, int on) {
     unsigned char control = SIM_SYNTH8(channel, SIM_SYNTH_CONTROL);
     SIM_SYNTH8(channel, SIM_SYNTH_CONTROL) =
         (unsigned char)(on ? control | SIM_SYNTH_GATE : control & ~SIM_SYNTH_GATE);
 }
 
-/** Copies length bytes of signed 8-bit samples from source into the Synth's Sample memory at offset, at once. */
+/** Immediately copies signed 8-bit sample bytes from source into shared Sample memory at offset. Length 0 means 65,536 bytes; the destination wraps at 65,536. */
 static inline void sim_synth_upload(const void *source, unsigned length, unsigned offset) {
     SIM_SYNTH_UPLOAD32(SIM_SYNTH_UPLOAD_SOURCE) = (unsigned)(unsigned long)source;
     SIM_SYNTH_UPLOAD16(SIM_SYNTH_UPLOAD_LENGTH) = (unsigned short)length;
