@@ -308,18 +308,18 @@
     }
 
     /* the column's own control, ruled off from memory's page buttons before it so that its
-       arrows do not read as one more page */
+       arrows do not read as one more page: a narrow strip from the card's top edge down to the
+       controls' rule, flush with the card's right edge */
     .collapse-button {
-        position: relative;
-        margin-left: 0.2rem;
         display: grid;
         place-items: center;
         flex: none;
-        width: 1.8rem;
-        min-height: 1.8rem;
+        width: 1.3rem;
+        margin: -0.3rem -0.3rem -0.3rem 0;
         padding: 0;
         border: none;
-        border-radius: 0.4rem;
+        border-left: 1px solid var(--wb-line, var(--tertiary));
+        border-radius: 0;
         background: transparent;
         color: var(--secondary-text);
         cursor: pointer;
@@ -335,15 +335,7 @@
 
         &:focus-visible {
             outline: solid 0.1rem var(--accent);
-        }
-
-        &::before {
-            content: '';
-            position: absolute;
-            left: -0.35rem;
-            top: 0.3rem;
-            bottom: 0.3rem;
-            border-left: 1px solid var(--wb-line, var(--tertiary));
+            outline-offset: -0.1rem;
         }
     }
 

@@ -7,24 +7,19 @@
     interface Props {
         code: string
         language: AvailableLanguages
-        /** The loaded editor's panels, with its defaults, so the preview reserves their room. */
-        showMemory?: boolean
+        /** Whether the loaded editor has a console, so the preview reserves its room. */
         showConsole?: boolean
     }
 
-    let { code, language, showMemory = true, showConsole = false }: Props = $props()
+    let { code, language, showConsole = false }: Props = $props()
 </script>
 
-<!-- Invisible stand-ins for the loaded editor's panels, laid out by the same rules, wrap where its
-     panels wrap. The source spans all of them, so the editor takes the room the preview had and
-     nothing below it moves when it loads. -->
+<!-- Invisible stand-ins for what the loaded editor shows before a Build, the code and the console,
+     laid out by the same rules: its memory and registers wait for the program. The source spans
+     both, so the editor takes the room the preview had and nothing below it moves when it loads. -->
 <div class="instruction-example playground preview">
     <div class="top-row" aria-hidden="true">
         <div class="editor"></div>
-        <div class="data-registers-wrapper"></div>
-        {#if showMemory}
-            <div class="code-data-memory-controls"></div>
-        {/if}
     </div>
     {#if showConsole}
         <div class="console" aria-hidden="true"></div>

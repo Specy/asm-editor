@@ -100,10 +100,10 @@ function playgroundBox(fence: PlaygroundFence, parent: Parent) {
             ? ''
             : 'max-width: 70ch; margin: 1.5rem var(--md-inline-margin, auto);'
     const screenHeight = fence.settings.showScreen ? 'min(40rem, 85vh)' : undefined
-    //a Screen that waits for a Build (`hide-until-built`) is not there to make room for until then:
-    //the frame starts at the stylesheet's height and the renderer grows it once the embed says it
-    //is built. A `tall` fence asked for its height whatever it shows
-    const grows = !fence.tall && fence.settings.hideUntilBuilt && screenHeight !== undefined
+    //a playground's Screen waits for a Build (see `embedQuery`), so there is nothing to make room
+    //for until then: the frame starts at the stylesheet's height and the renderer grows it once the
+    //embed says it is built. A `tall` fence asked for its height whatever it shows
+    const grows = !fence.tall && screenHeight !== undefined
     const height = fence.tall
         ? 'height: 80dvh;'
         : screenHeight && !grows
@@ -300,6 +300,11 @@ function markedTestcases(raw: string | undefined): Testcase[] {
     }
 }
 
+/**
+ * The embed's settings for a fence. Every playground keeps its memory, registers, flags, PC and
+ * Screen out of the way until its program is built, leaving the reader the whole width for the code
+ * while it is edited; the console and the Testcases stay, so nothing under the code moves on Build.
+ */
 function embedQuery(settings: PlaygroundSettings): string {
     const showMemory = settings.showMemory ? 'showMemory=true&' : ''
     const showConsole = settings.showConsole ? 'showConsole=true&' : ''
@@ -309,7 +314,7 @@ function embedQuery(settings: PlaygroundSettings): string {
     const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
     const showScreen = settings.showScreen ? 'showScreen=true&' : ''
     const openScreen = settings.openScreen ? 'openScreen=true&' : ''
-    const hideUntilBuilt = settings.hideUntilBuilt ? 'hideUntilBuilt=true&' : ''
+    const hideUntilBuilt = 'hideUntilBuilt=true&'
     const showOpenButton = settings.openButton ? 'openButton=true&' : ''
     const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
     return [

@@ -166,14 +166,17 @@ value from one half to the other. Intel's manuals call each half a **128-bit lan
 arithmetic such as `vaddps` this changes nothing. For instructions that rearrange data it limits
 where a value can go.
 
-`vpshufb ymm1, ymm0, ymm3` builds each byte of `ymm1` from a control byte at the same position in
-`ymm3`. The control byte's low four bits pick one of the 16 bytes of `ymm0` in the **same half**; a
-control byte with its top bit set produces zero. With the control bytes `15, 14, ..., 0` in both
-halves, `vpshufb` reverses each half separately. Reversing all 32 bytes needs a second instruction
-that does cross: `vpermq ymm2, ymm1, 0x4E` rearranges the four qwords of `ymm1`. Its immediate holds
-four 2-bit fields; field `i`, starting from the low bits, names the source qword for destination
-qword `i`. `0x4E` is `01 00 11 10` in binary, so destination qwords 0 to 3 take source qwords 2, 3,
-0 and 1, which swaps the halves.
+`vpshufb ymm1, ymm0, ymm3` builds each byte of `ymm1` using a control byte at the same position in
+`ymm3`:
+- Bits 0–3 of the control byte pick one of the 16 bytes in the **same 128-bit half** of `ymm0`.
+- If bit 7 of the control byte is set, that byte becomes `0`.
+
+With the control bytes `15, 14, ..., 0` in both halves, `vpshufb` reverses the 16 bytes inside each
+half separately. To finish reversing all 32 bytes across the whole register, you need a second
+instruction that crosses between halves: `vpermq ymm2, ymm1, 0x4E` rearranges the four 64-bit
+qwords of `ymm1`. Its 8-bit immediate contains four 2-bit selectors (from lowest to highest
+destination qword). `0x4E` is `01_00_11_10` in binary, which selects qwords `2, 3, 0, 1`—swapping
+the low and high 128-bit halves:
 
 ```x86|playground|avx|no-flags
 default rel
@@ -198,9 +201,9 @@ _start:
     syscall
 ```
 
-Switch the AVX tab to hex to read the bytes. The hex row prints byte 31 first and byte 0 last, as a
-number is written. `ymm1` reads `101112…1f000102…0f`: byte 0 is 15 and byte 16 is 31, so no byte
-left its half. `ymm2` reads `000102…1e1f`: byte 0 is 31 and byte 31 is 0.
+Switch the **AVX** tab to hex to inspect the bytes (shown from byte 31 on the left down to byte 0 on
+the right). In `ymm1`, each 16-byte half is reversed in place (`0f..00` in the low half and `1f..10`
+in the high half). After `vpermq`, `ymm2` has all 32 bytes reversed from `1f` down to `00`.
 
 The instructions that move data between halves include `vpermq`, `vpermd`, `vperm2i128`,
 `vperm2f128`, `vextractf128`, `vinsertf128` and the broadcasts. Shuffles such as `vpshufd`,
@@ -346,22 +349,23 @@ it knows the address is aligned, so the fault reveals an address that broke that
 
 ## Checking for AVX
 
-Not every x86-64 processor has AVX, so a program meant to run anywhere asks the `cpuid` instruction
-before it uses AVX instructions: `cpuid` with `eax = 1` reports AVX in bit 28 of `ecx`, and the
-program also checks bit 27 (OSXSAVE) and the `xgetbv` instruction, which together say that the
-operating system saves the `ymm` registers. This emulator's `cpuid` sets neither bit, although the
-emulator runs AVX instructions; a real processor with AVX would set both. A program that checks first therefore takes its SSE path here,
-while code that uses AVX instructions directly, like the programs on this page, runs.
+Because not every x86-64 processor supports AVX, portable programs check at runtime before running
+AVX code:
+1. Run `cpuid` with `eax = 1` and verify that bit 27 (`OSXSAVE`) and bit 28 (`AVX`) of `ecx` are set.
+2. Run `xgetbv` with `ecx = 0` and verify that bits 1 and 2 of `eax` are set, confirming that the
+   operating system saves and restores the `xmm` and `ymm` registers across context switches.
+
+Note that in this emulator, AVX instructions run directly without any setup, even though `cpuid`
+reports a baseline SSE2 processor with those feature bits clear.
 
 ## Your turn: scale and offset eight values
 
-Compute `x * scale + offset` for all eight binary32 values at `x`, with the result in `ymm0`.
-`scale` and `offset` are single values, so they have to reach every lane first. One FMA instruction
-can do the multiplication and the addition.
+Compute `x * scale + offset` for all eight binary32 values at `x`, leaving the result in `ymm0`.
+`scale` and `offset` are single floats in memory, so broadcast each one across all eight lanes first,
+then combine them with a single FMA instruction.
 
-The fixed code stores `ymm0` to `out` and loads its four qwords into `r12` to `r15`, because a
-Testcase reads memory and the general registers but not the vector registers. Each qword holds two
-lanes, the lower-numbered one in its low 32 bits.
+Leave the eight results in `ymm0`. The code at the end stores `ymm0` to `out` and copies it into
+`r12` through `r15` to check all eight lanes.
 
 ```x86|playground|avx|memory|exercise
 default rel

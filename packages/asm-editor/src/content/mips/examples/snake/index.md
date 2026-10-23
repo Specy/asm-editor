@@ -6,7 +6,7 @@ Select **Open in editor**, then **Build** and **Run**. Click the **Screen** befo
 `w`, `a`, `s` or `d` to steer. Click it again if you return to the editor. Press **Run** again for a
 new game. Each cell is one word in `display`; the `# @screen` line connects those words to the Screen.
 
-```mips|playground|open-screen|hide-until-built|console|no-registers|allow-open
+```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
 .eqv MMIO 0xffff0000
 .eqv SIDE 32                # the board, in cells

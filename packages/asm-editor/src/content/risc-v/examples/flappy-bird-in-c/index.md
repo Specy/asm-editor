@@ -27,7 +27,7 @@ These functions come from the editor's `<sim.h>`; no extra header or library nee
 to the project. In Generated assembly, keyboard polling becomes memory-mapped loads, and timing
 and printing become `ecall` instructions.
 
-```c|playground|target=riscv|file=flappy-bird.c|open-screen|hide-until-built|console|no-registers|allow-open
+```c|playground|target=riscv|file=flappy-bird.c|open-screen|console|no-registers|allow-open
 #include <sim.h>
 
 /* 256 x 256 pixels, with one array cell for each 4 x 4 square. */

@@ -112,6 +112,8 @@ describe('playground embeds', () => {
             expect(src).toContain('language=M68K')
             expect(src).toContain('showMemory=true')
             const url = embedUrl(target.querySelector('iframe'))
+            //every playground leaves the code the whole width until its program is built
+            expect(url.searchParams.get('hideUntilBuilt')).toBe('true')
             //the highlight's spans and the gutter are presentation only
             expect(
                 lzstring.decompressFromEncodedURIComponent(url.searchParams.get('code') ?? '')
@@ -192,17 +194,11 @@ describe('playground embeds', () => {
         }
     })
 
-    it('start a Screen that waits for its Build as short as the code, and grow on Build', () => {
-        const screen = [
-            '```mips|playground|open-screen|hide-until-built',
-            '    nop',
-            '```',
-            ''
-        ].join('\n')
+    it('start a Screen as short as the code, and grow on Build', () => {
+        const screen = ['```mips|playground|open-screen', '    nop', '```', ''].join('\n')
         const { target, cleanup } = render(`${screen}\n${screen}`)
         try {
             const [first, second] = target.querySelectorAll('iframe')
-            expect(embedUrl(first).searchParams.get('hideUntilBuilt')).toBe('true')
             expect(first.style.height).toBe('')
             expect(first.dataset.builtHeight).toBe('min(40rem, 85vh)')
             const tell = (built: boolean) =>
@@ -223,12 +219,11 @@ describe('playground embeds', () => {
         }
     })
 
-    it('keep a Screen that shows from the start at its height', () => {
-        const { target, cleanup } = render('```mips|playground|open-screen\n    nop\n```\n')
+    it('keep a tall Screen at the height it asked for', () => {
+        const { target, cleanup } = render('```mips|playground|open-screen|tall\n    nop\n```\n')
         try {
             const iframe = target.querySelector('iframe')!
-            expect(embedUrl(iframe).searchParams.has('hideUntilBuilt')).toBe(false)
-            expect(iframe.style.height).toBe('min(40rem, 85vh)')
+            expect(iframe.style.height).toBe('80dvh')
             expect(iframe.dataset.builtHeight).toBeUndefined()
         } finally {
             cleanup()

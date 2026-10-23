@@ -19,7 +19,7 @@ reading it:
 Start with `frame`, `readflap`, `movepipes` and `hittest`. You can skim the shape and colour helpers
 under `Drawing` on a first pass.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
     ORG     $1000
 
 start:

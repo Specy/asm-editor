@@ -171,7 +171,8 @@
             outline-offset: -2px;
         }
         &[aria-pressed='true'] {
-            background: color-mix(in srgb, var(--accent) 22%, transparent);
+            background: var(--accent);
+            color: var(--accent-text);
         }
     }
     /* a narrow pane keeps the buttons' icons and drops their words */

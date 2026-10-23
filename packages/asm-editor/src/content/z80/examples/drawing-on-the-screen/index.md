@@ -8,7 +8,7 @@ operation has two steps: set its colours and coordinates, then write **one comma
 `C_LINE_TO` draws from there to a new point; and `C_FLOOD` spreads colour from a starting point.
 The other commands here clear the Screen or draw a rectangle or ellipse.
 
-```z80|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
+```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10        ; the console character port draws at the text cursor
 P_PEN   equ 0x20        ; lines, outlines and text
 P_FILL  equ 0x21        ; the inside of a shape, and the clear

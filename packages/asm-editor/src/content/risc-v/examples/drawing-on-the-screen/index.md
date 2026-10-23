@@ -95,7 +95,7 @@ include both edges of the surrounding square, while the distance comparison uses
 
 Here is the complete picture. Press Run and open the Screen panel.
 
-```riscv|playground|open-screen|hide-until-built|no-registers|allow-open
+```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE, 32
 .eqv SKY, 0x0070B0E0

@@ -28,7 +28,7 @@ The values that must survive calls to `fill_rect` live in saved registers:
 
 As before, `s0` holds the display address and `s1` holds the colour for the next rectangle call.
 
-```riscv|playground|open-screen|hide-until-built|no-registers|allow-open
+```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv MMIO, 0xffff0000
 .eqv SIDE, 32               # words across and down

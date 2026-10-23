@@ -28,11 +28,6 @@ export type PlaygroundSettings = {
     showScreen: boolean
     /** Whether the Screen panel starts unfolded instead of behind its "Show screen" bar. */
     openScreen: boolean
-    /**
-     * Whether the memory, registers, flags, PC and Screen wait for a Build, so the playground is
-     * only as tall as its code until then.
-     */
-    hideUntilBuilt: boolean
     openButton: boolean
     /**
      * The Register file the panel opens on, lower case, or undefined for the CPU file. Only the
@@ -168,7 +163,6 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
             showFlags: !entries.includes('no-flags'),
             showScreen,
             openScreen,
-            hideUntilBuilt: entries.includes('hide-until-built'),
             openButton: entries.includes('allow-open'),
             registerFile
         },

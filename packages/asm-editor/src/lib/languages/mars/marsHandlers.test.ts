@@ -33,6 +33,7 @@ function setup(
         },
         executionController,
         devices: { flush: () => {} },
+        pauseAtSleep: () => {},
         setInterrupt: (interrupt) => {
             interrupts.push(interrupt)
         },

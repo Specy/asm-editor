@@ -14,7 +14,7 @@ width and height in `$a0`–`$a3`. `fill_disc` takes a centre column, centre row
 colour, base address and roof counter in `$s3` survive their calls. The coordinates used here keep
 every stored cell inside the grid.
 
-```mips|playground|open-screen|hide-until-built|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE 32                # words across and down
 .eqv SKY 0x0070B0E0

@@ -81,6 +81,10 @@
         registerFile: undefined
     })
     let inIframe = $state(true)
+    //framed by one of our own pages (a lecture, the documentation), whose sections already sit
+    //apart by the Workbench's gap: the frame's own padding is that gap, so its cards line up with
+    //the page's. A frame on someone else's site keeps the roomier padding
+    let framedByUs = $state(false)
     let code = $state(BASE_CODE[defaultLanguage])
     let project = $state<Project>()
     let loadedEmulator = $state<Emulator | null>(null)
@@ -93,6 +97,7 @@
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     onMount(() => {
         inIframe = window.self !== window.top
+        framedByUs = inIframe && framedBySameOrigin()
         settings = getSettings()
         code = getCodeFromUrl() ?? BASE_CODE[settings.language]
         testcases = cleanTestcases(getTestsFromUrl())
@@ -184,6 +189,15 @@
         } catch (e) {
             console.error(e)
             return []
+        }
+    }
+
+    function framedBySameOrigin() {
+        try {
+            return window.parent.location.origin === window.location.origin
+        } catch {
+            //another origin's location is not ours to read
+            return false
         }
     }
 
@@ -314,8 +328,8 @@
     {/if}
     <Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
         <div
+            class="playground"
             class:embed-builder={!inIframe}
-            class:playground={!inIframe}
             style={inIframe ? 'display: contents' : ''}
         >
             {#if !inIframe}
@@ -330,7 +344,7 @@
 
             <div class:builder-workspace={!inIframe} style={inIframe ? 'display: contents' : ''}>
                 <Column
-                    style={`padding: 0.5rem 0.5rem ${inIframe ? '0.5rem' : '0'}; flex:1; min-width: 0`}
+                    style={`--embed-padding: ${framedByUs ? 'var(--wb-gap)' : '0.5rem'}; padding: var(--embed-padding) var(--embed-padding) ${inIframe ? 'var(--embed-padding)' : '0'}; flex:1; min-width: 0`}
                 >
                     {#if ready}
                         {#key settings.language}

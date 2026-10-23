@@ -123,8 +123,8 @@ export {
 const MIPS_INSTRUCTIONS_PER_MS = 7_000
 
 /**
- * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
- * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). A millisecond
+ * How much wall time one `simulate*` call aims at, which is also about how far a chunk can carry the
+ * slice past its deadline before the next check (`marsSlice.ts`). A millisecond
  * is about eleven thousand instructions of compute and fifty calls in a compute slice, which the
  * call overhead measured there puts at half a percent of throughput.
  */
@@ -176,7 +176,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * registered on each freshly assembled Core.
      */
     private readonly handlers: MarsHandlers
-    /** The chunking of a slice, which is what keeps a sleeping program's slice short (`marsSlice.ts`). */
+    /** The chunking of a slice, which is what keeps it near its deadline (`marsSlice.ts`). */
     private readonly pacer = new MarsSlicePacer(MIPS_CHUNK_TARGET_MS)
     /** MARS's five display parameters, from the project and changed from the Screen panel. */
     private display: ProjectDisplay
@@ -192,6 +192,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
+    /** Whether a slice is running the Core, which is when a sleep ends the call (`pauseAtSleep`). */
+    private slicing = false
     /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
     private programArgv: string[] = []
 
@@ -232,6 +234,9 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 this.state.interrupt = interrupt
                 //MARS advances PC before invoking the syscall's asynchronous handler.
                 if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
+            },
+            pauseAtSleep: () => {
+                if (this.slicing) this.mips?.pause()
             },
             fileSystem: () => this.fileSystemSession,
             instructionSerial: () => this.requireMips().getCurrentInstructionSerial()
@@ -915,14 +920,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     /**
      * The Core stops for input by leaving the pending `simulate*` promise unsettled, and serves a
-     * `sleep` the same way, so both are served inside the slice and only the budget, a breakpoint
-     * or the end of the program end one. The budget is spent in chunks by the pacer, which is what
-     * keeps the slice of a sleeping program, and the pause it holds off, to about one sleep
-     * (`marsSlice.ts`). The Core reports no instruction count, so a chunk that came back still
-     * runnable ran its whole limit, which is exact for the compute-only case the budget exists for.
+     * `sleep` the same way. A read is served inside the slice; a sleep ends it, through the handler's
+     * `pauseAtSleep`, so the slice ends where the program's frame does and the next one starts on a
+     * fresh frame. The budget is spent in chunks by the pacer, which keeps a slice near its deadline
+     * (`marsSlice.ts`), and every chunk is charged what the Core says it executed.
      *
      * The bitmap display catches up once per slice rather than once per stored word, which is what
-     * keeps the observer cheap; a program that sleeps flushes from the handler too.
+     * keeps the observer cheap; a program that sleeps or waits for input flushes from the handler
+     * too.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const mips = this.requireMips()
@@ -930,18 +935,21 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         if (mips.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(mips, request.breakpoints)
         this.handlers.beginExecution()
-        return this.coreCall(() =>
-            this.pacer.run(
-                request,
-                MIPS_INSTRUCTIONS_PER_MS,
-                this._peripherals.clock,
-                async (limit) => {
+        this.slicing = true
+        try {
+            return await this.coreCall(() =>
+                this.pacer.run(request, MIPS_INSTRUCTIONS_PER_MS, async (limit) => {
                     const stop = await mips.simulateWithBreakpointsAndLimit(breakpoints, limit)
-                    if (endsProgram(stop)) return 'terminated'
-                    return stop === StopReason.BREAKPOINT ? 'breakpoint' : 'ran'
-                }
+                    const instructions = mips.getLastRunInstructionCount()
+                    if (endsProgram(stop)) return { outcome: 'terminated', instructions }
+                    if (stop === StopReason.BREAKPOINT)
+                        return { outcome: 'breakpoint', instructions }
+                    return { outcome: stop === StopReason.PAUSE ? 'paused' : 'ran', instructions }
+                })
             )
-        )
+        } finally {
+            this.slicing = false
+        }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

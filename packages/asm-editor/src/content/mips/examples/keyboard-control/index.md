@@ -13,7 +13,7 @@ at that address, and its data register is four bytes later, at `0xffff0004`. Loa
 addresses ask the device for input. Stores to `display` paint Screen cells; loads from `display`
 read their current colour words.
 
-```mips|playground|open-screen|hide-until-built|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv MMIO 0xffff0000
 .eqv SIDE 32                # words across and down

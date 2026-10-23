@@ -344,9 +344,11 @@
         margin-bottom: 0;
     }
 
+    /* no frame of its own: the embed's cards sit on the page as its sections do, apart by the same
+       small gap (the embed pads itself by it when a page of ours frames it) */
     :global(._markdown .code-playground) {
         box-sizing: border-box;
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border: none;
         border-radius: 0.8rem;
         width: 100%;
         min-height: 21.4rem;

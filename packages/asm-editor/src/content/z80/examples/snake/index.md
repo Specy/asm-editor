@@ -478,7 +478,7 @@ Try two small changes after you have played:
 
 Build this one and play it.
 
-```z80|playground|open-screen|hide-until-built|console|no-registers|no-flags|allow-open
+```z80|playground|open-screen|console|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10        ; a character, on the Screen and in the transcript
 P_NUM   equ 0x11        ; a byte as an unsigned decimal number
 P_PEN   equ 0x20

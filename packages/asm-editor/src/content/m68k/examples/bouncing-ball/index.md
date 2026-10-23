@@ -5,7 +5,7 @@ looping until you stop it or the editor's run limit is reached.
 The ball begins at `(100, 60)`. Each frame uses its current position, then changes that position
 for the next frame. Its horizontal step is 5 pixels and its vertical step is 3 pixels.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 SIZE    equ 40
 LIMITX  equ 640-40
 LIMITY  equ 480-40

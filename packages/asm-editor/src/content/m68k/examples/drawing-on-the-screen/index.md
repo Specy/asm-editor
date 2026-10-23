@@ -6,7 +6,7 @@ earlier ones.
 Each drawing request puts a task number in `d0.b` and its arguments in registers, then calls
 `trap #15`. The Screen holds the picture; the program does not store its pixels in M68K memory.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 SKY     equ $00E0B070       ; a colour is $00BBGGRR: blue, green, then red
 GRASS   equ $003C9648
 SUN     equ $0000D2FF

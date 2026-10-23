@@ -1460,10 +1460,11 @@
         line-height: 0.72rem;
         letter-spacing: 0.04em;
 
+        /* solid, since the selected row under it is tinted with the accent */
         &.selected {
-            color: var(--accent);
-            background: color-mix(in srgb, var(--accent) 12%, transparent);
-            border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+            color: var(--accent-text);
+            background: var(--accent);
+            border-color: var(--accent);
         }
     }
 

@@ -545,7 +545,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0.2rem;
+        //Rubik's capitals sit a little above the middle of their line
+        padding: 0.25rem 0.2rem 0.15rem;
         font-family: Rubik;
         border-radius: 0.2rem;
         border: none;

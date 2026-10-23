@@ -780,7 +780,8 @@
         flex: none;
         min-width: 1.45rem;
         height: 1.45rem;
-        padding: 0 0.2rem;
+        /* Fira Code's glyphs sit a little above the middle of their line box */
+        padding: 0.1em 0.2rem 0;
         border: 1px solid transparent;
         border-radius: 0.3rem;
         background: transparent;
@@ -798,26 +799,29 @@
 
         &[aria-pressed='true'] {
             opacity: 1;
-            color: var(--accent);
-            border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-            background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+            color: var(--accent-text);
+            background-color: var(--accent);
         }
 
+        /* the underline already fills the space below the letters */
         &.wholeWord {
+            padding-top: 0;
             text-decoration: underline;
             text-underline-offset: 0.18em;
         }
     }
 
+    /* as tall as the query box beside it, and square */
     .details {
         display: grid;
         place-items: center;
         flex: none;
-        width: 1.7rem;
-        height: 1.7rem;
-        padding: 0.42rem;
+        align-self: stretch;
+        width: 2rem;
+        min-height: 2rem;
+        padding: 0.57rem;
         border: none;
-        border-radius: 0.3rem;
+        border-radius: 0.5rem;
         background: transparent;
         color: inherit;
         opacity: 0.75;

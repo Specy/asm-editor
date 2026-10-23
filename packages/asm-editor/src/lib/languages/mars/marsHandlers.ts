@@ -82,8 +82,14 @@ export type MarsHandlerHost = {
     peripherals: Pick<EmulatorPeripherals, 'terminal' | 'clock' | 'random'>
     /** What ties a wait or a read to the run that asked for it. */
     executionController: ExecutionController
-    /** The bitmap display, whose picture catches up before the program sleeps. */
+    /** The bitmap display, whose picture catches up before the program sleeps or waits on the user. */
     devices: Pick<MarsDevices, 'flush'>
+    /**
+     * Ends the Core call at the sleep being served, when a slice is running it: the Core's
+     * `pause()`, which ends the slice where the program's frame does (`marsSlice.ts`). A Step or a
+     * Testcase runs on through the sleep.
+     */
+    pauseAtSleep(): void
     /** Shows the read or dialog the program is waiting on (`state.interrupt`), or clears it. */
     setInterrupt(interrupt: EmulatorInterrupt | undefined): void
     /** The Build's FileSystem session, or null when none is running. */
@@ -264,11 +270,13 @@ export class MarsHandlers {
      * ([ADR 0010](../../../../../../docs/adr/0010-program-time-without-clock-pacing.md)).
      *
      * The Screen catches up first: an animation draws a frame and then sleeps, and the frame has to
-     * be on screen while the program waits, not at the end of the slice several frames later.
+     * be on screen while the program waits, not at the end of the slice several frames later. The
+     * slice then ends once the sleep is over, so the next one starts on a fresh frame.
      */
     private async sleep(milliseconds: number): Promise<void> {
         const execution = this.execution
         this.host.devices.flush()
+        this.host.pauseAtSleep()
         //read the clock at the point of use: a Testcase swaps a virtual one in and the injected one back
         const clock = this.host.peripherals.clock
         await this.host.executionController.waitFor(execution, () => clock.wait(milliseconds))
@@ -278,6 +286,10 @@ export class MarsHandlers {
      * Shows what the program waits on as the Emulator's interrupt while `answer` settles. The Core
      * suspends the pending `step`/`simulate*` call for as long as a handler's promise is unsettled,
      * and `type` mirrors the handler's name so the UI can tell which service is waiting.
+     *
+     * The Screen catches up first, as it does before a `sleep`: the slice has not ended, so without
+     * it a program that draws a board and then asks for a move would show the old board while the
+     * prompt waits for the answer.
      */
     private async waitOn<T>(
         type: string,
@@ -285,6 +297,7 @@ export class MarsHandlers {
         answer: (execution: ExecutionGeneration) => Promise<T>
     ): Promise<T> {
         const execution = this.execution
+        this.host.devices.flush()
         this.host.setInterrupt({ type, message })
         try {
             return await answer(execution)

@@ -47,7 +47,7 @@
         if (patchable)
             return `Generated Listing of ${document.name}: read-only. While the program is paused, Space or the context menu patches the instruction on a line, in memory only.`
         if (builtFrom)
-            return `Generated Listing of ${document.name}, the program a Build of ${builtFrom} saved: read-only. While that program runs, the debugger follows it in ${builtFrom}.`
+            return `Generated Listing of ${document.name} (built from ${builtFrom}): read-only. While debugging, execution is shown in ${builtFrom}.`
         return `Generated Listing of ${document.name}: read-only.`
     })
 </script>

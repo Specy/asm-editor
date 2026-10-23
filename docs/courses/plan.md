@@ -275,12 +275,14 @@ screen" bar; it implies `screen`). Every page in `packages/asm-editor/src/conten
 on 2026-09-11: a reader whose program draws wants the drawing in front of them, and the bar is still
 there to fold it away. Added by the Register files work (2026-09-14): `fpu`, `cp0`, `csr`, `sse` and
 `x87` open the register panel on that Register file instead of on the CPU one, for the languages that
-have it (`docs/design/register-files.md`); a fence naming several keeps the first. Added 2026-10-20:
-`hide-until-built` keeps the memory, registers, flags, PC and Screen out of the playground until its
-program is built (they leave again on Stop), so a Screen fence's frame starts at the ordinary
-playground height and grows to the Screen's on Build; the console and the Testcases stay. Every page
-in `packages/asm-editor/src/content` that draws pairs it with `open-screen`. Every flag is read
-exactly as it is spelled here, so `FPU` names no file any more than `MEMORY` shows the memory panel.
+have it (`docs/design/register-files.md`); a fence naming several keeps the first. Since 2026-10-23
+every playground, and every instruction page's example, keeps the memory, registers, flags, PC and
+Screen out of the way until its program is built (they leave again on Stop), so the code has the
+whole width while it is edited and a Screen fence's frame starts at the ordinary playground height
+and grows to the Screen's on Build; the console and the Testcases stay, so nothing under the code
+moves. That replaced the `hide-until-built` flag of 2026-10-20, which asked for it fence by fence.
+Every flag is read exactly as it is spelled here, so `FPU` names no file any more than `MEMORY`
+shows the memory panel.
 
 Exercise, to be supported by the renderer and the verification test:
 

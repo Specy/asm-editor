@@ -22,7 +22,7 @@ The low 24 bits of each word hold a colour in **RRGGBB** order: red in bits 23â€
 
 This first program reserves a 16 by 16 framebuffer and changes four of its words.
 
-```mips|playground|open-screen|hide-until-built|memory
+```mips|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
 display: .space 1024        # 16 * 16 words * 4 bytes
@@ -80,7 +80,7 @@ When the column count is a power of two, shifts perform both multiplications. Th
 horizontal row in the 16-column framebuffer. It recomputes the formula for each value of `x` so the
 connection between coordinates and addresses stays visible.
 
-```mips|playground|open-screen|hide-until-built|memory
+```mips|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .eqv COLUMNS 16
 .data
@@ -148,7 +148,7 @@ Click the Screen before typing. A visible focus ring shows that it owns the keyb
 the console reach the receiver too, after any typed on the Screen; keys typed anywhere else on the
 page do not.
 
-```mips|playground|open-screen|hide-until-built|console|no-registers
+```mips|playground|open-screen|console|no-registers
 .eqv RECEIVER_CONTROL 0xffff0000
 .eqv RECEIVER_DATA    0xffff0004
 .eqv TRANSMITTER_DATA 0xffff000c
@@ -205,7 +205,7 @@ image, so try that part interactively.
 The same address calculation and service 32 are enough for a small animation. This program draws a
 dot, waits, erases that word and advances `x`.
 
-```mips|playground|open-screen|hide-until-built
+```mips|playground|open-screen
 # @screen unit=16 width=256 height=256 base=display
 .eqv COLUMNS 16
 .eqv DOT 0x00FFCC33
@@ -256,7 +256,7 @@ precomputed word index, byte offset or absolute address. Leave the check after y
 it loads through the address you calculated and prints the stored colour as a decimal number. That
 output checks the store-and-load pair; the Screen shows whether you chose the requested pixel.
 
-```mips|playground|open-screen|hide-until-built|memory|console|exercise
+```mips|playground|open-screen|memory|console|exercise
 # @screen unit=16 width=256 height=256 base=display
 .eqv COLUMNS 16
 .data
@@ -284,7 +284,7 @@ main:
 <details>
 <summary>Show solution</summary>
 
-```mips|playground|open-screen|hide-until-built|memory|console|solution
+```mips|playground|open-screen|memory|console|solution
 # @screen unit=16 width=256 height=256 base=display
 .eqv COLUMNS 16
 .data

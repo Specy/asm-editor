@@ -129,8 +129,8 @@ export {
 const RISCV_INSTRUCTIONS_PER_MS = 4_800
 
 /**
- * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
- * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). Four
+ * How much wall time one `simulate*` call aims at, which is also about how far a chunk can carry the
+ * slice past its deadline before the next check (`marsSlice.ts`). Four
  * milliseconds is about twenty thousand instructions of this Core's compute and a dozen calls in a
  * compute slice: the Core spends under a fifth of a microsecond on each instruction, so a chunk
  * that large hides the call.
@@ -154,7 +154,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * like the devices and registered on each freshly assembled Core.
      */
     private readonly handlers: MarsHandlers
-    /** The chunking of a slice, which is what keeps a sleeping program's slice short (`marsSlice.ts`). */
+    /** The chunking of a slice, which is what keeps it near its deadline (`marsSlice.ts`). */
     private readonly pacer = new MarsSlicePacer(RISCV_CHUNK_TARGET_MS)
     /** RARS's five display parameters, from the project and changed from the Screen panel. */
     private display: ProjectDisplay
@@ -170,6 +170,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
+    /** Whether a slice is running the Core, which is when a sleep ends the call (`pauseAtSleep`). */
+    private slicing = false
     /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
     private programArgv: string[] = []
 
@@ -212,6 +214,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 this.state.interrupt = interrupt
                 //RARS advances PC before invoking the ecall's asynchronous handler.
                 if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
+            },
+            pauseAtSleep: () => {
+                if (this.slicing) this.riscv?.pause()
             },
             fileSystem: () => this.fileSystemSession,
             instructionSerial: () => this.requireRiscV().getCurrentInstructionSerial()
@@ -1008,14 +1013,14 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     /**
      * The Core stops for input by leaving the pending `simulate*` promise unsettled, and serves a
-     * `sleep` the same way, so both are served inside the slice and only the budget, a breakpoint
-     * or the end of the program end one. The budget is spent in chunks by the pacer, which is what
-     * keeps the slice of a sleeping program, and the pause it holds off, to about one sleep
-     * (`marsSlice.ts`). The Core names its stop reason but reports no instruction count, so a chunk
-     * that came back runnable ran its whole limit.
+     * `sleep` the same way. A read is served inside the slice; a sleep ends it, through the handler's
+     * `pauseAtSleep`, so the slice ends where the program's frame does and the next one starts on a
+     * fresh frame. The budget is spent in chunks by the pacer, which keeps a slice near its deadline
+     * (`marsSlice.ts`), and every chunk is charged what the Core says it executed.
      *
      * The bitmap display catches up once per slice rather than once per stored word, which is what
-     * keeps the observer cheap; a program that sleeps flushes from the handler too.
+     * keeps the observer cheap; a program that sleeps or waits for input flushes from the handler
+     * too.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const riscv = this.requireRiscV()
@@ -1023,18 +1028,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         if (riscv.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(riscv, request.breakpoints)
         this.handlers.beginExecution()
-        return this.coreCall(() =>
-            this.pacer.run(
-                request,
-                RISCV_INSTRUCTIONS_PER_MS,
-                this._peripherals.clock,
-                async (limit) => {
+        this.slicing = true
+        try {
+            return await this.coreCall(() =>
+                this.pacer.run(request, RISCV_INSTRUCTIONS_PER_MS, async (limit) => {
                     const stop = await riscv.simulateWithBreakpointsAndLimit(breakpoints, limit)
-                    if (endsProgram(stop)) return 'terminated'
-                    return stop === StopReason.BREAKPOINT ? 'breakpoint' : 'ran'
-                }
+                    const instructions = riscv.getLastRunInstructionCount()
+                    if (endsProgram(stop)) return { outcome: 'terminated', instructions }
+                    if (stop === StopReason.BREAKPOINT)
+                        return { outcome: 'breakpoint', instructions }
+                    return { outcome: stop === StopReason.PAUSE ? 'paused' : 'ran', instructions }
+                })
             )
-        )
+        } finally {
+            this.slicing = false
+        }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

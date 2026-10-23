@@ -175,13 +175,11 @@ describe('the hover of a Pseudocode', () => {
 
     it("explains Ghidra's words, with the Pseudocode's section", () => {
         const [stack] = hover('main', 'acStack_98')
-        expect(stack).toContain(
-            '**acStack_98**: a variable the decompiler found in the stack frame'
-        )
+        expect(stack).toContain('**acStack_98**: a stack variable starting 0x98 bytes below')
         expect(stack).toContain('array of char')
         expect(stack.endsWith(PSEUDOCODE_LINK)).toBe(true)
         expect(hover('main', 'in_FS_OFFSET')[0]).toContain('stack canary')
-        expect(hover('main', 'undefined8')[0]).toContain('8 bytes whose type')
+        expect(hover('main', 'undefined8')[0]).toContain('8 bytes whose exact type')
         expect(hover('_start', 'unaff_retaddr')[0]).toContain('return address')
         //punctuation has nothing to say
         expect(hover('main', 'acStack_98,0x80', 10)).toEqual([])
@@ -324,7 +322,7 @@ describe("a C++ program's names in its Pseudocode", () => {
 
     it('still explains Ghidra’s words, and reads none into a name’s namespaces', () => {
         expect(hover('factcheck:main', 'auStack_128')[0]).toContain(
-            '**auStack_128**: a variable the decompiler found in the stack frame'
+            '**auStack_128**: a stack variable starting 0x128 bytes below'
         )
         //a declaration the printer broke after its namespace: its first part is no link, and
         //nothing Ghidra says
@@ -572,17 +570,17 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         const [stack] = hoverOf('crackme', 'password,0x80')
         expect(stack).toBe(
             [
-                '**password**: a local variable you renamed. Stored on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Use “Reset name” to rename it to its original name.',
+                '**password**: a local variable you renamed. Stored on the stack, 0x98 bytes below where the stack pointer was when the function was entered. Use “Reset name” to restore its original name.',
                 PSEUDOCODE_LINK
             ].join('\n\n')
         )
         const [register] = hoverOf('crackme', 'result = strcmp')
         expect(register).toContain(
-            `**result**: a local variable you renamed. Stored in \`EAX\`, first set at \`0x${(address + of.base + 0x8e).toString(16)}\` (\`EAX\`).`
+            `**result**: a local variable you renamed. Stored in \`EAX\`, first set at \`0x${(address + of.base + 0x8e).toString(16)}\`.`
         )
         //a name the decompiler gave is still explained as Ghidra's
         expect(hoverOf('crackme', 'pcVar2 = fgets')[0]).toContain(
-            '**pcVar2**: a local variable the decompiler made'
+            '**pcVar2**: a local variable kept in a register or temporary'
         )
     })
 
@@ -591,7 +589,7 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         const [stack] = hoverOf('crackme', 'password,0x80', 1, known)
         expect(stack).toBe(
             [
-                '**password**: a local variable you renamed (originally `acStack_98`). Stored on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Use “Reset name” to rename it to its original name.',
+                '**password**: a local variable you renamed (originally `acStack_98`). Stored on the stack, 0x98 bytes below where the stack pointer was when the function was entered. Use “Reset name” to restore its original name.',
                 PSEUDOCODE_LINK
             ].join('\n\n')
         )

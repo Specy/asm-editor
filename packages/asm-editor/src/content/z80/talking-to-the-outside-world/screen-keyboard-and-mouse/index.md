@@ -46,7 +46,7 @@ Red and green are each from 0 to 7; blue is from 0 to 3. For orange, choose red 
 Useful values include black `0x00`, blue `0x03`, green `0x1C`, cyan `0x1F`, red `0xE0`, orange
 `0xF0`, yellow `0xFC` and white `0xFF`.
 
-```z80|playground|open-screen|hide-until-built|no-registers|no-flags
+```z80|playground|open-screen|no-registers|no-flags
 P_PEN   equ 0x20
 P_FILL  equ 0x21
 P_WIDTH equ 0x22
@@ -144,7 +144,7 @@ If animation draws directly on the visible Screen, the viewer can see the clear 
 Command 11 turns on **double buffering**, sending drawing to an off-screen image. Command 13 presents
 that completed image. Reading port `0x51` waits for the next animation frame.
 
-```z80|playground|open-screen|hide-until-built|no-registers|no-flags
+```z80|playground|open-screen|no-registers|no-flags
 P_PEN   equ 0x20
 P_FILL  equ 0x21
 P_X     equ 0x23
@@ -255,7 +255,7 @@ The read does not replace `b` or `c`. The keyboard ports are:
 Letters use the ASCII code of their capital. Arrow codes are left `0x25`, up `0x26`, right `0x27`
 and down `0x28`. Click the Screen before pressing a key; its focus ring shows where input goes.
 
-```z80|playground|open-screen|hide-until-built|no-registers|no-flags
+```z80|playground|open-screen|no-registers|no-flags
 P_CHAR  equ 0x10
 P_PEN   equ 0x20
 P_FILL  equ 0x21
@@ -404,7 +404,7 @@ second snapshot. The event count increases for pointer movement and button chang
 The mouse example uses one additional drawing operation: command 0 draws one pixel at the current
 `(X, Y)` in the pen colour.
 
-```z80|playground|open-screen|hide-until-built|no-registers|no-flags
+```z80|playground|open-screen|no-registers|no-flags
 P_PEN   equ 0x20
 P_FILL  equ 0x21
 P_X     equ 0x23
@@ -482,7 +482,7 @@ Fill a red rectangle over the box from `(10, 10)` up to but not including `(100,
 the colour of pixel `(50, 50)` into `a`. Red is `0xE0`, so `a` should finish as `E0`. Set both pen
 and fill to red so the entire shape has one colour.
 
-```z80|playground|open-screen|hide-until-built|exercise
+```z80|playground|open-screen|exercise
     .org 0x8000
     ; your code here
     halt
@@ -497,7 +497,7 @@ and fill to red so the entire shape has one colour.
 <details>
 <summary>Show solution</summary>
 
-```z80|playground|open-screen|hide-until-built|solution
+```z80|playground|open-screen|solution
 RED equ 0xE0
 
     .org 0x8000
@@ -525,7 +525,7 @@ RED equ 0xE0
 Now put the text cursor at column 5, row 3 and print `HI`. Read its final column into `b` and its
 row into `c`. Each character advances the cursor, so `bc` should finish as `0x0703`.
 
-```z80|playground|open-screen|hide-until-built|console|exercise
+```z80|playground|open-screen|console|exercise
     .org 0x8000
     ; your code here
     halt
@@ -541,7 +541,7 @@ row into `c`. Each character advances the cursor, so `bc` should finish as `0x07
 <details>
 <summary>Show solution</summary>
 
-```z80|playground|open-screen|hide-until-built|console|solution
+```z80|playground|open-screen|console|solution
     .org 0x8000
     ld a, 5
     out (0x29), a       ; cursor column

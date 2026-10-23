@@ -57,7 +57,13 @@
     }
 </script>
 
-<div class="instruction-example playground">
+<!-- the registers wait for a Build, and the flags and the PC above them make that column about 2rem
+     taller than the row's usual 20rem: the code gets the same height from the start, so the console
+     under it stays where it is when they come -->
+<div
+    class="instruction-example playground"
+    style:--instruction-row-min-height={showPc && showFlags ? '22rem' : undefined}
+>
     {#key `${language}/${instructionKey}`}
         <EmulatorLoader
             bind:code
@@ -79,6 +85,7 @@
                     {initialRegisterFile}
                     {initialRegisterFormat}
                     showScreen={false}
+                    hideUntilBuilt
                     forceMemoryRight
                     dockActions={[
                         {
@@ -91,7 +98,7 @@
                 />
             {/snippet}
             {#snippet loading()}
-                <InstructionPreview {code} {language} {showMemory} {showConsole} />
+                <InstructionPreview {code} {language} {showConsole} />
             {/snippet}
         </EmulatorLoader>
     {/key}

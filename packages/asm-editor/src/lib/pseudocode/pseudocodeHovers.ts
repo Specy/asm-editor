@@ -111,10 +111,10 @@ function typeMarkdown(word: string): string | undefined {
     const unknown = /^undefined([1-8])?$/.exec(word)
     if (unknown) {
         const size = Number(unknown[1] ?? 1)
-        return `**${word}**: ${size === 1 ? 'one byte' : `${size} bytes`} whose type the decompiler could not work out. ${size === 1 ? 'It' : 'They'} may hold a number, a character, a pointer or part of something larger: how the code uses ${size === 1 ? 'it' : 'them'} is the clue.`
+        return `**${word}**: ${size === 1 ? 'one byte' : `${size} bytes`} whose exact type the decompiler could not infer. ${size === 1 ? 'It' : 'They'} may hold an integer, a character, a pointer, or part of a struct.`
     }
     if (word === 'code')
-        return "**code**: Ghidra's type for machine code. A `code *` is a pointer to a function, which the program calls through."
+        return "**code**: machine code. A `code *` is a pointer to a function."
     return undefined
 }
 
@@ -124,47 +124,47 @@ function variableMarkdown(word: string): string | undefined {
     if (parameter) {
         const index = Number(parameter[1])
         const which = ORDINALS[index - 1] ?? `number ${index}`
-        return `**${word}**: the function's ${which} parameter, named by its position. On x86-64 Linux the first six whole-number or pointer parameters arrive in \`rdi\`, \`rsi\`, \`rdx\`, \`rcx\`, \`r8\` and \`r9\`.`
+        return `**${word}**: the function's ${which} parameter. On x86-64 Linux, the first six integer or pointer parameters arrive in \`rdi\`, \`rsi\`, \`rdx\`, \`rcx\`, \`r8\`, and \`r9\`.`
     }
     const local = /^local_([\da-f]+)$/.exec(word)
     if (local)
-        return `**${word}**: a variable in the function's stack frame, named by where it is: it starts 0x${local[1]} bytes below where the stack pointer was when the function was entered.`
+        return `**${word}**: a local variable in the stack frame, starting 0x${local[1]} bytes below where the stack pointer was when the function was entered.`
     const stack = /^([a-zA-Z]*)Stack(X|Y)?_([\da-f]+)$/.exec(word)
     if (stack) {
         const [, letters, region, offset] = stack
         const where =
             region === 'X'
-                ? `0x${offset} bytes above where the stack pointer was when the function was entered: past the return address, where a caller leaves arguments`
+                ? `0x${offset} bytes above where the stack pointer was when the function was entered (in the caller's stack frame)`
                 : `0x${offset} bytes below where the stack pointer was when the function was entered`
-        return `**${word}**: a variable the decompiler found in the stack frame and named by where it is: it starts ${where}.${lettersSentence(letters)}`
+        return `**${word}**: a stack variable starting ${where}.${lettersSentence(letters)}`
     }
     const numbered = /^([a-zA-Z]+)Var(\d+)$/.exec(word)
     if (numbered)
-        return `**${word}**: a local variable the decompiler made for a value the code keeps in a register or works out along the way, numbered to tell it apart.${lettersSentence(numbered[1])}`
+        return `**${word}**: a local variable kept in a register or temporary, numbered to distinguish it from other locals.${lettersSentence(numbered[1])}`
     const global = /^([a-zA-Z]+)Ram([\da-f]+)$/.exec(word)
     if (global)
-        return `**${word}**: a global variable nothing names, named by the decompiler after its address, 0x${global[2].replace(/^0+(?=.)/, '')}.${lettersSentence(global[1])}`
+        return `**${word}**: an unnamed global variable at address 0x${global[2].replace(/^0+(?=.)/, '')}.${lettersSentence(global[1])}`
     const stackAddress = /^stack0x([\da-f]+)$/.exec(word)
     if (stackAddress)
-        return `**${word}**: the place on the stack ${stackOffset(stackAddress[1])} where the stack pointer was when the function was entered, which the code takes the address of, \`&${word}\`.`
+        return `**${word}**: a stack location ${stackOffset(stackAddress[1])} where the stack pointer was when the function was entered, referenced by address (\`&${word}\`).`
     if (word === 'in_FS_OFFSET')
-        return "**in_FS_OFFSET**: where the FS segment starts, which the function reads without being given it. x86-64 Linux keeps the running thread's data there, and `in_FS_OFFSET + 0x28` holds the stack canary: a random value the function checks before it returns, which a buffer overflow would have overwritten."
+        return '**in_FS_OFFSET**: the start of the thread-local `FS` segment. On x86-64 Linux, `in_FS_OFFSET + 0x28` holds the stack canary checked before the function returns to detect buffer overflows.'
     const stackInput = /^in_stack_([\da-f]+)$/.exec(word)
     if (stackInput)
-        return `**${word}**: a value the function reads from the stack, ${stackOffset(stackInput[1])} where the stack pointer was when it was entered, though its prototype lists no such parameter: \`in_\` and where the value is.`
+        return `**${word}**: a value read from the stack (${stackOffset(stackInput[1])} where the stack pointer was on entry) that is not part of the function's detected parameter list.`
     const input = /^in_(.+)$/.exec(word)
     if (input)
-        return `**${word}**: a value the function reads from \`${input[1]}\` before writing it, though its prototype lists no such parameter: \`in_\` and where the value comes from.`
+        return `**${word}**: a value the function reads from \`${input[1]}\` before writing it, outside its detected parameter list.`
     if (word === 'unaff_retaddr')
-        return '**unaff_retaddr**: the return address the call left on the stack, which says where the function returns to. `unaff_` marks a value the function finds as its caller left it.'
+        return '**unaff_retaddr**: the return address on the stack.'
     const unaffected = /^unaff_(.+)$/.exec(word)
     if (unaffected)
-        return `**${word}**: the value \`${unaffected[1]}\` had when the function was called, which it uses before setting it. A function must leave this register as it found it (callee-saved), so the decompiler calls the value unaffected.`
+        return `**${word}**: the value \`${unaffected[1]}\` had when the function was called, read before being set. Because \`${unaffected[1]}\` is callee-saved, the decompiler marks its entry value \`unaff_\` (unaffected).`
     const extra = /^extraout_(.+)$/.exec(word)
     if (extra)
         return extra[1] === 'var'
-            ? `**${word}**: a value a call left behind that the called function's prototype does not say it returns: an extra output.`
-            : `**${word}**: a value a call left in \`${extra[1]}\` that the called function's prototype does not say it returns: an extra output.`
+            ? `**${word}**: an extra return value left behind by a function call whose prototype did not declare it.`
+            : `**${word}**: a value a call left in \`${extra[1]}\` that the called function's prototype does not declare as a return value.`
     return undefined
 }
 
@@ -201,11 +201,11 @@ export function variableStorageWords(
     if (stack)
         return stack[1]
             ? `on the stack, 0x${stack[2]} bytes below where the stack pointer was when the function was entered`
-            : `on the stack, 0x${stack[2]} bytes above where the stack pointer was when the function was entered: past the return address, where a caller leaves arguments`
+            : `on the stack, 0x${stack[2]} bytes above where the stack pointer was when the function was entered (in the caller's stack frame)`
     const use = /@\+0x([\da-f]+)$/.exec(variable.id)
     const first = use ? `, first set at \`0x${(entry + parseInt(use[1], 16)).toString(16)}\`` : ''
     if (/^HASH:/i.test(storage))
-        return `in no one place: a value the decompiler follows through the code${first}`
+        return `in a temporary expression${first}`
     if (variable.kind === 'parameter') return `arriving in \`${storage}\``
     return storage.includes(':')
         ? `split across \`${storage}\`${first}`
@@ -227,11 +227,11 @@ export function renamedVariableMarkdown(
 ): string {
     const what = variable?.kind === 'parameter' ? 'a parameter' : 'a local variable'
     const where = variable
-        ? `Stored ${variableStorageWords(variable, entry)} (\`${variable.storage}\`).`
+        ? `Stored ${variableStorageWords(variable, entry)}.`
         : ''
     const originally = from === undefined ? '' : ` (originally \`${from}\`)`
     return [
-        `**${name}**: ${what} you renamed${originally}.${where && ` ${where}`} Use “Reset name” to rename it to its original name.`,
+        `**${name}**: ${what} you renamed${originally}.${where && ` ${where}`} Use “Reset name” to restore its original name.`,
         PSEUDOCODE_LINK
     ].join('\n\n')
 }

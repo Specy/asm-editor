@@ -468,6 +468,50 @@ describe('MIPS bitmap display', () => {
         )
         expect(pixelAt(emulator, 0, 0)).toBe(0xabcdef)
     })
+
+    it('shows only whole frames of a program that sleeps after drawing each one', async () => {
+        //forty frames that each fill the 8 by 8 grid in one color, red then blue, and sleep. The
+        //Screen catches up before every sleep and at the end of every slice, so a slice that ran on
+        //past a sleep into the next frame would show part of the grid in each color
+        const emulator = await build(
+            DATA +
+                `        li      $s0, 0
+frame:  andi    $t2, $s0, 1
+        li      $t1, 0x00ff0000
+        beqz    $t2, paint
+        li      $t1, 0x000000ff
+paint:  la      $t0, display
+        li      $t3, 64
+fill:   sw      $t1, 0($t0)
+        addi    $t0, $t0, 4
+        addi    $t3, $t3, -1
+        bnez    $t3, fill
+        li      $v0, 32
+        li      $a0, 1
+        syscall
+        addi    $s0, $s0, 1
+        blt     $s0, 40, frame
+` +
+                EXIT,
+            { virtualClock: true }
+        )
+        const screen = emulator.peripherals.screen
+        const shown: string[] = []
+        const sync = screen.syncFramebuffer.bind(screen)
+        screen.syncFramebuffer = (...args: Parameters<typeof sync>) => {
+            sync(...args)
+            const colors = new Set<number>()
+            for (let index = 0; index < 64; index++) {
+                colors.add(pixelAt(emulator, index % 8, Math.floor(index / 8)))
+            }
+            shown.push([...colors].map((color) => color.toString(16)).join('+'))
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(shown.length).toBeGreaterThanOrEqual(40)
+        expect(shown.filter((frame) => frame !== 'ff0000' && frame !== 'ff')).toEqual([])
+    })
 })
 
 describe('MIPS memory-mapped keyboard and display', () => {
@@ -606,6 +650,25 @@ main:
         expect(valueOf(emulator, '$s0')).toBe(BigInt('x'.charCodeAt(0)))
         expect(valueOf(emulator, '$s1')).toBe(10n)
         expect(emulator.stdOut).toBe('x\n')
+    })
+
+    it('shows what the program drew while it waits for input', async () => {
+        const emulator = await built(
+            DATA +
+                storePixel(0, '0x00ff0000') +
+                `        li      $v0, 12
+        syscall
+` +
+                EXIT
+        )
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        //the read suspends the slice, so only the read itself can have brought the Screen up to date
+        expect(emulator.peripherals.terminal.pendingRead).toBeDefined()
+        expect(pixelAt(emulator, 0, 0)).toBe(0xff0000)
+        emulator.peripherals.terminal.insertText('x')
+        await running
+        expect(emulator.errors).toEqual([])
     })
 
     it('refreshes the waiting instruction and registers at each input request', async () => {
@@ -1045,9 +1108,9 @@ describe('the MIPS examples', () => {
 
 describe('MIPS pause', () => {
     it('is taken within a sleep or two of a program that sleeps in a loop', async () => {
-        //the Core serves the sleep inside its `simulate*` call, so only the chunking of the slice
-        //(`marsSlice.ts`) keeps a pause from waiting for the whole instruction budget's worth of
-        //sleeps: four instructions a sleep and a compute slice's budget would be a minute
+        //the Core serves the sleep inside its `simulate*` call, so it is the sleep ending the slice
+        //(`marsSlice.ts`) that keeps a pause from waiting for the whole instruction budget's worth
+        //of sleeps: four instructions a sleep and a compute slice's budget would be a minute
         const emulator = await build(`        .text
 main:
 loop:   li      $v0, 32

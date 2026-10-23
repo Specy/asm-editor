@@ -16,7 +16,7 @@ pass through `frame`:
 Positions are **board cells** until `draw_cell` converts them to pixels. Each cell is 20 pixels
 wide, so the 32 by 24 board fills the 640 by 480 Screen.
 
-```m68k|playground|open-screen|hide-until-built|console|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|console|no-registers|no-flags|allow-open
 COLS    equ 32              ; the board in cells
 ROWS    equ 24
 CELL    equ 20              ; and one cell in pixels

@@ -37,9 +37,9 @@ describe("Ghidra's words", () => {
         ghidraWordMarkdown(word, kind) ?? ''
 
     it('explains its types for bytes of no known type', () => {
-        expect(hover('undefined8', 'type')).toContain('8 bytes whose type the decompiler')
-        expect(hover('undefined', 'type')).toContain('one byte whose type')
-        expect(hover('undefined1', 'type')).toContain('one byte whose type')
+        expect(hover('undefined8', 'type')).toContain('8 bytes whose exact type the decompiler')
+        expect(hover('undefined', 'type')).toContain('one byte whose exact type')
+        expect(hover('undefined1', 'type')).toContain('one byte whose exact type')
         expect(hover('code', 'type')).toContain('pointer to a function')
         expect(ghidraWordMarkdown('int', 'type')).toBeUndefined()
         //a variable of that name is the program's
@@ -67,7 +67,7 @@ describe("Ghidra's words", () => {
         expect(hover('param_1')).toContain("the function's first parameter")
         expect(hover('param_3')).toContain('third parameter')
         expect(hover('cRam0000000000004018')).toContain(
-            'named by the decompiler after its address, 0x4018'
+            'an unnamed global variable at address 0x4018'
         )
     })
 

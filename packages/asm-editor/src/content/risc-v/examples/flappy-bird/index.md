@@ -63,7 +63,7 @@ Here are three concrete details to look for in the listing:
 - If the bird covers rows `[20, 25)`, one bird column is painted as three bands: world `[0, 20)`,
   body `[20, 25)`, and world `[25, 64)`. Clipping makes each call paint only its own band.
 
-```riscv|playground|open-screen|hide-until-built|console|no-registers|allow-open
+```riscv|playground|open-screen|console|no-registers|allow-open
 # @screen unit=4 width=256 height=256 base=display
 .eqv MMIO, 0xffff0000
 # Grid and bird

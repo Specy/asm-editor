@@ -44,7 +44,7 @@ draws nothing. A square box makes an ellipse into a circle.
 Press Run and watch the Screen panel. You should see a blue rectangle, a yellow ellipse, a thick
 red line and a white label.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 WHITE   equ $00FFFFFF
 RED     equ $000000FF
 BLUE    equ $00FF0000
@@ -125,7 +125,7 @@ reversing before its next step would put its box beyond the screen. Each display
 The editor gives each Run a finite instruction limit, so it eventually stops by itself; Stop can end
 it sooner.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 SIZE    equ 48
 LIMITX  equ 640-48
 YELLOW  equ $0000FFFF
@@ -218,7 +218,7 @@ the frame is cleared, without adding another line to the transcript. Run it and 
 a lime 40-pixel square begins at `(300, 220)` and moves eight pixels per frame, staying inside the
 screen. The editor's finite instruction limit will end the run unless you press Stop first.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 SIZE    equ 40
 STEP    equ 8
 LIMITX  equ 640-40
@@ -339,7 +339,7 @@ for its starting title. Run it and drag with the left button: aqua discs follow 
 Shift while dragging for red; hold the right button to clear the image, including the title. The
 editor's finite instruction limit ends the run eventually, and Stop can end it sooner.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 BRUSH   equ 6
 AQUA    equ $00FFFF00
 RED     equ $000000FF
@@ -422,7 +422,7 @@ Fill a red rectangle over the box from `(10, 10)` to `(100, 100)`, then read the
 `(50, 50)` and leave its colour in `d0.l`. You should see the red rectangle; the register check
 expects 255 because red is `$000000FF`.
 
-```m68k|playground|open-screen|hide-until-built|exercise
+```m68k|playground|open-screen|exercise
 * your code here
 ```
 
@@ -435,7 +435,7 @@ expects 255 because red is `$000000FF`.
 <details>
 <summary>Show solution</summary>
 
-```m68k|playground|open-screen|hide-until-built|solution
+```m68k|playground|open-screen|solution
 RED equ $000000FF
 
     move.l #RED, d1
@@ -465,7 +465,7 @@ Set both pen and fill to blue (`$00FF0000`). Read the last pixel, `(639, 479)`, 
 leave its colour in `d0.l`. The rectangle should appear in the bottom-right corner, and the colour
 check expects `$00FF0000`. This uses the boundary values without treating `(640, 480)` as a pixel.
 
-```m68k|playground|open-screen|hide-until-built|exercise
+```m68k|playground|open-screen|exercise
 * your code here
 ```
 
@@ -478,7 +478,7 @@ check expects `$00FF0000`. This uses the boundary values without treating `(640,
 <details>
 <summary>Show solution</summary>
 
-```m68k|playground|open-screen|hide-until-built|solution
+```m68k|playground|open-screen|solution
 BLUE equ $00FF0000
 
     move.l #BLUE, d1

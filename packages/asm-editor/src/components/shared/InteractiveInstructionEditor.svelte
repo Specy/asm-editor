@@ -430,12 +430,13 @@
         })
     })
     //an embed is an iframe of a fixed height, which the registers card may not outgrow: it is the
-    //card that is held to what the frame leaves it, the embed's padding and the console under it,
-    //and the Register files that shrink inside it and scroll, whatever the flags and the PC above
-    //them take. A minimum height on the files would win over that and push the frame into scrolling
+    //card that is held to what the frame leaves it, the embed's padding (`--embed-padding`, set by
+    //the embed page) and the console under it, and the Register files that shrink inside it and
+    //scroll, whatever the flags and the PC above them take. A minimum height on the files would win
+    //over that and push the frame into scrolling
     let embeddedRegistersStyle = $derived(
         embedded
-            ? `max-height: calc(var(--screen-height) - 1rem - ${showConsole ? '4.5rem' : '0px'});`
+            ? `max-height: calc(var(--screen-height) - 2 * var(--embed-padding, 0.5rem) - ${showConsole ? '4.5rem' : '0px'});`
             : ''
     )
 
@@ -532,10 +533,11 @@
             ? testcases.length > 0
             : testcases.length > 0 && !showTestcases
     )
+    //the caller's own controls, such as "Try in the editor", keep the far end of the dock, after
+    //Test and the Testcases that belong with it
     const allDockActions = $derived<DockAction[]>(
         showTestcases
             ? [
-                  ...dockActions,
                   {
                       label: 'Testcases',
                       title: 'Show the Testcases',
@@ -548,7 +550,8 @@
                             ? 'green'
                             : undefined,
                       onClick: () => (testcasesVisible = !testcasesVisible)
-                  }
+                  },
+                  ...dockActions
               ]
             : dockActions
     )

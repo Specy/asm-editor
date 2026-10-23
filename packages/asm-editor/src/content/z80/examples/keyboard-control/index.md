@@ -8,7 +8,7 @@ checks which arrows are held. For port `0x31`, put the port number in `c` and an
 `b`, then use `in a, (c)`: `a` becomes 1 while that key is held, or 0 otherwise. The code checks
 left, right, up and down in turn, using their key codes `0x25` through `0x28`.
 
-```z80|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
+```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10
 P_PEN   equ 0x20
 P_FILL  equ 0x21

@@ -24,7 +24,7 @@ painted.
   collisions, then draws. A reset from `DEAD` starts again at `new_game` instead of finishing
   that old frame.
 
-```mips|playground|open-screen|hide-until-built|console|no-registers|allow-open
+```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=4 width=256 height=256 base=display
 .eqv MMIO 0xffff0000
 .eqv SIDE 64                # the grid, in words across and down

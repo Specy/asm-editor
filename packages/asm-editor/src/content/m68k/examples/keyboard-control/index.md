@@ -7,7 +7,7 @@ The ring around the Screen shows that it has keyboard focus. One click is enough
 remains; if you click elsewhere, click the Screen again before steering. Choose **Stop** when you
 are done. The program keeps looping until you stop it or the editor's run limit is reached.
 
-```m68k|playground|open-screen|hide-until-built|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 CELL    equ 40
 STEP    equ 8
 RIGHT   equ 640-40

@@ -25,7 +25,7 @@ other values that must survive calls live in saved registers:
 draws nothing. Positive rectangles must fit on the 32 by 32 display because the helper does not
 clip them at an edge.
 
-```riscv|playground|open-screen|hide-until-built|no-registers|allow-open
+```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE, 32               # words across and down
 .eqv BALL, 4                # ball width and height, in cells
