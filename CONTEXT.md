@@ -76,7 +76,7 @@ _Avoid_: viewer, render, thumbnail
 
 ## Byte edit
 
-A change typed into a byte **File** in the **Hex editor**, saved with the **Project** apart from the File's original bytes, which are kept unchanged. It overwrites bytes and never changes the File's length. Everything that reads the File (the **FileSystem**, a Build, the **Listing**, a download) sees the edited bytes, and nothing in the interface yet lists Byte edits or shows the original. Distinct from a **Patch** and any other **Poke**, which change only a Debug session's memory. See [ADR 0047](./docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md).
+A change typed into a byte **File** in the **Hex editor**, saved with the **Project** apart from the File's original bytes, which are kept unchanged. It overwrites bytes and never changes the File's length. Everything that reads the File (the **FileSystem**, a Build, the **Listing**, a download) sees the edited bytes, and nothing in the interface yet lists Byte edits or shows the original. The File keeps its **Annotations** through Byte edits and their Undo. Distinct from a **Patch** and any other **Poke**, which change only a Debug session's memory. See [ADR 0047](./docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md).
 _Avoid_: patch (the memory-only **Patch**), binary patch, modification, diff
 
 ## Peripheral
@@ -264,27 +264,32 @@ _Avoid_: main file, active file, selected file, open file
 
 ## Executable
 
-A **File** holding a program already built for the **Project**'s **Target** by a compiler and linker outside the editor, which a Build loads as it is instead of assembling. Today only an x86-64 Linux ELF in an x86 Project; its own symbols may have been stripped. See [the binary import design](./docs/design/binary-import.md).
+A **File** holding a program already built for the **Project**'s **Target** by a compiler and linker outside the editor, which a Build loads as it is instead of assembling. Today only an x86-64 Linux ELF in an x86 Project; its own symbols may have been stripped. Its **Annotations** are saved with it, apart from its bytes. See [the binary import design](./docs/design/binary-import.md).
 _Avoid_: binary (any File that is not text is binary), imported binary, compiled program, ELF (as a noun)
 
 ## Listing
 
-The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. A C++ symbol keeps its mangled name in the text, which every lookup reads, and a comment beside it gives its **Demangled name**. It is generated whenever it is shown and never saved, and nothing builds from it. An Executable opens on its Listing, at `main` (else the entry point, else the first function), or beside a **Pseudocode** at that Pseudocode's function.
+The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. A C++ symbol keeps its mangled name in the text, which every lookup reads, and a comment beside it gives its **Demangled name**. An Executable's Listing is made with its **Annotations**: a **Rename** in place of the name it replaces, a **Comment** at the end of its line or as lines of its own, which stand for the address they annotate and cover no bytes. It is generated whenever it is shown and never saved, and nothing builds from it. An Executable opens on its Listing, at `main` (else the entry point, else the first function), or beside a **Pseudocode** at that Pseudocode's function.
 _Avoid_: disassembly (the decoding that produces it), dump, decompilation (see **Pseudocode**), listing file
 
 ## Pseudocode
 
-The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. A C++ program's functions and data read by their **Demangled names** in their namespaces, qualified only as far as the place they are used needs. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
+The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. A C++ program's functions and data read by their **Demangled names** in their namespaces, qualified only as far as the place they are used needs. Its functions, data and variables read by the person's **Renames**, and the decompiler places their **Comments** as C comments, each given to it with the function. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
 _Avoid_: decompiled C, decompilation (when the text is meant), source, C code
 
 ## Symbols panel
 
-The **Workbench** side panel that lists the functions and the strings of an **Executable**, read from its **Listing**: the Executable shown in the focused editor pane, or else the **Selected program**'s **Entry file** when it is one. A function's row shows its name, run-time address and size, a string's its text and address; a C++ function is listed by its **Demangled name**, and the filter also matches its mangled name. A row reveals its line in the Listing, which a **Pseudocode** beside it follows, and the jump goes into the pane's **Navigation history**. Its rail entry is offered only in an x86 **Project** that has an Executable. Distinct from Monaco's Go to Symbol, which lists one Listing's labels inside the editor, and from the Explorer, which lists **Files**.
+The **Workbench** side panel that lists the functions and the strings of an **Executable**, read from its **Listing**: the Executable shown in the focused editor pane, or else the **Selected program**'s **Entry file** when it is one. A function's row shows its name, run-time address and size, a string's its text and address; a C++ function is listed by its **Demangled name**, and the filter also matches its mangled name. A row reveals its line in the Listing, which a **Pseudocode** beside it follows, and the jump goes into the pane's **Navigation history**. A function's row menu and F2 give it a **Rename** or a function **Comment**; a renamed function is listed by its Rename, and the filter also finds it by its old names. Its rail entry is offered only in an x86 **Project** that has an Executable. Distinct from Monaco's Go to Symbol, which lists one Listing's labels inside the editor, and from the Explorer, which lists **Files**.
 _Avoid_: symbol table (the ELF's own, which a stripped program lacks), outline, functions window
+
+## Search panel
+
+The **Workbench** side panel that finds text across the **Project**, offered in every **Target** and opened from its rail entry or with Ctrl+Shift+F (⌘⇧F on a Mac): in the Project's text **Files** and, in a Project with an **Executable**, in what the person ticks under "Look in": the Files, each Executable's **Listing** with its **Annotations**, and the **Pseudocode** of every function of each Executable, which it decompiles in the background while it is open. A result opens the File, the Listing or the function at its line, and a jump from a Listing or Pseudocode goes into the pane's **Navigation history**. An **Exam** has none. Distinct from Ctrl+F (one editor), the **Symbols panel** (one Executable's names) and the Documentation's search, whose **Search scope** the place it is made from sets.
+_Avoid_: find in files, global search, grep, search scope (for its ticks)
 
 ## Navigation history
 
-The places an editor pane jumped from in a **Listing** or a **Pseudocode**, kept per pane as a browser keeps its history: a line of a Listing, or the function a Pseudocode showed, in the version of the **File** it was shown in. Every jump records the place it leaves, in each pane it moves: a double-click on a name, Go to Definition, Go to Symbol, Show in Listing, a row of the **Symbols panel**. Go Back and Go Forward (Alt+← and Alt+→, the mouse's back and forward buttons, the context menu) move through it, past places that no longer exist; outside the editor, the keys and the buttons move the focused pane's. It lives as long as the open **Project** and is never saved. Distinct from the History of the **Debug tools**, which records the steps instruction Undo can take back.
+The places an editor pane jumped from in a **Listing** or a **Pseudocode**, kept per pane as a browser keeps its history: a line of a Listing, found again by the address it stands for once **Comments** or **Renames** have moved it, or the function a Pseudocode showed, in the version of the **File** it was shown in. Every jump records the place it leaves, in each pane it moves: a double-click on a name, Go to Definition, Go to Symbol, Show in Listing, a row of the **Symbols panel**, a result of the **Search panel**. Go Back and Go Forward (Alt+← and Alt+→, the mouse's back and forward buttons, the context menu) move through it, past places that no longer exist; outside the editor, the keys and the buttons move the focused pane's. It lives as long as the open **Project** and is never saved. Distinct from the History of the **Debug tools**, which records the steps instruction Undo can take back.
 _Avoid_: history (alone, which is the Debug tools' History), back stack, breadcrumbs, jump list
 
 ## Invented name
@@ -296,6 +301,21 @@ _Avoid_: random name, generated name, placeholder name
 
 The readable name the editor shows for a C++ symbol of an **Executable**, a **Build output** or a library they load, worked out from the mangled name by LLVM's demangler: `_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEpLERKS4_` is `std::string::operator+=`. Its short form, without parameters and with the standard library's templates shortened (`std::string` for `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>`), names a function in the **Symbols panel**, Go to Symbol, the Call stack and the History, the lists giving the signature instead where overloads share a short form; the **Listing**'s comments give the signature, `std::string::operator+=(std::string const&)`; the **Pseudocode** writes it in its namespaces; a hover gives every form, with the demangler's exact text and the mangled name. The mangled name stays the Listing's label, which its text and every lookup use, and a name the demangler cannot read stays mangled. Distinct from an **Invented name**, which the Listing makes up where nothing names an address, and from a C++ Build's memory labels, which show the demangler's exact text.
 _Avoid_: display name (the code's field for any name shown in place of another), pretty name, unmangled name, symbol name (the mangled one)
+
+## Annotation
+
+A **Rename** or a **Comment** a person adds to an **Executable** that is a **File** of the **Project**, kept on the File apart from its bytes, as its **Byte edits** are, by its link-time address (a variable's Rename also by the decompiler's id for the variable), and shown in its **Listing** and **Pseudocode**. It is saved, archived and shared with the File. Replacing the File's whole content (an upload over it, a program's write) drops it; a Byte edit and a rename of the File keep it, and one whose address no longer fits after a Byte edit stays saved until it fits again. A **Bundled library**'s Listing, the **Build output** and a read-only **Workbench** take none. Each change is one step of the File's own Undo, apart from instruction Undo and the **Hex editor**'s. See [ADR 0055](./docs/adr/0055-annotations-are-kept-on-the-file-apart-from-its-bytes.md).
+_Avoid_: note, markup, bookmark, label (a name of the Listing), metadata
+
+## Rename
+
+A name a person gives in place of the one the **Listing** or the decompiler gave: a function's, a datum's, a string's or a jump target's of an **Executable**, by its address in the file, shown wherever that name is; or a variable's or parameter's of one function of its **Pseudocode**, by the decompiler's id for it. It overrides an **Invented name** and a **Demangled name**, which its hover still gives ("Renamed from"), and Reset name takes it away. A PLT stub, a GOT slot and a parameter a C declaration names keep their names, and a jump target's Rename shows in the Listing only. Distinct from renaming a **File**, which moves its path.
+_Avoid_: alias, symbol, display name (the code's field), relabel
+
+## Comment
+
+Text a person attaches to an address of an **Executable** (a line comment, at an instruction or data line) or to one of its functions (a function comment). The **Listing** writes a line comment at the end of its line when it is one line of at most 60 characters, otherwise above the line, and a function comment above the function's label; the **Pseudocode** has Ghidra place it before the statement whose code holds the address, a function comment above the declaration, and lists at the top those it cannot place. A Comment set on a Pseudocode line is kept at that line's first mapped instruction. Its words are text, never a name to follow. Distinct from the comments the Listing and the decompiler write themselves (a string's text, a **Demangled name**, Ghidra's warnings) and from the comments in a source File's text.
+_Avoid_: note, remark, annotation (for a Comment alone), EOL/PRE/plate comment (Ghidra's kinds)
 
 ## Bundled library
 
@@ -423,7 +443,7 @@ _Avoid_: chunk, passage, paragraph
 
 ## Search scope
 
-What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program.
+What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program. Only the Documentation's search has one: the **Search panel**'s "Look in" ticks are the reader's choice, and are not called a scope.
 _Avoid_: corpus, index, search set, filter
 
 ## Course

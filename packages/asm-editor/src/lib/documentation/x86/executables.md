@@ -46,7 +46,7 @@ Other Files stored as bytes open in the Hex editor. An image, a PDF, audio or vi
 
 Click a byte, or tap it on a touch screen, to place the caret. Typing a hexadecimal digit in the hex column replaces half a byte and moves on; typing a printable ASCII character in the text column replaces the whole byte. **Tab** moves the caret to the text column and **Shift+Tab** back. Typing only overwrites: a File keeps its length, and you cannot insert or delete bytes.
 
-These changes are **Byte edits**. The project saves them with the File and keeps the File's original bytes apart from them; the status line shows **edited** while a File has some. Everything that reads the File uses the edited bytes: Build, the Listing, a program that opens the File, and **Download exact bytes** in the Explorer. A project archive and a share link carry both the original bytes and the Byte edits. Uploading a File over it, or a program writing to it during a run, replaces its bytes and discards its Byte edits. **Undo** (Ctrl+Z) and **Redo** (Ctrl+Shift+Z or Ctrl+Y) in the Hex editor go back and forward through the edits you made to the File since you opened the project.
+These changes are **Byte edits**. The project saves them with the File and keeps the File's original bytes apart from them; the status line shows **edited** while a File has some. Everything that reads the File uses the edited bytes: Build, the Listing, a program that opens the File, and **Download exact bytes** in the Explorer. A project archive and a share link carry both the original bytes and the Byte edits. Uploading a File over it, or a program writing to it during a run, replaces its bytes and discards its Byte edits. **Undo** (Ctrl+Z) and **Redo** (Ctrl+Shift+Z or Ctrl+Y) in the Hex editor go back and forward through the edits you made to the File since you opened the project. Byte edits keep the File's [renames and comments](#annotations), which have an Undo of their own.
 
 For example, to change the message `Wrong!`, [find](#finding) it as text and type over its letters in the text column. Disassemble then shows the new text in the Listing's data and in the comment beside each instruction that reads it.
 
@@ -76,11 +76,11 @@ The **Inspector** button above the bytes shows or hides it. In a wide pane it si
 
 ## The Listing {#listing}
 
-**Disassemble** shows an Executable's **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. The Listing is generated from the File's current bytes when shown and is never saved. It is read-only, as the notice at the top right says; to change the program, [edit its bytes](#byte-edits) in the Hex editor. The notice's **?** opens this section in the Documentation panel, and the notice hides while Find (Ctrl+F) is open in the pane. The gutter shows an address for each line. The Listing opens with `main`, or the entry point when no `main` is found, near the top, and beside a Pseudocode at its function. Switching the pane to Hex and back returns to the same place.
+**Disassemble** shows an Executable's **Listing**: its machine code as NASM assembly, one instruction per line, followed by its data. The Listing is generated from the File's current bytes when shown and is never saved. It is read-only, as the notice at the top right says; to change the program, [edit its bytes](#byte-edits) in the Hex editor. You can still [rename](#renaming) what it names and add [comments](#comments) to its lines, which the project saves beside the bytes. The notice's **?** opens this section in the Documentation panel, and the notice hides while Find (Ctrl+F) is open in the pane. The gutter shows an address for each line. The Listing opens with `main`, or the entry point when no `main` is found, near the top, and beside a Pseudocode at its function. Switching the pane to Hex and back returns to the same place.
 
 Data sections follow the code: strings appear as `s_Enter_password: db "Enter password: ", 0`, other bytes as `db` or `dq`, and uninitialized space as `resb`. An instruction that reads data through `[rel …]` names the data, with the string as a comment. Searching for a printed message can therefore help you find instructions that use it. In a C++ program, a comment also gives the readable [C++ name](#cpp-names) of each function or data a line names.
 
-Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name; a C++ name's hover also gives its [other forms](#cpp-names). Hover over a number for its value in decimal, hexadecimal and binary. When the number's bytes, in the order x86 keeps them in memory, are at least two printable characters, the card adds a **Text** line: `0x4c75257240343a41` reads `A:4@r%uL`, as a string the program builds from it does.
+Hover over an instruction for its address, bytes, and mnemonic documentation, or over a label for its address and the source of its name; a C++ name's hover also gives its [other forms](#cpp-names), and a renamed label's the name it was renamed from. Hover over a number for its value in decimal, hexadecimal and binary. When the number's bytes, in the order x86 keeps them in memory, are at least two printable characters, the card adds a **Text** line: `0x4c75257240343a41` reads `A:4@r%uL`, as a string the program builds from it does.
 
 **Go to Definition** (F12, or Ctrl+click) on a label opens its location, and so does a double-click on a label or on the target of a call or jump; such a name is underlined while the pointer is over it. **Go to References** lists the lines that name it. [Back and forward](#navigation) returns to where you were.
 
@@ -97,7 +97,7 @@ A **symbol** is a saved name for a function or data address. **Stripping** a pro
 - `.LAB_1`, `.LAB_2`, … for jump targets inside a function, numbered in address order. A jump to a smaller number goes backwards, as a loop does. From another function, the name includes its function: `FUN_brave_otter.LAB_3`.
 - `s_` followed by text for a string, such as `s_Enter_password`.
 
-The invented words do not describe what the code does. They depend on its address in the file, so the same program gets the same names on every open and for every reader. You can use those names in shared notes.
+The invented words do not describe what the code does. They depend on its address in the file, so the same program gets the same names on every open and for every reader. You can use those names in shared notes. Once you know what a function does, [rename](#renaming) it: your name replaces the Listing's, and the invented names of other addresses do not change.
 
 A C++ program's saved names are mangled, such as `_ZNSolsEi@plt` for `std::ostream::operator<<(int)`. The Listing keeps them as they are and shows the [C++ names](#cpp-names) in comments, hovers and lists.
 
@@ -105,7 +105,7 @@ A C++ program's saved names are mangled, such as `_ZNSolsEi@plt` for `std::ostre
 
 A C++ compiler encodes a function's namespaces, class and parameter types in its symbol name: `std::ostream::operator<<(int)` is `_ZNSolsEi` in the file. This encoding is called **mangling**. The editor demangles the names of an Executable, of a [Build output](#build-output) and of the libraries they load, such as `@lib/libstdc++.so.6`.
 
-The Listing's text keeps the mangled names, which its operands, labels, Go to Definition, References and [Patches](#patching) use. A comment gives the C++ name beside a call or jump target, an operand that names data, a `dq` pointer and a label's own line:
+The Listing's text keeps the mangled names, which its operands, labels, Go to Definition, References and [Patches](#patching) use. A function you [rename](#renaming) has your name there instead, and no comment with its C++ name. A comment gives the C++ name beside a call or jump target, an operand that names data, a `dq` pointer and a label's own line:
 
 ```x86
     call _ZNSolsEi@plt                  ; std::ostream::operator<<(int)
@@ -134,6 +134,8 @@ The **Symbols** panel, the tags icon in the rail, lists the functions and string
 
 Click a row to show its line in the Listing; a [Pseudocode](#decompile) beside the Listing follows it to that function. The row the Listing's cursor is in is marked. The filter box keeps the rows whose name or text contains what you type, or whose address contains it as hexadecimal digits, with or without `0x`. For a C++ function, the filter checks the mangled name, the short name and the signature, so both `operator+=` and `_ZNSolsEi` find rows. **Enter** shows the first row that matches, and the arrow keys move from the filter down through the rows.
 
+Right-click a function's row, or press the Menu key or **Shift+F10** on it, for **Rename…**, **Comment…**, which edits the function's [comment](#comments), and **Reset name** once it is renamed; **F2** on a row renames its function. On a touch screen, the row's **⋯** button opens the same menu. The prompt opens at the top of the panel. A [renamed](#renaming) function's row shows your name, its tooltip adds "Renamed from" and the old name, and the filter still finds it by the old name.
+
 ## Decompile {#decompile}
 
 **Decompile** shows a function of the Executable as **Pseudocode**: C-like text that Ghidra's decompiler produces from the function's machine code. Pseudocode helps you read the program. It is not the program's source and is not meant to compile: it uses the decompiler's own names and types, such as `iVar1` and `undefined8`, and can contain the decompiler's warnings.
@@ -142,11 +144,11 @@ The Pseudocode shows one function at a time: the function the Listing's cursor i
 
 Each Pseudocode line is linked to the instructions it came from. Linked lines share a colour in both panes, and selecting lines in one pane highlights the linked lines in the other. Some instructions, such as `endbr64` and `push rbp` at the start of a function, belong to no Pseudocode line.
 
-Like the Listing, the Pseudocode is generated from the File's current bytes and is never saved; a [Byte edit](#byte-edits) makes the editor decompile the function again. The decompiler runs in your browser, so the Executable is not uploaded anywhere. The first Decompile loads the decompiler, which takes a moment. Decompile is not available for a shared library's Listing, such as `@lib/libc.so.6`.
+Like the Listing, the Pseudocode is generated from the File's current bytes and is never saved; a [Byte edit](#byte-edits) makes the editor decompile the function again. Your [renames](#renaming) and [comments](#comments) are saved, and the decompiler is given them each time. The decompiler runs in your browser, so the Executable is not uploaded anywhere. The first Decompile loads the decompiler, which takes a moment. Decompile is not available for a shared library's Listing, such as `@lib/libc.so.6`.
 
 ## Reading the Pseudocode {#pseudocode}
 
-The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`; a C++ function is named as lists name it, such as `// game::Boss::~Boss() [deleting], …`. Functions and data have the names the [Listing](#names) gives them, invented ones included, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, a library variable the Listing names with its version, such as `stdin@GLIBC_2.2.5`, reads as `stdin`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`, and the types of library variables such as `stdin`.
+The first line is a comment naming the function and the addresses of its first and last bytes, such as `// main, 0x5555555551e9 to 0x5555555552ba`; a C++ function is named as lists name it, such as `// game::Boss::~Boss() [deleting], …`. A [function comment](#comments) of yours comes next, above the function's declaration. Functions and data have the names the [Listing](#names) gives them, invented ones included, or the names you [gave](#renaming) them, so `FUN_brave_otter` and `DAT_misty_tanager` read the same in both panes. A call through `strcmp@plt` reads as a call of `strcmp`, a library variable the Listing names with its version, such as `stdin@GLIBC_2.2.5`, reads as `stdin`, and strings appear inline, as in `strcmp(acStack_98,"hunter2")`. The decompiler knows the parameter and return types of common C library functions, such as `printf`, `fgets` and `strcmp`, and the types of library variables such as `stdin`.
 
 A C++ program's functions and data read with their namespaces and classes, as C++ writes them: in `main`, `std::string::operator+=(auStack_128,auStack_c8)` and `std::vector<std::string>::push_back(auStack_198,auStack_128)`. As in Ghidra, a name is qualified only as far as the place it is used needs: inside a member of `std::string`, a call of another member reads `max_size(…)`, and inside `game::Boss::Boss`, the call of its base class's constructor reads `Player::Player(param_1,param_2)`. A function's own declaration line always gives its whole name. Overloads read alike, such as `sum(auStack_178)` and `sum(auStack_198)` for two functions named `sum`; hover over one to see which it is.
 
@@ -159,7 +161,7 @@ The decompiler names everything else itself:
 - Types it cannot determine by their size: `undefined8` is 8 bytes and `undefined4` 4 bytes of unknown type.
 - Values that reach the function other than through its parameters and return values, by where they come from: `in_FS_OFFSET` is where the FS segment starts, which holds the stack canary at `in_FS_OFFSET + 0x28`; `unaff_RBX` is `rbx` as the caller left it; `extraout_RAX` is a value a call left in `rax` although its prototype returns none there.
 
-Hover over one of these words for a short explanation of it, with a link back to this section. A comment starting with `WARNING:` is a note from the decompiler about code it could not fully recover, such as a jump through a table. A name with an extra leading `_`, such as `_DAT_epic_cicada`, refers to more bytes than the Listing's label for that address covers.
+Hover over one of these words for a short explanation of it, with a link back to this section. A comment starting with `WARNING:` is a note from the decompiler about code it could not fully recover, such as a jump through a table. A name with an extra leading `_`, such as `_DAT_epic_cicada`, refers to more bytes than the Listing's label for that address covers. You can [rename](#renaming) the variables and parameters, such as `acStack_98` to `password`.
 
 Hover over a number for the card the [Listing](#listing) shows: its value in decimal, hexadecimal and binary, and a **Text** line when its bytes are printable. A constant written into a local variable is often part of a string built 8 bytes at a time: `0x4c75257240343a41` reads `A:4@r%uL`.
 
@@ -173,11 +175,143 @@ Most functions decompile in well under a second. A large function can take much 
 
 The decompiler stops working on a function after 30 seconds. The pane then shows **No Pseudocode** with the reason, such as "printf_positional took longer than 30 seconds to decompile". **Try again** starts again; on a less busy device, the function may finish within the limit. A function the decompiler cannot handle shows **No Pseudocode** with the decompiler's reason.
 
+## Renames {#renaming}
+
+You can give a function, data, a string or a jump target of the Executable a name of your own, such as `check_password` for a stripped program's `FUN_brave_otter`, and do the same for the decompiler's variables and parameters, such as `password` for `acStack_98`. The project saves your names with the Executable's File, apart from its bytes, and every view of the program uses them.
+
+Put the cursor on a name and press **n** or **F2**, or choose **Rename…** in the context menu (a long press on a touch screen). In the Listing, that is a label's own line or a name an instruction uses, such as `main` in `call main`; in the Pseudocode, the name of a function, a global or a variable. A prompt opens at the top of the pane with the current name selected. Type the new name and press **Enter** or **Save**, or press **Escape** or **Cancel** to keep the old one. The keys work while the Listing's or the Pseudocode's text has the keyboard; neither view takes typing, so **n** types nothing there. In the [Symbols panel](#symbols), **F2** renames the function whose row has the keyboard.
+
+A name is made of letters, digits and underscores, does not start with a digit, and has at most 128 characters, so that the Listing, the Patch prompt and the Pseudocode all read it as one name. It cannot be a keyword of C or C++, a type the decompiler writes such as `undefined4` or `code`, the name of an x86 register in any letter case, such as `rax` or `RIP`, or a word NASM reads in operands, such as `byte`, `qword`, `ptr` or `rel`. It must also differ from other names:
+
+- A function's, data's or string's name differs from every other name in the Listing. A library symbol also counts by its name without the `@` part: while the Listing has `puts@plt`, `puts` is taken.
+- A jump target's name differs from those of the other jump targets in its function. Type it without the dot: the Listing writes `.retry` inside the function and `main.retry` from elsewhere, as it writes `.LAB_2`.
+- A variable's name differs from the function's other variables and from every name in the Listing. It must not look like a name the decompiler gives, such as `iVar1`, `local_10`, `param_2`, `uStack_48` or `in_RAX`, so that your names are never mistaken for the decompiler's.
+
+While the name cannot be used, the prompt says why under the field, as in "rax is the name of an x86 register" or "main is the name of another label, at 0x5555555551e9", and **Save** is unavailable.
+
+A new name for a function, data or a string replaces the old one wherever the program shows it: on its label's line and in every instruction and `dq` that names it in the Listing, in **Go to Symbol** (Ctrl+Shift+O) and the [Symbols panel](#symbols), in the Pseudocode, and during a Debug session in the Call stack and the [memory view](#memory). Hover over it for "Renamed from `FUN_brave_otter`." and where that name came from. Other names of the same address, and the invented names of other addresses, stay as they were. A [C++ function](#cpp-names) you rename reads as your name, without namespaces, in the Pseudocode too; its hover still gives every form of the old name, and the Symbols panel's filter still finds it by them. The decompiler still knows a function's parameters by its original name: in a statically linked program, a `printf` renamed `say` still reads as `say("hello %s argc=%d\n",…)`. A jump target's new name shows in the Listing only; the Pseudocode's `goto` labels keep the decompiler's names.
+
+A variable's new name shows in its function's Pseudocode. Hover over it for where the decompiler keeps the variable, such as "on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`)", and the name it was renamed from. After the project is opened again, the hover can give that old name only once the decompiler has printed it again, for example after **Reset name**.
+
+**Reset name** in the context menu takes your name away, and the Listing's or the decompiler's name comes back. Saving the prompt with that name does the same; the prompt notes it, as in "Renamed from main; that name resets it."
+
+Some names cannot change:
+
+- A PLT stub or GOT slot, such as `strcmp@plt` or `strcmp@got`, is named after the library function the dynamic linker connects there, and the Pseudocode calls the library function by that name. Rename… on one says "strcmp is named by the library it comes from", as it does on a call of `__libc_start_main` in the Pseudocode.
+- A parameter whose name a C declaration gives keeps it. In a statically linked program's `puts(char *s)`, Rename… on `s` says "s is named by the C declaration of puts, so it keeps that name".
+- Rename… is not offered on a string, a `goto` label or the words of a comment in the Pseudocode, nor in a shared library's Listing, such as `@lib/libc.so.6`, or a [Build output](#build-output). A statically linked program's C library functions are part of the Executable, so you can rename them.
+
+If another label comes to have the name you gave, for example after a [Byte edit](#byte-edits) changes the program's symbols, the label you renamed keeps its own name until one of the two changes. Its hover says "Renamed `retry` in this Project, but another label has that name, so this one keeps its own until one of them changes.", Rename… notes that your name is not applied, and **Reset name** removes it.
+
+## Comments {#comments}
+
+A **comment** is a note of your own on a line of the Executable, or on a whole function. The Listing and the Pseudocode both show it, and the project saves it with the File.
+
+Put the cursor on a line and press **;** or choose **Comment…** in the context menu. The prompt holds the comment already there, if any. **Enter** saves, **Shift+Enter** starts a new line, and **Escape** cancels. Saving the prompt empty deletes the comment, as **Delete comment** in the context menu does. A comment has at most 4,000 characters on 40 lines. **;** works by the key's position on a US keyboard, so on another layout it may be a different key; the context menu works with any layout.
+
+What Comment… edits depends on the line:
+
+- In the Listing, an instruction or a line of data takes a comment at its address. On a function's label line, Comment… edits the comment on the whole function, and **Function comment…** does so from any other line of the function.
+- In the Pseudocode, a statement's comment is kept at its first instruction, the one a [Breakpoint](#pseudocode-debugging) set on the line goes on first, so the Listing shows it there too. On the function's declaration line, Comment… edits the function's comment, and **Function comment…** does so from any other line. Braces, declarations of variables and the decompiler's warnings take no Comment….
+- On a line of a comment of yours, in either view, Comment… edits that comment.
+
+The Listing writes a comment of one line and up to 60 characters at the end of its line, after any comment the Listing writes itself, with another `;` between them:
+
+```x86
+    lea rdx, [rel s_hunter2]            ; "hunter2" ; the password
+```
+
+A longer comment goes above the line, wrapped at 100 characters:
+
+```x86
+    ; compares what was typed with the password: zero in eax means they are equal, so the program
+    ; prints Correct! and returns zero
+    test eax, eax
+```
+
+A comment on a whole function goes between the blank line before the function and its label:
+
+```x86
+; Asks for a password on stdin and says whether it is right.
+; main returns 1 when stdin ends.
+main:
+    endbr64
+    push rbp                            ; saves the frame
+```
+
+A line covering several addresses, such as a line of data, shows each comment kept inside it; when it holds more than one, they all go above it. A comment's words are text, never a name to follow: hovering, double-clicking or Go to Definition on them does nothing, and Go to References never lists them. Comment lines have no address in the gutter and take no Breakpoint.
+
+In the Pseudocode, the decompiler places each comment as a C comment before the statement whose instructions include its address, above any warning of its own there, and the function's comment above the declaration:
+
+```c
+// main, 0x5555555551e9 to 0x5555555552ba
+
+/* Asks for a password on stdin and says whether it is right.
+   main returns 1 when stdin ends. */
+
+undefined8 main(void)
+```
+
+A comment on a statement, such as one set on crackme's `if (iVar1 == 0) {`, reads `/* the password matched */` on the line above it, and `; the password matched` at the end of `test eax, eax` in the Listing. A comment no statement holds is listed at the top, under `/* Comments that could not be placed in the function body: */`, so that no comment you wrote is hidden. That happens to a comment on an instruction that gives no Pseudocode, such as `endbr64`, and to one in code the decompiler found unreachable. Where two statements share an instruction, as when the decompiler moves a copy next to a call, a comment there can show above the statement after the one you meant. A `*/` inside a comment is written `* /`, so that the comment does not end early.
+
+## Keeping renames and comments {#annotations}
+
+While an Executable's Listing or Pseudocode has the keyboard, **Ctrl+Z** (⌘Z on a Mac) takes back your last rename, Reset name, comment or deleted comment, and **Ctrl+Shift+Z** or **Ctrl+Y** brings it back. The context menu has **Undo rename or comment** and **Redo rename or comment**. Each Executable has one history, shared by both panes and the Symbols panel, of up to 1,000 changes since you opened the project. It is separate from the Hex editor's Undo of Byte edits and from the dock's **Undo**, which takes back a step of the program. Undo and Redo change the text where it is, without moving the cursor to the change.
+
+Renames and comments are saved with the Executable's File, apart from its bytes, as [Byte edits](#byte-edits) are: by autosave or **Save**, in a project archive and in a share link. A project holds at most 256 KiB of them. A project archive that has some cannot be opened by an editor older than this feature. They never change the bytes, so nothing needs building again: the Listing and the Pseudocode are made again with them, and each pane keeps showing its text until the new one is ready, with its cursor on the same instruction or statement. For a large statically linked program, generating the Listing again takes about half a second.
+
+A File keeps its renames and comments through Byte edits and their Undo, and when you rename or move it in the Explorer. Uploading a File over it, or a program writing to it during a run, replaces its content and discards them, as it discards Byte edits; the dock's Undo of a program's write brings them back. Deleting the File deletes them.
+
+After a Byte edit, a rename or comment whose place has gone stays saved: a rename whose address no longer starts a label, or a comment whose address no longer starts a line, shows again once one does, after Undo for example. Meanwhile, a comment at an address inside an instruction shows on that instruction's line, and a function comment whose function is gone shows above the line holding its address. A variable's name applies while the decompiler still finds the variable. A variable on the stack keeps its name through most Byte edits, and one in a register while the instruction that sets it stays; a name whose variable is gone is ignored without a message.
+
+During a Debug session, while the program is paused, you can rename and comment as at any other time, and the running program's Listing, its Pseudocode, the Call stack and the memory view take the change at once. While the program runs, a Build works or the Testcases run, the editor says why it cannot take one, as in "The program is running: Pause it to rename or comment". A read-only project takes no renames or comments.
+
+## Searching the Project {#search}
+
+The **Search** panel, the magnifying glass in the rail, finds text in the project's Files and, in a project with an Executable, in each Executable's Listing and in the [Pseudocode of all its functions](#search-pseudocode). **Ctrl+Shift+F** (⌘⇧F on a Mac) opens it from anywhere in the editor, with the search box selected; when the editor you are in has text selected on one line, the box starts with that text. **Settings** › **Shortcuts** can change the key, listed as "Search the Project". An Exam has no Search panel, as it has no Explorer.
+
+Results come as you type. Three buttons beside the box change how text matches, and their keys work anywhere among the panel's controls:
+
+- **Match case** (`Aa`, Alt+C): without it, `strcmp` also finds `STRCMP`.
+- **Match whole word** (`ab`, Alt+W): a match must not start or end inside a word, a word being letters, digits and `_` in any script. `printf` is a whole word in `call printf@plt`, but not in `__printf_chk`.
+- **Use regular expression** (`.*`, Alt+R): the text is a JavaScript regular expression, such as `str(n)?cmp\(`. It matches within one line, unless it names a line break with `\n` or `\r`. One that cannot be read says why under the box, as in "Not a valid regular expression: unterminated group."
+
+The **⋯** button beside the box shows **Files to include** and **Files to exclude**, which take patterns separated by commas, such as `*.c, src/**`. A File is searched when it matches an include pattern, or there is none, and matches no exclude pattern; an Executable's Listing and Pseudocode go by the Executable's path. Letter case does not matter in a pattern:
+
+- `*` matches any characters but `/`, `?` one character, `[abc]`, `[a-z]` and `[!abc]` one of a set, and `{c,cpp}` either word; `\` takes the next character as it is.
+- A pattern without `/` matches a name in any folder: `*.c` matches `main.c` and `src/main.c`, and `build` matches a File named `build` and everything in a folder named `build`.
+- A pattern with `/` starts at the project's top: `src/*.c` matches `src/main.c` but not `src/lib/a.c`, and `**` matches any number of folders, as in `src/**`.
+- A pattern matching a folder matches everything in it, and one ending in `/`, such as `build/`, matches only folders.
+
+In a project with an Executable, the ticks under **Look in** choose what is searched. All three start ticked, and the editor remembers your choice, as it remembers the panel's width.
+
+- **Files**: the project's text Files, such as assembly, C, Markdown and notes, Generated assembly included. Files stored as bytes are not searched.
+- **Listings**: each Executable's Listing, with your renames and comments. The panel generates a Listing no pane has shown yet and says so, as in "Generating the Listing of factcheck: 40%". A shared library's Listing and the Build output are not searched.
+- **Pseudocode**: every function of each Executable, [decompiled in the background](#search-pseudocode).
+
+The results are grouped by File. An Executable's results are grouped under its name twice, once marked **Listing** and once **Pseudocode**, the second by function. Each row is a line's number and text with the matches marked. The line under the controls counts them, as in "12 matches in 3 Files", where an Executable counts as one File. The results follow changes as they happen: an edited File, a Listing generated again after a rename or comment, a function decompiled. While a new search runs, the last results stay, dimmed, until its first ones arrive.
+
+Click a row, or press **Enter** on it, to open it. A File's row opens the File with the match selected. A Listing's row shows its line, found again by its address if the Listing has changed since. A Pseudocode row shows the function in **Decompile**, with the match selected and the Listing beside it at the statement's first instruction. As Go to Definition does, opening a row records where the pane was in a Listing or Pseudocode, so **Alt+←** [goes back](#navigation) there. During a Debug session, an Executable's row opens in the version being debugged when a pane shows it. On a phone, choosing a row closes the panel's drawer.
+
+**Enter** in the search box opens the first result, **↓** moves to the results, and **Escape** clears the box. In the results, the arrow keys, **Home** and **End** move, **→** and **←** open and close a group, **Enter** or **Space** opens a row, and **↑** from the first item returns to the box.
+
+At most 2,000 rows are listed at first; "1,234 more lines not shown" and **Show more** add 2,000 more. A row whose line is longer than 1,000 characters shows the part around its first match. A search that runs for more than 2 seconds stops with "The search took too long.", with the matches found before it stopped. That is usually a regular expression that tries many ways to match, such as `^(\w+\s?)+;$`. A search that stopped is not run again until you change it.
+
+## Searching the Pseudocode {#search-pseudocode}
+
+While the Search panel is open with **Pseudocode** ticked, the editor decompiles each Executable's functions in the background, one at a time, and searches their Pseudocode as it arrives. `main` comes first, or the function at the entry point when there is no `main`, then the functions it calls, then the functions those call, and then the rest by address, so a statically linked program's own code is searched before its C library. PLT stubs, such as `strcmp@plt`, are left out.
+
+The panel shows "Decompiling 120 of 290 functions of factcheck" with a progress bar and **Cancel**. Cancel, closing the panel, or unticking Pseudocode stops it and keeps what was decompiled: the panel then says "Decompiled 120 of 290 functions of factcheck: the rest are not searched.", and **Resume** carries on. An Executable with up to 1,000 functions starts as soon as the panel opens. A larger one, such as a statically linked program with its C library, waits for your first search, which can then take several minutes; **Decompile now** starts it at once.
+
+A Pseudocode that a pane shows is decompiled first, though it may wait a few seconds for the function being decompiled in the background to finish. In the background, each function has 5 seconds rather than 30. A function that takes longer is listed under "1 function of factcheck not searched" with the reason and **Try again**, since a less busy device may finish it. A function the decompiler cannot handle is listed with the decompiler's reason.
+
+The decompiled text is kept while the project is open and never saved. A Byte edit makes every function decompile again, and a comment or a variable's rename makes its function decompile again. After a rename of a function or global, the kept text takes the new name without being decompiled again, so its lines can break differently from the Pseudocode a pane shows. Opening a result finds the match again in the text the pane shows.
+
 ## Back and forward {#navigation}
 
-Each editor pane keeps a history of the places it jumped from in a Listing or a Pseudocode, as a browser keeps the pages you visited. A jump is a double-click on a name, **Go to Definition**, **Go to Symbol**, **Show in Listing** in the Hex editor or in the menu of a [register's value or a byte](#memory), or a row of the [Symbols panel](#symbols). **Alt+←** goes back and **Alt+→** forward, and so do the mouse's back and forward buttons over the pane and **Go Back** and **Go Forward** in its context menu. Outside the editor, in the Symbols panel for one, the keys and the buttons move the pane you worked in last, while it shows a Listing or a Pseudocode with somewhere to go; otherwise they are the browser's, and with unsaved changes the page asks before you leave it.
+Each editor pane keeps a history of the places it jumped from in a Listing or a Pseudocode, as a browser keeps the pages you visited. A jump is a double-click on a name, **Go to Definition**, **Go to Symbol**, **Show in Listing** in the Hex editor or in the menu of a [register's value or a byte](#memory), a row of the [Symbols panel](#symbols), or a result of the [Search panel](#search). **Alt+←** goes back and **Alt+→** forward, and so do the mouse's back and forward buttons over the pane and **Go Back** and **Go Forward** in its context menu. Outside the editor, in the Symbols panel for one, the keys and the buttons move the pane you worked in last, while it shows a Listing or a Pseudocode with somewhere to go; otherwise they are the browser's, and with unsaved changes the page asks before you leave it.
 
-A place in the Listing is a line; a place in the Pseudocode is its function, and going back to one moves the Listing beside it into that function. A jump that moves both panes, such as following a call in the Pseudocode, leaves a place in each. A pane keeps up to 50 places behind it and 50 ahead, and skips a place that no longer exists, such as a library's Listing after the Debug session ends.
+A place in the Listing is a line, found again by its address, so it stays on its instruction when a [comment](#comments) or a [rename](#renaming) moves the lines; a place in the Pseudocode is its function, and going back to one moves the Listing beside it into that function. A jump that moves both panes, such as following a call in the Pseudocode, leaves a place in each. A pane keeps up to 50 places behind it and 50 ahead, and skips a place that no longer exists, such as a library's Listing after the Debug session ends.
 
 ## Building and stepping {#stepping}
 
@@ -193,13 +327,13 @@ By default, **Step** over a shared-library call such as `call printf@plt` runs t
 
 To step through shared-library instructions, enable **Step into library code** in **Preferences**. For a statically linked Executable, the library code is already part of the Executable, so Step enters those functions like other program functions. Programs [compiled in the editor](/documentation/x86/runtime-library#stepping) use different startup handling: enabling this Preference begins their execution at `_start`.
 
-A crash inside a library, such as invalid data reaching `strlen`, is shown on that library's instruction. The **Call stack** includes the program's own frames; choose a frame to see its line. A C++ frame shows its short name, or its signature where overloads share the short name, with the signature and mangled name in its tooltip.
+A crash inside a library, such as invalid data reaching `strlen`, is shown on that library's instruction. The **Call stack** includes the program's own frames; choose a frame to see its line. A C++ frame shows its short name, or its signature where overloads share the short name, with the signature and mangled name in its tooltip. A function you [renamed](#renaming) shows your name, with "Renamed from" and the old name in its tooltip.
 
 When the program exits, the Listing and the Pseudocode stay where you were reading, and no line is highlighted. Its last instructions run in the C library, and the only line of its own code involved is `_start`'s call of `__libc_start_main`. A program that ends on a signal, such as a crash, is still shown where it stopped. **Undo** takes the last step back and shows its line again.
 
 ## Breakpoints {#breakpoints}
 
-Click beside a Listing instruction to place a Breakpoint. **Run** stops before that instruction. A Breakpoint holds its address, so it stays on the instruction if the Listing's lines move. You can set Breakpoints on the Executable's instructions, but not on labels, data, or a library's Listing. You can also set them from the [Pseudocode](#pseudocode-debugging).
+Click beside a Listing instruction to place a Breakpoint. **Run** stops before that instruction. A Breakpoint holds its address, so it stays on the instruction if the Listing's lines move, as when a [comment](#comments) adds lines above it. You can set Breakpoints on the Executable's instructions, but not on labels, comments, data, or a library's Listing. You can also set them from the [Pseudocode](#pseudocode-debugging).
 
 **Toggle Breakpoint** (F9) in a line's context menu sets or removes its Breakpoint too. In Edge, and in Firefox on Windows, the browser may also act on F9; the context menu avoids that. During a Debug session, **Run to Cursor** (Ctrl+F10, ⌘F10 on a Mac) runs until the program reaches the instruction on the cursor's line, as if a Breakpoint were there for this Run only. It still stops earlier at any of your Breakpoints, and the program's end stops it too. Run to Cursor from the line the program is stopped on runs until the program comes back to that instruction. It is offered only on the running program's own Listing and Pseudocode, while the program is stopped and not waiting for input.
 
@@ -209,13 +343,13 @@ To inspect the inputs to a library function, stop on its `call` instruction. Int
 
 During a Debug session, a pane showing the Pseudocode stays on it. The Pseudocode shows the function the program is in and highlights the line the current instruction belongs to. An instruction that belongs to no line, such as `endbr64`, highlights no line; the Listing beside it always shows the instruction.
 
-Click beside a Pseudocode line to set a Breakpoint on it. The editor places a Breakpoint on the first instruction of each block of instructions the line came from. These are ordinary Breakpoints of the Listing, which shows them too. For example, in crackme, a Breakpoint on `if (iVar1 == 0) {` goes on `test eax, eax`, so **Run** stops after `strcmp` returns and before the program branches. A Pseudocode line is marked when any of its instructions has a Breakpoint, wherever you set it. Clicking the mark removes all of those Breakpoints, and removing them in the Listing removes the mark. Lines without instructions, such as declarations and braces, take none. **Toggle Breakpoint** and **Run to Cursor** in a Pseudocode line's context menu follow the same rule: Run to Cursor stops at the first of those instructions the program reaches.
+Click beside a Pseudocode line to set a Breakpoint on it. The editor places a Breakpoint on the first instruction of each block of instructions the line came from. These are ordinary Breakpoints of the Listing, which shows them too. For example, in crackme, a Breakpoint on `if (iVar1 == 0) {` goes on `test eax, eax`, so **Run** stops after `strcmp` returns and before the program branches. A Pseudocode line is marked when any of its instructions has a Breakpoint, wherever you set it. Clicking the mark removes all of those Breakpoints, and removing them in the Listing removes the mark. Lines without instructions, such as declarations, braces and comments, the decompiler's warnings included, take none, and the program's line is never one of them. **Toggle Breakpoint** and **Run to Cursor** in a Pseudocode line's context menu follow the same rule: Run to Cursor stops at the first of those instructions the program reaches.
 
 The Breakpoints belong to instructions, not to the text: they stay where they are when the Pseudocode is generated again, for example after a Byte edit. The Pseudocode of a [Build output](#build-output) takes no Breakpoints and highlights no line, like its Listing.
 
 ## Addresses in registers and memory {#memory}
 
-During a Debug session, the memory view's address box takes the Listing's [names](#names) as well as addresses: `main`, `FUN_brave_otter`, `DAT_misty_tanager`, `s_Enter_password` or `strcmp@plt`, and an offset after one, as in `DAT_misty_tanager+8`. Each goes to the address the name has while the program runs. A `.LAB_` name is not taken, since it names a place only inside its function. The `0x` before the box shows only while it holds a number.
+During a Debug session, the memory view's address box takes the Listing's [names](#names) as well as addresses: `main`, `FUN_brave_otter`, `DAT_misty_tanager`, `s_Enter_password` or `strcmp@plt`, and an offset after one, as in `DAT_misty_tanager+8`. Each goes to the address the name has while the program runs. A `.LAB_` name is not taken, since it names a place only inside its function. A name you gave with [Rename](#renaming) is taken too, and the memory view's list of data and its hover show your name for data the program's symbol table names. The `0x` before the box shows only while it holds a number.
 
 In a C++ program, the box also takes [C++ names](#cpp-names). It takes a function's short name or signature when no other function has the same one, such as `sum(std::vector<int> const&)` but not `sum`, which names two functions. It takes data by the name the memory view shows, including any version suffix: `std::cout@GLIBCXX_3.4` works, `std::cout` alone does not. The memory view's list of regions and data, and its hover over a byte, name C++ data this way and add the mangled name: the hover names `std::cout@GLIBCXX_3.4 (_ZSt4cout@GLIBCXX_3.4)`, and the list gives the mangled name in the row's tooltip.
 
@@ -261,13 +395,13 @@ For an Executable, startup advances to detected `main`, or to the executable ent
 
 ## Patching an instruction {#patching}
 
-While a Debug session is paused, you can replace an instruction in the Executable's Listing. Put the cursor on its line and press **Space**, or choose **Patch instruction…** in its context menu (a long press on a touch screen). Enter the replacement using the Listing's names, such as `je .LAB_2`. The preview shows its bytes and decoded instructions before writing anything; **Enter** or **Patch** applies it. A shorter replacement is padded with `nop`s. A longer replacement is refused because it would overwrite the next instruction. The patched line is marked and shows the current memory contents; History shows a row such as "Patched jne → je".
+While a Debug session is paused, you can replace an instruction in the Executable's Listing. Put the cursor on its line and press **Space**, or choose **Patch instruction…** in its context menu (a long press on a touch screen). Enter the replacement using the Listing's names, such as `je .LAB_2`, the ones you gave included. The preview shows its bytes and decoded instructions before writing anything; **Enter** or **Patch** applies it. A shorter replacement is padded with `nop`s. A longer replacement is refused because it would overwrite the next instruction. The patched line is marked and shows the current memory contents, with your [comment](#comments) at its end if it had one; History shows a row such as "Patched jne → je".
 
 A patch changes memory only. The Executable File keeps its bytes, and the next Build reloads them; to change the File itself, make a [Byte edit](#byte-edits). **Undo** can reverse a patch, but cannot cross a step with effects that are not recorded, such as consuming standard input or growing the heap. If you patch at `main` and then Run until the program reads a password, Undo cannot reach that patch; it remains until the next Build. To try a patch that you can undo, apply it after the program reads input, for example at a Breakpoint on `call strcmp@plt`.
 
 ## The Build output {#build-output}
 
-When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, on Disassemble with Hex and Decompile beside it, and it is read-only. Its Listing and Pseudocode take no Breakpoints; the debugger follows the program in your source. While Build works, its button says what it is doing, such as **Downloading the assembler…** the first time, **Assembling…** and **Linking…**, and **Cancel** ends it as it ends [an Executable's](#stepping). A Build started right after a Cancel may first say **Waiting for the cancelled Build to end…**, for up to 20 seconds while an unfinished download of the assembler gives up.
+When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, on Disassemble with Hex and Decompile beside it, and it is read-only. Its Listing and Pseudocode take no Breakpoints, renames or comments; the debugger follows the program in your source. While Build works, its button says what it is doing, such as **Downloading the assembler…** the first time, **Assembling…** and **Linking…**, and **Cancel** ends it as it ends [an Executable's](#stepping). A Build started right after a Cancel may first say **Waiting for the cancelled Build to end…**, for up to 20 seconds while an unfinished download of the assembler gives up.
 
 The running program finds it in its working directory: it can open `./main` and read its bytes, but writing it fails with `ETXTBSY`, and renaming or deleting it fails with `EBUSY`. Each Testcase's program finds its own copy.
 

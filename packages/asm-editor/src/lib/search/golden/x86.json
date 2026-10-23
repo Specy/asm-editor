@@ -170,6 +170,49 @@
             "expect": "x86/executables/navigation"
         },
         {
+            "query": "renames of functions and variables",
+            "top": 3,
+            "expect": "x86/executables/renaming"
+        },
+        {
+            "query": "rename a function",
+            "top": 3,
+            "expect": "x86/executables/renaming",
+            "meaning": true
+        },
+        {
+            "query": "rename a variable in the pseudocode",
+            "top": 3,
+            "expect": "x86/executables/renaming",
+            "meaning": true
+        },
+        {
+            "query": "comment a line of the listing",
+            "top": 3,
+            "expect": "x86/executables/comments"
+        },
+        {
+            "query": "are renames and comments saved",
+            "top": 3,
+            "expect": "x86/executables/annotations"
+        },
+        {
+            "query": "undo a rename or comment",
+            "top": 3,
+            "expect": "x86/executables/annotations",
+            "meaning": true
+        },
+        {
+            "query": "search text in every file of the project",
+            "top": 3,
+            "expect": "x86/executables/search"
+        },
+        {
+            "query": "search every function's pseudocode",
+            "top": 3,
+            "expect": ["x86/executables/search-pseudocode", "x86/executables/search"]
+        },
+        {
             "query": "type a function name in the memory view",
             "top": 3,
             "expect": "x86/executables/memory",

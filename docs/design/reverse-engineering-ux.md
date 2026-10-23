@@ -70,10 +70,10 @@ Status: decided 2026-10-21 by the owner, from [the usability study](../research/
 From the study, kept for later at the owner's word:
 
 - **C++ demangling** in the Listing, the Pseudocode and Go to Symbol, and typing `std::string` locals. _Taken up 2026-10-22 in [C++ demangling](./cpp-demangling.md): phase 1 (demangled names everywhere but the Listing's own text) is done; phase 2 (names in the Listing's text) and phase 3 (C++ types) remain._
-- **Rename and comments**, saved in the Project, fed into both the Listing and the decompiler.
+- **Rename and comments**, saved in the Project, fed into both the Listing and the decompiler. _Taken up 2026-10-22 in [Renames, comments and project-wide search](./annotations-and-search.md) and implemented by 2026-10-23._
 - **Cross-references** with address, containing function and kind (call, jump, read).
-- **An IDA- or Ghidra-style keymap** (`g`, `n`, `x`, `;`).
-- **Search across every function's Pseudocode.**
+- **An IDA- or Ghidra-style keymap** (`g`, `n`, `x`, `;`). _`n` and `;` came with renames and comments ([annotations-and-search.md](./annotations-and-search.md), decision 18); `g` and `x` remain._
+- **Search across every function's Pseudocode.** _Taken up 2026-10-22 in [Renames, comments and project-wide search](./annotations-and-search.md) as the Search panel, which also searches the Files and the Listings, and implemented by 2026-10-23._
 - **A graph view** of a function.
 - **Go to address** in the Listing and the Pseudocode (Ctrl+G and G take an address or a name). Today Ctrl+G goes to a line and Go to exists only in the Hex editor.
 - **AVX support in the x86 Core.**

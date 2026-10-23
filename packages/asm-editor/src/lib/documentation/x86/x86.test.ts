@@ -79,6 +79,11 @@ describe('the x86 Documentation', () => {
             'decompile',
             'pseudocode',
             'decompile-time',
+            'renaming',
+            'comments',
+            'annotations',
+            'search',
+            'search-pseudocode',
             'navigation',
             'stepping',
             'breakpoints',
@@ -138,6 +143,15 @@ describe('the x86 Documentation', () => {
         expect(text('decompile')).toContain('Ghidra')
         expect(text('pseudocode')).toContain('**Go to Definition**')
         expect(text('decompile-time')).toContain('30 seconds')
+        // renames, comments and their Undo, and the Search panel
+        expect(text('renaming')).toContain('**Reset name**')
+        expect(text('renaming')).toContain('@plt')
+        expect(text('comments')).toContain('**Function comment…**')
+        expect(text('comments')).toContain('Comments that could not be placed')
+        expect(text('annotations')).toContain('**Undo rename or comment**')
+        expect(text('search')).toContain('**Ctrl+Shift+F**')
+        expect(text('search')).toContain('**Look in**')
+        expect(text('search-pseudocode')).toContain('**Cancel**')
         expect(text('pseudocode-debugging')).toContain('`if (iVar1 == 0) {`')
         expect(text('build-output')).toContain('Decompile')
         // finding the way round: the Symbols panel, back and forward, and the pointer menus
