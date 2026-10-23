@@ -53,11 +53,16 @@
     /** What the browser found once it had read the File: its size in pixels, its length. */
     let dimensions = $state.raw<{ width: number; height: number }>()
     let duration = $state<number>()
-    /** How wide the image is drawn, which fitted to a smaller pane is less than its own width. */
+    /**
+     * How wide the image is drawn, which fitted to the pane is less than its own width in a smaller
+     * pane and more in a larger one.
+     */
     let shownWidth = $state(0)
     const scale = $derived(
         dimensions?.width && shownWidth ? Math.round((shownWidth / dimensions.width) * 100) : 100
     )
+    /** Drawn larger than its own size, where its pixels stay square rather than blurred. */
+    const enlarged = $derived(!!dimensions?.width && shownWidth > dimensions.width)
 
     function imageLoaded(event: Event) {
         const image = event.currentTarget as HTMLImageElement
@@ -88,7 +93,7 @@
             {#if dimensions}
                 <span class="fact">{dimensions.width} × {dimensions.height} px</span>
             {/if}
-            {#if kind.preview === 'image' && scale < 100}
+            {#if kind.preview === 'image' && !actualSize && scale !== 100}
                 <span class="fact" title="The image is fitted to the pane">shown at {scale}%</span>
             {/if}
             {#if duration !== undefined && formatDuration(duration)}
@@ -124,6 +129,10 @@
                 <img
                     src={source.url}
                     alt={name}
+                    class:enlarged
+                    style:--aspect={dimensions?.height
+                        ? dimensions.width / dimensions.height
+                        : null}
                     bind:clientWidth={shownWidth}
                     onload={imageLoaded}
                     onerror={(event) => failed(event, PREVIEW_UNAVAILABLE.image)}
@@ -273,8 +282,8 @@
         overflow: auto;
         padding: 1rem 1rem calc(1rem + var(--dock-room));
     }
-    /* fitted, an image only ever shrinks; at its own size it scrolls. The auto margins centre it
-       without pushing an image wider than the pane off its left edge, as centring the row would */
+    /* the auto margins centre an image or a video without pushing one wider than the pane off its
+       left edge, as centring the row would */
     img,
     video {
         margin: auto;
@@ -282,9 +291,22 @@
         max-height: 100%;
         object-fit: contain;
     }
+    /* fitted, an image fills the pane's width or its height, whichever it reaches first, so a small
+       one grows as well as a large one shrinks; at its own size it scrolls. The pane is a size
+       container, so 100cqw and 100cqh are the room inside its padding */
+    .image {
+        container-type: size;
+    }
+    .image:not(.actual-size) img {
+        width: min(100cqw, 100cqh * var(--aspect));
+    }
     .actual-size img {
         max-width: none;
         max-height: none;
+    }
+    /* as the Screen does, so a sprite sheet drawn larger reads as its pixels */
+    img.enlarged {
+        image-rendering: pixelated;
     }
     /* transparent pixels over a checkerboard in the pane's own two shades, so they read in either
        theme */
