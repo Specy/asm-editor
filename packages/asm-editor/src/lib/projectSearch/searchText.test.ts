@@ -274,6 +274,27 @@ describe('a regular expression', () => {
         ).toEqual([[{ start: 1, end: 2 }], [{ start: 0, end: 1 }]])
     })
 
+    it('reads no further than its line, so a pattern that could run on stays fast', () => {
+        //a static program's Listing has 150,000 lines: over the whole text, `[\s\S]*` would read
+        //to its end from every `call`, for seconds, and the search would time out
+        const instructions = ['mov rax, qword [rbp-0x8]', 'call puts@plt', 'add rsp, 0x10', 'ret']
+        const lines = Array.from(
+            { length: 100_000 },
+            (_, k) =>
+                `    ${instructions[k % instructions.length]}${k % 1000 === 1 ? ' ; call it a ret' : ''}`
+        )
+        const text = new SearchText(lines.join('\n'))
+        void text.lineStarts
+        for (const pattern of ['call[\\s\\S]*ret', 'call[^;]*;', 'mov\\W*xyz']) {
+            const started = performance.now()
+            const found = searchText(text, compileMatcher({ text: pattern, regex: true })!, 2_000)
+            const took = performance.now() - started
+            expect(took, pattern).toBeLessThan(1_000)
+            if (pattern === 'mov\\W*xyz') expect(found.matches).toBe(0)
+            else expect(found.lines, pattern).toBe(100)
+        }
+    })
+
     it('runs onto the lines after when it names a line break', () => {
         const text = '    ret\r\n\r\nmain:\n    push rbp'
         const found = search(text, { text: 'ret\\s*\\n\\s*main', regex: true })

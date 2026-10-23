@@ -3,7 +3,12 @@ import { executableAnalysis } from '#lib/executables.ts'
 import type { ElfAnalysis } from '#lib/listing/decoder.ts'
 import { LINE_KIND, type Listing, type ListingFunction } from '#lib/listing/listing.ts'
 import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
-import { pseudocodeNameSpans, rewriteNames, type NameSpan } from '#lib/projectSearch/nameSpans.ts'
+import {
+    pseudocodeNameSpans,
+    pseudocodeWidenedNames,
+    rewriteNames,
+    type NameSpan
+} from '#lib/projectSearch/nameSpans.ts'
 import { programNames, type PseudocodeName } from './programImage'
 import { functionAnnotations, functionAnnotationsKey } from './pseudocodeAnnotations'
 import { isTimeLimit, type PseudocodeClient, type PseudocodeResult } from './pseudocodeClient'
@@ -25,9 +30,11 @@ import { isTimeLimit, type PseudocodeClient, type PseudocodeResult } from './pse
  *   names, its comments, its function comment), for the Workbench session, never saved. A global
  *   rename rewrites the texts that name what it renamed rather than decompiling them again
  *   ("The cached text with a new name"), their lines then breaking where a fresh decompilation's
- *   might not; where a name is printed so that its new spelling cannot be worked out (a C++ name's
- *   namespaces broken onto another line, a name the decompiler widened, `_name`), its function is
- *   decompiled again, as one whose locals or comments changed is.
+ *   might not; where a rename changes more than the name's own text, its function is decompiled
+ *   again, as one whose locals or comments changed is: a C++ name moved out of its namespaces or
+ *   back, which the decompiler qualifies relative to the function it prints, and whose function
+ *   then qualifies every other name relative to the global scope; and a name the decompiler
+ *   widened (`_name`), which names no target to rewrite.
  *
  * A function past the time limit, or one the worker failed on, is listed as not searched
  * ({@link PseudocodeSearchFailure.retryable}) and tried again by `retry` or the next `start`: a
@@ -204,6 +211,8 @@ type Entry = PseudocodeSearchEntry & {
     annotationsKey: string
     /** The names its text holds. */
     names: Map<number, PseudocodeName>
+    /** The global names its text prints widened (`pseudocodeWidenedNames`), with no target. */
+    widened: readonly string[]
 }
 
 type Failure = { failure: PseudocodeSearchFailure; annotationsKey: string }
@@ -239,20 +248,35 @@ function nameChanges(
 }
 
 /**
- * Whether a name's text in a Pseudocode can be rewritten for its change: it is the old name as
- * printed, in full or qualified as far as the decompiler chose, on one line, and the new one goes
- * in the global scope, as a person's name does.
+ * Whether a change moves a name into or out of namespaces: a C++ name renamed into the global
+ * scope, as a person's name goes, or reset into its namespaces. The decompiler qualifies a name
+ * relative to the function it prints, so the texts naming it, and the renamed function's own,
+ * whose scope it is, read otherwise than by the name alone.
+ */
+const movesScope = ({ from, to }: NameChange) =>
+    !!(from?.namespace?.length || to?.namespace?.length)
+
+/**
+ * Whether a name's text in a Pseudocode can be rewritten for its change: a name in the global
+ * scope before and after, printed as it was named.
  */
 function rewritable(text: string, span: NameSpan, change: NameChange): boolean {
     const { from, to } = change
-    if (!from || !to || to.namespace?.length) return false
-    const written = text.slice(span.start, span.end)
-    const qualified = from.namespace?.length
-        ? `${from.namespace.join('::')}::${from.name}`
-        : from.name
-    if (written !== qualified && !qualified.endsWith(`::${written}`)) return false
-    //a qualified name the printer broke after a `::` starts on the line before
-    return !/::\s*$/.test(text.slice(Math.max(0, span.start - 256), span.start))
+    if (!from || !to || movesScope(change)) return false
+    return text.slice(span.start, span.end) === from.name
+}
+
+const oldNamesOf = new WeakMap<Map<number, NameChange>, Set<string>>()
+
+/** The names before of the changes, as the decompiler prints a name without its namespaces. */
+function oldNames(changes: Map<number, NameChange>): Set<string> {
+    let names = oldNamesOf.get(changes)
+    if (!names) {
+        names = new Set()
+        for (const { from } of changes.values()) if (from) names.add(from.name)
+        oldNamesOf.set(changes, names)
+    }
+    return names
 }
 
 /** The function's text with names rewritten from its own names to `names`; undefined when it cannot be. */
@@ -262,6 +286,14 @@ function rewrite(
     changes: Map<number, NameChange>
 ): Entry | undefined {
     if (entry.names === names) return entry
+    //its own name moved scope: every name in it may be qualified otherwise
+    const own = changes.get(entry.address)
+    if (own && movesScope(own)) return undefined
+    //a widened name names no target, but may be a renamed one's
+    if (entry.widened.length) {
+        const renamed = oldNames(changes)
+        if (entry.widened.some((name) => renamed.has(name))) return undefined
+    }
     let touched = false
     for (const span of entry.spans) {
         const change = changes.get(span.target)
@@ -614,6 +646,7 @@ export class PseudocodeSearchCache {
             name,
             text: textOf(result.lines),
             spans: pseudocodeNameSpans(result.lines),
+            widened: pseudocodeWidenedNames(result.lines),
             annotationsKey,
             names: version.facts.names
         }

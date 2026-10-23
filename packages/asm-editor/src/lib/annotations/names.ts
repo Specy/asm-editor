@@ -1,4 +1,4 @@
-import { X86_ASSEMBLER_REGISTERS } from '#lib/languages/X86/generated/x86Tokens.ts'
+import { NASM_OPERAND_WORDS, NASM_REGISTERS } from '#lib/listing/nasmWords.ts'
 
 /**
  * What a person's name for a label or a variable of an Executable may be
@@ -171,35 +171,32 @@ const GHIDRA_WORDS = new Set([
 ])
 
 /**
- * Every x86 register NASM names, and the instruction pointer, which the disassembler writes:
- * a label named `rax` would read as the register in an operand. Compared in lower case, as NASM
- * reads registers in any case.
+ * The names the C library's declarations give types, which the decompiler writes as they are
+ * (`size_t`, `FILE *`, `tm *`): every typedef and every struct and union tag of the prototypes the
+ * Pseudocode is decompiled with (`@specy/decompiler/prototypes/glibc.h`, which a test reads them
+ * from), so that no variable reads `size_t size_t;`.
  */
-export const X86_REGISTER_NAMES: ReadonlySet<string> = new Set([
-    ...X86_ASSEMBLER_REGISTERS,
-    'rip',
-    'eip'
+const C_LIBRARY_TYPES = new Set([
+    ...['size_t', 'ssize_t', 'intptr_t', 'uintptr_t', 'intmax_t', 'uintmax_t'],
+    ...['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'],
+    ...['off_t', 'pid_t', 'uid_t', 'gid_t', 'mode_t', 'time_t', 'clock_t', 'clockid_t'],
+    ...['suseconds_t', 'useconds_t', 'socklen_t', 'sa_family_t', 'in_port_t', 'in_addr_t'],
+    ...['nfds_t', 'sigset_t', '__sighandler_t', 'FILE', 'DIR', 'va_list'],
+    ...['pthread_t', 'pthread_key_t', 'pthread_once_t', 'pthread_attr_t', 'pthread_mutex_t'],
+    ...['pthread_mutexattr_t', 'pthread_cond_t', 'pthread_condattr_t'],
+    ...['_IO_FILE', '__dirstream', '__va_list_tag', '__jmp_buf_tag', 'tm', 'timespec', 'timeval'],
+    ...['in_addr', 'sockaddr', 'sockaddr_in', 'pollfd', 'option', 'dirent', 'addrinfo'],
+    ...['hostent', '_Unwind_Exception', '_Unwind_Context']
 ])
 
-/** The words NASM reads in an operand, besides registers, compared in lower case. */
-export const NASM_OPERAND_WORDS: ReadonlySet<string> = new Set([
-    'byte',
-    'word',
-    'dword',
-    'qword',
-    'tword',
-    'oword',
-    'yword',
-    'zword',
-    'ptr',
-    'rel',
-    'abs',
-    'short',
-    'near',
-    'far',
-    'strict',
-    'wrt',
-    'seg'
+/**
+ * The C library's constants, which a reader of C takes for the library's wherever they are
+ * written: `NULL`, `EOF`. Its objects (`stdin`, `errno`) are labels of a program that uses them,
+ * which a name differs from as from any label.
+ */
+const C_LIBRARY_CONSTANTS = new Set([
+    ...['NULL', 'EOF', 'BUFSIZ', 'FILENAME_MAX', 'RAND_MAX', 'EXIT_SUCCESS', 'EXIT_FAILURE'],
+    ...['SEEK_SET', 'SEEK_CUR', 'SEEK_END']
 ])
 
 /**
@@ -237,8 +234,9 @@ function foreignCharacter(name: string): string {
 /**
  * Why `name` cannot be any name a person gives, label or variable, from its text alone: not a C
  * identifier of at most {@link NAME_LENGTH_LIMIT} characters, or a word that already means
- * something where names are written (a C or C++ keyword, a type of the decompiler's, an x86
- * register, a word of NASM's operands). Undefined when it can be.
+ * something where names are written (a C or C++ keyword, a type of the decompiler's or of the C
+ * library's, a constant of the C library, an x86 register, a word of NASM's operands,
+ * `nasmWords.ts`). Undefined when it can be.
  */
 export function nameProblem(name: string): string | undefined {
     if (!name) return 'Write a name'
@@ -251,8 +249,11 @@ export function nameProblem(name: string): string | undefined {
     if (C_KEYWORDS.has(name)) return `${name} is a keyword of C`
     if (CPP_KEYWORDS.has(name)) return `${name} is a keyword of C++`
     if (GHIDRA_WORDS.has(name)) return `${name} is a type the decompiler writes`
+    if (C_LIBRARY_TYPES.has(name))
+        return `${name} is a type of the C library, which the decompiler writes`
+    if (C_LIBRARY_CONSTANTS.has(name)) return `${name} is a constant of the C library`
     const lower = name.toLowerCase()
-    if (X86_REGISTER_NAMES.has(lower)) return `${name} is the name of an x86 register`
+    if (NASM_REGISTERS.has(lower)) return `${name} is the name of an x86 register`
     if (NASM_OPERAND_WORDS.has(lower)) return `${name} is a word NASM reads in operands`
     return undefined
 }
@@ -268,10 +269,14 @@ export function looksLikeGhidraName(name: string): boolean {
 }
 
 /**
- * A label as a name check reads it, which a `ListingLabel` is: its name as defined (`main`,
- * `.LAB_3`, `puts@plt`) and its link-time address.
+ * A label as a name check reads it: its name as defined (`main`, `.LAB_3`, `puts@plt`), its
+ * address, and for a label the person renamed, `raw`, the name the Listing gave it
+ * (`ListingLabel.renamed.from`), whose library symbol the Listing still keeps for it.
  */
-export type NamedLabel = Readonly<{ name: string; address: number }>
+export type NamedLabel = Readonly<{ name: string; address: number; raw?: string }>
+
+/** A variable the person named in a function's Pseudocode, and that function, as a refusal names it. */
+export type NamedLocal = Readonly<{ name: string; owner: string }>
 
 const hex = (address: number) => `0x${address.toString(16)}`
 
@@ -281,7 +286,10 @@ const hex = (address: number) => `0x${address.toString(16)}`
  * passes depends on the label:
  * - a function, data or string label: every label of the Listing, raw, invented or renamed. A
  *   library symbol's label counts by its library name too, since the Pseudocode prints `puts@plt`
- *   as `puts`;
+ *   as `puts`, and keeps it when the person renamed a versioned datum (`stdin@GLIBC_2.2.5` named
+ *   `my_in` still holds `stdin`), as the Listing settles renames (`generateListing`'s `rename`);
+ *   `locals` are the variables the person named in the Executable's functions, whose Pseudocode
+ *   would then write the label as `::name`;
  * - a jump target (`jumpTarget`), written `.name` in its function: that function's labels, among
  *   which it must differ from the other jump targets alone.
  *
@@ -292,7 +300,10 @@ export function globalNameProblem(
     name: string,
     labels: Iterable<NamedLabel>,
     address: number,
-    { jumpTarget = false }: { jumpTarget?: boolean } = {}
+    {
+        jumpTarget = false,
+        locals = []
+    }: { jumpTarget?: boolean; locals?: Iterable<NamedLocal> } = {}
 ): string | undefined {
     const problem = nameProblem(name)
     if (problem) return problem
@@ -307,9 +318,14 @@ export function globalNameProblem(
         if (label.address === address) continue
         if (label.name === name)
             return `${name} is the name of another label, at ${hex(label.address)}`
-        if (libraryName(label.name) === name)
-            return `${name} is the name of another label, ${label.name}, at ${hex(label.address)}`
+        if (libraryName(label.raw ?? label.name) !== name) continue
+        return label.raw === undefined
+            ? `${name} is the name of another label, ${label.name}, at ${hex(label.address)}`
+            : `${name} is the name of another label, ${label.raw}, which you renamed ${label.name}, at ${hex(label.address)}`
     }
+    for (const local of locals)
+        if (local.name === name)
+            return `${name} is the name of a variable of ${local.owner}, whose Pseudocode would then write this label as ::${name}`
     return undefined
 }
 

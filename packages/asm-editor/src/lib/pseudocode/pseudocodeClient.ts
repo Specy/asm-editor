@@ -2,6 +2,7 @@ import type { DecompiledFunction, DecompileOptions } from '@specy/decompiler'
 import PseudocodeWorker from './pseudocode.worker?worker'
 import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import { executableAnalysis } from '#lib/executables.ts'
+import { KeyIds } from '#lib/keyIds.ts'
 import type { Listing } from '#lib/listing/listing.ts'
 import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import { programImage, programNamesKey } from './programImage'
@@ -102,6 +103,8 @@ type WorkerState = {
 type OpenProgram = { path: string; key: string; number: number }
 
 type Caller = {
+    /** Whom it asks for: a request may wait on a job of the other lane. */
+    lane: PseudocodePriority
     resolve(result: PseudocodeResult): void
     reject(reason: unknown): void
     onStage?: (stage: PseudocodeStage) => void
@@ -165,9 +168,13 @@ export class PseudocodeClient {
     private readonly opening = new Map<number, OpenProgram>()
     private readonly openFailures = new Map<number, string>()
     private readonly results = new Map<string, PseudocodeResult>()
-    /** A short number for each content string, as `ListingDocuments` keeps them. */
-    private readonly contentIds = new Map<string, number>()
-    private nextContentId = 0
+    /**
+     * A short number for each content string, as `ListingDocuments` keeps them, and apart, for
+     * each key of renames (`programNamesKey`) and of a function's Annotations, so that a run of
+     * those never takes a content's number away, which would open its program again.
+     */
+    private readonly contentIds = new KeyIds(4 * KEPT_PSEUDOCODE)
+    private readonly annotationIds = new KeyIds(4 * KEPT_PSEUDOCODE)
     private nextId = 1
     private nextProgram = 1
     /** Counts `dispose` calls, so work started before one does not finish after it. */
@@ -210,8 +217,8 @@ export class PseudocodeClient {
                 address,
                 functionAt(listing, address)?.end ?? address
             )
-        const programKey = `${this.contentId(file.content)}\0${byteEditsKey(file)}\0${listing.base}\0${listing.version}\0${this.contentId(programNamesKey(listing))}`
-        const key = `${programKey}\0${address}\0${this.contentId(functionAnnotationsKey(own))}`
+        const programKey = `${this.contentIds.of(file.content)}\0${byteEditsKey(file)}\0${listing.base}\0${listing.version}\0${this.annotationIds.of(programNamesKey(listing))}`
+        const key = `${programKey}\0${address}\0${this.annotationIds.of(functionAnnotationsKey(own))}`
         if (lane === 'visible') this.shown.add(path)
         const kept = this.version === undefined ? undefined : this.kept(key)
         if (kept) return Promise.resolve(kept)
@@ -237,17 +244,19 @@ export class PseudocodeClient {
                     callers: new Set(),
                     started: false
                 })
-            const caller: Caller = { resolve, reject, onStage: options.onStage }
+            const caller: Caller = { lane, resolve, reject, onStage: options.onStage }
             waiting.callers.add(caller)
             if (signal) {
                 const abort = () => {
                     waiting.callers.delete(caller)
                     reject(signal.reason)
-                    // Nobody waits for it any more: unless it has started, it is not asked for.
-                    // One no longer queued (answered, or dropped with the client) takes nothing
-                    // else with it.
-                    if (!waiting.started && !waiting.callers.size && this.dequeue(waiting))
-                        this.heard()
+                    if (waiting.started) return
+                    // Nobody waits for it any more: it is not asked for. One no longer queued
+                    // (answered, or dropped with the client) takes nothing else with it.
+                    if (!waiting.callers.size) {
+                        if (this.dequeue(waiting)) this.heard()
+                    } else if ([...waiting.callers].every((each) => each.lane === 'background'))
+                        this.demoted(waiting)
                 }
                 signal.addEventListener('abort', abort, { once: true })
                 caller.cleanup = () => signal.removeEventListener('abort', abort)
@@ -322,6 +331,18 @@ export class PseudocodeClient {
     }
 
     /**
+     * A pane's request that no pane waits for any more, only the background's that rode along:
+     * back in the background's lane, behind every pane's request, with the background's time
+     * limit, and not kept. Left as it is when it has started or is no longer queued.
+     */
+    private demoted(job: Job) {
+        if (job.lane !== 'visible' || this.jobs.has(jobKey('background', job.key))) return
+        if (!this.dequeue(job)) return
+        job.lane = 'background'
+        this.enqueue(job)
+    }
+
+    /**
      * Ends the worker and forgets every program and result, as the Workbench session ends;
      * whatever still waits is answered with an error. A later request starts afresh.
      */
@@ -337,6 +358,7 @@ export class PseudocodeClient {
         if (this.state) this.end(this.state)
         this.results.clear()
         this.contentIds.clear()
+        this.annotationIds.clear()
         for (const job of waiting)
             this.answer(job, { address: job.address, error: 'The decompiler was closed' })
     }
@@ -581,17 +603,6 @@ export class PseudocodeClient {
             this.fail(state, 'The decompiler failed: its worker sent an unreadable message')
         )
         return state
-    }
-
-    private contentId(content: string): number {
-        let id = this.contentIds.get(content)
-        if (id === undefined) {
-            //ids are never reused, so forgetting them only costs a result decompiled again
-            if (this.contentIds.size >= 4 * KEPT_PSEUDOCODE) this.contentIds.clear()
-            id = ++this.nextContentId
-            this.contentIds.set(content, id)
-        }
-        return id
     }
 }
 

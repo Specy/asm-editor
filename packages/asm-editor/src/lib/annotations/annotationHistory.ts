@@ -43,7 +43,9 @@ const KEPT_STEPS = 1000
  * the Annotations.
  *
  * A caller makes a change through `FileSystem.annotate` first and records it once it is made, so
- * that a refused change leaves no step; for Undo and Redo it puts back the step's `annotations`.
+ * that a refused change leaves no step; for Undo and Redo it passes what puts back the step's
+ * `annotations`, and the step moves only once that is done, so a refusal leaves the history as it
+ * was.
  */
 export class AnnotationHistory {
     private readonly stacks = new Map<string, Stack>()
@@ -95,23 +97,39 @@ export class AnnotationHistory {
     }
 
     /**
-     * The Annotations to put back to undo the last step on `file`, as it is now, and what that
-     * step changed; Redo can then put back what `file` has now. Undefined when there is nothing to
-     * undo.
+     * Undoes the last step on `file`, as it is now: `put` puts back the Annotations it had before
+     * that step, and the step then moves to Redo, which can put back what `file` has now. Gives
+     * the step, with what it changed; undefined when there is nothing to undo. When `put` throws
+     * (the FileSystem refuses the record), the history stays as it was and the error goes on.
      */
-    undo(path: string, file: ProjectFile): AnnotationStep | undefined {
-        return this.step(path, file, false)
+    undo(
+        path: string,
+        file: ProjectFile,
+        put: (annotations: Annotations | undefined) => void
+    ): AnnotationStep | undefined {
+        return this.step(path, file, false, put)
     }
 
-    redo(path: string, file: ProjectFile): AnnotationStep | undefined {
-        return this.step(path, file, true)
+    redo(
+        path: string,
+        file: ProjectFile,
+        put: (annotations: Annotations | undefined) => void
+    ): AnnotationStep | undefined {
+        return this.step(path, file, true, put)
     }
 
-    private step(path: string, file: ProjectFile, redo: boolean): AnnotationStep | undefined {
+    private step(
+        path: string,
+        file: ProjectFile,
+        redo: boolean,
+        put: (annotations: Annotations | undefined) => void
+    ): AnnotationStep | undefined {
         const stack = this.stack(path, file)
         const [from, to] = redo ? [stack.redo, stack.undo] : [stack.undo, stack.redo]
-        const step = from.pop()
+        const step = from.at(-1)
         if (!step) return undefined
+        put(step.annotations)
+        from.pop()
         to.push({ annotations: file.annotations, change: step.change })
         stack.key = annotationsKey(step)
         return step

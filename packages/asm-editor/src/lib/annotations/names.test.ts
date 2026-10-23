@@ -2,7 +2,9 @@
  * What a person's name for a label or a variable may be
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision 7).
  */
+import glibc from '@specy/decompiler/prototypes/glibc'
 import { describe, expect, it } from 'vite-plus/test'
+import { NASM_OPERAND_WORDS, NASM_REGISTERS } from '#lib/listing/nasmWords.ts'
 import {
     globalNameProblem,
     libraryNameProblem,
@@ -73,8 +75,58 @@ describe('any name', () => {
             expect(nameProblem(word)).toBe(`${word} is a word NASM reads in operands`)
         //`short` is C's before it is NASM's
         expect(nameProblem('short')).toBe('short is a keyword of C')
-        for (const name of ['raxes', 'r8x', 'flags', 'ip', 'to', 'ptr2'])
+        for (const name of ['raxes', 'r8x', 'flags', 'ptr2', 'top', 'stop'])
             expect(nameProblem(name), name).toBeUndefined()
+    })
+
+    it('is no word the Patch prompt reads as no name, so a renamed label can be typed back', () => {
+        //`fadd to st1`, `[nosplit rel x]`, the x87 stack's top, `ip`, and `r8l` for `r8b`
+        for (const register of ['st', 'ST', 'ip', 'r8l', 'r15l'])
+            expect(nameProblem(register)).toBe(`${register} is the name of an x86 register`)
+        for (const word of ['to', 'nosplit'])
+            expect(nameProblem(word)).toBe(`${word} is a word NASM reads in operands`)
+        //one list for both
+        for (const word of [...NASM_REGISTERS, ...NASM_OPERAND_WORDS])
+            expect(nameProblem(word), word).toBeDefined()
+    })
+
+    it("is no type or constant of the C library's, which the Pseudocode writes", () => {
+        for (const type of ['size_t', 'FILE', 'DIR', 'va_list', 'pid_t', 'uint8_t', 'tm'])
+            expect(nameProblem(type)).toBe(
+                `${type} is a type of the C library, which the decompiler writes`
+            )
+        for (const name of ['NULL', 'EOF', 'SEEK_SET', 'EXIT_FAILURE'])
+            expect(nameProblem(name)).toBe(`${name} is a constant of the C library`)
+        expect(nameProblem('Size_t')).toBeUndefined()
+        expect(nameProblem('null')).toBeUndefined()
+    })
+
+    it('is none of the type names the prototypes the Pseudocode is decompiled with declare', () => {
+        const code = glibc.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, ' ')
+        const types = new Set<string>()
+        //each typedef's name, to its `;` outside braces: `size_t`, `(*__sighandler_t)`, `} sigset_t`
+        for (let at = code.indexOf('typedef'); at >= 0; at = code.indexOf('typedef', at + 1)) {
+            let depth = 0
+            let end = at
+            for (; end < code.length; end++) {
+                if (code[end] === '{') depth++
+                else if (code[end] === '}') depth--
+                else if (code[end] === ';' && depth === 0) break
+            }
+            const statement = code.slice(at, end)
+            types.add(
+                (/\(\s*\*\s*(\w+)\s*\)/.exec(statement) ??
+                    /(\w+)\s*(?:\[[^\]]*\])?\s*$/.exec(statement))![1]
+            )
+        }
+        for (const [, tag] of code.matchAll(/\b(?:struct|union|enum)\s+([A-Za-z_]\w*)/g))
+            types.add(tag)
+        //a broken read would make every check below pass
+        expect(types).toContain('size_t')
+        expect(types).toContain('FILE')
+        expect(types).toContain('sigset_t')
+        expect(types).toContain('tm')
+        for (const type of types) expect(nameProblem(type), type).toBeDefined()
     })
 })
 
@@ -110,6 +162,38 @@ describe('a global name', () => {
         expect(globalNameProblem('memcpy', labels, 0x1200)).toBe(
             'memcpy is the name of another label, memcpy@GLIBC_2.14, at 0x1040'
         )
+    })
+
+    it("keeps a renamed library datum's name taken, as the Listing settles renames", () => {
+        //`stdin@GLIBC_2.2.5` renamed `my_in`: the Listing still keeps `stdin` for it
+        const renamed: NamedLabel[] = [
+            ...labels,
+            { name: 'my_in', address: 0x4010, raw: 'stdin@GLIBC_2.2.5' }
+        ]
+        expect(globalNameProblem('stdin_copy', renamed, 0x1200)).toBeUndefined()
+        expect(globalNameProblem('stdin', renamed, 0x1200)).toBe(
+            'stdin is the name of another label, stdin@GLIBC_2.2.5, which you renamed my_in, at 0x4010'
+        )
+        //its own label may take it back
+        expect(globalNameProblem('stdin', renamed, 0x4010)).toBeUndefined()
+        //a renamed label of the program's own frees its raw name, as the Listing does
+        const own: NamedLabel[] = [{ name: 'check', address: 0x1139, raw: 'main' }]
+        expect(globalNameProblem('main', own, 0x1200)).toBeUndefined()
+    })
+
+    it('differs from the variables the person named, whose Pseudocode would write it ::name', () => {
+        const locals = [
+            { name: 'password', owner: 'main' },
+            { name: 'count', owner: 'FUN_brave_otter' }
+        ]
+        expect(globalNameProblem('secret', labels, 0x4040, { locals })).toBeUndefined()
+        expect(globalNameProblem('password', labels, 0x4040, { locals })).toBe(
+            'password is the name of a variable of main, whose Pseudocode would then write this label as ::password'
+        )
+        //a jump target's `.password` is no global
+        expect(
+            globalNameProblem('password', labels, 0x1210, { jumpTarget: true, locals })
+        ).toBeUndefined()
     })
 
     it('is refused for what it is before whom it clashes with', () => {

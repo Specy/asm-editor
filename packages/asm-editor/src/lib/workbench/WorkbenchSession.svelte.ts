@@ -29,6 +29,7 @@ import {
     commentAt,
     functionCommentAt,
     localName,
+    localsOf,
     rename,
     renameLocal,
     resetName,
@@ -196,6 +197,7 @@ import {
     commentTarget,
     functionCommentTarget,
     labelToRename,
+    namedLocals,
     pseudocodeLabelToRename,
     pseudocodeNameToRename,
     renameProblem,
@@ -1870,16 +1872,19 @@ export class WorkbenchSession {
         const refusal = this.annotationRefusal(path)
         if (refusal) return this.annotated(refusal)
         const file = this.project.files[path]
-        const step = redo
-            ? this.annotationHistory.redo(path, file)
-            : this.annotationHistory.undo(path, file)
-        if (!step) return false
+        //the step moves only once the FileSystem takes its record: a refused one stays to try again
+        const put = (annotations: Annotations | undefined) =>
+            this.project.fileSystem.annotate(path, annotations)
+        let step
         try {
-            this.project.fileSystem.annotate(path, step.annotations)
+            step = redo
+                ? this.annotationHistory.redo(path, file, put)
+                : this.annotationHistory.undo(path, file, put)
         } catch (error) {
             console.error(error)
             return this.annotated(getM68kErrorMessage(error))
         }
+        if (!step) return false
         this.annotationsChanged(path)
         return true
     }
@@ -2060,7 +2065,12 @@ export class WorkbenchSession {
             text: target.current,
             ...(target.jumpTarget ? { prefix: '.' } : {}),
             ...(pseudocodeFunction !== undefined ? { pseudocodeFunction } : {}),
-            problem: (text) => renameProblem(target, text),
+            problem: (text) =>
+                renameProblem(
+                    target,
+                    text,
+                    namedLocals(target.listing, this.project.files[path]?.annotations)
+                ),
             save: (text) => {
                 const name = typedName(target, text)
                 return name === target.raw
@@ -2100,7 +2110,12 @@ export class WorkbenchSession {
             ...(note ? { note } : {}),
             text: target.current,
             pseudocodeFunction: functionAddress,
-            problem: (text) => variableRenameProblem(target, text),
+            problem: (text) =>
+                variableRenameProblem(
+                    target,
+                    text,
+                    localsOf(this.project.files[path]?.annotations, functionAddress)
+                ),
             save: (text) => {
                 const name = text.trim()
                 return this.writeVariableName(
@@ -3215,7 +3230,8 @@ export class WorkbenchSession {
             range
         }
         if (document.kind === 'file') return this.openFileMatch(document.path, match)
-        if (document.kind === 'listing') return this.openListingMatch(document.path, match)
+        if (document.kind === 'listing')
+            return this.openListingMatch(document.path, match, document.listing)
         if (!document.function) return false
         return this.openPseudocodeMatch(document.path, document.function.address, match)
     }
@@ -3284,11 +3300,15 @@ export class WorkbenchSession {
     /**
      * A Listing result, as the Symbols panel reveals a line: the Listing beside a focused
      * Pseudocode of the Executable moves to it, else a pane showing the Listing, else one showing
-     * its bytes, switched to it, else the focused pane.
+     * its bytes, switched to it, else the focused pane. `searched` is the Listing the result was
+     * found in, whose line is found again by its address in the one shown.
      */
-    private async openListingMatch(path: string, match: SearchMatch): Promise<boolean> {
+    private async openListingMatch(
+        path: string,
+        match: SearchMatch,
+        searched: Listing | undefined
+    ): Promise<boolean> {
         if (!this.project.files[path]) return false
-        const searched = this.projectSearch.searchedListing(path)
         const place = searched && placeOfLine(searched, match.line)
         const lineIn = (listing: Listing) =>
             place

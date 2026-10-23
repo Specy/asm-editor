@@ -140,8 +140,16 @@ describe('naming a patched line’s targets', () => {
         expect(addressName(listing, labelAddress('stdin@GLIBC_2.2.5') + 4n, line)).toBe(
             'stdin@GLIBC_2.2.5+0x4'
         )
-        //a name the line was written with comes before that
-        expect(addressName(listing, inside, line, new Map([[inside, 'DAT_x']]))).toBe('DAT_x')
+        //a name the line was written with comes before that, while it names the address
+        const typed = `main+0x${(inside - labelAddress('main')).toString(16)}`
+        expect(addressName(listing, inside, line, new Map([[inside, typed]]))).toBe(typed)
+        //a name no label has, or one whose label is elsewhere, is not kept
+        expect(addressName(listing, inside, line, new Map([[inside, 'DAT_x']]))).toBe(
+            's_hunter2+0x2'
+        )
+        expect(addressName(listing, inside, line, new Map([[inside, 'main+0x2']]))).toBe(
+            's_hunter2+0x2'
+        )
         //a label at exactly the address wins over a name it was written with
         expect(
             addressName(listing, labelAddress('main'), line, new Map([[labelAddress('main'), 'x']]))
@@ -447,6 +455,54 @@ describe('the patcher', () => {
                 new: [0x74, displacement]
             })
         ).toBe(`Patched jne → je at 0x${address.toString(16)}`)
+    })
+
+    it("names a patched line's typed target after its label's rename, and its Reset name", async () => {
+        const line = checkLine()
+        const address = runTime(line)
+        //`je main+0x…` to the `call strcmp@plt`, which no label names
+        const call = lineOf('call strcmp@plt')
+        const target = runTime(call)
+        const main = labelAddress('main')
+        const je = `je 0x${target.toString(16)}`
+        const displacement = (Number(target - address - 2n) + 256) & 0xff
+        const host = fakeHost({ [je]: [0x74, displacement] })
+        const typed = `je main+0x${(target - main).toString(16)}`
+        expect(
+            host.patcher.apply(ok(await host.patcher.preview(host.patcher.site(line)!, typed)))
+        ).toBe(true)
+        expect(host.patcher.patched!.lines.get(line)?.instruction).toBe(typed)
+        const write = { address, old: [0x75, 0x00], new: [0x74, displacement] }
+        write.old[1] = bytes[listing.lines.offsets[line] + 1]
+
+        const renamed = generateListing(decoder, {
+            bytes,
+            name: 'crackme',
+            base: PIE_BASE,
+            version: 'v1',
+            annotations: { names: new Map([[Number(main) - PIE_BASE, 'check_password']]) }
+        })
+        host.show(renamed)
+        const named = `je check_password+0x${(target - main).toString(16)}`
+        expect(host.patcher.patched!.lines.get(line)?.instruction).toBe(named)
+        expect(host.patcher.patched!.lines.get(line)?.text).toBe(`    ${named}`)
+        //the Patch prompt starts with it, which reads again
+        const site = host.patcher.site(line)!
+        expect(site.text).toBe(named)
+        expect((await host.patcher.preview(site, site.text)).ok).toBe(true)
+        //the History names the Poke by the name the label has now
+        expect(host.patcher.title(write)).toBe(
+            `Patched jne .LAB_2 → ${named} at 0x${address.toString(16)}`
+        )
+
+        //and its Reset name takes the person's name away again
+        host.show(listing)
+        expect(host.patcher.patched!.lines.get(line)?.instruction).toBe(typed)
+        const site2 = host.patcher.site(line)!
+        expect((await host.patcher.preview(site2, site2.text)).ok).toBe(true)
+        expect(host.patcher.title(write)).toBe(
+            `Patched jne .LAB_2 → ${typed} at 0x${address.toString(16)}`
+        )
     })
 
     it('writes nothing for an unchanged preview, or once the session has ended', async () => {

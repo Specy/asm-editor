@@ -159,8 +159,11 @@ export class ProjectSearch {
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- What the search worker was sent; nothing renders from it.
         pseudocode: new Map()
     }
-    /** The Listing each Executable's Listing results were found in, which a row's line is of. */
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read when a row is opened; nothing renders from it.
+    /**
+     * The Listing each Executable's Listing is searched as, the last ready one while it is made
+     * again; each result keeps the one it was found in (`SearchDocumentInfo.listing`).
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read as the documents are sent; nothing renders from it.
     private readonly searchedListings = new Map<string, Listing>()
     /** The Executables given to the Pseudocode cache. */
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Bookkeeping for the cache's `forget`; nothing renders from it.
@@ -248,11 +251,6 @@ export class ProjectSearch {
     /** Whether there is a query, which starts the batches of the larger Executables. */
     private readonly querying = $derived(this.text !== '')
 
-    /** The Listing a row of an Executable's Listing results was found in. */
-    searchedListing(path: string): Listing | undefined {
-        return this.searchedListings.get(path)
-    }
-
     /**
      * Keeps the documents up to date and searches while the panel is shown: from its effect, which
      * calls what this returns as it hides. Hiding stops the Pseudocode batches, keeping what they
@@ -291,7 +289,13 @@ export class ProjectSearch {
                                   : undefined
                         if (!searched) continue
                         this.searchedListings.set(path, searched)
-                        if (on) docs.push({ kind: 'listing', path, text: searched.text })
+                        if (on)
+                            docs.push({
+                                kind: 'listing',
+                                path,
+                                text: searched.text,
+                                listing: searched
+                            })
                     }
                     for (const path of [...this.searchedListings.keys()])
                         if (!states.some((state) => state.path === path))

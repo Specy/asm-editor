@@ -252,10 +252,12 @@ export function eachMatch(
 }
 
 /**
- * The matches of a regular expression over the whole text, with `m` so `^` and `$` are a line's.
- * With `singleLine`, a match that would run past its line's end (`\s+` at the end of a line) is
- * looked for again in that line alone, and one starting in a line break (`^` between `\r` and
- * `\n`) is no match.
+ * The matches of a regular expression, with `m` so `^` and `$` are a line's. With `singleLine`,
+ * each line is searched as if it were the whole text, so no match runs past its line's end (`\s+`
+ * at the end of a line) or starts in a line break (`^` between `\r` and `\n`), and no attempt
+ * reads past it either: over the whole text, `call[\s\S]*ret` would read to the text's end from
+ * every `call`, past the search's time limit on a static program's 150,000-line Listing. A pattern
+ * that names a line break is matched over the whole text.
  */
 function eachRegexMatch(
     text: SearchText,
@@ -264,27 +266,21 @@ function eachRegexMatch(
     singleLine: boolean,
     found: (start: number, end: number) => void
 ) {
+    if (singleLine) {
+        const starts = text.lineStarts
+        for (let line = 0; line < starts.length; line++)
+            eachLineMatch(text, pattern, wholeWord, line, starts[line], text.lineEnd(line), found)
+        return
+    }
     const subject = text.text
     const unicode = pattern.unicode
     let from = 0
-    let line = 0
     while (from <= subject.length) {
         pattern.lastIndex = from
         const match = pattern.exec(subject)
         if (!match) return
         const start = match.index
         const end = start + match[0].length
-        if (singleLine) {
-            line = text.lineAt(start, line)
-            const lineEnd = text.lineEnd(line)
-            if (end > lineEnd) {
-                if (start <= lineEnd)
-                    eachLineMatch(text, pattern, wholeWord, line, start, lineEnd, found)
-                const starts = text.lineStarts
-                from = line + 1 < starts.length ? starts[line + 1] : subject.length + 1
-                continue
-            }
-        }
         if (wholeWord && !isWholeWord(subject, start, end)) {
             from = advance(subject, start, unicode)
             continue

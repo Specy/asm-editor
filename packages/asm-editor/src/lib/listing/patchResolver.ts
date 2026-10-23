@@ -1,5 +1,6 @@
 import { functionAtLine, type Listing } from './listing'
 import { ListingIndex } from './listingNavigation'
+import { NASM_OPERAND_WORDS, NASM_REGISTERS } from './nasmWords'
 
 /**
  * The names an instruction typed over a Listing line may use, replaced by the run-time addresses
@@ -26,54 +27,6 @@ export type ResolvedInstruction = { text: string; names: ResolvedName[] } | { er
 
 /** The characters a Listing's names are made of, as `listingNavigation.ts` reads them. */
 const NAME_CHARACTER = /[\w$#@~.?]/
-
-/** Any register NASM names in 64-bit code; `st` alone is the top of the x87 stack. */
-const REGISTER = new RegExp(
-    '^(?:' +
-        [
-            '[re]?[abcd]x',
-            '[abcd][lh]',
-            '[re]?(?:si|di|sp|bp)',
-            '(?:si|di|sp|bp)l',
-            'r(?:[89]|1[0-5])[bwdl]?',
-            '[c-gs]s',
-            '[re]?ip',
-            'cr(?:[0-9]|1[0-5])',
-            'dr(?:[0-9]|1[0-5])',
-            'tr[0-7]',
-            'st[0-7]?',
-            'mm[0-7]',
-            '[xyz]mm(?:[0-9]|[12][0-9]|3[01])',
-            'k[0-7]',
-            'bnd[0-3]',
-            'tmm[0-7]'
-        ].join('|') +
-        ')$',
-    'i'
-)
-
-/** Words of NASM's operand syntax that are not names. */
-const KEYWORDS = new Set([
-    'byte',
-    'word',
-    'dword',
-    'qword',
-    'tword',
-    'oword',
-    'yword',
-    'zword',
-    'ptr',
-    'far',
-    'near',
-    'short',
-    'strict',
-    'rel',
-    'abs',
-    'nosplit',
-    'to',
-    'seg',
-    'wrt'
-])
 
 /** Words that may come before the mnemonic. */
 const PREFIXES = new Set([
@@ -205,7 +158,7 @@ export function resolveListingNames(
             if (index.label(name, line) === undefined) name = name.slice(1)
         } else {
             const lower = name.toLowerCase()
-            const reserved = REGISTER.test(name) || KEYWORDS.has(lower)
+            const reserved = NASM_REGISTERS.has(lower) || NASM_OPERAND_WORDS.has(lower)
             //a branch's target alone may be a name that is also one of NASM's words: `call abs`
             const target =
                 reserved &&

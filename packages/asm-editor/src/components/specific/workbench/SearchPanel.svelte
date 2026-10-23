@@ -18,6 +18,7 @@
         AUTO_DECOMPILE_LIMIT,
         type SearchedListing
     } from '#lib/projectSearch/projectSearch.svelte.ts'
+    import { escapeRegExp } from '#lib/projectSearch/query.ts'
     import {
         groupResults,
         type SearchDocumentResult,
@@ -29,6 +30,7 @@
     import FaEllipsisH from '~icons/fa-solid/ellipsis-h'
     import FaSearch from '~icons/fa-solid/search'
     import SourceFileIcon from '#cmp/specific/project/SourceFileIcon.svelte'
+    import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -53,14 +55,16 @@
         return search.watch()
     })
 
-    //Ctrl+Shift+F: the query focused, and filled with the editor's selection when there is one
+    //Ctrl+Shift+F: the query focused, and filled with the editor's selection when there is one,
+    //escaped when the query is a regular expression, so that it finds the text selected
     $effect(() => {
         const request = ui.searchRequest
         const input = queryInput
         if (!request || !input || request.token === search.answeredRequest) return
         search.answeredRequest = request.token
         untrack(() => {
-            if (request.query !== undefined) search.text = request.query
+            if (request.query !== undefined)
+                search.text = search.regex ? escapeRegExp(request.query) : request.query
             requestAnimationFrame(() => {
                 input.focus()
                 input.select()
@@ -175,7 +179,14 @@
               row: SearchRow
           }
 
-    const groupKey = (group: SearchResultGroup) => `${group.kind}:${group.path}`
+    /**
+     * The tree's keys, which no path can make two items share: a path may hold `:` and `@`, so
+     * a key is the item's parts as JSON rather than joined.
+     */
+    const groupKey = (group: SearchResultGroup) => JSON.stringify(['group', group.kind, group.path])
+    const functionKey = (result: SearchDocumentResult) => JSON.stringify(['function', result.id])
+    const rowKey = (result: SearchDocumentResult, row: SearchRow) =>
+        JSON.stringify(['row', result.id, row.line])
 
     const items = $derived.by<TreeItem[]>(() => {
         const list: TreeItem[] = []
@@ -188,23 +199,24 @@
                 let parent = key
                 let level: 2 | 3 = 2
                 if (group.kind === 'pseudocode') {
-                    const open = !collapsed.has(result.id)
+                    const fn = functionKey(result)
+                    const open = !collapsed.has(fn)
                     list.push({
                         type: 'function',
-                        key: result.id,
+                        key: fn,
                         level: 2,
                         parent: key,
                         result,
                         expanded: open
                     })
                     if (!open) continue
-                    parent = result.id
+                    parent = fn
                     level = 3
                 }
                 for (const row of result.rows)
                     list.push({
                         type: 'row',
-                        key: `${result.id}:${row.line}`,
+                        key: rowKey(result, row),
                         level,
                         parent,
                         result,
@@ -329,9 +341,14 @@
         focusItem(next ?? item.key)
     }
 
-    /** Alt+C, Alt+W and Alt+R switch the toggles from anywhere in the panel's controls. */
+    /**
+     * Alt+C, Alt+W and Alt+R switch the toggles from anywhere in the panel's controls; on a Mac
+     * ⌥⌘C, ⌥⌘W and ⌥⌘R, as Visual Studio Code has them, since Option alone types a character
+     * there (`ç`, `∑`, `®`), which the boxes must take.
+     */
+    const mac = usesCommandKey()
     function onControlsKeydown(event: KeyboardEvent) {
-        if (!event.altKey || event.ctrlKey || event.metaKey) return
+        if (!event.altKey || event.ctrlKey || event.metaKey !== mac) return
         if (event.code === 'KeyC') search.matchCase = !search.matchCase
         else if (event.code === 'KeyW') search.wholeWord = !search.wholeWord
         else if (event.code === 'KeyR') search.regex = !search.regex
@@ -354,10 +371,11 @@
         }
     }
 
+    const toggleKey = (letter: string) => (mac ? `⌥⌘${letter}` : `Alt+${letter}`)
     const TOGGLES = [
-        { key: 'matchCase', label: 'Match case', glyph: 'Aa', shortcut: 'Alt+C' },
-        { key: 'wholeWord', label: 'Match whole word', glyph: 'ab', shortcut: 'Alt+W' },
-        { key: 'regex', label: 'Use regular expression', glyph: '.*', shortcut: 'Alt+R' }
+        { key: 'matchCase', label: 'Match case', glyph: 'Aa', shortcut: toggleKey('C') },
+        { key: 'wholeWord', label: 'Match whole word', glyph: 'ab', shortcut: toggleKey('W') },
+        { key: 'regex', label: 'Use regular expression', glyph: '.*', shortcut: toggleKey('R') }
     ] as const
 
     const LOOK_IN = [

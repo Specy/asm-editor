@@ -1,6 +1,7 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { addressMap } from '#lib/annotations/annotations.ts'
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
+import { KeyIds } from '#lib/keyIds.ts'
 import {
     byteEditsKey,
     fileBytes,
@@ -103,13 +104,12 @@ export class ListingDocuments {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A cache read by `open`; what is shown is tracked through each document's own state.
     private readonly documents = new Map<string, ListingDocument>()
     /**
-     * A number for each content string, so a document's key is short: a File's content can be
-     * megabytes, and a key made by concatenating it would be copied out whole on every lookup.
-     * The same string object is hashed once, and a Project's File keeps its content string.
+     * A number for each content string and each Annotations key, so a document's key is short:
+     * a File's content can be megabytes, its Annotations 256 KiB. Apart, so that a run of renames
+     * and comments never takes the content's number away, which would make its Listing again.
      */
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Key material for `documents`; it has no tracked consumer.
-    private readonly contentIds = new Map<string, number>()
-    private nextContentId = 0
+    private readonly contentIds = new KeyIds(4 * KEPT_DOCUMENTS)
+    private readonly annotationIds = new KeyIds(4 * KEPT_DOCUMENTS)
     private readonly annotationKeys = new WeakMap<Annotations, string>()
     /**
      * The Listings of the running program, by the path they are shown at: its Executable's and
@@ -150,7 +150,7 @@ export class ListingDocuments {
      */
     open(order: ListingDocumentOrder): ListingDocument {
         const annotations = this.annotationsKey(order.annotations)
-        const key = `${order.base}\0${order.name}\0${this.contentId(order.content)}\0${order.edits ?? ''}\0${annotations && this.contentId(annotations)}`
+        const key = `${order.base}\0${order.name}\0${this.contentIds.of(order.content)}\0${order.edits ?? ''}\0${annotations && this.annotationIds.of(annotations)}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
         if (!document || (document.status === 'failed' && !document.lasting))
@@ -195,17 +195,6 @@ export class ListingDocuments {
             this.annotationKeys.set(annotations, key)
         }
         return key
-    }
-
-    private contentId(content: string): number {
-        let id = this.contentIds.get(content)
-        if (id === undefined) {
-            //ids are never reused, so forgetting them only costs a document found again
-            if (this.contentIds.size >= 4 * KEPT_DOCUMENTS) this.contentIds.clear()
-            id = ++this.nextContentId
-            this.contentIds.set(content, id)
-        }
-        return id
     }
 }
 

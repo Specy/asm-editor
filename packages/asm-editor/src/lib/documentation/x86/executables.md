@@ -181,11 +181,11 @@ You can give a function, data, a string or a jump target of the Executable a nam
 
 Put the cursor on a name and press **n** or **F2**, or choose **Rename…** in the context menu (a long press on a touch screen). In the Listing, that is a label's own line or a name an instruction uses, such as `main` in `call main`; in the Pseudocode, the name of a function, a global or a variable. A prompt opens at the top of the pane with the current name selected. Type the new name and press **Enter** or **Save**, or press **Escape** or **Cancel** to keep the old one. The keys work while the Listing's or the Pseudocode's text has the keyboard; neither view takes typing, so **n** types nothing there. In the [Symbols panel](#symbols), **F2** renames the function whose row has the keyboard.
 
-A name is made of letters, digits and underscores, does not start with a digit, and has at most 128 characters, so that the Listing, the Patch prompt and the Pseudocode all read it as one name. It cannot be a keyword of C or C++, a type the decompiler writes such as `undefined4` or `code`, the name of an x86 register in any letter case, such as `rax` or `RIP`, or a word NASM reads in operands, such as `byte`, `qword`, `ptr` or `rel`. It must also differ from other names:
+A name is made of letters, digits and underscores, does not start with a digit, and has at most 128 characters, so that the Listing, the Patch prompt and the Pseudocode all read it as one name. It cannot be a keyword of C or C++, a type the decompiler writes such as `undefined4` or `code`, a type or constant of the C library such as `size_t`, `FILE`, `NULL` or `EOF`, the name of an x86 register in any letter case, such as `rax`, `RIP` or `st`, or a word NASM reads in operands, such as `byte`, `qword`, `ptr`, `rel` or `to`. It must also differ from other names:
 
-- A function's, data's or string's name differs from every other name in the Listing. A library symbol also counts by its name without the `@` part: while the Listing has `puts@plt`, `puts` is taken.
+- A function's, data's or string's name differs from every other name in the Listing. A library symbol also counts by its name without the `@` part: while the Listing has `puts@plt`, `puts` is taken, and `stdin` stays taken after you rename `stdin@GLIBC_2.2.5`. It also differs from the variables you named, since their function's Pseudocode would then write it as `::password`.
 - A jump target's name differs from those of the other jump targets in its function. Type it without the dot: the Listing writes `.retry` inside the function and `main.retry` from elsewhere, as it writes `.LAB_2`.
-- A variable's name differs from the function's other variables and from every name in the Listing. It must not look like a name the decompiler gives, such as `iVar1`, `local_10`, `param_2`, `uStack_48` or `in_RAX`, so that your names are never mistaken for the decompiler's.
+- A variable's name differs from the function's other variables, the names you just gave included, and from every name in the Listing or in the Pseudocode, such as `greeting` for a C++ function the Listing writes `_ZL8greetingv`. It must not look like a name the decompiler gives, such as `iVar1`, `local_10`, `param_2`, `uStack_48` or `in_RAX`, so that your names are never mistaken for the decompiler's.
 
 While the name cannot be used, the prompt says why under the field, as in "rax is the name of an x86 register" or "main is the name of another label, at 0x5555555551e9", and **Save** is unavailable.
 
@@ -211,7 +211,7 @@ Put the cursor on a line and press **;** or choose **Comment…** in the context
 
 What Comment… edits depends on the line:
 
-- In the Listing, an instruction or a line of data takes a comment at its address. On a function's label line, Comment… edits the comment on the whole function, and **Function comment…** does so from any other line of the function.
+- In the Listing, an instruction or a line of data takes a comment at its address, and so does a label's line, for the line of bytes under it. A name just past the end of a section, such as `_end`, has no bytes to show a comment on, and takes none. On a function's label line, Comment… edits the comment on the whole function, and **Function comment…** does so from any other line of the function.
 - In the Pseudocode, a statement's comment is kept at its first instruction, the one a [Breakpoint](#pseudocode-debugging) set on the line goes on first, so the Listing shows it there too. On the function's declaration line, Comment… edits the function's comment, and **Function comment…** does so from any other line. Braces, declarations of variables and the decompiler's warnings take no Comment….
 - On a line of a comment of yours, in either view, Comment… edits that comment.
 
@@ -268,9 +268,9 @@ During a Debug session, while the program is paused, you can rename and comment 
 
 ## Searching the Project {#search}
 
-The **Search** panel, the magnifying glass in the rail, finds text in the project's Files and, in a project with an Executable, in each Executable's Listing and in the [Pseudocode of all its functions](#search-pseudocode). **Ctrl+Shift+F** (⌘⇧F on a Mac) opens it from anywhere in the editor, with the search box selected; when the editor you are in has text selected on one line, the box starts with that text. **Settings** › **Shortcuts** can change the key, listed as "Search the Project". An Exam has no Search panel, as it has no Explorer.
+The **Search** panel, the magnifying glass in the rail, finds text in the project's Files and, in a project with an Executable, in each Executable's Listing and in the [Pseudocode of all its functions](#search-pseudocode). **Ctrl+Shift+F** (⌘⇧F on a Mac) opens it from anywhere in the editor, with the search box selected; when the editor you are in has text selected on one line, the box starts with that text, escaped when **Use regular expression** is on so that it finds that very text. **Settings** › **Shortcuts** can change the key, listed as "Search the Project". An Exam has no Search panel, as it has no Explorer.
 
-Results come as you type. Three buttons beside the box change how text matches, and their keys work anywhere among the panel's controls:
+Results come as you type. Three buttons beside the box change how text matches, and their keys work anywhere among the panel's controls. On a Mac the keys are ⌥⌘C, ⌥⌘W and ⌥⌘R, since Option alone types a character there, such as `ç`.
 
 - **Match case** (`Aa`, Alt+C): without it, `strcmp` also finds `STRCMP`.
 - **Match whole word** (`ab`, Alt+W): a match must not start or end inside a word, a word being letters, digits and `_` in any script. `printf` is a whole word in `call printf@plt`, but not in `__printf_chk`.
@@ -305,7 +305,7 @@ The panel shows "Decompiling 120 of 290 functions of factcheck" with a progress 
 
 A Pseudocode that a pane shows is decompiled first, though it may wait a few seconds for the function being decompiled in the background to finish. In the background, each function has 5 seconds rather than 30. A function that takes longer is listed under "1 function of factcheck not searched" with the reason and **Try again**, since a less busy device may finish it. A function the decompiler cannot handle is listed with the decompiler's reason.
 
-The decompiled text is kept while the project is open and never saved. A Byte edit makes every function decompile again, and a comment or a variable's rename makes its function decompile again. After a rename of a function or global, the kept text takes the new name without being decompiled again, so its lines can break differently from the Pseudocode a pane shows. Opening a result finds the match again in the text the pane shows.
+The decompiled text is kept while the project is open and never saved. A Byte edit makes every function decompile again, and a comment or a variable's rename makes its function decompile again. After a rename of a function or global, the kept text takes the new name without being decompiled again, so its lines can break differently from the Pseudocode a pane shows. A rename of a C++ function, which moves it out of its namespaces, decompiles it again with the functions naming it, as does a rename of a global the decompiler writes with an extra `_`, such as `___dso_handle`. Opening a result finds the match again in the text the pane shows.
 
 ## Back and forward {#navigation}
 

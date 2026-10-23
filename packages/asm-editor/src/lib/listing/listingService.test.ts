@@ -351,6 +351,23 @@ describe('Listing documents', () => {
         })
     })
 
+    it('keep the document of a File over a run of renames and comments, each made once', () => {
+        let generated = 0
+        const documents = new ListingDocuments(() => {
+            generated++
+            return new Promise<Listing>(() => {})
+        })
+        const file = bytesFile(crackme())
+        //more Annotations records than the documents number at once
+        for (let k = 0; k < 40; k++) {
+            const annotations = { comments: { [`0x${(0x11e9 + k).toString(16)}`]: `step ${k}` } }
+            const made = documents.openExecutable('crackme', { ...file, annotations })!
+            //the same File and Annotations again: the same document, made once
+            expect(documents.openExecutable('crackme', { ...file, annotations }), `${k}`).toBe(made)
+            expect(generated).toBe(k + 1)
+        }
+    })
+
     it('take the kinds a Listing shows, by link-time address in address order', () => {
         expect(listingAnnotations(undefined)).toBeUndefined()
         expect(

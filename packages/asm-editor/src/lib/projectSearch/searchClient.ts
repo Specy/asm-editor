@@ -235,6 +235,7 @@ export class ProjectSearchClient {
         const info: SearchDocumentInfo = { kind: document.kind, path: document.path }
         if (document.function)
             info.function = { address: document.function.address, name: document.function.name }
+        if (document.listing) info.listing = document.listing
         const stored = this.documents.get(id)
         if (stored?.text === document.text) {
             stored.info = info

@@ -448,6 +448,32 @@ describe('the rail and the shortcut', () => {
         await new Promise((resolve) => setTimeout(resolve, 30))
         expect(view.query().value).toBe('hunter2')
     })
+
+    it('puts the selection in escaped when the query is a regular expression', async () => {
+        const view = searchPanel({
+            files: {
+                crackme: { encoding: 'base64', content: crackme },
+                'notes.txt': { encoding: 'plain', content: 'call f(x) twice\ncall fax twice' }
+            }
+        })
+        view.toggle('Use regular expression')
+        const group = view.session.groups[0]
+        group.editor = {
+            hasTextFocus: () => true,
+            getSelection: () => ({ isEmpty: () => false, startLineNumber: 1, endLineNumber: 1 }),
+            getModel: () => ({ getValueInRange: () => 'f(x)' })
+        } as unknown as typeof group.editor
+        ;(view.session as unknown as { handleCommandKey(e: KeyboardEvent): void }).handleCommandKey(
+            new KeyboardEvent('keydown', { code: 'KeyF', ctrlKey: true, shiftKey: true })
+        )
+        flushSync()
+        await until(() => view.query().value !== '')
+        expect(view.query().value).toBe('f\\(x\\)')
+        expect(view.session.projectSearch.regex).toBe(true)
+        await view.searched()
+        //the text selected, not `f` then a group of `x`, which `fax` holds
+        expect(view.rowTexts()).toEqual(['call f(x) twice'])
+    })
 })
 
 describe('searching', () => {
@@ -513,6 +539,69 @@ describe('searching', () => {
         expect(view.session.projectSearch.regex).toBe(false)
         await view.searched()
         expect(view.summary()).toBe('No results found.')
+    })
+
+    it('switches the toggles with ⌥⌘ on a Mac, where Option alone types a character', async () => {
+        vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
+        const view = searchPanel()
+        const titles = ['Match case', 'Match whole word', 'Use regular expression'].map((label) =>
+            view.target.querySelector(`button[aria-label="${label}"]`)!.getAttribute('title')
+        )
+        expect(titles).toEqual([
+            'Match case (⌥⌘C)',
+            'Match whole word (⌥⌘W)',
+            'Use regular expression (⌥⌘R)'
+        ])
+        const key = (code: string, init: KeyboardEventInit) => {
+            const event = new KeyboardEvent('keydown', {
+                code,
+                bubbles: true,
+                cancelable: true,
+                ...init
+            })
+            view.query().dispatchEvent(event)
+            flushSync()
+            return event
+        }
+        //Option+C types `ç`, Option+R `®`: the box takes them
+        for (const [code, typed] of [
+            ['KeyC', 'ç'],
+            ['KeyW', '∑'],
+            ['KeyR', '®']
+        ])
+            expect(key(code, { key: typed, altKey: true }).defaultPrevented, code).toBe(false)
+        const search = view.session.projectSearch
+        expect([search.matchCase, search.wholeWord, search.regex]).toEqual([false, false, false])
+        expect(key('KeyC', { key: 'ç', altKey: true, metaKey: true }).defaultPrevented).toBe(true)
+        expect(key('KeyW', { key: '∑', altKey: true, metaKey: true }).defaultPrevented).toBe(true)
+        expect(key('KeyR', { key: '®', altKey: true, metaKey: true }).defaultPrevented).toBe(true)
+        expect([search.matchCase, search.wholeWord, search.regex]).toEqual([true, true, true])
+    })
+
+    it('lists Files whose paths hold the characters its keys are made of', async () => {
+        //`notes.txt`'s line 1 and the File `notes.txt:1`, whose keys could be one string
+        const view = searchPanel({
+            files: {
+                crackme: { encoding: 'base64', content: crackme },
+                'notes.txt': { encoding: 'plain', content: 'hunter2' },
+                'notes.txt:1': { encoding: 'plain', content: 'hunter2' },
+                'notes.txt:1:1': { encoding: 'plain', content: 'hunter2' }
+            }
+        })
+        view.tick('Listings')
+        view.tick('Pseudocode')
+        view.type('hunter2')
+        await view.searched()
+        expect(view.groups()).toEqual([
+            'notes.txt File 1',
+            'notes.txt:1 File 1',
+            'notes.txt:1:1 File 1'
+        ])
+        expect(view.rows()).toHaveLength(3)
+        const keys = [...view.target.querySelectorAll<HTMLElement>('[role="treeitem"]')].map(
+            (item) => item.dataset.key
+        )
+        expect(new Set(keys).size).toBe(6)
     })
 
     it('looks in the Files the patterns include and do not exclude', async () => {
@@ -823,6 +912,42 @@ describe('opening a result', () => {
             .split('\n')
             .findIndex((text) => text.includes('lea rdx, [rel s_hunter2]'))
         expect(editors.of(group)!.selections.at(-1)!.startLineNumber).toBe(line + 1)
+    })
+
+    it('opens a row listed before its Listing was made again at the line it moved to', async () => {
+        const view = searchPanel()
+        const editors = editorsFor(view.session)
+        const group = view.session.groups[0]
+        view.tick('Pseudocode')
+        view.type('hunter2')
+        await until(() => view.groups().some((item) => item.includes('Listing')))
+        await view.searched()
+        const search = view.session.projectSearch
+        const found = search.results.find((result) => result.document.kind === 'listing')!
+        const row = found.rows.find((each) => each.text.includes('lea rdx'))!
+        const before = view.session.listingFor(liveSource('crackme'))!.listing!
+        //a comment above main moves every line below; the panel then searches the new Listing
+        view.session.setFunctionComment('crackme', MAIN, 'one\ntwo\nthree')
+        await until(() => {
+            const now = view.session.listingFor(liveSource('crackme'))
+            return now?.status === 'ready' && now.listing !== before
+        })
+        await until(
+            () =>
+                search.status === 'complete' &&
+                search.results.some(
+                    (result) => result.document.kind === 'listing' && result !== found
+                )
+        )
+        //the row as it was listed, of the Listing it was found in, opens where its line is now
+        expect(await view.session.openSearchResult(found.document, row)).toBe(true)
+        const after = view.session.listingFor(liveSource('crackme'))!.listing!
+        const line = after.text
+            .split('\n')
+            .findIndex((text) => text.includes('lea rdx, [rel s_hunter2]'))
+        await until(() => (editors.of(group)?.position.lineNumber ?? 1) > 1)
+        expect(editors.of(group)!.position.lineNumber).toBe(line + 1)
+        expect(editors.of(group)!.selections.at(-1)?.startLineNumber).toBe(line + 1)
     })
 
     it('opens a function in the Decompile view at the match, its Listing beside it', async () => {

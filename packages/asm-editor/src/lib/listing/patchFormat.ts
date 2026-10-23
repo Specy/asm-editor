@@ -27,7 +27,8 @@ import { withoutComment } from './patchResolver'
 
 /**
  * Names for run-time addresses that the Listing has no label at exactly, taken from what a line
- * was written with (`[rel DAT_calm_lynx+0x8]`), so a patched line keeps them.
+ * was written with (`[rel DAT_calm_lynx+0x8]`), so a patched line keeps them while they hold
+ * ({@link hintHolds}).
  */
 export type NameHints = ReadonlyMap<bigint, string>
 
@@ -97,7 +98,13 @@ function listingNaming(listing: Listing, hints: NameHints): AddressNaming<number
                 ? block.name
                 : block.fullName
         },
-        hint: (address) => hints.get(BigInt(address) + base),
+        hint: (address, line) => {
+            const target = BigInt(address) + base
+            const written = hints.get(target)
+            return written !== undefined && hintHolds(listing, written, target, line)
+                ? written
+                : undefined
+        },
         holder: (address) => holderAt(listing.holders ?? NO_HOLDERS, address),
         owner: (address) => functionAt(listing, address)?.address
     }
@@ -117,8 +124,42 @@ export function addressName(
     hints: NameHints = new Map()
 ): string | undefined {
     const address = Number(target - BigInt(listing.base))
-    if (!Number.isSafeInteger(address) || address < 0) return hints.get(target)
+    if (!Number.isSafeInteger(address) || address < 0) {
+        const written = hints.get(target)
+        return written !== undefined && hintHolds(listing, written, target, line)
+            ? written
+            : undefined
+    }
     return nameAddress(listingNaming(listing, hints), address, line)
+}
+
+/**
+ * Whether a name a line was written with (`main+0x8e`, `.LAB_2`, `s_hunter2-0x1`) still names the
+ * run-time `target` in this Listing, read from `line` as `resolveListingNames` reads it: its label
+ * is still called so and is where it was. A rename or a Reset name of the label takes the name
+ * away ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+ * decision 8), and the address is then named as the Listing names it.
+ */
+function hintHolds(listing: Listing, written: string, target: bigint, line: number): boolean {
+    const sign = written.search(/[+-]/)
+    const name = sign < 0 ? written : written.slice(0, sign)
+    let offset = 0n
+    if (sign >= 0) {
+        try {
+            offset = BigInt(written.slice(sign + 1))
+        } catch {
+            return false
+        }
+        if (written[sign] === '-') offset = -offset
+    }
+    const index = ListingIndex.of(listing)
+    const label =
+        index.label(name, line) ??
+        (name.startsWith('$') ? index.label(name.slice(1), line) : undefined)
+    return (
+        label !== undefined &&
+        BigInt.asUintN(64, BigInt(label.address + listing.base) + offset) === target
+    )
 }
 
 /** A decoded instruction's text with its branch and RIP-relative targets named. */

@@ -490,9 +490,9 @@ describe('the Search panel’s Pseudocode cache', () => {
         expect(cache.progress('bin/crackme')).toBeUndefined()
     })
 
-    it('rewrites a C++ name renamed into the global scope where it is printed whole', async () => {
+    it('decompiles again what names a C++ name renamed out of its namespaces, and its function', async () => {
         const { calls, load } = recording()
-        const { cache, changes } = cacheOver(load)
+        const { client, cache } = cacheOver(load)
         const plain = fileOf(read(FACTCHECK))
         const listing = listingOf(plain, undefined, 'factcheck')
         expect(await run(cache, 'factcheck', plain, listing)).toMatchObject({
@@ -504,17 +504,73 @@ describe('the Search panel’s Pseudocode cache', () => {
         const main = listing.functions.find((fn) => fn.name === 'main')!
         const before = cache.entries('factcheck').find((entry) => entry.address === main.address)!
         expect(before.text).toContain('game::clampTo<int>(')
-        changes.length = 0
         const names = new Map([[clamp.address, 'clamp_value']])
         const named = { ...plain, annotations: { names: { [key(clamp.address)]: 'clamp_value' } } }
-        await run(cache, 'factcheck', named, listingOf(named, { names }, 'factcheck'))
-        const after = cache.entries('factcheck').find((entry) => entry.address === main.address)!
-        expect(after.text).toBe(before.text.split('game::clampTo<int>(').join('clamp_value('))
-        //only a text the rewrite could not read was decompiled again, never main's
-        expect(calls.slice(asked).map((call) => call.address)).not.toContain(main.address)
-        expect(calls.length - asked).toBeLessThan(5)
-        expect(
-            cache.entries('factcheck').find((entry) => entry.address === clamp.address)!.text
-        ).toMatch(/^\S+ clamp_value\(/)
+        const renamed = listingOf(named, { names }, 'factcheck')
+        await run(cache, 'factcheck', named, renamed)
+        //the decompiler qualifies a name relative to the function it prints: main, which names
+        //it, and clamp_value itself, whose scope moved, are decompiled again, nothing else
+        const again = calls.slice(asked).map((call) => call.address)
+        expect(again).toContain(main.address)
+        expect(again).toContain(clamp.address)
+        expect(again.length).toBeLessThan(6)
+        const entries = new Map(cache.entries('factcheck').map((entry) => [entry.address, entry]))
+        expect(entries.get(main.address)!.text).toContain('clamp_value(')
+        expect(entries.get(clamp.address)!.text).toMatch(/^\S+ clamp_value\(/)
+        for (const address of new Set(again))
+            expect(entries.get(address)!.text).toBe(
+                text(await client.decompile('factcheck', named, renamed, address))
+            )
+    })
+
+    it('reads as a fresh decompilation after renaming every C++ function out of its namespaces', async () => {
+        const { cache, client } = cacheOver()
+        const plain = fileOf(read(FACTCHECK))
+        const listing = listingOf(plain, undefined, 'factcheck')
+        await run(cache, 'factcheck', plain, listing)
+        const names = new Map<number, string>()
+        for (const label of listing.labels)
+            if (label.kind === 'function' && label.origin !== 'plt' && label.demangled)
+                names.set(label.address, `renamed_${names.size}`)
+        expect(names.size).toBeGreaterThan(200)
+        const named = {
+            ...plain,
+            annotations: {
+                names: Object.fromEntries([...names].map(([address, name]) => [key(address), name]))
+            }
+        }
+        const renamed = listingOf(named, { names }, 'factcheck')
+        expect(await run(cache, 'factcheck', named, renamed)).toMatchObject({ done: 290 })
+        const differ: string[] = []
+        for (const entry of cache.entries('factcheck')) {
+            const fresh = await client.decompile('factcheck', named, renamed, entry.address)
+            if (!('error' in fresh) && fresh.text !== entry.text) differ.push(entry.name)
+        }
+        expect(differ).toEqual([])
+    })
+
+    it('decompiles again a function that prints a renamed global widened, `_name`', async () => {
+        const { calls, load } = recording()
+        const { client, cache } = cacheOver(load)
+        const plain = fileOf(read(CRACKME))
+        const listing = listingOf(plain)
+        await run(cache, 'crackme', plain, listing)
+        const dtors = listing.functions.find((fn) => fn.name === '__do_global_dtors_aux')!
+        const entry = () => cache.entries('crackme').find((each) => each.address === dtors.address)!
+        //read at another size than its symbol's, Ghidra writes `_` before the name
+        expect(entry().text).toContain('__cxa_finalize(___dso_handle)')
+        const handle = listing.labels.find((label) => label.name === '__dso_handle')!
+        const asked = calls.length
+        const named = { ...plain, annotations: { names: { [key(handle.address)]: 'handle' } } }
+        const renamed = listingOf(named, { names: new Map([[handle.address, 'handle']]) })
+        await run(cache, 'crackme', named, renamed)
+        expect(calls.slice(asked).map((call) => call.address)).toEqual([dtors.address])
+        expect(entry().text).toContain('__cxa_finalize(_handle)')
+        expect(entry().text).toBe(
+            text(await client.decompile('crackme', named, renamed, dtors.address))
+        )
+        //and back, on Reset name
+        await run(cache, 'crackme', plain, listing)
+        expect(entry().text).toContain('__cxa_finalize(___dso_handle)')
     })
 })

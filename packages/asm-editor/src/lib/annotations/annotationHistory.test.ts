@@ -30,14 +30,10 @@ function session() {
             history.record('chall', before, annotations, change)
         },
         undo() {
-            const step = history.undo('chall', file)
-            if (step) file = named(step.annotations, file)
-            return step
+            return history.undo('chall', file, (annotations) => (file = named(annotations, file)))
         },
         redo() {
-            const step = history.redo('chall', file)
-            if (step) file = named(step.annotations, file)
-            return step
+            return history.redo('chall', file, (annotations) => (file = named(annotations, file)))
         }
     }
 }
@@ -117,10 +113,33 @@ describe('the annotation history', () => {
         const run = session()
         run.change(rename(undefined, 0x1139, 'check'), at(0x1139))
         run.history.move('chall', 'moved')
-        expect(run.history.undo('chall', run.file)).toBeUndefined()
-        expect(run.history.undo('moved', run.file)?.annotations).toBeUndefined()
+        const put = () => {}
+        expect(run.history.undo('chall', run.file, put)).toBeUndefined()
+        expect(run.history.undo('moved', run.file, put)?.annotations).toBeUndefined()
         run.history.move('moved')
-        expect(run.history.redo('moved', original)).toBeUndefined()
+        expect(run.history.redo('moved', original, put)).toBeUndefined()
+    })
+
+    it('keeps a step the File refuses to take back, to undo or redo again', () => {
+        const run = session()
+        const first = rename(undefined, 0x1139, 'check')
+        const second = setComment(first, 0x1150, 'the password')
+        run.change(first, at(0x1139))
+        run.change(second, { kind: 'comment', address: 0x1150 })
+        const refuse = () => {
+            throw new Error('Project exceeds the 256 KiB annotation limit')
+        }
+        expect(() => run.history.undo('chall', run.file, refuse)).toThrow('256 KiB')
+        //nothing moved: the File still fits its stack, and the same step is undone next
+        expect(run.history.canUndo('chall', run.file)).toBe(true)
+        expect(run.history.canRedo('chall', run.file)).toBe(false)
+        expect(run.undo()?.annotations).toEqual(first)
+        expect(() => run.history.redo('chall', run.file, refuse)).toThrow('256 KiB')
+        expect(run.history.canRedo('chall', run.file)).toBe(true)
+        expect(run.redo()?.annotations).toEqual(second)
+        expect(run.file.annotations).toEqual(second)
+        expect(run.undo()?.annotations).toEqual(first)
+        expect(run.undo()?.annotations).toBeUndefined()
     })
 
     it('keeps the last thousand steps of a File', () => {

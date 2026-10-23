@@ -47,6 +47,27 @@ export function pseudocodeNameSpans(lines: readonly NamedLine[]): NameSpan[] {
 }
 
 /**
+ * The global names a function's decompiled lines print widened, which name no `target`: Ghidra
+ * writes a global read at a size its symbol does not have with an underscore before its name
+ * (`PrintC::pushMismatchSymbol`: `___dso_handle` for `__dso_handle`, `_DAT_epic_cicada`), as a
+ * `variable` token of no variable. Each is given without that underscore, as the symbol's name, so
+ * that a rename of the symbol can tell the text names it, which it then cannot rewrite.
+ */
+export function pseudocodeWidenedNames(lines: readonly NamedLine[]): string[] {
+    const names = new Set<string>()
+    for (const line of lines)
+        for (const token of line.tokens)
+            if (
+                token.kind === 'variable' &&
+                token.target === undefined &&
+                token.variable === undefined &&
+                line.text[token.start] === '_'
+            )
+                names.add(line.text.slice(token.start + 1, token.end))
+    return [...names]
+}
+
+/**
  * The text with each span's name replaced by `nameOf(target)`, where that gives one, and the
  * spans where they then are; `spans` in text order, not overlapping. A name `nameOf` leaves
  * `undefined` stays as it is, so a rename and a Reset name are both one call.

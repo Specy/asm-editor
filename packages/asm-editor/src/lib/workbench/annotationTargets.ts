@@ -1,13 +1,16 @@
 import type { DecompiledLine, DecompiledToken, DecompiledVariable } from '@specy/decompiler'
+import { addressOf, localsOf } from '#lib/annotations/annotations.ts'
 import {
     globalNameProblem,
     libraryNameProblem,
     localNameProblem,
-    type NamedLabel
+    type NamedLabel,
+    type NamedLocal
 } from '#lib/annotations/names.ts'
 import {
     functionAtLine,
     LINE_KIND,
+    lineOfAddress,
     PERSON_COMMENT,
     personCommentIndex,
     type Listing,
@@ -16,6 +19,7 @@ import {
 } from '#lib/listing/listing.ts'
 import { ListingIndex, listingTokenAt } from '#lib/listing/listingNavigation.ts'
 import { listingLabelOfTarget } from '#lib/pseudocode/pseudocodeMap.ts'
+import type { Annotations } from '#lib/projectFiles.ts'
 
 /**
  * What Rename… and Comment… act on at a line of an Executable's own Listing or of its Pseudocode
@@ -79,6 +83,8 @@ export function labelToRename(
 
 /** What a rename of one label needs: the name it has, the one it was given, what it may not be. */
 export type RenameTarget = {
+    /** The Listing it is a label of. */
+    listing: Listing
     label: ListingLabel
     /** Link-time. */
     address: number
@@ -95,7 +101,7 @@ export type RenameTarget = {
     refusal?: string
     /**
      * The labels its name must differ from (decision 7), at run-time addresses, as the Listing's
-     * gutter gives them, which a refusal names.
+     * gutter gives them, which a refusal names; a renamed one with the name the Listing gave it.
      */
     labels: readonly NamedLabel[]
     /** Its run-time address, by which its own labels are told from the others. */
@@ -114,6 +120,7 @@ export function renameTarget(listing: Listing, label: ListingLabel): RenameTarge
             ? `${label.name.replace(/@.*$/, '')} is named by the library it comes from`
             : undefined)
     return {
+        listing,
         label,
         address: label.address,
         jumpTarget,
@@ -123,9 +130,32 @@ export function renameTarget(listing: Listing, label: ListingLabel): RenameTarge
         labels: (owner
             ? listing.labels.filter((each) => each.line >= owner.line && each.line < owner.endLine)
             : listing.labels
-        ).map((each) => ({ name: each.name, address: each.address + listing.base })),
+        ).map((each) => ({
+            name: each.name,
+            address: each.address + listing.base,
+            ...(each.renamed ? { raw: each.renamed.from } : {})
+        })),
         runTimeAddress: label.address + listing.base
     }
+}
+
+/**
+ * The variables the person named in the Pseudocode of an Executable's functions, by a File's
+ * Annotations, each with its function as a refusal names it: what a global's name must differ
+ * from (decision 7), since that function's Pseudocode would print the global as `::name`.
+ */
+export function namedLocals(listing: Listing, annotations: Annotations | undefined): NamedLocal[] {
+    const locals: NamedLocal[] = []
+    for (const key of Object.keys(annotations?.locals ?? {})) {
+        const address = addressOf(key as `0x${string}`)
+        const fn = listing.functions.find((each) => each.address === address)
+        const owner = fn
+            ? (fn.list ?? fn.name)
+            : `the function at 0x${(address + listing.base).toString(16)}`
+        for (const name of Object.values(localsOf(annotations, address)))
+            locals.push({ name, owner })
+    }
+    return locals
 }
 
 /**
@@ -139,14 +169,21 @@ export function typedName(target: RenameTarget, typed: string): string {
 
 /**
  * Why a typed name cannot be given, as the prompt says it under the field, or undefined when it
- * can: the name the Listing gave the label always can, which resets it (decision 10).
+ * can: the name the Listing gave the label always can, which resets it (decision 10). `locals`
+ * are the variables the person named in the File's Pseudocode (`namedLocals`), as they are when
+ * it is asked.
  */
-export function renameProblem(target: RenameTarget, typed: string): string | undefined {
+export function renameProblem(
+    target: RenameTarget,
+    typed: string,
+    locals: Iterable<NamedLocal> = []
+): string | undefined {
     if (target.refusal) return target.refusal
     const name = typedName(target, typed)
     if (name === target.raw) return undefined
     return globalNameProblem(name, target.labels, target.runTimeAddress, {
-        jumpTarget: target.jumpTarget
+        jumpTarget: target.jumpTarget,
+        locals
     })
 }
 
@@ -169,7 +206,8 @@ function functionComment(listing: Listing, address: number): CommentTarget {
  * comment it holds, by the address it is kept at, a function comment's line the function
  * comment; a function's label line its function comment; any other line with an address the
  * comment at it, or one kept at an address inside its bytes, which shows on it (decision 4).
- * Undefined for a line with none: a blank, a section, the header.
+ * Undefined for a line with none: a blank, a section, the header, and the label line of a name
+ * just past a region (`_end:`), whose address no line of bytes holds, so that no comment shows.
  */
 export function commentTarget(listing: Listing, line: number): CommentTarget | undefined {
     const { kinds, addresses, sizes } = listing.lines
@@ -184,6 +222,9 @@ export function commentTarget(listing: Listing, line: number): CommentTarget | u
     const address = addresses[line]
     if (!(address >= 0) || kind === LINE_KIND.section || kind === LINE_KIND.blank) return undefined
     if (kind === LINE_KIND.label) {
+        //a name just past a region (`_end`, `__TMC_END__`) has no line of bytes under it, which
+        //a comment at its address would show on
+        if (lineOfAddress(listing, address) < 0) return undefined
         const fn = functionAtLine(listing, line)
         if (fn?.address === address) return functionComment(listing, address)
         return { kind: 'comment', address }
@@ -274,10 +315,32 @@ export type VariableRenameTarget = {
      * keeps (`puts(char *s)`).
      */
     refusal?: string
-    /** The names of the function's other variables, as printed, which it must differ from. */
-    variables: readonly string[]
-    /** Every label name of the Listing, which a variable must not hide. */
+    /**
+     * The function's other variables, by id, with their names as printed, which it must differ
+     * from; the person's names saved since win over these (`variableRenameProblem`).
+     */
+    variables: readonly { id: string; name: string }[]
+    /**
+     * Every name of a label of the Listing, which a variable must not hide: as defined, as the
+     * Pseudocode prints a C++ one (`greeting` for `_Z8greetingv`), and a renamed one's names
+     * before.
+     */
     globals: readonly string[]
+}
+
+/** Every name a label goes by, which a variable must not hide (`VariableRenameTarget.globals`). */
+function globalNames(listing: Listing): string[] {
+    const names = new Set<string>()
+    for (const label of listing.labels) {
+        if (label.kind === 'block') continue
+        names.add(label.name)
+        if (label.demangled) names.add(label.demangled.pseudocode.name)
+        if (label.renamed) {
+            names.add(label.renamed.from)
+            if (label.renamed.demangled) names.add(label.renamed.demangled.pseudocode.name)
+        }
+    }
+    return [...names]
 }
 
 /**
@@ -305,21 +368,29 @@ export function variableRenameTarget(
                   refusal: `${current} is named by the C declaration of ${fn.list ?? fn.name}, so it keeps that name`
               }
             : {}),
-        variables: variables.filter((each) => each.id !== id).map((each) => each.name),
-        globals: listing.labels.map((label) => label.name)
+        variables: variables
+            .filter((each) => each.id !== id)
+            .map((each) => ({ id: each.id, name: each.name })),
+        globals: globalNames(listing)
     }
 }
 
 /**
  * Why a typed name cannot be a variable's, as the prompt says it under the field, or undefined
- * when it can: the decompiler's own name for it always can, which resets it.
+ * when it can: the decompiler's own name for it always can, which resets it. `named` are the
+ * person's names for the function's variables as saved now (`localsOf`), by id, which win over
+ * the names the shown Pseudocode printed: one saved while the function is decompiled again is
+ * not printed yet, and two variables given one name would print as `x` and `x_00`.
  */
 export function variableRenameProblem(
     target: VariableRenameTarget,
-    typed: string
+    typed: string,
+    named: Readonly<Record<string, string>> = {}
 ): string | undefined {
     if (target.refusal) return target.refusal
     const name = typed.trim()
     if (target.raw !== undefined && name === target.raw) return undefined
-    return localNameProblem(name, target.variables, target.globals)
+    const names = new Map(target.variables.map((each) => [each.id, each.name]))
+    for (const [id, saved] of Object.entries(named)) if (id !== target.id) names.set(id, saved)
+    return localNameProblem(name, names.values(), target.globals)
 }

@@ -624,6 +624,28 @@ async function settled<T>(promise: Promise<T>): Promise<'pending' | 'settled'> {
     return state
 }
 
+describe('the Pseudocode client’s keys', () => {
+    it('keeps its program open over many comments of one function', async () => {
+        const { counts, load } = counting()
+        const client = new PseudocodeClient(inThreadWorker(load))
+        const file = crackmeFile()
+        const listing = listingOf(file)
+        const first = text(await client.decompile('crackme', file, listing, MAIN))
+        //more Annotations keys than the client numbers at once, each a function comment
+        for (let k = 0; k < 4 * KEPT_PSEUDOCODE + 12; k++)
+            await client.decompile('crackme', file, listing, START, {
+                annotations: { locals: [], comments: [], functionComment: `note ${k}` }
+            })
+        expect(counts.opens).toBe(1)
+        //the File's content keeps its number: the same program, and main's result is not kept
+        //past the last 32, so it is decompiled once more, by the program opened once
+        const again = text(await client.decompile('crackme', file, listing, MAIN))
+        expect(again.text).toBe(first.text)
+        expect(counts.opens).toBe(1)
+        client.dispose()
+    }, 60_000)
+})
+
 describe('the Pseudocode client’s background lane', () => {
     it('answers a pane’s request before the background’s waiting ones', async () => {
         const { calls, load } = counting()
@@ -751,6 +773,34 @@ describe('the Pseudocode client’s background lane', () => {
             priority: 'background'
         })
         expect(result).toEqual({ address: MAIN, error: 'main took longer than 1 ms to decompile' })
+        client.dispose()
+    })
+
+    it('moves a pane’s request back to the background once only the background waits on it', async () => {
+        const { counts, calls, load } = counting()
+        const client = new PseudocodeClient(inThreadWorker(load))
+        const file = crackmeFile()
+        const listing = listingOf(file)
+        const deregister = listing.functions.find((fn) => fn.name === 'deregister_tm_clones')!
+        const running = client.decompile('crackme', file, listing, MAIN)
+        const pane = new AbortController()
+        const visible = client.decompile('crackme', file, listing, START, { signal: pane.signal })
+        const background = client.decompile('crackme', file, listing, START, {
+            priority: 'background'
+        })
+        //the pane moved on before its turn: the background's request stays, as the background's
+        pane.abort(new DOMException('Moved on', 'AbortError'))
+        await expect(visible).rejects.toThrow('Moved on')
+        const later = client.decompile('crackme', file, listing, deregister.address)
+        await Promise.all([running, background, later])
+        expect(calls.map((call) => [call.address - listing.base, call.options])).toEqual([
+            [MAIN, undefined],
+            [deregister.address, undefined],
+            [START, { timeLimitMs: BACKGROUND_TIME_LIMIT_MS }]
+        ])
+        //and its result is not kept, as the background's never are
+        await client.decompile('crackme', file, listing, START, { priority: 'background' })
+        expect(counts.decompiles).toBe(4)
         client.dispose()
     })
 

@@ -1,3 +1,4 @@
+import type { Listing } from '#lib/listing/listing.ts'
 import type { SearchRow } from './searchText.ts'
 
 /**
@@ -28,6 +29,12 @@ export type SearchDocumentInfo = {
     path: string
     /** Only for Pseudocode: the function it is the text of. */
     function?: SearchFunction
+    /**
+     * Only for a Listing: the Listing it is the text of, whose lines a row's line numbers count,
+     * kept with each result, since a Listing made again (a rename, a comment) has its lines
+     * elsewhere. Never sent to the search worker.
+     */
+    listing?: Listing
 }
 
 /** A text to search: a File's whole text, a Listing's, or one function's Pseudocode. */
