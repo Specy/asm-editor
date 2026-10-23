@@ -390,11 +390,14 @@ static inline void sim_display_write(int character) {
  *     ...
  *     screen[y * (256 / 2) + x] = sim_rgb(255, 128, 0);
  *
- * Write it once, outside any function, with numbers RARS's display offers: width
- * and height 64, 128, 256, 512 or 1024, unit 1, 2, 4, 8, 16 or 32. The grid shares the
- * 4128768 bytes of static data, from 0x10010000 to 0x10400000, with the program's
- * other global variables and constants. The heap starts on the first page after static data if
- * it passes the default heap base. A larger display needs a larger unit.
+ * Write it once, outside any function. Width and height are any whole number of pixels from
+ * 1 to 1024, and unit any from 1 to 32; a unit that does not divide them drops
+ * the remainder. RARS's own display only offers 64, 128, 256, 512 or 1024 for width and
+ * height and 1, 2, 4, 8, 16 or 32 for unit, so a program that runs there too keeps to those.
+ *
+ * The grid shares the 4128768 bytes of static data, from 0x10010000 to 0x10400000, with
+ * the program's other global variables and constants. The heap starts on the first page after
+ * static data if it passes the default heap base. A larger display needs a larger unit.
  */
 
 /** A color for the bitmap display: red, green and blue from 0 to 255, in the low 24 bits. */
@@ -411,8 +414,8 @@ static inline unsigned sim_rgb(int red, int green, int blue) {
 #define __SIM_EXPANDED_STRING(text) __SIM_STRING(text)
 
 #define SIM_SCREEN(name, width, height, unit) \
-    __SIM_STATIC_ASSERT(((width) == 64 || (width) == 128 || (width) == 256 || (width) == 512 || (width) == 1024) && ((height) == 64 || (height) == 128 || (height) == 256 || (height) == 512 || (height) == 1024) && ((unit) == 1 || (unit) == 2 || (unit) == 4 || (unit) == 8 || (unit) == 16 || (unit) == 32), \
-        "SIM_SCREEN: width and height must be 64, 128, 256, 512 or 1024, and unit 1, 2, 4, 8, 16 or 32, the sizes RARS's bitmap display offers"); \
+    __SIM_STATIC_ASSERT(((width) >= 1 && (width) <= 1024) && ((height) >= 1 && (height) <= 1024) && ((unit) >= 1 && (unit) <= 32), \
+        "SIM_SCREEN: width and height must be from 1 to 1024 pixels, and unit from 1 to 32"); \
     __SIM_STATIC_ASSERT((width) / (unit) * ((height) / (unit)) * 4 <= 4128768, \
         "SIM_SCREEN: the grid does not fit in the 4128768 bytes of static data a RISC-V program has, which its other global variables and constants share; use a larger unit or a smaller display"); \
     __asm__("# @screen width=" __SIM_EXPANDED_STRING(width) " height=" __SIM_EXPANDED_STRING(height) " unit=" __SIM_EXPANDED_STRING(unit) " base=" #name); \

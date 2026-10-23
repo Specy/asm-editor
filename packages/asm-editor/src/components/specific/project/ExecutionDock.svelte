@@ -237,7 +237,7 @@
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
                     title={compilation.warning ??
-                        'Compile source and local headers with Compiler Explorer'}
+                        'Compile the source and the Files it includes with Compiler Explorer'}
                     onclick={compilation.onCompile}
                 >
                     <Icon size={0.9}>

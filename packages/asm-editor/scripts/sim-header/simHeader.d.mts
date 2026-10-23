@@ -30,10 +30,17 @@ export type SimHeaderData = {
         transmitterData: number
         readyBit: number
     }
-    /** The sizes the bitmap display offers, and the range GNU-profile Builds give static data. */
+    /**
+     * The sizes MARS's and RARS's bitmap display offers, the ranges the editor's display takes, and
+     * the range GNU-profile Builds give static data.
+     */
     display: {
         sizes: readonly number[]
         units: readonly number[]
+        sizeMin: number
+        sizeMax: number
+        unitMin: number
+        unitMax: number
         staticData: number
         staticDataEnd: number
     }

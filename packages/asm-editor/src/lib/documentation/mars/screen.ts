@@ -1,9 +1,13 @@
 import {
     DEFAULT_PROJECT_DISPLAY,
+    DISPLAY_SIZE_MAX,
+    DISPLAY_SIZE_MIN,
     formatMarsBaseAddress,
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
-    MARS_UNIT_SIZE_CHOICES
+    MARS_UNIT_SIZE_CHOICES,
+    UNIT_SIZE_MAX,
+    UNIT_SIZE_MIN
 } from '#lib/languages/mars/marsDisplay.ts'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
@@ -100,17 +104,18 @@ function parameters(): string {
         (choice) => `\`${formatMarsBaseAddress(choice.address)}\``
     ).join(', ')
     return [
-        `1. **Unit width** and **unit height in pixels**: ${MARS_UNIT_SIZE_CHOICES.join(', ')}. How large one word is drawn. Default ${display.unitWidth} by ${display.unitHeight}.`,
-        `2. **Display width** and **height in pixels**: ${MARS_DISPLAY_SIZE_CHOICES.join(', ')}. Default ${display.width} by ${display.height}. Divided by the unit size, they give the word grid: the default is ${display.width} by ${display.height} words.`,
+        `1. **Unit width** and **unit height in pixels**: ${MARS_UNIT_SIZE_CHOICES.join(', ')}, or **Custom** for any from ${UNIT_SIZE_MIN} to ${UNIT_SIZE_MAX}. How large one word is drawn. Default ${display.unitWidth} by ${display.unitHeight}.`,
+        `2. **Display width** and **height in pixels**: ${MARS_DISPLAY_SIZE_CHOICES.join(', ')}, or **Custom** for any from ${DISPLAY_SIZE_MIN} to ${DISPLAY_SIZE_MAX}. Default ${display.width} by ${display.height}. Divided by the unit size, they give the word grid: the default is ${display.width} by ${display.height} words.`,
         `3. **Base address for display**: where the grid starts. ${bases}. Default \`${formatMarsBaseAddress(display.baseAddress)}\`, which is where \`.data\` puts your first label.`
     ].join('\n')
 }
 
 function settings(): string {
     return [
-        `- \`width\`: the display width in pixels, one of ${MARS_DISPLAY_SIZE_CHOICES.join(', ')}.`,
-        `- \`height\`: the display height in pixels, one of ${MARS_DISPLAY_SIZE_CHOICES.join(', ')}.`,
-        `- \`unit\`: how many pixels wide and high one word is drawn, one of ${MARS_UNIT_SIZE_CHOICES.join(', ')}. \`unitWidth\` and \`unitHeight\` set the two separately.`,
+        `- \`width\`: the display width in pixels, any from ${DISPLAY_SIZE_MIN} to ${DISPLAY_SIZE_MAX}.`,
+        `- \`height\`: the display height in pixels, any from ${DISPLAY_SIZE_MIN} to ${DISPLAY_SIZE_MAX}.`,
+        `- \`unit\`: how many pixels wide and high one word is drawn, any from ${UNIT_SIZE_MIN} to ${UNIT_SIZE_MAX}. \`unitWidth\` and \`unitHeight\` set the two separately.`,
+        `- MARS's and RARS's own tool only offers ${MARS_DISPLAY_SIZE_CHOICES.join(', ')} for the display and ${MARS_UNIT_SIZE_CHOICES.join(', ')} for the unit, so a program that also runs there keeps to those. Here \`# @screen width=224 height=288\` gives an arcade machine's screen.`,
         '- `base`: where the grid starts: **a label the program defines**, which is the point of it (the program never has to know the address), or an address such as `0x10010000` or `268500992`. A label not on a word boundary is rounded down to one.'
     ].join('\n')
 }

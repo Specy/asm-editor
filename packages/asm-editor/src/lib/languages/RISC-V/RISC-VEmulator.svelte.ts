@@ -72,8 +72,10 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
+    assembledCore,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
+    resolveScreenLabel,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '#lib/languages/mars/screenDirective.ts'
@@ -368,9 +370,6 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _checkCode(sources: BuildSources): Diagnostic[] {
         //the bitness decides which instructions assemble (`ld` is RV64 only), so pin the module
         //global before creating the throwaway instance, exactly like `_compile` does
-        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
-        //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(sources).diagnostics
         RISCV.setIs64Bit(this.is64Bit)
         const files = textAssemblyFiles(sources)
         const riscv = makeRiscVCore(
@@ -382,6 +381,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
+        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
+        //is being typed and does not vanish half a second after a Build replaces this list; read
+        //last, since a name only a probe resolves assembles another Core over this one
+        const directive = this.readScreenDirective(
+            sources,
+            assembledCore(riscv, result)
+        ).diagnostics
         return this.withRuntimeHints(sources, [
             ...directive,
             ...includedScreenDiagnostics(files, sources.entry, lines),
@@ -391,34 +397,24 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.riscv = null
-        //before the Core is built, so the first instruction and a Testcase alike run on the display
-        //the source asked for; the label probe assembles a throwaway Core, which the real assembly
-        //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(sources)
+        const files = textAssemblyFiles(sources)
+        let { riscv, result } = this.assembleProgram(sources, files, undoSize)
+        //before the first instruction, so it and a Testcase alike run on the display the source
+        //asked for, its base label read from this assembly. A name only the probe resolves
+        //assembles a throwaway Core over the state every Core shares, so the program is assembled
+        //again after it
+        let probed = false
+        const configured = this.readScreenDirective(sources, assembledCore(riscv, result), () => {
+            probed = true
+        })
+        if (probed) ({ riscv, result } = this.assembleProgram(sources, files, undoSize))
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
         //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
-        //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
+        //a re-sync here would repaint the Screen `clear()` has just blanked with the program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        //creation + assembly is synchronous, so pinning the module global here cannot be
-        //interleaved with another instance's creation
-        RISCV.setIs64Bit(this.is64Bit)
-        const files = textAssemblyFiles(sources)
-        const riscv = makeRiscVCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
-        //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
-        //stored by every `initialize`, a Testcase's included, before its starting registers
-        riscv.setProgramArguments(this.programArgv)
-        const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
         const diagnostics = this.withRuntimeHints(sources, [
@@ -437,6 +433,30 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         }
         this.riscv = riscv
         return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, riscv) }
+    }
+
+    /** A Core for the program, assembled for a Build. */
+    private assembleProgram(
+        sources: BuildSources,
+        files: Record<string, string>,
+        undoSize: number
+    ) {
+        //creation + assembly is synchronous, so pinning the module global here cannot be
+        //interleaved with another instance's creation
+        RISCV.setIs64Bit(this.is64Bit)
+        const riscv = makeRiscVCore(
+            files,
+            sources.entry,
+            buildAssemblerProfile(sources),
+            this.runtimeLink(sources)
+        )
+        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
+        //the size has to be set *before* assembling: setting it afterwards would only size the next
+        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
+        riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //stored by every `initialize`, a Testcase's included, before its starting registers
+        riscv.setProgramArguments(this.programArgv)
+        return { riscv, result: riscv.assemble() }
     }
 
     /**
@@ -503,15 +523,26 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
-     * What the program's `@screen` comment asks for, on top of the display the Screen has now.
+     * What the program's `@screen` comment asks for, on top of the display the Screen has now, its
+     * base label read from `assembled`, the program's Core when it assembled; `onProbe` is told
+     * when that took a probe, which assembles a Core of its own.
      *
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(sources: BuildSources) {
+    private readScreenDirective(
+        sources: BuildSources,
+        assembled: JsRiscV | null,
+        onProbe?: () => void
+    ) {
         const code = sourceText(sources)
         const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(sources, label)
+            resolveScreenLabel(assembled, label, () => {
+                //the GNU profile's symbol table is all its probe ever read
+                if (sources.assemblerProfile === 'gnu-compiler-v1') return null
+                onProbe?.()
+                return this.probeLabelAddress(sources, label)
+            })
         )
         return {
             ...configured,
@@ -523,19 +554,16 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
-     * The address a `@screen base=<label>` names. The Core has no lookup by name — `getLabelAtAddress`
-     * only goes the other way — so the program is assembled once more with one extra `.word <label>`
-     * at a fixed address and that word is read back: the assembler itself resolves the name, which is
-     * what makes `.eqv` names, forward references and text labels all work.
+     * The address of a `@screen base=` name the program's symbol table does not hold, such as an
+     * `.eqv` name: the program is assembled once more with one extra `.word <name>` at a fixed
+     * address and that word is read back, since the assembler itself resolves the name in it.
      */
-    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
+    private probeLabelAddress(sources: BuildSources, label: string): number | null {
         try {
             RISCV.setIs64Bit(this.is64Bit)
             const probeSources = updateEntryText(
                 sources,
-                sources.assemblerProfile === 'gnu-compiler-v1'
-                    ? sourceText(sources)
-                    : screenLabelProbeSource(sourceText(sources), label)
+                screenLabelProbeSource(sourceText(sources), label)
             )
             const probe = makeRiscVCore(
                 textAssemblyFiles(probeSources),
@@ -544,12 +572,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
-            //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
-            if (sources.assemblerProfile === 'gnu-compiler-v1') {
-                const address = probe.getAddressOfLabel(label)
-                return address === -1 ? null : address >>> 0
-            }
             return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
         } catch {
             return null

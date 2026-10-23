@@ -287,6 +287,7 @@ describe('C/C++ Monaco help providers', () => {
             'Project header: src/local.h'
         )
         expect(result!.suggestions.some((item) => item.label === 'local.hpp')).toBe(false)
+        expect(result!.suggestions.some((item) => item.label === 'local.inc')).toBe(true)
         h.session.update({
             entry: 'src/main.c',
             files: h.session.sources.files['src/main.c']
@@ -297,6 +298,21 @@ describe('C/C++ Monaco help providers', () => {
         expect((await h.complete())!.suggestions.some((item) => item.label === 'local.h')).toBe(
             true
         )
+    })
+    it('offers the C sources a quoted include can paste in, but not the File itself', async () => {
+        const h = harness('#include "', 'src/main.c')
+        h.session.update({
+            entry: 'src/main.c',
+            files: {
+                ...h.session.sources.files,
+                'src/video.c': { encoding: 'plain', content: '' }
+            }
+        })
+        const result = (await h.complete())!.suggestions
+        expect(result.find((item) => item.label === 'video.c')?.detail).toBe(
+            'Project source: src/video.c'
+        )
+        expect(result.some((item) => item.label === 'main.c')).toBe(false)
     })
     it.each([
         ['./lo', './local.h', 'src/local.h'],

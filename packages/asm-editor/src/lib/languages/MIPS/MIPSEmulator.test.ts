@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { beforeEach, describe, expect, it } from 'vite-plus/test'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { MIPS } from '@specy/mips'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import {
@@ -988,12 +989,54 @@ main:
         expect(emulator.peripherals.screen.width).toBe(8)
     })
 
-    it('snaps a size MARS does not offer and still builds', async () => {
-        const emulator = await build('# @screen width=300\n' + DATA + EXIT)
-        expect(emulator.getDisplay?.()?.display.width).toBe(256)
-        expect(emulator.canExecute).toBe(true)
-        expect(emulator.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
-        expect(emulator.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    it('takes a size MARS does not offer without a word, and clamps one past the range', async () => {
+        const custom = await build('# @screen width=300 height=100 unit=1\n' + DATA + EXIT)
+        expect(custom.getDisplay?.()?.display).toMatchObject({ width: 300, height: 100 })
+        expect(custom.peripherals.screen.width).toBe(300)
+        expect(custom.peripherals.screen.height).toBe(100)
+        expect(custom.compilerDiagnostics).toEqual([])
+        const past = await build('# @screen width=3000\n' + DATA + EXIT)
+        expect(past.getDisplay?.()?.display.width).toBe(1024)
+        expect(past.canExecute).toBe(true)
+        expect(past.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
+        expect(past.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    })
+
+    it('reads a labelled base from the Build itself, assembling the program once', async () => {
+        const emulator = await build(PROGRAM)
+        const cores = vi.spyOn(MIPS, 'makeMipsFromFiles')
+        try {
+            await emulator.compile(200, PROGRAM)
+            expect(cores).toHaveBeenCalledTimes(1)
+        } finally {
+            cores.mockRestore()
+        }
+        expect(emulator.getDisplay?.()?.display.baseAddress).toBe(0x10010020)
+    })
+
+    it('resolves a base named by .eqv through a probe, and still builds the program it runs', async () => {
+        //an .eqv name is text the assembler substitutes, so no symbol table holds it
+        const code = PROGRAM.replace('base=grid', 'base=GRID_AT').replace(
+            '        li      $v0, 10',
+            `        .eqv    GRID_AT, 0x10010020
+        la      $t0, grid
+        li      $t1, 0x00abcdef
+        sw      $t1, 0($t0)
+        li      $v0, 10`
+        )
+        const emulator = await build(code)
+        expect(emulator.getDisplay?.()).toMatchObject({
+            origin: 'directive',
+            baseLabel: 'GRID_AT',
+            display: { baseAddress: 0x10010020 }
+        })
+        expect(emulator.compilerDiagnostics).toEqual([])
+        //the program assembled after the probe is the one that runs, with its undo history
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(pixelAt(emulator, 0, 0)).toBe(0xabcdef)
+        for (let step = 0; step < 8 && pixelAt(emulator, 0, 0) !== 0; step++) emulator.undo(1)
+        expect(pixelAt(emulator, 0, 0)).toBe(0)
     })
 
     it('keeps the base address and warns when the label does not exist', async () => {

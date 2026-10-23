@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { RISCV } from '@specy/risc-v'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import {
@@ -22,6 +23,10 @@ import {
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { RISCVCsrRegisterNames } from '#lib/languages/RISC-V/RISC-V-registers.ts'
+import { makeProjectFromArchive } from '#lib/projectArchive.ts'
+import { originalBytes } from '#lib/projectFiles.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
+import { compilationStatus } from '#lib/sourceCompilation/records.ts'
 
 /**
  * RARS's bitmap display and keyboard-and-display registers against the real Core under node, the
@@ -816,12 +821,54 @@ main:
         expect(emulator.peripherals.screen.width).toBe(8)
     })
 
-    it('snaps a size MARS does not offer and still builds', async () => {
-        const emulator = await build('# @screen width=300\n' + DATA + EXIT)
-        expect(emulator.getDisplay?.()?.display.width).toBe(256)
-        expect(emulator.canExecute).toBe(true)
-        expect(emulator.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
-        expect(emulator.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    it('takes a size MARS does not offer without a word, and clamps one past the range', async () => {
+        const custom = await build('# @screen width=300 height=100 unit=1\n' + DATA + EXIT)
+        expect(custom.getDisplay?.()?.display).toMatchObject({ width: 300, height: 100 })
+        expect(custom.peripherals.screen.width).toBe(300)
+        expect(custom.peripherals.screen.height).toBe(100)
+        expect(custom.compilerDiagnostics).toEqual([])
+        const past = await build('# @screen width=3000\n' + DATA + EXIT)
+        expect(past.getDisplay?.()?.display.width).toBe(1024)
+        expect(past.canExecute).toBe(true)
+        expect(past.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
+        expect(past.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    })
+
+    it('reads a labelled base from the Build itself, assembling the program once', async () => {
+        const emulator = await build(PROGRAM)
+        const cores = vi.spyOn(RISCV, 'makeRiscVFromFiles')
+        try {
+            await emulator.compile(200, PROGRAM)
+            expect(cores).toHaveBeenCalledTimes(1)
+        } finally {
+            cores.mockRestore()
+        }
+        expect(emulator.getDisplay?.()?.display.baseAddress).toBe(0x10010020)
+    })
+
+    it('resolves a base named by .eqv through a probe, and still builds the program it runs', async () => {
+        //an .eqv name is text the assembler substitutes, so no symbol table holds it
+        const code = PROGRAM.replace('base=grid', 'base=GRID_AT').replace(
+            '        li      a7, 10',
+            `        .eqv    GRID_AT, 0x10010020
+        la      t0, grid
+        li      t1, 0x00abcdef
+        sw      t1, 0(t0)
+        li      a7, 10`
+        )
+        const emulator = await build(code)
+        expect(emulator.getDisplay?.()).toMatchObject({
+            origin: 'directive',
+            baseLabel: 'GRID_AT',
+            display: { baseAddress: 0x10010020 }
+        })
+        expect(emulator.compilerDiagnostics).toEqual([])
+        //the program assembled after the probe is the one that runs, with its undo history
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(pixelAt(emulator, 0, 0)).toBe(0xabcdef)
+        for (let step = 0; step < 8 && pixelAt(emulator, 0, 0) !== 0; step++) emulator.undo(1)
+        expect(pixelAt(emulator, 0, 0)).toBe(0)
     })
 
     it('keeps the base address and warns when the label does not exist', async () => {
@@ -922,6 +969,99 @@ describe('the RISC-V examples', () => {
         expect(ball).toBeLessThanOrEqual(36)
         //program time advanced through the frame waits, on a clock that started at zero
         expect(emulator.stdOut).toContain('ms of program time: ')
+    })
+
+    describe('the Pac-Man Project', () => {
+        const folder = 'examples/risc-v/pacman'
+        const { project } = makeProjectFromArchive(readFileSync(`${folder}/pacman.asmproj`))
+
+        /** One of its Programs built and run to its title screen, with its own Files to read. */
+        async function toTitle(entry: string) {
+            const sources = programBuildSources(project, entry)
+            const keyboard = new Keyboard()
+            const emulator = RISCVEmulator(sources, {
+                peripherals: {
+                    keyboard,
+                    clock: new ProgramClock({ mode: 'virtual' }),
+                    fileSystem: new FileSystem(project.files)
+                }
+            })
+            await emulator.check()
+            await emulator.compile(0, sources)
+            expect(emulator.errors).toEqual([])
+            //the arcade's own 224 by 288, which its @screen directive asks for and MARS cannot show
+            expect([emulator.peripherals.screen.width, emulator.peripherals.screen.height]).toEqual(
+                [224, 288]
+            )
+            const at = (x: number, y: number) => pixelAt(emulator, x, y)
+            const runUntil = async (done: () => boolean) => {
+                for (let ran = 0; !done(); ran += 250_000) {
+                    expect(ran).toBeLessThan(10_000_000)
+                    await emulator.run(250_000)
+                    expect(emulator.errors).toEqual([])
+                }
+            }
+            //the title, once the Files are read: PUSH SPACE in orange from tile 9 of row 14
+            await runUntil(() => at(72, 112) === 0xffb852)
+            return { keyboard, at, runUntil }
+        }
+
+        it('is the folder, packed, with its two Programs', () => {
+            //scripts/pack-example-projects.mjs packs the archive from the folder: the two must agree
+            const names = (readdirSync(folder, { recursive: true }) as string[])
+                .map((name) => name.split('\\').join('/'))
+                .filter(
+                    (name) => name !== 'pacman.asmproj' && statSync(`${folder}/${name}`).isFile()
+                )
+                .sort()
+            expect(Object.keys(project.files).sort()).toEqual(names)
+            //Buffer.equals: toEqual walks half a megabyte of bytes one element at a time
+            const differing = names.filter(
+                (name) =>
+                    !Buffer.from(originalBytes(project.files[name]!)).equals(
+                        readFileSync(`${folder}/${name}`)
+                    )
+            )
+            expect(differing).toEqual([])
+            expect(Object.keys(project.programs).sort()).toEqual([
+                'assembly/main.s',
+                'c/pacman.c.riscv'
+            ])
+            //the C Program's assembly is what Compile makes of the sources in the folder: compile
+            //c/pacman.c again in the editor after changing them, then pack
+            const record = project.compilations.find((item) => item.sourcePath === 'c/pacman.c')!
+            expect(record.optimization).toBe('2')
+            expect(compilationStatus(record, project.files, 'RISC-V').stale).toBe(false)
+        })
+
+        it('plays the assembly version, reading its pictures from its Files', async () => {
+            const { keyboard, at, runUntil } = await toTitle('assembly/main.s')
+            //every lit pixel of maze.bmp, a 24 bit bottom-up BMP, is on the Screen under the score
+            const bmp = readFileSync(`${folder}/assets/maze.bmp`)
+            const pixels = bmp.readUInt32LE(10)
+            const wrong: string[] = []
+            for (let y = 0; y < 248; y++) {
+                for (let x = 0; x < 224; x++) {
+                    const p = pixels + (247 - y) * 672 + x * 3
+                    const color =
+                        ((bmp[p + 2] ?? 0) << 16) | ((bmp[p + 1] ?? 0) << 8) | (bmp[p] ?? 0)
+                    if (color && at(x, 24 + y) !== color) wrong.push(`${x},${y}`)
+                }
+            }
+            expect(wrong).toEqual([])
+            //a key starts a game: READY! in yellow, and Pac-Man, round, at his start, once
+            //PLAYER ONE has gone
+            keyboard.typeText(' ')
+            await runUntil(() => at(111, 211) === 0xffff00)
+            expect(at(88, 160)).toBe(0xffff00)
+        }, 60_000)
+
+        it('plays the C version from the assembly it comes with', async () => {
+            const { keyboard, at, runUntil } = await toTitle('c/pacman.c.riscv')
+            keyboard.typeText(' ')
+            await runUntil(() => at(111, 211) === 0xffff00)
+            expect(at(88, 160)).toBe(0xffff00)
+        }, 60_000)
     })
 
     it('echoes typed characters through the keyboard and display example', async () => {

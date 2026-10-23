@@ -12,10 +12,14 @@ import {
 import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '#lib/languages/Z80/trs80/trs80Display.ts'
 import {
     DEFAULT_PROJECT_DISPLAY,
+    DISPLAY_SIZE_MAX,
+    DISPLAY_SIZE_MIN,
     formatMarsBaseAddress,
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
-    MARS_UNIT_SIZE_CHOICES
+    MARS_UNIT_SIZE_CHOICES,
+    UNIT_SIZE_MAX,
+    UNIT_SIZE_MIN
 } from '#lib/languages/mars/marsDisplay.ts'
 import { MARS_RECEIVER_CONTROL } from '#lib/languages/mars/MarsDevices.ts'
 import type {
@@ -435,7 +439,7 @@ function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
     const base = MARS_RECEIVER_CONTROL >>> 0
     return [
         `- Graphics go through memory, not through a syscall: the screen is a grid of words, one word per pixel, whose low 24 bits are the color (red 23-16, green 15-8, blue 7-0). Words run left to right and then top to bottom. The program must reserve that memory itself, usually with \`.space\`.`,
-        `- The grid has the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')}), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')}) and a base address, which the user can pick in the screen panel among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words.`,
+        `- The grid has the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')} in the real tool, any from ${UNIT_SIZE_MIN} to ${UNIT_SIZE_MAX} here), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')} in the real tool, any from ${DISPLAY_SIZE_MIN} to ${DISPLAY_SIZE_MAX} here) and a base address, which the user can pick in the screen panel among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words.`,
         `- **Any program that draws must configure them itself**, with a comment directive the editor reads at every build, before the first instruction: \`# @screen unit=1 width=256 height=256 base=display\`. \`base\` takes a label the program defines (preferred: the program never has to know the address) or an address such as 0x10010000; \`unit\` sets both unit sizes, \`unitWidth\` and \`unitHeight\` set them apart. Order and spacing are free, anything left out keeps its current value, and a bad value is a warning on that line, not an error. It is a comment, so the file still assembles in the real simulator.`,
         `- Keyboard and console are four words: 0x${base.toString(16)} receiver control (bit 0 Ready, a character is waiting), 0x${(base + 4).toString(16)} receiver data (the character, reading it takes it), 0x${(base + 8).toString(16)} transmitter control (bit 0 Ready, always set) and 0x${(base + 12).toString(16)} transmitter data (storing a character prints it, ASCII 12 clears the console).`,
         `- Setting bit 1 of either control register, the interrupt-enable bit, stops the program with an error: poll the Ready bit instead.`,
@@ -496,7 +500,7 @@ These instructions take precedence over assembly workflow steps when editing C/C
 - The project language is the target architecture; C is the source language of a .c file. Do not pass "C" as write_to_file's language. Write to an explicit path such as main.c or main.cpp, preserving existing assembly files.
 - C/C++ compilation supports MIPS, RISC-V, RISC-V-64 and X86. Keep a saved project's target; for a fresh C example without a requested target, choose RISC-V using write_to_file's language parameter. M68K and Z80 do not support source compilation.
 - Read existing source before editing. Edit the original C/C++ source or local headers rather than generated assembly. Source and header writes are saved without assembler checks and invalidate execution.
-- Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the local headers to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not linked automatically; use local headers for helpers.
+- Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the Project files its quoted includes reach to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not compiled or linked separately; put helpers in headers, or #include "helpers.c" from the source, which pastes the file in as one compilation.
 - Start with optimization "0". When the source defines main, compile_source makes its generated assembly the selected program's Entry file. Then call compile (the assembly Build) before running or stepping. Compiler errors must be fixed in the source and recompiled; a saved source edit alone does not prove validity.
 - MIPS and RISC-V support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. X86 is freestanding: use <sim.h> for I/O; printf, malloc and the hosted runtime are unavailable.
 - <sim.h> declares simulator services; use search_documentation to find their signatures rather than guessing. C++ uses C++17 with compatibility headers and no full standard library, exceptions or RTTI.

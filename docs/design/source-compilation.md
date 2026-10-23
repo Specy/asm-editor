@@ -10,7 +10,9 @@ Accepted scope from the design interview on 2026-10-03. The owner subsequently a
 
 ## Compilation inputs
 
-Compile operates on the selected C or C++ File together with its project-local headers. Each Source compilation produces one Generated assembly output and its source mapping. Compiling and linking several C/C++ translation units together is deferred; the pipeline should allow that extension later.
+Compile operates on the selected C or C++ File together with the Project Files its quoted includes reach. Each Source compilation produces one Generated assembly output and its source mapping. Compiling and linking several C/C++ translation units together is deferred; the pipeline should allow that extension later.
+
+Update 2026-10-23: a quoted include reaches any plain-text File, whatever its extension, where it used to reach only `.h`, `.hpp`, `.hh`, `.hxx` and `.inc` Files, so `#include "video.c"` pastes a `.c` File in as a header is pasted. The first release had decided headers by extension and had not considered a `.c` File included as text, which needs none of the linking the deferred paragraph above is about. Compile now sends Compiler Explorer exactly the Files the scan reaches, rather than every header of the Project, so other Programs' sources and data Files stay in the browser; a `__has_include("…")` counts as reaching its File, and a computed include (`#include NAME`) still conservatively reaches every C or C++ File. The same set decides staleness and the in-flight change check. Include completion offers `.c` and `.cpp` Files beside headers.
 
 Clang is the default compiler for new MIPS and RISC-V sources. The Compile dock also offers GCC, using the same instruction-set and ABI presets; the Compilation record remembers the compiler used for each generated output.
 
@@ -34,7 +36,7 @@ Derive the initial output path by appending the Project Target's assembly extens
 
 ## Source-map invalidation
 
-Changing the compiled source File or a project-local header used by the Source compilation removes its Source map, mapped highlights, and connectors. Keep the Generated assembly File, both editor panes, and their tabs, and show a stale warning when the assembly is viewed. See the [independent editor panes plan](./independent-editor-panes-plan.md).
+Changing the compiled source File or a File it included removes its Source map, mapped highlights, and connectors. Keep the Generated assembly File, both editor panes, and their tabs, and show a stale warning when the assembly is viewed. See the [independent editor panes plan](./independent-editor-panes-plan.md).
 
 Manual edits to the Generated assembly also remove its Source map, mapped highlights, and connectors while keeping the editors open. Recompiling over manually edited assembly requires an overwrite confirmation. The origin relationship and manual-edit state must remain identifiable after map removal so that invalidation does not disable that confirmation.
 

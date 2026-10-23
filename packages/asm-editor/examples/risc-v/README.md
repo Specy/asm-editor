@@ -24,3 +24,20 @@ best score appear in the console. The program runs until you press Stop.
 
 The [Flappy bird in C example page](../../src/content/risc-v/examples/flappy-bird-in-c/index.md)
 contains the same source; keep both copies together when changing the game.
+
+## Pac-Man
+
+`pacman/` is a whole Project of several Files and two Programs: the arcade game on a Screen of its
+own 224 × 288 pixels, a size RARS's tool does not offer and this editor does, written once in
+assembly (`assembly/`, Entry `main.s`) and once in C (`c/pacman.c`, which `#include`s its other
+`.c` Files). Both read their sprites, letters and maze from `assets/` (`sprites.bmp`, `tiles.bmp`,
+`maze.bmp`, `maze.txt`) when they start, through the file services, so the pictures can be viewed
+in the Preview and changed without touching the code. Import `pacman/pacman.asmproj` on the
+Projects page, pick a Program, Build and Run, then click the Screen and press space. The Project's
+own `README.md` describes the controls and the Files.
+
+`pacman.asmproj` is packed from the folder by `node scripts/pack-example-projects.mjs`, run from
+`packages/asm-editor`; pack it again after changing a File. The C Program comes with its Generated
+assembly, `c/pacman.c.riscv`, so after changing a C File, Compile `c/pacman.c` in the editor at -O2
+and save its assembly into the folder before packing. The RISC-V example tests check that the
+archive and the folder agree and that the assembly is current.

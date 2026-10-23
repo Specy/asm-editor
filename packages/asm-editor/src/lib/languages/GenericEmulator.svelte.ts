@@ -54,6 +54,7 @@ import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import {
+    afterNextPaint,
     COMPUTE_SLICE_MS,
     nextSpeedCorrection,
     type ExecutionSlice,
@@ -1360,6 +1361,10 @@ export abstract class GenericEmulator<T, R extends string>
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(async () => {
+            //a Core assembles in one synchronous call that holds the page, for seconds on a large
+            //program: the host's sign that a Build began, such as the dock's spinner, is painted
+            //first, so it is on screen for the whole wait rather than only after it
+            await afterNextPaint()
             if (signal?.aborted) return
             await this.compileInternal(
                 historySize,

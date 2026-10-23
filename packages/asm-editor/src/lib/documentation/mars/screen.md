@@ -26,7 +26,7 @@ A comment line naming `@screen` sets those five parameters at every **Build**, b
 
 - Order and spacing do not matter, commas are allowed between settings, and `unitWidth`, `unit-width` and `unitwidth` are the same name.
 - What the directive leaves out keeps the value it had, and a program with no `@screen` line changes nothing at all: the configuration stays yours.
-- An unknown setting or a label that does not exist is a _warning_ on the directive's line, never an error: a comment cannot stop a program from assembling. A size off the list is replaced by the nearest one on it, and anything else is left as it was.
+- An unknown setting or a label that does not exist is a _warning_ on the directive's line, never an error: a comment cannot stop a program from assembling. A size outside the ranges is replaced by the nearest one inside them, and anything else is left as it was.
 - Changing a parameter in the **Display** popover afterwards wins, until the next Build reads the comment again.
 
 ## Keyboard and display registers {#keyboard-and-display}

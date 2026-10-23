@@ -1,0 +1,5925 @@
+        .attribute      4, 16
+        .attribute      5, "rv32i2p1_m2p0_f2p2_d2p2_zicsr2p0_zmmul1p0"
+        # @screen width=224 height=288 unit=1 base=display
+        .text
+        .globl  main
+        .p2align        2
+        .type   main,@function
+main:
+.Lfunc_begin0:
+        addi    sp, sp, -160
+        sw      ra, 156(sp)
+        sw      s0, 152(sp)
+        sw      s1, 148(sp)
+        sw      s2, 144(sp)
+        sw      s3, 140(sp)
+        sw      s4, 136(sp)
+        sw      s5, 132(sp)
+        sw      s6, 128(sp)
+        sw      s7, 124(sp)
+        sw      s8, 120(sp)
+        sw      s9, 116(sp)
+        sw      s10, 112(sp)
+        sw      s11, 108(sp)
+.Ltmp0:
+        lui     a0, %hi(.Lstr)
+        addi    a0, a0, %lo(.Lstr)
+        call    puts
+.Ltmp1:
+        lui     a0, %hi(load_assets.maze_txt)
+        addi    a0, a0, %lo(load_assets.maze_txt)
+        call    read_file
+.Ltmp2:
+        lui     s5, %hi(.L_MergedGlobals.19)
+        addi    s5, s5, %lo(.L_MergedGlobals.19)
+        sw      zero, 20(s5)
+        blez    a0, .LBB0_19
+        li      a1, 0
+        li      t3, 0
+        li      a3, 0
+        li      a2, 1
+        lui     a4, %hi(file_buffer)
+        addi    a4, a4, %lo(file_buffer)
+        li      a5, 13
+        li      a6, 10
+        li      a7, 28
+        li      t0, 31
+        li      t1, 111
+        li      t2, 46
+        j       .LBB0_4
+.LBB0_2:
+        li      t3, 0
+        addi    a2, a2, 1
+.LBB0_3:
+        addi    a0, a0, -1
+        addi    a4, a4, 1
+        beqz    a0, .LBB0_15
+.LBB0_4:
+        lbu     t4, 0(a4)
+        beq     t4, a5, .LBB0_3
+        bne     t4, a6, .LBB0_9
+        beqz    t3, .LBB0_2
+        bne     t3, a7, .LBB0_20
+        addi    a1, a1, 1
+        j       .LBB0_2
+.LBB0_9:
+        bge     a1, t0, .LBB0_19
+        bge     t3, a7, .LBB0_20
+        addi    t5, t3, 1
+        slli    t6, a1, 2
+        slli    s0, a1, 5
+        sub     t6, s0, t6
+        add     t3, s5, t3
+        add     t3, t3, t6
+        sb      t4, 576(t3)
+        beq     t4, t1, .LBB0_13
+        bne     t4, t2, .LBB0_14
+.LBB0_13:
+        addi    a3, a3, 1
+        sw      a3, 20(s5)
+.LBB0_14:
+        mv      t3, t5
+        j       .LBB0_3
+.LBB0_15:
+        beqz    t3, .LBB0_18
+        li      a0, 28
+        bne     t3, a0, .LBB0_20
+        addi    a1, a1, 1
+.LBB0_18:
+        li      a0, 31
+        beq     a1, a0, .LBB0_22
+.LBB0_19:
+.Ltmp3:
+        lui     a0, %hi(.L.str.3)
+        addi    a0, a0, %lo(.L.str.3)
+        lui     a1, %hi(load_assets.maze_txt)
+        addi    a1, a1, %lo(load_assets.maze_txt)
+        lui     a2, %hi(.L.str.1)
+        addi    a2, a2, %lo(.L.str.1)
+        j       .LBB0_21
+.Ltmp4:
+.LBB0_20:
+        lui     a0, %hi(.L.str.2)
+        addi    a0, a0, %lo(.L.str.2)
+        lui     a1, %hi(load_assets.maze_txt)
+        addi    a1, a1, %lo(load_assets.maze_txt)
+.Ltmp5:
+.LBB0_21:
+        call    printf
+.Ltmp6:
+        li      a0, 1
+        call    exit
+.Ltmp7:
+.LBB0_22:
+        lui     s0, %hi(load_assets.maze_bmp)
+        addi    s0, s0, %lo(load_assets.maze_bmp)
+        mv      a0, s0
+        call    read_file
+.Ltmp8:
+        mv      a1, a0
+        lui     s4, %hi(maze_image)
+        addi    s4, s4, %lo(maze_image)
+        li      s3, 21
+        slli    s1, s3, 10
+        add     s1, s4, s1
+        li      a3, 224
+        li      a4, 248
+        li      a5, 224
+        mv      a0, s0
+        mv      a2, s1
+        call    decode_bmp
+.Ltmp9:
+        lui     s2, %hi(load_assets.sprites)
+        addi    s2, s2, %lo(load_assets.sprites)
+        mv      a0, s2
+        call    read_file
+.Ltmp10:
+        mv      a1, a0
+        lui     a2, %hi(sprite_sheet)
+        addi    a2, a2, %lo(sprite_sheet)
+        li      a3, 256
+        li      a4, 144
+        li      a5, 256
+        mv      a0, s2
+        call    decode_bmp
+.Ltmp11:
+        lui     s2, %hi(load_assets.tiles_bmp)
+        addi    s2, s2, %lo(load_assets.tiles_bmp)
+        mv      a0, s2
+        call    read_file
+.Ltmp12:
+        mv      a1, a0
+        lui     a2, %hi(tile_sheet)
+        addi    a2, a2, %lo(tile_sheet)
+        li      a3, 128
+        li      a4, 40
+        li      a5, 128
+        mv      a0, s2
+        call    decode_bmp
+.Ltmp13:
+        li      a0, 0
+.Ltmp14:
+        sw      zero, 24(s5)
+        slli    s3, s3, 8
+        lui     a1, 8
+        lui     a4, %hi(wall_pixels)
+        addi    a4, a4, %lo(wall_pixels)
+        lui     a2, 60
+        addi    a1, a1, -1
+        addi    a2, a2, -2048
+        add     a2, s4, a2
+        j       .LBB0_24
+.LBB0_23:
+        addi    s1, s1, 4
+        addi    s3, s3, 1
+        beq     s1, a2, .LBB0_27
+.LBB0_24:
+        lw      a3, 0(s1)
+        beqz    a3, .LBB0_23
+        blt     a1, a0, .LBB0_23
+        slli    a3, a0, 2
+        addi    a0, a0, 1
+        sw      a0, 24(s5)
+        add     a3, a4, a3
+        sw      s3, 0(a3)
+        j       .LBB0_23
+.Ltmp15:
+.LBB0_27:
+        li      a7, 30
+        ecall
+.Ltmp16:
+        lui     a1, %hi(.L_MergedGlobals)
+        lui     a2, %hi(.L_MergedGlobals)
+        lw      a1, %lo(.L_MergedGlobals)(a1)
+        li      s9, 1
+        bne     a1, a0, .LBB0_29
+        li      a0, 1
+        j       .LBB0_30
+.LBB0_29:
+        xor     a0, a1, a0
+.LBB0_30:
+        sw      a0, %lo(.L_MergedGlobals)(a2)
+        call    enter_title
+.Ltmp17:
+        lui     s4, 1048560
+        li      s6, 2
+        lui     a5, 4096
+        li      s7, 16
+        lui     s8, %hi(.L_MergedGlobals)
+        addi    s8, s8, %lo(.L_MergedGlobals)
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      t2, 111
+        lui     a0, 838861
+        lui     a1, 104858
+        lui     s10, %hi(display)
+        addi    s10, s10, %lo(display)
+        lui     a2, 599186
+        lui     a3, 63
+        lui     a4, 3566
+        addi    a0, a0, -819
+        sw      a0, 20(sp)
+        addi    a0, a1, -1639
+        sw      a0, 16(sp)
+        addi    a0, a2, 1171
+        sw      a0, 64(sp)
+        add     a3, s10, a3
+        sw      a3, 12(sp)
+        addi    a0, a4, -257
+        sw      a0, 32(sp)
+        lui     a0, 32
+        lui     a1, 24
+        lui     a4, %hi(.L_MergedGlobals.19)
+        lui     a2, 60
+        li      a6, 72
+        addi    a3, a5, -256
+        sw      a3, 24(sp)
+        addi    a0, a0, -64
+        sw      a0, 60(sp)
+        addi    a0, a1, 256
+        sw      a0, 56(sp)
+        addi    a1, a2, -2048
+        lui     a0, %hi(maze_image)
+        addi    a0, a0, %lo(maze_image)
+        sw      a1, 8(sp)
+        add     a0, a0, a1
+        sw      a0, 4(sp)
+        lui     a2, %hi(.LJTI0_0)
+        addi    a2, a2, %lo(.LJTI0_0)
+        lui     s3, %hi(sprite_sheet)
+        addi    s3, s3, %lo(sprite_sheet)
+        j       .LBB0_32
+.LBB0_31:
+.Ltmp18:
+        sw      s6, 12(s8)
+.LBB0_32:
+.Ltmp19:
+        lw      a0, 0(s4)
+.Ltmp20:
+        andi    a0, a0, 1
+        beqz    a0, .LBB0_39
+.Ltmp21:
+        lw      a0, 4(s4)
+.Ltmp22:
+        zext.b  a1, a0
+        addi    a1, a1, -65
+        sltiu   a1, a1, 26
+        slli    a1, a1, 5
+        or      a0, a0, a1
+        zext.b  a0, a0
+        addi    a0, a0, -50
+        sb      s9, %lo(.L_MergedGlobals.19)(a4)
+        bltu    a6, a0, .LBB0_32
+        slli    a0, a0, 2
+        add     a0, a2, a0
+        lw      a0, 0(a0)
+        jr      a0
+.LBB0_35:
+        li      a0, 3
+        sw      a0, 12(s8)
+        j       .LBB0_32
+.LBB0_36:
+        sw      s9, 12(s8)
+        j       .LBB0_32
+.LBB0_37:
+        sw      zero, 12(s8)
+        j       .LBB0_32
+.LBB0_38:
+        sb      s9, 4(s5)
+        j       .LBB0_32
+.Ltmp23:
+.LBB0_39:
+        lw      a0, 60(s5)
+        beqz    a0, .LBB0_45
+        lw      a1, 52(s5)
+        bne     a1, s6, .LBB0_46
+.LBB0_41:
+.Ltmp24:
+        lbu     a1, 4(s5)
+        beqz    a1, .LBB0_49
+.Ltmp25:
+        seqz    a1, a0
+.Ltmp26:
+        sb      zero, 4(s5)
+        sw      a1, 60(s5)
+        beqz    a0, .LBB0_208
+.Ltmp27:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 487(a0)
+        li      s2, 64
+        li      a1, 46
+        bne     a0, a1, .LBB0_241
+.Ltmp28:
+        li      a2, 64
+        j       .LBB0_242
+.LBB0_45:
+        lw      a1, 64(s5)
+        addi    a1, a1, 1
+        sw      a1, 64(s5)
+        lw      a1, 52(s5)
+        beq     a1, s6, .LBB0_41
+.LBB0_46:
+        slli    a1, a1, 2
+        lui     a0, %hi(.LJTI0_1)
+        addi    a0, a0, %lo(.LJTI0_1)
+        add     a1, a0, a1
+        lw      a0, 0(a1)
+        sb      zero, 4(s5)
+        jr      a0
+.LBB0_47:
+        lbu     a0, %lo(.L_MergedGlobals.19)(a4)
+        bnez    a0, .LBB0_48
+        j       .LBB0_450
+.LBB0_48:
+        sb      zero, %lo(.L_MergedGlobals.19)(a4)
+        addi    a0, a4, %lo(.L_MergedGlobals.19)
+.Ltmp29:
+        sb      zero, 8(a0)
+        sw      s6, 28(a0)
+        sw      zero, 44(a0)
+        sw      s9, 4(s8)
+        li      a0, 1
+        call    start_level
+.Ltmp30:
+        j       .LBB0_209
+.Ltmp31:
+.LBB0_49:
+        beqz    a0, .LBB0_50
+        j       .LBB0_450
+.LBB0_50:
+.Ltmp32:
+        lw      a0, 120(s5)
+        beqz    a0, .LBB0_257
+.LBB0_51:
+        addi    a0, a0, -1
+        sw      a0, 120(s5)
+        li      s1, 4
+        li      s2, 138
+.Ltmp33:
+.LBB0_52:
+        call    check_collisions
+.Ltmp34:
+        li      t2, 111
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lw      s0, 52(s5)
+        lui     s3, %hi(sprite_sheet)
+        addi    s3, s3, %lo(sprite_sheet)
+        lui     s4, 1048560
+        li      s11, 14
+        beq     s0, s6, .LBB0_53
+        j       .LBB0_451
+.Ltmp35:
+.LBB0_53:
+        li      a0, 0
+        lui     a1, %hi(.L_MergedGlobals)
+        lw      a3, %lo(.L_MergedGlobals)(a1)
+        addi    a1, a1, %lo(.L_MergedGlobals)
+        lbu     s4, 16(s5)
+        lw      a2, 36(s5)
+        sw      a2, 96(sp)
+        lw      a5, 68(s5)
+        lw      a6, 80(s5)
+        lw      a2, 108(s5)
+        lw      a4, 112(s5)
+        lw      a1, 20(a1)
+        addi    a7, a5, 40
+        sw      a7, 92(sp)
+        addi    a7, a5, 32
+        sw      a7, 52(sp)
+        addi    a7, a5, 24
+        sw      a7, 36(sp)
+        addi    a7, a5, 12
+        sw      a7, 68(sp)
+        sw      a5, 100(sp)
+        addi    a5, a5, 16
+        sw      a5, 76(sp)
+        sw      a6, 28(sp)
+        andi    a5, a6, 1
+        sw      a5, 104(sp)
+        srai    a5, a2, 3
+        srai    a4, a4, 3
+        slli    a2, a1, 2
+        addi    a1, a1, -2
+        sw      a4, 80(sp)
+        slli    a4, a4, 1
+        sw      a4, 48(sp)
+        add     a4, t5, a2
+        sw      a4, 88(sp)
+        add     a2, t6, a2
+        sw      a2, 84(sp)
+        snez    a1, a1
+        addi    a1, a1, -1
+        andi    a2, a1, -2
+        andi    a1, a1, -4
+        add     a2, a2, a5
+        sw      a5, 72(sp)
+        add     a1, a1, a5
+        sw      a1, 44(sp)
+        slli    a2, a2, 1
+        sw      a2, 40(sp)
+        li      s0, -8
+        li      t3, 3
+        j       .LBB0_55
+.LBB0_54:
+.Ltmp36:
+        addi    a0, a0, 1
+        beq     a0, s1, .LBB0_203
+.LBB0_55:
+        li      a1, 44
+        mul     s3, a0, a1
+        add     s3, s5, s3
+.Ltmp37:
+        lw      ra, 220(s3)
+        bltu    s1, ra, .LBB0_58
+        li      a1, 27
+        srl     a1, a1, ra
+        andi    a1, a1, 1
+        beqz    a1, .LBB0_58
+        slli    a1, ra, 2
+        lui     a2, %hi(.Lswitch.table.main)
+        addi    a2, a2, %lo(.Lswitch.table.main)
+        add     a1, a2, a1
+        j       .LBB0_65
+.LBB0_58:
+        lw      a1, 212(s3)
+        andi    a1, a1, -8
+        li      a2, 136
+        bne     a1, a2, .LBB0_60
+        lw      a1, 208(s3)
+        srai    a1, a1, 3
+        addi    a2, a1, -22
+        lw      a1, 76(sp)
+        li      a4, -16
+        bltu    a2, a4, .LBB0_65
+.LBB0_60:
+        lw      a2, 224(s3)
+        lw      a1, 92(sp)
+        bnez    a2, .LBB0_65
+        snez    a1, a0
+        or      a1, a1, s4
+        andi    a2, a1, 1
+        lw      a1, 68(sp)
+        bnez    a2, .LBB0_65
+        lw      a1, 100(sp)
+        lw      a2, 28(a1)
+        lw      a1, 52(sp)
+        lw      a4, 96(sp)
+        bge     a2, a4, .LBB0_65
+        lw      a1, 100(sp)
+        lw      a2, 20(a1)
+        lw      a1, 36(sp)
+        lw      a4, 96(sp)
+        bge     a2, a4, .LBB0_65
+        lw      a1, 68(sp)
+.LBB0_65:
+        lw      a1, 0(a1)
+.Ltmp38:
+        lw      a2, 228(s3)
+        add     a1, a2, a1
+        srai    a6, a1, 8
+        zext.b  a1, a1
+        sw      a1, 228(s3)
+        blez    a6, .LBB0_54
+        lw      a1, 104(sp)
+        or      a1, a0, a1
+        addi    a6, a6, 1
+        snez    t4, a1
+        mv      a1, s4
+        j       .LBB0_69
+.LBB0_67:
+.Ltmp39:
+        slti    a4, a2, 139
+.Ltmp40:
+        slt     a5, a5, a2
+        sub     a5, a4, a5
+.Ltmp41:
+        addi    a4, a4, 2
+        add     a2, a5, a2
+        sw      a2, 212(s3)
+        sw      a4, 216(s3)
+        li      ra, 1
+.Ltmp42:
+.LBB0_68:
+        addi    a6, a6, -1
+        bgeu    s9, a6, .LBB0_54
+.LBB0_69:
+.Ltmp43:
+        beq     ra, s1, .LBB0_78
+        beq     ra, s9, .LBB0_75
+        bnez    ra, .LBB0_80
+        lw      a4, 216(s3)
+        lw      a2, 212(s3)
+        bne     a4, s6, .LBB0_91
+        addi    a4, a2, -1
+        sw      a4, 212(s3)
+        li      ra, 0
+        li      a4, 136
+        blt     a4, a2, .LBB0_68
+        sw      t3, 216(s3)
+        j       .LBB0_68
+.LBB0_75:
+        lw      a4, 208(s3)
+        lw      a2, 212(s3)
+        bne     a4, t2, .LBB0_87
+        addi    a4, a2, -1
+        sw      a4, 212(s3)
+        li      a4, 117
+        blt     a2, a4, .LBB0_93
+        sw      s6, 216(s3)
+        li      ra, 1
+        j       .LBB0_68
+.LBB0_78:
+        lw      a2, 212(s3)
+        blt     s2, a2, .LBB0_89
+        addi    a2, a2, 1
+        sw      a2, 212(s3)
+        sw      t3, 216(s3)
+        j       .LBB0_96
+.LBB0_80:
+        lw      a5, 208(s3)
+        lw      a7, 212(s3)
+        lw      s10, 216(s3)
+        andi    a2, a5, 7
+        bne     a2, t3, .LBB0_172
+        andi    a2, a7, 7
+        bne     a2, t3, .LBB0_172
+        li      a2, 3
+.Ltmp44:
+        srai    s8, a5, 3
+        srai    t3, a7, 3
+        li      t1, 3
+        bne     ra, a2, .LBB0_97
+        bne     t3, s11, .LBB0_97
+        addi    a2, s8, -13
+        bltu    s9, a2, .LBB0_97
+        snez    t0, a2
+.Ltmp45:
+.LBB0_86:
+        li      t3, 3
+        j       .LBB0_171
+.LBB0_87:
+        li      a5, 139
+        bne     a2, a5, .LBB0_67
+        slti    a2, a4, 111
+.Ltmp46:
+        slt     a5, t2, a4
+        sub     a5, a2, a5
+.Ltmp47:
+        xori    a2, a2, 1
+        add     a4, a5, a4
+        sw      a4, 208(s3)
+        sw      a2, 216(s3)
+        li      ra, 1
+        j       .LBB0_68
+.LBB0_89:
+        lw      a2, 208(s3)
+        lw      a4, 232(s3)
+        bne     a2, a4, .LBB0_95
+        li      ra, 1
+        sw      ra, 220(s3)
+        sw      zero, 224(s3)
+        j       .LBB0_68
+.LBB0_91:
+        addi    a4, a2, 1
+        sw      a4, 212(s3)
+        li      ra, 0
+        li      a4, 142
+        blt     a2, a4, .LBB0_68
+        sw      s6, 216(s3)
+        j       .LBB0_68
+.LBB0_93:
+        li      ra, 2
+        sw      s9, 216(s3)
+        sw      ra, 220(s3)
+        bne     a0, t3, .LBB0_68
+        li      s4, 0
+        li      a1, 0
+        sb      zero, 16(s5)
+        j       .LBB0_68
+.LBB0_95:
+        slt     a5, a2, a4
+.Ltmp48:
+        slt     a4, a4, a2
+.Ltmp49:
+        xori    a7, a5, 1
+.Ltmp50:
+        sub     a5, a5, a4
+.Ltmp51:
+        add     a2, a5, a2
+        sw      a2, 208(s3)
+        sw      a7, 216(s3)
+.LBB0_96:
+        li      ra, 4
+        j       .LBB0_68
+.LBB0_97:
+.Ltmp52:
+        xori    t0, s10, 1
+        bne     ra, s6, .LBB0_108
+        lw      a2, 224(s3)
+        beqz    a2, .LBB0_110
+        li      s2, 111
+.Ltmp53:
+        slli    a2, a3, 13
+        xor     a2, a2, a3
+        srli    a3, a2, 17
+        xor     a2, a3, a2
+.Ltmp54:
+        andi    a4, a2, 3
+        slli    a3, a4, 2
+        lui     t1, %hi(choice_order)
+        addi    t1, t1, %lo(choice_order)
+        add     a3, t1, a3
+        lw      t2, 0(a3)
+.Ltmp55:
+        slli    a3, a2, 5
+        xor     a3, a3, a2
+        lui     t5, %hi(.L_MergedGlobals)
+        sw      a3, %lo(.L_MergedGlobals)(t5)
+.Ltmp56:
+        beq     t2, t0, .LBB0_101
+        slli    t6, t2, 2
+        lui     t5, %hi(dir_dy)
+        addi    t5, t5, %lo(dir_dy)
+        add     t5, t5, t6
+        lw      t5, 0(t5)
+        add     t5, t5, t3
+.Ltmp57:
+        addi    s1, t5, -34
+        li      s0, -31
+        bgeu    s1, s0, .LBB0_120
+.Ltmp58:
+.LBB0_101:
+        addi    t2, a2, 1
+        andi    t2, t2, 3
+        slli    t2, t2, 2
+        add     t2, t1, t2
+        lw      t2, 0(t2)
+        beq     t2, t0, .LBB0_103
+        slli    t6, t2, 2
+        lui     t5, %hi(dir_dy)
+        addi    t5, t5, %lo(dir_dy)
+        add     t5, t5, t6
+        lw      t5, 0(t5)
+        add     t5, t5, t3
+.Ltmp59:
+        addi    s1, t5, -34
+        li      s0, -31
+        bgeu    s1, s0, .LBB0_122
+.Ltmp60:
+.LBB0_103:
+        xori    a4, a4, 2
+        slli    a4, a4, 2
+        add     a4, t1, a4
+        lw      a4, 0(a4)
+        beq     a4, t0, .LBB0_105
+        slli    t5, a4, 2
+        lui     t2, %hi(dir_dy)
+        addi    t2, t2, %lo(dir_dy)
+        add     t2, t2, t5
+        lw      t2, 0(t2)
+        add     t2, t2, t3
+.Ltmp61:
+        addi    t6, t2, -34
+        li      s0, -31
+        bgeu    t6, s0, .LBB0_124
+.Ltmp62:
+.LBB0_105:
+        addi    a2, a2, -1
+        andi    a2, a2, 3
+        slli    a2, a2, 2
+        add     a2, t1, a2
+        lw      a2, 0(a2)
+        beq     a2, t0, .LBB0_196
+        slli    a4, a2, 2
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        add     t2, t6, a4
+        lw      t2, 0(t2)
+        add     s0, t2, t3
+.Ltmp63:
+        addi    t2, s0, -34
+        li      t3, -31
+        li      s1, 4
+        li      s2, 138
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        bgeu    t2, t3, .LBB0_182
+.Ltmp64:
+.LBB0_107:
+        li      t2, 111
+        li      s0, -8
+        j       .LBB0_86
+.LBB0_108:
+        bne     ra, t1, .LBB0_110
+        li      s2, 111
+        li      s0, 14
+        li      s11, 14
+        li      t5, 13
+        j       .LBB0_128
+.LBB0_110:
+        li      s0, 14
+.Ltmp65:
+        or      a2, t4, a1
+        andi    a4, a2, 1
+        lw      a2, 104(sp)
+        bnez    a4, .LBB0_112
+        lw      a2, 100(sp)
+        lw      a2, 20(a2)
+        lw      a4, 96(sp)
+        slt     a2, a2, a4
+        xori    a2, a2, 1
+.LBB0_112:
+        li      s2, 111
+        lw      t5, 236(s3)
+        lw      s11, 240(s3)
+        beqz    a2, .LBB0_128
+        lw      a2, 88(sp)
+        lw      t2, 0(a2)
+        lw      a2, 84(sp)
+        lw      a2, 0(a2)
+        blt     s9, a0, .LBB0_117
+        lw      a4, 72(sp)
+        lw      t6, 80(sp)
+        beqz    a0, .LBB0_127
+        bne     a0, s9, .LBB0_128
+        slli    a4, t2, 2
+        slli    a2, a2, 2
+        lw      t2, 44(sp)
+        add     a4, t2, a4
+        lw      t6, 80(sp)
+        add     t6, a2, t6
+        j       .LBB0_127
+.LBB0_117:
+        beq     a0, s6, .LBB0_126
+        bne     a0, t1, .LBB0_128
+        lw      t2, 72(sp)
+        sub     a2, s8, t2
+        lw      t6, 80(sp)
+        sub     a4, t3, t6
+        mul     a2, a2, a2
+        mul     a4, a4, a4
+        add     a2, a4, a2
+        mv      a4, t2
+        li      t2, 64
+        bgeu    a2, t2, .LBB0_127
+        j       .LBB0_128
+.Ltmp66:
+.LBB0_120:
+        lui     s0, %hi(dir_dx)
+        addi    s0, s0, %lo(dir_dx)
+        add     t6, s0, t6
+        lw      t6, 0(t6)
+        add     t6, t6, s8
+.Ltmp67:
+        li      s0, 28
+        bltu    t6, s0, .LBB0_185
+        li      t6, 17
+        bne     t5, t6, .LBB0_101
+        j       .LBB0_191
+.Ltmp68:
+.LBB0_122:
+        lui     s0, %hi(dir_dx)
+        addi    s0, s0, %lo(dir_dx)
+        add     t6, s0, t6
+        lw      t6, 0(t6)
+        add     t6, t6, s8
+.Ltmp69:
+        li      s0, 27
+        bgeu    s0, t6, .LBB0_188
+        li      t6, 17
+        bne     t5, t6, .LBB0_103
+        j       .LBB0_191
+.Ltmp70:
+.LBB0_124:
+        lui     t6, %hi(dir_dx)
+        addi    t6, t6, %lo(dir_dx)
+        add     t5, t6, t5
+        lw      t5, 0(t5)
+        add     t5, t5, s8
+.Ltmp71:
+        li      t6, 27
+        bgeu    t6, t5, .LBB0_192
+        li      t5, 17
+        bne     t2, t5, .LBB0_105
+        j       .LBB0_195
+.Ltmp72:
+.LBB0_126:
+        lw      a4, 208(s5)
+        slli    t2, t2, 2
+        lw      t5, 212(s5)
+        lw      t6, 40(sp)
+        add     t2, t2, t6
+        srai    a4, a4, 3
+        sub     a4, t2, a4
+        slli    a2, a2, 2
+        lw      t2, 48(sp)
+        add     a2, a2, t2
+        srai    t2, t5, 3
+        sub     t6, a2, t2
+.Ltmp73:
+.LBB0_127:
+        mv      t5, a4
+        mv      s11, t6
+.LBB0_128:
+        li      a2, 0
+        li      t6, -1
+        li      a4, 1
+        beq     s10, t1, .LBB0_141
+        addi    t2, t3, -35
+        li      s1, -31
+        bltu    t2, s1, .LBB0_141
+        addi    t2, t3, -1
+.Ltmp74:
+        li      a2, 28
+        bltu    s8, a2, .LBB0_132
+        li      a2, 17
+        beq     t2, a2, .LBB0_135
+        j       .LBB0_181
+.LBB0_132:
+        slli    a2, t3, 2
+        slli    s1, t3, 5
+        sub     s1, s1, a2
+        lui     a2, %hi(tiles)
+        addi    a2, a2, %lo(tiles)
+        add     a2, a2, s8
+        add     a2, s1, a2
+        lbu     a2, -112(a2)
+.Ltmp75:
+        li      s1, 32
+        beq     a2, s1, .LBB0_135
+        beq     a2, s2, .LBB0_135
+        li      s1, 46
+        bne     a2, s1, .LBB0_181
+.Ltmp76:
+.LBB0_135:
+        beq     ra, t1, .LBB0_140
+        li      a2, 26
+        beq     t3, a2, .LBB0_138
+        bne     t3, s0, .LBB0_140
+.LBB0_138:
+        li      a2, 0
+        li      s0, 12
+        beq     s8, s0, .LBB0_141
+        li      s0, 15
+        beq     s8, s0, .LBB0_141
+.LBB0_140:
+        li      a4, 0
+        sub     a2, s8, t5
+        sub     t2, t2, s11
+        mul     a2, a2, a2
+        mul     t2, t2, t2
+        add     a2, t2, a2
+        li      t6, 2
+.LBB0_141:
+        addi    t2, t3, -34
+        beqz    s10, .LBB0_151
+.LBB0_142:
+        li      s0, -31
+        bltu    t2, s0, .LBB0_151
+        addi    s1, s8, -1
+.Ltmp77:
+        li      s0, 27
+        bgeu    s0, s1, .LBB0_145
+        li      s0, 17
+        beq     t3, s0, .LBB0_148
+        j       .LBB0_150
+.LBB0_145:
+        slli    s6, t3, 2
+        slli    s0, t3, 5
+        sub     s0, s0, s6
+        lui     s6, %hi(tiles)
+        addi    s6, s6, %lo(tiles)
+        add     s6, s6, s1
+        add     s0, s0, s6
+        lbu     s6, -84(s0)
+.Ltmp78:
+        li      s0, 32
+        beq     s6, s0, .LBB0_148
+        li      s0, 46
+        beq     s6, s0, .LBB0_148
+        bne     s6, s2, .LBB0_150
+.Ltmp79:
+.LBB0_148:
+        sub     s0, s1, t5
+        sub     s1, t3, s11
+        mul     s0, s0, s0
+        mul     s1, s1, s1
+        add     s1, s1, s0
+        slt     s0, s1, a2
+        or      a4, a4, s0
+        beqz    a4, .LBB0_150
+        li      t6, 1
+        mv      a2, s1
+.LBB0_150:
+        li      s6, 2
+.LBB0_151:
+        beq     s10, s6, .LBB0_160
+        addi    a4, t3, -33
+        li      s0, -31
+        bltu    a4, s0, .LBB0_160
+        addi    a4, t3, 1
+.Ltmp80:
+        li      s0, 27
+        bgeu    s0, s8, .LBB0_155
+        li      s0, 17
+        beq     a4, s0, .LBB0_158
+        j       .LBB0_160
+.LBB0_155:
+        slli    s0, t3, 2
+        slli    s1, t3, 5
+        sub     s1, s1, s0
+        lui     s0, %hi(tiles)
+        addi    s0, s0, %lo(tiles)
+        add     s0, s0, s8
+        add     s0, s1, s0
+        lbu     s1, -56(s0)
+.Ltmp81:
+        li      s0, 32
+        beq     s1, s0, .LBB0_158
+        li      s0, 46
+        beq     s1, s0, .LBB0_158
+        bne     s1, s2, .LBB0_160
+.Ltmp82:
+.LBB0_158:
+        sub     s0, s8, t5
+        sub     a4, a4, s11
+        mul     s0, s0, s0
+        mul     a4, a4, a4
+        add     a4, a4, s0
+        slti    s0, t6, 0
+        slt     s1, a4, a2
+        or      s0, s0, s1
+        beqz    s0, .LBB0_160
+        li      t6, 3
+        mv      a2, a4
+.LBB0_160:
+        li      s0, -8
+        beq     s10, s9, .LBB0_168
+        li      a4, -31
+        bltu    t2, a4, .LBB0_168
+        addi    s8, s8, 1
+.Ltmp83:
+        li      a4, 27
+        bgeu    a4, s8, .LBB0_164
+        li      a4, 17
+        beq     t3, a4, .LBB0_167
+        j       .LBB0_168
+.LBB0_164:
+        slli    a4, t3, 2
+        slli    t2, t3, 5
+        sub     a4, t2, a4
+        lui     t2, %hi(tiles)
+        addi    t2, t2, %lo(tiles)
+        add     t2, t2, s8
+        add     a4, a4, t2
+        lbu     a4, -84(a4)
+.Ltmp84:
+        li      t2, 32
+        beq     a4, t2, .LBB0_167
+        li      t2, 46
+        beq     a4, t2, .LBB0_167
+        bne     a4, s2, .LBB0_168
+.Ltmp85:
+.LBB0_167:
+        sub     a4, s8, t5
+        sub     t2, t3, s11
+        mul     a4, a4, a4
+        mul     t2, t2, t2
+        add     a4, t2, a4
+        slti    t2, t6, 0
+        slt     a2, a4, a2
+        or      a2, t2, a2
+        addi    a2, a2, -1
+        and     t6, a2, t6
+.LBB0_168:
+        li      s11, 14
+        li      s1, 4
+        li      s2, 138
+        li      t3, 3
+        bltz    t6, .LBB0_170
+        mv      t0, t6
+.LBB0_170:
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      t2, 111
+.LBB0_171:
+        sw      t0, 216(s3)
+        mv      s10, t0
+.Ltmp86:
+.LBB0_172:
+        slli    s10, s10, 2
+        add     a2, t5, s10
+        add     s10, t6, s10
+        lw      a2, 0(a2)
+        lw      a4, 0(s10)
+        add     a5, a2, a5
+        add     a7, a4, a7
+        sw      a5, 208(s3)
+        sw      a7, 212(s3)
+        bge     a5, s0, .LBB0_174
+        li      a2, 240
+        j       .LBB0_176
+.LBB0_174:
+        li      a2, 232
+        blt     a5, a2, .LBB0_177
+        li      a2, -240
+.LBB0_176:
+        add     a5, a2, a5
+        sw      a5, 208(s3)
+.LBB0_177:
+        bne     ra, t3, .LBB0_68
+        li      ra, 3
+        bne     a5, t2, .LBB0_68
+        li      a2, 115
+        bne     a7, a2, .LBB0_68
+        li      ra, 4
+        sw      t3, 216(s3)
+        sw      ra, 220(s3)
+        j       .LBB0_68
+.LBB0_181:
+        li      a2, 0
+        addi    t2, t3, -34
+.Ltmp87:
+        bnez    s10, .LBB0_142
+        j       .LBB0_151
+.LBB0_182:
+        add     a4, t5, a4
+        lw      a4, 0(a4)
+        add     s8, a4, s8
+.Ltmp88:
+        li      a4, 27
+        bgeu    a4, s8, .LBB0_197
+        li      a4, 17
+        li      t2, 111
+        li      t3, 3
+        bne     s0, a4, .LBB0_200
+.Ltmp89:
+.LBB0_184:
+        mv      t0, a2
+        li      s0, -8
+        j       .LBB0_171
+.LBB0_185:
+.Ltmp90:
+        slli    s1, t5, 2
+        slli    t5, t5, 5
+        sub     t5, t5, s1
+        lui     s0, %hi(tiles)
+        addi    s0, s0, %lo(tiles)
+        add     t6, s0, t6
+        add     t5, t5, t6
+        lbu     t5, -84(t5)
+.Ltmp91:
+        li      t6, 32
+        beq     t5, t6, .LBB0_191
+        li      t6, 46
+        beq     t5, t6, .LBB0_191
+        bne     t5, s2, .LBB0_101
+        j       .LBB0_191
+.LBB0_188:
+.Ltmp92:
+        slli    s1, t5, 2
+        slli    t5, t5, 5
+        sub     t5, t5, s1
+        lui     s0, %hi(tiles)
+        addi    s0, s0, %lo(tiles)
+        add     t6, s0, t6
+        add     t5, t5, t6
+        lbu     t5, -84(t5)
+.Ltmp93:
+        li      t6, 32
+        beq     t5, t6, .LBB0_191
+        li      t6, 46
+        beq     t5, t6, .LBB0_191
+        bne     t5, s2, .LBB0_103
+.LBB0_191:
+        mv      t0, t2
+        j       .LBB0_196
+.LBB0_192:
+.Ltmp94:
+        slli    t6, t2, 2
+        slli    t2, t2, 5
+        sub     t2, t2, t6
+        lui     t6, %hi(tiles)
+        addi    t6, t6, %lo(tiles)
+        add     t5, t6, t5
+        add     t2, t2, t5
+        lbu     t2, -84(t2)
+.Ltmp95:
+        li      t5, 32
+        beq     t2, t5, .LBB0_195
+        li      t5, 46
+        beq     t2, t5, .LBB0_195
+        bne     t2, s2, .LBB0_105
+.LBB0_195:
+        mv      t0, a4
+.LBB0_196:
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      t2, 111
+        li      s0, -8
+        li      s1, 4
+        li      s2, 138
+        j       .LBB0_86
+.LBB0_197:
+.Ltmp96:
+        slli    a4, s0, 2
+        slli    s0, s0, 5
+        sub     s0, s0, a4
+        lui     a4, %hi(tiles)
+        addi    a4, a4, %lo(tiles)
+        add     s8, a4, s8
+        add     s0, s0, s8
+        lbu     a4, -84(s0)
+.Ltmp97:
+        li      t2, 32
+        beq     a4, t2, .LBB0_201
+        li      t2, 46
+        li      t3, 3
+        beq     a4, t2, .LBB0_202
+        li      t2, 111
+        beq     a4, t2, .LBB0_184
+.LBB0_200:
+        li      s0, -8
+        j       .LBB0_171
+.LBB0_201:
+        mv      t0, a2
+        j       .LBB0_107
+.LBB0_202:
+        mv      t0, a2
+        li      t2, 111
+        li      s0, -8
+        j       .LBB0_171
+.Ltmp98:
+.LBB0_203:
+        call    check_collisions
+.Ltmp99:
+        li      t0, 111
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lw      s0, 52(s5)
+        lui     s3, %hi(sprite_sheet)
+        addi    s3, s3, %lo(sprite_sheet)
+        lui     s4, 1048560
+        beq     s0, s6, .LBB0_204
+        j       .LBB0_451
+.LBB0_204:
+.Ltmp100:
+        lw      a1, 264(s5)
+        beqz    a1, .LBB0_357
+        lw      a0, 308(s5)
+        lui     a7, %hi(.L_MergedGlobals)
+        addi    a7, a7, %lo(.L_MergedGlobals)
+        li      t1, 3
+        beqz    a0, .LBB0_393
+        lw      a0, 352(s5)
+        li      t3, 6
+        bnez    a0, .LBB0_406
+.Ltmp101:
+        li      a3, 0
+        addi    a0, s5, 340
+        li      a4, 3
+        li      a2, 1
+        j       .LBB0_395
+.LBB0_208:
+.Ltmp102:
+        li      a0, 11
+        li      a1, 20
+        li      a2, 48
+        lw      s0, 24(sp)
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp103:
+        li      a0, 12
+        li      a1, 20
+        li      a2, 33
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp104:
+        li      a0, 13
+        li      a1, 20
+        li      a2, 53
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp105:
+        li      a0, 14
+        li      a1, 20
+        li      a2, 51
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp106:
+        li      a0, 15
+        li      a1, 20
+        li      a2, 37
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp107:
+        li      a0, 16
+        li      a1, 20
+        li      a2, 36
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp108:
+.LBB0_209:
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+.Ltmp109:
+        j       .LBB0_450
+.Ltmp110:
+.LBB0_210:
+        lw      a0, 56(s5)
+        addi    a1, a0, 1
+        sw      a1, 56(s5)
+        li      a1, 179
+        bge     a0, a1, .LBB0_211
+        j       .LBB0_450
+.LBB0_211:
+        lw      s1, 28(s5)
+        beqz    s1, .LBB0_391
+        addi    s0, s1, -1
+        lw      a0, 8(sp)
+        add     s2, s10, a0
+        sw      s0, 28(s5)
+        lui     s3, %hi(background)
+        addi    s3, s3, %lo(background)
+        add     s3, s3, a0
+        lw      s4, 4(sp)
+        lw      s8, 12(sp)
+.LBB0_213:
+.Ltmp111:
+        li      a2, 448
+        mv      a0, s2
+        mv      a1, s4
+        call    memcpy
+.Ltmp112:
+        li      a2, 448
+        mv      a0, s3
+        mv      a1, s4
+        call    memcpy
+.Ltmp113:
+        addi    s2, s2, 896
+        addi    s4, s4, 896
+        addi    s3, s3, 896
+        bne     s2, s8, .LBB0_213
+.Ltmp114:
+        li      a0, 5
+        blt     s0, a0, .LBB0_216
+        li      s0, 5
+.LBB0_216:
+        lui     s3, %hi(sprite_sheet)
+        addi    s3, s3, %lo(sprite_sheet)
+        lui     s4, 1048560
+        lui     a3, %hi(background)
+        addi    a3, a3, %lo(background)
+        blt     s1, s6, .LBB0_356
+        li      a0, 0
+        lui     a1, 60
+        addi    a2, a1, -1984
+        add     a1, s10, a2
+        add     a2, a3, a2
+        j       .LBB0_219
+.LBB0_218:
+        addi    a0, a0, 1
+        addi    a1, a1, 64
+        addi    a2, a2, 64
+        beq     a0, s0, .LBB0_356
+.LBB0_219:
+        li      a3, 0
+        addi    a4, s3, 192
+        mv      a5, a2
+        mv      a6, a1
+        j       .LBB0_221
+.LBB0_220:
+.Ltmp115:
+        addi    a3, a3, 1
+        addi    a6, a6, 896
+        addi    a5, a5, 896
+        addi    a4, a4, 1024
+        beq     a3, s7, .LBB0_218
+.LBB0_221:
+        slli    a7, a3, 10
+        add     a7, a7, s3
+        addi    a7, a7, 256
+        mv      t0, a4
+        mv      t1, a5
+        mv      t2, a6
+        j       .LBB0_223
+.LBB0_222:
+        addi    t2, t2, 4
+        addi    t0, t0, 4
+        addi    t1, t1, 4
+        beq     t0, a7, .LBB0_220
+.LBB0_223:
+        lw      t3, 0(t0)
+        beqz    t3, .LBB0_222
+        sw      t3, 0(t1)
+        sw      t3, 0(t2)
+        j       .LBB0_222
+.Ltmp116:
+.LBB0_225:
+        lw      a0, 56(s5)
+        lw      a1, 104(s5)
+        addi    a2, a0, 1
+        sw      a2, 56(s5)
+        beqz    a1, .LBB0_350
+        bne     a2, a1, .LBB0_350
+.Ltmp117:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 317(a0)
+        li      s2, 64
+        li      a1, 46
+        bne     a0, a1, .LBB0_358
+.Ltmp118:
+        li      a2, 64
+        j       .LBB0_359
+.LBB0_229:
+        lw      a0, 56(s5)
+        addi    a1, a0, 1
+        sw      a1, 56(s5)
+        li      a1, 58
+        blt     a1, a0, .LBB0_230
+        j       .LBB0_450
+.LBB0_230:
+        li      s0, 2
+        li      s1, 4
+        li      s11, 6
+        j       .LBB0_435
+.LBB0_231:
+.Ltmp119:
+        lw      a0, 56(s5)
+        addi    a1, a0, 1
+        sw      a1, 56(s5)
+        li      a1, 58
+        blt     a1, a0, .LBB0_353
+        sb      zero, %lo(.L_MergedGlobals.19)(a4)
+        j       .LBB0_450
+.Ltmp120:
+.LBB0_233:
+        lw      a0, 56(s5)
+        addi    a1, a0, 1
+        sw      a1, 56(s5)
+        li      a1, 59
+        blt     a0, a1, .LBB0_450
+        li      a1, 154
+        bltu    a1, a0, .LBB0_361
+        addi    a1, a0, -59
+        zext.b  a0, a1
+        li      a2, 171
+        mul     a0, a0, a2
+        srli    a0, a0, 11
+        slli    a2, a0, 4
+        slli    a3, a0, 2
+        sub     a3, a3, a2
+        add     a1, a1, a3
+        zext.b  a1, a1
+        bnez    a1, .LBB0_450
+        lw      a1, 24(s5)
+.Ltmp121:
+        blez    a1, .LBB0_450
+.Ltmp122:
+        andi    a0, a0, 1
+.Ltmp123:
+        slli    a1, a1, 2
+        lui     a2, %hi(wall_pixels)
+        addi    a2, a2, %lo(wall_pixels)
+        add     a1, a2, a1
+        j       .LBB0_239
+.LBB0_238:
+        add     a5, s10, a4
+        lui     a6, %hi(background)
+        addi    a6, a6, %lo(background)
+        add     a4, a6, a4
+        addi    a2, a2, 4
+        sw      a3, 0(a5)
+        sw      a3, 0(a4)
+        beq     a2, a1, .LBB0_450
+.LBB0_239:
+        lw      a4, 0(a2)
+        slli    a4, a4, 2
+        lw      a3, 32(sp)
+        beqz    a0, .LBB0_238
+        lui     a3, %hi(maze_image)
+        addi    a3, a3, %lo(maze_image)
+        add     a3, a3, a4
+        lw      a3, 0(a3)
+        j       .LBB0_238
+.Ltmp124:
+.LBB0_241:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_242:
+        li      a0, 11
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp125:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 488(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_244
+        li      a2, 64
+        j       .LBB0_245
+.LBB0_244:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_245:
+        li      a0, 12
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp126:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 489(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_247
+        li      a2, 64
+        j       .LBB0_248
+.LBB0_247:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_248:
+        li      a0, 13
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp127:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 490(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_250
+        li      a2, 64
+        j       .LBB0_251
+.LBB0_250:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_251:
+        li      a0, 14
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp128:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 491(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_253
+        li      a2, 64
+        j       .LBB0_254
+.LBB0_253:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_254:
+        li      a0, 15
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp129:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 492(a0)
+        li      a1, 46
+        beq     a0, a1, .LBB0_256
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    s2, a0, 65
+.LBB0_256:
+        li      a0, 16
+        li      a1, 20
+        mv      a2, s2
+        li      a3, 0
+        call    draw_glyph
+.Ltmp130:
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      t2, 111
+.Ltmp131:
+        lw      a0, 120(s5)
+        bnez    a0, .LBB0_51
+.LBB0_257:
+        lw      a0, 96(s5)
+        beqz    a0, .LBB0_259
+        li      a0, 36
+        j       .LBB0_260
+.LBB0_259:
+        li      a0, 8
+.LBB0_260:
+        li      s1, 4
+        li      s2, 138
+        lw      a2, 68(s5)
+        lw      a1, 124(s5)
+        sw      a2, 88(sp)
+        add     a0, a2, a0
+        lw      a0, 0(a0)
+        add     a0, a1, a0
+        srai    s11, a0, 8
+        zext.b  a0, a0
+        sw      a0, 124(s5)
+        blez    s11, .LBB0_52
+        lw      s4, 108(s5)
+        lw      s0, 112(s5)
+        lw      a0, 116(s5)
+        sw      a0, 104(sp)
+        lw      a0, 128(s5)
+        sw      a0, 84(sp)
+        lui     a1, %hi(.L_MergedGlobals)
+        addi    a1, a1, %lo(.L_MergedGlobals)
+        lw      a6, 12(a1)
+        lbu     a0, 12(s5)
+        lw      a2, 36(s5)
+        sw      a2, 100(sp)
+        lw      s10, 40(s5)
+        lw      a7, 76(s5)
+        lw      s8, 20(a1)
+        addi    s11, s11, 1
+        slli    a1, a6, 2
+        add     a2, t5, a1
+        sw      a2, 72(sp)
+        add     a1, t6, a1
+        sw      a1, 76(sp)
+        andi    a0, a0, 1
+        sw      a0, 80(sp)
+        sw      a6, 96(sp)
+        j       .LBB0_265
+.LBB0_262:
+        lw      a1, 84(sp)
+.Ltmp132:
+        addi    a1, a1, 1
+        sw      a1, 84(sp)
+        sw      a1, 128(s5)
+        li      s6, 2
+        li      t2, 111
+.LBB0_263:
+        lw      a1, 100(sp)
+        beqz    a1, .LBB0_392
+.Ltmp133:
+.LBB0_264:
+        addi    s11, s11, -1
+        mv      s10, a0
+        bltu    s9, s11, .LBB0_265
+        j       .LBB0_52
+.LBB0_265:
+        mv      a2, s8
+.Ltmp134:
+        srai    a0, s4, 3
+        srai    a1, s0, 3
+        mv      s8, a6
+        beq     a6, a2, .LBB0_270
+        xor     a3, a2, a6
+        bne     a3, s9, .LBB0_268
+.LBB0_267:
+        lui     a2, %hi(.L_MergedGlobals)
+        addi    a2, a2, %lo(.L_MergedGlobals)
+        sw      a6, 20(a2)
+        mv      s8, a6
+        j       .LBB0_270
+.LBB0_268:
+        lw      a3, 76(sp)
+        lw      a3, 0(a3)
+        add     a3, a3, a1
+.Ltmp135:
+        addi    a4, a3, -34
+        li      a5, -31
+        bgeu    a4, a5, .LBB0_277
+.Ltmp136:
+        mv      s8, a2
+.LBB0_270:
+        slli    a4, s8, 2
+        andi    a2, s4, -8
+        andi    a3, s0, -8
+        andi    a5, s8, -2
+        addi    a2, a2, 3
+        addi    a3, a3, 3
+        bne     a5, s6, .LBB0_274
+        add     a4, t6, a4
+        lw      a4, 0(a4)
+        bne     s0, a3, .LBB0_289
+        add     a1, a4, a1
+.Ltmp137:
+        addi    a3, a1, -34
+        li      a5, -31
+        bgeu    a3, a5, .LBB0_279
+.Ltmp138:
+.LBB0_273:
+        li      a0, 0
+        bne     s4, a2, .LBB0_290
+        j       .LBB0_298
+.LBB0_274:
+        add     a4, t5, a4
+        lw      a4, 0(a4)
+        bne     s4, a2, .LBB0_296
+.Ltmp139:
+        addi    a2, a1, -34
+        li      a5, -31
+        bgeu    a2, a5, .LBB0_281
+.Ltmp140:
+.LBB0_276:
+        li      a0, 0
+        bne     s0, a3, .LBB0_297
+        j       .LBB0_298
+.LBB0_277:
+        lw      a4, 72(sp)
+        lw      a4, 0(a4)
+        add     a4, a4, a0
+.Ltmp141:
+        li      a5, 28
+        bltu    a4, a5, .LBB0_283
+        mv      s8, a2
+        li      a2, 17
+        beq     a3, a2, .LBB0_267
+        j       .LBB0_270
+.Ltmp142:
+.LBB0_279:
+        li      a3, 28
+        bltu    a0, a3, .LBB0_286
+        li      a0, 17
+        bne     a1, a0, .LBB0_273
+        j       .LBB0_289
+.Ltmp143:
+.LBB0_281:
+        add     a0, a4, a0
+.Ltmp144:
+        li      a2, 28
+        bltu    a0, a2, .LBB0_293
+        li      a0, 17
+        bne     a1, a0, .LBB0_276
+        j       .LBB0_296
+.Ltmp145:
+.LBB0_283:
+        slli    a5, a3, 2
+        slli    a3, a3, 5
+        sub     a3, a3, a5
+        lui     a5, %hi(tiles)
+        addi    a5, a5, %lo(tiles)
+        add     a4, a5, a4
+        add     a3, a3, a4
+        lbu     a3, -84(a3)
+.Ltmp146:
+        li      a4, 32
+        beq     a3, a4, .LBB0_267
+        beq     a3, t2, .LBB0_267
+        mv      s8, a2
+        li      a2, 46
+        beq     a3, a2, .LBB0_267
+        j       .LBB0_270
+.Ltmp147:
+.LBB0_286:
+        slli    a3, a1, 2
+        slli    a1, a1, 5
+        sub     a1, a1, a3
+        lui     a3, %hi(tiles)
+        addi    a3, a3, %lo(tiles)
+        add     a0, a3, a0
+        add     a0, a1, a0
+        lbu     a0, -84(a0)
+.Ltmp148:
+        li      a1, 32
+        beq     a0, a1, .LBB0_289
+        beq     a0, t2, .LBB0_289
+        li      a1, 46
+        bne     a0, a1, .LBB0_273
+.Ltmp149:
+.LBB0_289:
+        add     s0, a4, s0
+        sw      s0, 112(s5)
+        li      a0, 1
+        beq     s4, a2, .LBB0_298
+.LBB0_290:
+        li      a0, 0
+.Ltmp150:
+        slt     a1, a2, s4
+        slt     a2, s4, a2
+        sub     a2, a2, a1
+.Ltmp151:
+        add     s4, a2, s4
+        sw      s4, 108(s5)
+        li      a1, -8
+        blt     s4, a1, .LBB0_299
+.LBB0_291:
+        li      a1, 232
+        blt     s4, a1, .LBB0_301
+        li      a1, -240
+        j       .LBB0_300
+.LBB0_293:
+.Ltmp152:
+        slli    a2, a1, 2
+        slli    a1, a1, 5
+        sub     a1, a1, a2
+        lui     a2, %hi(tiles)
+        addi    a2, a2, %lo(tiles)
+        add     a1, a1, a2
+        add     a0, a1, a0
+        lbu     a0, -84(a0)
+.Ltmp153:
+        li      a1, 32
+        beq     a0, a1, .LBB0_296
+        beq     a0, t2, .LBB0_296
+        li      a1, 46
+        bne     a0, a1, .LBB0_276
+.Ltmp154:
+.LBB0_296:
+        add     s4, a4, s4
+        sw      s4, 108(s5)
+        li      a0, 1
+        beq     s0, a3, .LBB0_298
+.LBB0_297:
+.Ltmp155:
+        slt     a0, a3, s0
+        slt     a1, s0, a3
+        sub     a1, a1, a0
+.Ltmp156:
+        add     s0, a1, s0
+        sw      s0, 112(s5)
+        li      a0, 1
+.LBB0_298:
+        seqz    a0, a0
+        li      a1, -8
+        bge     s4, a1, .LBB0_291
+.LBB0_299:
+        li      a1, 240
+.LBB0_300:
+        add     s4, a1, s4
+        sw      s4, 108(s5)
+.LBB0_301:
+        bnez    a0, .LBB0_303
+        lw      a0, 104(sp)
+        addi    a0, a0, 1
+        sw      a0, 104(sp)
+        sw      a0, 116(s5)
+.Ltmp157:
+.LBB0_303:
+        srai    s2, s0, 3
+.Ltmp158:
+        addi    a0, s2, -34
+.Ltmp159:
+        srai    s3, s4, 3
+.Ltmp160:
+        li      a1, -31
+        bltu    a0, a1, .LBB0_309
+        li      a0, 27
+        bltu    a0, s3, .LBB0_309
+        slli    a0, s2, 2
+        slli    a1, s2, 5
+        sub     a1, a1, a0
+        lui     s1, %hi(tiles)
+        addi    s1, s1, %lo(tiles)
+        add     s1, s1, s3
+        add     s1, a1, s1
+        lbu     s6, -84(s1)
+.Ltmp161:
+        beq     s6, t2, .LBB0_307
+        li      a0, 46
+        bne     s6, a0, .LBB0_309
+.LBB0_307:
+        beq     s6, t2, .LBB0_315
+        li      a0, 1
+        j       .LBB0_316
+.LBB0_309:
+        beqz    a7, .LBB0_342
+        li      s6, 2
+        li      a0, 20
+        bne     s2, a0, .LBB0_313
+        addi    s3, s3, -13
+        bltu    s9, s3, .LBB0_313
+        li      a0, 120
+        sw      a0, 72(s5)
+        sw      zero, 76(s5)
+        lw      a0, 88(sp)
+        lw      a0, 4(a0)
+        call    add_score
+.Ltmp162:
+        lw      a6, 96(sp)
+        li      t2, 111
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        li      a7, 0
+.LBB0_313:
+        mv      a0, s10
+.LBB0_314:
+        li      s1, 4
+        li      s2, 138
+        j       .LBB0_264
+.LBB0_315:
+        li      a0, 3
+.LBB0_316:
+        sw      a0, 120(s5)
+        sw      a7, 92(sp)
+        beq     s6, t2, .LBB0_318
+        li      a0, 10
+        j       .LBB0_319
+.LBB0_318:
+        li      a0, 50
+.LBB0_319:
+        call    add_score
+.Ltmp163:
+        li      a0, 111
+        bne     s6, a0, .LBB0_334
+.Ltmp164:
+        lw      a0, 220(s5)
+.Ltmp165:
+        sw      zero, 92(s5)
+        li      a4, 2
+.Ltmp166:
+        bne     a0, a4, .LBB0_324
+        lw      a1, 216(s5)
+        xori    a1, a1, 1
+        sw      a1, 216(s5)
+        lw      a1, 264(s5)
+        beq     a1, a4, .LBB0_325
+.LBB0_322:
+        lw      a2, 308(s5)
+        bne     a2, a4, .LBB0_326
+.LBB0_323:
+        lw      a3, 304(s5)
+        xori    a3, a3, 1
+        sw      a3, 304(s5)
+        lw      a3, 352(s5)
+        beq     a3, a4, .LBB0_327
+        j       .LBB0_328
+.LBB0_324:
+        lw      a1, 264(s5)
+        bne     a1, a4, .LBB0_322
+.LBB0_325:
+        lw      a2, 260(s5)
+        xori    a2, a2, 1
+        sw      a2, 260(s5)
+        lw      a2, 308(s5)
+        beq     a2, a4, .LBB0_323
+.LBB0_326:
+        lw      a3, 352(s5)
+        bne     a3, a4, .LBB0_328
+.LBB0_327:
+        lw      a4, 348(s5)
+        xori    a4, a4, 1
+        sw      a4, 348(s5)
+.Ltmp167:
+.LBB0_328:
+        lw      a4, 88(sp)
+        lw      a4, 44(a4)
+        beqz    a4, .LBB0_334
+        addi    a0, a0, -3
+        sw      a4, 96(s5)
+        li      a4, 2
+        bgeu    a0, a4, .LBB0_344
+        addi    a1, a1, -3
+        bgeu    a1, a4, .LBB0_345
+.LBB0_331:
+        addi    a2, a2, -3
+        bgeu    a2, a4, .LBB0_346
+.LBB0_332:
+        addi    a3, a3, -3
+        bltu    a3, a4, .LBB0_334
+.LBB0_333:
+        sw      s9, 356(s5)
+.Ltmp168:
+.LBB0_334:
+        li      a0, 32
+        sb      a0, -84(s1)
+.Ltmp169:
+        mv      a0, s3
+        mv      a1, s2
+        li      a2, 0
+        li      a3, 0
+        call    draw_glyph
+.Ltmp170:
+        lw      a1, 100(sp)
+.Ltmp171:
+        addi    a1, a1, -1
+        addi    a0, s10, 1
+        sw      a1, 100(sp)
+        sw      a1, 36(s5)
+        sw      a0, 40(s5)
+        sw      zero, 88(s5)
+        li      a1, 169
+        lw      a7, 92(sp)
+        beq     s10, a1, .LBB0_336
+        li      a1, 69
+        bne     s10, a1, .LBB0_337
+.LBB0_336:
+        li      a7, 570
+        sw      a7, 76(s5)
+.LBB0_337:
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      s1, 4
+        li      s2, 138
+        lw      a6, 96(sp)
+        lw      a1, 80(sp)
+        bnez    a1, .LBB0_262
+.Ltmp172:
+        lw      a1, 264(s5)
+        beqz    a1, .LBB0_343
+        lw      a1, 308(s5)
+        li      s6, 2
+        beqz    a1, .LBB0_347
+        lw      a1, 352(s5)
+        li      t2, 111
+        bnez    a1, .LBB0_263
+.Ltmp173:
+        addi    a1, s5, 340
+        j       .LBB0_349
+.LBB0_342:
+        mv      a0, s10
+        li      s6, 2
+        j       .LBB0_314
+.LBB0_343:
+        addi    a1, s5, 252
+        li      s6, 2
+        j       .LBB0_348
+.LBB0_344:
+.Ltmp174:
+        sw      s9, 224(s5)
+        addi    a1, a1, -3
+        bltu    a1, a4, .LBB0_331
+.LBB0_345:
+        sw      s9, 268(s5)
+        addi    a2, a2, -3
+        bltu    a2, a4, .LBB0_332
+.LBB0_346:
+        sw      s9, 312(s5)
+        addi    a3, a3, -3
+        bgeu    a3, a4, .LBB0_333
+        j       .LBB0_334
+.Ltmp175:
+.LBB0_347:
+        addi    a1, s5, 296
+.LBB0_348:
+        li      t2, 111
+.LBB0_349:
+.Ltmp176:
+        lw      a2, 36(a1)
+        addi    a2, a2, 1
+        sw      a2, 36(a1)
+        j       .LBB0_263
+.Ltmp177:
+.LBB0_350:
+        addi    a1, a1, 119
+        blt     a0, a1, .LBB0_450
+.Ltmp178:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 487(a0)
+        li      s2, 64
+        li      a1, 46
+        bne     a0, a1, .LBB0_419
+.Ltmp179:
+        li      a2, 64
+        j       .LBB0_420
+.LBB0_353:
+.Ltmp180:
+        li      a1, 298
+        bltu    a1, a0, .LBB0_355
+        lbu     a0, %lo(.L_MergedGlobals.19)(a4)
+        andi    a0, a0, 1
+        beqz    a0, .LBB0_450
+.LBB0_355:
+        call    enter_title
+.Ltmp181:
+        j       .LBB0_209
+.Ltmp182:
+.LBB0_356:
+        sw      zero, 128(s5)
+        sb      s9, 12(s5)
+        sb      s9, 16(s5)
+        sw      zero, 72(s5)
+        sw      zero, 76(s5)
+        li      a0, 0
+        call    begin_life
+.Ltmp183:
+        j       .LBB0_390
+.Ltmp184:
+.LBB0_357:
+        li      a3, 0
+        li      a2, 0
+        addi    a0, s5, 252
+        li      a4, 1
+        lui     a7, %hi(.L_MergedGlobals)
+        addi    a7, a7, %lo(.L_MergedGlobals)
+        li      t1, 3
+        j       .LBB0_394
+.LBB0_358:
+.Ltmp185:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_359:
+        li      a0, 9
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp186:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 318(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_365
+.Ltmp187:
+        li      a2, 64
+        j       .LBB0_366
+.LBB0_361:
+        lw      a0, 24(s5)
+        lui     a5, %hi(maze_image)
+        addi    a5, a5, %lo(maze_image)
+        lui     a6, %hi(background)
+        addi    a6, a6, %lo(background)
+.Ltmp188:
+        blez    a0, .LBB0_364
+        slli    a0, a0, 2
+        lui     a1, %hi(wall_pixels)
+        addi    a1, a1, %lo(wall_pixels)
+        add     a0, a1, a0
+.LBB0_363:
+        lw      a2, 0(a1)
+        addi    a1, a1, 4
+        slli    a2, a2, 2
+        add     a3, a5, a2
+        lw      a3, 0(a3)
+        add     a4, s10, a2
+        add     a2, a6, a2
+        sw      a3, 0(a4)
+        sw      a3, 0(a2)
+        bne     a1, a0, .LBB0_363
+.Ltmp189:
+.LBB0_364:
+        lw      a0, 4(s8)
+        addi    a0, a0, 1
+        sw      a0, 4(s8)
+        li      a0, 0
+        call    start_level
+.Ltmp190:
+        j       .LBB0_390
+.Ltmp191:
+.LBB0_365:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_366:
+        li      a0, 10
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp192:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 319(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_368
+        li      a2, 64
+        j       .LBB0_369
+.LBB0_368:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_369:
+        li      a0, 11
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp193:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 320(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_371
+        li      a2, 64
+        j       .LBB0_372
+.LBB0_371:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_372:
+        li      a0, 12
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp194:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 321(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_374
+        li      a2, 64
+        j       .LBB0_375
+.LBB0_374:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_375:
+        li      a0, 13
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp195:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 322(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_377
+        li      a2, 64
+        j       .LBB0_378
+.LBB0_377:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_378:
+        li      a0, 14
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp196:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 323(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_380
+        li      a2, 64
+        j       .LBB0_381
+.LBB0_380:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_381:
+        li      a0, 15
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp197:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 324(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_383
+        li      a2, 64
+        j       .LBB0_384
+.LBB0_383:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_384:
+        li      a0, 16
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp198:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 325(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_386
+        li      a2, 64
+        j       .LBB0_387
+.LBB0_386:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_387:
+        li      a0, 17
+        li      a1, 14
+        li      a3, 0
+        call    draw_glyph
+.Ltmp199:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 326(a0)
+        li      a1, 46
+        beq     a0, a1, .LBB0_389
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    s2, a0, 65
+.LBB0_389:
+        li      a0, 18
+        li      a1, 14
+        mv      a2, s2
+        li      a3, 0
+        call    draw_glyph
+.Ltmp200:
+        sw      s9, 100(s5)
+.LBB0_390:
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        j       .LBB0_450
+.Ltmp201:
+.LBB0_391:
+        li      a0, 9
+        li      a1, 20
+        li      a2, 39
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp202:
+        li      a0, 10
+        li      a1, 20
+        li      a2, 33
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp203:
+        li      a0, 11
+        li      a1, 20
+        li      a2, 45
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp204:
+        li      a0, 12
+        li      a1, 20
+        li      a2, 37
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp205:
+        li      a0, 13
+        li      a1, 20
+        lui     a3, 4080
+        li      a2, 0
+        call    draw_glyph
+.Ltmp206:
+        li      a0, 14
+        li      a1, 20
+        lui     a3, 4080
+        li      a2, 0
+        call    draw_glyph
+.Ltmp207:
+        li      a0, 15
+        li      a1, 20
+        li      a2, 47
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp208:
+        li      a0, 16
+        li      a1, 20
+        li      a2, 54
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp209:
+        li      a0, 17
+        li      a1, 20
+        li      a2, 37
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp210:
+        li      a0, 18
+        li      a1, 20
+        li      a2, 50
+        lui     a3, 4080
+        call    draw_glyph
+.Ltmp211:
+        li      s0, 6
+.Ltmp212:
+        sw      s0, 52(s5)
+        sw      zero, 56(s5)
+        li      a0, 1
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      s1, 4
+        j       .LBB0_454
+.Ltmp213:
+.LBB0_392:
+        li      s0, 5
+        lui     s3, %hi(sprite_sheet)
+        addi    s3, s3, %lo(sprite_sheet)
+        lui     s4, 1048560
+        lui     s8, %hi(.L_MergedGlobals)
+        addi    s8, s8, %lo(.L_MergedGlobals)
+        lui     s10, %hi(display)
+        addi    s10, s10, %lo(display)
+        li      s11, 6
+        j       .LBB0_435
+.LBB0_393:
+        li      a2, 0
+        addi    a0, s5, 296
+        li      a4, 2
+        li      a3, 1
+.LBB0_394:
+        li      t3, 6
+.LBB0_395:
+.Ltmp214:
+        lw      a5, 88(s5)
+        lw      a6, 4(a7)
+        addi    a5, a5, 1
+        sw      a5, 88(s5)
+        li      t2, 5
+        blt     a6, t2, .LBB0_397
+        li      a6, 180
+        j       .LBB0_398
+.LBB0_397:
+        li      a6, 240
+.LBB0_398:
+        bge     a5, a6, .LBB0_404
+        lbu     a5, 12(s5)
+        beqz    a5, .LBB0_416
+        lw      a4, 128(s5)
+        xori    a5, a4, 7
+        or      a1, a1, a5
+        beqz    a1, .LBB0_405
+        addi    a1, a4, -17
+        seqz    a1, a1
+        and     a1, a3, a1
+        bnez    a1, .LBB0_405
+        addi    a4, a4, -32
+        seqz    a0, a4
+        and     a0, a2, a0
+        beqz    a0, .LBB0_406
+        sb      zero, 12(s5)
+        j       .LBB0_406
+.LBB0_404:
+        sw      zero, 88(s5)
+.LBB0_405:
+        sw      s9, 12(a0)
+.Ltmp215:
+.LBB0_406:
+        lw      a0, 96(s5)
+        beqz    a0, .LBB0_409
+        addi    a0, a0, -1
+        sw      a0, 96(s5)
+        bnez    a0, .LBB0_445
+        sw      zero, 224(s5)
+        sw      zero, 268(s5)
+        sw      zero, 312(s5)
+        sw      zero, 356(s5)
+        j       .LBB0_445
+.LBB0_409:
+        lw      a1, 28(sp)
+        blt     t3, a1, .LBB0_445
+        lw      a0, 84(s5)
+        addi    a0, a0, -1
+        sw      a0, 84(s5)
+        bnez    a0, .LBB0_445
+        addi    a0, a1, 1
+        sw      a0, 80(s5)
+        bne     a1, t3, .LBB0_440
+.Ltmp216:
+        lw      a0, 220(s5)
+        bne     a0, s6, .LBB0_441
+.LBB0_413:
+        lw      a0, 216(s5)
+        xori    a0, a0, 1
+        sw      a0, 216(s5)
+        lw      a0, 264(s5)
+        beq     a0, s6, .LBB0_442
+.LBB0_414:
+        lw      a0, 308(s5)
+        bne     a0, s6, .LBB0_443
+.LBB0_415:
+        lw      a0, 304(s5)
+        xori    a0, a0, 1
+        sw      a0, 304(s5)
+        lw      a0, 352(s5)
+        beq     a0, s6, .LBB0_444
+        j       .LBB0_445
+.Ltmp217:
+.LBB0_416:
+        beq     a4, s6, .LBB0_436
+        bne     a4, t1, .LBB0_438
+.Ltmp218:
+        li      a1, 60
+        j       .LBB0_437
+.LBB0_419:
+.Ltmp219:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_420:
+        li      a0, 11
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp220:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 488(a0)
+        li      a1, 46
+        li      s11, 6
+        bne     a0, a1, .LBB0_422
+        li      a2, 64
+        j       .LBB0_423
+.LBB0_422:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_423:
+        li      a0, 12
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp221:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 489(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_425
+        li      a2, 64
+        j       .LBB0_426
+.LBB0_425:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_426:
+        li      a0, 13
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp222:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 490(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_428
+        li      a2, 64
+        j       .LBB0_429
+.LBB0_428:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_429:
+        li      a0, 14
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp223:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 491(a0)
+        li      a1, 46
+        bne     a0, a1, .LBB0_431
+        li      a2, 64
+        j       .LBB0_432
+.LBB0_431:
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+.LBB0_432:
+        li      a0, 15
+        li      a1, 20
+        li      a3, 0
+        call    draw_glyph
+.Ltmp224:
+        lui     a0, %hi(tiles)
+        addi    a0, a0, %lo(tiles)
+        lbu     a0, 492(a0)
+        li      a1, 46
+        beq     a0, a1, .LBB0_434
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    s2, a0, 65
+.LBB0_434:
+        li      a0, 16
+        li      a1, 20
+        mv      a2, s2
+        li      a3, 0
+        call    draw_glyph
+.Ltmp225:
+        li      s0, 2
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        li      s1, 4
+.Ltmp226:
+.LBB0_435:
+        sw      s0, 52(s5)
+        sw      zero, 56(s5)
+        lui     s2, %hi(background)
+        addi    s2, s2, %lo(background)
+        j       .LBB0_453
+.LBB0_436:
+        li      a1, 56
+.LBB0_437:
+        lw      a2, 100(sp)
+.Ltmp227:
+        add     a1, a2, a1
+        lw      a1, 0(a1)
+        j       .LBB0_439
+.LBB0_438:
+        li      a1, 0
+.LBB0_439:
+        lw      a2, 36(a0)
+        bge     a2, a1, .LBB0_405
+        j       .LBB0_406
+.Ltmp228:
+.LBB0_440:
+        lw      a1, 100(sp)
+.Ltmp229:
+        lw      a1, 52(a1)
+        slli    a0, a0, 2
+        add     a0, a1, a0
+        lw      a0, 0(a0)
+        sw      a0, 84(s5)
+.Ltmp230:
+        lw      a0, 220(s5)
+        beq     a0, s6, .LBB0_413
+.LBB0_441:
+        lw      a0, 264(s5)
+        bne     a0, s6, .LBB0_414
+.LBB0_442:
+        lw      a0, 260(s5)
+        xori    a0, a0, 1
+        sw      a0, 260(s5)
+        lw      a0, 308(s5)
+        beq     a0, s6, .LBB0_415
+.LBB0_443:
+        lw      a0, 352(s5)
+        bne     a0, s6, .LBB0_445
+.LBB0_444:
+        lw      a0, 348(s5)
+        xori    a0, a0, 1
+        sw      a0, 348(s5)
+.Ltmp231:
+.LBB0_445:
+        lw      a0, 76(s5)
+        beqz    a0, .LBB0_447
+        addi    a0, a0, -1
+        sw      a0, 76(s5)
+.LBB0_447:
+        lw      a0, 72(s5)
+        beqz    a0, .LBB0_449
+        addi    a0, a0, -1
+        sw      a0, 72(s5)
+.Ltmp232:
+.LBB0_449:
+        lw      a0, 64(s5)
+        lw      a1, 20(sp)
+        mul     a0, a0, a1
+        slli    a1, a0, 31
+        srli    a0, a0, 1
+        or      a0, a0, a1
+        lw      a1, 16(sp)
+        bgeu    a1, a0, .LBB0_584
+.Ltmp233:
+.LBB0_450:
+        lw      s0, 52(s5)
+        li      s1, 4
+.LBB0_451:
+        li      a0, 1
+        lui     s8, %hi(.L_MergedGlobals)
+        addi    s8, s8, %lo(.L_MergedGlobals)
+        lui     s10, %hi(display)
+        addi    s10, s10, %lo(display)
+        beqz    s0, .LBB0_454
+        li      s11, 6
+        lui     s2, %hi(background)
+        addi    s2, s2, %lo(background)
+        beq     s0, s11, .LBB0_455
+.LBB0_453:
+        lbu     a0, 64(s5)
+        andi    a0, a0, 16
+        seqz    a0, a0
+        lw      a1, 8(s8)
+        beq     a1, a0, .LBB0_460
+        j       .LBB0_456
+.LBB0_454:
+        li      s11, 6
+        lui     s2, %hi(background)
+        addi    s2, s2, %lo(background)
+.LBB0_455:
+        lw      a1, 8(s8)
+        beq     a1, a0, .LBB0_460
+.LBB0_456:
+        sw      a0, 8(s8)
+        beqz    a0, .LBB0_458
+        lui     s2, 4096
+        addi    s2, s2, -1
+.Ltmp234:
+        li      a0, 3
+        li      a2, 17
+        li      a1, 0
+        mv      a3, s2
+        call    draw_glyph
+.Ltmp235:
+        li      a0, 4
+        li      a2, 53
+        li      a1, 0
+        mv      a3, s2
+        call    draw_glyph
+.Ltmp236:
+        li      a0, 5
+        li      a2, 48
+        li      a1, 0
+        mv      a3, s2
+        lui     s2, %hi(background)
+        addi    s2, s2, %lo(background)
+        li      s1, 4
+        j       .LBB0_459
+.Ltmp237:
+.LBB0_458:
+        li      a0, 3
+        li      a1, 0
+        li      a2, 0
+        li      a3, 0
+        call    draw_glyph
+.Ltmp238:
+        li      a0, 4
+        li      a1, 0
+        li      a2, 0
+        li      a3, 0
+        call    draw_glyph
+.Ltmp239:
+        li      a0, 5
+        li      a1, 0
+        li      a2, 0
+        li      a3, 0
+.Ltmp240:
+.LBB0_459:
+        call    draw_glyph
+.Ltmp241:
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+.Ltmp242:
+.LBB0_460:
+        sw      zero, 384(s5)
+        sw      zero, 416(s5)
+        sw      zero, 448(s5)
+        sw      zero, 480(s5)
+.Ltmp243:
+        addi    a1, s0, -1
+.Ltmp244:
+        sw      zero, 512(s5)
+        sw      zero, 544(s5)
+.Ltmp245:
+        bltu    s1, a1, .LBB0_510
+        li      a0, 0
+        slli    a1, a1, 2
+        lui     a2, %hi(.LJTI0_2)
+        addi    a2, a2, %lo(.LJTI0_2)
+        add     a1, a2, a1
+        lw      a3, 0(a1)
+        li      a2, 1
+        mv      a1, s0
+        jr      a3
+.LBB0_462:
+        lw      a1, 100(s5)
+        seqz    a0, a1
+        j       .LBB0_472
+.LBB0_463:
+        lw      a0, 56(s5)
+        slti    a0, a0, 60
+        xori    a0, a0, 1
+        j       .LBB0_476
+.LBB0_464:
+        li      a0, 0
+        li      a1, 0
+.LBB0_465:
+        bnez    a2, .LBB0_467
+        j       .LBB0_469
+.LBB0_466:
+        lw      a0, 56(s5)
+        slti    a2, a0, 60
+        xori    a0, a2, 1
+        xori    a1, a2, 3
+        beqz    a2, .LBB0_469
+.LBB0_467:
+        lw      a3, 76(s5)
+        beqz    a3, .LBB0_469
+        lw      a2, 68(s5)
+        lw      a2, 0(a2)
+.Ltmp246:
+        lui     a3, 28
+        j       .LBB0_471
+.Ltmp247:
+.LBB0_469:
+        lw      a3, 72(s5)
+        snez    a3, a3
+        and     a2, a2, a3
+        beqz    a2, .LBB0_472
+        lw      a2, 68(s5)
+        lw      a2, 0(a2)
+        lui     a3, 32
+        addi    a3, a3, 256
+.LBB0_471:
+.Ltmp248:
+        add     a3, s3, a3
+        slli    a2, a2, 6
+        add     a2, a3, a2
+.Ltmp249:
+        sw      s9, 384(s5)
+        li      a3, 104
+        sw      a3, 388(s5)
+        li      a3, 156
+        sw      a3, 392(s5)
+        sw      a2, 396(s5)
+.Ltmp250:
+.LBB0_472:
+        beq     a1, s9, .LBB0_476
+        li      a2, 3
+        beq     a1, a2, .LBB0_483
+        bne     a1, s6, .LBB0_478
+.Ltmp251:
+        lw      a1, 116(s5)
+        lw      a2, 20(s8)
+        slli    a1, a1, 29
+        srli    a1, a1, 30
+        slli    a3, a1, 2
+        lui     a4, %hi(pacman_frame.mouth)
+        addi    a4, a4, %lo(pacman_frame.mouth)
+        add     a3, a4, a3
+        lw      a3, 0(a3)
+.Ltmp252:
+        slli    a2, a2, 7
+.Ltmp253:
+        addi    a1, a1, -3
+        seqz    a1, a1
+.Ltmp254:
+        slli    a3, a3, 6
+        add     a2, a2, a3
+.Ltmp255:
+        addi    a1, a1, -1
+        and     a1, a1, a2
+.Ltmp256:
+        add     a1, s3, a1
+.Ltmp257:
+        j       .LBB0_477
+.LBB0_476:
+        mv      a1, s3
+.LBB0_477:
+        lw      a2, 108(s5)
+        lw      a3, 112(s5)
+.Ltmp258:
+        addi    a2, a2, -7
+        addi    a3, a3, -7
+        sw      s9, 416(s5)
+        sw      a2, 420(s5)
+        sw      a3, 424(s5)
+        sw      a1, 428(s5)
+.Ltmp259:
+.LBB0_478:
+        bnez    a0, .LBB0_510
+        lw      a2, 64(s5)
+        lw      a0, 68(s5)
+        lw      a3, 92(s5)
+        lw      a1, 96(s5)
+        lw      a6, 132(s5)
+        lw      a4, 60(sp)
+        add     a4, s3, a4
+        slli    a2, a2, 28
+        lw      a5, 64(sp)
+        mulh    a5, a1, a5
+        slli    a7, a3, 6
+        srli    a2, a2, 31
+        add     a5, a5, a1
+        srli    a3, a5, 31
+        srai    a5, a5, 4
+        add     a3, a5, a3
+        slli    a5, a3, 5
+        slli    a3, a3, 2
+        sub     a5, a3, a5
+        slli    a3, a2, 6
+        add     a5, a1, a5
+        slti    a5, a5, 14
+        slli    a5, a5, 1
+        add     a4, a4, a7
+        li      a7, 3
+        bne     s0, a7, .LBB0_481
+        addi    t0, s5, 208
+        mv      a7, a4
+        beq     a6, t0, .LBB0_488
+.LBB0_481:
+.Ltmp260:
+        lw      a7, 220(s5)
+        addi    a7, a7, -3
+        bltu    s9, a7, .LBB0_485
+        lw      a7, 216(s5)
+.Ltmp261:
+        slli    a7, a7, 6
+        lw      t0, 56(sp)
+        j       .LBB0_487
+.Ltmp262:
+.LBB0_483:
+        lw      a1, 56(s5)
+        li      a2, 147
+        blt     a2, a1, .LBB0_478
+        addi    a1, a1, -60
+        srai    a2, a1, 31
+        srli    a2, a2, 29
+        add     a1, a1, a2
+.Ltmp263:
+        srli    a1, a1, 3
+        slli    a1, a1, 6
+        lui     a2, 4
+        add     a2, s3, a2
+        add     a1, a2, a1
+        j       .LBB0_477
+.Ltmp264:
+.LBB0_485:
+        lw      a7, 224(s5)
+        beqz    a7, .LBB0_580
+        lw      a7, 48(a0)
+        slli    t0, a7, 2
+        slli    a7, a7, 5
+        sub     a7, a7, t0
+        slt     a7, a7, a1
+        addi    a7, a7, -1
+        and     a7, a7, a5
+        or      a7, a7, a2
+.Ltmp265:
+        slli    a7, a7, 6
+        lui     t0, 24
+.Ltmp266:
+.LBB0_487:
+        add     t0, s3, t0
+        add     a7, t0, a7
+.Ltmp267:
+.LBB0_488:
+        lw      t0, 208(s5)
+        lw      t1, 212(s5)
+.Ltmp268:
+        addi    t0, t0, -7
+        addi    t1, t1, -7
+        sw      s9, 544(s5)
+        sw      t0, 548(s5)
+        sw      t1, 552(s5)
+        sw      a7, 556(s5)
+.Ltmp269:
+        li      a7, 3
+        bne     s0, a7, .LBB0_490
+        addi    t0, s5, 252
+        mv      a7, a4
+        beq     a6, t0, .LBB0_495
+.LBB0_490:
+.Ltmp270:
+        lw      a7, 264(s5)
+        addi    a7, a7, -3
+        bgeu    a7, s6, .LBB0_492
+        lw      a7, 260(s5)
+.Ltmp271:
+        slli    a7, a7, 6
+        lw      t0, 56(sp)
+        j       .LBB0_494
+.Ltmp272:
+.LBB0_492:
+        lw      a7, 268(s5)
+        beqz    a7, .LBB0_581
+        lw      a7, 48(a0)
+        slli    t0, a7, 2
+        slli    a7, a7, 5
+        sub     a7, a7, t0
+        slt     a7, a7, a1
+        addi    a7, a7, -1
+        and     a7, a7, a5
+        or      a7, a7, a2
+.Ltmp273:
+        slli    a7, a7, 6
+        lui     t0, 24
+.Ltmp274:
+.LBB0_494:
+        add     t0, s3, t0
+        add     a7, t0, a7
+.Ltmp275:
+.LBB0_495:
+        lw      t0, 252(s5)
+        lw      t1, 256(s5)
+.Ltmp276:
+        addi    t0, t0, -7
+        addi    t1, t1, -7
+        sw      s9, 512(s5)
+        sw      t0, 516(s5)
+        sw      t1, 520(s5)
+        sw      a7, 524(s5)
+.Ltmp277:
+        li      a7, 3
+        bne     s0, a7, .LBB0_497
+        addi    t0, s5, 296
+        mv      a7, a4
+        beq     a6, t0, .LBB0_502
+.LBB0_497:
+.Ltmp278:
+        lw      a7, 308(s5)
+        addi    a7, a7, -3
+        bgeu    a7, s6, .LBB0_499
+        lw      a7, 304(s5)
+.Ltmp279:
+        slli    a7, a7, 6
+        lw      t0, 56(sp)
+        j       .LBB0_501
+.Ltmp280:
+.LBB0_499:
+        lw      a7, 312(s5)
+        beqz    a7, .LBB0_582
+        lw      a7, 48(a0)
+        slli    t0, a7, 2
+        slli    a7, a7, 5
+        sub     a7, a7, t0
+        slt     a7, a7, a1
+        addi    a7, a7, -1
+        and     a7, a7, a5
+        or      a7, a7, a2
+.Ltmp281:
+        slli    a7, a7, 6
+        lui     t0, 24
+.Ltmp282:
+.LBB0_501:
+        add     t0, s3, t0
+        add     a7, t0, a7
+.Ltmp283:
+.LBB0_502:
+        lw      t0, 296(s5)
+        lw      t1, 300(s5)
+.Ltmp284:
+        addi    t0, t0, -7
+        addi    t1, t1, -7
+        sw      s9, 480(s5)
+        sw      t0, 484(s5)
+        sw      t1, 488(s5)
+        sw      a7, 492(s5)
+.Ltmp285:
+        li      a7, 3
+        bne     s0, a7, .LBB0_504
+        addi    a7, s5, 340
+        beq     a6, a7, .LBB0_509
+.LBB0_504:
+.Ltmp286:
+        lw      a4, 352(s5)
+        addi    a4, a4, -3
+        bgeu    a4, s6, .LBB0_506
+        lw      a0, 348(s5)
+.Ltmp287:
+        slli    a0, a0, 6
+        lw      a4, 56(sp)
+        j       .LBB0_508
+.Ltmp288:
+.LBB0_506:
+        lw      a4, 356(s5)
+        beqz    a4, .LBB0_583
+        lw      a0, 48(a0)
+        slli    a3, a0, 2
+        slli    a0, a0, 5
+        sub     a0, a0, a3
+        slt     a0, a0, a1
+        addi    a0, a0, -1
+        and     a0, a0, a5
+        or      a0, a0, a2
+.Ltmp289:
+        slli    a0, a0, 6
+        lui     a4, 24
+.Ltmp290:
+.LBB0_508:
+        add     a4, s3, a4
+        add     a4, a4, a0
+.Ltmp291:
+.LBB0_509:
+        lw      a0, 340(s5)
+        lw      a1, 344(s5)
+.Ltmp292:
+        addi    a0, a0, -7
+        addi    a1, a1, -7
+        sw      s9, 448(s5)
+        sw      a0, 452(s5)
+        sw      a1, 456(s5)
+        sw      a4, 460(s5)
+.Ltmp293:
+.LBB0_510:
+        li      a0, 0
+        li      t4, 208
+        lui     s0, 4
+        li      s1, 224
+        j       .LBB0_512
+.LBB0_511:
+.Ltmp294:
+        addi    a0, a0, 1
+        beq     a0, s11, .LBB0_528
+.LBB0_512:
+        slli    a1, a0, 5
+        add     a1, s5, a1
+        lw      a2, 400(a1)
+        beqz    a2, .LBB0_511
+        lw      a5, 404(a1)
+        lw      a6, 408(a1)
+        lw      a1, 412(a1)
+.Ltmp295:
+        bltu    t4, a5, .LBB0_520
+        li      a2, 0
+        slli    a3, a6, 7
+        slli    a6, a6, 10
+        slli    a5, a5, 2
+        sub     a3, a6, a3
+        add     a4, a3, a5
+        add     a3, s10, a4
+        add     a4, s2, a4
+        mv      a5, a1
+        j       .LBB0_516
+.LBB0_515:
+        addi    a2, a2, 1
+        addi    a5, a5, 1024
+        addi    a3, a3, 896
+        addi    a4, a4, 896
+        beq     a2, s7, .LBB0_511
+.LBB0_516:
+        slli    a6, a2, 10
+        add     a6, a6, a1
+        addi    a6, a6, 64
+        mv      a7, a5
+        mv      t0, a4
+        mv      t1, a3
+        j       .LBB0_518
+.LBB0_517:
+        addi    t1, t1, 4
+        addi    a7, a7, 4
+        addi    t0, t0, 4
+        beq     a7, a6, .LBB0_515
+.LBB0_518:
+        lw      t2, 0(a7)
+        beqz    t2, .LBB0_517
+        lw      t2, 0(t0)
+        sw      t2, 0(t1)
+        j       .LBB0_517
+.LBB0_520:
+.Ltmp296:
+        sub     a2, s1, a5
+        li      a3, 16
+        blt     a2, a3, .LBB0_522
+.Ltmp297:
+        li      a2, 16
+.LBB0_522:
+        li      a3, 0
+        neg     a4, a5
+        srai    a7, a5, 31
+        and     a4, a7, a4
+        slli    a7, a6, 7
+        slli    a6, a6, 10
+        sub     a6, a6, a7
+        slli    a7, a5, 2
+        sub     a7, a1, a7
+        sgtz    a1, a5
+        neg     a1, a1
+        and     a1, a1, a5
+        slli    t0, a1, 2
+        add     a5, a6, t0
+        add     a1, s10, a5
+        add     a5, s2, a5
+        add     a6, a7, t0
+        j       .LBB0_524
+.LBB0_523:
+        addi    a3, a3, 1
+        addi    a1, a1, 896
+        addi    a5, a5, 896
+        addi    a6, a6, 1024
+        beq     a3, s7, .LBB0_511
+.LBB0_524:
+        mv      a7, a6
+        mv      t0, a5
+        mv      t1, a1
+        mv      t2, a4
+        blt     a4, a2, .LBB0_526
+        j       .LBB0_523
+.LBB0_525:
+        addi    t2, t2, 1
+        addi    t1, t1, 4
+        addi    t0, t0, 4
+        addi    a7, a7, 4
+        bge     t2, a2, .LBB0_523
+.LBB0_526:
+        lw      t3, 0(a7)
+        beqz    t3, .LBB0_525
+        lw      t3, 0(t0)
+        sw      t3, 0(t1)
+        j       .LBB0_525
+.Ltmp298:
+.LBB0_528:
+        li      a0, 0
+        li      t2, 111
+        j       .LBB0_530
+.LBB0_529:
+        addi    a0, a0, 1
+        beq     a0, s11, .LBB0_574
+.LBB0_530:
+        slli    a2, a0, 5
+        add     a2, s5, a2
+        lw      a1, 384(a2)
+        sw      a1, 400(a2)
+        beqz    a1, .LBB0_529
+        lw      a5, 388(a2)
+        lw      a6, 392(a2)
+        lw      a1, 396(a2)
+        sw      a5, 404(a2)
+        sw      a6, 408(a2)
+        sw      a1, 412(a2)
+.Ltmp299:
+        bltu    t4, a5, .LBB0_566
+        slli    a2, a6, 7
+        slli    a6, a6, 10
+        slli    a5, a5, 2
+        sub     a2, a6, a2
+        add     a5, s10, a5
+        add     a2, a5, a2
+        addi    a2, a2, 32
+        add     a3, a1, s0
+        j       .LBB0_534
+.LBB0_533:
+        addi    a1, a1, 1024
+        addi    a2, a2, 896
+        beq     a1, a3, .LBB0_529
+.LBB0_534:
+        lw      a4, 0(a1)
+        beqz    a4, .LBB0_536
+        sw      a4, -32(a2)
+.LBB0_536:
+        lw      a4, 4(a1)
+        beqz    a4, .LBB0_538
+        sw      a4, -28(a2)
+.LBB0_538:
+        lw      a4, 8(a1)
+        beqz    a4, .LBB0_540
+        sw      a4, -24(a2)
+.LBB0_540:
+        lw      a4, 12(a1)
+        beqz    a4, .LBB0_542
+        sw      a4, -20(a2)
+.LBB0_542:
+        lw      a4, 16(a1)
+        beqz    a4, .LBB0_544
+        sw      a4, -16(a2)
+.LBB0_544:
+        lw      a4, 20(a1)
+        beqz    a4, .LBB0_546
+        sw      a4, -12(a2)
+.LBB0_546:
+        lw      a4, 24(a1)
+        beqz    a4, .LBB0_548
+        sw      a4, -8(a2)
+.LBB0_548:
+        lw      a4, 28(a1)
+        beqz    a4, .LBB0_550
+        sw      a4, -4(a2)
+.LBB0_550:
+        lw      a4, 32(a1)
+        beqz    a4, .LBB0_552
+        sw      a4, 0(a2)
+.LBB0_552:
+        lw      a4, 36(a1)
+        beqz    a4, .LBB0_554
+        sw      a4, 4(a2)
+.LBB0_554:
+        lw      a4, 40(a1)
+        beqz    a4, .LBB0_556
+        sw      a4, 8(a2)
+.LBB0_556:
+        lw      a4, 44(a1)
+        beqz    a4, .LBB0_558
+        sw      a4, 12(a2)
+.LBB0_558:
+        lw      a4, 48(a1)
+        beqz    a4, .LBB0_560
+        sw      a4, 16(a2)
+.LBB0_560:
+        lw      a4, 52(a1)
+        beqz    a4, .LBB0_562
+        sw      a4, 20(a2)
+.LBB0_562:
+        lw      a4, 56(a1)
+        beqz    a4, .LBB0_564
+        sw      a4, 24(a2)
+.LBB0_564:
+        lw      a4, 60(a1)
+        beqz    a4, .LBB0_533
+        sw      a4, 28(a2)
+        j       .LBB0_533
+.LBB0_566:
+.Ltmp300:
+        sub     a2, s1, a5
+        li      a3, 16
+        blt     a2, a3, .LBB0_568
+.Ltmp301:
+        li      a2, 16
+.LBB0_568:
+        li      a3, 0
+        neg     a4, a5
+        srai    a7, a5, 31
+        and     a4, a7, a4
+        slli    a7, a6, 7
+        slli    a6, a6, 10
+        sub     a6, a6, a7
+        slli    a7, a5, 2
+        sub     a7, a1, a7
+        sgtz    a1, a5
+        neg     a1, a1
+        and     a1, a1, a5
+        add     a6, s10, a6
+        slli    a5, a1, 2
+        add     a1, a6, a5
+        add     a5, a7, a5
+        j       .LBB0_570
+.LBB0_569:
+        addi    a3, a3, 1
+        addi    a1, a1, 896
+        addi    a5, a5, 1024
+        beq     a3, s7, .LBB0_529
+.LBB0_570:
+        mv      a6, a5
+        mv      a7, a1
+        mv      t0, a4
+        blt     a4, a2, .LBB0_572
+        j       .LBB0_569
+.LBB0_571:
+        addi    t0, t0, 1
+        addi    a7, a7, 4
+        addi    a6, a6, 4
+        bge     t0, a2, .LBB0_569
+.LBB0_572:
+        lw      t1, 0(a6)
+        beqz    t1, .LBB0_571
+        sw      t1, 0(a7)
+        j       .LBB0_571
+.Ltmp302:
+.LBB0_574:
+        li      a7, 30
+        ecall
+.Ltmp303:
+        lw      a1, 136(s5)
+        lw      a3, 140(s5)
+        addi    a2, a1, 16
+        addi    a4, a3, 2
+        sw      a2, 136(s5)
+        sw      a4, 140(s5)
+        blez    a3, .LBB0_576
+        addi    a3, a3, -1
+        addi    a2, a1, 17
+        sw      a2, 136(s5)
+        sw      a3, 140(s5)
+.LBB0_576:
+        sub     a2, a2, a0
+        addi    a1, a2, -101
+        li      a3, -202
+        lui     a4, %hi(.L_MergedGlobals.19)
+        li      a6, 72
+        bltu    a3, a1, .LBB0_578
+        addi    a0, a0, 16
+        sw      a0, 136(s5)
+        li      a0, 16
+        j       .LBB0_579
+.LBB0_578:
+        sgtz    a0, a2
+        neg     a0, a0
+        and     a0, a0, a2
+.LBB0_579:
+        lui     a2, %hi(.LJTI0_0)
+        addi    a2, a2, %lo(.LJTI0_0)
+.Ltmp304:
+        li      a7, 32
+        ecall
+.Ltmp305:
+        j       .LBB0_32
+.LBB0_580:
+.Ltmp306:
+        lw      a7, 248(s5)
+        lw      t0, 216(s5)
+.Ltmp307:
+        slli    a7, a7, 14
+        add     a7, s3, a7
+        slli    t0, t0, 7
+        add     a7, a7, t0
+        add     a7, a7, a3
+        j       .LBB0_488
+.Ltmp308:
+.LBB0_581:
+        lw      a7, 292(s5)
+        lw      t0, 260(s5)
+.Ltmp309:
+        slli    a7, a7, 14
+        add     a7, s3, a7
+        slli    t0, t0, 7
+        add     a7, a7, t0
+        add     a7, a7, a3
+.Ltmp310:
+        j       .LBB0_495
+.LBB0_582:
+        lw      a7, 336(s5)
+        lw      t0, 304(s5)
+.Ltmp311:
+        slli    a7, a7, 14
+        add     a7, s3, a7
+        slli    t0, t0, 7
+        add     a7, a7, t0
+        add     a7, a7, a3
+.Ltmp312:
+        j       .LBB0_502
+.LBB0_583:
+        lw      a0, 380(s5)
+        lw      a1, 348(s5)
+.Ltmp313:
+        slli    a0, a0, 14
+        add     a0, s3, a0
+        slli    a1, a1, 7
+        add     a0, a0, a1
+        add     a4, a0, a3
+.Ltmp314:
+        j       .LBB0_509
+.Ltmp315:
+.LBB0_584:
+        lw      a0, 16(a7)
+        lw      a1, 32(s5)
+        seqz    a2, a0
+        sw      a2, 16(a7)
+.Ltmp316:
+        blez    a1, .LBB0_450
+.Ltmp317:
+        snez    a0, a0
+.Ltmp318:
+        slli    a1, a1, 3
+        addi    s0, s5, 148
+        addi    a0, a0, -1
+        andi    s2, a0, 65
+        add     s1, s0, a1
+        j       .LBB0_587
+.LBB0_586:
+        addi    s0, s0, 8
+        beq     s0, s1, .LBB0_450
+.LBB0_587:
+        lw      a1, 0(s0)
+.Ltmp319:
+        addi    a0, a1, -34
+        li      a2, -31
+        bltu    a0, a2, .LBB0_586
+.Ltmp320:
+        lw      a0, -4(s0)
+.Ltmp321:
+        li      a2, 27
+        bltu    a2, a0, .LBB0_586
+        slli    a2, a1, 2
+        slli    a3, a1, 5
+        sub     a3, a3, a2
+        lui     a2, %hi(tiles)
+        addi    a2, a2, %lo(tiles)
+        add     a2, a2, a0
+        add     a2, a3, a2
+        lbu     a2, -84(a2)
+.Ltmp322:
+        bne     a2, t0, .LBB0_586
+        mv      a2, s2
+        li      a3, 0
+        call    draw_glyph
+.Ltmp323:
+        li      t0, 111
+        lui     t6, %hi(dir_dy)
+        addi    t6, t6, %lo(dir_dy)
+        lui     t5, %hi(dir_dx)
+        addi    t5, t5, %lo(dir_dx)
+        j       .LBB0_586
+.Ltmp324:
+.LBB0_591:
+.Lfunc_end0:
+        .size   main, .Lfunc_end0-main
+        .section        .rodata,"a",@progbits
+        .p2align        2, 0x0
+.LJTI0_0:
+        .word   .LBB0_35
+        .word   .LBB0_32
+        .word   .LBB0_36
+        .word   .LBB0_35
+        .word   .LBB0_37
+        .word   .LBB0_32
+        .word   .LBB0_31
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_36
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_37
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_38
+        .word   .LBB0_36
+        .word   .LBB0_32
+        .word   .LBB0_35
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_31
+        .word   .LBB0_32
+        .word   .LBB0_32
+        .word   .LBB0_31
+.LJTI0_1:
+        .word   .LBB0_47
+        .word   .LBB0_225
+        .word   .LBB0_591
+        .word   .LBB0_229
+        .word   .LBB0_210
+        .word   .LBB0_233
+        .word   .LBB0_231
+.LJTI0_2:
+        .word   .LBB0_462
+        .word   .LBB0_465
+        .word   .LBB0_464
+        .word   .LBB0_466
+        .word   .LBB0_463
+        .text
+        .p2align        2
+        .type   enter_title,@function
+enter_title:
+.Lfunc_begin1:
+        addi    sp, sp, -48
+        sw      ra, 44(sp)
+        sw      s0, 40(sp)
+        sw      s1, 36(sp)
+        sw      s2, 32(sp)
+        sw      s3, 28(sp)
+        sw      s4, 24(sp)
+        sw      s5, 20(sp)
+        sw      s6, 16(sp)
+        sw      s7, 12(sp)
+.Ltmp325:
+        lui     a0, %hi(.L_MergedGlobals+4)
+        sw      zero, %lo(.L_MergedGlobals+4)(a0)
+        lui     s2, %hi(.L_MergedGlobals.19)
+        addi    s2, s2, %lo(.L_MergedGlobals.19)
+        sw      zero, 28(s2)
+.Ltmp326:
+        sw      zero, 32(s2)
+        addi    s1, s2, 576
+        lui     s0, %hi(tiles)
+        addi    s0, s0, %lo(tiles)
+        li      a2, 868
+        mv      a0, s0
+        mv      a1, s1
+        call    memcpy
+.Ltmp327:
+        li      a0, 0
+        li      a1, 0
+        li      a2, 111
+        li      a3, 7
+        li      a4, 28
+        li      a5, 31
+        j       .LBB1_2
+.LBB1_1:
+        addi    a0, a0, 1
+        addi    s1, s1, 28
+        beq     a0, a5, .LBB1_7
+.LBB1_2:
+        li      a6, 0
+        addi    a7, a0, 3
+        j       .LBB1_4
+.LBB1_3:
+        addi    a6, a6, 1
+        beq     a6, a4, .LBB1_1
+.LBB1_4:
+        add     t0, s1, a6
+        lbu     t0, 0(t0)
+        bne     t0, a2, .LBB1_3
+        blt     a3, a1, .LBB1_3
+        slli    t0, a1, 3
+        addi    a1, a1, 1
+        add     t0, s2, t0
+        sw      a6, 144(t0)
+        sw      a7, 148(t0)
+        sw      a1, 32(s2)
+        j       .LBB1_3
+.LBB1_7:
+        lw      a0, 20(s2)
+        sw      a0, 36(s2)
+        sw      zero, 40(s2)
+.Ltmp328:
+        lui     a0, %hi(background)
+        addi    a0, a0, %lo(background)
+        lui     s1, %hi(maze_image)
+        addi    s1, s1, %lo(maze_image)
+        lui     a2, 63
+        lui     s2, 63
+        mv      a1, s1
+        call    memcpy
+.Ltmp329:
+        lui     a0, %hi(display)
+        addi    a0, a0, %lo(display)
+        add     a1, a0, s2
+        j       .LBB1_9
+.LBB1_8:
+        addi    a0, a0, 4
+        addi    s1, s1, 4
+        beq     a0, a1, .LBB1_11
+.LBB1_9:
+        lw      a2, 0(s1)
+        lw      a3, 0(a0)
+        beq     a3, a2, .LBB1_8
+        sw      a2, 0(a0)
+        j       .LBB1_8
+.LBB1_11:
+        li      s3, 0
+        li      s4, 111
+        li      s5, 46
+        li      s6, 28
+        li      s7, 31
+        j       .LBB1_13
+.LBB1_12:
+        addi    s3, s3, 1
+        addi    s0, s0, 28
+        beq     s3, s7, .LBB1_21
+.LBB1_13:
+        li      s1, 0
+        addi    s2, s3, 3
+        j       .LBB1_17
+.LBB1_14:
+        li      a2, 64
+.LBB1_15:
+.Ltmp330:
+        mv      a0, s1
+        mv      a1, s2
+        li      a3, 0
+        call    draw_glyph
+.Ltmp331:
+.LBB1_16:
+        addi    s1, s1, 1
+        beq     s1, s6, .LBB1_12
+.LBB1_17:
+        add     a0, s0, s1
+        lbu     a0, 0(a0)
+        beq     a0, s4, .LBB1_19
+        bne     a0, s5, .LBB1_16
+.LBB1_19:
+.Ltmp332:
+        beq     a0, s5, .LBB1_14
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+        j       .LBB1_15
+.Ltmp333:
+.LBB1_21:
+        call    draw_hud
+.Ltmp334:
+        lui     a2, 4092
+.Ltmp335:
+        li      a0, 9
+        li      a1, 14
+        addi    s0, a2, -1966
+        li      a2, 48
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp336:
+        li      a0, 10
+        li      a1, 14
+        li      a2, 53
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp337:
+        li      a0, 11
+        li      a1, 14
+        li      a2, 51
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp338:
+        li      a0, 12
+        li      a1, 14
+        li      a2, 40
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp339:
+        li      a0, 13
+        li      a1, 14
+        li      a2, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp340:
+        li      a0, 14
+        li      a1, 14
+        li      a2, 51
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp341:
+        li      a0, 15
+        li      a1, 14
+        li      a2, 48
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp342:
+        li      a0, 16
+        li      a1, 14
+        li      a2, 33
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp343:
+        li      a0, 17
+        li      a1, 14
+        li      a2, 35
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp344:
+        li      a0, 18
+        li      a1, 14
+        li      a2, 37
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp345:
+        lui     a0, %hi(.L_MergedGlobals.19)
+        sb      zero, %lo(.L_MergedGlobals.19)(a0)
+        addi    a0, a0, %lo(.L_MergedGlobals.19)
+.Ltmp346:
+        sw      zero, 52(a0)
+        sw      zero, 56(a0)
+.Ltmp347:
+        lw      ra, 44(sp)
+        lw      s0, 40(sp)
+        lw      s1, 36(sp)
+        lw      s2, 32(sp)
+        lw      s3, 28(sp)
+        lw      s4, 24(sp)
+        lw      s5, 20(sp)
+        lw      s6, 16(sp)
+        lw      s7, 12(sp)
+        addi    sp, sp, 48
+        ret
+.Ltmp348:
+.Lfunc_end1:
+        .size   enter_title, .Lfunc_end1-enter_title
+        .p2align        2
+        .type   read_file,@function
+read_file:
+.Lfunc_begin2:
+        addi    sp, sp, -32
+        sw      ra, 28(sp)
+        sw      s0, 24(sp)
+        sw      s1, 20(sp)
+        sw      s2, 16(sp)
+        sw      s3, 12(sp)
+        mv      s0, a0
+.Ltmp349:
+        lui     a1, %hi(.L.str.4)
+        addi    a1, a1, %lo(.L.str.4)
+        call    fopen
+.Ltmp350:
+        beqz    a0, .LBB2_6
+        mv      s1, a0
+        lui     a0, %hi(file_buffer)
+        addi    a0, a0, %lo(file_buffer)
+        li      a1, 1
+        lui     a2, 64
+        lui     s3, 64
+        mv      a3, s1
+        call    fread
+.Ltmp351:
+        mv      s2, a0
+        bne     a0, s3, .LBB2_4
+        mv      a0, s1
+        call    fgetc
+.Ltmp352:
+        mv      s3, a0
+        mv      a0, s1
+        call    fclose
+.Ltmp353:
+        li      a0, -1
+        beq     s3, a0, .LBB2_5
+.Ltmp354:
+        lui     a0, %hi(.L.str.3)
+        addi    a0, a0, %lo(.L.str.3)
+        lui     a2, %hi(.L.str.6)
+        addi    a2, a2, %lo(.L.str.6)
+        j       .LBB2_7
+.Ltmp355:
+.LBB2_4:
+        mv      a0, s1
+        call    fclose
+.Ltmp356:
+.LBB2_5:
+        mv      a0, s2
+        lw      ra, 28(sp)
+        lw      s0, 24(sp)
+        lw      s1, 20(sp)
+        lw      s2, 16(sp)
+        lw      s3, 12(sp)
+        addi    sp, sp, 32
+        ret
+.LBB2_6:
+.Ltmp357:
+        lui     a0, %hi(.L.str.3)
+        addi    a0, a0, %lo(.L.str.3)
+        lui     a2, %hi(.L.str.5)
+        addi    a2, a2, %lo(.L.str.5)
+.Ltmp358:
+.LBB2_7:
+        mv      a1, s0
+        call    printf
+.Ltmp359:
+        li      a0, 1
+        call    exit
+.Ltmp360:
+.Lfunc_end2:
+        .size   read_file, .Lfunc_end2-read_file
+        .p2align        2
+        .type   decode_bmp,@function
+decode_bmp:
+.Lfunc_begin3:
+        addi    sp, sp, -16
+        sw      ra, 12(sp)
+        sw      s0, 8(sp)
+        sw      s1, 4(sp)
+        li      a6, 54
+.Ltmp361:
+        blt     a1, a6, .LBB3_26
+        lui     a6, %hi(file_buffer)
+        lbu     a7, %lo(file_buffer)(a6)
+        li      t0, 66
+        bne     a7, t0, .LBB3_26
+        addi    a6, a6, %lo(file_buffer)
+        lbu     a6, 1(a6)
+        li      a7, 77
+        bne     a6, a7, .LBB3_26
+.Ltmp362:
+        lui     a7, %hi(file_buffer)
+        addi    a7, a7, %lo(file_buffer)
+.Ltmp363:
+        lbu     a6, 15(a7)
+        lbu     t0, 14(a7)
+        lbu     t1, 16(a7)
+        lbu     t2, 17(a7)
+        slli    a6, a6, 8
+        or      a6, a6, t0
+        slli    t1, t1, 16
+        slli    t2, t2, 24
+        or      t0, t1, t2
+        or      t1, a6, t0
+        li      a6, 39
+.Ltmp364:
+        bgeu    a6, t1, .LBB3_27
+.Ltmp365:
+        lbu     a6, 19(a7)
+        lbu     t0, 20(a7)
+        lbu     t2, 21(a7)
+        lbu     t3, 18(a7)
+        slli    a6, a6, 8
+        slli    t0, t0, 16
+        slli    t2, t2, 24
+        or      a6, a6, t3
+        or      t0, t0, t2
+.Ltmp366:
+        lbu     t2, 23(a7)
+        lbu     t3, 22(a7)
+        lbu     t4, 24(a7)
+        lbu     t5, 25(a7)
+        slli    t2, t2, 8
+        or      t2, t2, t3
+.Ltmp367:
+        or      t0, a6, t0
+.Ltmp368:
+        slli    t4, t4, 16
+        slli    a6, t5, 24
+        or      t3, t4, a6
+        or      t2, t2, t3
+.Ltmp369:
+        bgez    a6, .LBB3_6
+        neg     t2, t2
+.LBB3_6:
+        bne     t0, a3, .LBB3_28
+        bne     t2, a4, .LBB3_28
+.Ltmp370:
+        lbu     t0, 28(a7)
+        lbu     t2, 29(a7)
+.Ltmp371:
+        lbu     t4, 30(a7)
+        lbu     t3, 31(a7)
+        lbu     s0, 32(a7)
+        lbu     s1, 33(a7)
+.Ltmp372:
+        slli    t2, t2, 8
+.Ltmp373:
+        slli    t5, t3, 8
+.Ltmp374:
+        or      t3, t2, t0
+.Ltmp375:
+        or      t0, t5, t4
+.Ltmp376:
+        lbu     t2, 10(a7)
+        lbu     t6, 11(a7)
+        lbu     t4, 12(a7)
+        lbu     t5, 13(a7)
+.Ltmp377:
+        slli    s0, s0, 16
+        slli    s1, s1, 24
+        or      s0, s0, s1
+        li      s1, 24
+        or      s0, t0, s0
+        li      t0, 1
+.Ltmp378:
+        bne     t3, s1, .LBB3_10
+        beqz    s0, .LBB3_16
+.LBB3_10:
+        li      s1, 32
+        bne     t3, s1, .LBB3_12
+        beqz    s0, .LBB3_16
+.LBB3_12:
+        bne     t3, s1, .LBB3_30
+        li      s1, 3
+        bne     s0, s1, .LBB3_30
+        li      s0, 56
+        bltu    t1, s0, .LBB3_16
+.Ltmp379:
+        lbu     t0, 66(a7)
+        lbu     t1, 67(a7)
+        lbu     s0, 68(a7)
+        lbu     s1, 69(a7)
+.Ltmp380:
+        or      t0, t1, t0
+        or      s0, s0, s1
+        or      t0, t0, s0
+        seqz    t0, t0
+.LBB3_16:
+        slli    t6, t6, 8
+        slli    t4, t4, 16
+        slli    t5, t5, 24
+        srli    t1, t3, 3
+        lui     t3, 2048
+        or      s0, t6, t2
+        or      s1, t4, t5
+        or      s0, s0, s1
+        mul     s1, t1, a3
+        addi    s1, s1, 3
+        addi    t3, t3, -4
+        and     t3, s1, t3
+        mul     s1, t3, a4
+        add     s0, s1, s0
+        blt     a1, s0, .LBB3_29
+        li      a0, 0
+        add     t4, t5, t4
+        slli    a5, a5, 2
+        add     t2, t6, t2
+        add     t2, t4, t2
+        add     a1, t2, a7
+        addi    a1, a1, 3
+        slli    a3, a3, 2
+        mv      a7, a2
+        j       .LBB3_19
+.LBB3_18:
+        addi    a0, a0, 1
+        add     a7, a7, a5
+        beq     a0, a4, .LBB3_25
+.LBB3_19:
+        mv      t2, a0
+        bltz    a6, .LBB3_21
+        not     t2, a0
+        add     t2, a4, t2
+.LBB3_21:
+        mul     t4, a5, a0
+        mul     t5, t2, t3
+        add     t2, a3, t4
+        add     t2, a2, t2
+        add     t4, a1, t5
+        mv      t5, a7
+        j       .LBB3_23
+.LBB3_22:
+        sw      t6, 0(t5)
+        addi    t5, t5, 4
+        add     t4, t4, t1
+        beq     t5, t2, .LBB3_18
+.LBB3_23:
+        lbu     t6, -2(t4)
+        lbu     s0, -3(t4)
+        lbu     s1, -1(t4)
+        slli    t6, t6, 8
+        or      t6, t6, s0
+        slli    s1, s1, 16
+        or      t6, t6, s1
+        bnez    t0, .LBB3_22
+        lb      s0, 0(t4)
+        srai    s0, s0, 31
+        and     t6, s0, t6
+        j       .LBB3_22
+.LBB3_25:
+        lw      ra, 12(sp)
+        lw      s0, 8(sp)
+        lw      s1, 4(sp)
+        addi    sp, sp, 16
+        ret
+.LBB3_26:
+.Ltmp381:
+        lui     a3, %hi(.L.str.3)
+        addi    a3, a3, %lo(.L.str.3)
+        lui     a2, %hi(.L.str.7)
+        addi    a2, a2, %lo(.L.str.7)
+        j       .LBB3_31
+.Ltmp382:
+.LBB3_27:
+        lui     a3, %hi(.L.str.3)
+        addi    a3, a3, %lo(.L.str.3)
+        lui     a2, %hi(.L.str.8)
+        addi    a2, a2, %lo(.L.str.8)
+        j       .LBB3_31
+.Ltmp383:
+.LBB3_28:
+        lui     a2, %hi(.L.str.9)
+        addi    a2, a2, %lo(.L.str.9)
+        mv      a1, a0
+        mv      a0, a2
+        mv      a2, a3
+        mv      a3, a4
+        call    printf
+.Ltmp384:
+        li      a0, 1
+        call    exit
+.Ltmp385:
+.LBB3_29:
+        lui     a3, %hi(.L.str.3)
+        addi    a3, a3, %lo(.L.str.3)
+        lui     a2, %hi(.L.str.11)
+        addi    a2, a2, %lo(.L.str.11)
+        j       .LBB3_31
+.Ltmp386:
+.LBB3_30:
+        lui     a3, %hi(.L.str.3)
+        addi    a3, a3, %lo(.L.str.3)
+        lui     a2, %hi(.L.str.10)
+        addi    a2, a2, %lo(.L.str.10)
+.Ltmp387:
+.LBB3_31:
+        mv      a1, a0
+.Ltmp388:
+        mv      a0, a3
+        call    printf
+.Ltmp389:
+        li      a0, 1
+        call    exit
+.Ltmp390:
+.Lfunc_end3:
+        .size   decode_bmp, .Lfunc_end3-decode_bmp
+        .p2align        2
+        .type   draw_hud,@function
+draw_hud:
+.Lfunc_begin4:
+        addi    sp, sp, -48
+        sw      ra, 44(sp)
+        sw      s0, 40(sp)
+        sw      s1, 36(sp)
+        sw      s2, 32(sp)
+        sw      s3, 28(sp)
+        sw      s4, 24(sp)
+        sw      s5, 20(sp)
+        sw      s6, 16(sp)
+        sw      s7, 12(sp)
+        sw      s8, 8(sp)
+        lui     s0, 4096
+.Ltmp391:
+        li      a0, 3
+        addi    s0, s0, -1
+        li      a2, 17
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp392:
+        li      a0, 4
+        li      a2, 53
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp393:
+        li      a0, 5
+        li      a2, 48
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp394:
+        lui     s3, %hi(.L_MergedGlobals)
+        addi    s3, s3, %lo(.L_MergedGlobals)
+        li      s1, 1
+        sw      s1, 8(s3)
+.Ltmp395:
+        li      a0, 9
+        li      a2, 40
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp396:
+        li      a0, 10
+        li      a2, 41
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp397:
+        li      a0, 11
+        li      a2, 39
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp398:
+        li      a0, 12
+        li      a2, 40
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp399:
+        li      a0, 13
+        li      a1, 0
+        li      a2, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp400:
+        li      a0, 14
+        li      a2, 51
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp401:
+        li      a0, 15
+        li      a2, 35
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp402:
+        li      a0, 16
+        li      a2, 47
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp403:
+        li      a0, 17
+        li      a2, 50
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp404:
+        li      a0, 18
+        li      a2, 37
+        li      a1, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp405:
+        li      s2, 0
+.Ltmp406:
+        lui     s4, %hi(.L_MergedGlobals.19)
+        addi    s4, s4, %lo(.L_MergedGlobals.19)
+        lw      s7, 44(s4)
+        li      s5, 8
+        lui     a0, 419430
+        addi    s6, a0, 1639
+        j       .LBB4_3
+.LBB4_1:
+.Ltmp407:
+        mulh    a0, s7, s6
+        srli    a1, a0, 31
+        srai    a0, a0, 2
+        add     a0, a0, a1
+        slli    a1, a0, 1
+        slli    a2, a0, 3
+        add     a1, a2, a1
+        sub     a2, s7, a1
+        addi    a2, a2, 16
+        addi    s2, s2, 1
+        mv      s7, a0
+.LBB4_2:
+        addi    a0, s5, -2
+        li      a1, 1
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp408:
+        addi    s5, s5, -1
+        bgeu    s1, s5, .LBB4_6
+.LBB4_3:
+        bnez    s7, .LBB4_1
+        bge     s1, s2, .LBB4_1
+        li      s7, 0
+        li      a2, 0
+        j       .LBB4_2
+.Ltmp409:
+.LBB4_6:
+        li      s1, 0
+        lw      s5, 48(s4)
+        li      s2, 8
+        lui     a0, 419430
+        lui     s0, 4096
+        addi    s6, a0, 1639
+        addi    s0, s0, -1
+        snez    s7, s5
+        slli    s7, s7, 1
+        li      s8, 1
+        j       .LBB4_9
+.LBB4_7:
+.Ltmp410:
+        mulh    a0, s5, s6
+        srli    a1, a0, 31
+        srai    a0, a0, 2
+        add     a0, a0, a1
+        slli    a1, a0, 1
+        slli    a2, a0, 3
+        add     a1, a2, a1
+        sub     a2, s5, a1
+        addi    a2, a2, 16
+        addi    s1, s1, 1
+        mv      s5, a0
+.LBB4_8:
+        addi    a0, s2, 8
+        li      a1, 1
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp411:
+        addi    s2, s2, -1
+        bgeu    s8, s2, .LBB4_12
+.LBB4_9:
+        bnez    s5, .LBB4_7
+        blt     s1, s7, .LBB4_7
+        li      s5, 0
+        li      a2, 0
+        j       .LBB4_8
+.Ltmp412:
+.LBB4_12:
+        lui     s5, %hi(display)
+        addi    s5, s5, %lo(display)
+        lui     a0, 60
+        lui     s7, %hi(maze_image)
+        addi    s7, s7, %lo(maze_image)
+        lui     s6, %hi(background)
+        addi    s6, s6, %lo(background)
+        lui     s8, 63
+        addi    s2, a0, -2048
+        add     s0, s5, s2
+        add     s1, s7, s2
+        add     s2, s6, s2
+        add     s8, s5, s8
+.LBB4_13:
+.Ltmp413:
+        li      a2, 448
+        mv      a0, s0
+        mv      a1, s1
+        call    memcpy
+.Ltmp414:
+        li      a2, 448
+        mv      a0, s2
+        mv      a1, s1
+        call    memcpy
+.Ltmp415:
+        addi    s0, s0, 896
+        addi    s1, s1, 896
+        addi    s2, s2, 896
+        bne     s0, s8, .LBB4_13
+.Ltmp416:
+        lw      a1, 28(s4)
+        li      a2, 5
+        mv      a0, a1
+        blt     a1, a2, .LBB4_16
+        li      a0, 5
+.LBB4_16:
+        lui     s4, %hi(sprite_sheet)
+        addi    s4, s4, %lo(sprite_sheet)
+        blez    a1, .LBB4_25
+        li      a1, 0
+        lui     a3, 60
+        addi    a2, s4, 192
+        addi    a4, a3, -1984
+        add     a3, s5, a4
+        add     a4, s6, a4
+        li      a5, 16
+        j       .LBB4_19
+.LBB4_18:
+        addi    a1, a1, 1
+        addi    a3, a3, 64
+        addi    a4, a4, 64
+        beq     a1, a0, .LBB4_25
+.LBB4_19:
+        li      a6, 0
+        mv      a7, a2
+        mv      t0, a4
+        mv      t1, a3
+        j       .LBB4_21
+.LBB4_20:
+.Ltmp417:
+        addi    a6, a6, 1
+        addi    t1, t1, 896
+        addi    t0, t0, 896
+        addi    a7, a7, 1024
+        beq     a6, a5, .LBB4_18
+.LBB4_21:
+        slli    t2, a6, 10
+        add     t2, t2, s4
+        addi    t2, t2, 256
+        mv      t3, a7
+        mv      t4, t0
+        mv      t5, t1
+        j       .LBB4_23
+.LBB4_22:
+        addi    t5, t5, 4
+        addi    t3, t3, 4
+        addi    t4, t4, 4
+        beq     t3, t2, .LBB4_20
+.LBB4_23:
+        lw      t6, 0(t3)
+        beqz    t6, .LBB4_22
+        sw      t6, 0(t4)
+        sw      t6, 0(t5)
+        j       .LBB4_22
+.Ltmp418:
+.LBB4_25:
+        lui     a0, 60
+        lui     a1, 63
+        addi    s2, a0, -1600
+        addi    a0, a1, 448
+        add     s0, s5, s2
+        add     s1, s7, s2
+        add     s2, s6, s2
+        add     s7, s5, a0
+.LBB4_26:
+.Ltmp419:
+        li      a2, 448
+        mv      a0, s0
+        mv      a1, s1
+        call    memcpy
+.Ltmp420:
+        li      a2, 448
+        mv      a0, s2
+        mv      a1, s1
+        call    memcpy
+.Ltmp421:
+        addi    s0, s0, 896
+        addi    s1, s1, 896
+        addi    s2, s2, 896
+        bne     s0, s7, .LBB4_26
+.Ltmp422:
+        lw      a0, 4(s3)
+        blez    a0, .LBB4_40
+        addi    a1, a0, -1
+        lui     a2, 60
+        li      a3, 6
+        addi    a2, a2, -1280
+        bltu    a1, a3, .LBB4_30
+        li      a1, 6
+.LBB4_30:
+        li      a7, 0
+        add     s5, s5, a2
+        add     s6, s6, a2
+        lui     a2, %hi(level_table)
+        addi    a2, a2, %lo(level_table)
+        lui     a3, 28
+        addi    a4, a3, 64
+        li      a5, 16
+        mv      t0, a0
+        j       .LBB4_32
+.LBB4_31:
+        addi    a7, a6, 1
+        addi    s5, s5, -64
+        sub     t0, a0, a7
+        addi    s6, s6, -64
+        beq     a6, a1, .LBB4_40
+.LBB4_32:
+        li      t1, 21
+        mv      a6, a7
+        bltu    t0, t1, .LBB4_34
+        li      t0, 21
+.LBB4_34:
+        li      a7, 0
+        slli    t0, t0, 6
+        add     t0, t0, a2
+        lw      t0, -64(t0)
+.Ltmp423:
+        add     t1, s4, a3
+        slli    t2, t0, 6
+        add     t0, t1, t2
+.Ltmp424:
+        add     t1, t2, a4
+        mv      t2, s6
+        mv      t3, s5
+        j       .LBB4_36
+.LBB4_35:
+        addi    a7, a7, 1
+        addi    t3, t3, 896
+        addi    t2, t2, 896
+        addi    t0, t0, 1024
+        beq     a7, a5, .LBB4_31
+.LBB4_36:
+        slli    t4, a7, 10
+        add     t4, t1, t4
+        add     t4, s4, t4
+        mv      t5, t0
+        mv      t6, t2
+        mv      s0, t3
+        j       .LBB4_38
+.LBB4_37:
+        addi    s0, s0, 4
+        addi    t5, t5, 4
+        addi    t6, t6, 4
+        beq     t5, t4, .LBB4_35
+.LBB4_38:
+        lw      s1, 0(t5)
+        beqz    s1, .LBB4_37
+        sw      s1, 0(t6)
+        sw      s1, 0(s0)
+        j       .LBB4_37
+.Ltmp425:
+.LBB4_40:
+        lw      ra, 44(sp)
+        lw      s0, 40(sp)
+        lw      s1, 36(sp)
+        lw      s2, 32(sp)
+        lw      s3, 28(sp)
+        lw      s4, 24(sp)
+        lw      s5, 20(sp)
+        lw      s6, 16(sp)
+        lw      s7, 12(sp)
+        lw      s8, 8(sp)
+        addi    sp, sp, 48
+        ret
+.Ltmp426:
+.Lfunc_end4:
+        .size   draw_hud, .Lfunc_end4-draw_hud
+        .p2align        2
+        .type   draw_glyph,@function
+draw_glyph:
+.Lfunc_begin5:
+        slli    a4, a2, 16
+        slli    a5, a1, 10
+        slli    a1, a1, 13
+        slli    a0, a0, 5
+        lui     a6, %hi(background)
+        addi    a6, a6, %lo(background)
+        sub     a1, a1, a5
+        lui     a5, %hi(display)
+        addi    a5, a5, %lo(display)
+        add     a0, a1, a0
+        lui     a7, %hi(maze_image)
+        addi    a7, a7, %lo(maze_image)
+        srai    a4, a4, 3
+        srli    a4, a4, 28
+        add     t0, a2, a4
+        addi    a4, a0, 16
+        add     a0, a6, a4
+        add     a1, a5, a4
+        add     a4, a7, a4
+        andi    a5, t0, -16
+        sub     a2, a2, a5
+        lui     a5, %hi(tile_sheet)
+        addi    a5, a5, %lo(tile_sheet)
+        slli    t0, t0, 16
+        srai    a6, t0, 16
+        srli    a6, a6, 4
+        slli    a6, a6, 12
+        add     a5, a6, a5
+        lui     a6, 1
+        addi    a6, a6, 16
+        slli    a2, a2, 16
+        srai    a2, a2, 16
+        slli    a2, a2, 5
+        add     a5, a5, a2
+        addi    a2, a5, 16
+        add     a5, a5, a6
+        j       .LBB5_3
+.LBB5_1:
+        lw      a6, 12(a4)
+.LBB5_2:
+        sw      a6, 12(a0)
+        sw      a6, 12(a1)
+        addi    a2, a2, 512
+        addi    a0, a0, 896
+        addi    a1, a1, 896
+        addi    a4, a4, 896
+        beq     a2, a5, .LBB5_34
+.LBB5_3:
+        lw      a7, -16(a2)
+        beqz    a7, .LBB5_6
+        beqz    a3, .LBB5_7
+        mv      a7, a3
+        j       .LBB5_7
+.LBB5_6:
+        lw      a7, -16(a4)
+.LBB5_7:
+        lw      a6, -12(a2)
+        sw      a7, -16(a0)
+        sw      a7, -16(a1)
+        beqz    a6, .LBB5_10
+        beqz    a3, .LBB5_11
+        mv      a6, a3
+        j       .LBB5_11
+.LBB5_10:
+        lw      a6, -12(a4)
+.LBB5_11:
+        lw      a7, -8(a2)
+        sw      a6, -12(a0)
+        sw      a6, -12(a1)
+        beqz    a7, .LBB5_14
+        beqz    a3, .LBB5_15
+        mv      a7, a3
+        j       .LBB5_15
+.LBB5_14:
+        lw      a7, -8(a4)
+.LBB5_15:
+        lw      a6, -4(a2)
+        sw      a7, -8(a0)
+        sw      a7, -8(a1)
+        beqz    a6, .LBB5_18
+        beqz    a3, .LBB5_19
+        mv      a6, a3
+        j       .LBB5_19
+.LBB5_18:
+        lw      a6, -4(a4)
+.LBB5_19:
+        lw      a7, 0(a2)
+        sw      a6, -4(a0)
+        sw      a6, -4(a1)
+        beqz    a7, .LBB5_22
+        beqz    a3, .LBB5_23
+        mv      a7, a3
+        j       .LBB5_23
+.LBB5_22:
+        lw      a7, 0(a4)
+.LBB5_23:
+        lw      a6, 4(a2)
+        sw      a7, 0(a0)
+        sw      a7, 0(a1)
+        beqz    a6, .LBB5_26
+        beqz    a3, .LBB5_27
+        mv      a6, a3
+        j       .LBB5_27
+.LBB5_26:
+        lw      a6, 4(a4)
+.LBB5_27:
+        lw      a7, 8(a2)
+        sw      a6, 4(a0)
+        sw      a6, 4(a1)
+        beqz    a7, .LBB5_30
+        beqz    a3, .LBB5_31
+        mv      a7, a3
+        j       .LBB5_31
+.LBB5_30:
+        lw      a7, 8(a4)
+.LBB5_31:
+        lw      a6, 12(a2)
+        sw      a7, 8(a0)
+        sw      a7, 8(a1)
+        beqz    a6, .LBB5_1
+        beqz    a3, .LBB5_2
+        mv      a6, a3
+        j       .LBB5_2
+.LBB5_34:
+        ret
+.Ltmp427:
+.Lfunc_end5:
+        .size   draw_glyph, .Lfunc_end5-draw_glyph
+        .p2align        2
+        .type   start_level,@function
+start_level:
+.Lfunc_begin6:
+        addi    sp, sp, -48
+        sw      ra, 44(sp)
+        sw      s0, 40(sp)
+        sw      s1, 36(sp)
+        sw      s2, 32(sp)
+        sw      s3, 28(sp)
+        sw      s4, 24(sp)
+        sw      s5, 20(sp)
+        sw      s6, 16(sp)
+        sw      s7, 12(sp)
+        sw      s8, 8(sp)
+.Ltmp428:
+        lui     a1, %hi(.L_MergedGlobals+4)
+        lw      a1, %lo(.L_MergedGlobals+4)(a1)
+        li      a2, 21
+        mv      s0, a0
+        blt     a1, a2, .LBB6_2
+        li      a1, 21
+.LBB6_2:
+        slli    a1, a1, 6
+        lui     a0, %hi(level_table)
+        addi    a0, a0, %lo(level_table)
+        add     a0, a1, a0
+        lui     s3, %hi(.L_MergedGlobals.19)
+        addi    s3, s3, %lo(.L_MergedGlobals.19)
+        addi    a0, a0, -64
+.Ltmp429:
+        sw      zero, 32(s3)
+.Ltmp430:
+        sw      a0, 68(s3)
+.Ltmp431:
+        addi    s2, s3, 576
+        lui     s1, %hi(tiles)
+        addi    s1, s1, %lo(tiles)
+        li      a2, 868
+        mv      a0, s1
+        mv      a1, s2
+        call    memcpy
+.Ltmp432:
+        li      a0, 0
+        li      a1, 0
+        li      a2, 111
+        li      a3, 7
+        li      a4, 28
+        li      a5, 31
+        j       .LBB6_4
+.LBB6_3:
+        addi    a0, a0, 1
+        addi    s2, s2, 28
+        beq     a0, a5, .LBB6_9
+.LBB6_4:
+        li      a6, 0
+        addi    a7, a0, 3
+        j       .LBB6_6
+.LBB6_5:
+        addi    a6, a6, 1
+        beq     a6, a4, .LBB6_3
+.LBB6_6:
+        add     t0, s2, a6
+        lbu     t0, 0(t0)
+        bne     t0, a2, .LBB6_5
+        blt     a3, a1, .LBB6_5
+        slli    t0, a1, 3
+        addi    a1, a1, 1
+        add     t0, s3, t0
+        sw      a6, 144(t0)
+        sw      a7, 148(t0)
+        sw      a1, 32(s3)
+        j       .LBB6_5
+.LBB6_9:
+        lw      a0, 20(s3)
+.Ltmp433:
+        sw      zero, 244(s3)
+        sw      zero, 288(s3)
+        sw      zero, 332(s3)
+        sw      zero, 376(s3)
+.Ltmp434:
+        sb      zero, 12(s3)
+        sb      zero, 16(s3)
+.Ltmp435:
+        sw      a0, 36(s3)
+        sw      zero, 40(s3)
+.Ltmp436:
+        sw      zero, 72(s3)
+        sw      zero, 76(s3)
+.Ltmp437:
+        lui     a0, %hi(background)
+        addi    a0, a0, %lo(background)
+        lui     s2, %hi(maze_image)
+        addi    s2, s2, %lo(maze_image)
+        lui     a2, 63
+        lui     s3, 63
+        mv      a1, s2
+        call    memcpy
+.Ltmp438:
+        lui     a0, %hi(display)
+        addi    a0, a0, %lo(display)
+        add     a1, a0, s3
+        j       .LBB6_11
+.LBB6_10:
+        addi    a0, a0, 4
+        addi    s2, s2, 4
+        beq     a0, a1, .LBB6_13
+.LBB6_11:
+        lw      a2, 0(s2)
+        lw      a3, 0(a0)
+        beq     a3, a2, .LBB6_10
+        sw      a2, 0(a0)
+        j       .LBB6_10
+.LBB6_13:
+        li      s4, 0
+        li      s5, 111
+        li      s6, 46
+        li      s7, 28
+        li      s8, 31
+        j       .LBB6_15
+.LBB6_14:
+        addi    s4, s4, 1
+        addi    s1, s1, 28
+        beq     s4, s8, .LBB6_23
+.LBB6_15:
+        li      s2, 0
+        addi    s3, s4, 3
+        j       .LBB6_19
+.LBB6_16:
+        li      a2, 64
+.LBB6_17:
+.Ltmp439:
+        mv      a0, s2
+        mv      a1, s3
+        li      a3, 0
+        call    draw_glyph
+.Ltmp440:
+.LBB6_18:
+        addi    s2, s2, 1
+        beq     s2, s7, .LBB6_14
+.LBB6_19:
+        add     a0, s1, s2
+        lbu     a0, 0(a0)
+        beq     a0, s5, .LBB6_21
+        bne     a0, s6, .LBB6_18
+.LBB6_21:
+.Ltmp441:
+        beq     a0, s6, .LBB6_16
+        addi    a0, a0, -111
+        snez    a0, a0
+        addi    a0, a0, -1
+        andi    a2, a0, 65
+        j       .LBB6_17
+.Ltmp442:
+.LBB6_23:
+        call    draw_hud
+.Ltmp443:
+        mv      a0, s0
+        lw      ra, 44(sp)
+        lw      s0, 40(sp)
+        lw      s1, 36(sp)
+        lw      s2, 32(sp)
+        lw      s3, 28(sp)
+        lw      s4, 24(sp)
+        lw      s5, 20(sp)
+        lw      s6, 16(sp)
+        lw      s7, 12(sp)
+        lw      s8, 8(sp)
+        addi    sp, sp, 48
+.Ltmp444:
+        tail    begin_life
+.Ltmp445:
+.Lfunc_end6:
+        .size   start_level, .Lfunc_end6-start_level
+        .p2align        2
+        .type   begin_life,@function
+begin_life:
+.Lfunc_begin7:
+        addi    sp, sp, -48
+        sw      ra, 44(sp)
+        sw      s0, 40(sp)
+        sw      s1, 36(sp)
+        sw      s2, 32(sp)
+        sw      s3, 28(sp)
+        sw      s4, 24(sp)
+        sw      s5, 20(sp)
+        sw      s6, 16(sp)
+        sw      s7, 12(sp)
+        mv      s0, a0
+.Ltmp446:
+        lui     s2, %hi(.L_MergedGlobals.19)
+        addi    s2, s2, %lo(.L_MergedGlobals.19)
+        li      s3, 111
+        li      a0, 211
+        lui     s4, %hi(.L_MergedGlobals)
+        addi    s4, s4, %lo(.L_MergedGlobals)
+        li      s5, 1
+        sw      s5, 12(s4)
+        sw      s5, 20(s4)
+.Ltmp447:
+        lw      s6, 244(s2)
+.Ltmp448:
+        sw      s3, 108(s2)
+        sw      a0, 112(s2)
+        sw      zero, 116(s2)
+        sw      zero, 120(s2)
+        sw      zero, 124(s2)
+.Ltmp449:
+        addi    a0, s2, 208
+        lui     s1, %hi(ghost_start)
+        addi    s1, s1, %lo(ghost_start)
+        li      a2, 44
+        mv      a1, s1
+        call    memcpy
+.Ltmp450:
+        lw      s7, 288(s2)
+        sw      s6, 244(s2)
+        addi    a0, s2, 252
+        addi    a1, s1, 44
+        li      a2, 44
+        call    memcpy
+.Ltmp451:
+        lw      s6, 332(s2)
+        sw      s7, 288(s2)
+        addi    a0, s2, 296
+        addi    a1, s1, 88
+        li      a2, 44
+        call    memcpy
+.Ltmp452:
+        lw      s7, 376(s2)
+        sw      s6, 332(s2)
+        addi    a0, s2, 340
+        addi    a1, s1, 132
+        li      a2, 44
+        call    memcpy
+.Ltmp453:
+        lw      a0, 68(s2)
+        lw      a0, 52(a0)
+.Ltmp454:
+        sw      s7, 376(s2)
+.Ltmp455:
+        sw      zero, 80(s2)
+        lw      a1, 0(a0)
+        lw      a0, 32(s2)
+        sw      zero, 96(s2)
+        sw      zero, 60(s2)
+        sw      a1, 84(s2)
+        sw      zero, 88(s2)
+        sw      zero, 92(s2)
+        sw      s5, 16(s4)
+.Ltmp456:
+        blez    a0, .LBB7_7
+        slli    a0, a0, 3
+        addi    s1, s2, 148
+        li      s4, -31
+        li      s5, 27
+        add     s6, s1, a0
+        lui     s7, %hi(tiles)
+        addi    s7, s7, %lo(tiles)
+        j       .LBB7_3
+.LBB7_2:
+        addi    s1, s1, 8
+        beq     s1, s6, .LBB7_7
+.LBB7_3:
+        lw      a1, 0(s1)
+.Ltmp457:
+        addi    a0, a1, -34
+        bltu    a0, s4, .LBB7_2
+.Ltmp458:
+        lw      a0, -4(s1)
+.Ltmp459:
+        bltu    s5, a0, .LBB7_2
+        slli    a2, a1, 2
+        slli    a3, a1, 5
+        sub     a3, a3, a2
+        add     a2, s7, a0
+        add     a2, a3, a2
+        lbu     a2, -84(a2)
+.Ltmp460:
+        bne     a2, s3, .LBB7_2
+        li      a2, 65
+        li      a3, 0
+        call    draw_glyph
+.Ltmp461:
+        j       .LBB7_2
+.Ltmp462:
+.LBB7_7:
+        lui     a2, 4096
+.Ltmp463:
+        li      a0, 11
+        li      a1, 20
+        addi    s1, a2, -256
+        li      a2, 50
+        mv      a3, s1
+        call    draw_glyph
+.Ltmp464:
+        li      a0, 12
+        li      a1, 20
+        li      a2, 37
+        mv      a3, s1
+        call    draw_glyph
+.Ltmp465:
+        li      a0, 13
+        li      a1, 20
+        li      a2, 33
+        mv      a3, s1
+        call    draw_glyph
+.Ltmp466:
+        li      a0, 14
+        li      a1, 20
+        li      a2, 36
+        mv      a3, s1
+        call    draw_glyph
+.Ltmp467:
+        li      a0, 15
+        li      a1, 20
+        li      a2, 57
+        mv      a3, s1
+        call    draw_glyph
+.Ltmp468:
+        li      a0, 16
+        li      a1, 20
+        li      a2, 1
+        li      s3, 1
+        mv      a3, s1
+        call    draw_glyph
+.Ltmp469:
+        seqz    a0, s0
+        xori    a1, s0, 1
+        addi    a0, a0, -1
+        andi    a0, a0, 120
+        sw      a1, 100(s2)
+        sw      a0, 104(s2)
+        beqz    s0, .LBB7_9
+        lui     s0, 16
+.Ltmp470:
+        li      a0, 9
+        li      a1, 14
+        addi    s0, s0, -1
+        li      a2, 48
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp471:
+        li      a0, 10
+        li      a1, 14
+        li      a2, 44
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp472:
+        li      a0, 11
+        li      a1, 14
+        li      a2, 33
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp473:
+        li      a0, 12
+        li      a1, 14
+        li      a2, 57
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp474:
+        li      a0, 13
+        li      a1, 14
+        li      a2, 37
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp475:
+        li      a0, 14
+        li      a1, 14
+        li      a2, 50
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp476:
+        li      a0, 15
+        li      a1, 14
+        li      a2, 0
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp477:
+        li      a0, 16
+        li      a1, 14
+        li      a2, 47
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp478:
+        li      a0, 17
+        li      a1, 14
+        li      a2, 46
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp479:
+        li      a0, 18
+        li      a1, 14
+        li      a2, 37
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp480:
+.LBB7_9:
+        sw      s3, 52(s2)
+        sw      zero, 56(s2)
+.Ltmp481:
+        lw      ra, 44(sp)
+        lw      s0, 40(sp)
+        lw      s1, 36(sp)
+        lw      s2, 32(sp)
+        lw      s3, 28(sp)
+        lw      s4, 24(sp)
+        lw      s5, 20(sp)
+        lw      s6, 16(sp)
+        lw      s7, 12(sp)
+        addi    sp, sp, 48
+        ret
+.Ltmp482:
+.Lfunc_end7:
+        .size   begin_life, .Lfunc_end7-begin_life
+        .p2align        2
+        .type   check_collisions,@function
+check_collisions:
+.Lfunc_begin8:
+        addi    sp, sp, -16
+        sw      ra, 12(sp)
+        sw      s0, 8(sp)
+        sw      s1, 4(sp)
+.Ltmp483:
+        lui     s0, %hi(.L_MergedGlobals.19)
+        addi    s0, s0, %lo(.L_MergedGlobals.19)
+        lw      a3, 220(s0)
+        lw      a1, 108(s0)
+        lw      a0, 112(s0)
+        li      a2, 2
+        bne     a3, a2, .LBB8_4
+        lw      a3, 208(s0)
+        xor     a4, a3, a1
+        li      a3, 7
+        bltu    a3, a4, .LBB8_4
+        lw      a4, 212(s0)
+        xor     a4, a4, a0
+        bltu    a3, a4, .LBB8_4
+        addi    s1, s0, 208
+        lw      a0, 16(s1)
+        bnez    a0, .LBB8_12
+        j       .LBB8_17
+.LBB8_4:
+        lw      a3, 264(s0)
+        bne     a3, a2, .LBB8_8
+        lw      a2, 252(s0)
+        xor     a2, a2, a1
+        li      a3, 7
+        bltu    a3, a2, .LBB8_8
+        lw      a2, 256(s0)
+        xor     a2, a2, a0
+        li      a3, 8
+        bgeu    a2, a3, .LBB8_8
+        addi    s1, s0, 252
+        lw      a0, 16(s1)
+        bnez    a0, .LBB8_12
+        j       .LBB8_17
+.LBB8_8:
+        lw      a3, 308(s0)
+        li      a2, 2
+        bne     a3, a2, .LBB8_13
+        lw      a3, 296(s0)
+        xor     a3, a3, a1
+        li      a4, 7
+        bltu    a4, a3, .LBB8_13
+        lw      a3, 300(s0)
+        xor     a3, a3, a0
+        li      a4, 8
+        bgeu    a3, a4, .LBB8_13
+        addi    s1, s0, 296
+        lw      a0, 16(s1)
+        beqz    a0, .LBB8_17
+.LBB8_12:
+.Ltmp484:
+        lw      a0, 92(s0)
+        li      a1, 100
+        addi    a0, a0, 1
+        sw      a0, 92(s0)
+        sll     a0, a1, a0
+        call    add_score
+.Ltmp485:
+        li      a0, 3
+        sw      a0, 12(s1)
+        sw      zero, 16(s1)
+        sw      s1, 132(s0)
+        j       .LBB8_18
+.Ltmp486:
+.LBB8_13:
+        lw      a3, 352(s0)
+        bne     a3, a2, .LBB8_19
+        lw      a2, 340(s0)
+        xor     a1, a2, a1
+        li      a2, 7
+        bltu    a2, a1, .LBB8_19
+        lw      a1, 344(s0)
+        xor     a0, a1, a0
+        li      a1, 8
+        bgeu    a0, a1, .LBB8_19
+        addi    s1, s0, 340
+        lw      a0, 16(s1)
+        bnez    a0, .LBB8_12
+.LBB8_17:
+        li      a0, 4
+.LBB8_18:
+        sw      a0, 52(s0)
+        sw      zero, 56(s0)
+.LBB8_19:
+        lw      ra, 12(sp)
+        lw      s0, 8(sp)
+        lw      s1, 4(sp)
+        addi    sp, sp, 16
+        ret
+.Ltmp487:
+.Lfunc_end8:
+        .size   check_collisions, .Lfunc_end8-check_collisions
+        .p2align        2
+        .type   add_score,@function
+add_score:
+.Lfunc_begin9:
+        addi    sp, sp, -48
+        sw      ra, 44(sp)
+        sw      s0, 40(sp)
+        sw      s1, 36(sp)
+        sw      s2, 32(sp)
+        sw      s3, 28(sp)
+        sw      s4, 24(sp)
+        sw      s5, 20(sp)
+        sw      s6, 16(sp)
+        sw      s7, 12(sp)
+        sw      s8, 8(sp)
+        sw      s9, 4(sp)
+.Ltmp488:
+        lui     s4, %hi(.L_MergedGlobals.19)
+        addi    s4, s4, %lo(.L_MergedGlobals.19)
+        lw      s3, 44(s4)
+        lbu     a1, 8(s4)
+        add     s3, s3, a0
+        sw      s3, 44(s4)
+        bnez    a1, .LBB9_15
+        lui     a0, 2
+        addi    a0, a0, 1808
+        blt     s3, a0, .LBB9_15
+        li      a0, 1
+        lw      s8, 28(s4)
+        lui     s6, %hi(display)
+        addi    s6, s6, %lo(display)
+        lui     a1, 60
+        lui     s1, %hi(maze_image)
+        addi    s1, s1, %lo(maze_image)
+        lui     s7, %hi(background)
+        addi    s7, s7, %lo(background)
+        lui     s9, 63
+        addi    s2, a1, -2048
+        add     s0, s6, s2
+        add     s1, s1, s2
+        add     s2, s7, s2
+        addi    s5, s8, 1
+        sb      a0, 8(s4)
+        sw      s5, 28(s4)
+        add     s9, s6, s9
+.LBB9_3:
+.Ltmp489:
+        li      a2, 448
+        mv      a0, s0
+        mv      a1, s1
+        call    memcpy
+.Ltmp490:
+        li      a2, 448
+        mv      a0, s2
+        mv      a1, s1
+        call    memcpy
+.Ltmp491:
+        addi    s0, s0, 896
+        addi    s1, s1, 896
+        addi    s2, s2, 896
+        bne     s0, s9, .LBB9_3
+.Ltmp492:
+        li      a0, 5
+        blt     s5, a0, .LBB9_6
+        li      s5, 5
+.LBB9_6:
+        bltz    s8, .LBB9_15
+        li      a0, 0
+        lui     a2, 60
+        lui     a1, %hi(sprite_sheet)
+        addi    a1, a1, %lo(sprite_sheet)
+        addi    a3, a2, -1984
+        addi    a2, a1, 192
+        add     s6, s6, a3
+        add     a3, s7, a3
+        li      a4, 16
+        j       .LBB9_9
+.LBB9_8:
+        addi    a0, a0, 1
+        addi    s6, s6, 64
+        addi    a3, a3, 64
+        beq     a0, s5, .LBB9_15
+.LBB9_9:
+        li      a5, 0
+        mv      a6, a2
+        mv      a7, a3
+        mv      t0, s6
+        j       .LBB9_11
+.LBB9_10:
+.Ltmp493:
+        addi    a5, a5, 1
+        addi    t0, t0, 896
+        addi    a7, a7, 896
+        addi    a6, a6, 1024
+        beq     a5, a4, .LBB9_8
+.LBB9_11:
+        slli    t1, a5, 10
+        add     t1, t1, a1
+        addi    t1, t1, 256
+        mv      t2, a6
+        mv      t3, a7
+        mv      t4, t0
+        j       .LBB9_13
+.LBB9_12:
+        addi    t4, t4, 4
+        addi    t2, t2, 4
+        addi    t3, t3, 4
+        beq     t2, t1, .LBB9_10
+.LBB9_13:
+        lw      t5, 0(t2)
+        beqz    t5, .LBB9_12
+        sw      t5, 0(t3)
+        sw      t5, 0(t4)
+        j       .LBB9_12
+.Ltmp494:
+.LBB9_15:
+        lw      a0, 48(s4)
+        bge     a0, s3, .LBB9_22
+        li      s1, 0
+        sw      s3, 48(s4)
+        li      s2, 8
+        lui     a0, 419430
+        lui     s0, 4096
+        addi    s4, a0, 1639
+        addi    s0, s0, -1
+        li      s5, 1
+        mv      s6, s3
+        j       .LBB9_19
+.LBB9_17:
+.Ltmp495:
+        mulh    a0, s6, s4
+        srli    a1, a0, 31
+        srai    a0, a0, 2
+        add     a0, a0, a1
+        slli    a1, a0, 1
+        slli    a2, a0, 3
+        add     a1, a2, a1
+        sub     a2, s6, a1
+        addi    a2, a2, 16
+        addi    s1, s1, 1
+        mv      s6, a0
+.LBB9_18:
+        addi    a0, s2, 8
+        li      a1, 1
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp496:
+        addi    s2, s2, -1
+        bgeu    s5, s2, .LBB9_22
+.LBB9_19:
+        bnez    s6, .LBB9_17
+        bge     s5, s1, .LBB9_17
+        li      s6, 0
+        li      a2, 0
+        j       .LBB9_18
+.Ltmp497:
+.LBB9_22:
+        li      s1, 0
+        li      s2, 8
+        lui     a0, 419430
+        lui     s0, 4096
+        addi    s4, a0, 1639
+        addi    s0, s0, -1
+        li      s5, 1
+        j       .LBB9_25
+.LBB9_23:
+.Ltmp498:
+        mulh    a0, s3, s4
+        srli    a1, a0, 31
+        srai    a0, a0, 2
+        add     a0, a0, a1
+        slli    a1, a0, 1
+        slli    a2, a0, 3
+        add     a1, a2, a1
+        sub     a2, s3, a1
+        addi    a2, a2, 16
+        addi    s1, s1, 1
+        mv      s3, a0
+.LBB9_24:
+        addi    a0, s2, -2
+        li      a1, 1
+        mv      a3, s0
+        call    draw_glyph
+.Ltmp499:
+        addi    s2, s2, -1
+        bgeu    s5, s2, .LBB9_28
+.LBB9_25:
+        bnez    s3, .LBB9_23
+        bge     s5, s1, .LBB9_23
+        li      s3, 0
+        li      a2, 0
+        j       .LBB9_24
+.Ltmp500:
+.LBB9_28:
+        lw      ra, 44(sp)
+        lw      s0, 40(sp)
+        lw      s1, 36(sp)
+        lw      s2, 32(sp)
+        lw      s3, 28(sp)
+        lw      s4, 24(sp)
+        lw      s5, 20(sp)
+        lw      s6, 16(sp)
+        lw      s7, 12(sp)
+        lw      s8, 8(sp)
+        lw      s9, 4(sp)
+        addi    sp, sp, 48
+        ret
+.Ltmp501:
+.Lfunc_end9:
+        .size   add_score, .Lfunc_end9-add_score
+        .type   display,@object
+        .bss
+        .globl  display
+        .p2align        2, 0x0
+display:
+        .zero   258048
+        .size   display, 258048
+        .type   load_assets.maze_txt,@object
+        .section        .rodata,"a",@progbits
+load_assets.maze_txt:
+        .asciz  "assets/maze.txt"
+        .size   load_assets.maze_txt, 16
+        .type   load_assets.maze_bmp,@object
+load_assets.maze_bmp:
+        .asciz  "assets/maze.bmp"
+        .size   load_assets.maze_bmp, 16
+        .type   load_assets.sprites,@object
+load_assets.sprites:
+        .asciz  "assets/sprites.bmp"
+        .size   load_assets.sprites, 19
+        .type   load_assets.tiles_bmp,@object
+load_assets.tiles_bmp:
+        .asciz  "assets/tiles.bmp"
+        .size   load_assets.tiles_bmp, 17
+        .type   maze_image,@object
+        .local  maze_image
+        .comm   maze_image,258048,4
+        .type   sprite_sheet,@object
+        .local  sprite_sheet
+        .comm   sprite_sheet,147456,4
+        .type   tile_sheet,@object
+        .local  tile_sheet
+        .comm   tile_sheet,20480,4
+        .type   file_buffer,@object
+        .local  file_buffer
+        .comm   file_buffer,262144,1
+        .type   .L.str.1,@object
+        .section        .rodata.str1.1,"aMS",@progbits,1
+.L.str.1:
+        .asciz  "the maze must be 31 lines of 28 characters."
+        .size   .L.str.1, 44
+        .type   .L.str.2,@object
+.L.str.2:
+        .asciz  "pacman: %s: every line must be 28 characters long; this one is not: line %d\n"
+        .size   .L.str.2, 77
+        .type   .L.str.3,@object
+.L.str.3:
+        .asciz  "pacman: %s: %s\n"
+        .size   .L.str.3, 16
+        .type   .L.str.4,@object
+.L.str.4:
+        .asciz  "rb"
+        .size   .L.str.4, 3
+        .type   .L.str.5,@object
+.L.str.5:
+        .asciz  "cannot open it. It has to be a File of this Project."
+        .size   .L.str.5, 53
+        .type   .L.str.6,@object
+.L.str.6:
+        .asciz  "it is larger than the 256 KB the program reads."
+        .size   .L.str.6, 48
+        .type   .L.str.7,@object
+.L.str.7:
+        .asciz  "not a BMP picture."
+        .size   .L.str.7, 19
+        .type   .L.str.8,@object
+.L.str.8:
+        .asciz  "the BMP header is not one this program reads (save it as a plain 24 bit BMP)."
+        .size   .L.str.8, 78
+        .type   .L.str.9,@object
+.L.str.9:
+        .asciz  "pacman: %s: the picture has the wrong size. It must be %d by %d pixels.\n"
+        .size   .L.str.9, 73
+        .type   .L.str.10,@object
+.L.str.10:
+        .asciz  "save it as a 24 or 32 bit BMP, without compression."
+        .size   .L.str.10, 52
+        .type   .L.str.11,@object
+.L.str.11:
+        .asciz  "the file ends before its last row of pixels."
+        .size   .L.str.11, 45
+        .type   wall_pixels,@object
+        .local  wall_pixels
+        .comm   wall_pixels,131072,4
+        .type   tiles,@object
+        .local  tiles
+        .comm   tiles,868,1
+        .type   background,@object
+        .local  background
+        .comm   background,258048,4
+        .type   level_table,@object
+        .section        .rodata,"a",@progbits
+        .p2align        2, 0x0
+level_table:
+        .word   0
+        .word   100
+        .word   256
+        .word   240
+        .word   128
+        .word   20
+        .word   256
+        .word   10
+        .word   272
+        .word   288
+        .word   160
+        .word   360
+        .word   5
+        .word   modes_level1
+        .word   30
+        .word   60
+        .word   1
+        .word   300
+        .word   288
+        .word   272
+        .word   144
+        .word   30
+        .word   288
+        .word   15
+        .word   304
+        .word   304
+        .word   176
+        .word   300
+        .word   5
+        .word   modes_level2
+        .word   0
+        .word   50
+        .word   2
+        .word   500
+        .word   288
+        .word   272
+        .word   144
+        .word   40
+        .word   288
+        .word   20
+        .word   304
+        .word   304
+        .word   176
+        .word   240
+        .word   5
+        .word   modes_level2
+        .word   0
+        .word   0
+        .word   2
+        .word   500
+        .word   288
+        .word   272
+        .word   144
+        .word   40
+        .word   288
+        .word   20
+        .word   304
+        .word   304
+        .word   176
+        .word   180
+        .word   5
+        .word   modes_level2
+        .word   0
+        .word   0
+        .word   3
+        .word   700
+        .word   320
+        .word   304
+        .word   160
+        .word   40
+        .word   320
+        .word   20
+        .word   336
+        .word   320
+        .word   192
+        .word   120
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   3
+        .word   700
+        .word   320
+        .word   304
+        .word   160
+        .word   50
+        .word   320
+        .word   25
+        .word   336
+        .word   320
+        .word   192
+        .word   300
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   4
+        .word   1000
+        .word   320
+        .word   304
+        .word   160
+        .word   50
+        .word   320
+        .word   25
+        .word   336
+        .word   320
+        .word   192
+        .word   120
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   4
+        .word   1000
+        .word   320
+        .word   304
+        .word   160
+        .word   50
+        .word   320
+        .word   25
+        .word   336
+        .word   320
+        .word   192
+        .word   120
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   5
+        .word   2000
+        .word   320
+        .word   304
+        .word   160
+        .word   60
+        .word   320
+        .word   30
+        .word   336
+        .word   320
+        .word   192
+        .word   60
+        .word   3
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   5
+        .word   2000
+        .word   320
+        .word   304
+        .word   160
+        .word   60
+        .word   320
+        .word   30
+        .word   336
+        .word   320
+        .word   192
+        .word   300
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   6
+        .word   3000
+        .word   320
+        .word   304
+        .word   160
+        .word   60
+        .word   320
+        .word   30
+        .word   336
+        .word   320
+        .word   192
+        .word   120
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   6
+        .word   3000
+        .word   320
+        .word   304
+        .word   160
+        .word   80
+        .word   320
+        .word   40
+        .word   336
+        .word   320
+        .word   192
+        .word   60
+        .word   3
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   80
+        .word   320
+        .word   40
+        .word   336
+        .word   320
+        .word   192
+        .word   60
+        .word   3
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   80
+        .word   320
+        .word   40
+        .word   336
+        .word   320
+        .word   192
+        .word   180
+        .word   5
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   100
+        .word   320
+        .word   50
+        .word   336
+        .word   320
+        .word   192
+        .word   60
+        .word   3
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   100
+        .word   320
+        .word   50
+        .word   336
+        .word   320
+        .word   192
+        .word   60
+        .word   3
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   100
+        .word   320
+        .word   50
+        .word   336
+        .word   320
+        .word   192
+        .word   0
+        .word   0
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   100
+        .word   320
+        .word   50
+        .word   336
+        .word   320
+        .word   192
+        .word   60
+        .word   3
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   120
+        .word   320
+        .word   60
+        .word   336
+        .word   320
+        .word   192
+        .word   0
+        .word   0
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   320
+        .word   304
+        .word   160
+        .word   120
+        .word   320
+        .word   60
+        .word   336
+        .word   320
+        .word   192
+        .word   0
+        .word   0
+        .word   modes_level5
+        .word   0
+        .word   0
+        .word   7
+        .word   5000
+        .word   288
+        .word   304
+        .word   160
+        .word   120
+        .word   320
+        .word   60
+        .word   336
+        .word   320
+        .word   192
+        .word   0
+        .word   0
+        .word   modes_level5
+        .word   0
+        .word   0
+        .size   level_table, 1344
+        .type   modes_level1,@object
+        .p2align        2, 0x0
+modes_level1:
+        .word   420
+        .word   1200
+        .word   420
+        .word   1200
+        .word   300
+        .word   1200
+        .word   300
+        .size   modes_level1, 28
+        .type   modes_level2,@object
+        .p2align        2, 0x0
+modes_level2:
+        .word   420
+        .word   1200
+        .word   420
+        .word   1200
+        .word   300
+        .word   61980
+        .word   1
+        .size   modes_level2, 28
+        .type   modes_level5,@object
+        .p2align        2, 0x0
+modes_level5:
+        .word   300
+        .word   1200
+        .word   300
+        .word   1200
+        .word   300
+        .word   62220
+        .word   1
+        .size   modes_level5, 28
+        .type   ghost_start,@object
+        .p2align        2, 0x0
+ghost_start:
+        .word   111
+        .word   115
+        .word   1
+        .word   2
+        .word   0
+        .word   0
+        .word   111
+        .word   25
+        .word   0
+        .word   0
+        .word   2
+        .word   111
+        .word   139
+        .word   3
+        .word   0
+        .word   0
+        .word   0
+        .word   111
+        .word   2
+        .word   0
+        .word   0
+        .word   3
+        .word   95
+        .word   139
+        .word   2
+        .word   0
+        .word   0
+        .word   0
+        .word   95
+        .word   27
+        .word   35
+        .word   0
+        .word   4
+        .word   127
+        .word   139
+        .word   2
+        .word   0
+        .word   0
+        .word   0
+        .word   127
+        .word   0
+        .word   35
+        .word   0
+        .word   5
+        .size   ghost_start, 176
+        .type   dir_dx,@object
+        .section        .rodata.cst16,"aM",@progbits,16
+        .p2align        2, 0x0
+dir_dx:
+        .word   1
+        .word   4294967295
+        .word   0
+        .word   0
+        .size   dir_dx, 16
+        .type   dir_dy,@object
+        .p2align        2, 0x0
+dir_dy:
+        .word   0
+        .word   0
+        .word   4294967295
+        .word   1
+        .size   dir_dy, 16
+        .type   choice_order,@object
+        .section        .rodata.str4.4,"aMS",@progbits,4
+        .p2align        2, 0x0
+choice_order:
+        .word   2
+        .word   1
+        .word   3
+        .word   0
+        .size   choice_order, 16
+        .type   pacman_frame.mouth,@object
+        .p2align        2, 0x0
+pacman_frame.mouth:
+        .word   1
+        .word   2
+        .word   1
+        .word   0
+        .size   pacman_frame.mouth, 16
+        .type   .Lstr,@object
+        .section        .rodata.str1.1,"aMS",@progbits,1
+.Lstr:
+        .asciz  "PAC-MAN for RISC-V, in C\nClick the Screen so it gets the keyboard, then press space.\nMove with W A S D (Z Q S D and 8 4 5 6 work too), P pauses.\nThe arrow keys do not type characters, so the game cannot see them."
+        .size   .Lstr, 213
+        .type   .Lswitch.table.main,@object
+        .section        .rodata,"a",@progbits
+        .p2align        2, 0x0
+.Lswitch.table.main:
+        .word   128
+        .word   160
+        .zero   4
+        .word   384
+        .word   384
+        .size   .Lswitch.table.main, 20
+        .type   .L_MergedGlobals,@object
+        .data
+        .p2align        2, 0x0
+.L_MergedGlobals:
+        .word   625341585
+        .word   1
+        .word   1
+        .word   1
+        .word   1
+        .word   1
+        .size   .L_MergedGlobals, 24
+        .type   .L_MergedGlobals.19,@object
+        .local  .L_MergedGlobals.19
+        .comm   .L_MergedGlobals.19,1444,4
+rng_state = .L_MergedGlobals
+        .size   rng_state, 4
+level = .L_MergedGlobals+4
+        .size   level, 4
+oneup_lit = .L_MergedGlobals+8
+        .size   oneup_lit, 4
+pac_want = .L_MergedGlobals+12
+        .size   pac_want, 4
+energizers_lit = .L_MergedGlobals+16
+        .size   energizers_lit, 4
+pac_dir = .L_MergedGlobals+20
+        .size   pac_dir, 4
+key_pressed = .L_MergedGlobals.19
+        .size   key_pressed, 1
+pause_requested = .L_MergedGlobals.19+4
+        .size   pause_requested, 1
+extra_life_given = .L_MergedGlobals.19+8
+        .size   extra_life_given, 1
+global_mode = .L_MergedGlobals.19+12
+        .size   global_mode, 1
+elroy_enabled = .L_MergedGlobals.19+16
+        .size   elroy_enabled, 1
+dots_total = .L_MergedGlobals.19+20
+        .size   dots_total, 4
+wall_pixel_count = .L_MergedGlobals.19+24
+        .size   wall_pixel_count, 4
+lives = .L_MergedGlobals.19+28
+        .size   lives, 4
+energizer_count = .L_MergedGlobals.19+32
+        .size   energizer_count, 4
+dots_left = .L_MergedGlobals.19+36
+        .size   dots_left, 4
+dots_eaten = .L_MergedGlobals.19+40
+        .size   dots_eaten, 4
+score = .L_MergedGlobals.19+44
+        .size   score, 4
+high_score = .L_MergedGlobals.19+48
+        .size   high_score, 4
+game_state = .L_MergedGlobals.19+52
+        .size   game_state, 4
+state_timer = .L_MergedGlobals.19+56
+        .size   state_timer, 4
+paused = .L_MergedGlobals.19+60
+        .size   paused, 4
+frame_count = .L_MergedGlobals.19+64
+        .size   frame_count, 4
+level_info = .L_MergedGlobals.19+68
+        .size   level_info, 4
+fruit_score_timer = .L_MergedGlobals.19+72
+        .size   fruit_score_timer, 4
+fruit_timer = .L_MergedGlobals.19+76
+        .size   fruit_timer, 4
+mode_index = .L_MergedGlobals.19+80
+        .size   mode_index, 4
+mode_timer = .L_MergedGlobals.19+84
+        .size   mode_timer, 4
+dot_timer = .L_MergedGlobals.19+88
+        .size   dot_timer, 4
+ghosts_eaten = .L_MergedGlobals.19+92
+        .size   ghosts_eaten, 4
+fright_timer = .L_MergedGlobals.19+96
+        .size   fright_timer, 4
+show_actors = .L_MergedGlobals.19+100
+        .size   show_actors, 4
+ready_intro = .L_MergedGlobals.19+104
+        .size   ready_intro, 4
+pac_x = .L_MergedGlobals.19+108
+        .size   pac_x, 4
+pac_y = .L_MergedGlobals.19+112
+        .size   pac_y, 4
+pac_anim = .L_MergedGlobals.19+116
+        .size   pac_anim, 4
+pac_stall = .L_MergedGlobals.19+120
+        .size   pac_stall, 4
+pac_acc = .L_MergedGlobals.19+124
+        .size   pac_acc, 4
+global_dots = .L_MergedGlobals.19+128
+        .size   global_dots, 4
+eaten_ghost = .L_MergedGlobals.19+132
+        .size   eaten_ghost, 4
+next_deadline = .L_MergedGlobals.19+136
+        .size   next_deadline, 4
+deadline_thirds = .L_MergedGlobals.19+140
+        .size   deadline_thirds, 4
+energizers = .L_MergedGlobals.19+144
+        .size   energizers, 64
+ghosts = .L_MergedGlobals.19+208
+        .size   ghosts, 176
+slots = .L_MergedGlobals.19+384
+        .size   slots, 192
+maze_layout = .L_MergedGlobals.19+576
+        .size   maze_layout, 868

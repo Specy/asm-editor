@@ -7,6 +7,7 @@ import {
     type Optimization,
     type SourceCompiler
 } from './records'
+import { compilationInputs } from './compilationInputs'
 import {
     compilerExplorerDriver,
     SourceCompilationError,
@@ -58,16 +59,12 @@ export async function compileProjectSource(
     )
     const outputPath = previous?.outputPath ?? generatedAssemblyPath(sourcePath, target)
     const originalOutput = fileFingerprint(files[outputPath])
-    // Every submitted header can affect preprocessing, even if it emits no mapped instructions.
+    // Every submitted File can affect preprocessing, even if it emits no mapped instructions, and
+    // a File that starts or stops being reached changes what would be submitted.
     const submitted = (current: typeof files) =>
-        Object.keys(current)
-            .filter(
-                (path) =>
-                    path === sourcePath ||
-                    (/\.(h|hpp|hh|hxx|inc)$/i.test(path) && current[path].encoding === 'plain')
-            )
-            .sort()
-            .map((path) => `${path}\0${fileFingerprint(current[path])}`)
+        Object.entries(compilationInputs(sourcePath, current))
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([path, fingerprint]) => `${path}\0${fingerprint}`)
             .join('\n')
     const originalInputs = submitted(files)
     const assertCurrent = () => {

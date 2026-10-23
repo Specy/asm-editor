@@ -65,6 +65,10 @@ const data = {
     display: {
         sizes: display.MARS_DISPLAY_SIZE_CHOICES,
         units: display.MARS_UNIT_SIZE_CHOICES,
+        sizeMin: display.DISPLAY_SIZE_MIN,
+        sizeMax: display.DISPLAY_SIZE_MAX,
+        unitMin: display.UNIT_SIZE_MIN,
+        unitMax: display.UNIT_SIZE_MAX,
         //GNU-profile static data can grow past the default heap; the Core moves the heap after it.
         staticData: address('static data'),
         staticDataEnd: 0x10400000

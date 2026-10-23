@@ -22,7 +22,7 @@ export function createCompileSourceTool(context: DefaultCodingAgentToolContext) 
             : 'the generated assembly becomes a program and is selected'
     return tool({
         name: 'compile_source',
-        description: `Compiles one C/C++ source file and local headers through Compiler Explorer into assembly. When the source defines main, ${becomes}; a recompile selects the program it already is, and a source without main (a companion file) leaves the programs alone. Preserves compilation records and source maps. Requires internet access. Call compile afterwards to build the selected program. Recompile after source or header edits.`,
+        description: `Compiles one C/C++ source file, with the Project files its quoted includes reach (headers or .c files), through Compiler Explorer into assembly. When the source defines main, ${becomes}; a recompile selects the program it already is, and a source without main (a companion file) leaves the programs alone. Preserves compilation records and source maps. Requires internet access. Call compile afterwards to build the selected program. Recompile after source or header edits.`,
         schema: z.object({
             path: z
                 .string()

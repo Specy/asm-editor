@@ -62,6 +62,33 @@ describe('compilation freshness after include resolution changes', () => {
             compilationStatus(macroRecord, { ...computed, 'unused.h': text('') }, 'RISC-V').stale
         ).toBe(true)
     })
+    it('follows a quoted include of a .c File and a __has_include like any header', () => {
+        const original: ProjectFiles = {
+            ...files,
+            'src/main.c': text(
+                '#include "parts/video.c"\n#if __has_include("options.h")\n#endif\nint main(void) {}'
+            ),
+            'src/parts/video.c': text('int video;'),
+            'other.c': text('int main(void) { return 1; }')
+        }
+        const compiled = { ...record, inputs: compilationInputs(record.sourcePath, original) }
+        expect(Object.keys(compiled.inputs).sort()).toEqual(['src/main.c', 'src/parts/video.c'])
+        expect(
+            compilationStatus(
+                compiled,
+                { ...original, 'src/parts/video.c': text('int video = 1;') },
+                'RISC-V'
+            ).stale
+        ).toBe(true)
+        //the File __has_include asked about appearing changes the answer
+        expect(
+            compilationStatus(compiled, { ...original, 'src/options.h': text('') }, 'RISC-V').stale
+        ).toBe(true)
+        //another Program's source is not an input
+        expect(
+            compilationStatus(compiled, { ...original, 'other.c': text('') }, 'RISC-V').stale
+        ).toBe(false)
+    })
     it('respects the source directory search path inside nested headers', () => {
         const original = {
             ...files,

@@ -15,8 +15,10 @@ import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts
 import { normalizeMarsDisplay } from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
+    assembledCore,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
+    resolveScreenLabel,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '#lib/languages/mars/screenDirective.ts'
@@ -83,7 +85,13 @@ function runtimeLink(sources: BuildSources, target: MarsTarget): RiscVLink {
     }
 }
 
-function resolveLabelAddress(
+/**
+ * The address of a `@screen base=` name the analyzed program's symbol table does not hold, such as
+ * an `.eqv` name: the program assembled once more with one extra `.word <name>` at a fixed address,
+ * that word read back. A labelled base is read from the analysis's own assembly instead
+ * (`resolveScreenLabel`), which made every analysis of one assemble the program twice.
+ */
+function probeLabelAddress(
     files: Record<string, string>,
     entry: string,
     target: MarsTarget,
@@ -93,13 +101,7 @@ function resolveLabelAddress(
 ): number | null {
     try {
         const probe = makeCore(
-            {
-                ...files,
-                [entry]:
-                    assemblerProfile === 'gnu-compiler-v1'
-                        ? (files[entry] ?? '')
-                        : screenLabelProbeSource(files[entry] ?? '', label)
-            },
+            { ...files, [entry]: screenLabelProbeSource(files[entry] ?? '', label) },
             entry,
             target,
             assemblerProfile,
@@ -107,10 +109,6 @@ function resolveLabelAddress(
         )
         const result = probe.assemble()
         if (result.errors.some((error) => !error.isWarning)) return null
-        if (assemblerProfile === 'gnu-compiler-v1' && 'getAddressOfLabel' in probe) {
-            const address = probe.getAddressOfLabel(label)
-            return address === -1 ? null : address >>> 0
-        }
         return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
     } catch {
         return null
@@ -231,10 +229,18 @@ export function analyzeMarsProject(
             file.encoding !== 'plain' ? 'binary' : reached.has(path) ? 'assembled' : 'not-reachable'
     }
 
+    //read after everything else this analysis takes from its Core, since a probe assembles another
     const screenDiagnostics: Diagnostic[] = applyScreenDirective(
         sourceText(sources),
         normalizeMarsDisplay(undefined),
-        (label) => resolveLabelAddress(files, sources.entry, target, label, profile, link)
+        (label) =>
+            resolveScreenLabel(assembledCore(core, result), label, () =>
+                //GNU assembly cannot place a probe word at a fixed address, and its symbol table
+                //is all a probe would read
+                profile === 'gnu-compiler-v1'
+                    ? null
+                    : probeLabelAddress(files, sources.entry, target, label, profile, link)
+            )
     ).diagnostics.map((diagnostic) => ({ ...diagnostic, file: sources.entry }))
     screenDiagnostics.push(...ignoredIncludedScreenDiagnostics(files, sources.entry, reached))
 

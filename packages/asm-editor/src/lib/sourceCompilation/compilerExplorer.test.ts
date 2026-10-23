@@ -407,6 +407,49 @@ describe('hosted compilation', () => {
         }
     )
 
+    it('sends what the quoted includes reach, a .c File included, and nothing else', () => {
+        const text = (content: string) => ({ encoding: 'plain' as const, content })
+        const request = createCompilerRequest({
+            ...hosted(),
+            sourcePath: 'c/pacman.c',
+            files: {
+                'c/pacman.c': text('#include "video.c"\n#if __has_include("debug.h")\n#endif\n'),
+                'c/video.c': text('#include "../shared/draw.inc"\nint video;\n'),
+                'shared/draw.inc': text('int draw;\n'),
+                'c/debug.h': text(''),
+                //another Program's source, a header nothing includes and a picture stay home
+                'c/other.c': text('int main(void) { return 0; }\n'),
+                'unused.h': text('#error not sent\n'),
+                'sprites.bmp': { encoding: 'base64', content: 'Qk0=' }
+            }
+        })
+        expect(request.body.files.map((file) => file.filename).sort()).toEqual([
+            'project/c/debug.h',
+            'project/c/pacman.c',
+            'project/c/video.c',
+            'project/shared/draw.inc'
+        ])
+    })
+
+    it.skipIf(!HOST_GCC)('includes a .c File as text, as GCC does', () => {
+        const text = (content: string) => ({ encoding: 'plain' as const, content })
+        const files = {
+            'c/pacman.c': text('#include "parts/video.c"\nint drawn = draw(2);\n'),
+            'c/parts/video.c': text('static int draw(int x) { return x * SCALE; }\n'),
+            'c/parts/scale.h': text('#define SCALE 3\n'),
+            'c/defines.h': text('#define SCALE 7\n')
+        }
+        //video.c does not include scale.h: SCALE is undefined there, and stays so in the output
+        const request = createCompilerRequest({ ...hosted(), sourcePath: 'c/pacman.c', files })
+        const output = preprocess(request)
+        expect(output).toContain('static int draw(int x) { return x * SCALE; }')
+        expect(output).toContain('int drawn = draw(2);')
+        expect(Object.keys(compilationInputs('c/pacman.c', files)).sort()).toEqual([
+            'c/pacman.c',
+            'c/parts/video.c'
+        ])
+    })
+
     it.skipIf(!HOST_GCC)(
         'keeps a Project source named example.c separate from the service input',
         () => {
@@ -1030,10 +1073,10 @@ describe('x86 compilation', () => {
         )
         //the translation reads GCC's raw output, its .file and .loc directives included
         expect(Object.values(c.body.options.filters).every((filter) => filter === false)).toBe(true)
+        //src/values.h is a Project header the source does not include, so it is not sent
         expect(c.body.files.map((file) => file.filename).sort()).toEqual(
             [
                 'project/src/main.c',
-                'project/src/values.h',
                 ...Object.keys(headers).map((name) => `sysroot/include/${name}`)
             ].sort()
         )
@@ -1059,7 +1102,6 @@ describe('x86 compilation', () => {
         expect(c.body.files.map((file) => file.filename).sort()).toEqual(
             [
                 'project/src/main.c',
-                'project/src/values.h',
                 'sysroot/include/sim.h',
                 ...Object.keys(headers).map((name) => `sysroot/include/${name}`)
             ].sort()

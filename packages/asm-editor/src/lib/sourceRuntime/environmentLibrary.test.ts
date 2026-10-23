@@ -31,9 +31,13 @@ import {
     MARS_TRANSMITTER_DATA
 } from '#lib/languages/mars/MarsDevices.ts'
 import {
+    DISPLAY_SIZE_MAX,
+    DISPLAY_SIZE_MIN,
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
-    MARS_UNIT_SIZE_CHOICES
+    MARS_UNIT_SIZE_CHOICES,
+    UNIT_SIZE_MAX,
+    UNIT_SIZE_MIN
 } from '#lib/languages/mars/marsDisplay.ts'
 import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
 import { makeRiscVCore } from '#lib/languages/RISC-V/RISC-V-core.ts'
@@ -66,6 +70,10 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
     display: {
         sizes: MARS_DISPLAY_SIZE_CHOICES,
         units: MARS_UNIT_SIZE_CHOICES,
+        sizeMin: DISPLAY_SIZE_MIN,
+        sizeMax: DISPLAY_SIZE_MAX,
+        unitMin: UNIT_SIZE_MIN,
+        unitMax: UNIT_SIZE_MAX,
         staticData: address('static data'),
         staticDataEnd: 0x10400000
     }
@@ -181,6 +189,9 @@ describe.each(TARGETS)('<sim.h> for %s', (target) => {
 
     it('caps SIM_SCREEN at the static data the Cores have room for', () => {
         expect(text).toContain('* 4 <= 4128768, \\')
+        //any size the display takes, not only the ones MARS's and RARS's tool lists
+        expect(text).toContain('(width) >= 1 && (width) <= 1024')
+        expect(text).toContain('(unit) >= 1 && (unit) <= 32')
         expect(text).toContain('# @screen width=')
         expect(text).toContain('#ifdef __cplusplus\n#define __SIM_STATIC_ASSERT static_assert')
     })

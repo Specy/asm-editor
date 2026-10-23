@@ -61,9 +61,11 @@ them before the program begins, which makes the display setup repeatable:
 ```
 
 Here `width=256` and `height=256` make a 256-by-256-pixel display. `unit=16` draws every backing
-word as a 16-by-16 screen-pixel square, leaving a 16-by-16 grid of words. The allowed display
-widths and heights are 64, 128, 256, 512, and 1024. The allowed unit dimensions are 1, 2, 4, 8,
-16, and 32; `unit` sets both dimensions, while `unitWidth` and `unitHeight` can set them separately.
+word as a 16-by-16 screen-pixel square, leaving a 16-by-16 grid of words. RARS offers display
+widths and heights of 64, 128, 256, 512, and 1024, and unit dimensions of 1, 2, 4, 8, 16, and 32.
+The editor also takes any whole number from 1 to 1024 for the display and from 1 to 32 for a unit,
+which RARS cannot show. `unit` sets both dimensions, while `unitWidth` and `unitHeight` can set
+them separately.
 Finally, `base=display` tells the panel that the word at the label `display` is the first pixel.
 An address may be used for `base` too, but a label keeps the program independent of the data
 section's numeric address.

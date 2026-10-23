@@ -237,8 +237,8 @@ ${DEVICE_HELPERS.map((helper) => `/** ${helper.headerDoc(devices, hex)} */\nstat
 /** `sim_rgb` and `SIM_SCREEN`, whose grid may not take more than the static data the Core has room for. */
 function screenSection(display, target) {
     const limit = display.staticDataEnd - display.staticData
-    const size = (value) => display.sizes.map((choice) => `(${value}) == ${choice}`).join(' || ')
-    const unit = display.units.map((choice) => `(unit) == ${choice}`).join(' || ')
+    const size = (value) => `(${value}) >= ${display.sizeMin} && (${value}) <= ${display.sizeMax}`
+    const unit = `(unit) >= ${display.unitMin} && (unit) <= ${display.unitMax}`
     return `/*
  * The bitmap display: a grid of words, one color each, drawn on the Screen.
  *
@@ -250,11 +250,14 @@ function screenSection(display, target) {
  *     ...
  *     screen[y * (256 / 2) + x] = sim_rgb(255, 128, 0);
  *
- * Write it once, outside any function, with numbers ${target.simulator}'s display offers: width
- * and height ${listed(display.sizes)}, unit ${listed(display.units)}. The grid shares the
- * ${limit} bytes of static data, from ${hex(display.staticData)} to ${hex(display.staticDataEnd)}, with the program's
- * other global variables and constants. The heap starts on the first page after static data if
- * it passes the default heap base. A larger display needs a larger unit.
+ * Write it once, outside any function. Width and height are any whole number of pixels from
+ * ${display.sizeMin} to ${display.sizeMax}, and unit any from ${display.unitMin} to ${display.unitMax}; a unit that does not divide them drops
+ * the remainder. ${target.simulator}'s own display only offers ${listed(display.sizes)} for width and
+ * height and ${listed(display.units)} for unit, so a program that runs there too keeps to those.
+ *
+ * The grid shares the ${limit} bytes of static data, from ${hex(display.staticData)} to ${hex(display.staticDataEnd)}, with
+ * the program's other global variables and constants. The heap starts on the first page after
+ * static data if it passes the default heap base. A larger display needs a larger unit.
  */
 
 /** A color for the bitmap display: red, green and blue from 0 to 255, in the low 24 bits. */
@@ -272,7 +275,7 @@ static inline ${prototypeOf(RGB_HELPER)} {
 
 #define ${SCREEN_MACRO.name}(${SCREEN_MACRO.parameters.join(', ')}) \\
     __SIM_STATIC_ASSERT((${size('width')}) && (${size('height')}) && (${unit}), \\
-        "SIM_SCREEN: width and height must be ${listed(display.sizes)}, and unit ${listed(display.units)}, the sizes ${target.simulator}'s bitmap display offers"); \\
+        "SIM_SCREEN: width and height must be from ${display.sizeMin} to ${display.sizeMax} pixels, and unit from ${display.unitMin} to ${display.unitMax}"); \\
     __SIM_STATIC_ASSERT((width) / (unit) * ((height) / (unit)) * 4 <= ${limit}, \\
         "SIM_SCREEN: the grid does not fit in the ${limit} bytes of static data a ${target.language} program has, which its other global variables and constants share; use a larger unit or a smaller display"); \\
     __asm__("# @screen width=" __SIM_EXPANDED_STRING(width) " height=" __SIM_EXPANDED_STRING(height) " unit=" __SIM_EXPANDED_STRING(unit) " base=" #name); \\

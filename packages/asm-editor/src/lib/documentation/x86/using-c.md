@@ -25,7 +25,7 @@ Editing help works locally, before Compile. It covers known language and library
 
 The Compile controls use GCC and let you choose an optimization level. Start with **-O0** to follow your statements easily. Higher levels can combine statements, move instructions or remove work whose result is unused.
 
-Compile creates an assembly file and makes it the project's entry file, which Build uses. Compile handles one C or C++ source file at a time; other `.c` or `.cpp` files are not compiled or linked automatically. Compilation needs an internet connection: your selected source and the project's local headers are sent to Compiler Explorer.
+Compile creates an assembly file and makes it the project's entry file, which Build uses. Compile handles one C or C++ source file at a time; other `.c` or `.cpp` files are not compiled or linked automatically. Compilation needs an internet connection: your selected source and the project files its `#include "…"` lines reach are sent to Compiler Explorer, and nothing else of the project.
 
 To use a local header, create `helpers.h` beside your source file in the same project:
 
@@ -45,7 +45,9 @@ int main(void) {
 }
 ```
 
-After changing the source or a local header, **Compile** again, then **Build** to run the updated program.
+A quoted `#include` may name a `.c` file too: the compiler pastes its text in, exactly as it does a header's, so a program can be split across several `.c` files that one source includes. Each file is then part of that one compilation, not a separate one linked later.
+
+After changing the source or a file it includes, **Compile** again, then **Build** to run the updated program.
 
 ### Program arguments
 

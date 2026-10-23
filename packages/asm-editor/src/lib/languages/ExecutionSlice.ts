@@ -188,6 +188,32 @@ export function yieldToHost(): Promise<void> {
 }
 
 /**
+ * Waits until the browser has painted a frame, so that what the page shows just before a long
+ * synchronous call, such as a Core assembling a large program in one go, is on screen while the
+ * call holds the page: the dock's Build spinner, which a CSS transform animation keeps turning on
+ * the compositor even while the page's own thread is busy. Measured on the Pac-Man example, RARS
+ * holds the page for one to three seconds, and without this wait whether "Building…" was painted
+ * first depended on whether some earlier await happened to straddle a frame.
+ *
+ * A `requestAnimationFrame` callback runs just before a frame is painted, and a turn handed to the
+ * host from it runs after the paint. A hidden tab paints no frames, so a short timer stands in for
+ * the frame there; outside a browser there is nothing to paint and it resolves at once.
+ */
+export function afterNextPaint(timeoutMs = 100): Promise<void> {
+    if (typeof requestAnimationFrame !== 'function' || typeof document === 'undefined')
+        return Promise.resolve()
+    return new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, timeoutMs)
+        requestAnimationFrame(() => {
+            void yieldToHost().then(() => {
+                clearTimeout(timer)
+                resolve()
+            })
+        })
+    })
+}
+
+/**
  * When a slice should stop regardless of how many instructions it has run. An instruction budget
  * only tracks time while every instruction costs about the same, and on two of these Cores it does
  * not: one Z80 `out` or one M68K trap can clear a whole Screen, which is a hundred thousand pixels

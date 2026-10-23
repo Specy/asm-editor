@@ -283,9 +283,11 @@ export function createCompilerRequest(
         ? request.sourcePath.slice(0, request.sourcePath.lastIndexOf('/'))
         : '.'
     const quote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`
-    const headers = Object.entries(request.files).filter(
-        ([path, file]) => /\.(h|hpp|hh|hxx|inc)$/i.test(path) && file.encoding === 'plain'
-    )
+    //what the source's quoted includes reach, a `.c` as much as a `.h`, and nothing else of the
+    //Project: other Programs' sources and data Files never leave the browser
+    const included = Object.keys(compilationInputs(request.sourcePath, request.files))
+        .filter((path) => path !== request.sourcePath)
+        .sort()
     const sourceAnnotations = compiler === 'clang' && request.sourceAnnotations
     const common = compilerCodeFlags(
         compiler,
@@ -323,7 +325,7 @@ export function createCompilerRequest(
         },
         files: [
             upload(request.sourcePath, source.content),
-            ...headers.map(([path, file]) => upload(path, file.content)),
+            ...included.map((path) => upload(path, request.files[path]!.content)),
             ...Object.entries(sysroot).map(([path, contents]) => ({
                 filename: `${SYSROOT_INCLUDE}/${path}`,
                 contents
@@ -333,7 +335,7 @@ export function createCompilerRequest(
     const json = JSON.stringify(body)
     if (new TextEncoder().encode(json).length > COMPILE_BYTE_LIMIT)
         throw new SourceCompilationError(
-            'Source and local headers exceed the 1 MiB compilation limit.'
+            'The source and the Files it includes exceed the 1 MiB compilation limit.'
         )
     return { compilerId: preset.id, language, body, json }
 }

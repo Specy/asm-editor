@@ -70,8 +70,10 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
+    assembledCore,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
+    resolveScreenLabel,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '#lib/languages/mars/screenDirective.ts'
@@ -372,9 +374,6 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
-        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
-        //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(sources).diagnostics
         const files = textAssemblyFiles(sources)
         const mips = makeMipsCore(
             files,
@@ -385,6 +384,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const result = mips.assemble()
         const lines = tokenizedLines(mips)
         const spans = makeTokenSpanIndex(lines)
+        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
+        //is being typed and does not vanish half a second after a Build replaces this list; read
+        //last, since a name only a probe resolves assembles another Core over this one
+        const directive = this.readScreenDirective(sources, assembledCore(mips, result)).diagnostics
         return this.withRuntimeHints(sources, [
             ...directive,
             ...includedScreenDiagnostics(files, sources.entry, lines),
@@ -394,31 +397,24 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.mips = null
-        //before the Core is built, so the first instruction and a Testcase alike run on the display
-        //the source asked for; the label probe assembles a throwaway Core, which the real assembly
-        //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(sources)
+        const files = textAssemblyFiles(sources)
+        let { mips, result } = this.assembleProgram(sources, files, undoSize)
+        //before the first instruction, so it and a Testcase alike run on the display the source
+        //asked for, its base label read from this assembly. A name only the probe resolves
+        //assembles a throwaway Core over the state every Core shares, so the program is assembled
+        //again after it
+        let probed = false
+        const configured = this.readScreenDirective(sources, assembledCore(mips, result), () => {
+            probed = true
+        })
+        if (probed) ({ mips, result } = this.assembleProgram(sources, files, undoSize))
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
         //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
-        //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
+        //a re-sync here would repaint the Screen `clear()` has just blanked with the program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        const files = textAssemblyFiles(sources)
-        const mips = makeMipsCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
-        //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
-        //stored by every `initialize`, a Testcase's included, before its starting registers
-        mips.setProgramArguments(this.programArgv)
-        const result = mips.assemble()
         const lines = tokenizedLines(mips)
         const spans = makeTokenSpanIndex(lines)
         const diagnostics = this.withRuntimeHints(sources, [
@@ -437,6 +433,27 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         }
         this.mips = mips
         return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, mips) }
+    }
+
+    /** A Core for the program, assembled for a Build. */
+    private assembleProgram(
+        sources: BuildSources,
+        files: Record<string, string>,
+        undoSize: number
+    ) {
+        const mips = makeMipsCore(
+            files,
+            sources.entry,
+            buildAssemblerProfile(sources),
+            this.runtimeLink(sources)
+        )
+        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
+        //the size has to be set *before* assembling: setting it afterwards would only size the next
+        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
+        mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //stored by every `initialize`, a Testcase's included, before its starting registers
+        mips.setProgramArguments(this.programArgv)
+        return { mips, result: mips.assemble() }
     }
 
     /**
@@ -502,15 +519,27 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     /**
-     * What the program's `@screen` comment asks for, on top of the display the Screen has now.
+     * What the program's `@screen` comment asks for, on top of the display the Screen has now, its
+     * base label read from `assembled`, the program's Core when it assembled; `onProbe` is told
+     * when that took a probe, which assembles a Core of its own.
      *
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(sources: BuildSources) {
+    private readScreenDirective(
+        sources: BuildSources,
+        assembled: JsMips | null,
+        onProbe?: () => void
+    ) {
         const code = sourceText(sources)
         const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(sources, label)
+            resolveScreenLabel(assembled, label, () => {
+                //GNU assembly cannot place a probe word at a fixed address, and its symbol table
+                //is all a probe would read
+                if (sources.assemblerProfile === 'gnu-compiler-v1') return null
+                onProbe?.()
+                return this.probeLabelAddress(sources, label)
+            })
         )
         return {
             ...configured,
@@ -522,19 +551,16 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     /**
-     * The address a `@screen base=<label>` names. The Core has no lookup by name — `getLabelAtAddress`
-     * only goes the other way — so the program is assembled once more with one extra `.word <label>`
-     * at a fixed address and that word is read back: the assembler itself resolves the name, which is
-     * what makes `.eqv` names, forward references and text labels all work.
+     * The address of a `@screen base=` name the program's symbol table does not hold, such as an
+     * `.eqv` name: the program is assembled once more with one extra `.word <name>` at a fixed
+     * address and that word is read back, since the assembler itself resolves the name in it.
      */
-    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
+    private probeLabelAddress(sources: BuildSources, label: string): number | null {
         try {
-            //GNU assembly cannot place a probe word at a fixed address, but its Core looks labels
-            //up by name instead
-            const gnu = sources.assemblerProfile === 'gnu-compiler-v1'
-            const probeSources = gnu
-                ? sources
-                : updateEntryText(sources, screenLabelProbeSource(sourceText(sources), label))
+            const probeSources = updateEntryText(
+                sources,
+                screenLabelProbeSource(sourceText(sources), label)
+            )
             const probe = makeMipsCore(
                 textAssemblyFiles(probeSources),
                 probeSources.entry,
@@ -542,12 +568,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
-            //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
-            if (gnu) {
-                const address = probe.getAddressOfLabel(label)
-                return address === -1 ? null : address >>> 0
-            }
             return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
         } catch {
             return null

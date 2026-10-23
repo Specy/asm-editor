@@ -208,7 +208,7 @@ _Avoid_: crt0 (the Runtime library's start code, which takes its place once x86 
 
 ## Source compilation
 
-The conversion of a selected higher-level **File** and its project-local headers into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
+The conversion of a selected higher-level **File**, and the Project **Files** its quoted includes reach (headers, or `.c` Files pasted in), into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
 
 ## C/C++ language help
 
@@ -234,7 +234,7 @@ The correspondence between lines of **Generated assembly** and the higher-level 
 
 ## Stale assembly
 
-**Generated assembly** whose source File or a project-local header used to compile it has subsequently changed. Its contents remain available, but its Source map has been removed and the editor identifies it as stale.
+**Generated assembly** whose source File or a File it included when compiled has subsequently changed. Its contents remain available, but its Source map has been removed and the editor identifies it as stale.
 
 ## Project archive
 
