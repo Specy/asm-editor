@@ -72,9 +72,19 @@ export class CompilationFailedError extends Error {
  * new names.
  */
 export class BuildDownloadError extends Error {
-    constructor(problem: string, options?: ErrorOptions & { refused?: boolean }) {
+    constructor(
+        /** What could not be downloaded: "libc.so.6", "the assembler". */
+        readonly resource: string,
+        /** Why, as the message's brackets hold it: "no response for 20 seconds", "404 Not Found". */
+        readonly reason: string,
+        options?: ErrorOptions & { refused?: boolean }
+    ) {
         super(
-            `${problem}. ${options?.refused ? 'Reload the page' : 'Check the connection'} and Build again.`,
+            `Couldn't download ${resource} (${reason}). ${
+                options?.refused
+                    ? 'The site may have been updated: reload the page, then press Build again.'
+                    : 'Check your internet connection, then press Build again.'
+            }`,
             options
         )
         this.name = 'BuildDownloadError'

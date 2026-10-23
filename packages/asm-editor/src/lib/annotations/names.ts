@@ -239,22 +239,24 @@ function foreignCharacter(name: string): string {
  * `nasmWords.ts`). Undefined when it can be.
  */
 export function nameProblem(name: string): string | undefined {
-    if (!name) return 'Write a name'
+    if (!name) return 'Write a name.'
     if (!IDENTIFIER.test(name)) {
-        if (/^[0-9]/.test(name)) return 'A name cannot start with a digit'
-        return `A name holds letters, digits and underscores only, not ${foreignCharacter(name)}`
+        if (/^[0-9]/.test(name)) return 'A name cannot start with a digit.'
+        return `The name can only have letters, digits and underscores. This name has ${foreignCharacter(name)}.`
     }
     if (name.length > NAME_LENGTH_LIMIT)
-        return `A name has at most ${NAME_LENGTH_LIMIT} characters, and this one has ${name.length}`
-    if (C_KEYWORDS.has(name)) return `${name} is a keyword of C`
-    if (CPP_KEYWORDS.has(name)) return `${name} is a keyword of C++`
-    if (GHIDRA_WORDS.has(name)) return `${name} is a type the decompiler writes`
-    if (C_LIBRARY_TYPES.has(name))
-        return `${name} is a type of the C library, which the decompiler writes`
-    if (C_LIBRARY_CONSTANTS.has(name)) return `${name} is a constant of the C library`
+        return `Names can be up to ${NAME_LENGTH_LIMIT} characters long. This one has ${name.length}.`
+    if (C_KEYWORDS.has(name)) return `“${name}” is a C keyword. Choose another name.`
+    if (CPP_KEYWORDS.has(name)) return `“${name}” is a C++ keyword. Choose another name.`
+    if (GHIDRA_WORDS.has(name))
+        return `“${name}” is the name of a type used in the Pseudocode. Choose another name.`
+    if (C_LIBRARY_TYPES.has(name)) return `“${name}” is a C library type. Choose another name.`
+    if (C_LIBRARY_CONSTANTS.has(name))
+        return `“${name}” is a C library constant. Choose another name.`
     const lower = name.toLowerCase()
-    if (NASM_REGISTERS.has(lower)) return `${name} is the name of an x86 register`
-    if (NASM_OPERAND_WORDS.has(lower)) return `${name} is a word NASM reads in operands`
+    if (NASM_REGISTERS.has(lower)) return `“${name}” is an x86 register. Choose another name.`
+    if (NASM_OPERAND_WORDS.has(lower))
+        return `“${name}” is a special word in assembly. Choose another name.`
     return undefined
 }
 
@@ -311,21 +313,21 @@ export function globalNameProblem(
         const written = `.${name}`
         for (const label of labels)
             if (label.address !== address && label.name === written)
-                return `${name} is the name of another jump target of this function, at ${hex(label.address)}`
+                return `Another jump target in this function is already called “${name}” (at ${hex(label.address)}).`
         return undefined
     }
     for (const label of labels) {
         if (label.address === address) continue
         if (label.name === name)
-            return `${name} is the name of another label, at ${hex(label.address)}`
+            return `Another label is already called “${name}” (at ${hex(label.address)}).`
         if (libraryName(label.raw ?? label.name) !== name) continue
         return label.raw === undefined
-            ? `${name} is the name of another label, ${label.name}, at ${hex(label.address)}`
-            : `${name} is the name of another label, ${label.raw}, which you renamed ${label.name}, at ${hex(label.address)}`
+            ? `“${name}” is already used by ${label.name} (at ${hex(label.address)}).`
+            : `“${name}” is already used by ${label.raw}, which was renamed to ${label.name} (at ${hex(label.address)}).`
     }
     for (const local of locals)
         if (local.name === name)
-            return `${name} is the name of a variable of ${local.owner}, whose Pseudocode would then write this label as ::${name}`
+            return `“${name}” is already a variable defined in ${local.owner}. Choose another name.`
     return undefined
 }
 
@@ -343,12 +345,13 @@ export function localNameProblem(
     const problem = nameProblem(name)
     if (problem) return problem
     if (looksLikeGhidraName(name))
-        return `${name} reads as a name the decompiler gives; choose one that does not`
+        return `The name “${name}” uses the same format that the decompiler uses. Choose a different name.`
     for (const variable of variables)
-        if (variable === name) return `${name} is the name of another variable of this function`
+        if (variable === name)
+            return `Another variable in this function is already called “${name}”.`
     for (const global of globals)
         if (global === name || libraryName(global) === name)
-            return `${name} is the name of a global, which the Pseudocode would then write as ::${name}`
+            return `The name “${name}” is already used as a function or global variable. Choose another name.`
     return undefined
 }
 
@@ -373,5 +376,5 @@ const LIBRARY_BOUND = /^(.+)@(?:plt|plt_resolver|got)$/
  */
 export function libraryNameProblem(name: string): string | undefined {
     const match = LIBRARY_BOUND.exec(name)
-    return match ? `${match[1]} is named by the library it comes from` : undefined
+    return match ? `“${match[1]}” can't be renamed, as it comes from a shared library.` : undefined
 }

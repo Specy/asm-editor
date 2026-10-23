@@ -1740,11 +1740,11 @@ export class WorkbenchSession {
      * and its Listing shows them at once (decision 22).
      */
     annotationRefusal(path: string): string | undefined {
-        if (this.host.readonly) return 'This Project is read-only'
-        if (this.testing) return 'The Testcases are running: rename and comment once they end'
-        if (this.building) return 'A Build is running: rename and comment once it ends'
-        if (this.running) return 'The program is running: Pause it to rename or comment'
-        if (!this.project.files[path]) return `${path} is not a File of the Project`
+        if (this.host.readonly) return 'This Project is read-only.'
+        if (this.testing) return 'Wait for the Testcases to finish, then try again.'
+        if (this.building) return 'Wait for the Build to finish, then try again.'
+        if (this.running) return 'Pause the program to rename or comment.'
+        if (!this.project.files[path]) return `${path} is not present in this Project.`
         return undefined
     }
 
@@ -2052,9 +2052,9 @@ export class WorkbenchSession {
         const shown = target.jumpTarget ? label.fullName : (label.demangled?.short ?? label.name)
         const dot = target.jumpTarget ? '.' : ''
         const note = label.renameConflict
-            ? `Your name ${label.renameConflict} is not applied: another label has it.`
+            ? `The name “${label.renameConflict}” isn't used, as it is already used by another label.`
             : label.renamed
-              ? `Renamed from ${dot}${target.raw}; that name resets it.`
+              ? `Renamed “${dot}${target.raw}” to “${dot}${target.current}”. Rename it to “${dot}${target.raw}” again to go back.`
               : undefined
         return new AnnotationPrompt({
             kind: 'name',
@@ -2100,8 +2100,8 @@ export class WorkbenchSession {
         const note = !renamed
             ? undefined
             : raw !== undefined
-              ? `Renamed from ${raw}; that name resets it.`
-              : 'Reset name gives back the name the decompiler gave it.'
+              ? `Renamed “${raw}” to “${target.current}”. Rename it to “${raw}” again to go back.`
+              : 'Use “Reset name” to rename the variable to its original name.'
         return new AnnotationPrompt({
             kind: 'name',
             path,
@@ -2130,7 +2130,7 @@ export class WorkbenchSession {
 
     /**
      * The prompt of Comment… or Function comment… (decision 18), or undefined after saying why
-     * the File takes none now: the comment there is, which saving empty deletes.
+     * the File takes none now: the comment there is, which Delete or saving empty deletes.
      */
     commentPrompt(
         path: string,
@@ -2144,20 +2144,25 @@ export class WorkbenchSession {
             return undefined
         }
         const fn = target.function
+        const existing = this.commentOf(path, target)
         const where = `0x${(target.address + listing.base).toString(16)}`
         const title =
             target.kind === 'function comment'
-                ? `Comment on the function ${fn ? (fn.list ?? fn.name) : `at ${where}`}`
+                ? fn
+                    ? `Comment on ${fn.list ?? fn.name}`
+                    : `Comment on the function at ${where}`
                 : `Comment at ${where}`
         return new AnnotationPrompt({
             kind: target.kind,
             path,
             address: target.address,
             title,
-            text: this.commentOf(path, target) ?? '',
+            text: existing ?? '',
             ...(pseudocodeFunction !== undefined ? { pseudocodeFunction } : {}),
             problem: (text) => commentProblem(normalizeComment(text)),
-            save: (text) => this.writeComment(path, target, text)
+            save: (text) => this.writeComment(path, target, text),
+            //Delete, offered on a comment there is, deletes it as Delete comment does
+            ...(existing !== undefined ? { remove: () => this.writeComment(path, target, '') } : {})
         })
     }
 
@@ -3918,7 +3923,7 @@ export class WorkbenchSession {
     get buildPhase(): string {
         return (
             this.emulator.buildPhase ??
-            (this.cancelledBuild ? 'Waiting for the cancelled Build to end…' : 'Building…')
+            (this.cancelledBuild ? 'Finishing the cancelled Build…' : 'Building…')
         )
     }
 

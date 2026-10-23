@@ -242,7 +242,7 @@ describe('the Pseudocode client without a Worker', () => {
         const result = await client.decompile('crackme', file, listing, MAIN)
         expect(result).toEqual({
             address: MAIN,
-            error: 'main took longer than 30 seconds to decompile'
+            error: 'main took longer than 30 seconds to decompile.'
         })
         await client.decompile('crackme', file, listing, MAIN)
         expect(counts.decompiles).toBe(2)
@@ -311,7 +311,10 @@ describe('the Pseudocode client without a Worker', () => {
         const abort = new AbortController()
         const dropped = client.decompile('crackme', file, listing, MAIN, { signal: abort.signal })
         client.dispose()
-        expect(await dropped).toEqual({ address: MAIN, error: 'The decompiler was closed' })
+        expect(await dropped).toEqual({
+            address: MAIN,
+            error: 'The decompiler stopped unexpectedly. Try again.'
+        })
         // Requests queued after it, one of them waiting its turn, are still answered.
         const first = client.decompile('crackme', file, listing, MAIN)
         const second = client.decompile('crackme', file, listing, start)
@@ -329,7 +332,10 @@ describe('the Pseudocode client without a Worker', () => {
         const listing = listingOf(file)
         const waiting = client.decompile('crackme', file, listing, MAIN)
         client.dispose()
-        expect(await waiting).toEqual({ address: MAIN, error: 'The decompiler was closed' })
+        expect(await waiting).toEqual({
+            address: MAIN,
+            error: 'The decompiler stopped unexpectedly. Try again.'
+        })
         expect(text(await client.decompile('crackme', file, listing, MAIN)).name).toBe('main')
         client.dispose()
         // The worker's decompiler goes with it, and every program with that.
@@ -364,7 +370,9 @@ describe('the Pseudocode client with a Worker', () => {
         const file = crackmeFile()
         const result = await client.decompile('crackme', file, listingOf(file), MAIN)
         expect(result).toMatchObject({ address: MAIN })
-        expect('error' in result && result.error).toMatch(/^The decompiler failed: .*Worker/)
+        expect('error' in result && result.error).toBe(
+            'The decompiler stopped unexpectedly. Try again.'
+        )
         client.dispose()
     })
 
@@ -379,7 +387,7 @@ describe('the Pseudocode client with a Worker', () => {
         const listing = listingOf(file)
         expect(await client.decompile('crackme', file, listing, MAIN)).toEqual({
             address: MAIN,
-            error: 'The decompiler stopped answering: nothing came from it for 0.05 seconds'
+            error: 'The decompiler stopped responding after 0.05 seconds.'
         })
         expect(SilentWorker.instances).toHaveLength(1)
         const [worker] = SilentWorker.instances
@@ -683,7 +691,7 @@ describe('the Pseudocode client’s background lane', () => {
             client.decompile('crackme', file, listing, MAIN, { priority: 'background' })
         expect(await background()).toEqual({
             address: MAIN,
-            error: 'main took longer than 1.234 seconds to decompile'
+            error: 'main took longer than 1.234 seconds to decompile.'
         })
         expect(calls[0].options).toEqual({ timeLimitMs: 1234 })
         await background()
@@ -772,7 +780,7 @@ describe('the Pseudocode client’s background lane', () => {
         const result = await client.decompile('crackme', file, listing, MAIN, {
             priority: 'background'
         })
-        expect(result).toEqual({ address: MAIN, error: 'main took longer than 1 ms to decompile' })
+        expect(result).toEqual({ address: MAIN, error: 'main took longer than 1 ms to decompile.' })
         client.dispose()
     })
 

@@ -109,11 +109,11 @@ describe('an instruction the Core cannot run', () => {
         const emulator = await ranInto('vaddps zmm0, zmm1, zmm2')
         expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
         expect(texts(emulator)).toEqual([
-            `The program ran \`vaddps zmm0, zmm1, zmm2\` at \`0x${emulator.pc.toString(16)}\`. AVX-512 instructions are not currently supported.`
+            `The program stopped at \`vaddps zmm0, zmm1, zmm2\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support AVX-512 instructions yet.`
         ])
         expect(emulator.notes[0].tone).toBe('warning')
         expect(emulator.termination).toMatchObject({
-            unsupported: 'AVX-512 instructions are not currently supported'
+            unsupported: "stopped: AVX-512 isn't supported yet"
         })
     })
 
@@ -127,7 +127,7 @@ describe('an instruction the Core cannot run', () => {
         expect(emulator.notes).toEqual([])
         await emulator.step()
         expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
-        const note = `The program ran \`vaddps zmm0, zmm1, zmm2\` at \`0x${emulator.pc.toString(16)}\`. AVX-512 instructions are not currently supported.`
+        const note = `The program stopped at \`vaddps zmm0, zmm1, zmm2\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support AVX-512 instructions yet.`
         expect(texts(emulator)).toEqual([note])
         //an Undo takes the end back, and the Step that ends it again says it again, once
         emulator.undo()
@@ -164,10 +164,10 @@ describe('an instruction the Core cannot run', () => {
                 number: 4,
                 name: 'SIGILL',
                 description: 'Illegal instruction',
-                unsupported: 'AVX-512 instructions are not currently supported'
+                unsupported: "stopped: AVX-512 isn't supported yet"
             })
             expect(texts(emulator), source).toEqual([
-                `The program ran \`${decoded}\` at \`0x${emulator.pc.toString(16)}\`. AVX-512 instructions are not currently supported.`
+                `The program stopped at \`${decoded}\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support AVX-512 instructions yet.`
             ])
         }
     })
@@ -181,7 +181,7 @@ describe('an instruction the Core cannot run', () => {
                 number: 4,
                 name: 'SIGILL',
                 description: 'Illegal instruction',
-                unsupported: 'APX instructions are not currently supported'
+                unsupported: "stopped: APX isn't supported yet"
             })
             //the decoder reads no APX instruction, so the Log has no text to name one by
             expect(emulator.notes, source).toEqual([])
@@ -189,27 +189,41 @@ describe('an instruction the Core cannot run', () => {
     })
 
     it('names the extension of a VEX instruction the Core does not run', async () => {
-        //each as written, as the note names it, and its extension
+        //each as written, as the note names it, what the run's status says, and the note's words
         const instructions = [
             //VAES: the 128-bit vaesenc runs
             [
                 'vaesenc ymm0, ymm1, ymm2',
                 'vaesenc ymm0, ymm1, ymm2',
-                '256-bit AES and carry-less multiplication instructions are not currently supported'
+                "stopped: 256-bit AES and carry-less multiplication aren't supported yet",
+                '256-bit AES and carry-less multiplication instructions'
             ],
             //the AVX-512 mask instructions are VEX
-            ['kmovw k1, eax', 'kmovw k1, eax', 'AVX-512 instructions are not currently supported'],
+            [
+                'kmovw k1, eax',
+                'kmovw k1, eax',
+                "stopped: AVX-512 isn't supported yet",
+                'AVX-512 instructions'
+            ],
             [
                 'vgf2p8affineqb xmm0, xmm1, xmm2, 0',
                 'vgf2p8affineqb xmm0, xmm1, xmm2, 0x00',
-                'GFNI instructions are not currently supported'
+                "stopped: GFNI isn't supported yet",
+                'GFNI instructions'
+            ],
+            //a family that is already a plural, and says what it is
+            [
+                'vsha512rnds2 ymm0, ymm1, xmm2',
+                'vsha512rnds2 ymm0, ymm1, xmm2',
+                "stopped: the SHA extensions aren't supported yet",
+                'the SHA extensions'
             ]
         ]
-        for (const [source, decoded, unsupported] of instructions) {
+        for (const [source, decoded, unsupported, family] of instructions) {
             const emulator = await ranInto(source)
             expect(emulator.termination, source).toMatchObject({ name: 'SIGILL', unsupported })
             expect(texts(emulator), source).toEqual([
-                `The program ran \`${decoded}\` at \`0x${emulator.pc.toString(16)}\`. ${unsupported}.`
+                `The program stopped at \`${decoded}\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support ${family} yet.`
             ])
         }
     })
@@ -238,7 +252,7 @@ describe('an instruction the Core cannot run', () => {
             description: 'Illegal instruction'
         })
         expect(texts(emulator)).toEqual([
-            `The program ran \`aesenc xmm0, xmm1\` at \`0x${emulator.pc.toString(16)}\`, which the emulator does not support`
+            `The program stopped at \`aesenc xmm0, xmm1\` (\`0x${emulator.pc.toString(16)}\`): this emulator can't run that instruction.`
         ])
     })
 
@@ -277,11 +291,13 @@ describe('a library the Core does not bundle', () => {
         const sources = executableSources('crackme', bytes)
         const emulator = await emulatorFor(sources)
         await emulator.compile(0, sources)
-        expect(texts(emulator)).toEqual(['libz.so.6 is not one of the bundled libraries'])
+        expect(texts(emulator)).toEqual([
+            "This emulator doesn't have libz.so.6, so the program may not start."
+        ])
         expect(emulator.compilerDiagnostics).toEqual([
             expect.objectContaining({
                 severity: 'warning',
-                message: 'libz.so.6 is not one of the bundled libraries'
+                message: "This emulator doesn't have libz.so.6, so the program may not start."
             })
         ])
         //the dynamic linker then fails with its own message

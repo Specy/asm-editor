@@ -572,13 +572,13 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         const [stack] = hoverOf('crackme', 'password,0x80')
         expect(stack).toBe(
             [
-                '**password**: a local variable renamed in this Project. The decompiler keeps it on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Reset name gives back the name the decompiler gave it.',
+                '**password**: a local variable you renamed. Stored on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Use “Reset name” to rename it to its original name.',
                 PSEUDOCODE_LINK
             ].join('\n\n')
         )
         const [register] = hoverOf('crackme', 'result = strcmp')
         expect(register).toContain(
-            `**result**: a local variable renamed in this Project. The decompiler keeps it in \`EAX\`, first set at \`0x${(address + of.base + 0x8e).toString(16)}\` (\`EAX\`).`
+            `**result**: a local variable you renamed. Stored in \`EAX\`, first set at \`0x${(address + of.base + 0x8e).toString(16)}\` (\`EAX\`).`
         )
         //a name the decompiler gave is still explained as Ghidra's
         expect(hoverOf('crackme', 'pcVar2 = fgets')[0]).toContain(
@@ -591,14 +591,13 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         const [stack] = hoverOf('crackme', 'password,0x80', 1, known)
         expect(stack).toBe(
             [
-                '**password**: a local variable renamed in this Project.',
-                'Renamed from `acStack_98`. The decompiler keeps it on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Reset name gives that name back.',
+                '**password**: a local variable you renamed (originally `acStack_98`). Stored on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`). Use “Reset name” to rename it to its original name.',
                 PSEUDOCODE_LINK
             ].join('\n\n')
         )
         //one it does not know is said as before
         expect(hoverOf('crackme', 'result = strcmp', 1, known)[0]).toContain(
-            'Reset name gives back the name the decompiler gave it.'
+            '**result**: a local variable you renamed. Stored'
         )
     })
 

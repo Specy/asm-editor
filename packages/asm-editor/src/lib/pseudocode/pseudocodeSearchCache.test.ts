@@ -322,13 +322,13 @@ describe('the Search panel’s Pseudocode cache', () => {
             {
                 address: frame.address,
                 name: 'frame_dummy',
-                error: 'frame_dummy has more than 100000 instructions',
+                error: 'frame_dummy is too long to decompile (over 100000 instructions).',
                 retryable: false
             },
             {
                 address: MAIN,
                 name: 'main',
-                error: 'main took longer than 5 seconds to decompile',
+                error: 'main took longer than 5 seconds to decompile.',
                 retryable: true
             }
         ])

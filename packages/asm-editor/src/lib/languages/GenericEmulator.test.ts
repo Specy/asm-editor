@@ -874,14 +874,14 @@ describe('a Build that waits', () => {
 
     it('tells the Terminal what could not be downloaded and to Build again', async () => {
         const emulator = new FakeEmulator()
-        const failure = new BuildDownloadError('Could not download libc.so.6: no data for 20 s')
+        const failure = new BuildDownloadError('libc.so.6', 'no response for 20 seconds')
         const build = waitingBuild(emulator, failure)
         const done = emulator.compile(0, '')
         await vi.waitFor(() => expect(build.started).toBe(1))
         build.finish()
         await expect(done).rejects.toBe(failure)
         expect(emulator.errors).toEqual([
-            'Could not download libc.so.6: no data for 20 s. Check the connection and Build again.'
+            "Couldn't download libc.so.6 (no response for 20 seconds). Check your internet connection, then press Build again."
         ])
         expect(emulator.buildPhase).toBeUndefined()
         expect(emulator.canExecute).toBe(false)

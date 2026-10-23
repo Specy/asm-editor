@@ -14,7 +14,7 @@ import { PSEUDOCODE_DOCUMENTATION } from '#lib/documentation/x86/executableSecti
  * The link every explanation ends with, at the page's own address: Monaco drops a hover's link
  * without a scheme. A Workbench opens it in its Documentation panel (`openDocumentationLink`).
  */
-export const PSEUDOCODE_LINK = `[Reading the Pseudocode](${globalThis.location?.origin ?? ''}${PSEUDOCODE_DOCUMENTATION})`
+export const PSEUDOCODE_LINK = `[Learn to read the Pseudocode](${globalThis.location?.origin ?? ''}${PSEUDOCODE_DOCUMENTATION})`
 
 /**
  * The value of a constant as the decompiler prints it: decimal or hexadecimal, maybe negative,
@@ -215,9 +215,9 @@ export function variableStorageWords(
 /**
  * The hover of a local variable or parameter the person renamed
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
- * 16): their name, what it was renamed from when the decompiler's own name for it is known
- * (`from`), as a renamed label's hover says it, and where the decompiler keeps it, which that name
- * said. Without the variable, as when the decompiler no longer reports it, no place.
+ * 16): their name, what it was originally called when the decompiler's own name for it is known
+ * (`from`), and where the decompiler keeps it, which that name said. Without the variable, as when
+ * the decompiler no longer reports it, no place.
  */
 export function renamedVariableMarkdown(
     name: string,
@@ -227,13 +227,11 @@ export function renamedVariableMarkdown(
 ): string {
     const what = variable?.kind === 'parameter' ? 'a parameter' : 'a local variable'
     const where = variable
-        ? `The decompiler keeps it ${variableStorageWords(variable, entry)} (\`${variable.storage}\`).`
+        ? `Stored ${variableStorageWords(variable, entry)} (\`${variable.storage}\`).`
         : ''
-    if (from === undefined)
-        return `**${name}**: ${what} renamed in this Project.${where && ` ${where}`} Reset name gives back the name the decompiler gave it.\n\n${PSEUDOCODE_LINK}`
+    const originally = from === undefined ? '' : ` (originally \`${from}\`)`
     return [
-        `**${name}**: ${what} renamed in this Project.`,
-        `Renamed from \`${from}\`.${where && ` ${where}`} Reset name gives that name back.`,
+        `**${name}**: ${what} you renamed${originally}.${where && ` ${where}`} Use “Reset name” to rename it to its original name.`,
         PSEUDOCODE_LINK
     ].join('\n\n')
 }

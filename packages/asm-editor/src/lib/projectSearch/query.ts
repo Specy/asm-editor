@@ -108,7 +108,7 @@ export function escapeRegExp(text: string): string {
 
 /**
  * Turns the engine's message (V8: "Invalid regular expression: /(/gmu: Unterminated group") into
- * a sentence: "Not a valid regular expression: unterminated group."
+ * a sentence: "This regular expression isn't valid: unterminated group."
  */
 function regexProblem(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error)
@@ -116,9 +116,9 @@ function regexProblem(error: unknown): string {
         /^Invalid regular expression: \/.*\/[a-z]*: (.+)$/s.exec(message)?.[1] ??
         message.replace(/^(?:SyntaxError: )?(?:Invalid regular expression:?\s*)?/i, '')
     ).trim()
-    if (!reason) return 'Not a valid regular expression.'
+    if (!reason) return "This regular expression isn't valid."
     const sentence = reason[0].toLowerCase() + reason.slice(1)
-    return `Not a valid regular expression: ${sentence}${/[.!?]$/.test(sentence) ? '' : '.'}`
+    return `This regular expression isn't valid: ${sentence}${/[.!?]$/.test(sentence) ? '' : '.'}`
 }
 
 /**

@@ -160,7 +160,7 @@ describe('Rename… in the Listing', () => {
         expect(
             session.renameTargetAt(group, call, columnOf(listing, call, 'printf'))
         ).toMatchObject({
-            refusal: 'printf is named by the library it comes from'
+            refusal: "“printf” can't be renamed, as it comes from a shared library."
         })
     })
 
@@ -176,30 +176,34 @@ describe('Rename… in the Listing', () => {
         }
         expect(reason('check_password')).toBeUndefined()
         expect(reason('  check_password  ')).toBeUndefined()
-        expect(reason('')).toBe('Write a name')
+        expect(reason('')).toBe('Write a name.')
         expect(reason('my name')).toBe(
-            'A name holds letters, digits and underscores only, not a space'
+            'The name can only have letters, digits and underscores. This name has a space.'
         )
         expect(reason('main.cold')).toBe(
-            'A name holds letters, digits and underscores only, not “.”'
+            'The name can only have letters, digits and underscores. This name has “.”.'
         )
-        expect(reason('2fast')).toBe('A name cannot start with a digit')
+        expect(reason('2fast')).toBe('A name cannot start with a digit.')
         expect(reason('x'.repeat(129))).toBe(
-            'A name has at most 128 characters, and this one has 129'
+            'Names can be up to 128 characters long. This one has 129.'
         )
-        expect(reason('int')).toBe('int is a keyword of C')
-        expect(reason('class')).toBe('class is a keyword of C++')
-        expect(reason('undefined4')).toBe('undefined4 is a type the decompiler writes')
-        expect(reason('RAX')).toBe('RAX is the name of an x86 register')
-        expect(reason('qword')).toBe('qword is a word NASM reads in operands')
+        expect(reason('int')).toBe('“int” is a C keyword. Choose another name.')
+        expect(reason('class')).toBe('“class” is a C++ keyword. Choose another name.')
+        expect(reason('undefined4')).toBe(
+            '“undefined4” is the name of a type used in the Pseudocode. Choose another name.'
+        )
+        expect(reason('RAX')).toBe('“RAX” is an x86 register. Choose another name.')
+        expect(reason('qword')).toBe('“qword” is a special word in assembly. Choose another name.')
         //another label's, raw or invented, at the address the gutter shows
-        expect(reason('_start')).toBe(`_start is the name of another label, at ${hex(0x1100)}`)
+        expect(reason('_start')).toBe(
+            `Another label is already called “_start” (at ${hex(0x1100)}).`
+        )
         expect(reason('FUN_winged_scarab')).toBe(
-            `FUN_winged_scarab is the name of another label, at ${hex(0x1020)}`
+            `Another label is already called “FUN_winged_scarab” (at ${hex(0x1020)}).`
         )
         //a library function's, which its PLT stub stands for
         expect(reason('puts')).toBe(
-            `puts is the name of another label, puts@plt_resolver, at ${hex(0x1030)}`
+            `“puts” is already used by puts@plt_resolver (at ${hex(0x1030)}).`
         )
         //a refused name is not saved
         prompt.input('rax')
@@ -213,7 +217,7 @@ describe('Rename… in the Listing', () => {
         expect(block.spec).toMatchObject({ title: 'Rename main.LAB_2', prefix: '.', text: 'LAB_2' })
         block.input('LAB_1')
         expect(block.problem).toBe(
-            `LAB_1 is the name of another jump target of this function, at ${hex(0x1242)}`
+            `Another jump target in this function is already called “LAB_1” (at ${hex(0x1242)}).`
         )
         block.input('_start')
         expect(block.problem).toBeUndefined()
@@ -249,7 +253,7 @@ describe('Rename… in the Listing', () => {
         expect(group.openAnnotationPrompt!.spec).toMatchObject({
             title: 'Rename check_password',
             text: 'check_password',
-            note: 'Renamed from main; that name resets it.'
+            note: 'Renamed “main” to “check_password”. Rename it to “main” again to go back.'
         })
     })
 
@@ -297,14 +301,18 @@ describe('Rename… in the Listing', () => {
         const { group, listing } = await shown(session)
         const call = lineOf(listing, 'call strcmp@plt')
         expect(session.openRenamePrompt(group, call, columnOf(listing, call, 'strcmp'))).toBe(false)
-        expect(warn).toHaveBeenCalledWith('strcmp is named by the library it comes from')
+        expect(warn).toHaveBeenCalledWith(
+            "“strcmp” can't be renamed, as it comes from a shared library."
+        )
         expect(group.annotationPrompt).toBeUndefined()
         const stub = lineOf(listing, 'strcmp@plt:')
         expect(session.openRenamePrompt(group, stub, 0)).toBe(false)
         //nor a GOT slot
         const got = listing.labels.find((label) => label.name === 'puts@got')!
         expect(session.openRenamePrompt(group, got.line, 0)).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith('puts is named by the library it comes from')
+        expect(warn).toHaveBeenLastCalledWith(
+            "“puts” can't be renamed, as it comes from a shared library."
+        )
         expect(session.project.files.crackme.annotations).toBeUndefined()
     })
 })
@@ -372,19 +380,15 @@ describe('where renames and comments are taken', () => {
         session.building = true
         expect(session.renameTargetAt(group, main, 0)).toBeDefined()
         expect(session.openRenamePrompt(group, main, 0)).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith('A Build is running: rename and comment once it ends')
+        expect(warn).toHaveBeenLastCalledWith('Wait for the Build to finish, then try again.')
         session.building = false
         session.running = true
         expect(session.openCommentPrompt(group, main)).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith(
-            'The program is running: Pause it to rename or comment'
-        )
+        expect(warn).toHaveBeenLastCalledWith('Pause the program to rename or comment.')
         session.running = false
         session.testing = true
         expect(session.renameLabel('crackme', MAIN, 'check_password')).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith(
-            'The Testcases are running: rename and comment once they end'
-        )
+        expect(warn).toHaveBeenLastCalledWith('Wait for the Testcases to finish, then try again.')
         session.testing = false
         //a prompt open when a Build starts says so when saved, and stays
         session.openRenamePrompt(group, main, 0)
@@ -392,7 +396,7 @@ describe('where renames and comments are taken', () => {
         session.building = true
         expect(session.saveAnnotationPrompt(group)).toBe(false)
         expect(group.openAnnotationPrompt!.failure).toBe(
-            'A Build is running: rename and comment once it ends'
+            'Wait for the Build to finish, then try again.'
         )
         session.building = false
         expect(session.saveAnnotationPrompt(group)).toBe(true)
@@ -463,12 +467,14 @@ describe('Comment…', () => {
         }
         expect(reason('one\ntwo\n\tthree')).toBeUndefined()
         expect(reason('a\n'.repeat(40) + 'a')).toBe(
-            'A comment has at most 40 lines, and this one has 41'
+            'Comments can be up to 40 lines long. This one has 41.'
         )
         expect(reason('x'.repeat(4001))).toBe(
-            'A comment has at most 4,000 characters, and this one has 4,001'
+            'Comments can be up to 4,000 characters long. This one has 4,001.'
         )
-        expect(reason('bell\u0007')).toBe('A comment cannot hold control characters')
+        expect(reason('bell\u0007')).toBe(
+            'This comment has a hidden control character. Remove it to save.'
+        )
         expect(reason('   \n  ')).toBeUndefined()
         expect(session.saveAnnotationPrompt(group)).toBe(true)
         expect(session.project.files.crackme.annotations).toBeUndefined()
@@ -491,7 +497,7 @@ describe('Comment…', () => {
             address: MAIN
         })
         expect(session.openCommentPrompt(group, call, true)).toBe(true)
-        expect(group.openAnnotationPrompt!.spec.title).toBe('Comment on the function main')
+        expect(group.openAnnotationPrompt!.spec.title).toBe('Comment on main')
         group.openAnnotationPrompt!.input('Asks for the password\nand checks it')
         expect(session.saveAnnotationPrompt(group)).toBe(true)
         expect(session.project.files.crackme.annotations).toEqual({
@@ -735,7 +741,7 @@ describe('the prompt', () => {
         flushSync()
         const dialog = target.querySelector<HTMLElement>('[role="dialog"]')!
         expect(dialog.getAttribute('aria-labelledby')).toBeTruthy()
-        expect(target.textContent).toContain('Comment on the function main')
+        expect(target.textContent).toContain('Comment on main')
         const field = target.querySelector('textarea')!
         expect(field.getAttribute('aria-label')).toBe('Comment')
         field.value = 'a'.repeat(4001)
@@ -744,7 +750,7 @@ describe('the prompt', () => {
         //the reason, as the field's description, and Save disabled
         const reason = target.querySelector<HTMLElement>('.annotation-error')!
         expect(reason.textContent).toBe(
-            'A comment has at most 4,000 characters, and this one has 4,001'
+            'Comments can be up to 4,000 characters long. This one has 4,001.'
         )
         expect(field.getAttribute('aria-describedby')).toBe(reason.id)
         expect(field.getAttribute('aria-invalid')).toBe('true')
@@ -768,6 +774,55 @@ describe('the prompt', () => {
         })
         dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
         expect(closed).toHaveBeenCalledOnce()
+    })
+
+    it('deletes a comment there is with Delete, as one undoable step, offered on no other', async () => {
+        const { session } = setup()
+        const { group, listing } = await shown(session)
+        const lea = lineOf(listing, 'lea rdx, [rel s_hunter2]')
+        //a new comment has nothing to delete, and a name never has
+        session.openCommentPrompt(group, lea)
+        expect(group.openAnnotationPrompt!.deletable).toBe(false)
+        session.openRenamePrompt(group, lineOf(listing, 'main:'), 0)
+        expect(group.openAnnotationPrompt!.deletable).toBe(false)
+        session.closeAnnotationPrompt(group)
+        session.setComment('crackme', listing.lines.addresses[lea], 'the password')
+        session.openCommentPrompt(group, lea)
+        const closed = vi.fn(() => session.closeAnnotationPrompt(group))
+        const target = document.createElement('div')
+        document.body.append(target)
+        const view = mount(AnnotationPromptView, {
+            target,
+            props: {
+                prompt: group.openAnnotationPrompt!,
+                onsave: () => session.saveAnnotationPrompt(group),
+                onclose: closed
+            }
+        })
+        disposers.push(() => unmount(view))
+        flushSync()
+        expect(target.querySelector('.annotation-hint')?.textContent).toBe(
+            'Press Enter to save, Shift+Enter to add a line.'
+        )
+        //whatever the field holds, even text that cannot be saved
+        const field = target.querySelector('textarea')!
+        field.value = 'bell\u0007'
+        field.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+        const remove = [...target.querySelectorAll('button')].find(
+            (button) => button.textContent === 'Delete'
+        )!
+        expect(remove.type).toBe('button')
+        expect(remove.disabled).toBe(false)
+        remove.click()
+        expect(closed).toHaveBeenCalledOnce()
+        expect(session.project.files.crackme.annotations).toBeUndefined()
+        expect(session.undoAnnotation('crackme')).toBe(true)
+        expect(Object.values(session.project.files.crackme.annotations?.comments ?? {})).toEqual([
+            'the password'
+        ])
+        expect(session.redoAnnotation('crackme')).toBe(true)
+        expect(session.project.files.crackme.annotations).toBeUndefined()
     })
 
     it('asks for a name in one line, with a jump target’s dot before it', async () => {

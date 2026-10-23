@@ -422,12 +422,12 @@
         const text = column === 'hex' ? bytesAsHex(copied) : bytesAsText(copied)
         const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard
         if (!clipboard) {
-            toast.error('The clipboard is not available here')
+            toast.error("Copying isn't available in this browser.")
             return
         }
         clipboard.writeText(text).then(
             () => {},
-            () => toast.error('Could not copy to the clipboard')
+            () => toast.error("Couldn't copy to the clipboard.")
         )
     }
 

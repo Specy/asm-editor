@@ -323,7 +323,7 @@ describe('the search client', () => {
         client.sync(PROJECT)
         expect(await client.search({ text: '(', regex: true }).done).toEqual({
             status: 'invalid',
-            problem: 'Not a valid regular expression: unterminated group.'
+            problem: "This regular expression isn't valid: unterminated group."
         })
         expect(await client.search({ text: '' }).done).toEqual({
             status: 'complete',
@@ -373,7 +373,7 @@ describe('the search client', () => {
         )
         expect(await dying.done).toEqual({
             status: 'failed',
-            message: 'The search failed: out of memory'
+            message: 'Search stopped unexpectedly. Search again to retry.'
         })
         expect(completed(await client.search({ text: 'strcmp' }).done).totals.matches).toBe(3)
         expect(InThreadSearchWorker.made).toHaveLength(2)
@@ -388,7 +388,7 @@ describe('the search client', () => {
         nowhere.sync(PROJECT)
         expect(await nowhere.search({ text: 'strcmp' }).done).toEqual({
             status: 'failed',
-            message: 'The search could not start: Worker is not defined'
+            message: "Search couldn't start (Worker is not defined). Reload the page to try again."
         })
     })
 

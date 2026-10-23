@@ -72,33 +72,66 @@ describe('saved Annotations', () => {
     })
 
     it.each([
-        [[], 'Invalid annotations for chall'],
-        [null, 'Invalid annotations for chall'],
-        ['names', 'Invalid annotations for chall'],
-        [{ labels: {} }, 'Invalid annotations for chall'],
-        [{ names: [] }, 'Invalid names for chall'],
-        [{ names: { '4409': 'check' } }, 'Invalid address of a name in chall: 4409'],
-        [{ names: { '0x01139': 'check' } }, 'Invalid address of a name in chall: 0x01139'],
-        [{ names: { '0x1A': 'check' } }, 'Invalid address of a name in chall: 0x1A'],
-        [{ names: { '0x20000000000000': 'x' } }, 'Invalid address of a name'],
-        [{ names: { '0x1139': 3 } }, 'Invalid name in chall at 0x1139: not text'],
-        [{ names: { '0x1139': 'my main' } }, 'Invalid name in chall at 0x1139: A name holds'],
-        [{ names: { '0x1139': 'rax' } }, 'rax is the name of an x86 register'],
-        [{ names: { '0x1139': 'int' } }, 'int is a keyword of C'],
-        [{ names: { '0x1139': 'x'.repeat(129) } }, 'at most 128 characters'],
-        [{ comments: { '0x1150': '' } }, 'Invalid comment in chall at 0x1150: an empty comment'],
+        [[], "chall has damaged renames or comments and can't be opened."],
+        [null, "chall has damaged renames or comments and can't be opened."],
+        ['names', "chall has damaged renames or comments and can't be opened."],
+        [{ labels: {} }, "chall has damaged renames or comments and can't be opened."],
+        [{ names: [] }, "chall has damaged renames or comments and can't be opened."],
+        [{ names: { '4409': 'check' } }, 'chall has a rename or comment at a bad address (4409).'],
+        [
+            { names: { '0x01139': 'check' } },
+            'chall has a rename or comment at a bad address (0x01139).'
+        ],
+        [{ names: { '0x1A': 'check' } }, 'chall has a rename or comment at a bad address (0x1A).'],
+        [{ names: { '0x20000000000000': 'x' } }, 'chall has a rename or comment at a bad address'],
+        [{ names: { '0x1139': 3 } }, "chall has a name at 0x1139 that can't be used: not text"],
+        [
+            { names: { '0x1139': 'my main' } },
+            "chall has a name at 0x1139 that can't be used: The name can only have"
+        ],
+        [{ names: { '0x1139': 'rax' } }, '“rax” is an x86 register. Choose another name.'],
+        [{ names: { '0x1139': 'int' } }, '“int” is a C keyword. Choose another name.'],
+        [{ names: { '0x1139': 'x'.repeat(129) } }, 'up to 128 characters long'],
+        [
+            { comments: { '0x1150': '' } },
+            "chall has a comment at 0x1150 that can't be used: an empty comment"
+        ],
         [{ comments: { '0x1150': ' \n ' } }, 'an empty comment'],
-        [{ comments: { '0x1150': 'a\tb' } }, 'A comment cannot hold control characters'],
-        [{ comments: { '0x1150': 'x'.repeat(4001) } }, 'at most 4,000 characters'],
-        [{ comments: { '0x1150': 'x\n'.repeat(40) + 'x' } }, 'at most 40 lines'],
-        [{ functionComments: { '0x1139': null } }, 'Invalid function comment in chall'],
-        [{ locals: { '0x1139': 'password' } }, 'Invalid local names for chall at 0x1139'],
-        [{ locals: { main: { 'stack:-0x98': 'password' } } }, 'Invalid address of a function'],
-        [{ locals: { '0x1139': { '': 'password' } } }, 'Invalid variable id in chall at 0x1139'],
-        [{ locals: { '0x1139': { 'stack:\n': 'password' } } }, 'Invalid variable id'],
-        [{ locals: { '0x1139': { ['x'.repeat(257)]: 'password' } } }, 'Invalid variable id'],
-        [{ locals: { '0x1139': { 'stack:-0x98': 'iVar1' } } }, 'iVar1 reads as a name the'],
-        [{ locals: { '0x1139': { 'stack:-0x98': 'local_98' } } }, 'local_98 reads as a name']
+        [
+            { comments: { '0x1150': 'a\tb' } },
+            'This comment has a hidden control character. Remove it to save.'
+        ],
+        [{ comments: { '0x1150': 'x'.repeat(4001) } }, 'up to 4,000 characters long'],
+        [{ comments: { '0x1150': 'x\n'.repeat(40) + 'x' } }, 'up to 40 lines long'],
+        [{ functionComments: { '0x1139': null } }, 'chall has a function comment at 0x1139'],
+        [
+            { locals: { '0x1139': 'password' } },
+            "chall has damaged renames or comments and can't be opened."
+        ],
+        [
+            { locals: { main: { 'stack:-0x98': 'password' } } },
+            'chall has a rename or comment at a bad address'
+        ],
+        [
+            { locals: { '0x1139': { '': 'password' } } },
+            'chall has a rename or comment at a bad address (0x1139).'
+        ],
+        [
+            { locals: { '0x1139': { 'stack:\n': 'password' } } },
+            'chall has a rename or comment at a bad address'
+        ],
+        [
+            { locals: { '0x1139': { ['x'.repeat(257)]: 'password' } } },
+            'chall has a rename or comment at a bad address'
+        ],
+        [
+            { locals: { '0x1139': { 'stack:-0x98': 'iVar1' } } },
+            'The name “iVar1” uses the same format'
+        ],
+        [
+            { locals: { '0x1139': { 'stack:-0x98': 'local_98' } } },
+            'The name “local_98” uses the same'
+        ]
     ])('are refused when malformed (%#)', (value, message) => {
         const raw = { chall: { ...chall, annotations: value } }
         expect(String(formatError(() => cleanFiles(raw)))).toContain(message)
@@ -142,7 +175,7 @@ describe('saved Annotations', () => {
         })
         expect(storedAnnotationsSize(cleanFiles(files(32)))).toBe(65 * 4008)
         expect(formatError(() => cleanFiles(files(33)))).toBe(
-            'Project exceeds the 256 KiB annotation limit'
+            'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
         )
     })
 })
@@ -165,7 +198,7 @@ describe('a File with Annotations', () => {
         expect(withAnnotations('chall', named, undefined)).toEqual(edited)
         expect(withAnnotations('chall', named, {})).toEqual(edited)
         expect(formatError(() => withAnnotations('chall', named, { names: { '0x1': 'if' } }))).toBe(
-            'Invalid name in chall at 0x1: if is a keyword of C'
+            "chall has a name at 0x1 that can't be used: “if” is a C keyword. Choose another name."
         )
     })
 

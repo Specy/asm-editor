@@ -70,7 +70,7 @@ export type SearchStatus =
     /** A query being searched, its results streaming in. */
     | 'searching'
     | 'complete'
-    /** Past the time limit: "The search took too long", with the results found before. */
+    /** Past the time limit: "Search stopped after 2 seconds", with the results found before. */
     | 'timedOut'
     /** A regular expression that does not compile: `problem` says why. */
     | 'invalid'

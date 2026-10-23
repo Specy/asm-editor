@@ -310,7 +310,7 @@ export function labelHoverMarkdown(listing: Listing, label: ListingLabel): strin
         label.renameConflict === undefined
             ? []
             : [
-                  `Renamed ${markdownCode(label.renameConflict)} in this Project, but another label has that name, so this one keeps its own until one of them changes.`
+                  `You renamed this to ${markdownCode(label.renameConflict)}, but another label already has that name, so the original name is shown instead.`
               ]
     if (renamed)
         //the person's name, then what it was, as the hover gave it before

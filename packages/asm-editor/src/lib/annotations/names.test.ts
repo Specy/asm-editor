@@ -19,21 +19,21 @@ describe('any name', () => {
     it('is a C identifier of at most 128 characters', () => {
         for (const name of ['password', 'check_flag', '_start2', 'A', '_', 'x'.repeat(128)])
             expect(nameProblem(name), name).toBeUndefined()
-        expect(nameProblem('')).toBe('Write a name')
-        expect(nameProblem('2fast')).toBe('A name cannot start with a digit')
+        expect(nameProblem('')).toBe('Write a name.')
+        expect(nameProblem('2fast')).toBe('A name cannot start with a digit.')
         expect(nameProblem('x'.repeat(NAME_LENGTH_LIMIT + 1))).toBe(
-            'A name has at most 128 characters, and this one has 129'
+            'Names can be up to 128 characters long. This one has 129.'
         )
     })
 
     it('says which character is not one, since the Pseudocode would print it as given', () => {
         expect(nameProblem('my main')).toBe(
-            'A name holds letters, digits and underscores only, not a space'
+            'The name can only have letters, digits and underscores. This name has a space.'
         )
-        expect(nameProblem('a\tb')).toContain('not a tab')
-        expect(nameProblem('a\nb')).toContain('not a line break')
-        expect(nameProblem('a\u0007b')).toContain('not a control character')
-        expect(nameProblem('a\u00a0b')).toContain('not a blank')
+        expect(nameProblem('a\tb')).toContain('This name has a tab.')
+        expect(nameProblem('a\nb')).toContain('This name has a line break.')
+        expect(nameProblem('a\u0007b')).toContain('This name has a control character.')
+        expect(nameProblem('a\u00a0b')).toContain('This name has a blank.')
         //`@` and `.` already mean something in the Listing, `$` is NASM's
         for (const [name, character] of [
             ['puts@plt', '@'],
@@ -45,15 +45,15 @@ describe('any name', () => {
             ['\u{1f600}', '\u{1f600}']
         ])
             expect(nameProblem(name)).toBe(
-                `A name holds letters, digits and underscores only, not “${character}”`
+                `The name can only have letters, digits and underscores. This name has “${character}”.`
             )
     })
 
     it("is no keyword of C's or C++'s, in their own case", () => {
         for (const keyword of ['int', 'if', 'return', '_Bool', 'typeof', 'true', 'bool', 'void'])
-            expect(nameProblem(keyword)).toBe(`${keyword} is a keyword of C`)
+            expect(nameProblem(keyword)).toBe(`“${keyword}” is a C keyword. Choose another name.`)
         for (const keyword of ['class', 'co_await', 'operator', 'this', 'wchar_t', 'xor_eq'])
-            expect(nameProblem(keyword)).toBe(`${keyword} is a keyword of C++`)
+            expect(nameProblem(keyword)).toBe(`“${keyword}” is a C++ keyword. Choose another name.`)
         expect(nameProblem('Int')).toBeUndefined()
         expect(nameProblem('If')).toBeUndefined()
         //contextual words are names
@@ -63,18 +63,24 @@ describe('any name', () => {
 
     it("is no type of the decompiler's", () => {
         for (const word of ['undefined', 'undefined1', 'undefined8', 'code', 'uint', 'ulonglong'])
-            expect(nameProblem(word)).toBe(`${word} is a type the decompiler writes`)
+            expect(nameProblem(word)).toBe(
+                `“${word}” is the name of a type used in the Pseudocode. Choose another name.`
+            )
         expect(nameProblem('undefined9')).toBeUndefined()
         expect(nameProblem('Code')).toBeUndefined()
     })
 
     it('is no x86 register nor a word of NASM operands, in any case', () => {
         for (const register of ['rax', 'RAX', 'eAx', 'al', 'r8d', 'r15b', 'xmm15', 'zmm31', 'rip'])
-            expect(nameProblem(register)).toBe(`${register} is the name of an x86 register`)
+            expect(nameProblem(register)).toBe(
+                `“${register}” is an x86 register. Choose another name.`
+            )
         for (const word of ['byte', 'QWORD', 'zword', 'ptr', 'rel', 'abs', 'near', 'wrt', 'seg'])
-            expect(nameProblem(word)).toBe(`${word} is a word NASM reads in operands`)
+            expect(nameProblem(word)).toBe(
+                `“${word}” is a special word in assembly. Choose another name.`
+            )
         //`short` is C's before it is NASM's
-        expect(nameProblem('short')).toBe('short is a keyword of C')
+        expect(nameProblem('short')).toBe('“short” is a C keyword. Choose another name.')
         for (const name of ['raxes', 'r8x', 'flags', 'ptr2', 'top', 'stop'])
             expect(nameProblem(name), name).toBeUndefined()
     })
@@ -82,9 +88,13 @@ describe('any name', () => {
     it('is no word the Patch prompt reads as no name, so a renamed label can be typed back', () => {
         //`fadd to st1`, `[nosplit rel x]`, the x87 stack's top, `ip`, and `r8l` for `r8b`
         for (const register of ['st', 'ST', 'ip', 'r8l', 'r15l'])
-            expect(nameProblem(register)).toBe(`${register} is the name of an x86 register`)
+            expect(nameProblem(register)).toBe(
+                `“${register}” is an x86 register. Choose another name.`
+            )
         for (const word of ['to', 'nosplit'])
-            expect(nameProblem(word)).toBe(`${word} is a word NASM reads in operands`)
+            expect(nameProblem(word)).toBe(
+                `“${word}” is a special word in assembly. Choose another name.`
+            )
         //one list for both
         for (const word of [...NASM_REGISTERS, ...NASM_OPERAND_WORDS])
             expect(nameProblem(word), word).toBeDefined()
@@ -92,11 +102,11 @@ describe('any name', () => {
 
     it("is no type or constant of the C library's, which the Pseudocode writes", () => {
         for (const type of ['size_t', 'FILE', 'DIR', 'va_list', 'pid_t', 'uint8_t', 'tm'])
-            expect(nameProblem(type)).toBe(
-                `${type} is a type of the C library, which the decompiler writes`
-            )
+            expect(nameProblem(type)).toBe(`“${type}” is a C library type. Choose another name.`)
         for (const name of ['NULL', 'EOF', 'SEEK_SET', 'EXIT_FAILURE'])
-            expect(nameProblem(name)).toBe(`${name} is a constant of the C library`)
+            expect(nameProblem(name)).toBe(
+                `“${name}” is a C library constant. Choose another name.`
+            )
         expect(nameProblem('Size_t')).toBeUndefined()
         expect(nameProblem('null')).toBeUndefined()
     })
@@ -145,10 +155,10 @@ describe('a global name', () => {
     it('differs from every other label of the Listing, raw, invented or renamed', () => {
         expect(globalNameProblem('validate', labels, 0x1200)).toBeUndefined()
         expect(globalNameProblem('main', labels, 0x1200)).toBe(
-            'main is the name of another label, at 0x1139'
+            'Another label is already called “main” (at 0x1139).'
         )
         expect(globalNameProblem('FUN_brave_otter', labels, 0x1139)).toBe(
-            'FUN_brave_otter is the name of another label, at 0x1200'
+            'Another label is already called “FUN_brave_otter” (at 0x1200).'
         )
         //`main` keeps its own name, and may take an alias's, which names the same place
         expect(globalNameProblem('main', labels, 0x1139)).toBeUndefined()
@@ -157,10 +167,10 @@ describe('a global name', () => {
 
     it("differs from a library symbol's name, which the Pseudocode prints for its stub", () => {
         expect(globalNameProblem('puts', labels, 0x1200)).toBe(
-            'puts is the name of another label, puts@plt, at 0x1030'
+            '“puts” is already used by puts@plt (at 0x1030).'
         )
         expect(globalNameProblem('memcpy', labels, 0x1200)).toBe(
-            'memcpy is the name of another label, memcpy@GLIBC_2.14, at 0x1040'
+            '“memcpy” is already used by memcpy@GLIBC_2.14 (at 0x1040).'
         )
     })
 
@@ -172,7 +182,7 @@ describe('a global name', () => {
         ]
         expect(globalNameProblem('stdin_copy', renamed, 0x1200)).toBeUndefined()
         expect(globalNameProblem('stdin', renamed, 0x1200)).toBe(
-            'stdin is the name of another label, stdin@GLIBC_2.2.5, which you renamed my_in, at 0x4010'
+            '“stdin” is already used by stdin@GLIBC_2.2.5, which was renamed to my_in (at 0x4010).'
         )
         //its own label may take it back
         expect(globalNameProblem('stdin', renamed, 0x4010)).toBeUndefined()
@@ -188,7 +198,7 @@ describe('a global name', () => {
         ]
         expect(globalNameProblem('secret', labels, 0x4040, { locals })).toBeUndefined()
         expect(globalNameProblem('password', labels, 0x4040, { locals })).toBe(
-            'password is the name of a variable of main, whose Pseudocode would then write this label as ::password'
+            '“password” is already a variable defined in main. Choose another name.'
         )
         //a jump target's `.password` is no global
         expect(
@@ -197,8 +207,10 @@ describe('a global name', () => {
     })
 
     it('is refused for what it is before whom it clashes with', () => {
-        expect(globalNameProblem('rax', labels, 0x1200)).toBe('rax is the name of an x86 register')
-        expect(globalNameProblem('my main', labels, 0x1200)).toContain('not a space')
+        expect(globalNameProblem('rax', labels, 0x1200)).toBe(
+            '“rax” is an x86 register. Choose another name.'
+        )
+        expect(globalNameProblem('my main', labels, 0x1200)).toContain('This name has a space.')
     })
 
     it("of a jump target differs from its function's other jump targets alone", () => {
@@ -209,7 +221,7 @@ describe('a global name', () => {
         ]
         expect(globalNameProblem('done', ownFunction, 0x1210, { jumpTarget: true })).toBeUndefined()
         expect(globalNameProblem('loop', ownFunction, 0x1210, { jumpTarget: true })).toBe(
-            'loop is the name of another jump target of this function, at 0x1220'
+            'Another jump target in this function is already called “loop” (at 0x1220).'
         )
         //written `.FUN_brave_otter`, it clashes with no global
         expect(
@@ -221,11 +233,15 @@ describe('a global name', () => {
     })
 
     it('is never given to a PLT stub or a GOT slot, which the library names', () => {
-        expect(libraryNameProblem('puts@plt')).toBe('puts is named by the library it comes from')
-        expect(libraryNameProblem('__libc_start_main@plt_resolver')).toBe(
-            '__libc_start_main is named by the library it comes from'
+        expect(libraryNameProblem('puts@plt')).toBe(
+            "“puts” can't be renamed, as it comes from a shared library."
         )
-        expect(libraryNameProblem('stdin@got')).toBe('stdin is named by the library it comes from')
+        expect(libraryNameProblem('__libc_start_main@plt_resolver')).toBe(
+            "“__libc_start_main” can't be renamed, as it comes from a shared library."
+        )
+        expect(libraryNameProblem('stdin@got')).toBe(
+            "“stdin” can't be renamed, as it comes from a shared library."
+        )
         for (const name of ['main', 'FUN_brave_otter', 'memcpy@GLIBC_2.14', '@plt', '.LAB_3'])
             expect(libraryNameProblem(name), name).toBeUndefined()
     })
@@ -238,13 +254,13 @@ describe('a local name', () => {
     it("differs from the function's other variables and from every global", () => {
         expect(localNameProblem('password', variables, globals)).toBeUndefined()
         expect(localNameProblem('len', variables, globals)).toBe(
-            'len is the name of another variable of this function'
+            'Another variable in this function is already called “len”.'
         )
         expect(localNameProblem('main', variables, globals)).toBe(
-            'main is the name of a global, which the Pseudocode would then write as ::main'
+            'The name “main” is already used as a function or global variable. Choose another name.'
         )
         expect(localNameProblem('printf', variables, globals)).toBe(
-            'printf is the name of a global, which the Pseudocode would then write as ::printf'
+            'The name “printf” is already used as a function or global variable. Choose another name.'
         )
         expect(localNameProblem('LAB_3', variables, globals)).toBeUndefined()
     })
@@ -276,7 +292,7 @@ describe('a local name', () => {
         ]) {
             expect(looksLikeGhidraName(name), name).toBe(true)
             expect(localNameProblem(name, [], [])).toBe(
-                `${name} reads as a name the decompiler gives; choose one that does not`
+                `The name “${name}” uses the same format that the decompiler uses. Choose a different name.`
             )
         }
         for (const name of [
@@ -297,7 +313,7 @@ describe('a local name', () => {
     })
 
     it('follows the rules of any name first', () => {
-        expect(localNameProblem('int', [], [])).toBe('int is a keyword of C')
-        expect(localNameProblem('', ['x'], [])).toBe('Write a name')
+        expect(localNameProblem('int', [], [])).toBe('“int” is a C keyword. Choose another name.')
+        expect(localNameProblem('', ['x'], [])).toBe('Write a name.')
     })
 })

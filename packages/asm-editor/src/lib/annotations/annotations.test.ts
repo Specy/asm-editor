@@ -72,15 +72,15 @@ describe('comments', () => {
         expect(commentProblem('')).toBeUndefined()
         expect(commentProblem('x'.repeat(4000))).toBeUndefined()
         expect(commentProblem('x'.repeat(4001))).toBe(
-            'A comment has at most 4,000 characters, and this one has 4,001'
+            'Comments can be up to 4,000 characters long. This one has 4,001.'
         )
         expect(commentProblem(Array(40).fill('line').join('\n'))).toBeUndefined()
         expect(commentProblem(Array(41).fill('line').join('\n'))).toBe(
-            'A comment has at most 40 lines, and this one has 41'
+            'Comments can be up to 40 lines long. This one has 41.'
         )
         for (const control of ['\u0000', '\t', '\r', '\u001b', '\u007f', '\u0085', '\u2028'])
             expect(commentProblem(`a${control}b`), JSON.stringify(control)).toBe(
-                'A comment cannot hold control characters'
+                'This comment has a hidden control character. Remove it to save.'
             )
         //what normalizing leaves is always one
         expect(commentProblem(normalizeComment('a\tb\r\nc\u2028d'))).toBeUndefined()

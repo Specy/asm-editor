@@ -384,7 +384,9 @@ export class FileSystem {
         const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
         files[path] = withAnnotations(path, file, annotations)
         if (storedAnnotationsSize(files) > ANNOTATIONS_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 256 KiB annotation limit')
+            throw new ProjectFormatError(
+                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            )
         this.store.write(Object.freeze(files))
         this.notify(true)
     }
@@ -560,7 +562,9 @@ export class FileSystemSession {
         for (const [other, each] of this.paths) if (each.file) records[other] = each.file
         records[path] = next
         if (storedAnnotationsSize(records) > ANNOTATIONS_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 256 KiB annotation limit')
+            throw new ProjectFormatError(
+                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            )
         node.file = next
         this.flush()
     }

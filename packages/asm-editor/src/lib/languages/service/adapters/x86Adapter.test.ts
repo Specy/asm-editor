@@ -229,7 +229,7 @@ describe('x86 Project analysis adapter', () => {
                 severity: 'warning',
                 location: expect.objectContaining({ path: 'main.asm' }),
                 message:
-                    'Could not download the assembler: no data for 20 s. The code is checked once it downloads, which is tried again shortly.'
+                    "Code checking is paused: couldn't download the assembler (no response for 20 seconds). It will try again shortly."
             })
         ])
         //a server that refused it refuses it again: only a reload helps
@@ -238,7 +238,7 @@ describe('x86 Project analysis adapter', () => {
         expect(refused.snapshot.diagnostics[0]).toMatchObject({
             severity: 'warning',
             message:
-                'Could not download the assembler: 404 Not Found. Reload the page to have the code checked.'
+                "Code checking is paused: couldn't download the assembler (404 Not Found). Reload the page to check your code."
         })
         //and the next check checks
         check.mockRestore()

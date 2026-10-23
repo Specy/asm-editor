@@ -19,6 +19,7 @@
         type SearchedListing
     } from '#lib/projectSearch/projectSearch.svelte.ts'
     import { escapeRegExp } from '#lib/projectSearch/query.ts'
+    import { SEARCH_TIME_LIMIT_MS } from '#lib/projectSearch/searchClient.ts'
     import {
         groupResults,
         type SearchDocumentResult,
@@ -85,6 +86,8 @@
     const totals = $derived(search.totals)
     const hidden = $derived(totals.lines - totals.rows)
 
+    const stopped = `Search stopped after ${SEARCH_TIME_LIMIT_MS / 1000} seconds.`
+
     /** What the summary says under the controls. */
     const summary = $derived.by(() => {
         if (!search.text) return ''
@@ -95,13 +98,13 @@
                     ? `Searching… ${found} so far`
                     : 'Searching…'
             case 'complete':
-                return totals.matches ? found : 'No results found.'
+                return totals.matches ? found : 'No matches found.'
             case 'timedOut':
                 return totals.matches
-                    ? `The search took too long: ${found} before it stopped.`
-                    : 'The search took too long.'
+                    ? `${stopped} Found ${found} before stopping. Try a simpler pattern.`
+                    : `${stopped} Try a simpler pattern.`
             case 'failed':
-                return search.problem ?? 'The search failed.'
+                return search.problem ?? 'Search failed. Try again.'
             default:
                 return ''
         }
@@ -235,8 +238,8 @@
     )
 
     function groupTitle(group: SearchResultGroup) {
-        if (group.kind === 'listing') return `${group.path}, its Listing`
-        if (group.kind === 'pseudocode') return `${group.path}, its Pseudocode`
+        if (group.kind === 'listing') return `The Listing of ${group.path}`
+        if (group.kind === 'pseudocode') return `The Pseudocode of ${group.path}`
         return group.path
     }
 
@@ -525,9 +528,9 @@
                         <div class="lane lane-line">
                             {#if search.cancelled.has(lane.path) || progress.done > 0 || progress.total <= AUTO_DECOMPILE_LIMIT}
                                 <p>
-                                    Decompiled {progress.done.toLocaleString('en-US')} of {progress.total.toLocaleString(
+                                    Searched {progress.done.toLocaleString('en-US')} of {progress.total.toLocaleString(
                                         'en-US'
-                                    )} functions of {lane.name}: the rest are not searched.
+                                    )} functions of {lane.name}. Press Resume to search the rest.
                                 </p>
                                 <button
                                     type="button"
@@ -536,9 +539,8 @@
                                 >
                             {:else}
                                 <p>
-                                    The Pseudocode of {lane.name}'s {progress.total.toLocaleString(
-                                        'en-US'
-                                    )} functions is decompiled once you search.
+                                    {lane.name} has {progress.total.toLocaleString('en-US')} functions.
+                                    Their Pseudocode is decompiled when you search.
                                 </p>
                                 <button
                                     type="button"
@@ -552,7 +554,7 @@
                     {#if progress.failures.length}
                         <details class="lane failures">
                             <summary>
-                                {count(progress.failures.length, 'function')} of {lane.name} not searched
+                                {`${count(progress.failures.length, 'function')} of ${lane.name} couldn't be searched.`}
                             </summary>
                             <ul>
                                 {#each progress.failures as failure (failure.address)}
@@ -581,7 +583,7 @@
     {/if}
 
     {#if nothingTicked}
-        <p class="note">Tick a place under Look in to search it.</p>
+        <p class="note">Nothing to search: tick Files, Listings or Pseudocode under “Look in”.</p>
     {:else if !search.text}
         <p class="note">
             {offered

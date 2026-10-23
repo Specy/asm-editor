@@ -100,6 +100,7 @@ import {
     x86CoreProject,
     X86_START_UNIT_FILES
 } from './x86StartUnit'
+import { downloadReason } from './x86Downloads'
 import type { Termination } from '#lib/languages/termination.ts'
 import { X86_INSTRUCTIONS } from './generated/x86Instructions'
 import { x86FormSupport } from './x86Support'
@@ -186,17 +187,25 @@ const MAX_INSTRUCTION_LENGTH = 15n
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
 
 /**
- * What a program that ended on an instruction of an extension the Core does not run is told, in
- * place of "Illegal instruction"
+ * What the run's status says of a program that ended on an instruction of an extension the Core
+ * does not run, in place of "Illegal instruction"
  * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
- * 1), for the family a reader knows it by: "AVX-512 instructions are not currently supported". A
- * real processor with that extension would run it.
+ * 1), for the family a reader knows it by: "stopped: AVX-512 isn't supported yet". A real
+ * processor with that extension would run it.
  */
 function unsupportedText(family: string): string {
-    // `the SHA extensions` is already a plural to begin a sentence with
-    return family.startsWith('the ')
-        ? `${family[0].toUpperCase()}${family.slice(1)} are not currently supported`
-        : `${family} instructions are not currently supported`
+    // `the SHA extensions` and `SM3 and SM4` are plurals
+    const plural = family.startsWith('the ') || family.includes(' and ')
+    return `stopped: ${family} ${plural ? "aren't" : "isn't"} supported yet`
+}
+
+/**
+ * The instructions of a family the Core does not run, as the Log's note names them: "AVX-512
+ * instructions", "the SHA extensions".
+ */
+function unsupportedInstructions(family: string): string {
+    // `the SHA extensions` already says what they are
+    return family.startsWith('the ') ? family : `${family} instructions`
 }
 
 /** The prefixes a VEX or EVEX prefix may follow: the segment overrides and the address size. */
@@ -483,14 +492,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const decoded = illegal?.decoded
         if (!illegal || !decoded || decoded.isInvalid) return []
         if (UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
-        const ran = `The program ran \`${decoded.text}\` at \`0x${illegal.address.toString(16)}\``
+        const stopped = `The program stopped at \`${decoded.text}\` (\`0x${illegal.address.toString(16)}\`)`
         const family = unsupportedFamily(illegal.bytes, decoded)
         return [
             {
                 tone: 'warning',
                 text: family
-                    ? `${ran}. ${unsupportedText(family)}.`
-                    : `${ran}, which the emulator does not support`
+                    ? `${stopped}: this emulator doesn't support ${unsupportedInstructions(family)} yet.`
+                    : `${stopped}: this emulator can't run that instruction.`
             }
         ]
     }
@@ -690,7 +699,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             //a library or the assembler that could not be downloaded: Build again, and it is
             //downloaded again, after a reload of the page when the server refused it
             if (error instanceof ResourceDownloadError)
-                throw new BuildDownloadError(error.message, {
+                throw new BuildDownloadError(error.resource, downloadReason(error), {
                     cause: error,
                     refused: error.status !== undefined
                 })
@@ -746,7 +755,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
             //the dynamic linker will fail to load the program with its own message, on stderr
             const missing = info.missing.map(
-                (name) => `${name} is not one of the bundled libraries`
+                (name) => `This emulator doesn't have ${name}, so the program may not start.`
             )
             return {
                 ok: true,

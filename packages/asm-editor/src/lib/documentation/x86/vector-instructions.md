@@ -16,11 +16,11 @@ The emulator runs every VEX-encoded instruction of these extensions:
 | AES-NI, PCLMULQDQ | `vaesenc`, `vaesdec`, `vaeskeygenassist`, `vpclmulqdq xmm`                                |
 | SSE4.1, SSE4.2    | `vpminsd`, `vpmovzxbw`, `vblendvps`, `vptest`, `vroundps`, `vdpps`, `vpcmpistri`          |
 
-Most of SSE4.1, SSE4.2 and AES-NI run only in their `v` form: write `vpminsd xmm0, xmm0, xmm1`, not `pminsd xmm0, xmm1`. The legacy encodings without `v` stop the program with `SIGILL`, the illegal-instruction signal, and the **Log** names the instruction: "The program ran `pminsd xmm0, xmm1` at `0x401000`, which the emulator does not support". Four run in both forms: `pmulld`, `movntdqa`, `pclmulqdq` and `crc32`, which has no `v` form. SSE, SSE2, SSE3 and SSSE3 run in both forms.
+Most of SSE4.1, SSE4.2 and AES-NI run only in their `v` form: write `vpminsd xmm0, xmm0, xmm1`, not `pminsd xmm0, xmm1`. The legacy encodings without `v` stop the program with `SIGILL`, the illegal-instruction signal, and the **Log** names the instruction: "The program stopped at `pminsd xmm0, xmm1` (`0x401000`): this emulator can't run that instruction." Four run in both forms: `pmulld`, `movntdqa`, `pclmulqdq` and `crc32`, which has no `v` form. SSE, SSE2, SSE3 and SSSE3 run in both forms.
 
 These do not run, and stop the program with `SIGILL` in the same way:
 
-- **AVX-512**: the EVEX encoding, the `zmm` registers, `ymm16` to `ymm31`, the `k` mask registers, masking such as `{k1}{z}` and embedded broadcasts such as `{1to16}`. The Log says "AVX-512 instructions are not currently supported."
+- **AVX-512**: the EVEX encoding, the `zmm` registers, `ymm16` to `ymm31`, the `k` mask registers, masking such as `{k1}{z}` and embedded broadcasts such as `{1to16}`. The Log says "this emulator doesn't support AVX-512 instructions yet."
 - **VAES**, the 256-bit forms of the AES instructions, such as `vaesenc ymm0, ymm1, ymm2`.
 - The 256-bit form of `vpclmulqdq`.
 - **MMX**: every instruction on the 64-bit `mm` registers, such as `paddd mm0, mm1` or `movq mm0, rax`. Only `emms` runs, and does nothing.

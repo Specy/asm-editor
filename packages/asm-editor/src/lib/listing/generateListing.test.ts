@@ -1208,7 +1208,7 @@ describe('Annotations', () => {
         expect(labelHoverMarkdown(refused, labelNamed(refused, 'main'))).toBe(
             [
                 '**main** at `0x5555555551e9`',
-                'Renamed `_start` in this Project, but another label has that name, so this one keeps its own until one of them changes.',
+                'You renamed this to `_start`, but another label already has that name, so the original name is shown instead.',
                 'Named by the symbol table.'
             ].join('\n\n')
         )

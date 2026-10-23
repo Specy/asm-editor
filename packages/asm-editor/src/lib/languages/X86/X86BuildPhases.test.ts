@@ -97,10 +97,10 @@ describe('an x86 Build', () => {
         const failed = emulator.compile(0, executable)
         await expect(failed).rejects.toBeInstanceOf(BuildDownloadError)
         await expect(failed).rejects.toThrow(
-            'Could not download libc.so.6: no data for 20 s. Check the connection and Build again.'
+            "Couldn't download libc.so.6 (no response for 20 seconds). Check your internet connection, then press Build again."
         )
         expect(emulator.errors).toEqual([
-            'Could not download libc.so.6: no data for 20 s. Check the connection and Build again.'
+            "Couldn't download libc.so.6 (no response for 20 seconds). Check your internet connection, then press Build again."
         ])
         expect(emulator.canExecute).toBe(false)
         expect(emulator.buildPhase).toBeUndefined()
@@ -119,7 +119,20 @@ describe('an x86 Build', () => {
             new ResourceDownloadError('libc.so.6', '404 Not Found', { status: 404 })
         )
         await expect(emulator.compile(0, executable)).rejects.toThrow(
-            'Could not download libc.so.6: 404 Not Found. Reload the page and Build again.'
+            "Couldn't download libc.so.6 (404 Not Found). The site may have been updated: reload the page, then press Build again."
+        )
+    })
+
+    it("gives the browser's reason without its own final period", async () => {
+        const emulator = await emulatorFor(executable)
+        const core = (emulator as unknown as { core: CoreX86Emulator }).core
+        //Firefox's message ends with a period, which the bracket would follow
+        const network = new TypeError('NetworkError when attempting to fetch resource.')
+        vi.spyOn(core, 'loadExecutable').mockRejectedValueOnce(
+            new ResourceDownloadError('libc.so.6', network.message, { cause: network })
+        )
+        await expect(emulator.compile(0, executable)).rejects.toThrow(
+            "Couldn't download libc.so.6 (NetworkError when attempting to fetch resource). Check your internet connection, then press Build again."
         )
     })
 })

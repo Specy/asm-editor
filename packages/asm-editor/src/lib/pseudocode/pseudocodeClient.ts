@@ -36,6 +36,12 @@ export const KEPT_PSEUDOCODE = 32
 export const BACKGROUND_TIME_LIMIT_MS = 5_000
 
 /**
+ * Why there is no Pseudocode when the worker died, could not start or was closed: the client's own
+ * failure, which another try may not have.
+ */
+const DECOMPILER_STOPPED = 'The decompiler stopped unexpectedly. Try again.'
+
+/**
  * A function's Pseudocode as the decompiler gives it, or `{ address, error }` with the reason
  * there is none. Its addresses (the result's, each line's `addresses`, each token's `address` and
  * `target`) are link-time ones, as the Listing's line table has them; the text prints them as the
@@ -360,7 +366,7 @@ export class PseudocodeClient {
         this.contentIds.clear()
         this.annotationIds.clear()
         for (const job of waiting)
-            this.answer(job, { address: job.address, error: 'The decompiler was closed' })
+            this.answer(job, { address: job.address, error: DECOMPILER_STOPPED })
     }
 
     private kept(key: string): PseudocodeResult | undefined {
@@ -405,8 +411,8 @@ export class PseudocodeClient {
         let state: WorkerState
         try {
             state = this.state ?? this.start()
-        } catch (error) {
-            return this.finish(job, failed(job, error, 'The decompiler failed: '), false)
+        } catch {
+            return this.finish(job, { address: job.address, error: DECOMPILER_STOPPED }, false)
         }
         this.stage(job, state.loaded ? 'decompiling' : 'loading')
         let program = this.programs.get(job.path)
@@ -516,13 +522,17 @@ export class PseudocodeClient {
                 if (job?.id !== response.id) break
                 const message = this.openFailures.get(job.program!) ?? response.message
                 this.openFailures.delete(job.program!)
-                this.finish(job, { address: job.address, error: message }, false)
+                this.finish(job, { address: job.address, error: decompilerReason(message) }, false)
                 return
             }
             case 'function': {
                 const job = this.current
                 if (job?.id !== response.id) break
-                const result = toLinkTime(response.result, job.listing.base)
+                const linked = toLinkTime(response.result, job.listing.base)
+                const result =
+                    'error' in linked
+                        ? { address: linked.address, error: decompilerReason(linked.error) }
+                        : linked
                 this.finish(job, result, !('error' in result && isTimeLimit(result.error)))
                 return
             }
@@ -545,7 +555,7 @@ export class PseudocodeClient {
                 () =>
                     this.fail(
                         state,
-                        `The decompiler stopped answering: nothing came from it for ${this.silenceMs / 1000} seconds`
+                        `The decompiler stopped responding after ${this.silenceMs / 1000} seconds.`
                     ),
                 this.silenceMs
             )
@@ -593,15 +603,8 @@ export class PseudocodeClient {
         )
         // A worker that fails to load or dies answers nothing: fail what waits on it, and let the
         // next request start a fresh one.
-        worker.addEventListener('error', (event) =>
-            this.fail(
-                state,
-                `The decompiler failed: ${(event as ErrorEvent).message || 'its worker failed to start'}`
-            )
-        )
-        worker.addEventListener('messageerror', () =>
-            this.fail(state, 'The decompiler failed: its worker sent an unreadable message')
-        )
+        worker.addEventListener('error', () => this.fail(state, DECOMPILER_STOPPED))
+        worker.addEventListener('messageerror', () => this.fail(state, DECOMPILER_STOPPED))
         return state
     }
 }
@@ -611,14 +614,25 @@ function jobKey(lane: PseudocodePriority, key: string) {
     return `${lane}\0${key}`
 }
 
-function failed(job: Job, error: unknown, prefix = ''): PseudocodeResult {
+function failed(job: Job, error: unknown): PseudocodeResult {
     const message = error instanceof Error ? error.message : String(error)
-    return { address: job.address, error: `${prefix}${message}` }
+    return { address: job.address, error: message }
 }
 
-/** The decompiler's message for a function past its time limit, which a less busy machine may beat. */
+/**
+ * The decompiler's reason there is no Pseudocode, as the editor says it: a function past the time
+ * limit ("main took longer than 30 seconds to decompile.") or past the instruction count ("main is
+ * too long to decompile (over 100000 instructions).") as a sentence, anything else as given.
+ */
+export function decompilerReason(error: string): string {
+    const tooLong = /^(.+) has more than (\d+) instructions$/s.exec(error)
+    if (tooLong) return `${tooLong[1]} is too long to decompile (over ${tooLong[2]} instructions).`
+    return / took longer than .* to decompile$/.test(error) ? `${error}.` : error
+}
+
+/** The reason for a function past its time limit, which a less busy machine may beat. */
 export function isTimeLimit(error: string): boolean {
-    return / took longer than .* to decompile$/.test(error)
+    return / took longer than .* to decompile\.?$/.test(error)
 }
 
 /** A result at the image's addresses, which are the Listing's shifted by its base, at link-time ones. */

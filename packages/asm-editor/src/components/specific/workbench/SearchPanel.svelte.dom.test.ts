@@ -525,7 +525,7 @@ describe('searching', () => {
         expect(view.summary()).toBe('3 matches in 2 Files')
         view.toggle('Match whole word')
         await view.searched()
-        expect(view.summary()).toBe('No results found.')
+        expect(view.summary()).toBe('No matches found.')
         view.toggle('Match whole word')
         view.toggle('Use regular expression')
         view.type('pass\\w+|not')
@@ -538,7 +538,7 @@ describe('searching', () => {
         flushSync()
         expect(view.session.projectSearch.regex).toBe(false)
         await view.searched()
-        expect(view.summary()).toBe('No results found.')
+        expect(view.summary()).toBe('No matches found.')
     })
 
     it('switches the toggles with ⌥⌘ on a Mac, where Option alone types a character', async () => {
@@ -650,7 +650,7 @@ describe('searching', () => {
         ).toEqual([false, true, false])
         //and nothing is searched with nothing ticked
         next.tick('Listings')
-        expect(next.target.querySelector('.note')?.textContent).toContain('Tick a place')
+        expect(next.target.querySelector('.note')?.textContent).toContain('Nothing to search')
     })
 
     it('offers no Look in without an Executable, in any Target', async () => {
@@ -694,14 +694,14 @@ describe('searching', () => {
         view.type('hunter(')
         await until(() => view.session.projectSearch.status === 'invalid')
         const problem = view.target.querySelector('.problem')!
-        expect(problem.textContent).toMatch(/^Not a valid regular expression: .+\.$/)
+        expect(problem.textContent).toMatch(/^This regular expression isn't valid: .+\.$/)
         expect(view.query().getAttribute('aria-invalid')).toBe('true')
         expect(view.query().getAttribute('aria-describedby')).toBe(problem.id)
         expect(view.rows()).toHaveLength(0)
         //a pattern that backtracks: the search worker is ended past the time limit
         view.type('(a+)+$')
         await until(() => view.session.projectSearch.status === 'timedOut', 6_000)
-        expect(view.summary()).toBe('The search took too long.')
+        expect(view.summary()).toBe('Search stopped after 2 seconds. Try a simpler pattern.')
         //and a new query starts a new worker
         view.type('hunter2')
         await view.searched()
@@ -733,7 +733,9 @@ describe('the Pseudocode in the background', () => {
         await until(() => !progress().running)
         const stopped = progress().done
         expect(stopped).toBeLessThan(290)
-        expect(lane()).toContain(`Decompiled ${stopped} of 290 functions of factcheck`)
+        expect(lane()).toContain(
+            `Searched ${stopped} of 290 functions of factcheck. Press Resume to search the rest.`
+        )
         expect(view.target.querySelector('.announcement')?.textContent).toBe(
             'Stopped decompiling the functions of factcheck.'
         )
@@ -766,7 +768,7 @@ describe('the Pseudocode in the background', () => {
         await until(() => !view.session.projectSearch.progress.crackme.running)
         const failures = view.target.querySelector('.failures')!
         expect(failures.querySelector('summary')!.textContent).toContain(
-            '1 function of crackme not searched'
+            "1 function of crackme couldn't be searched."
         )
         expect(failures.querySelector('.failure-name')!.textContent).toBe('main')
         view.type('hunter2')
@@ -802,7 +804,7 @@ describe('the results kept up to date', () => {
         view.type('check_password')
         await until(() => view.session.pseudocode.search.entries('crackme').length === 8)
         await view.searched()
-        expect(view.summary()).toBe('No results found.')
+        expect(view.summary()).toBe('No matches found.')
         view.session.renameLabel('crackme', MAIN, 'check_password')
         await until(() => view.groups().some((group) => group.includes('Pseudocode')))
         await until(() => view.groups().some((group) => group.includes('Listing')))

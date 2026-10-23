@@ -999,7 +999,7 @@ describe('Annotations in the FileSystem', () => {
         const before = fs.files
         expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)
         expect(() => fs.annotate('chall', names('rax'))).toThrow(
-            'Invalid name in chall at 0x1139: rax is the name of an x86 register'
+            "chall has a name at 0x1139 that can't be used: “rax” is an x86 register. Choose another name."
         )
         expect(() => fs.annotate('chall', { comments: { '0x1': 'x'.repeat(4001) } })).toThrow(
             ProjectFormatError
@@ -1020,7 +1020,7 @@ describe('Annotations in the FileSystem', () => {
         fs.annotate('notes.txt', comments(60))
         const before = fs.files
         expect(() => fs.annotate('chall', comments(6))).toThrow(
-            'Project exceeds the 256 KiB annotation limit'
+            'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
         )
         expect(fs.files).toBe(before)
         fs.annotate('chall', comments(5))
@@ -1079,7 +1079,9 @@ describe('Annotations in the FileSystem', () => {
         session.presentBuildOutput('program', new Uint8Array([0x7f]))
         expect(failure(() => fs.annotate('program', names('x')))).toBe(FileErrorCode.NotFound)
         expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)
-        expect(() => fs.annotate('chall', names('int'))).toThrow('int is a keyword of C')
+        expect(() => fs.annotate('chall', names('int'))).toThrow(
+            '“int” is a C keyword. Choose another name.'
+        )
         session.stop()
         expect(fs.files.chall.annotations).toEqual(names('verify'))
         expect(() => session.annotate('chall', names('late'))).toThrow('ended')
@@ -1140,7 +1142,7 @@ describe('Annotations in the FileSystem', () => {
         const session = fs.beginSession()
         const before = fs.files
         expect(() => fs.annotate('chall', big(0, 6))).toThrow(
-            'Project exceeds the 256 KiB annotation limit'
+            'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
         )
         expect(fs.files).toBe(before)
         fs.annotate('chall', big(0, 5))

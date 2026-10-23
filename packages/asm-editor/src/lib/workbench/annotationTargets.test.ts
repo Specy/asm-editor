@@ -79,7 +79,7 @@ describe('a global rename', () => {
         const dummy = labelNamed(named, 'frame_dummy')
         const problem = renameProblem(renameTarget(named, dummy), 'stdin')
         expect(problem).toBe(
-            `stdin is the name of another label, stdin@GLIBC_2.2.5, which you renamed my_in, at 0x${(datum.address + BASE).toString(16)}`
+            `“stdin” is already used by stdin@GLIBC_2.2.5, which was renamed to my_in (at 0x${(datum.address + BASE).toString(16)}).`
         )
         //the Listing would not apply it either
         const both = crackme(
@@ -105,7 +105,7 @@ describe('a global rename', () => {
             { name: 'orphan', owner: `the function at 0x${(0x99999 + BASE).toString(16)}` }
         ])
         expect(renameProblem(target, 'password', locals)).toBe(
-            'password is the name of a variable of main, whose Pseudocode would then write this label as ::password'
+            '“password” is already a variable defined in main. Choose another name.'
         )
         expect(renameProblem(target, 'the_password', locals)).toBeUndefined()
     })
@@ -131,7 +131,7 @@ describe('a local rename', () => {
             printed: 'acStack_98'
         })
         expect(variableRenameProblem(target, 'greeting')).toBe(
-            'greeting is the name of a global, which the Pseudocode would then write as ::greeting'
+            'The name “greeting” is already used as a function or global variable. Choose another name.'
         )
         //and a renamed one's names before, which its symbol keeps
         const renamed = generateListing(decoder, {
@@ -149,7 +149,7 @@ describe('a local rename', () => {
         })
         for (const name of ['hello', 'greeting', '_ZL8greetingv'])
             expect(variableRenameProblem(again, name), name).toBe(
-                `${name} is the name of a global, which the Pseudocode would then write as ::${name}`
+                `The name “${name}” is already used as a function or global variable. Choose another name.`
             )
     })
 
@@ -163,7 +163,7 @@ describe('a local rename', () => {
         //`iVar1` was just named `result`, and main is being decompiled again
         const saved = { 'register:0x0:4@+0x8e': 'result' }
         expect(variableRenameProblem(target, 'result', saved)).toBe(
-            'result is the name of another variable of this function'
+            'Another variable in this function is already called “result”.'
         )
         //its own saved name is no clash
         expect(variableRenameProblem(target, 'buffer', { 'stack:-0x98': 'buffer' })).toBeUndefined()

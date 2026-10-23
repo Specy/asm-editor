@@ -286,7 +286,7 @@ describe('the Symbols panel', () => {
         view.session.selectProgram('main.s')
         flushSync()
         expect(view.rows()).toHaveLength(0)
-        expect(view.panel().textContent).toContain('Show an Executable in the editor')
+        expect(view.panel().textContent).toContain('Open an Executable')
     })
 
     it('reveals a row in the Listing, switching the focused pane from the bytes', async () => {
@@ -460,7 +460,7 @@ describe('renaming and commenting from the Symbols panel', () => {
         //a refused name says why, and Save waits
         type(view, 'my name')
         expect(prompt.querySelector('.annotation-error')?.textContent).toBe(
-            'A name holds letters, digits and underscores only, not a space'
+            'The name can only have letters, digits and underscores. This name has a space.'
         )
         type(view, 'check_password')
         submit(view)
@@ -488,7 +488,7 @@ describe('renaming and commenting from the Symbols panel', () => {
         await openMenu(rowOf(view, 'main'))
         pickItem('Comment…')
         expect(view.panel().querySelector('.annotation-prompt')!.textContent).toContain(
-            'Comment on the function main'
+            'Comment on main'
         )
         type(view, 'Asks for the password')
         submit(view)
@@ -526,7 +526,9 @@ describe('renaming and commenting from the Symbols panel', () => {
         )
         flushSync()
         expect(view.panel().querySelector('.annotation-prompt')).toBeNull()
-        expect(warn).toHaveBeenCalledWith('puts is named by the library it comes from')
+        expect(warn).toHaveBeenCalledWith(
+            "“puts” can't be renamed, as it comes from a shared library."
+        )
     })
 
     it('has a button for a row’s menu on a touch screen, which has no right click', async () => {

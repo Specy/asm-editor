@@ -66,13 +66,13 @@ describe('compiling a query', () => {
     it('says why a regular expression does not compile, as a sentence', () => {
         expect(() => compileMatcher({ text: 'str(cmp', regex: true })).toThrow(SearchQueryError)
         expect(queryProblem({ text: 'str(cmp', regex: true })).toBe(
-            'Not a valid regular expression: unterminated group.'
+            "This regular expression isn't valid: unterminated group."
         )
         expect(queryProblem({ text: '*rax', regex: true })).toBe(
-            'Not a valid regular expression: nothing to repeat.'
+            "This regular expression isn't valid: nothing to repeat."
         )
         expect(queryProblem({ text: '[a', regex: true })).toMatch(
-            /^Not a valid regular expression: .+\.$/
+            /^This regular expression isn't valid: .+\.$/
         )
         //the same text is a plain query anyone can search for
         expect(queryProblem({ text: 'str(cmp' })).toBeUndefined()

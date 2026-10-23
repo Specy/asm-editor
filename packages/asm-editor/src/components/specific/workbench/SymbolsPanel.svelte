@@ -311,8 +311,7 @@
 <section class="symbols" aria-label="Symbols">
     {#if !source}
         <p class="note">
-            Show an Executable in the editor, or select a Program whose Entry file is one, to list
-            its functions and strings.
+            Open an Executable, or select a Program that runs one, to see its functions and strings.
         </p>
     {:else}
         <div
@@ -380,9 +379,7 @@
             <p class="note">The Listing could not be generated: {listingDocument.error}</p>
         {:else if total === 0}
             <p class="note">
-                {kind === 'functions'
-                    ? 'The Listing has no functions.'
-                    : 'The Listing has no strings.'}
+                {kind === 'functions' ? 'No functions found.' : 'No strings found.'}
             </p>
         {:else}
             <p class="count" role="status">

@@ -102,7 +102,7 @@ describe('a Build in progress', () => {
         press('Build')
         expect(build.started).toBe(2)
         expect(session.building).toBe(true)
-        expect(button('Build')!.textContent?.trim()).toBe('Waiting for the cancelled Build to end…')
+        expect(button('Build')!.textContent?.trim()).toBe('Finishing the cancelled Build…')
         build.finish[0]()
         await vi.waitFor(() => expect(button('Build')!.textContent?.trim()).toBe('Building…'))
     })
@@ -151,11 +151,11 @@ describe('a Build in progress', () => {
         const { session, emulator, button, press } = setup()
         const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
         const message =
-            'Could not download libstdc++.so.6: no data for 20 s. Check the connection and Build again.'
+            "Couldn't download libstdc++.so.6 (no response for 20 seconds). Check your internet connection, then press Build again."
         emulator.compile = async () => {
             //what GenericEmulator tells the Terminal before it throws
             emulator.errors = [message]
-            throw new BuildDownloadError('Could not download libstdc++.so.6: no data for 20 s')
+            throw new BuildDownloadError('libstdc++.so.6', 'no response for 20 seconds')
         }
         session.bottomTab = 'problems'
         press('Build')

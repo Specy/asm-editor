@@ -3,6 +3,7 @@ import { createX86Emulator, ResourceDownloadError, type MonacoError } from '@spe
 import type { BuildSources } from '#lib/projectFiles.ts'
 import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
 import { x86CoreProject, prepareX86Runtime } from '#lib/languages/X86/x86StartUnit.ts'
+import { downloadReason } from '#lib/languages/X86/x86Downloads.ts'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 import { unresolvedSnapshot, unresolvedSources } from './unresolved'
@@ -84,10 +85,8 @@ export async function analyzeX86Project(
         //error, which would hold Build back, until the check downloads it again. A server that
         //refused it refuses it again, until a reload of the page asks for the site's new files
         const refused = error.status !== undefined
-        const message = `${error.message}. ${
-            refused
-                ? 'Reload the page to have the code checked.'
-                : 'The code is checked once it downloads, which is tried again shortly.'
+        const message = `Code checking is paused: couldn't download ${error.resource} (${downloadReason(error)}). ${
+            refused ? 'Reload the page to check your code.' : 'It will try again shortly.'
         }`
         throw new AnalysisUnavailableError(
             message,

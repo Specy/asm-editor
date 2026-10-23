@@ -8,7 +8,8 @@
      * 18), over the Listing line it was opened on as the Patch prompt is, or over the Symbols
      * panel: a name in one line, or a comment in several, with the reason the text cannot be saved
      * under it as it is typed. Enter saves, Shift+Enter starts a comment's next line, and Escape or
-     * Cancel leaves everything as it was. A comment saved empty is deleted.
+     * Cancel leaves everything as it was. Delete, shown for a comment there is, deletes it, as
+     * saving it empty does.
      */
     let {
         prompt,
@@ -56,6 +57,11 @@
     function submit(event?: SubmitEvent) {
         event?.preventDefault()
         if (problem === undefined) onsave()
+    }
+
+    /** Delete: the comment goes, as Delete comment takes it, and the prompt closes. */
+    function remove() {
+        if (prompt.remove()) onclose()
     }
 
     /** Enter saves a comment as it saves a name, and Shift+Enter starts its next line. */
@@ -145,12 +151,13 @@
             {#if reason !== undefined}
                 <p id={reasonId} class="annotation-error">{reason}</p>
             {:else if prompt.multiline}
-                <p class="annotation-hint">
-                    Enter saves, Shift+Enter starts a new line; saved empty, the comment is deleted.
-                </p>
+                <p class="annotation-hint">Press Enter to save, Shift+Enter to add a line.</p>
             {/if}
         </div>
         <div class="annotation-row">
+            {#if prompt.deletable}
+                <button type="button" class="tool delete" onclick={remove}>Delete</button>
+            {/if}
             <button type="button" class="tool" onclick={onclose}>Cancel</button>
             <button type="submit" class="tool primary" disabled={problem !== undefined}>Save</button
             >
@@ -302,6 +309,12 @@
     .tool:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: -2px;
+    }
+
+    /* apart from Cancel and Save, at the row's start */
+    .delete {
+        margin-right: auto;
+        color: var(--red);
     }
 
     .primary {

@@ -266,7 +266,7 @@ export function resolveMemoryAddress(
         if (label !== undefined) return label
     }
     if (/^(?:0x)?[0-9a-f]+$/i.test(text)) return BigInt(`0x${text.replace(/^0x/i, '')}`)
-    if (!built) throw new Error('Build to use labels')
+    if (!built) throw new Error('Build the program first to go to a label.')
     const match = /^(.*?)(?:\+((?:0x[0-9a-f]+)|[0-9]+))?$/i.exec(text)!
     const address = lookup(match[1])
     if (address === undefined) throw new Error(`Unknown label: ${match[1]}`)

@@ -1113,7 +1113,7 @@ describe('a function that does not decompile', () => {
         flushSync()
         const document = await decompiled(pane)
         expect(document.status).toBe('failed')
-        expect(document.error).toBe('main took longer than 30 seconds to decompile')
+        expect(document.error).toBe('main took longer than 30 seconds to decompile.')
         const host = window.document.createElement('div')
         window.document.body.appendChild(host)
         const status = mount(PseudocodeStatus, {
@@ -1127,7 +1127,7 @@ describe('a function that does not decompile', () => {
         flushSync()
         expect(host.querySelector('h2')?.textContent).toBe('No Pseudocode')
         expect(host.querySelector('p')?.textContent).toBe(
-            'main could not be decompiled: main took longer than 30 seconds to decompile'
+            "Couldn't decompile main: main took longer than 30 seconds to decompile."
         )
         //a less busy machine may beat the limit
         slow.clear()
@@ -1363,20 +1363,20 @@ describe('renames and comments in the Pseudocode', () => {
         //its own name, which keeps it the decompiler's
         expect(reason('acStack_98')).toBeUndefined()
         expect(reason('local_98')).toBe(
-            'local_98 reads as a name the decompiler gives; choose one that does not'
+            'The name “local_98” uses the same format that the decompiler uses. Choose a different name.'
         )
         expect(reason('sVar4')).toBe(
-            'sVar4 reads as a name the decompiler gives; choose one that does not'
+            'The name “sVar4” uses the same format that the decompiler uses. Choose a different name.'
         )
         expect(reason('main')).toBe(
-            'main is the name of a global, which the Pseudocode would then write as ::main'
+            'The name “main” is already used as a function or global variable. Choose another name.'
         )
         expect(reason('puts')).toBe(
-            'puts is the name of a global, which the Pseudocode would then write as ::puts'
+            'The name “puts” is already used as a function or global variable. Choose another name.'
         )
-        expect(reason('int')).toBe('int is a keyword of C')
+        expect(reason('int')).toBe('“int” is a C keyword. Choose another name.')
         expect(reason('my password')).toBe(
-            'A name holds letters, digits and underscores only, not a space'
+            'The name can only have letters, digits and underscores. This name has a space.'
         )
         expect(reason(' password ')).toBeUndefined()
         expect(session.saveAnnotationPrompt(pane)).toBe(true)
@@ -1402,7 +1402,9 @@ describe('renames and comments in the Pseudocode', () => {
         session.openRenamePrompt(pane, result.line, result.column)
         const other = pane.openAnnotationPrompt!
         other.input('password')
-        expect(other.problem).toBe('password is the name of another variable of this function')
+        expect(other.problem).toBe(
+            'Another variable in this function is already called “password”.'
+        )
         other.input('result')
         expect(session.saveAnnotationPrompt(pane)).toBe(true)
         const both = await shownWith(pane, 'result = strcmp(password,"hunter2");')
@@ -1414,7 +1416,7 @@ describe('renames and comments in the Pseudocode', () => {
         expect(pane.openAnnotationPrompt!.spec).toMatchObject({
             title: 'Rename password',
             text: 'password',
-            note: 'Renamed from acStack_98; that name resets it.'
+            note: 'Renamed “acStack_98” to “password”. Rename it to “acStack_98” again to go back.'
         })
     })
 
@@ -1459,13 +1461,14 @@ describe('renames and comments in the Pseudocode', () => {
         expect(session.variableTargetAt(pane, parameter.line, parameter.column)).toMatchObject({
             parameter: true,
             current: 's',
-            refusal: 's is named by the C declaration of puts, so it keeps that name'
+            refusal:
+                "“s” can't be renamed, as its name comes from the C library's declaration of puts."
         })
         expect(session.canRenameAt(pane, parameter.line, parameter.column)).toBe(true)
         expect(session.canResetNameAt(pane, parameter.line, parameter.column)).toBe(false)
         expect(session.openRenamePrompt(pane, parameter.line, parameter.column)).toBe(false)
         expect(warn).toHaveBeenLastCalledWith(
-            's is named by the C declaration of puts, so it keeps that name'
+            "“s” can't be renamed, as its name comes from the C library's declaration of puts."
         )
         expect(pane.annotationPrompt).toBeUndefined()
         //its locals are the person's to name
@@ -1480,10 +1483,12 @@ describe('renames and comments in the Pseudocode', () => {
         //a library function's name is the library's
         const call = at(document, 'iVar1 = strcmp', 'strcmp')
         expect(session.renameTargetAt(pane, call.line, call.column)).toMatchObject({
-            refusal: 'strcmp is named by the library it comes from'
+            refusal: "“strcmp” can't be renamed, as it comes from a shared library."
         })
         expect(session.openRenamePrompt(pane, call.line, call.column)).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith('strcmp is named by the library it comes from')
+        expect(warn).toHaveBeenLastCalledWith(
+            "“strcmp” can't be renamed, as it comes from a shared library."
+        )
 
         const declaration = at(document, 'undefined8 main(void)', 'main')
         expect(session.renameTargetAt(pane, declaration.line, declaration.column)).toMatchObject({
@@ -1501,7 +1506,9 @@ describe('renames and comments in the Pseudocode', () => {
             pseudocodeFunction: MAIN
         })
         prompt.input('_start')
-        expect(prompt.problem).toBe(`_start is the name of another label, at ${runTime(0x1100)}`)
+        expect(prompt.problem).toBe(
+            `Another label is already called “_start” (at ${runTime(0x1100)}).`
+        )
         prompt.input('check_password')
         expect(session.saveAnnotationPrompt(pane)).toBe(true)
         expect(session.project.files.crackme.annotations).toEqual({
@@ -1519,7 +1526,9 @@ describe('renames and comments in the Pseudocode', () => {
         const again = at(renamed, 'undefined8 check_password(void)', 'check_password')
         expect(session.canResetNameAt(pane, again.line, again.column)).toBe(true)
         session.openRenamePrompt(pane, again.line, again.column)
-        expect(pane.openAnnotationPrompt!.spec.note).toBe('Renamed from main; that name resets it.')
+        expect(pane.openAnnotationPrompt!.spec.note).toBe(
+            'Renamed “main” to “check_password”. Rename it to “main” again to go back.'
+        )
         session.closeAnnotationPrompt(pane)
 
         //and from a call, in _start, where the library's own is refused
@@ -1529,7 +1538,7 @@ describe('renames and comments in the Pseudocode', () => {
         const entry = await shownWith(pane, '__libc_start_main(check_password,')
         const library = at(entry, '__libc_start_main(', '__libc_start_main')
         expect(session.renameTargetAt(pane, library.line, library.column)?.refusal).toBe(
-            '__libc_start_main is named by the library it comes from'
+            "“__libc_start_main” can't be renamed, as it comes from a shared library."
         )
         const argument = at(entry, '__libc_start_main(check_password', 'check_password')
         expect(session.resetNameAt(pane, argument.line, argument.column)).toBe(true)
@@ -1627,7 +1636,7 @@ describe('renames and comments in the Pseudocode', () => {
         })
         expect(session.commentTargetAt(pane, 0, true)?.kind).toBe('function comment')
         expect(session.openCommentPrompt(pane, strcmp, true)).toBe(true)
-        expect(pane.openAnnotationPrompt!.spec.title).toBe('Comment on the function main')
+        expect(pane.openAnnotationPrompt!.spec.title).toBe('Comment on main')
         pane.openAnnotationPrompt!.input('Asks for the password\nand checks it')
         expect(session.saveAnnotationPrompt(pane)).toBe(true)
         expect(session.project.files.crackme.annotations).toEqual({
@@ -1710,19 +1719,15 @@ describe('renames and comments in the Pseudocode', () => {
         //offered, so the key says why
         expect(session.canRenameAt(pane, name.line, name.column)).toBe(true)
         expect(session.openRenamePrompt(pane, name.line, name.column)).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith('A Build is running: rename and comment once it ends')
+        expect(warn).toHaveBeenLastCalledWith('Wait for the Build to finish, then try again.')
         session.building = false
         session.running = true
         expect(session.openCommentPrompt(pane, branch)).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith(
-            'The program is running: Pause it to rename or comment'
-        )
+        expect(warn).toHaveBeenLastCalledWith('Pause the program to rename or comment.')
         session.running = false
         session.testing = true
         expect(session.renameVariable('crackme', MAIN, 'stack:-0x98', 'password')).toBe(false)
-        expect(warn).toHaveBeenLastCalledWith(
-            'The Testcases are running: rename and comment once they end'
-        )
+        expect(warn).toHaveBeenLastCalledWith('Wait for the Testcases to finish, then try again.')
         session.testing = false
         expect(session.project.files.crackme.annotations).toBeUndefined()
     })

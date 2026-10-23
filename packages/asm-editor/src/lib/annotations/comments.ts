@@ -51,11 +51,11 @@ const count = (value: number) => value.toLocaleString('en-US')
  * or undefined when it can. An empty comment can: saving one deletes the comment there.
  */
 export function commentProblem(text: string): string | undefined {
-    if (holdsControl(text)) return 'A comment cannot hold control characters'
+    if (holdsControl(text)) return 'This comment has a hidden control character. Remove it to save.'
     if (text.length > COMMENT_LENGTH_LIMIT)
-        return `A comment has at most ${count(COMMENT_LENGTH_LIMIT)} characters, and this one has ${count(text.length)}`
+        return `Comments can be up to ${count(COMMENT_LENGTH_LIMIT)} characters long. This one has ${count(text.length)}.`
     const lines = text ? text.split('\n').length : 0
     if (lines > COMMENT_LINE_LIMIT)
-        return `A comment has at most ${COMMENT_LINE_LIMIT} lines, and this one has ${lines}`
+        return `Comments can be up to ${COMMENT_LINE_LIMIT} lines long. This one has ${lines}.`
     return undefined
 }

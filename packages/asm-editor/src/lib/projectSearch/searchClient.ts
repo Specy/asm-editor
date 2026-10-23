@@ -44,8 +44,8 @@ export type SearchOutcome =
     | { status: 'cancelled' }
     /**
      * It ran past the time limit, so the worker was ended; the next search starts another and
-     * sends it every document again. `results` are those that came before. The panel says "The
-     * search took too long".
+     * sends it every document again. `results` are those that came before. The panel says "Search
+     * stopped after 2 seconds".
      */
     | { status: 'timedOut'; results: SearchDocumentResult[] }
     /** A regular expression JavaScript cannot compile: `problem` is the sentence to show. */
@@ -303,7 +303,7 @@ export class ProjectSearchClient {
             const message = error instanceof Error ? error.message : String(error)
             return this.finish(search, {
                 status: 'failed',
-                message: `The search could not start: ${message}`
+                message: `Search couldn't start (${message}). Reload the page to try again.`
             })
         }
         this.flush(state)
@@ -450,14 +450,11 @@ export class ProjectSearchClient {
         )
         // A worker that fails to load or dies answers nothing: fail what waits on it, and let the
         // next search start a fresh one.
-        worker.addEventListener('error', (event) =>
-            this.fail(
-                state,
-                `The search failed: ${(event as ErrorEvent).message || 'its worker failed to start'}`
-            )
+        worker.addEventListener('error', () =>
+            this.fail(state, 'Search stopped unexpectedly. Search again to retry.')
         )
         worker.addEventListener('messageerror', () =>
-            this.fail(state, 'The search failed: its worker sent an unreadable message')
+            this.fail(state, 'Search stopped unexpectedly. Search again to retry.')
         )
         return state
     }

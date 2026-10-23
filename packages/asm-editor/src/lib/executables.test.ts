@@ -172,7 +172,7 @@ it('warns about each library the Executable needs that is not bundled', async ()
         expect(emulator.compilerDiagnostics).toEqual([
             expect.objectContaining({
                 severity: 'warning',
-                message: 'libx.so.6 is not one of the bundled libraries'
+                message: "This emulator doesn't have libx.so.6, so the program may not start."
             })
         ])
     } finally {

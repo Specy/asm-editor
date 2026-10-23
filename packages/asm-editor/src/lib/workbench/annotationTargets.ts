@@ -117,7 +117,7 @@ export function renameTarget(listing: Listing, label: ListingLabel): RenameTarge
     const library =
         libraryNameProblem(label.name) ??
         (label.origin === 'plt' || label.origin === 'got'
-            ? `${label.name.replace(/@.*$/, '')} is named by the library it comes from`
+            ? `“${label.name.replace(/@.*$/, '')}” can't be renamed, as it comes from a shared library.`
             : undefined)
     return {
         listing,
@@ -365,7 +365,7 @@ export function variableRenameTarget(
         ...(raw !== undefined ? { raw } : {}),
         ...(variable?.locked
             ? {
-                  refusal: `${current} is named by the C declaration of ${fn.list ?? fn.name}, so it keeps that name`
+                  refusal: `“${current}” can't be renamed, as its name comes from the C library's declaration of ${fn.list ?? fn.name}.`
               }
             : {}),
         variables: variables

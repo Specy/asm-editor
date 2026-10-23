@@ -13,7 +13,7 @@ const AVX: Termination = {
     number: 4,
     name: 'SIGILL',
     description: 'Illegal instruction',
-    unsupported: 'AVX-512 instructions are not currently supported'
+    unsupported: "stopped: AVX-512 isn't supported yet"
 }
 
 describe('describeTermination', () => {
@@ -24,7 +24,7 @@ describe('describeTermination', () => {
         expect(describeTermination({ kind: 'end' })).toBe('ran past its last instruction')
         expect(describeTermination(SEGFAULT)).toBe('Segmentation fault (signal 11)')
         //what the emulator cannot run, in place of the signal it raised
-        expect(describeTermination(AVX)).toBe('AVX-512 instructions are not currently supported')
+        expect(describeTermination(AVX)).toBe("stopped: AVX-512 isn't supported yet")
         expect(describeTermination({ kind: 'error', message: 'Bad load' })).toBe(
             'stopped by an error: Bad load'
         )
@@ -46,7 +46,7 @@ describe('terminationSummary', () => {
             'Ran in 2.500s, Segmentation fault (signal 11)'
         )
         expect(terminationSummary(AVX, 12)).toBe(
-            'Ran in 12ms, AVX-512 instructions are not currently supported'
+            "Ran in 12ms, stopped: AVX-512 isn't supported yet"
         )
         expect(
             terminationSummary({ kind: 'error', message: 'Bad load' }, 3, { errorMessage: false })
@@ -62,7 +62,7 @@ describe('terminationSummary', () => {
     it('starts with how it ended when no Run measured it', () => {
         expect(terminationSummary({ kind: 'exit', code: 0 }, -1)).toBe('Exited with code 0')
         expect(terminationSummary(SEGFAULT, -1)).toBe('Segmentation fault (signal 11)')
-        expect(terminationSummary(AVX, -1)).toBe('AVX-512 instructions are not currently supported')
+        expect(terminationSummary(AVX, -1)).toBe("Stopped: AVX-512 isn't supported yet")
         expect(terminationSummary({ kind: 'error', message: 'Bad load' }, -1)).toBe(
             'Stopped by an error: Bad load'
         )

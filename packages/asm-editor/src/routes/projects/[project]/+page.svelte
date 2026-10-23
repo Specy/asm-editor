@@ -55,7 +55,7 @@
      */
     beforeNavigate((navigation) => {
         if (!unsaved || navigation.willUnload || navigation.type === 'goto') return
-        if (!confirm('You have unsaved changes. Leave this page without saving them?'))
+        if (!confirm('You have unsaved changes. Do you want to leave without saving?'))
             navigation.cancel()
     })
 

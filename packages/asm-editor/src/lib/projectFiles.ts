@@ -406,8 +406,18 @@ function savedLocalProblem(name: unknown): string | undefined {
     if (typeof name !== 'string') return 'not text'
     const problem = nameProblem(name)
     if (problem) return problem
-    return looksLikeGhidraName(name) ? `${name} reads as a name the decompiler gives` : undefined
+    return looksLikeGhidraName(name)
+        ? `The name “${name}” uses the same format that the decompiler uses. Choose a different name.`
+        : undefined
 }
+
+/** A File's saved renames or comments that are not the shape they are saved in. */
+const damagedAnnotations = (path: string) =>
+    new ProjectFormatError(`${path} has damaged renames or comments and can't be opened.`)
+
+/** A File's saved rename or comment at a key that is no address or variable id. */
+const misplacedAnnotation = (path: string, key: string) =>
+    new ProjectFormatError(`${path} has a rename or comment at a bad address (${key}).`)
 
 /** One map of texts by address, checked, in address order; undefined when absent or empty. */
 function cleanAddressTexts(
@@ -417,13 +427,14 @@ function cleanAddressTexts(
     problemOf: (text: unknown) => string | undefined
 ): Readonly<Record<FileAddress, string>> | undefined {
     if (value === undefined) return undefined
-    if (!isPlainRecord(value)) throw new ProjectFormatError(`Invalid ${what}s for ${path}`)
+    if (!isPlainRecord(value)) throw damagedAnnotations(path)
     const entries = Object.entries(value).map(([key, text]) => {
-        if (!isFileAddress(key))
-            throw new ProjectFormatError(`Invalid address of a ${what} in ${path}: ${key}`)
+        if (!isFileAddress(key)) throw misplacedAnnotation(path, key)
         const problem = problemOf(text)
         if (problem)
-            throw new ProjectFormatError(`Invalid ${what} in ${path} at ${key}: ${problem}`)
+            throw new ProjectFormatError(
+                `${path} has a ${what} at ${key} that can't be used: ${problem}`
+            )
         return [key, text as string] as const
     })
     if (!entries.length) return undefined
@@ -445,7 +456,7 @@ export function cleanAnnotations(path: string, value: unknown): Annotations | un
         !isPlainRecord(value) ||
         Object.keys(value).some((key) => !ANNOTATION_KINDS.includes(key as keyof Annotations))
     )
-        throw new ProjectFormatError(`Invalid annotations for ${path}`)
+        throw damagedAnnotations(path)
     const names = cleanAddressTexts(path, value.names, 'name', (name) =>
         typeof name === 'string' ? nameProblem(name) : 'not text'
     )
@@ -458,21 +469,17 @@ export function cleanAnnotations(path: string, value: unknown): Annotations | un
     )
     let locals: Annotations['locals']
     if (value.locals !== undefined) {
-        if (!isPlainRecord(value.locals))
-            throw new ProjectFormatError(`Invalid local names for ${path}`)
+        if (!isPlainRecord(value.locals)) throw damagedAnnotations(path)
         const functions: (readonly [FileAddress, Readonly<Record<string, string>>])[] = []
         for (const [key, variables] of Object.entries(value.locals)) {
-            if (!isFileAddress(key))
-                throw new ProjectFormatError(`Invalid address of a function in ${path}: ${key}`)
-            if (!isPlainRecord(variables))
-                throw new ProjectFormatError(`Invalid local names for ${path} at ${key}`)
+            if (!isFileAddress(key)) throw misplacedAnnotation(path, key)
+            if (!isPlainRecord(variables)) throw damagedAnnotations(path)
             const named = Object.entries(variables).map(([id, name]) => {
-                if (!isVariableId(id))
-                    throw new ProjectFormatError(`Invalid variable id in ${path} at ${key}`)
+                if (!isVariableId(id)) throw misplacedAnnotation(path, key)
                 const problem = savedLocalProblem(name)
                 if (problem)
                     throw new ProjectFormatError(
-                        `Invalid local name in ${path} at ${key}: ${problem}`
+                        `${path} has a variable name at ${key} that can't be used: ${problem}`
                     )
                 return [id, name as string] as const
             })
@@ -727,7 +734,9 @@ export function cleanFiles(raw: unknown): ProjectFiles {
         const annotations = cleanAnnotations(path, value.annotations)
         annotated += annotationsSize(annotations)
         if (annotated > ANNOTATIONS_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 256 KiB annotation limit')
+            throw new ProjectFormatError(
+                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            )
         files[path] = Object.freeze({
             encoding: value.encoding,
             content: value.content,

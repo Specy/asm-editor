@@ -12,8 +12,8 @@ import { formatTime } from '#lib/utils.ts'
  *   cliff), or the Core says only that it is over.
  * - `signal`: a Linux signal ended it, named as a shell names it: `Segmentation fault`. When the
  *   signal says only that the emulator cannot run what a real processor would, `unsupported` says
- *   that in its place: "AVX-512 instructions are not currently supported" for SIGILL on an
- *   AVX-512 (EVEX) instruction.
+ *   that in its place: "stopped: AVX-512 isn't supported yet" for SIGILL on an AVX-512 (EVEX)
+ *   instruction.
  * - `error`: a runtime error ended it. A Core reports one by throwing, so `GenericEmulator` records
  *   it from what was thrown, never an adapter.
  *
@@ -42,7 +42,7 @@ export type TerminationWordingOptions = {
 /**
  * How the program ended, as one clause the Log, the info lines and the coding agent share:
  * "exited with code 3", "exited", "ran past its last instruction", "Segmentation fault (signal
- * 11)", "AVX-512 instructions are not currently supported", "stopped by an error: …".
+ * 11)", "stopped: AVX-512 isn't supported yet", "stopped by an error: …".
  */
 export function describeTermination(
     termination: Termination,

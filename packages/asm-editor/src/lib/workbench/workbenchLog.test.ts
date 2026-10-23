@@ -51,7 +51,7 @@ describe('buildEntry', () => {
 
     it('says under a failed Build why, when no diagnostic does', () => {
         const problem =
-            'Could not download libc.so.6: no data for 20 s. Check the connection and Build again.'
+            "Couldn't download libc.so.6 (no response for 20 seconds). Check your internet connection, then press Build again."
         const entry = buildEntry({
             ok: false,
             errors: 0,
@@ -202,13 +202,15 @@ describe('noteEntry', () => {
 describe('noteSpans', () => {
     it('sets the code between backticks apart', () => {
         expect(
-            noteSpans('The program ran `vmovd xmm0, edi` at `0x555555555195`, which it cannot')
+            noteSpans(
+                "The program stopped at `vmovd xmm0, edi` (`0x555555555195`): this emulator can't run that instruction."
+            )
         ).toEqual([
-            { text: 'The program ran ', code: false },
+            { text: 'The program stopped at ', code: false },
             { text: 'vmovd xmm0, edi', code: true },
-            { text: ' at ', code: false },
+            { text: ' (', code: false },
             { text: '0x555555555195', code: true },
-            { text: ', which it cannot', code: false }
+            { text: "): this emulator can't run that instruction.", code: false }
         ])
         expect(noteSpans('`getcpu` (syscall 309)')).toEqual([
             { text: 'getcpu', code: true },
@@ -217,8 +219,13 @@ describe('noteSpans', () => {
     })
 
     it('reads text without code, or with an unpaired backtick, as plain text', () => {
-        expect(noteSpans('libz.so.6 is not one of the bundled libraries')).toEqual([
-            { text: 'libz.so.6 is not one of the bundled libraries', code: false }
+        expect(
+            noteSpans("This emulator doesn't have libz.so.6, so the program may not start.")
+        ).toEqual([
+            {
+                text: "This emulator doesn't have libz.so.6, so the program may not start.",
+                code: false
+            }
         ])
         expect(noteSpans('a ` b')).toEqual([{ text: 'a ` b', code: false }])
     })

@@ -211,7 +211,7 @@ describe('the search service', () => {
             {
                 type: 'failure',
                 search: 3,
-                message: 'Not a valid regular expression: unterminated group.'
+                message: "This regular expression isn't valid: unterminated group."
             },
             { type: 'done', search: 3, cancelled: false }
         ])

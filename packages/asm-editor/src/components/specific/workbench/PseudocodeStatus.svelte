@@ -38,7 +38,7 @@
     {:else if document?.status === 'failed'}
         <div class="pseudocode-status" role="status">
             <h2>No Pseudocode</h2>
-            <p>{name} could not be decompiled: {document.error}</p>
+            <p>Couldn't decompile {name}: {document.error}</p>
             <button type="button" onclick={onRetry}>Try again</button>
         </div>
     {:else if document?.status !== 'ready' && !kept}
@@ -46,7 +46,7 @@
         <div class="pseudocode-status waiting" role="status">
             <h2>Decompiling…</h2>
             <p>
-                {document?.stage === 'loading' ? 'Loading the decompiler' : `Decompiling ${name}`}
+                {document?.stage === 'loading' ? 'Loading the decompiler…' : `Decompiling ${name}…`}
             </p>
             <progress aria-label="Decompiling" value="10" max="100"></progress>
         </div>

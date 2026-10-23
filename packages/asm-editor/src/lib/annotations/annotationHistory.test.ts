@@ -127,7 +127,9 @@ describe('the annotation history', () => {
         run.change(first, at(0x1139))
         run.change(second, { kind: 'comment', address: 0x1150 })
         const refuse = () => {
-            throw new Error('Project exceeds the 256 KiB annotation limit')
+            throw new Error(
+                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            )
         }
         expect(() => run.history.undo('chall', run.file, refuse)).toThrow('256 KiB')
         //nothing moved: the File still fits its stack, and the same step is undone next

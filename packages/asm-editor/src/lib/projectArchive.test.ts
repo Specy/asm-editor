@@ -713,15 +713,15 @@ describe('Annotations in an archive', () => {
             makeProjectFromArchive(
                 archive(4, { encoding: 'base64', annotations: { names: { main: 'check' } } })
             )
-        ).toThrow('Invalid address of a name in chall: main')
+        ).toThrow('chall has a rename or comment at a bad address (main).')
         expect(() =>
             makeProjectFromArchive(
                 archive(4, { encoding: 'base64', annotations: { names: { '0x1': 'rax' } } })
             )
-        ).toThrow('rax is the name of an x86 register')
+        ).toThrow('“rax” is an x86 register. Choose another name.')
         expect(() =>
             makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: { notes: {} } }))
-        ).toThrow('Invalid annotations for chall')
+        ).toThrow("chall has damaged renames or comments and can't be opened.")
     })
 
     it('never gives a one-File Project with Annotations as its source text, which loses them', () => {

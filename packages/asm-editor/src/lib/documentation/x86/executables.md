@@ -30,7 +30,7 @@ Dynamically linked programs use five bundled libraries from Ubuntu 26.04. The ed
 
 A program that needs another library, such as `libcrypto.so.3`, does not start. The **Log** names the missing library, and the Terminal shows the dynamic linker's error. A program requiring a newer glibc version also stops, with an error such as `version 'GLIBC_2.xx' not found`.
 
-The first Build that needs a library downloads it, and later Builds reuse it. While it downloads, Build names it, as in **Downloading libc.so.6…**. A download that fails, or receives nothing for 20 seconds, ends the Build: the Terminal, the Log and a message say what could not be downloaded, such as "Could not download libc.so.6: no data for 20 s. Check the connection and Build again.", and **Build** is available again. When the server refuses the download instead, with an error such as `404 Not Found`, the site has most likely been updated since the page was opened, and the message says to reload the page and Build again.
+The first Build that needs a library downloads it, and later Builds reuse it. While it downloads, Build names it, as in **Downloading libc.so.6…**. A download that fails, or receives nothing for 20 seconds, ends the Build: the Terminal, the Log and a message say what could not be downloaded, such as "Couldn't download libc.so.6 (no response for 20 seconds). Check your internet connection, then press Build again.", and **Build** is available again. When the server refuses the download instead, with an error such as `404 Not Found`, the site has most likely been updated since the page was opened, and the message says to reload the page, then press Build again.
 
 These Linux libraries are separate from the editor's [Runtime library](/documentation/x86/runtime-library). That reference describes programs compiled in the editor and assembly programs that explicitly link the Runtime library; its function list and C++ restrictions do not describe the libraries used by an imported Executable. Conversely, compiling in the editor does not give a program the bundled glibc or C++ standard library. A statically linked Executable uses the library code already inside its file.
 
@@ -173,7 +173,7 @@ The notice at the top right names the function shown. Its **?** opens this secti
 
 Most functions decompile in well under a second. A large function can take much longer: `printf_positional`, part of the C library in a statically linked program, takes 10 seconds or more. While the decompiler works, the pane shows **Decompiling…** with the function's name. For a large program, the pane first shows the progress of its Listing, which the decompiler needs.
 
-The decompiler stops working on a function after 30 seconds. The pane then shows **No Pseudocode** with the reason, such as "printf_positional took longer than 30 seconds to decompile". **Try again** starts again; on a less busy device, the function may finish within the limit. A function the decompiler cannot handle shows **No Pseudocode** with the decompiler's reason.
+The decompiler stops working on a function after 30 seconds. The pane then shows **No Pseudocode** with the reason, such as "printf_positional took longer than 30 seconds to decompile." **Try again** starts again; on a less busy device, the function may finish within the limit. A function the decompiler cannot handle shows **No Pseudocode** with the decompiler's reason.
 
 ## Renames {#renaming}
 
@@ -187,27 +187,27 @@ A name is made of letters, digits and underscores, does not start with a digit, 
 - A jump target's name differs from those of the other jump targets in its function. Type it without the dot: the Listing writes `.retry` inside the function and `main.retry` from elsewhere, as it writes `.LAB_2`.
 - A variable's name differs from the function's other variables, the names you just gave included, and from every name in the Listing or in the Pseudocode, such as `greeting` for a C++ function the Listing writes `_ZL8greetingv`. It must not look like a name the decompiler gives, such as `iVar1`, `local_10`, `param_2`, `uStack_48` or `in_RAX`, so that your names are never mistaken for the decompiler's.
 
-While the name cannot be used, the prompt says why under the field, as in "rax is the name of an x86 register" or "main is the name of another label, at 0x5555555551e9", and **Save** is unavailable.
+While the name cannot be used, the prompt says why under the field, as in "“rax” is an x86 register. Choose another name." or "Another label is already called “main” (at 0x5555555551e9).", and **Save** is unavailable.
 
 A new name for a function, data or a string replaces the old one wherever the program shows it: on its label's line and in every instruction and `dq` that names it in the Listing, in **Go to Symbol** (Ctrl+Shift+O) and the [Symbols panel](#symbols), in the Pseudocode, and during a Debug session in the Call stack and the [memory view](#memory). Hover over it for "Renamed from `FUN_brave_otter`." and where that name came from. Other names of the same address, and the invented names of other addresses, stay as they were. A [C++ function](#cpp-names) you rename reads as your name, without namespaces, in the Pseudocode too; its hover still gives every form of the old name, and the Symbols panel's filter still finds it by them. The decompiler still knows a function's parameters by its original name: in a statically linked program, a `printf` renamed `say` still reads as `say("hello %s argc=%d\n",…)`. A jump target's new name shows in the Listing only; the Pseudocode's `goto` labels keep the decompiler's names.
 
 A variable's new name shows in its function's Pseudocode. Hover over it for where the decompiler keeps the variable, such as "on the stack, 0x98 bytes below where the stack pointer was when the function was entered (`Stack[-0x98]`)", and the name it was renamed from. After the project is opened again, the hover can give that old name only once the decompiler has printed it again, for example after **Reset name**.
 
-**Reset name** in the context menu takes your name away, and the Listing's or the decompiler's name comes back. Saving the prompt with that name does the same; the prompt notes it, as in "Renamed from main; that name resets it."
+**Reset name** in the context menu takes your name away, and the Listing's or the decompiler's name comes back. Saving the prompt with that name does the same; the prompt notes it, as in "Renamed “main” to “check_password”. Rename it to “main” again to go back."
 
 Some names cannot change:
 
-- A PLT stub or GOT slot, such as `strcmp@plt` or `strcmp@got`, is named after the library function the dynamic linker connects there, and the Pseudocode calls the library function by that name. Rename… on one says "strcmp is named by the library it comes from", as it does on a call of `__libc_start_main` in the Pseudocode.
-- A parameter whose name a C declaration gives keeps it. In a statically linked program's `puts(char *s)`, Rename… on `s` says "s is named by the C declaration of puts, so it keeps that name".
+- A PLT stub or GOT slot, such as `strcmp@plt` or `strcmp@got`, is named after the library function the dynamic linker connects there, and the Pseudocode calls the library function by that name. Rename… on one says "“strcmp” can't be renamed, as it comes from a shared library.", as it does on a call of `__libc_start_main` in the Pseudocode.
+- A parameter whose name a C declaration gives keeps it. In a statically linked program's `puts(char *s)`, Rename… on `s` says "“s” can't be renamed, as its name comes from the C library's declaration of puts."
 - Rename… is not offered on a string, a `goto` label or the words of a comment in the Pseudocode, nor in a shared library's Listing, such as `@lib/libc.so.6`, or a [Build output](#build-output). A statically linked program's C library functions are part of the Executable, so you can rename them.
 
-If another label comes to have the name you gave, for example after a [Byte edit](#byte-edits) changes the program's symbols, the label you renamed keeps its own name until one of the two changes. Its hover says "Renamed `retry` in this Project, but another label has that name, so this one keeps its own until one of them changes.", Rename… notes that your name is not applied, and **Reset name** removes it.
+If another label comes to have the name you gave, for example after a [Byte edit](#byte-edits) changes the program's symbols, the label you renamed keeps its own name until one of the two changes. Its hover says "You renamed this to `retry`, but another label already has that name, so the original name is shown instead.", Rename… notes that your name isn't used, and **Reset name** removes it.
 
 ## Comments {#comments}
 
 A **comment** is a note of your own on a line of the Executable, or on a whole function. The Listing and the Pseudocode both show it, and the project saves it with the File.
 
-Put the cursor on a line and press **;** or choose **Comment…** in the context menu. The prompt holds the comment already there, if any. **Enter** saves, **Shift+Enter** starts a new line, and **Escape** cancels. Saving the prompt empty deletes the comment, as **Delete comment** in the context menu does. A comment has at most 4,000 characters on 40 lines. **;** works by the key's position on a US keyboard, so on another layout it may be a different key; the context menu works with any layout.
+Put the cursor on a line and press **;** or choose **Comment…** in the context menu. The prompt holds the comment already there, if any. **Enter** saves, **Shift+Enter** starts a new line, and **Escape** cancels. On a comment already there, the prompt's **Delete** button deletes it, as **Delete comment** in the context menu does, and so does saving the prompt empty. A comment has at most 4,000 characters on 40 lines. **;** works by the key's position on a US keyboard, so on another layout it may be a different key; the context menu works with any layout.
 
 What Comment… edits depends on the line:
 
@@ -264,7 +264,7 @@ A File keeps its renames and comments through Byte edits and their Undo, and whe
 
 After a Byte edit, a rename or comment whose place has gone stays saved: a rename whose address no longer starts a label, or a comment whose address no longer starts a line, shows again once one does, after Undo for example. Meanwhile, a comment at an address inside an instruction shows on that instruction's line, and a function comment whose function is gone shows above the line holding its address. A variable's name applies while the decompiler still finds the variable. A variable on the stack keeps its name through most Byte edits, and one in a register while the instruction that sets it stays; a name whose variable is gone is ignored without a message.
 
-During a Debug session, while the program is paused, you can rename and comment as at any other time, and the running program's Listing, its Pseudocode, the Call stack and the memory view take the change at once. While the program runs, a Build works or the Testcases run, the editor says why it cannot take one, as in "The program is running: Pause it to rename or comment". A read-only project takes no renames or comments.
+During a Debug session, while the program is paused, you can rename and comment as at any other time, and the running program's Listing, its Pseudocode, the Call stack and the memory view take the change at once. While the program runs, a Build works or the Testcases run, the editor says why it cannot take one, as in "Pause the program to rename or comment." A read-only project takes no renames or comments.
 
 ## Searching the Project {#search}
 
@@ -274,7 +274,7 @@ Results come as you type. Three buttons beside the box change how text matches, 
 
 - **Match case** (`Aa`, Alt+C): without it, `strcmp` also finds `STRCMP`.
 - **Match whole word** (`ab`, Alt+W): a match must not start or end inside a word, a word being letters, digits and `_` in any script. `printf` is a whole word in `call printf@plt`, but not in `__printf_chk`.
-- **Use regular expression** (`.*`, Alt+R): the text is a JavaScript regular expression, such as `str(n)?cmp\(`. It matches within one line, unless it names a line break with `\n` or `\r`. One that cannot be read says why under the box, as in "Not a valid regular expression: unterminated group."
+- **Use regular expression** (`.*`, Alt+R): the text is a JavaScript regular expression, such as `str(n)?cmp\(`. It matches within one line, unless it names a line break with `\n` or `\r`. One that cannot be read says why under the box, as in "This regular expression isn't valid: unterminated group."
 
 The **⋯** button beside the box shows **Files to include** and **Files to exclude**, which take patterns separated by commas, such as `*.c, src/**`. A File is searched when it matches an include pattern, or there is none, and matches no exclude pattern; an Executable's Listing and Pseudocode go by the Executable's path. Letter case does not matter in a pattern:
 
@@ -295,15 +295,15 @@ Click a row, or press **Enter** on it, to open it. A File's row opens the File w
 
 **Enter** in the search box opens the first result, **↓** moves to the results, and **Escape** clears the box. In the results, the arrow keys, **Home** and **End** move, **→** and **←** open and close a group, **Enter** or **Space** opens a row, and **↑** from the first item returns to the box.
 
-At most 2,000 rows are listed at first; "1,234 more lines not shown" and **Show more** add 2,000 more. A row whose line is longer than 1,000 characters shows the part around its first match. A search that runs for more than 2 seconds stops with "The search took too long.", with the matches found before it stopped. That is usually a regular expression that tries many ways to match, such as `^(\w+\s?)+;$`. A search that stopped is not run again until you change it.
+At most 2,000 rows are listed at first; "1,234 more lines not shown" and **Show more** add 2,000 more. A row whose line is longer than 1,000 characters shows the part around its first match. A search that runs for more than 2 seconds stops with "Search stopped after 2 seconds. Try a simpler pattern.", and says what it found before it stopped. That is usually a regular expression that tries many ways to match, such as `^(\w+\s?)+;$`. A search that stopped is not run again until you change it.
 
 ## Searching the Pseudocode {#search-pseudocode}
 
 While the Search panel is open with **Pseudocode** ticked, the editor decompiles each Executable's functions in the background, one at a time, and searches their Pseudocode as it arrives. `main` comes first, or the function at the entry point when there is no `main`, then the functions it calls, then the functions those call, and then the rest by address, so a statically linked program's own code is searched before its C library. PLT stubs, such as `strcmp@plt`, are left out.
 
-The panel shows "Decompiling 120 of 290 functions of factcheck" with a progress bar and **Cancel**. Cancel, closing the panel, or unticking Pseudocode stops it and keeps what was decompiled: the panel then says "Decompiled 120 of 290 functions of factcheck: the rest are not searched.", and **Resume** carries on. An Executable with up to 1,000 functions starts as soon as the panel opens. A larger one, such as a statically linked program with its C library, waits for your first search, which can then take several minutes; **Decompile now** starts it at once.
+The panel shows "Decompiling 120 of 290 functions of factcheck" with a progress bar and **Cancel**. Cancel, closing the panel, or unticking Pseudocode stops it and keeps what was decompiled: the panel then says "Searched 120 of 290 functions of factcheck. Press Resume to search the rest.", and **Resume** carries on. An Executable with up to 1,000 functions starts as soon as the panel opens. A larger one, such as a statically linked program with its C library, waits for your first search, which can then take several minutes; **Decompile now** starts it at once.
 
-A Pseudocode that a pane shows is decompiled first, though it may wait a few seconds for the function being decompiled in the background to finish. In the background, each function has 5 seconds rather than 30. A function that takes longer is listed under "1 function of factcheck not searched" with the reason and **Try again**, since a less busy device may finish it. A function the decompiler cannot handle is listed with the decompiler's reason.
+A Pseudocode that a pane shows is decompiled first, though it may wait a few seconds for the function being decompiled in the background to finish. In the background, each function has 5 seconds rather than 30. A function that takes longer is listed under "1 function of factcheck couldn't be searched." with the reason and **Try again**, since a less busy device may finish it. A function the decompiler cannot handle is listed with the decompiler's reason.
 
 The decompiled text is kept while the project is open and never saved. A Byte edit makes every function decompile again, and a comment or a variable's rename makes its function decompile again. After a rename of a function or global, the kept text takes the new name without being decompiled again, so its lines can break differently from the Pseudocode a pane shows. A rename of a C++ function, which moves it out of its namespaces, decompiles it again with the functions naming it, as does a rename of a global the decompiler writes with an extra `_`, such as `___dso_handle`. Opening a result finds the match again in the text the pane shows.
 
@@ -401,7 +401,7 @@ A patch changes memory only. The Executable File keeps its bytes, and the next B
 
 ## The Build output {#build-output}
 
-When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, on Disassemble with Hex and Decompile beside it, and it is read-only. Its Listing and Pseudocode take no Breakpoints, renames or comments; the debugger follows the program in your source. While Build works, its button says what it is doing, such as **Downloading the assembler…** the first time, **Assembling…** and **Linking…**, and **Cancel** ends it as it ends [an Executable's](#stepping). A Build started right after a Cancel may first say **Waiting for the cancelled Build to end…**, for up to 20 seconds while an unfinished download of the assembler gives up.
+When **Build** assembles your program, including one compiled from C or C++, it links a Linux executable, as `nasm` and `ld` would. The **Explorer** lists it under **Build output**, at the name the [Command line](#arguments) runs it as: the Entry path without its extension, so `main.asm` gives `main` and a program compiled from `src/main.c` gives `src/main`. It opens like an imported Executable, on Disassemble with Hex and Decompile beside it, and it is read-only. Its Listing and Pseudocode take no Breakpoints, renames or comments; the debugger follows the program in your source. While Build works, its button says what it is doing, such as **Downloading the assembler…** the first time, **Assembling…** and **Linking…**, and **Cancel** ends it as it ends [an Executable's](#stepping). A Build started right after a Cancel may first say **Finishing the cancelled Build…**, for up to 20 seconds while an unfinished download of the assembler gives up.
 
 The running program finds it in its working directory: it can open `./main` and read its bytes, but writing it fails with `ETXTBSY`, and renaming or deleting it fails with `EBUSY`. Each Testcase's program finds its own copy.
 
@@ -414,9 +414,9 @@ If a File or folder of the project already has the Build output's path, the Buil
 The **Log** reports unsupported operations once per run:
 
 - An unimplemented system call: "`getcpu` (syscall 309) is not implemented; the call returned ENOSYS". The program receives `ENOSYS`, Linux's error for an unavailable call.
-- An unsupported instruction: "The program ran `aesenc xmm0, xmm1` at `0x555555555195`, which the emulator does not support". Execution ends with `SIGILL`, the illegal-instruction signal. The Listing still decodes the instruction. [Vector instructions](/documentation/x86/vector-instructions) lists the extensions that run.
-- An AVX-512 instruction: "The program ran `vaddps zmm0, zmm1, zmm2` at `0x555555555195`. AVX-512 instructions are not currently supported." The run's line in the Log ends with the same sentence instead of "Illegal instruction (signal 4)". Nothing warns before a run, because a program can contain AVX-512 code it never reaches: glibc chooses its functions by what the processor reports.
-- A library that is not bundled: "libcrypto.so.3 is not one of the bundled libraries".
+- An unsupported instruction: "The program stopped at `aesenc xmm0, xmm1` (`0x555555555195`): this emulator can't run that instruction." Execution ends with `SIGILL`, the illegal-instruction signal. The Listing still decodes the instruction. [Vector instructions](/documentation/x86/vector-instructions) lists the extensions that run.
+- An AVX-512 instruction: "The program stopped at `vaddps zmm0, zmm1, zmm2` (`0x555555555195`): this emulator doesn't support AVX-512 instructions yet." The run's line in the Log ends with "stopped: AVX-512 isn't supported yet" instead of "Illegal instruction (signal 4)". Nothing warns before a run, because a program can contain AVX-512 code it never reaches: glibc chooses its functions by what the processor reports.
+- A library that is not bundled: "This emulator doesn't have libcrypto.so.3, so the program may not start."
 - Startup that reaches the 50,000,000-instruction budget. Execution pauses and remains inspectable, as described under [Building and stepping](#stepping).
 
 ## Safety {#safety}
