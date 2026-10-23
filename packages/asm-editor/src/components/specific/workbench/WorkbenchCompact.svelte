@@ -149,6 +149,7 @@
                                         currentAddress={emulator.memory.global.address}
                                         onAddressChange={(address) =>
                                             moveMemoryView(session, ui, address)}
+                                        hideLabel={emulator.memory.global.rowSize < 16}
                                     />
                                 </div>
                                 <MemoryVisualiser

@@ -24,6 +24,10 @@
         currentAddress: bigint
         bytesPerPage: number
         memorySize: bigint
+        /**
+         * Whether the field leaves out its "Address" caption: callers do above a memory view
+         * narrower than 16 bytes a row, which leaves the controls too little room for it.
+         */
         hideLabel?: boolean
         inputStyle?: string
         style?: string

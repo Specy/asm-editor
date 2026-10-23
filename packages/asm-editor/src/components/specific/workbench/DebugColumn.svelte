@@ -144,6 +144,7 @@
                         inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                         currentAddress={emulator.memory.global.address}
                         onAddressChange={(address) => moveMemoryView(session, ui, address)}
+                        hideLabel={emulator.memory.global.rowSize < 16}
                     />
                     <button
                         class="collapse-button"
@@ -314,7 +315,7 @@
         display: grid;
         place-items: center;
         flex: none;
-        width: 1.3rem;
+        width: 2.5rem;
         margin: -0.3rem -0.3rem -0.3rem 0;
         padding: 0;
         border: none;

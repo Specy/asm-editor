@@ -796,6 +796,7 @@
                 onAddressChange={(e) => {
                     emulator.setGlobalMemoryAddress(e)
                 }}
+                hideLabel={emulator.memory.global.rowSize < 16}
             />
         </div>
         <div class="memory-page">
