@@ -20,8 +20,10 @@
     let metaTheme: HTMLMetaElement | null = $state(null)
 
     // Emitted once here rather than in each of the ~40 pages that write their own
-    // head block: both values derive from the URL, so a page has nothing to add.
-    let canonicalUrl = $derived(toAbsoluteUrl(page.url.pathname))
+    // head block: both values derive from the URL, so a page has nothing to add. The
+    // exception is a page that duplicates another, such as an instruction's other
+    // spelling, which names the page it duplicates as `canonicalPath`.
+    let canonicalUrl = $derived(toAbsoluteUrl(page.data.canonicalPath ?? page.url.pathname))
     let socialImage = $derived(
         page.data.socialImage ?? {
             src: '/images/ASM-editor.webp',

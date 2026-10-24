@@ -17,7 +17,7 @@
 <InstructionPageHead {document} architecture="RISC-V" root="/documentation/risc-v" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <InstructionDocumentView {document} language="RISC-V">
+    <InstructionDocumentView {document} language="RISC-V" aliases={data.props.aliases}>
         {#snippet example()}
             <InstructionExample
                 instructionKey={document.name}

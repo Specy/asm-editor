@@ -6,6 +6,8 @@ import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
 import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
 import { x86DocumentedNames } from '#lib/languages/X86/X86-documentation.ts'
 import { z80InstructionMap } from '#lib/languages/Z80/Z80-documentation.ts'
+import { aliasTarget } from '#lib/documentation/instructions/aliases.ts'
+import type { DocumentationLanguage } from '#lib/search/scope.ts'
 
 export const prerender = true
 
@@ -83,22 +85,23 @@ function lectureDates(): Map<string, string> {
 }
 
 /** One entry per documented instruction, from the same maps the pages themselves load,
- *  so the sitemap cannot list a page that does not exist or miss one that does. */
+ *  so the sitemap cannot list a page that does not exist or miss one that does. An
+ *  instruction's other spelling is left out: its page names the main one as canonical. */
 function instructionRoutes() {
-    const instructions = [
-        ['m68k', M68KUncompoundedInstructions],
-        ['mips', mipsInstructionMap],
-        ['risc-v', riscvInstructionMap],
-        ['z80', z80InstructionMap]
-    ].flatMap(([arch, map]) =>
-        Array.from((map as Map<string, unknown>).keys()).map(
-            (name) => `/documentation/${arch}/instruction/${name}`
-        )
+    const names: [DocumentationLanguage, string[]][] = [
+        ['m68k', [...M68KUncompoundedInstructions.keys()]],
+        ['mips', [...mipsInstructionMap.keys()]],
+        ['risc-v', [...riscvInstructionMap.keys()]],
+        ['z80', [...z80InstructionMap.keys()]],
+        // x86 has a page per documented instruction rather than per accepted mnemonic: the vector
+        // and system extensions are listed on the complete documentation page instead.
+        ['x86', x86DocumentedNames]
+    ]
+    return names.flatMap(([arch, instructions]) =>
+        instructions
+            .filter((name) => !aliasTarget(arch, name))
+            .map((name) => `/documentation/${arch}/instruction/${name}`)
     )
-    // x86 has a page per documented instruction rather than per accepted mnemonic: the vector and
-    // system extensions are listed on the complete documentation page instead of getting one each.
-    const x86 = x86DocumentedNames.map((name) => `/documentation/x86/instruction/${name}`)
-    return [...instructions, ...x86]
 }
 
 function escapeXml(value: string) {
