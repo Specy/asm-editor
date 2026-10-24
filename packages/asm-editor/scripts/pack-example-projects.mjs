@@ -47,8 +47,7 @@ const EXAMPLES = [
         folder: 'examples/risc-v/pacman',
         archive: 'pacman.asmproj',
         name: 'Pac-Man',
-        description:
-            'The arcade game at its own 224 × 288 pixels, with its music and sounds, twice: in RISC-V assembly and in C. Both read their pictures from the same BMP Files when they start.',
+        description: 'The Pacman arcade game with audio, implemented in RISC-V and C.',
         language: 'RISC-V',
         programs: {
             //what the Entry's @screen directive configures, so the Screen is right before a Build
