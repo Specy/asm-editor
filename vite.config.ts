@@ -76,10 +76,11 @@ export default defineConfig({
                 ['packages/decompiler/js/dist/**']
             ),
             // trs80 is an npm workspace of its own (see pnpm-workspace.yaml): it installs from its
-            // lockfile and builds @specy/z80 with the packages it bundles, as its CD does.
+            // lockfile and builds @specy/z80, which bundles the other packages from source, as its
+            // CD does.
             'build:z80': coreBuild(
                 'packages/z80',
-                'npm ci && npm run build -- --scope @specy/z80 --include-dependencies',
+                'npm ci && npm run build -w packages/z80-machine',
                 ['packages/z80/**'],
                 ['packages/z80/packages/z80-machine/dist/**']
             ),

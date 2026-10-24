@@ -6,13 +6,13 @@ workspace packages ([ADR 0043](./adr/0043-the-repository-is-a-workspace-of-its-p
 always runs the checked-out revisions: a change to a Core reaches the app on its next build, with no
 release in between.
 
-| Directory         | Repository                                      | npm package                           | Build                                                   |
-| ----------------- | ----------------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
-| `packages/mips`   | [Specy/mars](https://github.com/Specy/mars)     | `marsjs/ts` (`@specy/mips`)           | Maven and TeaVM, then tsup (`build:all`)                |
-| `packages/risc-v` | [Specy/rars](https://github.com/Specy/rars)     | `rarsjs/ts` (`@specy/risc-v`)         | Maven and TeaVM, then tsup (`build:all`)                |
-| `packages/m68k`   | [Specy/s68k](https://github.com/Specy/s68k)     | `ts-lib` (`@specy/s68k`)              | `cargo test`, wasm-pack, then tsc (`build-all`)         |
-| `packages/x86`    | [Specy/x86-js](https://github.com/Specy/x86-js) | `blink-js` (`@specy/x86`)             | tsdown over the checked-in WASM (`build`)               |
-| `packages/z80`    | [Specy/trs80](https://github.com/Specy/trs80)   | `packages/z80-machine` (`@specy/z80`) | `npm ci`, then lerna with the trs80 packages it bundles |
+| Directory         | Repository                                      | npm package                           | Build                                                        |
+| ----------------- | ----------------------------------------------- | ------------------------------------- | ------------------------------------------------------------ |
+| `packages/mips`   | [Specy/mars](https://github.com/Specy/mars)     | `marsjs/ts` (`@specy/mips`)           | Maven and TeaVM, then tsup (`build:all`)                     |
+| `packages/risc-v` | [Specy/rars](https://github.com/Specy/rars)     | `rarsjs/ts` (`@specy/risc-v`)         | Maven and TeaVM, then tsup (`build:all`)                     |
+| `packages/m68k`   | [Specy/s68k](https://github.com/Specy/s68k)     | `ts-lib` (`@specy/s68k`)              | `cargo test`, wasm-pack, then tsc (`build-all`)              |
+| `packages/x86`    | [Specy/x86-js](https://github.com/Specy/x86-js) | `blink-js` (`@specy/x86`)             | tsdown over the checked-in WASM (`build`)                    |
+| `packages/z80`    | [Specy/trs80](https://github.com/Specy/trs80)   | `packages/z80-machine` (`@specy/z80`) | `npm ci`, then vite, bundling the z80-* packages from source |
 
 ## Setup
 
@@ -54,8 +54,8 @@ After rebuilding a Core while the dev server runs, restart the server so Vite lo
 X86's `build` uses the WASM checked into `blink-js/src/wasm`. When the Blink C sources change,
 `pnpm --filter @specy/x86 run build:wasm` rebuilds it, which needs the Emscripten toolchain.
 
-trs80 is an npm workspace of 21 packages whose builds rely on its root's hoisting, so it is not part
-of the pnpm workspace: its build task installs it from its own lockfile, and the app links
+trs80 is an npm workspace of 20 packages that resolve one another through its own root, so it is not
+part of the pnpm workspace: its build task installs it from its own lockfile, and the app links
 `@specy/z80` from `packages/z80/packages/z80-machine`.
 
 ## Testing a Core
@@ -67,7 +67,8 @@ vp run build:mips
 pnpm --filter @specy/mips test
 ```
 
-For Z80, run `npm test` in `packages/z80`.
+For Z80, run `npx vitest run packages/z80-` in `packages/z80`, which runs the suites of the packages
+`@specy/z80` bundles (`npm test` there runs upstream's TRS-80 suites too).
 
 ## Updating a submodule
 

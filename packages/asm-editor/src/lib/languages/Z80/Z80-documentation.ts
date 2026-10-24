@@ -123,14 +123,12 @@ function toVariant(variant: OpcodeVariant): Z80InstructionVariant {
 }
 
 /**
- * Every mnemonic the assembler understands, minus the Z180 extensions: the assembler accepts them
- * but this Z80 core executes them as no-ops, so documenting them would promise something the
- * emulator does not do. Ten mnemonics (`mlt`, `in0`, `out0`, `slp`, `tst`, …) disappear entirely.
+ * Every mnemonic the assembler understands. The Core's opcode table covers the Z80 alone, without
+ * the Z180's extensions (`mlt`, `in0`, `out0`, `slp`, `tst`, …), which it rejects.
  */
 export const z80InstructionMap: Map<string, Z80InstructionVariant[]> = new Map()
 for (const [mnemonic, variants] of mnemonicMap) {
-    const kept = variants.filter((variant) => !variant.clr.z180).map(toVariant)
-    if (kept.length > 0) z80InstructionMap.set(mnemonic, kept)
+    z80InstructionMap.set(mnemonic, variants.map(toVariant))
 }
 
 export const z80InstructionEntries: [string, Z80InstructionVariant[]][] = [
