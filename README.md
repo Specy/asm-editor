@@ -7,7 +7,7 @@ It includes many debugging and inspection tools aimed to help you understand ass
 > **Published research** ASM Editor is described in [_ASM Editor: Understanding Language Abstractions Through Assembly Programming_](https://doi.org/10.1109/EDUCON67543.2026.11574463), presented at the 2026 IEEE Global Engineering Education Conference (EDUCON), Cairo.
 > If you use it in teaching or research, please [cite the paper](#citing-asm-editor).
 
-[![localImage](https://asm-editor.specy.app/images/ASM-C-Compilation.webp)](https://asm-editor.specy.app/)
+[![localImage](https://asm-editor.specy.app/images/ASM-Pacman.webp)](https://asm-editor.specy.app/)
 
 ## App features
 

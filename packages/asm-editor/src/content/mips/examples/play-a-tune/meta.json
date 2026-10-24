@@ -2,5 +2,6 @@
     "name": "Play a tune",
     "description": "Play the first phrase of Ode to Joy from pairs of pitches and durations, then compare waiting and overlapping notes.",
     "order": 25,
-    "topic": "play-a-tune"
+    "topic": "play-a-tune",
+    "template": 7
 }
