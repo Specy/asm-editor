@@ -1,4 +1,4 @@
-import { SITE_URL } from '#lib/seo.ts'
+import { NOINDEX_PAGES, SITE_URL } from '#lib/seo.ts'
 import { blogCatalog } from '#lib/blog/catalog.server.ts'
 import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
 import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
@@ -11,17 +11,10 @@ export const prerender = true
 /**
  * Routes that exist but do not belong in an index: app surfaces that hold the reader's
  * own state, and the embed target, which is meant to be framed by another page rather
- * than landed on from a search result.
+ * than landed on from a search result. The pages that also carry a robots noindex come
+ * from the same list the hook writes it for.
  */
-const EXCLUDED = new Set([
-    '/embed',
-    // src/routes/exam/+layout.ts sets prerender = false, so no exam page is ever built
-    '/exam',
-    '/exam/session',
-    '/projects',
-    '/projects/create',
-    '/chat'
-])
+const EXCLUDED = new Set([...NOINDEX_PAGES.keys(), '/embed', '/projects', '/projects/create'])
 
 /** Discovered rather than hand-listed, so a new page is in the sitemap the moment it
  *  exists. Parameterised routes are filtered out here and expanded below. */
