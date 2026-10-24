@@ -4,6 +4,7 @@
     import { onMount } from 'svelte'
     import InstructionDocumentView from '#cmp/documentation/instruction/InstructionDocumentView.svelte'
     import InstructionPageHead from '#cmp/documentation/instruction/InstructionPageHead.svelte'
+    import InstructionLessons from '#cmp/documentation/instruction/InstructionLessons.svelte'
 
     interface Props {
         data: PageData
@@ -27,7 +28,7 @@
 <InstructionPageHead {document} architecture="x86-64" root="/documentation/x86" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <InstructionDocumentView {document} language="X86">
+    <InstructionDocumentView {document} language="X86" aliases={data.props.aliases}>
         {#snippet example()}
             {#if data.props.example}
                 {#if component}
@@ -46,6 +47,7 @@
             {/if}
         {/snippet}
     </InstructionDocumentView>
+    <InstructionLessons lessons={data.props.lessons} />
 </Page>
 
 <style>

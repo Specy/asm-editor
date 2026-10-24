@@ -11,6 +11,7 @@
     import SearchPalette from '#cmp/search/SearchPalette.svelte'
     import { COURSES_SCOPE } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
 
     interface Props {
         data: PageData
@@ -24,21 +25,30 @@
 
 <DefaultNavbar />
 
-<svelte:head>
-    <title>Courses</title>
-    <meta
-        name="description"
-        content="Explore our courses to learn assembly programming from scratch."
-    />
-    <meta property="og:title" content="Courses" />
-    <meta
-        property="og:description"
-        content="Explore our courses to learn assembly programming from scratch."
-    />
-</svelte:head>
+<PageMeta
+    title="Assembly courses - M68K, MIPS, RISC-V, x86-64, Z80 | Asm Editor"
+    description="Free interactive assembly courses: start with Assembly basics, then learn M68K, MIPS, RISC-V, x86-64 or Z80 with code that runs in your browser."
+/>
 
 <Page hasNavbar cropped contentStyle="padding: 1rem;">
     <Header>Courses</Header>
+    <div class="intro">
+        <p>
+            Interactive courses on assembly programming.
+            <a href={resolve('/learn/courses/[courseId]', { courseId: 'assembly-basics' })}
+                >Assembly basics</a
+            > covers what every assembly language has in common, from registers and memory to branching,
+            the stack and system calls, and is the place to start if you have never written assembly.
+            The language courses then teach M68K, MIPS, RISC-V, x86-64 and Z80 one at a time, from a first
+            program to complete examples such as sorting and searching an array.
+        </p>
+        <p>
+            The code in the lessons runs in your browser: each playground is an editor with its own
+            emulator, where you can run a program, step through it one instruction at a time, undo a
+            step and watch the registers change. In the language courses, many lessons close with an
+            exercise whose tests check your solution.
+        </p>
+    </div>
     <SearchLauncher size="full" placeholder="Search in every course" />
     <div class="courses">
         {#each data.courses as course (course.slug)}
@@ -66,6 +76,22 @@
 <SearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
 
 <style>
+    .intro {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        max-width: 60rem;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+        color: var(--background-text-muted);
+    }
+    .intro p {
+        margin: 0;
+    }
+    .intro a {
+        color: var(--accent);
+        text-decoration: underline;
+    }
     .courses {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));

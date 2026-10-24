@@ -4,6 +4,7 @@
     import InstructionExample from '#cmp/documentation/site/InstructionExample.svelte'
     import InstructionDocumentView from '#cmp/documentation/instruction/InstructionDocumentView.svelte'
     import InstructionPageHead from '#cmp/documentation/instruction/InstructionPageHead.svelte'
+    import InstructionLessons from '#cmp/documentation/instruction/InstructionLessons.svelte'
 
     interface Props {
         data: PageData
@@ -17,7 +18,7 @@
 <InstructionPageHead {document} architecture="RISC-V" root="/documentation/risc-v" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <InstructionDocumentView {document} language="RISC-V">
+    <InstructionDocumentView {document} language="RISC-V" aliases={data.props.aliases}>
         {#snippet example()}
             <InstructionExample
                 instructionKey={document.name}
@@ -25,4 +26,5 @@
             />
         {/snippet}
     </InstructionDocumentView>
+    <InstructionLessons lessons={data.props.lessons} />
 </Page>

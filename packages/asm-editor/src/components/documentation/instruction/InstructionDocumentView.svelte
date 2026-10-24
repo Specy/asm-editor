@@ -53,9 +53,18 @@
         example?: Snippet
         /** How the forms of an opened row are highlighted. */
         language?: AvailableLanguages
+        /** The mnemonic's other spellings, whose own pages point readers and crawlers here. */
+        aliases?: string[]
     }
 
-    let { document, density = 'page', disableLinks = false, example, language }: Props = $props()
+    let {
+        document,
+        density = 'page',
+        disableLinks = false,
+        example,
+        language,
+        aliases = []
+    }: Props = $props()
 
     // the editor's colours for the highlighted forms, as code samples take them
     const palette = $derived(
@@ -160,6 +169,13 @@
                         source={fact}
                     />
                 {/each}
+            </p>
+        {/if}
+        {#if aliases.length > 0}
+            <p class="header-facts">
+                <InlineMarkdown
+                    source={`Also written as: ${aliases.map((alias) => `\`${alias}\``).join(', ')}`}
+                />
             </p>
         {/if}
     </header>

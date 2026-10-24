@@ -37,6 +37,21 @@ export const PAPER = {
     }
 } as const
 
+/**
+ * App surfaces that are reachable and answer 200 but are not content anyone searches for: the AI
+ * chat and the exam builder and session, which hold the reader's own state. `hooks.server.ts` writes
+ * a robots noindex into their HTML and the sitemap leaves them out.
+ *
+ * They are prerendered as empty shells (`ssr = false`), so a `<svelte:head>` in the page never
+ * reaches the HTML a crawler reads; `title` is what the hook writes for it there, the same one the
+ * page sets once it runs. A page rendered on the server writes its own title and needs none here.
+ */
+export const NOINDEX_PAGES: ReadonlyMap<string, { title?: string }> = new Map([
+    ['/chat', { title: 'AI Chat' }],
+    ['/exam', { title: 'Exam Builder - Asm Editor' }],
+    ['/exam/session', { title: 'Exam Session - Asm Editor' }]
+])
+
 export function toAbsoluteUrl(pathname: string) {
     return `${SITE_URL}${pathname.startsWith('/') ? '' : '/'}${pathname}`
 }
