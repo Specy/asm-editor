@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
+import { instructionLessons } from '#lib/content/lectureInstructions.ts'
 import { chapters } from '#lib/documentation/x86/x86.ts'
 import { x86InstructionMap, hasX86InstructionPage } from '#lib/languages/X86/X86-documentation.ts'
 import { x86InstructionDocument } from '#lib/documentation/x86/instructionDocument.ts'
@@ -23,7 +24,8 @@ export const load = (async ({ params }) => {
             // is what the prerendered pages serve to readers without JavaScript. Null for the
             // instructions there is no safe program to show.
             example: buildX86Example(instruction.name),
-            aliases: aliasesOf('x86', instruction.name)
+            aliases: aliasesOf('x86', instruction.name),
+            lessons: await instructionLessons('x86', instruction.name)
         }
     }
 }) satisfies PageServerLoad

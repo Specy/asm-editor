@@ -22,6 +22,7 @@
     import { courseLanguage } from '#lib/search/scope.ts'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd, lectureLd } from '#lib/seo.ts'
+    import LectureInstructions from '#cmp/content/LectureInstructions.svelte'
 
     interface Props {
         data: PageData & { content: string }
@@ -160,6 +161,7 @@
             Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
         </p>
     {/if}
+    <LectureInstructions groups={data.instructions} language={courseLanguage(data.course.slug)} />
     {#if editorLanguage}
         <div class="editor-section" bind:this={editorSection}>
             {#key editorLanguage}

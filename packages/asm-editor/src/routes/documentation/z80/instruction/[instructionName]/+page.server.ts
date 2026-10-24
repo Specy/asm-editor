@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
+import { instructionLessons } from '#lib/content/lectureInstructions.ts'
 import { chapters } from '#lib/documentation/z80/z80.ts'
 import { z80InstructionMap } from '#lib/languages/Z80/Z80-documentation.ts'
 import { z80InstructionDocument } from '#lib/documentation/z80/instructionDocument.ts'
@@ -15,7 +16,8 @@ export const load = (async ({ params }) => {
             document: z80InstructionDocument(params.instructionName),
             // Generated here so the page ships the example already assembled into the HTML, which
             // is what the prerendered pages serve to readers without JavaScript.
-            example: buildZ80Example(params.instructionName, variants)
+            example: buildZ80Example(params.instructionName, variants),
+            lessons: await instructionLessons('z80', params.instructionName)
         }
     }
 }) satisfies PageServerLoad

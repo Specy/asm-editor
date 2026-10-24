@@ -1,13 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { NOINDEX_PAGES, SITE_URL } from '#lib/seo.ts'
 import { blogCatalog } from '#lib/blog/catalog.server.ts'
-import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
-import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
-import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
-import { x86DocumentedNames } from '#lib/languages/X86/X86-documentation.ts'
-import { z80InstructionMap } from '#lib/languages/Z80/Z80-documentation.ts'
 import { aliasTarget } from '#lib/documentation/instructions/aliases.ts'
-import type { DocumentationLanguage } from '#lib/search/scope.ts'
+import { INSTRUCTION_PAGES, instructionPathname } from '#lib/documentation/instructions/pages.ts'
+import { DOCUMENTATION_LANGUAGES } from '#lib/search/scope.ts'
 
 export const prerender = true
 
@@ -88,19 +84,10 @@ function lectureDates(): Map<string, string> {
  *  so the sitemap cannot list a page that does not exist or miss one that does. An
  *  instruction's other spelling is left out: its page names the main one as canonical. */
 function instructionRoutes() {
-    const names: [DocumentationLanguage, string[]][] = [
-        ['m68k', [...M68KUncompoundedInstructions.keys()]],
-        ['mips', [...mipsInstructionMap.keys()]],
-        ['risc-v', [...riscvInstructionMap.keys()]],
-        ['z80', [...z80InstructionMap.keys()]],
-        // x86 has a page per documented instruction rather than per accepted mnemonic: the vector
-        // and system extensions are listed on the complete documentation page instead.
-        ['x86', x86DocumentedNames]
-    ]
-    return names.flatMap(([arch, instructions]) =>
-        instructions
-            .filter((name) => !aliasTarget(arch, name))
-            .map((name) => `/documentation/${arch}/instruction/${name}`)
+    return DOCUMENTATION_LANGUAGES.flatMap((language) =>
+        [...INSTRUCTION_PAGES[language]]
+            .filter((name) => !aliasTarget(language, name))
+            .map((name) => instructionPathname(language, name))
     )
 }
 

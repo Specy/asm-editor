@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
+import { instructionLessons } from '#lib/content/lectureInstructions.ts'
 import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
 import { m68kInstructionDocument } from '#lib/documentation/m68k/instructionDocument.ts'
 
@@ -13,7 +14,8 @@ export const load = (async ({ params }) => {
     return {
         props: {
             document,
-            example: instruction.interactiveExample?.code
+            example: instruction.interactiveExample?.code,
+            lessons: await instructionLessons('m68k', params.instructionName)
         }
     }
 }) satisfies PageServerLoad

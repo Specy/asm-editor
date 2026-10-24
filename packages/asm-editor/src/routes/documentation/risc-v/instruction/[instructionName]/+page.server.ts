@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
+import { instructionLessons } from '#lib/content/lectureInstructions.ts'
 import { chapters } from '#lib/documentation/riscv/riscv.ts'
 import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
 import { riscvInstructionContent } from '#lib/documentation/riscv/instructionContent.ts'
@@ -19,7 +20,8 @@ export const load = (async ({ params }) => {
         props: {
             document: riscvInstructionDocument(params.instructionName, instruction, content),
             content,
-            aliases: aliasesOf('risc-v', params.instructionName)
+            aliases: aliasesOf('risc-v', params.instructionName),
+            lessons: await instructionLessons('risc-v', params.instructionName)
         }
     }
 }) satisfies PageServerLoad
