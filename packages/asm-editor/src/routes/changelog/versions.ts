@@ -7,6 +7,22 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '13.0.0',
+        title: 'Decompile and disassemble ELF files & Audio',
+        date: new Date('2026-10-24'),
+        changes: [
+            'Added importing, disassembling, running and debugging of x86-64 Linux ELF executables',
+            'Added decompilation to C-like pseudocode using Ghidra, connected to the assembly instructions with breakpoints and stepping',
+            'Added instruction patching, function and variable renaming, and comments in the disassembly and pseudocode',
+            'Added a Symbols panel for functions and strings, and project wide search across source files, disassembly and pseudocode',
+            'Added a Hex editor for binary files and previews for images, PDFs, audio and video',
+            'Projects can now contain multiple programs, each with its own entry file, settings and testcases',
+            'Added MIDI notes for MIPS, RISC-V and Z80, and WAV/MIDI file playback for M68K',
+            'Added a waveform synthesizer for MIPS, RISC-V and M68K, and an AY-3-8910 sound chip for Z80',
+            'Improved simulator performance, documentation and the workbench layout on smaller screens'
+        ]
+    },
+    {
         version: '12.0.0',
         title: 'Compile from C/C++',
         date: new Date('2026-10-05'),
