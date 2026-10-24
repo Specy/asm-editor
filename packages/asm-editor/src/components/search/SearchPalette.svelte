@@ -15,7 +15,10 @@
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import { goto } from '$app/navigation'
+    import type { ResolvedPathname } from '$app/types'
     import { hasCodeName } from '#lib/documentation/entries.ts'
+    import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
+    import { resolveHref } from '#lib/hrefs.ts'
     import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
@@ -119,8 +122,8 @@
         opener?.focus?.()
     }
 
-    function hrefOf(result: SearchResult): string {
-        return result.kind === 'entry' ? result.entry.href : result.section.href
+    function hrefOf(result: SearchResult): ResolvedPathname {
+        return resolveHref(result.kind === 'entry' ? result.entry.href : result.section.href)
     }
 
     async function go(result: SearchResult) {
@@ -187,7 +190,7 @@
                 <button type="button" class="close" onclick={close}>Cancel</button>
             </div>
             {#if !query.trim()}
-                <p class="hint">An instruction, a directive, or a question in your own words.</p>
+                <p class="hint">Write the name of an instruction, directive or any question.</p>
             {:else}
                 <ul class="results" id="palette-results" role="listbox" bind:this={list}>
                     {#each results as result, index (result.key)}
@@ -201,7 +204,13 @@
                             onclick={() => go(result)}
                         >
                             {#if result.kind === 'entry'}
-                                <span class="kind">{result.entry.chapterTitle}</span>
+                                <!-- an instruction names its category after its Chapter:
+                                     "Instructions · Arithmetic" -->
+                                <span class="kind"
+                                    >{result.entry.category
+                                        ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
+                                        : result.entry.chapterTitle}</span
+                                >
                                 <span class="title">
                                     <span
                                         class:code={hasCodeName({

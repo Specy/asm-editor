@@ -55,3 +55,49 @@ export const SCREEN_MACRO = {
     summary:
         'Defines a global array of Screen cells and configures the Screen at Build. Use outside functions; each cell covers unit by unit pixels.'
 }
+
+/** The Synth's three helpers; everything else is a register a program writes through `SIM_SYNTH8` or `SIM_SYNTH16`. */
+export const SYNTH_HELPERS = [
+    {
+        name: 'sim_synth_play',
+        returns: { type: 'void' },
+        parameters: [
+            { type: 'int', name: 'channel' },
+            { type: 'unsigned', name: 'hz' }
+        ],
+        summary:
+            'Sets frequency in Hz and turns the gate on. If it is already on, turn it off first with sim_synth_gate(channel, 0) to start another attack.',
+        body: () =>
+            'SIM_SYNTH16(channel, SIM_SYNTH_FREQUENCY) = (unsigned short)hz;\n    SIM_SYNTH8(channel, SIM_SYNTH_CONTROL) |= SIM_SYNTH_GATE;'
+    },
+    {
+        name: 'sim_synth_gate',
+        returns: { type: 'void' },
+        parameters: [
+            { type: 'int', name: 'channel' },
+            { type: 'int', name: 'on' }
+        ],
+        summary:
+            "Changes a Synth channel's gate: off to on starts attack, on to off starts release. Keeping the same gate value does not retrigger.",
+        body: () =>
+            'unsigned char control = SIM_SYNTH8(channel, SIM_SYNTH_CONTROL);\n    SIM_SYNTH8(channel, SIM_SYNTH_CONTROL) =\n        (unsigned char)(on ? control | SIM_SYNTH_GATE : control & ~SIM_SYNTH_GATE);'
+    },
+    {
+        name: 'sim_synth_upload',
+        returns: { type: 'void' },
+        parameters: [
+            { type: 'const void *', name: 'source' },
+            { type: 'unsigned', name: 'length' },
+            { type: 'unsigned', name: 'offset' }
+        ],
+        summary:
+            'Immediately copies signed 8-bit sample bytes from source into shared Sample memory at offset. Length 0 means 65,536 bytes; the destination wraps at 65,536.',
+        body: () =>
+            [
+                'SIM_SYNTH_UPLOAD32(SIM_SYNTH_UPLOAD_SOURCE) = (unsigned)(unsigned long)source;',
+                'SIM_SYNTH_UPLOAD16(SIM_SYNTH_UPLOAD_LENGTH) = (unsigned short)length;',
+                'SIM_SYNTH_UPLOAD16(SIM_SYNTH_UPLOAD_DESTINATION) = (unsigned short)offset;',
+                'SIM_SYNTH_UPLOAD8(SIM_SYNTH_UPLOAD_START) = 1;'
+            ].join('\n    ')
+    }
+]

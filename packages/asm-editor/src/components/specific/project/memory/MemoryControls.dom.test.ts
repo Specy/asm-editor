@@ -54,7 +54,11 @@ function render(
             ...extra.labels
         ],
         resolveMemoryLabel: (name: string) =>
-            name === 'buffer' ? 0x1003n : name === 'main' ? 0x2000n : undefined
+            new Map([
+                ['buffer', 0x1003n],
+                ['main', 0x2000n],
+                ['DAT_singing_perch', 0x3010n]
+            ]).get(name)
     } as unknown as Emulator
     const app = mount(MemoryControls, {
         target,
@@ -98,6 +102,23 @@ it('keeps partially typed labels valid during rendering and submits label offset
     ui.type('unknown')
     ui.search()
     expect(ui.target.querySelector('[role="alert"]')?.textContent).toContain('Unknown label')
+})
+it('writes 0x before the text only while it is hex digits, not before a name', () => {
+    const ui = render()
+    const prefix = () => ui.target.querySelector('.hex-address-label')?.textContent?.trim()
+    expect(prefix()).toBe('0x')
+    //an Invented name of an Executable's Listing, which used to read as 0xsinging_perch
+    ui.type('DAT_singing_perch')
+    expect(prefix()).toBeUndefined()
+    ui.search()
+    expect(ui.change).toHaveBeenLastCalledWith(0x3010n)
+    //the address it went to, which is a number again
+    expect(ui.input.value).toBe('00003010')
+    expect(prefix()).toBe('0x')
+    ui.type('buffer+16')
+    expect(prefix()).toBeUndefined()
+    ui.type('')
+    expect(prefix()).toBe('0x')
 })
 it('disables the picker before Build and reports why a label cannot resolve', () => {
     const ui = render(false)
@@ -225,4 +246,42 @@ it('lists the Arguments as a region of their own, with their parts under it', as
     filtered[1].click()
     flushSync()
     expect(ui.change).toHaveBeenLastCalledWith(0x7fffffe8n)
+})
+
+it('lists a demangled label by its name, with the raw one in its tooltip and its filter', async () => {
+    const ui = render(true, true, {
+        regions: [],
+        labels: [
+            {
+                name: '_ZSt4cout@GLIBCXX_3.4',
+                displayName: 'std::cout@GLIBCXX_3.4',
+                section: '.data',
+                address: 0x1018n,
+                fromLibrary: false
+            }
+        ]
+    })
+    ui.target.querySelector<HTMLButtonElement>('[aria-label="Memory regions"]')!.click()
+    flushSync()
+    await tick()
+    flushSync()
+    await tick()
+    const labelRows = () =>
+        [...ui.target.querySelectorAll<HTMLElement>('[role="option"] .data-label')].map((row) => ({
+            text: row.querySelector('span')?.textContent,
+            title: row.getAttribute('title')
+        }))
+    expect(labelRows()).toEqual([
+        { text: 'buffer', title: null },
+        { text: 'std::cout@GLIBCXX_3.4', title: 'std::cout@GLIBCXX_3.4\n_ZSt4cout@GLIBCXX_3.4' }
+    ])
+    const filter = ui.target.querySelector<HTMLInputElement>(
+        '[aria-label="Filter memory regions"]'
+    )!
+    for (const text of ['_ZSt4cout', 'std::cout']) {
+        filter.value = text
+        filter.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+        expect(labelRows().map((row) => row.text)).toEqual(['std::cout@GLIBCXX_3.4'])
+    }
 })

@@ -6,18 +6,39 @@ import {
     liveSource,
     canEditProjectBreakpoints,
     isCurrentBuildLocation,
+    isSameProjectSourceSelection,
     type ProjectSourceSelection
 } from '#lib/monaco/projectSourceSelection.ts'
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
-import { isLineBreakpoint } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
+import type { ProjectFileKind } from '#lib/fileKinds.ts'
+import { textFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
+import { overwritesOnly } from '#lib/projectFiles.ts'
+import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
+import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
+import {
+    isLineBreakpoint,
+    type SourceBreakpoint
+} from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    LINE_KIND,
+    lineOfAddress,
+    type Listing,
+    type ListingFunction
+} from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
+import type { PseudocodeDocument } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
+import {
+    defaultPseudocodeFunction,
+    pseudocodeBreakpointLines,
+    pseudocodeLineOfAddress
+} from '#lib/pseudocode/pseudocodeMap.ts'
 import type { PatchedListing } from '#lib/listing/listingPatcher.svelte.ts'
 import type { PatchPrompt } from './patchPrompt.svelte'
+import type { AnnotationPrompt } from './annotationPrompt.svelte'
+import { NavigationHistory } from './navigationHistory.svelte'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'
 import { hasRuntimeLibraryFor } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
-import { assemblyLinesOf } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     compilationStatus,
     defaultSourceCompiler,
@@ -37,15 +58,64 @@ export class EditorGroup {
     optimization = $state<Optimization>('0')
     sourceCompiler = $state<SourceCompiler>('clang')
 
+    /**
+     * The view this pane last showed each File in
+     * ([file-views.md](../../../../../docs/design/file-views.md), decision 8), while its tab is
+     * open; a File it has none for opens in the view the Project saved for it, or its default.
+     */
+    views = $state.raw<Readonly<Record<string, FileView>>>({})
+    /**
+     * Where this pane was in each File it showed in the Hex editor, while its tab is open: not
+     * reactive, since only the Hex editor reads it, when it opens the File again.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read once when a Hex editor opens a File; nothing tracks it.
+    readonly hexViews = new Map<string, HexViewState>()
+    /**
+     * Where this pane's code editor left each model, by key: the editor is made anew whenever the
+     * pane comes back to code from the bytes or a Preview, and goes back to where the last one was.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read when an editor takes a model; nothing tracks it.
+    readonly editorViewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>()
+    /** The bytes Show in Hex asked this pane to select, until its Hex editor has. */
+    hexReveal = $state.raw<{ path: string; offset: number; length: number } | undefined>()
+    /**
+     * Why this pane shows a File in the Hex editor where its Preview was asked for: the browser
+     * could not show it after all (decision 14). The note stands over the bytes until a view is
+     * chosen for the File again, and the Preview is tried anew when that view is the Preview.
+     */
+    previewNotes = $state.raw<Readonly<Record<string, string>>>({})
+    /**
+     * The function this pane shows each Executable's Pseudocode of, by its link-time address,
+     * while its tab is open: the one the Listing's cursor was last in, a call followed to, or the
+     * program counter's ([file-views.md](../../../../../docs/design/file-views.md), decision 6).
+     */
+    pseudocodeFunctions = $state.raw<Readonly<Record<string, number>>>({})
+    /** The 0-based line of the editor's cursor, in whatever the pane shows; -1 before it has one. */
+    cursorLine = $state(-1)
+    /**
+     * The places in Listings and Pseudocode this pane jumped from, which Back and Forward return
+     * to ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 8).
+     */
+    readonly history = new NavigationHistory()
+
     declare readonly displayedPath: string
     declare readonly sourceView: 'snapshot' | 'live'
-    declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
+    /** What the displayed File is, from its bytes; undefined for a library's Listing or no File. */
+    declare readonly displayedKind: ProjectFileKind | undefined
+    /** How the displayed File is shown: as text, in the Hex editor, as a Listing, as a Preview. */
+    declare readonly displayedView: FileView
+    declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage> | TextFileLanguage
     /**
      * The Listing the displayed File is shown as: an Executable's, or that of a library the running
      * program loaded, under `@lib/` ([binary-import.md](../../../../../docs/design/binary-import.md),
      * decisions 5 and 18). It is read-only and is no File of the Project.
      */
     declare readonly displayedListing: ListingDocument | undefined
+    /** The Listing document asked for, which `displayedListing` shows once it is ready. */
+    declare private readonly requestedListing: ListingDocument | undefined
+    /** The same for `pseudocodeListing`. */
+    declare private readonly requestedPseudocodeListing: ListingDocument | undefined
     /**
      * The running Executable's patched lines, when this group shows its Listing in the current
      * Build ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13).
@@ -53,8 +123,36 @@ export class EditorGroup {
     declare readonly displayedPatches: PatchedListing | undefined
     /** The displayed Listing as shown: with its patched lines, if any, in place. */
     declare readonly displayedListingView: Listing | undefined
+    /**
+     * The Listing a pane showing an Executable's Pseudocode decompiles from and pairs with: the
+     * one a Listing pane of the same version of the File shows, generated for it even when no
+     * pane shows the Listing. Undefined in every other view, so a pane showing the bytes makes no
+     * Listing.
+     */
+    declare readonly pseudocodeListing: ListingDocument | undefined
+    /** The function whose Pseudocode the pane shows, once the Listing is ready. */
+    declare readonly pseudocodeFunction: ListingFunction | undefined
+    /** That function's Pseudocode, decompiling or decompiled. */
+    declare readonly requestedPseudocode: PseudocodeDocument | undefined
+    /**
+     * The Pseudocode the pane shows: the function's once it is decompiled or has failed, and until
+     * then the one it showed before, of the same Listing, so that moving between functions neither
+     * empties the pane nor resizes the pair for the moment a function takes. A function that takes
+     * longer is covered by "Decompiling…".
+     */
+    declare readonly displayedPseudocode: PseudocodeDocument | undefined
+    /**
+     * The model key of the Pseudocode this pane last showed of each File it has open, whatever it
+     * shows now: kept, so that the File shown again finds its model and scroll position as it was.
+     */
+    declare readonly pseudocodeModelKeys: readonly string[]
     /** The "Patch instruction…" prompt opened over this group's Listing; see `openPatchPrompt`. */
     patchPrompt = $state.raw<PatchPrompt | undefined>()
+    /**
+     * The Rename… or Comment… prompt opened over this group's Listing or Pseudocode; see
+     * `openAnnotationPrompt`.
+     */
+    annotationPrompt = $state.raw<AnnotationPrompt | undefined>()
 
     constructor(
         readonly session: WorkbenchSession,
@@ -67,10 +165,28 @@ export class EditorGroup {
         this.sourceView = $derived<'snapshot' | 'live'>(
             this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
         )
+        //Pseudocode reads like C, and a Listing like the Target's assembly, whatever the
+        //Executable's name; a File's text like what its name says it is
         this.displayedLanguage = $derived(
-            editorFileLanguage(this.displayedPath, this.session.project.language)
+            this.displayedView === 'pseudocode'
+                ? 'c'
+                : (this.displayedView === 'text' && textFileLanguage(this.displayedPath)) ||
+                      editorFileLanguage(this.displayedPath, this.session.project.language)
         )
-        this.displayedListing = $derived(this.session.listingFor(this.sourceSelection))
+        this.displayedKind = $derived(
+            this.session.fileKindOf(this.displayedFile, this.displayedPath)
+        )
+        this.displayedView = $derived(this.viewOf(this.displayedPath, this.displayedKind))
+        //generated only for a pane that shows it: an Executable in the Hex editor needs none
+        this.requestedListing = $derived(
+            this.displayedView === 'listing'
+                ? this.session.listingFor(this.sourceSelection)
+                : undefined
+        )
+        //apart from the request, which may make the document: a derived does not depend on the
+        //state of a document it made, and this one waits for it to be ready
+        const shownListing = this.listingAsShown()
+        this.displayedListing = $derived(shownListing(this.requestedListing))
         this.displayedPatches = $derived.by(() => {
             const patched = this.session.emulator.patcher?.patched
             const selection = this.sourceSelection
@@ -85,7 +201,138 @@ export class EditorGroup {
         this.displayedListingView = $derived(
             this.displayedPatches?.listing ?? this.displayedListing?.listing
         )
+        this.requestedPseudocodeListing = $derived(
+            this.displayedView === 'pseudocode'
+                ? this.session.listingFor(this.sourceSelection)
+                : undefined
+        )
+        const decompiledListing = this.listingAsShown()
+        this.pseudocodeListing = $derived(decompiledListing(this.requestedPseudocodeListing))
+        this.pseudocodeFunction = $derived.by(() => {
+            const listing = this.pseudocodeListing?.listing
+            return listing ? this.session.pseudocodeFunctionFor(this, listing) : undefined
+        })
+        this.requestedPseudocode = $derived.by(() => {
+            const document = this.pseudocodeListing
+            const fn = this.pseudocodeFunction
+            const file = this.displayedFile
+            return document && fn && file
+                ? this.session.pseudocode.open(this.displayedPath, file, document, fn)
+                : undefined
+        })
+        let settled: PseudocodeDocument | undefined
+        this.displayedPseudocode = $derived.by(() => {
+            const requested = this.requestedPseudocode
+            if (requested?.status !== 'decompiling') return (settled = requested)
+            //another function of the same Listing, or the same function of a Listing made again
+            //(a rename, a comment, a Byte edit), keeps the one shown until it is decompiled
+            return settled?.path === requested.path &&
+                (settled.listingDocument === requested.listingDocument ||
+                    settled.fn.address === requested.fn.address)
+                ? settled
+                : requested
+        })
+        let shown: Readonly<Record<string, string>> = {}
+        this.pseudocodeModelKeys = $derived.by(() => {
+            const paths = this.tabs.paths
+            const identity = this.modelIdentity
+            const kept = Object.entries(shown).filter(([path]) => paths.includes(path))
+            if (identity?.view === 'pseudocode')
+                kept.push([identity.path, projectSourceModelKey(identity)])
+            shown = Object.fromEntries(kept)
+            return Object.values(shown)
+        })
         this.resetCompilationOptions()
+    }
+
+    /**
+     * A Listing document as this pane shows it: the one asked for, except that while one made
+     * again for the same version of the same File is being generated (after a rename or a comment,
+     * a Byte edit, or at the address a Debug session loaded the program at), the one it showed
+     * stays until the new one is ready, so the text is not taken away for the moment it takes
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 22). One per derived value, whose last document it keeps.
+     */
+    private listingAsShown() {
+        let shown: { document: ListingDocument; selection: ProjectSourceSelection } | undefined
+        return (requested: ListingDocument | undefined): ListingDocument | undefined => {
+            const selection = this.sourceSelection
+            if (
+                requested?.status === 'generating' &&
+                shown &&
+                shown.document !== requested &&
+                shown.document.status === 'ready' &&
+                isSameProjectSourceSelection(shown.selection, selection)
+            )
+                return shown.document
+            shown = requested && { document: requested, selection: { ...selection } }
+            return requested
+        }
+    }
+
+    /**
+     * The view this pane shows a File of this kind in: the one it last showed it in, else the one
+     * last chosen for it anywhere, which the Project saves, when the kind offers it; else the
+     * kind's default. A library's Listing is no File and is only ever a Listing.
+     */
+    viewOf(path: string, kind: ProjectFileKind | undefined): FileView {
+        if (!kind && this.session.emulator.listings?.isLibrary(path)) return 'listing'
+        return resolveFileView(kind, this.views[path], this.session.project.fileViews?.[path])
+    }
+
+    /**
+     * Shows a File in another view in this pane, when its kind offers that view. With `remember`,
+     * as when a person picks it, the Project saves it as the File's last view.
+     */
+    setView(path: string, view: FileView, remember = true) {
+        const kind = path === this.displayedPath ? this.displayedKind : this.session.kindAt(path)
+        if (resolveFileView(kind, view) !== view) return
+        if (remember) this.forgetPreviewNote(path)
+        if (this.views[path] !== view) this.views = { ...this.views, [path]: view }
+        if (remember) this.session.viewChosen(path, view, kind)
+    }
+
+    /**
+     * The browser could not preview the File at `path` after all: this pane shows its bytes
+     * instead, under the note that says why, without that counting as a view anyone chose.
+     */
+    previewUnavailable(path: string, note: string) {
+        this.previewNotes = { ...this.previewNotes, [path]: note }
+        this.setView(path, 'hex', false)
+    }
+
+    private forgetPreviewNote(path: string, to?: string) {
+        if (!Object.hasOwn(this.previewNotes, path)) return
+        const notes = Object.entries(this.previewNotes).filter(([key]) => key !== path)
+        if (to !== undefined) notes.push([to, this.previewNotes[path]])
+        this.previewNotes = Object.fromEntries(notes)
+    }
+
+    /** Shows the Pseudocode of the function at a link-time address, when this pane shows one. */
+    followFunction(path: string, address: number) {
+        if (this.pseudocodeFunctions[path] !== address)
+            this.pseudocodeFunctions = { ...this.pseudocodeFunctions, [path]: address }
+    }
+
+    /** Forgets the view of a File whose tab closed here, or carries it to a renamed path. */
+    moveView(from: string, to?: string) {
+        this.forgetPreviewNote(from, to)
+        //a closed tab's places stay, and Back opens it again
+        if (to !== undefined) this.history.rename(from, to)
+        if (Object.hasOwn(this.pseudocodeFunctions, from)) {
+            const functions = Object.entries(this.pseudocodeFunctions).filter(
+                ([path]) => path !== from && path !== to
+            )
+            if (to !== undefined) functions.push([to, this.pseudocodeFunctions[from]])
+            this.pseudocodeFunctions = Object.fromEntries(functions)
+        }
+        const place = this.hexViews.get(from)
+        this.hexViews.delete(from)
+        if (place && to !== undefined) this.hexViews.set(to, place)
+        if (!Object.hasOwn(this.views, from)) return
+        const views = Object.entries(this.views).filter(([path]) => path !== from && path !== to)
+        if (to !== undefined) views.push([to, this.views[from]])
+        this.views = Object.fromEntries(views)
     }
 
     resetCompilationOptions() {
@@ -134,6 +381,21 @@ export class EditorGroup {
             : undefined
     }
     /**
+     * The open Rename… or Comment… prompt, while the pane shows the Listing of the File it
+     * annotates, or the Pseudocode of the function it was opened over
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 18).
+     */
+    get openAnnotationPrompt(): AnnotationPrompt | undefined {
+        const prompt = this.annotationPrompt
+        if (!prompt || prompt.spec.path !== this.displayedPath) return undefined
+        const over = prompt.spec.pseudocodeFunction
+        if (over === undefined) return this.displayedView === 'listing' ? prompt : undefined
+        return this.displayedView === 'pseudocode' && this.displayedPseudocode?.fn.address === over
+            ? prompt
+            : undefined
+    }
+    /**
      * Whether the displayed Listing is a library's the running program loaded, which takes no
      * Breakpoints (decision 11); a Project File under `@lib/` is an ordinary File.
      */
@@ -145,12 +407,43 @@ export class EditorGroup {
         if (this.displayedLibraryMember) return this.session.runtimeMemberFile(this.displayedPath)
         //a library's Listing is no File at all
         if (this.displayedLibraryListing) return undefined
+        //the Build's version of a File has the live File's renames and comments
         return this.sourceView === 'snapshot'
-            ? this.session.emulator.buildSources?.files[this.displayedPath]
+            ? this.session.snapshotFile(this.displayedPath)
             : this.session.project.files[this.displayedPath]
+    }
+    /**
+     * The Entry of the Program whose Build saved the displayed File, while it is that Build's
+     * output unchanged ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+     * It is an Executable like any other: its Listing takes Breakpoints for when it runs as a
+     * Program of its own, and shows no program counter while its source runs.
+     */
+    get displayedBuildOutputEntry(): string | undefined {
+        return this.session.buildOutputs.get(this.displayedPath)?.entry
+    }
+    /**
+     * The line this pane's editor puts the displayed Listing at when it shows it for the first time
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 13): the function of the Pseudocode beside it, which follows the Listing's cursor; else
+     * `main`, else the entry point's, as a Pseudocode chooses its function. A library's Listing
+     * opens at its top.
+     */
+    get listingStartLine(): number | undefined {
+        const document = this.displayedListing
+        const listing = document?.listing
+        if (!listing || this.displayedLibraryListing) return undefined
+        const beside = this.session.groups.find(
+            (other) =>
+                other !== this &&
+                other.displayedView === 'pseudocode' &&
+                other.pseudocodeListing === document
+        )
+        return (beside?.pseudocodeFunction ?? defaultPseudocodeFunction(listing))?.line
     }
     get displayedCode() {
         if (this.displayedListing) return this.displayedListingView?.text ?? ''
+        if (this.displayedView === 'pseudocode')
+            return this.displayedPseudocode?.status === 'ready' ? this.displayedPseudocode.text : ''
         return this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
     }
     get displayedCompilation() {
@@ -188,8 +481,6 @@ export class EditorGroup {
     get compilationNotice() {
         const record = this.displayedCompilation
         if (!record) return ''
-        if (this.unsupportedRuntimeAbi)
-            return `Compiled against Runtime ABI ${record.runtimeAbi}, which this editor does not provide. Recompile to build it.`
         const status = compilationStatus(
             record,
             this.session.project.files,
@@ -238,18 +529,80 @@ export class EditorGroup {
         )
         return status.stale || status.edited
     }
+    /**
+     * The views the displayed File can be switched between, in the order the view switch offers
+     * them (decision 4): Hex · Disassemble · Decompile for an Executable, Preview · Hex for a File
+     * the browser can show, and none where there is only one view, as for text and other bytes. A
+     * library's Listing is no File and has none.
+     */
+    get viewSwitch(): readonly FileView[] {
+        if (!this.displayedFile || this.displayedLibraryMember) return []
+        const views = fileViewsOf(this.displayedKind)
+        return views.length > 1 ? views : []
+    }
+    /**
+     * The Entry path of the Program whose Entry file the pane shows, which its Build and Test act
+     * on ([programs.md](../../../../../docs/design/programs.md), decision 5): a File of the live
+     * Project, so no Runtime library member, library Listing or Build output, and never a
+     * Program whose Entry is missing, which there is nothing to show of. Undefined for any other
+     * File, which has no Build outside a Debug session.
+     */
+    get displayedProgram(): string | undefined {
+        const path = this.displayedPath
+        const project = this.session.project
+        if (!path || this.displayedLibraryMember || this.displayedLibraryListing) return undefined
+        return project.program(path) && Object.hasOwn(project.files, path) ? path : undefined
+    }
+    /**
+     * Whether the execution dock floats over this pane. `controls` says whether the layout puts
+     * the execution controls in a pane, as a desktop and a phone do; a tablet has one bar for
+     * them. During a Debug session the controls group has it, and outside one every pane showing
+     * an Entry file, for its Program's Build ([programs-plan.md](../../../../../docs/design/programs-plan.md),
+     * decision 8); a source File its compile dock outside a Debug session, and on every device a
+     * File shown in more than one way its view switch.
+     */
+    hasDock(controls: boolean): boolean {
+        const s = this.session
+        if (!this.displayedPath) return false
+        return (
+            (controls &&
+                (s.debugSession
+                    ? s.controlsGroup === this
+                    : this.displayedProgram !== undefined)) ||
+            ((!!sourceLanguage(this.displayedPath) || this.recompilationNeeded) &&
+                !s.debugSession) ||
+            this.viewSwitch.length > 1
+        )
+    }
+    /** Whether the displayed view is text in the code editor: a File's, a Listing or Pseudocode. */
+    get showsCode() {
+        const view = this.displayedView
+        return view === 'text' || view === 'listing' || view === 'pseudocode'
+    }
     get modelIdentity(): ProjectModelIdentity | undefined {
-        if (!this.displayedPath) return undefined
+        if (!this.displayedPath || !this.showsCode) return undefined
+        const view = this.displayedView
         //a Listing's model is made once its text exists, never filled in afterwards: Monaco decides
         //at a model's creation whether it is too large to highlight
         if (this.displayedListing && this.displayedListing.status !== 'ready') return undefined
-        return { sessionId: this.session.languageSessionId, ...this.sourceSelection }
+        //and a function's Pseudocode once it is decompiled, a model of its own for each function
+        const pseudocode = view === 'pseudocode' ? this.displayedPseudocode : undefined
+        if (view === 'pseudocode' && pseudocode?.status !== 'ready') return undefined
+        return {
+            sessionId: this.session.languageSessionId,
+            ...this.sourceSelection,
+            //a Listing's model is the File's as much as its text's is, so the view tells them apart
+            ...(view === 'listing' || view === 'pseudocode' ? { view } : {}),
+            ...(pseudocode ? { functionAddress: pseudocode.fn.address } : {})
+        }
     }
     get modelKey() {
         return this.modelIdentity ? projectSourceModelKey(this.modelIdentity) : `empty:${this.id}`
     }
     get displayedDiagnostics() {
         const s = this.session
+        //a Pseudocode is the decompiler's, which no Build or check reports on
+        if (this.displayedView === 'pseudocode') return []
         const diagnostics =
             this.sourceView === 'live' ? s.liveViewDiagnostics : s.emulator.compilerDiagnostics
         //a Diagnostic of no File belongs to whichever File is shown, except the Arguments', which
@@ -262,6 +615,17 @@ export class EditorGroup {
     }
     get breakpointsEditable() {
         const s = this.session
+        //a Pseudocode line's go on its instructions, in the Executable's Listing (decision 10)
+        if (this.displayedView === 'pseudocode')
+            return (
+                this.displayedPseudocode?.map !== undefined &&
+                !this.displayedLibraryListing &&
+                canEditProjectBreakpoints(this.sourceSelection, {
+                    readonly: s.host.readonly,
+                    building: s.building,
+                    fileSystemLocked: s.fileSystemLocked
+                })
+            )
         //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
         //during a Debug session
         if (this.displayedEnvironmentHeader) return !s.host.readonly && !s.building
@@ -290,38 +654,66 @@ export class EditorGroup {
             })
         )
     }
-    get displayedBreakpoints() {
+    /**
+     * The displayed File's Breakpoints, as this pane draws them: during a Debug session only in
+     * the Build's version, where they apply.
+     */
+    get shownBreakpoints(): SourceBreakpoint[] {
         const s = this.session
-        //a Listing's Breakpoints are addresses, drawn on the line that holds them now
-        const listing = this.displayedListing?.listing
         return (
             this.sourceView === 'snapshot' || !s.fileSystemLocked || this.displayedEnvironmentHeader
                 ? s.emulator.breakpoints
                 : []
+        ).filter((item) => item.file === this.displayedPath)
+    }
+    /** The link-time addresses of those Breakpoints that are an Executable's. */
+    get shownAddressBreakpoints(): number[] {
+        return this.shownBreakpoints.flatMap((item) =>
+            isLineBreakpoint(item) ? [] : [item.address]
         )
-            .filter((item) => item.file === this.displayedPath)
-            .flatMap((item) => {
-                if (isLineBreakpoint(item)) return [item.line]
-                const line = listing ? lineOfAddress(listing, item.address) : -1
-                return line >= 0 ? [line] : []
-            })
+    }
+    get displayedBreakpoints(): number[] {
+        //a Pseudocode marks each line whose instructions carry one, wherever it was set
+        //(decision 10)
+        if (this.displayedView === 'pseudocode') {
+            const document = this.displayedPseudocode
+            return document?.map
+                ? pseudocodeBreakpointLines(
+                      document.map,
+                      document.listing,
+                      this.shownAddressBreakpoints
+                  )
+                : []
+        }
+        //a Listing's Breakpoints are addresses, drawn on the line that holds them now
+        const listing = this.displayedListing?.listing
+        return this.shownBreakpoints.flatMap((item) => {
+            if (isLineBreakpoint(item)) return [item.line]
+            const line = listing ? lineOfAddress(listing, item.address) : -1
+            return line >= 0 ? [line] : []
+        })
     }
     /** Lines of this assembly where a Breakpoint set on its C or C++ source stops. */
     get displayedMappedBreakpoints() {
         const s = this.session
         if (this.sourceView !== 'snapshot' && s.fileSystemLocked) return []
+        if (this.displayedView === 'pseudocode') return []
         const own = this.displayedBreakpoints
         return s.mappedBreakpoints
             .filter((item) => item.file === this.displayedPath && !own.includes(item.line))
             .map((item) => item.line)
     }
+    /**
+     * Whether the displayed view draws the program's current instruction on its line: a File's
+     * text or its Listing, not its bytes or a Preview.
+     */
+    get showsInstructions() {
+        return this.displayedView === 'text' || this.displayedView === 'listing'
+    }
     get instructionLine() {
         const s = this.session
-        return isCurrentBuildLocation(
-            this.sourceSelection,
-            s.buildGeneration,
-            s.emulator.currentFile
-        )
+        return this.showsInstructions &&
+            isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
             ? s.emulator.line
             : -1
     }
@@ -347,8 +739,30 @@ export class EditorGroup {
             text: `running from inside this instruction, at +${offset}${code ? `: ${code}` : ''}`
         }
     }
+    /**
+     * The program counter's line in a Pseudocode of the running Executable: the first whose
+     * instructions hold it, by its link-time address; -1 when none does, and always for the Build
+     * output, whose program the debugger follows in its source (plan decision 15). None either
+     * while the program is on no line, as once it has exited
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 3).
+     */
+    get pseudocodeProgramLine() {
+        const s = this.session
+        const document = this.displayedPseudocode
+        const map = document?.map
+        if (
+            !map ||
+            s.emulator.line < 0 ||
+            !isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
+        )
+            return -1
+        const address = Number(s.emulator.pc) - document.listingDocument.base
+        return pseudocodeLineOfAddress(map, document.listing, address)
+    }
     get highlightedLine() {
-        const pair = this.session.mappingPair
+        if (this.displayedView === 'pseudocode') return this.pseudocodeProgramLine
+        const pair = this.session.linePairing
         if (pair?.source === this) {
             const location = this.session.executionSourceLocation
             return location?.path === this.displayedPath ? location.line : -1
@@ -357,7 +771,7 @@ export class EditorGroup {
     }
     get mappedLines() {
         const s = this.session
-        const pair = s.mappingPair
+        const pair = s.linePairing
         const selected = s.mappingSelection
         if (!pair || !selected) return []
         if (pair.source === this)
@@ -365,16 +779,38 @@ export class EditorGroup {
                 location.path === this.displayedPath ? [location.line] : []
             )
         if (pair.assembly !== this) return []
-        return assemblyLinesOf(pair.map, selected)
+        return pair.assemblyLinesOf(selected)
     }
     get lineColoring() {
-        const s = this.session
-        if (s.mappingPair?.assembly === this) return s.mappingColors?.assembly
-        if (s.mappingPair?.source === this) return s.mappingColors?.source.get(this.displayedPath)
+        const pair = this.session.linePairing
+        if (pair?.assembly === this) return pair.coloring.assembly
+        if (pair?.source === this) return pair.coloring.source.get(this.displayedPath)
         return undefined
     }
     get activeLineColors() {
         return this.session.activeMappingColors
+    }
+    /**
+     * Why the displayed File's bytes cannot be typed over now, or undefined when they can: whatever
+     * keeps a File's text read-only, and saved edits that insert or delete bytes, since only
+     * overwrites can be added to. A File stored as text has its text overwritten instead.
+     */
+    get bytesReadOnly(): string | undefined {
+        const s = this.session
+        if (s.host.readonly) return 'This Project is read-only'
+        if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
+        if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
+            return 'The Files are read-only during a Debug session: Stop to edit them'
+        if (s.running || s.building) return 'The Files are read-only while a Build runs'
+        if (this.displayedFile && !overwritesOnly(this.displayedFile))
+            return 'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
+        return undefined
+    }
+    /** Why a File the browser could not preview is shown in the Hex editor instead. */
+    get bytesNotice(): string | undefined {
+        if (this.displayedView === 'hex' && Object.hasOwn(this.previewNotes, this.displayedPath))
+            return this.previewNotes[this.displayedPath]
+        return undefined
     }
     get editorDisabled() {
         const s = this.session

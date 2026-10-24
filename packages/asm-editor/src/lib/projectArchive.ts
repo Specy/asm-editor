@@ -1,11 +1,15 @@
 import {
     isAvailableLanguage,
+    legacyProjectShape,
     makeProject,
     type ExternalImport,
+    type LegacyProjectData,
     type Project,
     type ProjectData,
-    type StoredProject
+    type StoredProject,
+    withoutBuildOutputs
 } from '#lib/Project.svelte.ts'
+import { untouchedBuildOutputs } from '#lib/buildOutput.ts'
 import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
 import { serializer } from '#lib/json.ts'
 import {
@@ -14,15 +18,31 @@ import {
     FILE_COUNT_LIMIT,
     FILE_ENCODINGS,
     PATH_BYTE_LIMIT,
-    fileBytes,
     isValidFilePath,
+    originalBytes,
     projectFileFromBytes,
     ProjectFormatError,
-    type FileEncoding
+    type Annotations,
+    type ByteEdit,
+    type FileEncoding,
+    type ProjectFile
 } from '#lib/projectFiles.ts'
 import { unzipSync, zipSync, type Unzipped } from 'fflate'
 
-const ARCHIVE_VERSION = 1
+/**
+ * Version 2 gave a File's manifest entry its Byte edits, beside the original bytes under `files/`;
+ * version 3 replaced the project's `entry`, `settings`, `testcases` and `display` with its `programs`
+ * ([ADR 0054](../../../../docs/adr/0054-a-project-holds-programs-identified-by-their-entry-file.md));
+ * version 4, version 3's shape, gave a File's entry its Annotations
+ * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 21).
+ * An archive is written in the oldest version that holds it, which older editors read: a Project
+ * with one Program as version 1, or 2 with Byte edits, one with several or none as 3, and only one
+ * with Annotations as 4, which an editor before them refuses as a version it does not know.
+ */
+const ARCHIVE_VERSION_WITH_ANNOTATIONS = 4
+const ARCHIVE_VERSION = 3
+const ARCHIVE_VERSION_WITHOUT_PROGRAMS = 2
+const ARCHIVE_VERSION_WITHOUT_EDITS = 1
 const MANIFEST_NAME = 'project.json'
 const FILE_PREFIX = 'files/'
 const MANIFEST_BYTE_LIMIT = 1024 * 1024
@@ -34,28 +54,58 @@ const ARCHIVE_BYTE_LIMIT =
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
-type ArchivedFile = { encoding: FileEncoding }
+type ArchivedFile = {
+    encoding: FileEncoding
+    edits?: readonly ByteEdit[]
+    annotations?: Annotations
+}
 type ProjectManifest = {
-    version: typeof ARCHIVE_VERSION
-    project: Omit<ProjectData, 'files'>
+    version:
+        | typeof ARCHIVE_VERSION_WITH_ANNOTATIONS
+        | typeof ARCHIVE_VERSION
+        | typeof ARCHIVE_VERSION_WITHOUT_PROGRAMS
+        | typeof ARCHIVE_VERSION_WITHOUT_EDITS
+    /** `LegacyProjectData` before version 3, `ProjectData` without its Files from it on. */
+    project: Omit<ProjectData, 'files'> | Omit<LegacyProjectData, 'files'>
     files: Record<string, ArchivedFile>
 }
 
+/**
+ * The Project as a download or an archive holds it: without the Build outputs nobody changed, which
+ * a Build makes again ([ADR 0056](../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+ */
 function snapshotOf(project: Project | ProjectData): ProjectData {
-    return 'toObject' in project ? project.toObject() : project
+    return withoutBuildOutputs('toObject' in project ? project.toObject() : project)
 }
 
 /** A complete, byte-preserving Project ZIP. No running descriptor or Undo state is serialized. */
 export function projectToArchive(project: Project | ProjectData): Uint8Array<ArrayBuffer> {
     const snapshot = snapshotOf(project)
     const files = cleanFiles(snapshot.files)
-    const projectMetadata = { ...snapshot }
+    const annotated = Object.values(files).some((file) => file.annotations)
+    //no version before Programs holds Annotations, so they take the shape after them
+    const legacy = annotated ? undefined : legacyProjectShape(snapshot)
+    const projectMetadata = { ...(legacy ?? snapshot) }
     Reflect.deleteProperty(projectMetadata, 'files')
+    const edited = Object.values(files).some((file) => file.edits?.length)
     const manifest: ProjectManifest = {
-        version: ARCHIVE_VERSION,
+        version: annotated
+            ? ARCHIVE_VERSION_WITH_ANNOTATIONS
+            : !legacy
+              ? ARCHIVE_VERSION
+              : edited
+                ? ARCHIVE_VERSION_WITHOUT_PROGRAMS
+                : ARCHIVE_VERSION_WITHOUT_EDITS,
         project: projectMetadata,
         files: Object.fromEntries(
-            Object.entries(files).map(([path, file]) => [path, { encoding: file.encoding }])
+            Object.entries(files).map(([path, file]) => [
+                path,
+                {
+                    encoding: file.encoding,
+                    ...(file.edits ? { edits: file.edits } : {}),
+                    ...(file.annotations ? { annotations: file.annotations } : {})
+                }
+            ])
         )
     }
     const manifestBytes = encoder.encode(serializer.stringify(manifest, null, 2))
@@ -63,8 +113,9 @@ export function projectToArchive(project: Project | ProjectData): Uint8Array<Arr
         throw new ProjectFormatError('Project metadata exceeds the 1 MiB archive limit')
     }
     const entries: Record<string, Uint8Array> = { [MANIFEST_NAME]: manifestBytes }
+    //the original bytes: the Byte edits are in the manifest, kept apart as the Project keeps them
     for (const [path, file] of Object.entries(files))
-        entries[`${FILE_PREFIX}${path}`] = fileBytes(file)
+        entries[`${FILE_PREFIX}${path}`] = originalBytes(file)
     return zipSync(entries, { level: 6 })
 }
 
@@ -84,11 +135,19 @@ export function projectSourceName(project: Project | ProjectData): string {
     return downloadName(project.name, LANGUAGE_EXTENSIONS[project.language])
 }
 
-/** Whether a bare source file could hold the whole Project: one plain-text File, and it is the Entry. */
+/**
+ * Whether a bare source file could hold the whole Project: one plain-text File without
+ * Annotations, which its text cannot carry, and it is the Entry of its one Program, which the
+ * exported file's shape before Programs can say. A Build output nobody changed does not count,
+ * since the file leaves it out.
+ */
 export function isSingleSourceProject(project: Project | ProjectData): boolean {
-    const paths = Object.keys(project.files)
-    if (paths.length !== 1 || paths[0] !== project.entry) return false
-    return project.files[project.entry]?.encoding === 'plain'
+    const derived = untouchedBuildOutputs(project.files, project.builds)
+    const paths = Object.keys(project.files).filter((path) => !derived.has(path))
+    const entries = Object.keys(project.programs)
+    if (paths.length !== 1 || entries.length !== 1 || paths[0] !== entries[0]) return false
+    const file = project.files[paths[0]]
+    return file?.encoding === 'plain' && !file.annotations
 }
 
 export type ProjectDownload = {
@@ -100,9 +159,10 @@ export type ProjectDownload = {
 }
 
 /**
- * The single download a Project gets. A one-File Project travels as its source text with the
- * metadata block appended, which other editors and assemblers still read as a program; anything
- * with more Files, or with binary ones, only survives as the archive.
+ * The single download a Project gets. A one-File Project whose File is its one Program's Entry
+ * travels as its source text with the metadata block appended, which other editors and assemblers
+ * still read as a program; anything with more Files, binary ones, or other than one Program only
+ * survives as the archive.
  */
 export function projectDownload(project: Project | ProjectData): ProjectDownload {
     const snapshot = snapshotOf(project)
@@ -199,14 +259,21 @@ export function makeProjectFromArchive(input: ArrayBuffer | Uint8Array): Externa
         throw new ProjectFormatError('Project manifest and archived Files do not match')
     }
 
-    const files: Record<string, ReturnType<typeof projectFileFromBytes>> = Object.create(null)
+    const files: Record<string, ProjectFile> = Object.create(null)
     for (const path of metadataPaths) {
         if (!isValidFilePath(path))
             throw new ProjectFormatError(`Invalid manifest File path: ${path}`)
         const archived = extracted[`${FILE_PREFIX}${path}`]
         if (!archived) throw new ProjectFormatError(`Archived File is missing: ${path}`)
         const info = rawManifest.files[path]
-        files[path] = projectFileFromBytes(archived, info.encoding)
+        const file = projectFileFromBytes(archived, info.encoding)
+        //`cleanFiles` below checks the edits against the original they apply to, and the
+        //Annotations as a saved Project's
+        files[path] = {
+            ...file,
+            ...(info.edits ? { edits: info.edits } : {}),
+            ...(info.annotations ? { annotations: info.annotations } : {})
+        }
     }
     for (const name of Object.keys(extracted)) {
         if (name === MANIFEST_NAME) continue
@@ -233,20 +300,35 @@ function parseManifest(bytes: Uint8Array): ProjectManifest {
             `Invalid project.json manifest: ${error instanceof Error ? error.message : String(error)}`
         )
     }
-    if (!isRecord(parsed) || parsed.version !== ARCHIVE_VERSION) {
+    if (
+        !isRecord(parsed) ||
+        (parsed.version !== ARCHIVE_VERSION_WITH_ANNOTATIONS &&
+            parsed.version !== ARCHIVE_VERSION &&
+            parsed.version !== ARCHIVE_VERSION_WITHOUT_PROGRAMS &&
+            parsed.version !== ARCHIVE_VERSION_WITHOUT_EDITS)
+    ) {
         throw new ProjectFormatError('Unsupported Project archive version')
     }
+    //version 1 knows no Byte edits, and versions before 4 no Annotations
+    const keys =
+        parsed.version === ARCHIVE_VERSION_WITHOUT_EDITS
+            ? ['encoding']
+            : parsed.version === ARCHIVE_VERSION_WITH_ANNOTATIONS
+              ? ['encoding', 'edits', 'annotations']
+              : ['encoding', 'edits']
     if (!isRecord(parsed.project) || !isRecord(parsed.files)) {
         throw new ProjectFormatError('Malformed Project archive manifest')
     }
-    validateProjectMetadata(parsed.project)
+    validateProjectMetadata(parsed.project, parsed.version)
     for (const [path, info] of Object.entries(parsed.files)) {
         if (
             !isValidFilePath(path) ||
             !isRecord(info) ||
             typeof info.encoding !== 'string' ||
             !FILE_ENCODINGS.includes(info.encoding as FileEncoding) ||
-            Object.keys(info).some((key) => key !== 'encoding')
+            Object.keys(info).some((key) => !keys.includes(key)) ||
+            (info.edits !== undefined && !Array.isArray(info.edits)) ||
+            (info.annotations !== undefined && !isRecord(info.annotations))
         ) {
             throw new ProjectFormatError(`Malformed manifest File entry: ${path}`)
         }
@@ -254,28 +336,53 @@ function parseManifest(bytes: Uint8Array): ProjectManifest {
     return parsed as ProjectManifest
 }
 
-function validateProjectMetadata(project: Record<string, unknown>): void {
+function validateProjectMetadata(project: Record<string, unknown>, version: unknown): void {
     if (
         typeof project.id !== 'string' ||
         typeof project.name !== 'string' ||
         typeof project.description !== 'string' ||
         !isAvailableLanguage(project.language) ||
-        typeof project.entry !== 'string' ||
-        !isValidFilePath(project.entry) ||
         typeof project.createdAt !== 'number' ||
         !Number.isFinite(project.createdAt) ||
         typeof project.updatedAt !== 'number' ||
-        !Number.isFinite(project.updatedAt) ||
-        !isRecord(project.settings) ||
-        !Array.isArray(project.testcases)
+        !Number.isFinite(project.updatedAt)
     ) {
         throw new ProjectFormatError('Malformed Project metadata')
     }
-    if (project.display !== undefined && !isRecord(project.display)) {
-        throw new ProjectFormatError('Malformed Project display metadata')
+    if (version === ARCHIVE_VERSION || version === ARCHIVE_VERSION_WITH_ANNOTATIONS) {
+        if (
+            !isRecord(project.programs) ||
+            (project.selectedProgram !== undefined &&
+                (typeof project.selectedProgram !== 'string' ||
+                    !isValidFilePath(project.selectedProgram)))
+        ) {
+            throw new ProjectFormatError('Malformed Project metadata')
+        }
+        for (const [entry, program] of Object.entries(project.programs)) {
+            if (!isValidFilePath(entry) || !isRecord(program)) {
+                throw new ProjectFormatError(`Malformed Program ${entry} metadata`)
+            }
+            validateProgramMetadata(program, `Program ${entry}`)
+        }
+    } else {
+        //before Programs, the one Program's parts are the project's own
+        if (typeof project.entry !== 'string' || !isValidFilePath(project.entry)) {
+            throw new ProjectFormatError('Malformed Project metadata')
+        }
+        validateProgramMetadata(project, 'Project')
     }
     if (project.exam !== undefined && !isRecord(project.exam)) {
         throw new ProjectFormatError('Malformed Project exam metadata')
+    }
+}
+
+/** A Program's parts, which are at the top of a manifest before version 3. */
+function validateProgramMetadata(program: Record<string, unknown>, owner: string): void {
+    if (!isRecord(program.settings) || !Array.isArray(program.testcases)) {
+        throw new ProjectFormatError(`Malformed ${owner} metadata`)
+    }
+    if (program.display !== undefined && !isRecord(program.display)) {
+        throw new ProjectFormatError(`Malformed ${owner} display metadata`)
     }
 }
 

@@ -44,7 +44,9 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
     [4]: {
         name: 'print string',
         code: 4,
-        arguments: [{ name: '$a0', description: 'address of null-terminated string to print' }],
+        arguments: [
+            { name: '$a0', description: 'address of NUL-terminated UTF-8 string to print' }
+        ],
         result: {},
         implemented: true,
         binding: {
@@ -61,7 +63,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 { name: '$v0', description: 'contains the integer parsed from the input line' }
             ],
-            other: 'Reads one line, trims surrounding whitespace, and parses it as an integer. Invalid input stops the program with an input error.'
+            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as an integer. Invalid input stops the program with an input error.'
         },
         implemented: true,
         binding: {
@@ -81,7 +83,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains the floating-point value parsed from the input line'
                 }
             ],
-            other: 'Reads one line, trims surrounding whitespace, and parses it as a floating-point value. Invalid input stops the program with an input error.'
+            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as a floating-point value. Invalid input stops the program with an input error.'
         },
         implemented: true,
         binding: {
@@ -101,7 +103,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains the double-precision value parsed from the input line'
                 }
             ],
-            other: 'Reads one line, trims surrounding whitespace, and parses it as a double-precision value. Invalid input stops the program with an input error.'
+            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as a double-precision value. Invalid input stops the program with an input error.'
         },
         implemented: true,
         binding: {
@@ -115,10 +117,10 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         code: 8,
         arguments: [
             { name: '$a0', description: 'address of input buffer' },
-            { name: '$a1', description: 'maximum number of characters to read' }
+            { name: '$a1', description: 'size of input buffer in bytes' }
         ],
         result: {
-            other: "Service 8 - Follows semantics of UNIX 'fgets'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer."
+            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Stores UTF-8 with fgets-style limits: for buffer size n, writes at most n-1 bytes, adds a newline if there is room, then a NUL byte. Truncation can split a multibyte character. If n = 1, ignores input and writes only NUL; if n < 1, ignores input and writes nothing.'
         },
         implemented: true,
         binding: {
@@ -135,7 +137,8 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         code: 9,
         arguments: [{ name: '$a0', description: 'number of bytes to allocate' }],
         result: {
-            arguments: [{ name: '$v0', description: 'contains address of allocated memory' }]
+            arguments: [{ name: '$v0', description: 'contains address of allocated memory' }],
+            other: 'Heap exhaustion stops execution with a runtime error.'
         },
         implemented: true,
         binding: {
@@ -148,7 +151,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         name: 'exit (terminate execution)',
         code: 10,
         arguments: [],
-        result: {},
+        result: { other: 'Ends the program successfully with exit code 0.' },
         implemented: true,
         binding: {
             name: 'sim_exit',
@@ -175,7 +178,10 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         name: 'read character',
         code: 12,
         arguments: [],
-        result: { arguments: [{ name: '$v0', description: 'contains the input character code' }] },
+        result: {
+            arguments: [{ name: '$v0', description: 'contains the input character code' }],
+            other: 'Waits for one key in the Terminal and completes immediately; Enter returns 10. A Testcase supplies scripted input. Returns one UTF-16 code unit (16 bits), which may be half of a supplementary Unicode character.'
+        },
         implemented: true,
         binding: {
             name: 'sim_read_char',
@@ -187,15 +193,13 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         name: 'open file',
         code: 13,
         arguments: [
-            { name: '$a0', description: 'address of null-terminated string containing filename' },
+            { name: '$a0', description: 'address of NUL-terminated UTF-8 path in Project Files' },
             { name: '$a1', description: 'flags' },
             { name: '$a2', description: 'mode' }
         ],
         result: {
-            arguments: [
-                { name: '$v0', description: 'contains file descriptor (negative if error)' }
-            ],
-            other: 'Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. The mode argument is ignored. A negative descriptor means the operation failed. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3.'
+            arguments: [{ name: '$v0', description: 'contains file descriptor (-1 if error)' }],
+            other: 'Opens a file in the Project Files, without accessing the computer’s disk. Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. The mode argument is ignored. Failure returns -1. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3. Undo restores file changes; each Testcase starts with its own copy of the Project Files.'
         },
         implemented: true,
         binding: {
@@ -214,17 +218,16 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             { name: '$a0', description: 'file descriptor' },
             { name: '$a1', description: 'address of input buffer' },
-            { name: '$a2', description: 'maximum number of characters to read' }
+            { name: '$a2', description: 'maximum number of bytes to read' }
         ],
         result: {
             arguments: [
                 {
                     name: '$v0',
-                    description:
-                        'contains number of characters read (0 if end-of-file, negative if error)'
+                    description: 'contains number of bytes read (0 if end-of-file, -1 if error)'
                 }
             ],
-            other: 'The result, including a negative value on failure, is returned in `$v0`.'
+            other: 'Reads bytes from an open Project File. Descriptor 0 reads standard input from the Terminal: enter a line and press Enter. Ctrl+D or End of input on an empty line ends standard input; a Testcase uses scripted input and reaches end of input when its answers run out. Returns 0 at end of input or file, and -1 on failure. Undo restores file state; each Testcase uses its own copy of Project Files.'
         },
         implemented: true,
         binding: {
@@ -243,16 +246,16 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             { name: '$a0', description: 'file descriptor' },
             { name: '$a1', description: 'address of output buffer' },
-            { name: '$a2', description: 'number of characters to write' }
+            { name: '$a2', description: 'number of bytes to write' }
         ],
         result: {
             arguments: [
                 {
                     name: '$v0',
-                    description: 'contains number of characters written (negative if error)'
+                    description: 'contains number of bytes written (-1 if error)'
                 }
             ],
-            other: 'The result, including a negative value on failure, is returned in `$v0`.'
+            other: 'Writes bytes to an open Project File; descriptors 1 and 2 write to the Terminal as standard output and standard error. Returns the number of bytes written, or -1 on failure. Undo restores file changes; each Testcase uses its own copy of Project Files.'
         },
         implemented: true,
         binding: {
@@ -343,6 +346,38 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
             returns: { type: 'long long', low: '$a0', high: '$a1' }
         }
     },
+    [31]: {
+        name: 'MIDI out',
+        code: 31,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'pitch, 0 to 127: 60 is middle C, 62 is D, 64 is E; each step is one semitone'
+            },
+            { name: '$a1', description: 'duration in milliseconds' },
+            {
+                name: '$a2',
+                description:
+                    'instrument sound from the General MIDI list, numbered from 0 to 127: 0 piano, 40 violin, 56 trumpet, 73 flute'
+            },
+            { name: '$a3', description: 'volume, 0 (silent) to 127 (loudest)' }
+        ],
+        result: {
+            other: 'Plays a note and continues immediately, allowing notes to overlap. Values outside 0 to 127 use these defaults: invalid pitch becomes 60 (middle C), invalid instrument becomes 0 (piano), and invalid volume becomes 100. A negative duration becomes 1000 milliseconds, as in MARS. The first note or MIDI-file request after opening or reloading the editor page waits while the browser loads the sound bank, the collection of instrument sounds; later runs share it. At most 64 notes sound at once, where MARS has no limit: starting another stops the oldest. Notes finish their duration after the program exits. Testcases are silent.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_midi_out',
+            parameters: [
+                { name: 'pitch', type: 'int', register: '$a0' },
+                { name: 'duration', type: 'int', register: '$a1' },
+                { name: 'instrument', type: 'int', register: '$a2' },
+                { name: 'volume', type: 'int', register: '$a3' }
+            ],
+            returns: { type: 'void' }
+        }
+    },
     [32]: {
         name: 'sleep',
         code: 32,
@@ -354,6 +389,38 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         binding: {
             name: 'sim_sleep',
             parameters: [{ name: 'milliseconds', type: 'int', register: '$a0' }],
+            returns: { type: 'void' }
+        }
+    },
+    [33]: {
+        name: 'MIDI out synchronous',
+        code: 33,
+        arguments: [
+            {
+                name: '$a0',
+                description:
+                    'pitch, 0 to 127: 60 is middle C, 62 is D, 64 is E; each step is one semitone'
+            },
+            { name: '$a1', description: 'duration in milliseconds' },
+            {
+                name: '$a2',
+                description:
+                    'instrument sound from the General MIDI list, numbered from 0 to 127: 0 piano, 40 violin, 56 trumpet, 73 flute'
+            },
+            { name: '$a3', description: 'volume, 0 (silent) to 127 (loudest)' }
+        ],
+        result: {
+            other: 'Plays a note with the same argument defaults as service 31, then waits for the requested duration before the next instruction. A sequence of these calls can play a melody. Muting or stopping the audible note does not shorten the wait. Testcases are silent; the wait completes immediately and advances the virtual clock by the duration.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_midi_out_sync',
+            parameters: [
+                { name: 'pitch', type: 'int', register: '$a0' },
+                { name: 'duration', type: 'int', register: '$a1' },
+                { name: 'instrument', type: 'int', register: '$a2' },
+                { name: 'volume', type: 'int', register: '$a3' }
+            ],
             returns: { type: 'void' }
         }
     },
@@ -537,7 +604,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             {
                 name: '$a0',
-                description: 'address of null-terminated string that is the message to user'
+                description: 'address of NUL-terminated UTF-8 string that is the message to user'
             }
         ],
         result: {
@@ -561,7 +628,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             {
                 name: '$a0',
-                description: 'address of null-terminated string that is the message to user'
+                description: 'address of NUL-terminated UTF-8 string that is the message to user'
             }
         ],
         result: {
@@ -590,7 +657,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             {
                 name: '$a0',
-                description: 'address of null-terminated string that is the message to user'
+                description: 'address of NUL-terminated UTF-8 string that is the message to user'
             }
         ],
         result: {
@@ -622,7 +689,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             {
                 name: '$a0',
-                description: 'address of null-terminated string that is the message to user'
+                description: 'address of NUL-terminated UTF-8 string that is the message to user'
             }
         ],
         result: {
@@ -654,10 +721,10 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             {
                 name: '$a0',
-                description: 'address of null-terminated string that is the message to user'
+                description: 'address of NUL-terminated UTF-8 string that is the message to user'
             },
             { name: '$a1', description: 'address of input buffer' },
-            { name: '$a2', description: 'maximum number of characters to read' }
+            { name: '$a2', description: 'size of input buffer in bytes' }
         ],
         result: {
             arguments: [
@@ -667,7 +734,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                         'contains status value\n0: OK status. Buffer contains the input string.\n-2: Cancel was chosen. No change to buffer.\n-3: OK was chosen but no data had been input into field. No change to buffer.\n-4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null.'
                 }
             ],
-            other: 'See Service 8 note below table'
+            other: 'Stores the entered string as UTF-8 in the buffer: at most n-1 bytes for buffer size n, followed by a newline if there is room and a terminating NUL. Truncation can split a multibyte character.'
         },
         implemented: true,
         binding: {
@@ -686,7 +753,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             {
                 name: '$a0',
-                description: 'address of null-terminated string that is the message to user'
+                description: 'address of NUL-terminated UTF-8 string that is the message to user'
             },
             {
                 name: '$a1',
@@ -712,7 +779,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
             {
                 name: '$a0',
                 description:
-                    'address of null-terminated string that is an information-type message to user'
+                    'address of NUL-terminated UTF-8 string that is an information-type message to user'
             },
             {
                 name: '$a1',
@@ -737,7 +804,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
             {
                 name: '$a0',
                 description:
-                    'address of null-terminated string that is an information-type message to user'
+                    'address of NUL-terminated UTF-8 string that is an information-type message to user'
             },
             {
                 name: '$f12',
@@ -762,7 +829,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
             {
                 name: '$a0',
                 description:
-                    'address of null-terminated string that is an information-type message to user'
+                    'address of NUL-terminated UTF-8 string that is an information-type message to user'
             },
             {
                 name: '$f12',
@@ -787,11 +854,12 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
             {
                 name: '$a0',
                 description:
-                    'address of null-terminated string that is an information-type message to user'
+                    'address of NUL-terminated UTF-8 string that is an information-type message to user'
             },
             {
                 name: '$a1',
-                description: 'address of null-terminated string to display after the first string'
+                description:
+                    'address of NUL-terminated UTF-8 string to display after the first string'
             }
         ],
         result: { other: 'N/A' },

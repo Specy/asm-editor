@@ -30,12 +30,65 @@
         onCompile: () => void
         onCancel: () => void
     }
+
+    /**
+     * A Build that says what it is waiting for and can be cancelled, as the Workbench's
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 2): while `building`, Build reads `phase` beside a spinner, and Cancel follows it.
+     */
+    export interface DockBuildProgress {
+        /** What the Build waits for, such as "Downloading libc.so.6…", or "Building…". */
+        phase: string
+        onCancel: () => void
+    }
+
+    /**
+     * What Build is called, and what its tooltip says it does: "Debug" for a program that is
+     * loaded rather than assembled, an Executable
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 10).
+     */
+    export interface DockBuildButton {
+        label: string
+        title: string
+    }
+
+    /**
+     * The speaker button, at the far end: the host passes it once the program has made a sound
+     * ([audio.md](../../../../../../docs/design/audio.md#autoplay-mute-and-volume)).
+     */
+    export interface DockSound {
+        muted: boolean
+        /** Something is heard right now, which lights the button. */
+        playing: boolean
+        /** The program waits while the sound bank loads. */
+        loading: boolean
+        onToggle: () => void
+    }
+    /** One button of the view switch: a way the pane can show its File. */
+    export interface DockView {
+        id: string
+        label: string
+        title: string
+        icon: Component
+    }
+
+    /**
+     * The view switch, beside Build: one option per view the pane's File offers, the picked one the
+     * view it shows ([file-views.md](../../../../../../docs/design/file-views.md), decision 4).
+     */
+    export interface DockViews {
+        options: readonly DockView[]
+        value: string
+        onChange: (id: string) => void
+    }
 </script>
 
 <script lang="ts">
     /**
      * The execution dock: Build, and once built Stop, Run, Undo and Step, with Test and the caller's
-     * own actions at the far end. Run turns into Pause while the program runs. It only draws the
+     * own actions at the far end, and after them, in either case, the view switch of a pane that
+     * shows a File in more than one way. Run turns into Pause while the program runs. It only draws the
      * controls and says which was pressed; what a press does, and when the program counts as built,
      * is the host's: the Workbench's `ExecutionControls` and the documentation's Playground. It is a
      * bar with nothing of its own to draw, laid over the bottom of an editor or stuck under it,
@@ -43,6 +96,7 @@
      * one tray spans the bar and the buttons share its width.
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
@@ -53,7 +107,8 @@
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
     import FaSpinner from '~icons/fa-solid/spinner'
-    import FaFlag from '~icons/fa-solid/flag'
+    import FaVolumeUp from '~icons/fa-solid/volume-up'
+    import FaVolumeMute from '~icons/fa-solid/volume-mute'
 
     interface Props {
         /** Built: Stop, Run, Undo and Step in place of Build. */
@@ -78,19 +133,20 @@
         /** Round the end tray's top-right corner when it sits beside another editor. */
         roundedEnd?: boolean
         actions?: DockAction[]
+        /** What a Build in progress waits for, and its Cancel; without it Build shows a clock. */
+        buildProgress?: DockBuildProgress
+        /** Build's name and tooltip, which a Build in progress replaces with what it waits for. */
+        buildButton?: DockBuildButton
         compilation?: DockCompilation
+        /** The pane's view switch, shown during a Debug session too. */
+        views?: DockViews
+        /** The speaker button, once the program has made a sound. */
+        sound?: DockSound
         /** The displayed File is source, so Compile takes the place of Build. */
         compileOnly?: boolean
         /** Compilation-only docks in another pane share one project execution dock. */
         showExecution?: boolean
-        /** Build's label: "Build entry" where the displayed File is not the one it starts from. */
-        buildLabel?: string
         onBuild: () => void
-        /**
-         * Makes the displayed File the Entry path, offered beside Build when it is assembly that
-         * Build would not start from.
-         */
-        onSetEntry?: () => void
         onStop: () => void
         onRun: () => void
         onPause: () => void
@@ -113,12 +169,14 @@
         roundedStart = false,
         roundedEnd = false,
         actions = [],
+        buildProgress,
+        buildButton = { label: 'Build', title: 'Assemble the program and start debugging it' },
         compilation,
+        views,
+        sound,
         compileOnly = false,
         showExecution = true,
-        buildLabel = 'Build',
         onBuild,
-        onSetEntry,
         onStop,
         onRun,
         onPause,
@@ -127,7 +185,14 @@
         onTest
     }: Props = $props()
 
-    const hasEnd = $derived(showExecution && (hasTests || actions.length > 0))
+    const hasEnd = $derived(showExecution && (hasTests || actions.length > 0 || !!sound))
+    /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
+    const beforeViews = $derived(
+        debugging ? showExecution : (showExecution && !compileOnly) || !!compilation
+    )
+    /** Whether the dock holds the view switch and nothing else, as a pane's beside the controls. */
+    const switchOnly = $derived(!!views && !beforeViews && !hasEnd)
+    const progress = $derived(building ? buildProgress : undefined)
 </script>
 
 <div
@@ -138,8 +203,13 @@
     class:rounded-end={roundedEnd}
     class:debugging
     class:with-end={debugging && hasEnd}
+    class:with-far-end={hasEnd}
+    class:with-session={debugging && showExecution}
     class:with-actions={debugging && actions.length > 0}
     class:with-compilation={!!compilation}
+    class:with-views={!!views}
+    class:with-wide-views={(views?.options.length ?? 0) > 2}
+    class:switch-only={switchOnly}
 >
     <div class="toolbar">
         {#if !debugging}
@@ -147,33 +217,32 @@
                 <button
                     type="button"
                     class="tool primary"
+                    class:progress={!!progress}
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
-                    title="Assemble the program and start debugging it"
-                    aria-label={buildLabel}
+                    title={progress?.phase ?? buildButton.title}
+                    aria-label={buildButton.label}
+                    aria-busy={building}
                 >
                     <Icon size={1}>
-                        {#if building}
+                        {#if progress}
+                            <span class="busy-spinner"><FaSpinner /></span>
+                        {:else if building}
                             <FaRegClock />
                         {:else}
                             <FaWrench />
                         {/if}
                     </Icon>
-                    <span class="label">{buildLabel}</span>
+                    <span class="label">{progress?.phase ?? buildButton.label}</span>
                 </button>
-                {#if onSetEntry}
+                {#if progress}
                     <button
                         type="button"
                         class="tool"
-                        onclick={onSetEntry}
-                        disabled={building || running}
-                        title="Build from this file instead of the current entry file"
+                        title="Stop building and go back to editing"
+                        aria-label="Cancel the Build"
+                        onclick={progress.onCancel}>Cancel</button
                     >
-                        <Icon size={0.85}>
-                            <FaFlag />
-                        </Icon>
-                        <span class="label">Set file as entry</span>
-                    </button>
                 {/if}
             {/if}
             {#if compilation}
@@ -185,7 +254,7 @@
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
                     title={compilation.warning ??
-                        'Compile source and local headers with Compiler Explorer'}
+                        'Compile the source and the Files it includes with Compiler Explorer'}
                     onclick={compilation.onCompile}
                 >
                     <Icon size={0.9}>
@@ -290,10 +359,63 @@
                 <span class="label">Step</span>
             </button>
         {/if}
+        {#if views}
+            {#if beforeViews}
+                <span class="divider" aria-hidden="true"></span>
+            {/if}
+            <!-- the choice every other switch in the editor is, drawn at the dock's height and in
+                 its words, which drop as the dock narrows as the other buttons' do -->
+            <div class="view-switch" style:--views={views.options.length}>
+                <SegmentedControl
+                    ariaLabel="View"
+                    options={views.options}
+                    selected={views.value}
+                    onSelect={(id) => views?.onChange(id)}
+                    {fill}
+                    style="height: 100%"
+                >
+                    {#snippet face(option)}
+                        <span class="view">
+                            {#if option.icon}
+                                <Icon size={0.85}>
+                                    <option.icon />
+                                </Icon>
+                            {/if}
+                            <span class="label">{option.label}</span>
+                        </span>
+                    {/snippet}
+                </SegmentedControl>
+            </div>
+        {/if}
     </div>
     {#if hasEnd}
         <div class="toolbar end">
             <span class="divider fill-only" aria-hidden="true"></span>
+            {#if sound}
+                <button
+                    type="button"
+                    class="tool sound"
+                    class:playing={sound.playing && !sound.muted}
+                    onclick={sound.onToggle}
+                    aria-pressed={!sound.muted}
+                    title={sound.loading
+                        ? 'Loading sounds…'
+                        : sound.muted
+                          ? 'Turn sound on'
+                          : 'Turn sound off'}
+                >
+                    <Icon size={0.9}>
+                        {#if sound.loading}
+                            <span class="busy-spinner"><FaSpinner /></span>
+                        {:else if sound.muted}
+                            <FaVolumeMute />
+                        {:else}
+                            <FaVolumeUp />
+                        {/if}
+                    </Icon>
+                    <span class="label">{sound.loading ? 'Loading…' : 'Sound'}</span>
+                </button>
+            {/if}
             {#if hasTests}
                 <button
                     type="button"
@@ -417,6 +539,10 @@
         color: var(--red);
     }
 
+    .sound.playing {
+        color: var(--accent);
+    }
+
     .green {
         color: var(--green);
     }
@@ -442,6 +568,53 @@
 
     .label {
         margin-left: 0.45rem;
+    }
+
+    /* Build while it says what it waits for: busy rather than unavailable, so its words stay
+       legible, and the first thing to give way, cut short, when the bar is too narrow for them */
+    .progress {
+        flex-shrink: 1;
+        min-width: 0;
+        cursor: progress;
+
+        .label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+
+    .primary.progress:disabled {
+        color: color-mix(in srgb, var(--accent-text) 80%, var(--tray));
+    }
+
+    .toolbar:has(> .progress) {
+        min-width: 0;
+    }
+
+    /* in one tray across a phone's pane, beside an Executable's views, Build's equal share is too
+       narrow for what it waits for: the spinner says it builds, and the tooltip what for */
+    .fill.with-views .progress .label {
+        display: none;
+    }
+
+    /* the views, the editor's one control for a choice: a strip as tall as the tray's buttons,
+       whose highlight slides to the view shown, its faces in the tray's type */
+    .view-switch {
+        display: flex;
+        height: 100%;
+    }
+
+    .view {
+        display: flex;
+        align-items: center;
+        font-size: 0.95rem;
+        font-weight: 500;
+        user-select: none;
+
+        :global(.icon) {
+            cursor: inherit;
+        }
     }
 
     .optimization,
@@ -483,6 +656,14 @@
 
         .toolbar {
             display: contents;
+        }
+
+        /* the switch one item among the buttons, with a share for each of its options: its basis
+           the narrow tools' padding, which each of their shares holds beyond its part of the
+           width left over */
+        .view-switch {
+            flex: var(--views) 1 calc(var(--views) * 1.2rem);
+            min-width: 0;
         }
 
         .fill-only {
@@ -617,6 +798,193 @@
 
     @container (max-width: 22rem) {
         .debugging .label {
+            display: none;
+        }
+    }
+
+    /* The view switch drops its words first, then the rest go as above, Test's before the others'.
+       Measured for a switch of two, as Hex · Disassemble was before Decompile joined it, and kept
+       for Preview · Hex, which is narrower: Hex 4.7rem and Disassemble 8.7rem with their words,
+       2.45rem bare; beside them Build 5.3rem, a Debug session's four 21.8rem and Test 5.5rem. A
+       pane's dock with the switch alone keeps its words down to 14rem, in a Debug session too. A
+       switch of three has its own steps below. These widths are the tool buttons the switch was
+       before it became the segmented control, which is narrower: Hex 4.3rem, Disassemble 8.3rem
+       and Decompile 7.4rem with their words, 2.05rem bare, and no gap between them, so each step
+       comes a little before it has to */
+    @container (max-width: 24rem) {
+        .with-views:not(.switch-only) .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 30rem) {
+        .with-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 20rem) {
+        .with-views.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 37rem) {
+        .with-views.with-session .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 43rem) {
+        .with-views.with-session.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 33.5rem) {
+        .with-views.with-session.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 27.5rem) {
+        .with-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 31rem) {
+        .with-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    /* in one tray across the bar every button has an equal share, so the widest word decides:
+       Disassemble's needs 8.7rem a button, a Debug session's 5.5rem */
+    @container (max-width: 27rem) {
+        .fill.with-views:not(.switch-only) .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 36rem) {
+        .fill.with-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 34rem) {
+        .fill.with-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 39.5rem) {
+        .fill.with-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 14rem) {
+        .with-views .label {
+            display: none;
+        }
+    }
+
+    /* and one across a phone's pane, a share for each */
+    @container (max-width: 18rem) {
+        .fill.switch-only .label {
+            display: none;
+        }
+    }
+
+    /* An Executable's switch has a third button, Decompile, 7.77rem with its word and 2.45rem
+       bare, so the same steps come later. Measured beside it: Build and the three views 28.31rem,
+       14.47rem with the views bare; a Debug session's four and the views 44.17rem, 30.32rem with
+       the views bare; Test's tray 5.51rem, 3.06rem bare, after a 0.4rem gap; the switch alone
+       22.16rem */
+    @container (max-width: 32rem) {
+        .with-wide-views:not(.switch-only) .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 38rem) {
+        .with-wide-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 23.5rem) {
+        .with-wide-views.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 45rem) {
+        .with-wide-views.with-session .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 51rem) {
+        .with-wide-views.with-session.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 36.5rem) {
+        .with-wide-views.with-session.with-far-end .end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 30.5rem) {
+        .with-wide-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 34rem) {
+        .with-wide-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    /* in one tray across the bar, one more equal share: 8.7rem for Disassemble's word, 5.5rem in
+       a Debug session */
+    @container (max-width: 36rem) {
+        .fill.with-wide-views:not(.switch-only) .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 45rem) {
+        .fill.with-wide-views.with-far-end .view .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 39.5rem) {
+        .fill.with-wide-views.with-session .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 45rem) {
+        .fill.with-wide-views.with-session.with-far-end .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 22.5rem) {
+        .with-wide-views .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 27rem) {
+        .fill.switch-only.with-wide-views .label {
             display: none;
         }
     }

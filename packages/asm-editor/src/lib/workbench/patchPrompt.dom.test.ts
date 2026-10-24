@@ -453,7 +453,8 @@ describe('the Listing notice during a Debug session', () => {
             props: { document: listing, patchable: true }
         })
         flushSync()
-        expect(host.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        expect(host.textContent?.trim()).toBe('read-only')
+        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
             'Generated Listing of crackme: read-only. While the program is paused, Space or the context menu patches the instruction on a line, in memory only.'
         )
         unmount(notice)
@@ -463,7 +464,8 @@ describe('the Listing notice during a Debug session', () => {
             props: { document: listing, patchable: true, touch: true }
         })
         flushSync()
-        expect(host.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        expect(host.textContent?.trim()).toBe('read-only')
+        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
             'Generated Listing of crackme: read-only. While the program is paused, a long press on a line offers to patch its instruction, in memory only.'
         )
         unmount(touch)

@@ -4,7 +4,7 @@ import type { InjectedPeripheralOptions } from '#lib/languages/peripherals/perip
 import type { Termination } from '#lib/languages/termination.ts'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
 import { unsignedBigIntToSigned } from '#lib/utils.ts'
-import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
+import type { Annotations, BuildInput, BuildSources } from '#lib/projectFiles.ts'
 
 export type StatusRegister = {
     name: string
@@ -71,6 +71,12 @@ export type Diagnostic =
 
 export type StackFrame = {
     name: string
+    /**
+     * What the frame's tooltip adds where `name` shortens it: a C++ function's signature and the
+     * raw name it stands for ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md),
+     * decision 11).
+     */
+    detail?: string
     address: bigint
     destination: bigint
     sp: bigint
@@ -122,7 +128,9 @@ export enum RegisterSize {
     Long = 4,
     Double = 8,
     /** 128 bits, the width of an x86 SSE register. */
-    Quad = 16
+    Quad = 16,
+    /** 256 bits, the width of an x86 AVX register. */
+    Oct = 32
 }
 
 export type RegisterChunk = {
@@ -284,7 +292,22 @@ export type ExecutionStep = {
      * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
      * takes back together.
      */
-    stretch?: { library: string; instructions: number }
+    stretch?: LibraryStretch
+}
+
+/** A Step's stretch of library code, as the History names it. */
+export type LibraryStretch = {
+    /**
+     * What the Step called: `printf`, `puts in libc.so.6`,
+     * `std::ostream::operator<< in libstdc++.so.6`.
+     */
+    library: string
+    /**
+     * Where `library` shortens a C++ name, what its tooltip adds: the signature and the raw name
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 11).
+     */
+    detail?: string
+    instructions: number
 }
 
 /**
@@ -580,6 +603,17 @@ export type BaseEmulatorDerivedState = {
     /** What the Log should say about the current program's run, oldest first; see `EmulatorNote`. */
     readonly notes: readonly EmulatorNote[]
     /**
+     * What the Audio Peripheral is doing, for the execution dock's speaker button: how many Notes
+     * and Sounds have played since the Emulator was made, whether a program waits for the sound
+     * bank, and how much longer something is heard.
+     */
+    readonly audioActivity: import('#lib/languages/peripherals/audio/Audio.ts').AudioActivity
+    /**
+     * What the Build in progress is waiting for, in words, such as "Downloading libc.so.6…";
+     * undefined when there is nothing more to say than that it builds.
+     */
+    readonly buildPhase?: string
+    /**
      * x86 only: the Listings of Executables this Emulator generates, and in `session` those of the
      * running program and the libraries it loaded, under `@lib/`.
      */
@@ -708,9 +742,19 @@ export type EmulatorNote = {
 }
 
 export type BaseEmulatorActions = {
-    compile: (historySize: number, sourceOverride?: BuildInput) => Promise<void>
+    /** A Build whose `signal` is aborted before its turn at the Core comes does not start. */
+    compile: (
+        historySize: number,
+        sourceOverride?: BuildInput,
+        signal?: AbortSignal
+    ) => Promise<void>
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
+    /**
+     * A Run that also stops before any of `targets`, temporary Breakpoints kept only for it: Run
+     * to Cursor.
+     */
+    runTo: (targets: readonly SourceBreakpoint[], haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
     setGlobalMemorySize: (pageSize: number, rowSize: number) => void
     setCode: (code: string) => void
@@ -725,6 +769,11 @@ export type BaseEmulatorActions = {
     setBreakpointResolver: (
         resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
     ) => void
+    /**
+     * Where the program a person's Build links goes: x86 only, saved as a File of the Project by
+     * the Workbench that owns it, else only shown to the running program; see `BuildOutputHost`.
+     */
+    setBuildOutputHost: (host: import('#lib/buildOutput.ts').BuildOutputHost | undefined) => void
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
     /**
@@ -785,6 +834,12 @@ export type BaseEmulatorActions = {
      * program's to configure.
      */
     setDisplay?: (display: ProjectDisplay) => void
+    /**
+     * x86 only: the Annotations the File of the Executable a Debug session runs has now, which
+     * its running Listing is made again with ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 22): a rename or a comment made during the session shows at once.
+     */
+    setExecutableAnnotations?: (path: string, annotations: Annotations | undefined) => void
     /**
      * MIPS and RISC-V only: the display the Screen is configured with right now, and whether the
      * last Build read it out of the program's own `@screen` comment directive rather than from the

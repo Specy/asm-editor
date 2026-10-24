@@ -13,6 +13,7 @@
         AvailableLanguages,
         AvailableProgrammingLanguages
     } from '../../../lib/Project.svelte'
+    import { isTextFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
     import type { MonacoType } from '#lib/monaco/Monaco.ts'
     import { Monaco } from '#lib/monaco/Monaco.ts'
     import { generateTheme } from '#lib/monaco/editorTheme.ts'
@@ -26,6 +27,7 @@
     import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
     import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
     import { setModelBuildArtifacts } from '#lib/monaco/assemblyInsights.ts'
+    import { CurrentLineReveal } from '#lib/monaco/currentLineReveal.ts'
     import { keepHoverReachable } from '#lib/monaco/hoverReachability.ts'
     import type { EditorLineColoring } from '#lib/monaco/lineColoring.ts'
     import { selectedLines } from '#lib/monaco/selectedLines.ts'
@@ -37,12 +39,22 @@
         setModelListing,
         type ListingModel
     } from '#lib/monaco/listingModels.ts'
+    import { setModelPseudocode, type PseudocodeModel } from '#lib/monaco/pseudocodeModels.ts'
     import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '#lib/Config.ts'
     import {
         lineActionContextKey,
         lineActionDescriptor,
-        type EditorLineAction
+        navigationActions,
+        type EditorLineAction,
+        type EditorNavigation
     } from '#lib/monaco/editorLineActions.ts'
+    import { followNamesAndHistory } from '#lib/monaco/editorNavigation.ts'
+    import { noteViewStateListing, viewStateFor } from '#lib/monaco/listingViewState.ts'
+    import {
+        noteViewStatePseudocode,
+        pseudocodeViewStateFor
+    } from '#lib/monaco/pseudocodeViewState.ts'
+    import { openProjectResource } from '#lib/languages/service/navigation.ts'
 
     interface Props {
         disabled?: boolean
@@ -73,7 +85,7 @@
         /** Palette indices emphasized by the active source/assembly connections; others dim. */
         activeLineColors?: ReadonlySet<number>
         hasError?: boolean
-        language: AvailableLanguages | AvailableProgrammingLanguages
+        language: AvailableLanguages | AvailableProgrammingLanguages | TextFileLanguage
         diagnostics?: Diagnostic[]
         breakpoints?: number[]
         /** Lines where a Breakpoint set on another File, through a Source map, stops. */
@@ -92,6 +104,8 @@
          * instead of its number, and the Listing providers read it.
          */
         listing?: ListingModel
+        /** The Pseudocode the model holds, when it is one, which its navigation reads. */
+        pseudocode?: PseudocodeModel
         /** Whether a 0-based line can take a Breakpoint; every line by default. */
         canBreakAt?: (line: number) => boolean
         /** 0-based lines a Debug session patched, marked beside their line numbers. */
@@ -103,6 +117,18 @@
          * lines where they are available: "Patch instruction…" on a Listing.
          */
         lineActions?: readonly EditorLineAction[]
+        /**
+         * Back and forward through the pane's navigation history, for a Listing or a Pseudocode:
+         * Go Back and Go Forward in the context menu and on Alt+← and Alt+→, and the mouse's back
+         * and forward buttons.
+         */
+        navigation?: EditorNavigation
+        /**
+         * Where each model was left, by key, kept by a host that outlives this editor: a pane
+         * that shows a File's bytes and then its Listing again mounts a new editor, which goes
+         * back to where the last one left the Listing. This editor's own by default.
+         */
+        viewStates?: Map<string, monaco.editor.ICodeEditorViewState | null>
     }
 
     let {
@@ -127,10 +153,13 @@
         viewZones = [],
         buildArtifacts = [],
         listing,
+        pseudocode,
         canBreakAt,
         patchedLines = [],
         lineNote,
-        lineActions
+        lineActions,
+        navigation,
+        viewStates
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -162,8 +191,28 @@
     let hoveredGliphen: number | null = $state(null)
     /** The 0-based line the cursor is on, which the line actions are offered for. */
     let cursorLine = $state(-1)
+    /** And its 0-based column, for an action on the name under the cursor, as Rename… is. */
+    let cursorColumn = $state(-1)
+    /**
+     * The Listing the model shown was placed with, untracked: a view state saved over it is moved
+     * onto the next Listing of the same File, whose lines may sit elsewhere (`viewStateFor`).
+     */
+    let placedListing: ListingModel['listing'] | undefined
+    /**
+     * Likewise the Pseudocode the model shown was placed with: a function decompiled again (after
+     * a rename or a comment) keeps the same places in view (`pseudocodeViewStateFor`).
+     */
+    let placedPseudocode: PseudocodeModel | undefined
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Monaco handles; nothing renders from them.
     const lineActionKeys = new Map<string, monaco.editor.IContextKey<boolean>>()
+    /** The line actions with Go Back and Go Forward first, for an editor with a history. */
+    const editorActions = $derived([
+        ...(navigation ? navigationActions(navigation) : []),
+        ...(lineActions ?? [])
+    ])
+    /** The name under the mouse a double-click would follow, drawn as a link. */
+    let followDecorations: monaco.editor.IEditorDecorationsCollection | undefined
+    let followedRange: monaco.IRange | undefined
     let destroyed = false
     /**
      * The editor this component created. `editor` is bound out to the host, and a host that swaps
@@ -177,16 +226,24 @@
     //models both reads and writes them, which with reactive maps made it re-run on its own writes.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
     const models = new Map<string, monaco.editor.ITextModel>()
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
-    const modelViewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>()
+    const modelViewStates: Map<string, monaco.editor.ICodeEditorViewState | null> = untrack(
+        () => viewStates ?? new Map()
+    )
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
         /** A change to any Project File's model, including one the editor is not showing. */
         fileChange: { path: string; value: string }
         breakpointPress: number
+        /** The cursor's zero-based line, whoever moved it: the person, the debugger, a model switch. */
+        cursorMove: number
         /** Zero-based lines covered by the user's selections, a click's single line included. */
         linesSelect: number[]
+        /**
+         * Go to Symbol or Go to Line moved the cursor: the zero-based line it left, sent before
+         * the cursor's move.
+         */
+        jump: number
     }>()
     let el: HTMLDivElement | null = $state(null)
 
@@ -281,12 +338,18 @@
             observer.observe(mockEditor)
         }
 
+        followDecorations = mountedEditor.createDecorationsCollection()
         toDispose.push(
             mountedEditor.onDidChangeCursorPosition((event) => {
+                const left = cursorLine
                 cursorLine = event.position.lineNumber - 1
+                cursorColumn = event.position.column - 1
                 //at once, not in an effect: a right click moves the cursor and opens the context
                 //menu in the same event, and the menu reads the keys as they are then
-                updateLineActionKeys(cursorLine)
+                updateLineActionKeys(cursorLine, cursorColumn)
+                //Monaco's own jumps, Go to Symbol's and Go to Line's
+                if (event.source === 'code.jump') dispatcher('jump', left)
+                dispatcher('cursorMove', cursorLine)
             }),
             mountedEditor.onDidChangeCursorSelection((event) => {
                 //Model switches and debugger navigation are not a new user source selection.
@@ -318,6 +381,21 @@
             })
         )
         toDispose.push(() => observer.disconnect())
+
+        //a double-click on a name in a Listing or a Pseudocode follows it, and Alt+←, Alt+→ and the
+        //mouse's buttons move through the pane's history there (decisions 7 and 8)
+        toDispose.push(
+            followNamesAndHistory(loadedMonaco, mountedEditor, editorElement, {
+                navigation: () => navigation,
+                follow: (name) =>
+                    void openProjectResource(
+                        name.resource,
+                        { lineNumber: name.line, column: 1 },
+                        mountedEditor
+                    ),
+                showFollowable
+            })
+        )
         toDispose.push(
             mountedEditor.onDidChangeModelContent(() => {
                 if (disabled || applyingExternalValue) return
@@ -329,7 +407,43 @@
                 dispatcher('change', value)
             })
         )
+        //after the listeners, so the host hears where the cursor went
+        applyingExternalValue = true
+        try {
+            placeModel(mountedEditor, loadedMonaco, mounted)
+        } finally {
+            applyingExternalValue = false
+        }
     })
+
+    /**
+     * Puts a model the editor has just taken where an editor of this host last left it, or, shown
+     * for the first time, on the line its source opens at, near the top of the view.
+     */
+    function placeModel(
+        currentEditor: monaco.editor.IStandaloneCodeEditor,
+        currentMonaco: MonacoType,
+        shown: EditorSource
+    ) {
+        const viewState = modelViewStates.get(shown.key)
+        //a Listing made again since keeps its addresses in view, not its line numbers, and a
+        //Pseudocode decompiled again its statements, comments and names
+        const placing = untrack(() => listing?.listing)
+        placedListing = placing
+        const decompiled = untrack(() => pseudocode)
+        placedPseudocode = decompiled
+        if (viewState) {
+            currentEditor.restoreViewState(
+                pseudocodeViewStateFor(viewStateFor(viewState, placing), decompiled)
+            )
+            return
+        }
+        const opensAt = shown.opensAt
+        if (opensAt === undefined || opensAt < 0) return
+        const lineNumber = zeroBasedLineToMonaco(opensAt)
+        currentEditor.setPosition({ lineNumber, column: 1 })
+        currentEditor.revealLineNearTop(lineNumber, currentMonaco.editor.ScrollType.Immediate)
+    }
 
     function setModelValue(model: monaco.editor.ITextModel, value: string) {
         if (model.getValue() === value) return
@@ -358,7 +472,7 @@
         const listener = model.onDidChangeContent(() => {
             if (disabled || applyingExternalValue) return
             const changed = parseProjectSourceUri(model.uri)
-            if (changed?.sourceKind === 'live') {
+            if (changed?.sourceKind === 'live' && !changed.view) {
                 dispatcher('fileChange', { path: changed.path, value: model.getValue() })
             }
         })
@@ -393,6 +507,14 @@
         //a host that swaps its content while Monaco is still loading can destroy this component
         //between the editor's creation and this effect; a disposed editor throws on setModel
         if (destroyed || !currentEditor || !currentMonaco) return
+        //saved before the model is resolved: a Listing made again replaces the model under the
+        //same key, disposing the one the editor holds, whose state would then be lost
+        const leaving = currentEditor.getModel() ? currentEditor.saveViewState() : null
+        noteViewStateListing(leaving, placedListing)
+        noteViewStatePseudocode(leaving, placedPseudocode)
+        //and the keyboard: Monaco drops it with the view of a model it lets go, which a Listing
+        //made again after a rename typed there would take from the person
+        const typing = currentEditor.hasTextFocus()
         const model = sharedModels
             ? sharedModels.resolve(
                   currentMonaco,
@@ -410,19 +532,25 @@
             console.error(`Language registration failed for ${language}`, error)
         )
         if (currentEditor.getModel() !== model) {
-            if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
+            //the link under the mouse is the outgoing model's
+            showFollowable(undefined)
+            if (viewStateKey && leaving) modelViewStates.set(viewStateKey, leaving)
             applyingExternalValue = true
             try {
                 currentEditor.setModel(model)
-                const viewState = modelViewStates.get(next.key)
-                if (viewState) currentEditor.restoreViewState(viewState)
+                placeModel(currentEditor, currentMonaco, next)
+                if (typing && !currentEditor.hasTextFocus()) currentEditor.focus()
             } finally {
                 applyingExternalValue = false
             }
         }
         viewStateKey = next.key
         activeModelKey = next.key
+        //the same model's Listing with a Debug session's patches keeps its line table
+        placedListing = untrack(() => listing?.listing)
+        placedPseudocode = untrack(() => pseudocode)
         cursorLine = (currentEditor.getPosition()?.lineNumber ?? 0) - 1
+        cursorColumn = (currentEditor.getPosition()?.column ?? 0) - 1
     }
 
     $effect(() => {
@@ -457,11 +585,24 @@
         return key
     }
 
-    function updateLineActionKeys(line: number) {
+    function updateLineActionKeys(line: number, column: number) {
         untrack(() => {
-            for (const action of lineActions ?? [])
-                lineActionKey(action)?.set(line >= 0 && action.available(line))
+            for (const action of editorActions)
+                lineActionKey(action)?.set(line >= 0 && action.available(line, Math.max(column, 0)))
         })
+    }
+
+    /** Draws a name as a link while the mouse is over it, or none. */
+    function showFollowable(range: monaco.IRange | undefined) {
+        if (
+            range === followedRange ||
+            (range && followedRange && monacoInstance?.Range.equalsRange(range, followedRange))
+        )
+            return
+        followedRange = range
+        followDecorations?.set(
+            range ? [{ range, options: { inlineClassName: 'followable-name' } }] : []
+        )
     }
 
     //each line action is a Monaco action while the host offers it, shown in the context menu and
@@ -469,15 +610,17 @@
     $effect(() => {
         const currentEditor = editor
         const currentMonaco = monacoInstance
-        const actions = lineActions
-        if (!currentEditor || !currentMonaco || !actions?.length) return
+        const actions = editorActions
+        if (!currentEditor || !currentMonaco || !actions.length) return
         const registered = untrack(() =>
             actions.map((action) => {
                 lineActionKey(action)
                 return currentEditor.addAction(
                     lineActionDescriptor(action, currentMonaco, (target) => {
-                        const line = (target.getPosition()?.lineNumber ?? 0) - 1
-                        if (line >= 0 && action.available(line)) action.run(line)
+                        const position = target.getPosition()
+                        const line = (position?.lineNumber ?? 0) - 1
+                        const column = Math.max((position?.column ?? 1) - 1, 0)
+                        if (line >= 0 && action.available(line, column)) action.run(line, column)
                     })
                 )
             })
@@ -489,11 +632,13 @@
     })
     //and again whenever what decides it changes: a Run starting or ending, another model
     $effect(() => {
-        const actions = lineActions
+        const actions = editorActions
         void activeModelKey
-        if (!editor || !actions?.length) return
+        if (!editor || !actions.length) return
         for (const action of actions)
-            lineActionKey(action)?.set(cursorLine >= 0 && action.available(cursorLine))
+            lineActionKey(action)?.set(
+                cursorLine >= 0 && action.available(cursorLine, Math.max(cursorColumn, 0))
+            )
     })
 
     $effect(() => {
@@ -514,6 +659,12 @@
         const model = editor?.getModel()
         if (!model || model.isDisposed()) return
         return setModelListing(model.uri.toString(), listing)
+    })
+    $effect(() => {
+        if (!activeModelKey || !pseudocode) return
+        const model = editor?.getModel()
+        if (!model || model.isDisposed()) return
+        return setModelPseudocode(model.uri.toString(), pseudocode)
     })
     /** Whether the gutter prints a Listing's addresses, so leaving one restores line numbers. */
     let addressGutter = false
@@ -579,6 +730,13 @@
     })
     onDestroy(() => {
         destroyed = true
+        //for the next editor of a host that keeps them, with the Listing it was over
+        if (viewStates && viewStateKey && ownEditor?.getModel()) {
+            const state = ownEditor.saveViewState()
+            noteViewStateListing(state, placedListing)
+            noteViewStatePseudocode(state, placedPseudocode)
+            viewStates.set(viewStateKey, state)
+        }
 
         toDispose.forEach((disposable) => {
             if (typeof disposable === 'function') return disposable()
@@ -592,7 +750,7 @@
         if (!sharedModels)
             for (const model of models.values()) if (!model.isDisposed()) model.dispose()
         models.clear()
-        modelViewStates.clear()
+        if (!viewStates) modelViewStates.clear()
     })
 
     let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
@@ -865,10 +1023,17 @@
         }
     })
 
+    /** The program's current line, revealed at once in a model just shown and smoothly after. */
+    const currentLine = new CurrentLineReveal()
     $effect(() => {
-        if (activeModelKey && editor && highlightedLine >= 0) {
-            editor.revealLineInCenter(zeroBasedLineToMonaco(highlightedLine))
-        }
+        const scroll = monacoInstance?.editor.ScrollType
+        if (activeModelKey && editor && scroll && highlightedLine >= 0)
+            currentLine.reveal(
+                editor,
+                scroll,
+                activeModelKey,
+                zeroBasedLineToMonaco(highlightedLine)
+            )
     })
     $effect(() => {
         const currentMonaco = monacoInstance
@@ -883,7 +1048,9 @@
             }
             currentMonaco.editor.setModelMarkers(
                 model,
-                language,
+                //JSON, JavaScript, CSS and HTML report their own problems under their language's
+                //name, which the editor's would replace
+                isTextFileLanguage(language) ? `asm-editor-${language}` : language,
                 diagnostics.map((e) => {
                     const lineNumber = Math.min(Math.max(e.lineIndex + 1, 1), model.getLineCount())
                     const maxColumn = model.getLineMaxColumn(lineNumber)
@@ -909,8 +1076,9 @@
                         endLineNumber: lineNumber,
                         endColumn,
                         relatedInformation: e.related?.map((related) => {
+                            //another File's text, whichever view this model is
                             const relatedIdentity = modelIdentity
-                                ? { ...modelIdentity, path: related.file }
+                                ? { ...modelIdentity, path: related.file, view: undefined }
                                 : undefined
                             return {
                                 resource: relatedIdentity
@@ -1145,6 +1313,12 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    //a name a double-click follows, under the mouse
+    :global(.followable-name) {
+        text-decoration: underline;
+        cursor: pointer;
     }
 
     //what runs when it is not what the line shows, after the line's text

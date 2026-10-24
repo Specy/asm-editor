@@ -7,18 +7,18 @@
 </script>
 
 <svelte:head>
-    <title>x86 Using C and C++</title>
+    <title>x86-64 Using C and C++</title>
     <meta
         name="description"
-        content="Write, run and debug C or C++ for x86, with examples, simulator functions and supported language features."
+        content="Write, run and debug C or C++ for x86-64, with examples, simulator functions and supported language features."
     />
     <meta
         property="og:description"
-        content="Write, run and debug C or C++ for x86, with examples, simulator functions and supported language features."
+        content="Write, run and debug C or C++ for x86-64, with examples, simulator functions and supported language features."
     />
 </svelte:head>
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
-    <h1>x86 Using C and C++</h1>
+    <h1>x86-64 Using C and C++</h1>
     <ChapterView {chapter} />
 </Page>

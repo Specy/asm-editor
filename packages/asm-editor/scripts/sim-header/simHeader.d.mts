@@ -30,13 +30,40 @@ export type SimHeaderData = {
         transmitterData: number
         readyBit: number
     }
-    /** The sizes the bitmap display offers, and the range GNU-profile Builds give static data. */
+    /**
+     * The sizes MARS's and RARS's bitmap display offers, the ranges the editor's display takes, and
+     * the range GNU-profile Builds give static data.
+     */
     display: {
         sizes: readonly number[]
         units: readonly number[]
+        sizeMin: number
+        sizeMax: number
+        unitMin: number
+        unitMax: number
         staticData: number
         staticDataEnd: number
     }
+    /** The Synth's block, from `synthRegisters.ts`. */
+    synth: {
+        base: number
+        channelCount: number
+        channelSize: number
+        channelRegisters: readonly SimSynthRegister[]
+        uploadRegisters: readonly SimSynthRegister[]
+        waveforms: readonly string[]
+        wavetables: number
+        wavetableSize: number
+        gate: number
+        loop: number
+    }
+}
+
+export type SimSynthRegister = {
+    readonly name: string
+    readonly offset: number
+    readonly bytes: number
+    readonly description: string
 }
 
 export const SIM_HEADER_DIRECTORY: string

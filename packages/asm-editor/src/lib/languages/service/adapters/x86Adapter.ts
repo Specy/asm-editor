@@ -1,10 +1,13 @@
 import { executableKind } from '#lib/executables.ts'
-import { createX86Emulator, type MonacoError } from '@specy/x86'
+import { createX86Emulator, ResourceDownloadError, type MonacoError } from '@specy/x86'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
 import { x86CoreProject, prepareX86Runtime } from '#lib/languages/X86/x86StartUnit.ts'
+import { downloadReason } from '#lib/languages/X86/x86Downloads.ts'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
+import { unresolvedSnapshot, unresolvedSources } from './unresolved'
+import { AnalysisUnavailableError } from '../workers/projectWorkerServer'
 
 export function x86DiagnosticToLanguageDiagnostic(
     error: MonacoError,
@@ -44,7 +47,14 @@ export async function analyzeX86Project(
     const kind = executableKind(sources.files[sources.entry])
     if (kind !== 'none') {
         if (kind !== 'supported')
-            return unresolvedSnapshot(sources, kind.unsupported, sessionId, revision)
+            return unresolvedSnapshot(
+                sources,
+                kind.unsupported,
+                sessionId,
+                revision,
+                'X86',
+                'nasm-project'
+            )
         return {
             sessionId,
             revision,
@@ -61,11 +71,37 @@ export async function analyzeX86Project(
         }
     }
     //sources the Build refuses are not checked either: why they cannot be built is the one error
-    if (sources.assemblyError)
-        return unresolvedSnapshot(sources, sources.assemblyError, sessionId, revision)
+    const unresolved = unresolvedSources(sources)
+    if (unresolved)
+        return unresolvedSnapshot(sources, unresolved, sessionId, revision, 'X86', 'nasm-project')
     await prepareX86Runtime(sources)
-    checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
-    const diagnostics = await checker.checkProject(x86CoreProject(sources))
+    let diagnostics: MonacoError[]
+    try {
+        checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
+        diagnostics = await checker.checkProject(x86CoreProject(sources))
+    } catch (error) {
+        if (!(error instanceof ResourceDownloadError)) throw error
+        //the assembler did not arrive, which says nothing of the code: a warning rather than an
+        //error, which would hold Build back, until the check downloads it again. A server that
+        //refused it refuses it again, until a reload of the page asks for the site's new files
+        const refused = error.status !== undefined
+        const message = `Code checking is paused: couldn't download ${error.resource} (${downloadReason(error)}). ${
+            refused ? 'Reload the page to check your code.' : 'It will try again shortly.'
+        }`
+        throw new AnalysisUnavailableError(
+            message,
+            unresolvedSnapshot(
+                sources,
+                message,
+                sessionId,
+                revision,
+                'X86',
+                'nasm-project',
+                'warning'
+            ),
+            { cause: error, retry: !refused }
+        )
+    }
     // NASM reports no reached set, so the editor follows literal includes for file-status hints.
     const reached = x86ReachableFiles(sources)
     const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
@@ -83,38 +119,6 @@ export async function analyzeX86Project(
         diagnostics: diagnostics.map((diagnostic) =>
             x86DiagnosticToLanguageDiagnostic(diagnostic, sources.entry)
         ),
-        symbols: [],
-        occurrences: [],
-        fileStatus
-    }
-}
-
-/** The sources' resolution failure as an error on the Entry's first line, and nothing checked. */
-function unresolvedSnapshot(
-    sources: BuildSources,
-    message: string,
-    sessionId: string,
-    revision: number
-): ProjectAnalysisSnapshot {
-    const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
-    for (const [path, file] of Object.entries(sources.files)) {
-        fileStatus[path] = file.encoding === 'plain' ? 'unknown' : 'binary'
-    }
-    return {
-        sessionId,
-        revision,
-        target: 'X86',
-        diagnostics: [
-            {
-                severity: 'error',
-                source: 'nasm-project',
-                location: {
-                    path: sources.entry,
-                    range: { start: { line: 0, column: 0 }, end: { line: 0, column: 1 } }
-                },
-                message
-            }
-        ],
         symbols: [],
         occurrences: [],
         fileStatus

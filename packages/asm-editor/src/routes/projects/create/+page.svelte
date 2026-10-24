@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
 
@@ -20,6 +21,8 @@
     import { isCompilationTarget } from '#lib/sourceCompilation/records.ts'
     import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
     import { onMount } from 'svelte'
+    import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
+    import { IMPORTABLE_FILES, importFiles } from '#lib/projectImport.ts'
 
     let { data }: { data: PageData } = $props()
 
@@ -28,15 +31,34 @@
 
     let name = $state('')
     let description = $state('')
-    let language: AvailableLanguages = $state('M68K')
-    const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
+    let language: AvailableLanguages = $state('RISC-V-64')
+    const languageOptions: Array<{ key: string; value: AvailableLanguages }> = [
         { key: 'M68K', value: 'M68K' },
         { key: 'MIPS', value: 'MIPS' },
-        { key: 'X86', value: 'X86' },
+        { key: languageLabel('X86'), value: 'X86' },
         { key: 'RISC-V', value: 'RISC-V' },
         { key: 'RISC-V-64', value: 'RISC-V-64' },
         { key: 'Z80', value: 'Z80' }
     ]
+
+    const LANGUAGE_STORAGE_KEY = 'asm-editor_new-project-isa'
+    onMount(() => {
+        try {
+            const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY)
+            const option = languageOptions.find((option) => option.value === stored)
+            if (option) language = option.value
+        } catch {
+            // Project creation still works when browser storage is unavailable.
+        }
+    })
+
+    function rememberLanguage(value: AvailableLanguages) {
+        try {
+            localStorage.setItem(LANGUAGE_STORAGE_KEY, value)
+        } catch {
+            // Keep the selected ISA for this form even if it cannot be saved.
+        }
+    }
 
     const BAREBONES = 'barebones'
     let templateId = $state(BAREBONES)
@@ -74,6 +96,13 @@
             toast.error('Error creating project')
         }
     }
+
+    /** A program brought in instead of a template opens as Create would; several are listed. */
+    async function importDropped(files: File[]) {
+        const projects = await importFiles(files)
+        if (projects.length === 1) goto(resolve('/projects/[project]', { project: projects[0].id }))
+        else if (projects.length > 1) goto(resolve('/projects'))
+    }
 </script>
 
 <svelte:head>
@@ -98,15 +127,24 @@
         </div>
         {#if data.gettingStarted}
             <p style="margin: 0.8rem 0; line-height: 1.6">
-                New to ASM Editor? <a href={data.gettingStarted} style="color: var(--accent)"
-                    >Follow the getting-started guide</a
+                New to ASM Editor? <a
+                    href={resolve('/blog/posts/[slug]', { slug: data.gettingStarted })}
+                    style="color: var(--accent)">Follow the getting-started guide</a
                 >.
             </p>
         {/if}
-        <Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
+        <Form
+            style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; margin:0.5rem 0"
+            on:submit={create}
+        >
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
-            <Select title="Language" options={languageOptions} bind:value={language}>
+            <Select
+                title="Instruction Set"
+                options={languageOptions}
+                bind:value={language}
+                onChange={rememberLanguage}
+            >
                 {#snippet item(option)}
                     <span class="language-option">
                         <span>{option.key}</span>
@@ -139,6 +177,14 @@
             </ButtonLink>
             <Button onClick={create}>Create</Button>
         </div>
+        <div class="import-drop">
+            <FileDropZone
+                title="Already have a program? Drop it here"
+                hint={IMPORTABLE_FILES}
+                dropLabel="Drop to open as a project"
+                onFiles={importDropped}
+            />
+        </div>
     </div>
 </Page>
 
@@ -153,6 +199,10 @@
 
     .top-title {
         align-items: center;
+    }
+
+    .import-drop {
+        margin-top: 2.5rem;
     }
 
     .template-field {

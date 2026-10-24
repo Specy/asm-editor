@@ -24,10 +24,12 @@
         goesNextLineBy,
         inRange,
         isMemoryChunkEqual,
+        type MemoryCell,
         type MemoryReading,
         parseMemoryPoke
     } from '#cmp/specific/project/memory/memoryTabUtils.ts'
     import Row from '#cmp/shared/layout/Row.svelte'
+    import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import {
         type ColorizedLabel,
         type DiffedMemory,
@@ -74,6 +76,13 @@
         pokeable?: boolean
         /** One commit of the selection, which is one Poke however many bytes it holds. */
         onPoke?: (address: bigint, bytes: Uint8Array) => void
+        /**
+         * The menu a right click on a byte opens, the Debug session's pointer menu. Without it a
+         * right click is the browser's, and selects the byte as any press does.
+         */
+        cellMenu?: (cell: MemoryCell) => ContextMenuEntry[]
+        /** A byte to mark while its page is shown: where a pointer menu last moved the view. */
+        markedAddress?: bigint
     }
 
     let {
@@ -93,7 +102,9 @@
         memorySize,
         dense = false,
         pokeable = false,
-        onPoke
+        onPoke,
+        cellMenu,
+        markedAddress
     }: Props = $props()
     const annotations = $derived.by(() => {
         const cells = Array.from({ length: pageSize }, (_, index) => {
@@ -187,6 +198,8 @@
     }
 
     function onPointerDown(e: PointerEvent) {
+        //the other buttons open the menu, and leave the selection and its input as they are
+        if (cellMenu && e.button > 0) return
         selectingAddresses = true
         const el = findElInTree(e.target as HTMLElement, id)
         if (!el) return
@@ -383,6 +396,45 @@
         }
     }
 
+    //the pointer menu, at the pointer: a byte takes no focus, so no key opens it
+    let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    function onContextMenu(e: MouseEvent) {
+        if (!cellMenu) return
+        //the input being typed into keeps the browser's own menu, for pasting into it
+        if ((e.target as Element | null)?.closest?.('input')) return
+        const el = findElInTree(e.target as HTMLElement, id)
+        const index = el ? parseInt(el.id.split('-')[1]) : NaN
+        if (isNaN(index)) return
+        e.preventDefault()
+        const inSelection =
+            selectionLength > 0 &&
+            index >= selectionStart &&
+            index < selectionStart + selectionLength
+        const value = inSelection
+            ? selectionUnreadable
+                ? undefined
+                : getNumberInRange(
+                      memory,
+                      selectedAddressesIndexes.start,
+                      selectedAddressesIndexes.len,
+                      endianess
+                  ).current
+            : unreadable?.mask[index]
+              ? undefined
+              : BigInt(memory.current[index])
+        contextMenu = {
+            x: e.clientX,
+            y: e.clientY,
+            //inside a selection, the cell is the selection: its number, and where it starts, which
+            //Follow pointer reads from as the number reads
+            items: cellMenu({
+                address: currentAddress + BigInt(inSelection ? selectionStart : index),
+                value,
+                bytes: inSelection ? selectionLength : 1
+            })
+        }
+    }
+
     function getColorOfAddress(address: bigint) {
         let last: { color?: string; address: bigint } = {
             address: -1n
@@ -455,6 +507,7 @@
     <div
         class="memory-numbers"
         onpointerdown={onPointerDown}
+        oncontextmenu={onContextMenu}
         ondragstart={(e) => e.preventDefault()}
         onpointermove={selectingAddresses ? handlePointerMove : undefined}
     >
@@ -475,6 +528,7 @@
             <div
                 class="memory-number"
                 class:outlined={!!annotations[i].region}
+                class:marked={markedAddress === currentAddress + BigInt(i)}
                 style={annotations[i].outline}
             >
                 {#if i === selectedAddressesIndexes.start}
@@ -617,6 +671,16 @@
         </div>
     {/if}
 </div>
+<!-- beside the grid rather than in it, so that it reads in the page's type and not the bytes' -->
+{#if contextMenu}
+    <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={contextMenu.items}
+        label="Memory"
+        onClose={() => (contextMenu = null)}
+    />
+{/if}
 
 <style lang="scss">
     //the value fills its cell, so that in a page stretched taller than its rows need, a
@@ -635,6 +699,18 @@
             border-width: var(--region-edges);
             pointer-events: none;
             z-index: 1;
+        }
+
+        /* the byte a pointer menu moved the view to, ringed inside its cell over the region's
+           outline so that it reads on any page */
+        &.marked::before {
+            content: '';
+            position: absolute;
+            inset: 1px;
+            border: 2px solid var(--accent);
+            border-radius: 0.2rem;
+            pointer-events: none;
+            z-index: 2;
         }
 
         > :global(div:has(> .tooltip-base)) {

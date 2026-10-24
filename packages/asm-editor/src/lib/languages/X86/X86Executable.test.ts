@@ -9,7 +9,18 @@ import { readFileSync } from 'node:fs'
 import { analyze } from '@specy/x86/elf'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
+import { executableAnalysis } from '#lib/executables.ts'
+import { needsDemangler } from '#lib/languages/demangle/loadDemangler.ts'
+import { memoryHover, resolveMemoryAddress } from '#lib/languages/memoryRegions.ts'
 import { instructionAddressAt, LINE_KIND, type Listing } from '#lib/listing/listing.ts'
+import { InThreadWorker } from '#lib/pseudocode/inThreadWorker.ts'
+import { PseudocodeClient } from '#lib/pseudocode/pseudocodeClient.ts'
+import { PSEUDOCODE_HEADER_LINES } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
+import {
+    pseudocodeBreakpointAddresses,
+    pseudocodeLineOfAddress,
+    pseudocodeMap
+} from '#lib/pseudocode/pseudocodeMap.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
 import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
@@ -32,6 +43,26 @@ function lineOf(listing: Listing, text: string): number {
     expect(line, text).toBeGreaterThanOrEqual(0)
     expect(lines.indexOf(lines[line], line + 1), `${text} is not unique`).toBe(-1)
     return line
+}
+
+/**
+ * The first line from `from` that calls `name`, whatever comment the Listing writes after it (a C++
+ * name's demangled one).
+ */
+function callLine(listing: Listing, name: string, from = 0): number {
+    const lines = listing.text.split('\n')
+    const line = lines.findIndex(
+        (text, index) => index >= from && text.split(';')[0].trim() === `call ${name}`
+    )
+    expect(line, name).toBeGreaterThanOrEqual(0)
+    return line
+}
+
+/** The line of a label, whatever comment the Listing writes after it. */
+function labelLine(listing: Listing, name: string): number {
+    const label = listing.labels.find((candidate) => candidate.name === name)
+    expect(label, name).toBeDefined()
+    return label!.line
 }
 
 /** The first instruction line after a label line. */
@@ -139,6 +170,85 @@ describe('a Debug session of an Executable', () => {
         expect(emulator.stdOut).toContain('Wrong!')
     })
 
+    it("stops on a Breakpoint set on the Pseudocode's `if (iVar1 == 0)`, before its test and jne", async () => {
+        const sources = executableSources()
+        const { emulator, listing } = await built(sources)
+        //main's Pseudocode as a pane shows it, from the Listing the debugger runs with
+        const main = listing.functions.find((fn) => fn.name === 'main')!
+        const client = new PseudocodeClient(InThreadWorker)
+        const result = await client.decompile(
+            'crackme',
+            sources.files.crackme,
+            listing,
+            main.address
+        )
+        client.dispose()
+        if ('error' in result) throw new Error(result.error)
+        const map = pseudocodeMap(listing, main, result.lines, PSEUDOCODE_HEADER_LINES)
+        const branch =
+            result.lines.findIndex((line) => line.text.trim() === 'if (iVar1 == 0) {') +
+            PSEUDOCODE_HEADER_LINES
+        expect(branch).toBeGreaterThan(PSEUDOCODE_HEADER_LINES)
+        //a gutter click on the line: an address Breakpoint on the first instruction of its block
+        const test = lineOf(listing, 'test eax, eax')
+        const addresses = pseudocodeBreakpointAddresses(map, listing, branch)
+        expect(addresses).toEqual([instructionAddressAt(listing, test)])
+        for (const address of addresses) emulator.toggleAddressBreakpoint(address, 'crackme')
+
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        await emulator.run(0)
+        //stopped before the test, strcmp's answer in eax and the Pseudocode on the `if`
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.currentFile).toBe('crackme')
+        expect(emulator.line).toBe(test)
+        expect(emulator.pc).toBe(BigInt(addresses[0] + PIE_LOAD_BASE))
+        const pcLine = () =>
+            pseudocodeLineOfAddress(map, listing, Number(emulator.pc) - listing.base)
+        expect(pcLine()).toBe(branch)
+        const rax = emulator.registers.find((register) => register.name === 'rax')!.value
+        expect(BigInt(rax) & 0xffffffffn).not.toBe(0n)
+        //a Step to the jne, the same line, then into the else branch
+        await emulator.step()
+        expect(emulator.line).toBe(test + 1)
+        expect(listing.text.split('\n')[test + 1].trim()).toBe('jne .LAB_2')
+        expect(pcLine()).toBe(branch)
+        await emulator.step()
+        const wrong =
+            result.lines.findIndex((line) => line.text.includes('puts("Wrong!")')) +
+            PSEUDOCODE_HEADER_LINES
+        expect(pcLine()).not.toBe(branch)
+        for (let i = 0; i < 10 && pcLine() !== wrong; i++) await emulator.step()
+        expect(pcLine()).toBe(wrong)
+        await emulator.run(0)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.stdOut).toContain('Wrong!')
+    })
+
+    it('runs to the cursor, or an earlier Breakpoint, keeping no Breakpoint of its own', async () => {
+        const { emulator, listing } = await built(executableSources())
+        const call = lineOf(listing, 'call strcmp@plt')
+        const test = lineOf(listing, 'test eax, eax')
+        const at = (line: number) => ({
+            file: 'crackme',
+            address: instructionAddressAt(listing, line)!
+        })
+        emulator.toggleAddressBreakpoint(at(call).address, 'crackme')
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        //Run to Cursor on the test after strcmp stops first on the person's Breakpoint before it
+        await emulator.runTo([at(test)], 0)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.line).toBe(call)
+        //and again, at the cursor's instruction
+        await emulator.runTo([at(test)], 0)
+        expect(emulator.line).toBe(test)
+        expect(emulator.pc).toBe(BigInt(at(test).address + PIE_LOAD_BASE))
+        expect(emulator.breakpoints).toEqual([at(call)])
+        //from the cursor's own instruction it runs on, here to the program's end (ADR 0023)
+        await emulator.runTo([at(test)], 0)
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.stdOut).toContain('Wrong!')
+    })
+
     it('keeps the History and Call stack on their lines when an instruction is unreadable', async () => {
         const { emulator, listing } = await built(executableSources())
         const line = lineOf(listing, 'call strcmp@plt')
@@ -174,6 +284,31 @@ describe('a Debug session of an Executable', () => {
         expect(emulator.line).toBe(line)
     })
 
+    it("takes the Listing's names in the memory view, where they are at run time", async () => {
+        // stripped, so no symbol of the file names what the Listing does
+        const { emulator, listing } = await built(executableSources('crackme-stripped'))
+        const named = listing.labels.filter(
+            (label) => label.origin === 'invented' || label.origin === 'string'
+        )
+        expect(named.map((label) => label.name)).toEqual(
+            expect.arrayContaining([
+                expect.stringMatching(/^FUN_/),
+                expect.stringMatching(/^DAT_/),
+                's_hunter2'
+            ])
+        )
+        for (const label of named)
+            expect(emulator.resolveMemoryLabel(label.name), label.name).toBe(
+                BigInt(label.address + PIE_LOAD_BASE)
+            )
+        const password = emulator.resolveMemoryLabel('s_hunter2')!
+        expect(cString(emulator.readMemoryBytes(password, 16))).toBe('hunter2')
+        // a jump target's name is one only inside its function
+        const block = listing.labels.find((label) => label.kind === 'block')!
+        expect(emulator.resolveMemoryLabel(block.name)).toBeUndefined()
+        expect(emulator.resolveMemoryLabel(block.fullName)).toBeUndefined()
+    })
+
     it('drops the running Listings when the session ends', async () => {
         const { emulator } = await built(executableSources())
         // the Build ran to `main` without making a library's Listing: nothing showed one
@@ -185,6 +320,96 @@ describe('a Debug session of an Executable', () => {
         expect([...emulator.listings!.session.keys()].sort()).toEqual(['@lib/libc.so.6', 'crackme'])
         emulator.clear()
         expect(emulator.listings!.session.size).toBe(0)
+    })
+})
+
+describe('renames and comments of an Executable', () => {
+    /** crackme's `main`, and its `lea rdx, [rel s_hunter2]`, link-time. */
+    const MAIN = 0x11e9
+    const PASSWORD = 0x1263
+
+    function annotated(names: Record<string, string>, comments: Record<string, string> = {}) {
+        const sources = executableSources()
+        const file = sources.files.crackme
+        return {
+            ...sources,
+            files: { crackme: { ...file, annotations: { names, comments } } }
+        }
+    }
+
+    it('are in the running Listing, its Call stack, memory labels and address box', async () => {
+        const sources = annotated(
+            { [`0x${MAIN.toString(16)}`]: 'check_password', '0x4000': 'start_of_data' },
+            { [`0x${PASSWORD.toString(16)}`]: 'the password\nin .rodata' }
+        )
+        const { emulator, listing } = await built(sources)
+        // the program counter at main's first instruction, on its line of the annotated Listing
+        const label = labelLine(listing, 'check_password')
+        const first = firstInstructionAfter(listing, label)
+        expect(emulator.line).toBe(first)
+        expect(listing.text).toContain(
+            '    ; the password\n    ; in .rodata\n    lea rdx, [rel s_hunter2]'
+        )
+        // a Breakpoint on the commented instruction stops there, below its comment
+        const lea = lineOf(listing, 'lea rdx, [rel s_hunter2]            ; "hunter2"')
+        expect(instructionAddressAt(listing, lea)).toBe(PASSWORD)
+        emulator.toggleAddressBreakpoint(PASSWORD, 'crackme')
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        await emulator.run(0)
+        expect(emulator.pc).toBe(BigInt(PASSWORD + PIE_LOAD_BASE))
+        expect(emulator.line).toBe(lea)
+        // the frame of the renamed function, by the person's name, the Listing's in its tooltip
+        const frame = emulator.callStack.find((each) => each.line === label)
+        expect(frame).toMatchObject({
+            name: 'check_password',
+            detail: 'Renamed from main',
+            file: 'crackme'
+        })
+        // the address box takes the new name, and the raw one still
+        expect(emulator.resolveMemoryLabel('check_password')).toBe(BigInt(MAIN + PIE_LOAD_BASE))
+        expect(emulator.resolveMemoryLabel('main')).toBe(BigInt(MAIN + PIE_LOAD_BASE))
+        // the memory view's label of a renamed datum's symbol reads as the person named it, and
+        // the address box takes that name
+        const data = listing.labels.find((each) => each.address === 0x4000 && each.renamed)!
+        const symbol = emulator.dataLabels.find((each) => each.name === data.renamed!.from)!
+        expect(symbol).toMatchObject({
+            displayName: 'start_of_data',
+            address: BigInt(0x4000 + PIE_LOAD_BASE)
+        })
+        expect(emulator.resolveMemoryLabel('start_of_data')).toBe(symbol.address)
+    })
+
+    it('change during the session: its Listing is made again, the program on the same instruction', async () => {
+        const { emulator, listing } = await built(executableSources())
+        const line = lineOf(listing, 'call strcmp@plt')
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, line)!, 'crackme')
+        emulator.peripherals.terminal.useScriptedInput(['swordfish'])
+        await emulator.run(0)
+        expect(emulator.line).toBe(line)
+        const before = emulator.listings!.session.get('crackme')!
+        const annotations = {
+            names: { [`0x${MAIN.toString(16)}`]: 'check_password' },
+            comments: { [`0x${PASSWORD.toString(16)}`]: 'a\nb\nc' }
+        }
+        emulator.setExecutableAnnotations('crackme', annotations)
+        const after = emulator.listings!.session.get('crackme')!
+        expect(after).not.toBe(before)
+        // at the address the program was loaded at
+        expect(after.base).toBe(before.base)
+        const remade = await after.ready
+        await pauseUntil(() => emulator.line === lineOf(remade, 'call strcmp@plt'))
+        expect(emulator.line).toBe(line + 3)
+        expect(emulator.callStack.find((frame) => frame.name === 'check_password')).toMatchObject({
+            line: labelLine(remade, 'check_password'),
+            detail: 'Renamed from main'
+        })
+        expect(emulator.resolveMemoryLabel('check_password')).toBe(BigInt(MAIN + PIE_LOAD_BASE))
+        // the same annotations again open nothing new
+        emulator.setExecutableAnnotations('crackme', annotations)
+        expect(emulator.listings!.session.get('crackme')).toBe(after)
+        // and the program runs on, on the new Listing's lines
+        await emulator.step()
+        expect(emulator.line).toBe(lineOf(remade, 'test eax, eax'))
     })
 })
 
@@ -439,11 +664,12 @@ describe('library code of an Executable', () => {
         expect([...emulator.listings!.session.keys()]).toEqual(['crackme'])
     })
 
-    it('shows a program that ended inside libc at its call into libc, making no Listing', async () => {
-        for (const how of ['run', 'step'] as const) {
+    it('shows a program that exited on no line, in the File it was in, making no Listing', async () => {
+        for (const how of ['run', 'step', 'run into library code'] as const) {
             const { emulator, listing } = await built(executableSources())
             emulator.peripherals.terminal.useScriptedInput(['hunter2'])
-            if (how === 'run') await emulator.run(0)
+            preferencesStore.values.stepIntoRuntimeLibrary.value = how === 'run into library code'
+            if (how !== 'step') await emulator.run(0)
             else {
                 // main returns into libc, which exits; on the way it calls back into the program's
                 // destructors, where a Step stops, as in any callback
@@ -461,22 +687,30 @@ describe('library code of an Executable', () => {
             }
             expect(emulator.terminated).toBe(true)
             expect(emulator.termination).toMatchObject({ kind: 'exit', code: 0 })
-            // the program's own code was inside `_start`'s call to __libc_start_main
-            expect(emulator.currentFile).toBe('crackme')
-            expect(emulator.line).toBe(lineOf(listing, 'call qword [rel __libc_start_main@got]'))
-            expect([...emulator.listings!.session.keys()]).toEqual(['crackme'])
+            // the Listing stays where the person was reading, rather than going to `_start`'s call
+            // of __libc_start_main, the program's own code its end in libc is inside
+            expect(emulator.currentFile, how).toBe('crackme')
+            expect(emulator.line, how).toBe(-1)
+            expect([...emulator.listings!.session.keys()], how).toEqual(['crackme'])
+            if (how === 'step') {
+                // an Undo takes the end back, and the program is on a line again
+                emulator.undo()
+                expect(emulator.terminated).toBe(false)
+                expect(emulator.currentFile).toBe('crackme')
+                expect(emulator.line).toBeGreaterThanOrEqual(0)
+            }
         }
     })
 
-    it('shows a C++ program that caught an exception ending at `_start`, not at its throw', async () => {
-        const { emulator, listing } = await built(executableSources('cpp'))
+    it('shows a C++ program that caught an exception on no line, not at its throw', async () => {
+        const { emulator } = await built(executableSources('cpp'))
         await emulator.run(0)
         expect(emulator.stdOut).toBe('hello\nC++\ncaught exception\n')
         expect(emulator.termination).toMatchObject({ kind: 'exit', code: 0 })
         // the unwinding left __cxa_throw's frames and main returned: only exit's frames remain
         expect(emulator.callStack.map((frame) => frame.name)).not.toContain('main')
         expect(emulator.currentFile).toBe('cpp')
-        expect(emulator.line).toBe(lineOf(listing, 'call qword [rel __libc_start_main@got]'))
+        expect(emulator.line).toBe(-1)
     })
 
     it('shows a crash inside libc on its line, with the program a click away', async () => {
@@ -502,6 +736,179 @@ describe('library code of an Executable', () => {
             file: 'overflow',
             line: call + 1
         })
+    })
+})
+
+/**
+ * A C++ Executable's names in the debug tools and the memory view
+ * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decisions 11 and 12), on the
+ * Core's `cpp` fixture: `std::vector<std::string>` of two words written with `std::cout`.
+ */
+describe('C++ names of an Executable', () => {
+    /** `std::operator<<(std::ostream&, std::string const&)`, through the PLT. */
+    const WRITE_STRING =
+        '_ZStlsIcSt11char_traitsIcESaIcEERSt13basic_ostreamIT_T0_ES7_RKNSt7__cxx1112basic_stringIS4_S5_T1_EE'
+    /** `std::operator<<(std::ostream&, char)`, through the PLT. */
+    const WRITE_CHARACTER = '_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c'
+    /** `std::string`'s constructor from a `char const*`, `main`'s first call. */
+    const STRING_FROM_LITERAL =
+        '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1IS3_EEPKcRKS3_'
+
+    it('names the memory view’s data labels demangled, the raw names in the hover and the address box', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        const label = (name: string) => emulator.dataLabels.find((label) => label.name === name)!
+        const cout = label('_ZSt4cout@GLIBCXX_3.4')
+        expect(cout.displayName).toBe('std::cout@GLIBCXX_3.4')
+        expect(label('_ZTISt13runtime_error@GLIBCXX_3.4').displayName).toBe(
+            'typeinfo for std::runtime_error@GLIBCXX_3.4'
+        )
+        // names that are not mangled read as before
+        expect(label('__dso_handle').displayName).toBeUndefined()
+        expect(label('DW.ref.__gxx_personality_v0').displayName).toBeUndefined()
+        // the grid's hover gives both
+        expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, cout.address + 8n)).toBe(
+            '.bss · std::cout@GLIBCXX_3.4+8 (_ZSt4cout@GLIBCXX_3.4)'
+        )
+        // the address box takes the demangled name, and the raw names it took before
+        const resolve = (input: string) =>
+            resolveMemoryAddress(input, true, (name) => emulator.resolveMemoryLabel(name))
+        expect(resolve('std::cout@GLIBCXX_3.4')).toBe(cout.address)
+        expect(resolve('std::cout@GLIBCXX_3.4+8')).toBe(cout.address + 8n)
+        expect(resolve('_ZSt4cout@GLIBCXX_3.4')).toBe(cout.address)
+        expect(resolve('typeinfo for std::runtime_error@GLIBCXX_3.4')).toBe(
+            label('_ZTISt13runtime_error@GLIBCXX_3.4').address
+        )
+        expect(resolve('main')).toBe(BigInt(listing.main! + PIE_LOAD_BASE))
+    })
+
+    it('names the Call stack’s frames demangled, the signature and raw name in their tooltip', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        await stepTo(emulator, callLine(listing, STRING_FROM_LITERAL))
+        await emulator.step()
+        const frames = emulator.callStack
+        expect(frames.at(-1)).toMatchObject({
+            name: 'std::string::basic_string<std::allocator<char>>',
+            detail: `std::string::basic_string<std::allocator<char>>(char const*, std::allocator<char> const&)\n${STRING_FROM_LITERAL}`,
+            file: 'cpp',
+            line: labelLine(listing, STRING_FROM_LITERAL)
+        })
+        // C names, libc's frames among them, read as before, with no tooltip
+        const main = frames.find((frame) => frame.name === 'main')!
+        expect(main.detail).toBeUndefined()
+        const libc = frames.filter((frame) => frame.file === '@lib/libc.so.6')
+        expect(libc.map((frame) => frame.name)).toContain('__libc_start_main')
+        expect(libc.every((frame) => frame.detail === undefined)).toBe(true)
+    })
+
+    it('names a frame by what the Symbols panel lists, the signature where the Listing has overloads', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        //`std::string::_M_local_data()`, beside `std::string::_M_local_data() const`
+        const LOCAL_DATA = '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv'
+        const start = firstInstructionAfter(listing, labelLine(listing, LOCAL_DATA))
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, start)!, 'cpp')
+        await emulator.run(0)
+        expect(emulator.line).toBe(start)
+        const frames = emulator.callStack
+        expect(frames.at(-1)).toMatchObject({
+            name: 'std::string::_M_local_data()',
+            detail: `std::string::_M_local_data()\n${LOCAL_DATA}`,
+            line: labelLine(listing, LOCAL_DATA)
+        })
+        //its caller has no overload: its short name
+        expect(frames.at(-2)).toMatchObject({
+            name: 'std::string::basic_string<std::allocator<char>>',
+            detail: `std::string::basic_string<std::allocator<char>>(char const*, std::allocator<char> const&)\n${STRING_FROM_LITERAL}`
+        })
+    })
+
+    it('takes a function’s short name or signature in the address box, when only one address has it', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        const resolve = (input: string) =>
+            resolveMemoryAddress(input, true, (name) => emulator.resolveMemoryLabel(name))
+        const at = (name: string) =>
+            BigInt(listing.labels.find((label) => label.name === name)!.address + PIE_LOAD_BASE)
+        const destructor = at('_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev')
+        expect(resolve('std::string::~basic_string')).toBe(destructor)
+        expect(resolve('std::string::~basic_string()+4')).toBe(destructor + 4n)
+        expect(resolve('operator new')).toBe(at('_ZnwmPv'))
+        expect(resolve('operator new@plt')).toBe(at('_Znwm@plt'))
+        //overloads: only their signatures name one
+        const localData = at(
+            '_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv'
+        )
+        expect(resolve('std::string::_M_local_data()')).toBe(localData)
+        expect(resolve('std::string::_M_local_data() const')).toBe(
+            at('_ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv')
+        )
+        expect(() => resolve('std::string::_M_local_data')).toThrow(
+            'Unknown label: std::string::_M_local_data'
+        )
+        //raw names as before
+        expect(resolve('_ZnwmPv')).toBe(at('_ZnwmPv'))
+    })
+
+    it('names a frame in libstdc++ demangled, and the PLT stub that led there', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        // the second word's write, whose calls the first one bound
+        const write = callLine(listing, `${WRITE_STRING}@plt`)
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, write)!, 'cpp')
+        await emulator.run(0)
+        await emulator.run(0)
+        expect(emulator.line).toBe(write)
+        expect(emulator.stdOut).toBe('hello\n')
+        preferencesStore.values.stepIntoRuntimeLibrary.value = true
+        const inLibrary = () =>
+            emulator.callStack.find((frame) => frame.file === '@lib/libstdc++.so.6')
+        for (let i = 0; i < 100 && !inLibrary(); i++) await emulator.step()
+        // named by the library's Listing once it is made
+        await emulator.listings!.session.get('@lib/libstdc++.so.6')!.ready
+        await Promise.resolve()
+        expect(inLibrary()).toMatchObject({
+            name: 'std::ostream::sentry::sentry@plt',
+            detail: 'std::ostream::sentry::sentry(std::ostream&)@plt\n_ZNSo6sentryC1ERSo@plt'
+        })
+        const stub = labelLine(listing, `${WRITE_STRING}@plt`)
+        expect(emulator.callStack.find((frame) => frame.line === stub)).toMatchObject({
+            name: 'std::operator<<<char, std::char_traits<char>, std::allocator<char>>@plt',
+            detail: `std::operator<<<char, std::char_traits<char>, std::allocator<char>>(std::ostream&, std::string const&)@plt\n${WRITE_STRING}@plt`
+        })
+        // libstdc++'s Listing takes seconds
+    }, 30_000)
+
+    it('names the History’s calls into libstdc++ demangled, the signature and raw name in their tooltip', async () => {
+        const { emulator, listing } = await built(executableSources('cpp'))
+        const write = callLine(listing, `${WRITE_STRING}@plt`)
+        emulator.toggleAddressBreakpoint(instructionAddressAt(listing, write)!, 'cpp')
+        await emulator.run(0)
+        await emulator.step()
+        expect(emulator.latestSteps[0].stretch).toEqual({
+            library:
+                'std::operator<<<char, std::char_traits<char>, std::allocator<char>> in libstdc++.so.6',
+            detail: `std::operator<<<char, std::char_traits<char>, std::allocator<char>>(std::ostream&, std::string const&)\n${WRITE_STRING}`,
+            instructions: expect.any(Number)
+        })
+        await stepTo(emulator, callLine(listing, `${WRITE_CHARACTER}@plt`, write))
+        await emulator.step()
+        expect(emulator.stdOut).toBe('hello\n')
+        expect(emulator.latestSteps[0].stretch).toMatchObject({
+            library: 'std::operator<<<std::char_traits<char>> in libstdc++.so.6',
+            detail: `std::operator<<<std::char_traits<char>>(std::ostream&, char)\n${WRITE_CHARACTER}`
+        })
+    })
+
+    it('leaves a C program’s names as they were', async () => {
+        const sources = executableSources()
+        expect(needsDemangler(executableAnalysis(sources.files.crackme))).toBe(false)
+        const { emulator, listing } = await built(sources)
+        expect(emulator.dataLabels.every((label) => label.displayName === undefined)).toBe(true)
+        emulator.peripherals.terminal.useScriptedInput(['hunter2'])
+        await stepTo(emulator, lineOf(listing, 'call printf@plt'))
+        await emulator.step()
+        expect(emulator.latestSteps[0].stretch).toEqual({
+            library: 'printf in libc.so.6',
+            instructions: expect.any(Number)
+        })
+        expect(emulator.callStack.every((frame) => frame.detail === undefined)).toBe(true)
     })
 })
 

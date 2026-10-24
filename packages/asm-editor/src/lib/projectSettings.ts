@@ -10,12 +10,15 @@ import { languageHasScreen } from './languages/peripherals/peripheralSet'
 import { languageTakesArguments, parseCommandLine } from './commandLine'
 
 /**
- * The Settings of a Project: the configuration that changes what the Emulator or the program does,
+ * The Settings of a Program: the configuration that changes what the Emulator or the program does,
  * as opposed to the Preferences of `#stores/preferencesStore.svelte.ts`, which only change what the
- * person sees ([ADR 0014](../../../../docs/adr/0014-settings-split-by-effect.md)).
+ * person sees ([ADR 0014](../../../../docs/adr/0014-settings-split-by-effect.md)). They were the
+ * Project's until a Project held Programs
+ * ([ADR 0054](../../../../docs/adr/0054-a-project-holds-programs-identified-by-their-entry-file.md)),
+ * which is why the names below still say Project.
  *
  * Each Setting is declared once, here: its name in the panel, its type, its default per language
- * and the languages it applies to. A Project stores only the values that were decided for it,
+ * and the languages it applies to. A Program stores only the values that were decided for it,
  * keyed by id, never these descriptors; `resolveProjectSettings` puts the two together. Loading is
  * tolerant, see `cleanProjectSettings`: nothing here has a version number, and nothing resets.
  */
@@ -32,7 +35,7 @@ export type ProjectSettingValues = {
     /**
      * Whether the Core keeps an undo history, of `UNDO_HISTORY_SIZE` steps when it does: what a
      * Build is given is `undoHistorySize`. It replaced a number of steps on 2026-10-01, and a
-     * Project that had chosen none loads with it off, see `cleanProjectSettings`.
+     * Program that had chosen none loads with it off, see `cleanProjectSettings`.
      */
     undoEnabled: boolean
     /**
@@ -54,11 +57,11 @@ export type ProjectSettingValues = {
 
 export type ProjectSettingId = keyof ProjectSettingValues
 
-/** What a Project stores: only the Settings somebody decided for it. */
+/** What a Program stores: only the Settings somebody decided for it. */
 export type ProjectSettingsDecisions = Partial<ProjectSettingValues>
 
 /**
- * The undo history a Build keeps when the Project's undo is on, in the Core's back steps (an
+ * The undo history a Build keeps when the Program's undo is on, in the Core's back steps (an
  * instruction records one to three). Large enough that a Step over a Runtime library call, such as
  * a `printf` of a double or a `qsort` of a few hundred values, can be undone as a whole. The Cores
  * allocate it as it fills, so a short program pays nothing: measured on 2026-10-04 at about 150
@@ -66,7 +69,7 @@ export type ProjectSettingsDecisions = Partial<ProjectSettingValues>
  */
 export const UNDO_HISTORY_SIZE = 200_000
 
-/** The history size a Build is given: the undo steps of a Project whose undo is on, else none. */
+/** The history size a Build is given: the undo steps of a Program whose undo is on, else none. */
 export function undoHistorySize(settings: Pick<ProjectSettingValues, 'undoEnabled'>): number {
     return settings.undoEnabled ? UNDO_HISTORY_SIZE : 0
 }
@@ -195,7 +198,7 @@ export function projectSettingDefault<K extends ProjectSettingId>(
 }
 
 /**
- * The values a Project runs with: its decisions where it made some, the language's defaults
+ * The values a Program runs with: its decisions where it made some, the language's defaults
  * everywhere else. Settings that do not apply to the language are resolved too, at their default,
  * so a consumer can read any key without checking applicability first.
  */
@@ -220,8 +223,8 @@ export function resolveProjectSettings(
 /**
  * Decisions read back from storage, a shared link or an imported file, which can be anything: an
  * unknown key is dropped, a value the Setting cannot use is dropped, and what remains is kept as
- * decided, whether or not it applies to the language (it is harmless there, and a language never
- * changes after creation).
+ * decided, whether or not it applies to the language, so changing the Project's ISA and back keeps
+ * each Program's previous choices.
  */
 export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
     validateProfileSetting(raw)
@@ -233,7 +236,7 @@ export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
         if (value === undefined) continue
         if (PROJECT_SETTINGS[id].accepts(value)) decisions[id] = value
     }
-    //undo was a number of steps before it was on or off: a Project that chose none chose it off,
+    //undo was a number of steps before it was on or off: a Program that chose none chose it off,
     //and any other number is what on means now
     if (decisions.undoEnabled === undefined && record.maxHistorySize === 0) {
         decisions.undoEnabled = false
@@ -252,10 +255,19 @@ function validateProfileSetting(raw: unknown) {
     }
 }
 
-/** Whether a Project decided anything about a Setting, which the panel shows beside the value. */
+/** Whether a Program decided anything about a Setting, which the panel shows beside the value. */
 export function isProjectSettingDecided(
     decisions: ProjectSettingsDecisions | undefined,
     id: ProjectSettingId
 ): boolean {
     return decisions?.[id] !== undefined
+}
+
+/**
+ * Whether a Program decided any Setting at all, applying to its language or not: what removing it
+ * loses besides its Testcases, which the prompt before it names
+ * ([programs.md](../../../../docs/design/programs.md), decision 7).
+ */
+export function hasDecidedSettings(decisions: ProjectSettingsDecisions | undefined): boolean {
+    return PROJECT_SETTING_IDS.some((id) => isProjectSettingDecided(decisions, id))
 }

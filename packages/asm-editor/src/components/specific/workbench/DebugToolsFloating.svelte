@@ -14,6 +14,7 @@
         workbenchLayout,
         type FloatingWindowState
     } from '#stores/workbenchLayoutStore.svelte.ts'
+    import { memoryCellMenu } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -131,6 +132,7 @@
                 callStackAddresses={makeColorizedLabels(emulator.callStack)}
                 pokeable={session.pokeable}
                 onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
+                cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
             />
         </div>
     </ToggleableDraggable>

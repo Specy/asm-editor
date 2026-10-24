@@ -28,6 +28,7 @@ export function entryDocument(entry: DocumentationEntry, chapterTitle: string): 
         ...(entry.codeName === undefined ? {} : { codeName: entry.codeName }),
         names: entry.names,
         signature: entry.signature ?? '',
+        ...(entry.category ? { category: entry.category } : {}),
         summary: entry.summary,
         text: plainText(entry.searchText),
         code: entry.code ?? '',
@@ -35,7 +36,10 @@ export function entryDocument(entry: DocumentationEntry, chapterTitle: string): 
     }
 }
 
-/** What the model reads of an entry: where it is, what it is called, and what it says. */
+/**
+ * What the model reads of an entry: where it is, what it is called, and what it says. Not its
+ * category, which the words half matches instead, so that a category's name never moves a vector.
+ */
 export function entryEmbeddingText(entry: EntryDocument): string {
     const name = entry.signature ? `${entry.title} ${entry.signature}` : entry.title
     const text = `${entry.chapterTitle}: ${name}. ${entry.summary}\n${entry.text}`

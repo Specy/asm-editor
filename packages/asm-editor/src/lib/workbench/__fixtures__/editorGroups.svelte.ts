@@ -2,12 +2,14 @@ import { makeProject, type AvailableLanguages, type StoredProject } from '#lib/P
 import type { BuildSources } from '#lib/projectFiles.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import {
+    InterpreterStatus,
     sameBreakpoint,
     type Diagnostic,
     type EmulatorNote,
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
+import type { BuildOutputHost } from '#lib/buildOutput.ts'
 import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
@@ -30,6 +32,7 @@ export function editorGroupsFixture(
     let breakpointResolver:
         | ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[])
         | undefined
+    let buildOutputHost: BuildOutputHost | undefined
     const emulator = $state({
         pc: 0n,
         systemSize: 4,
@@ -40,10 +43,12 @@ export function editorGroupsFixture(
         currentFile: 'main.s',
         line: 0,
         compilerDiagnostics: [] as Diagnostic[],
-        errors: [],
+        errors: [] as string[],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
         notes: [] as EmulatorNote[],
+        /** What the Build in progress says it waits for, as an adapter that reports one sets it. */
+        buildPhase: undefined as string | undefined,
         /** The Arguments the last Build or test run was given, as `setProgramArguments` passes them. */
         programArguments: '',
         setProgramArguments(text: string) {
@@ -63,10 +68,19 @@ export function editorGroupsFixture(
             else this.breakpoints.splice(index, 1)
         },
         setSources: (_sources: BuildSources) => {},
+        /** The targets of each Run to Cursor, which stops at once, as at one of them. */
+        runsTo: [] as SourceBreakpoint[][],
+        runTo(targets: readonly SourceBreakpoint[], _haltLimit: number) {
+            this.runsTo.push([...targets])
+            return Promise.resolve(InterpreterStatus.Running)
+        },
         //a Build that changes nothing; a test that needs one to fail replaces it
-        compile: async (_historySize: number, _sources: BuildSources) => {},
+        compile: async (_historySize: number, _sources: BuildSources, _signal?: AbortSignal) => {},
         setBreakpointResolver: (resolver: typeof breakpointResolver) => {
             breakpointResolver = resolver
+        },
+        setBuildOutputHost: (host: BuildOutputHost | undefined) => {
+            buildOutputHost = host
         },
         setGlobalMemorySize: (_pageSize: number, _rowSize: number) => {},
         clear: () => {}
@@ -85,6 +99,8 @@ export function editorGroupsFixture(
         session,
         /** The Breakpoints the Core would run with, as the session resolves them. */
         coreBreakpoints: () => breakpointResolver?.(emulator.breakpoints) ?? emulator.breakpoints,
+        /** What the session does with a linked program, as an x86 Build hands it over. */
+        buildOutputHost: () => buildOutputHost!,
         dispose: () => {
             disposeEffects()
             session.models.dispose()

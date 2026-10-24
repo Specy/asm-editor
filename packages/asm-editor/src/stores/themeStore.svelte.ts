@@ -286,7 +286,7 @@ export const DEFAULT_X86_THEME = {
     version: 1,
     id: LANGUAGE_THEMES.X86,
     extends: LANGUAGE_THEMES.X86,
-    name: 'Default x86',
+    name: 'Default x86-64',
     editable: false,
     theme: {
         background: {

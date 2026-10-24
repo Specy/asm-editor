@@ -1,6 +1,7 @@
 import { dequantize, fromBase64, quantize, toBase64 } from './embedding'
 import { VECTOR_DIMS } from './model'
 import type { EntryKind } from '#lib/documentation/entries.ts'
+import type { InstructionCategory } from '#lib/documentation/instructions/categories.ts'
 import type { DocumentationLanguage, ShardId } from './scope'
 
 /**
@@ -26,6 +27,12 @@ export type EntryDocument = {
     /** What an exact-name search matches, lowercase. */
     names: string[]
     signature: string
+    /**
+     * An instruction's **Instruction category**, matched together with the Chapter's title and named
+     * on its result row. Optional, so `PAYLOAD_FORMAT` stays: a shard without it still reads, and
+     * the vectors, made without it, are unchanged.
+     */
+    category?: InstructionCategory
     summary: string
     text: string
     code: string

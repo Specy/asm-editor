@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount } from 'svelte'
+import { beforeAll, describe, expect, it, vi } from 'vite-plus/test'
+import { flushSync, mount, tick, unmount } from 'svelte'
 import MemoryRenderer from './MemoryRenderer.svelte'
+import type { MemoryCell } from './memoryTabUtils'
 import { type DiffedMemory, RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
 
@@ -8,6 +9,12 @@ import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
 //because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection
 //would fail the run, so the database is stubbed away: nothing the memory grid does goes near it
 vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+
+//jsdom has no popovers, which the pointer menu opens as
+beforeAll(() => {
+    HTMLElement.prototype.showPopover ??= function () {}
+    HTMLElement.prototype.hidePopover ??= function () {}
+})
 
 /**
  * Poking memory from the selection popup ([the design record](../../../../../../../docs/design/pokes.md)):
@@ -29,9 +36,13 @@ function render(
         endianess?: 'big' | 'little'
         unreadable?: number[]
         readOnlyMemory?: import('#lib/languages/commonLanguageFeatures.svelte.ts').ReadOnlyMemory[]
+        /** A pointer menu, whose calls are recorded with the cell they were given. */
+        withMenu?: boolean
+        markedAddress?: bigint
     } = {}
 ) {
     const pokes: { address: bigint; bytes: number[] }[] = []
+    const menus: MemoryCell[] = []
     const target = document.createElement('div')
     document.body.appendChild(target)
     const memory: DiffedMemory = {
@@ -61,13 +72,21 @@ function render(
             systemSize: RegisterSize.Long,
             pokeable: options.pokeable ?? true,
             onPoke: (address: bigint, bytes: Uint8Array) =>
-                pokes.push({ address, bytes: [...bytes] })
+                pokes.push({ address, bytes: [...bytes] }),
+            cellMenu: options.withMenu
+                ? (cell: MemoryCell) => {
+                      menus.push(cell)
+                      return [{ label: 'Follow pointer', onSelect: () => {} }]
+                  }
+                : undefined,
+            markedAddress: options.markedAddress
         }
     })
     flushSync()
     const cells = () => [...target.querySelectorAll<HTMLElement>('.memory-numbers .tooltip-base')]
     return {
         pokes,
+        menus,
         target,
         cells,
         input: () => target.querySelector<HTMLInputElement>('.selection-input'),
@@ -81,6 +100,24 @@ function render(
                 flushSync()
             }
         },
+        /** A right click on a byte; whether something took it from the browser. */
+        rightClick: (index: number) => {
+            const cell = cells()[index]
+            //the press first, as a mouse sends it, then the menu's own event
+            cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 2 }))
+            flushSync()
+            const event = new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                button: 2,
+                clientX: 30,
+                clientY: 40
+            })
+            cell.dispatchEvent(event)
+            flushSync()
+            return event.defaultPrevented
+        },
+        menu: () => document.querySelector<HTMLElement>('[role="menu"]'),
         showAsCharacters: () => {
             target.querySelector<HTMLElement>('button[title="Show as character"]')!.click()
             flushSync()
@@ -443,4 +480,62 @@ it('outlines the Arguments in their colour, chunked and named by their parts', (
     } finally {
         ui.close()
     }
+})
+
+describe("a memory cell's pointer menu", () => {
+    it('opens on a right click with the byte, leaving the selection alone', async () => {
+        const panel = render({ withMenu: true })
+        expect(panel.rightClick(3)).toBe(true)
+        await tick()
+        expect(panel.menus).toEqual([{ address: ADDRESS + 3n, value: 0x33n, bytes: 1 }])
+        expect(panel.menu()?.getAttribute('aria-label')).toBe('Memory')
+        //a right click is no press that selects, so no Poke input opened under the menu
+        expect(panel.popup()).toBe(null)
+        panel.close()
+    })
+
+    it('reads a selection the click lands in as its number, in the panel endianness', async () => {
+        const panel = render({ withMenu: true, endianess: 'little' })
+        panel.select(1, 4)
+        expect(panel.rightClick(2)).toBe(true)
+        await tick()
+        //at the selection's start, where Follow pointer reads the pointer the number is
+        expect(panel.menus).toEqual([{ address: ADDRESS + 1n, value: 0x44330201n, bytes: 4 }])
+        //the selection is still there to poke
+        expect(panel.input()?.value).toBe(String(0x44330201))
+        panel.close()
+    })
+
+    it('gives no value for a byte the Core could not read', async () => {
+        const panel = render({ withMenu: true, unreadable: [0, 0, 1, 0, 0, 0, 0, 0] })
+        panel.rightClick(2)
+        await tick()
+        expect(panel.menus).toEqual([{ address: ADDRESS + 2n, value: undefined, bytes: 1 }])
+        panel.close()
+    })
+
+    it('leaves a click selecting and poking, and a panel without a menu as it was', () => {
+        const panel = render({ withMenu: true })
+        panel.select(3)
+        expect(panel.input()?.value).toBe('33')
+        expect(panel.menus).toEqual([])
+        panel.close()
+        const plain = render()
+        expect(plain.rightClick(3)).toBe(false)
+        expect(plain.menu()).toBe(null)
+        //the browser's menu, over a press that selects the byte as any press always has
+        expect(plain.input()?.value).toBe('33')
+        plain.close()
+    })
+
+    it('marks the byte a pointer menu moved the view to', () => {
+        const panel = render({ markedAddress: ADDRESS + 5n })
+        const marked = [...panel.target.querySelectorAll('.memory-number.marked')]
+        expect(marked).toEqual([panel.cells()[5].closest('.memory-number')])
+        panel.close()
+        //a mark on another page marks nothing on this one
+        const elsewhere = render({ markedAddress: ADDRESS + 0x100n })
+        expect(elsewhere.target.querySelectorAll('.memory-number.marked')).toHaveLength(0)
+        elsewhere.close()
+    })
 })

@@ -5,6 +5,8 @@ import { Mouse } from '#lib/languages/peripherals/Mouse.ts'
 import { BLACK, WHITE } from '#lib/languages/peripherals/screen/color.ts'
 import { SCREEN_CELL_8X8 } from '#lib/languages/peripherals/screen/bitmapFont.ts'
 import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import {
     Z80_COLORS,
     Z80_MOUSE_FLAGS,
@@ -53,6 +55,11 @@ function makeDevice() {
             cells.resyncs += 1
         }
     }
+    const audioOutput = new RecordingAudioOutput()
+    const audio = new Audio({ output: audioOutput, clock: { now: () => elapsedHundredths * 10 } })
+    let position = 0
+    audio.track(() => position, 100)
+    const holds: Promise<void>[] = []
     const device = new Z80Device({
         write: (text) => {
             output += text
@@ -63,6 +70,10 @@ function makeDevice() {
         screen,
         keyboard,
         mouse,
+        audio: () => audio,
+        holdForAudio: (loading, play) => {
+            holds.push(loading.then(play))
+        },
         cells,
         onGraphicalUse: () => {
             graphicalUses += 1
@@ -70,6 +81,13 @@ function makeDevice() {
     })
     return {
         device,
+        audio,
+        audioOutput,
+        holds,
+        /** Names the instruction the next port accesses belong to, for the Audio journal. */
+        at(instruction: number) {
+            position = instruction
+        },
         screen,
         keyboard,
         mouse,
@@ -126,6 +144,7 @@ describe('Z80Device port decoding', () => {
         expect(Z80Device.groupOf(Z80_PORTS.KEY_STATE)).toBe('keyboard')
         expect(Z80Device.groupOf(Z80_PORTS.MOUSE_BUTTONS)).toBe('mouse')
         expect(Z80Device.groupOf(Z80_PORTS.TIME_NOW)).toBe('time')
+        expect(Z80Device.groupOf(Z80_PORTS.NOTE_PLAY)).toBe('audio')
         expect(Z80Device.groupOf(0xf0)).toBeUndefined()
     })
 
@@ -618,5 +637,99 @@ describe('Z80 screen modes', () => {
         view.device.writePort(Z80_PORTS.SCREEN_PEN_COLOR, 0xff)
         expect(view.graphicalUses).toBe(0)
         expect(view.device.isGraphical).toBe(false)
+    })
+})
+
+describe('Z80Device audio ports', () => {
+    const notes = (output: RecordingAudioOutput) => {
+        return output.commands.flatMap((c) =>
+            c.type === 'note' ? [[c.pitch, c.instrument, c.volume, c.durationMs]] : []
+        )
+    }
+
+    it('plays a Note with what the other ports set, MARS defaults to begin with', () => {
+        const { device, audio, audioOutput } = makeDevice()
+        device.writePort(Z80_PORTS.NOTE_PLAY, 60)
+        device.writePort(Z80_PORTS.NOTE_INSTRUMENT, 40)
+        device.writePort(Z80_PORTS.NOTE_VOLUME, 30)
+        device.writePort(busAddress(Z80_PORTS.NOTE_DURATION, 0x07), 0xd0)
+        device.writePort(Z80_PORTS.NOTE_PLAY, 69)
+        audio.flush()
+        expect(notes(audioOutput)).toEqual([
+            [60, 0, 100, 1000],
+            [69, 40, 30, 2000]
+        ])
+    })
+
+    it('applies MARS ranges to bytes past 127', () => {
+        const { device, audio, audioOutput } = makeDevice()
+        device.writePort(Z80_PORTS.NOTE_INSTRUMENT, 200)
+        device.writePort(Z80_PORTS.NOTE_VOLUME, 128)
+        device.writePort(Z80_PORTS.NOTE_PLAY, 255)
+        audio.flush()
+        expect(notes(audioOutput)).toEqual([[60, 0, 100, 1000]])
+    })
+
+    it('answers an empty bus on the ports that only take writes, and is not graphical use', () => {
+        const { device, graphicalUses } = makeDevice()
+        for (const port of [
+            'NOTE_PLAY',
+            'NOTE_INSTRUMENT',
+            'NOTE_VOLUME',
+            'NOTE_DURATION'
+        ] as const) {
+            expect(device.readPort(Z80_PORTS[port])).toBe(Z80_UNCONNECTED_PORT_VALUE)
+        }
+        device.writePort(Z80_PORTS.NOTE_PLAY, 60)
+        expect(graphicalUses).toBe(0)
+    })
+
+    it('waits on the play-and-wait port until the adapter grants it, with the pitch from B', () => {
+        const { device } = makeDevice()
+        const address = busAddress(Z80_PORTS.NOTE_PLAY_WAIT, 64)
+        expect(Z80Device.isWaitPort(address)).toBe(true)
+        expect(device.readPort(address)).toBeUndefined()
+        expect(device.noteToWaitFor(address)).toEqual({
+            pitch: 64,
+            duration: 1000,
+            instrument: 0,
+            volume: 100
+        })
+        device.completeWait(address)
+        expect(device.readPort(address)).toBe(0)
+        expect(device.readPort(address)).toBeUndefined()
+    })
+
+    it('asks the adapter to hold the program while the sound bank loads, then plays', async () => {
+        const { device, audio, audioOutput, holds } = makeDevice()
+        audioOutput.holdPrepare = true
+        device.writePort(Z80_PORTS.NOTE_PLAY, 60)
+        expect(holds).toHaveLength(1)
+        audioOutput.settle()
+        await holds[0]
+        audio.flush()
+        expect(notes(audioOutput)).toEqual([[60, 0, 100, 1000]])
+    })
+
+    it('puts the audio registers back when Undo takes the out back', () => {
+        const { device, audio, audioOutput, at } = makeDevice()
+        at(1)
+        device.writePort(Z80_PORTS.NOTE_INSTRUMENT, 40)
+        at(2)
+        device.writePort(Z80_PORTS.NOTE_PLAY, 60)
+        audio.undoAfter(0)
+        at(3)
+        device.writePort(Z80_PORTS.NOTE_PLAY, 62)
+        audio.flush()
+        expect(notes(audioOutput)).toEqual([[62, 0, 100, 1000]])
+    })
+
+    it('starts every run from MARS defaults', () => {
+        const { device, audio, audioOutput } = makeDevice()
+        device.writePort(Z80_PORTS.NOTE_INSTRUMENT, 40)
+        device.reset()
+        device.writePort(Z80_PORTS.NOTE_PLAY, 60)
+        audio.flush()
+        expect(notes(audioOutput)).toEqual([[60, 0, 100, 1000]])
     })
 })

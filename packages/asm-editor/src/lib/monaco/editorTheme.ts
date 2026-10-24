@@ -80,7 +80,11 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
     }
 }
 
-/** The rules for the assembly grammars' tokens, from the table the code blocks paint with too. */
+/**
+ * The rules for the assembly grammars' tokens and C/C++'s, from the table the code blocks paint
+ * with too. A C++ attribute's is one though the base theme gives it the same colour, so that the
+ * editor and the code blocks read it from one place.
+ */
 function assemblyRules(
     colors: Record<AssemblyThemeToken, string>
 ): monaco.editor.ITokenThemeRule[] {

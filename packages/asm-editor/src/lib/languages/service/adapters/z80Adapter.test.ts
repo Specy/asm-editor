@@ -60,4 +60,34 @@ describe('Z80 Project analysis adapter', () => {
             })
         )
     })
+
+    it('reports sources that cannot be resolved as the one error, as Build does', () => {
+        const problem = 'This Project has no program.'
+        const none = analyzeZ80Project(
+            normalizeBuildInput({
+                entry: 'main.z80',
+                files: { 'main.z80': { encoding: 'plain', content: ' ld a,nope' } },
+                assemblyError: problem
+            }),
+            'no-program',
+            1
+        )
+        expect(none.diagnostics).toEqual([
+            expect.objectContaining({ severity: 'error', message: problem })
+        ])
+        const missing = analyzeZ80Project(
+            normalizeBuildInput({
+                entry: 'gone.z80',
+                files: { 'main.z80': { encoding: 'plain', content: ' nop' } }
+            }),
+            'missing-entry',
+            1
+        )
+        expect(missing.diagnostics).toEqual([
+            expect.objectContaining({
+                message: 'Entry file not found: gone.z80',
+                location: expect.objectContaining({ path: 'gone.z80' })
+            })
+        ])
+    })
 })

@@ -1,3 +1,8 @@
+<script lang="ts" module>
+    /** The width of the strip the column collapses to, in pixels. */
+    export const DEBUG_STRIP_WIDTH = 32
+</script>
+
 <script lang="ts">
     /**
      * The right-hand column of a Debug session on desktop: registers beside memory, then the Screen,
@@ -7,7 +12,14 @@
      * column scrolls rather than squeezing what is under registers and memory into the height
      * left: the sections have 170vh to open into from the start, and the Screen alone is as tall as
      * it needs to fill the column's width.
+     *
+     * It collapses to a strip that stays at the Workbench's right edge
+     * ([the design record](../../../../../../docs/design/reverse-engineering-ux.md), decision 19),
+     * from the button at the end of memory's controls or by dragging its splitter, and the strip
+     * opens it again at the width it had. Collapsed, the column is only hidden, so nothing in it
+     * is built anew, and its width, the registers' included, takes no room.
      */
+    import { tick } from 'svelte'
     import Splitter from '#cmp/shared/layout/Splitter.svelte'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
@@ -24,8 +36,11 @@
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle, toolSectionStyle } from './debugTools'
+    import { markedMemoryAddress, memoryCellMenu, moveMemoryView } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
+    import FaAngleDoubleLeft from '~icons/fa-solid/angle-double-left'
+    import FaAngleDoubleRight from '~icons/fa-solid/angle-double-right'
 
     interface Props {
         /** The column's width in pixels, measured, for the splitter that sets it. */
@@ -42,6 +57,16 @@
     const sectionsMode = $derived(!ui.floatingDebugTools)
     const hasLower = $derived(hasScreen || sectionsMode)
     const tools = $derived(debugTools(emulator.memory.tabs))
+    //what the strip names: everything collapsing hides, which is the Screen in a Target that has
+    //one and the Debug tools while they are sections here rather than windows of their own
+    const stripLabel = $derived(
+        [
+            'Registers',
+            'Memory',
+            ...(hasScreen ? ['Screen'] : []),
+            ...(sectionsMode ? tools.map((tool) => tool.title) : [])
+        ].join(' · ')
+    )
     //the grouping picked in the register panel, which is what its rows' width depends on
     let registersSize = $state(RegisterSize.Word)
     //the register column is as wide as the CPU file asks at that grouping, so the memory beside it
@@ -65,12 +90,40 @@
               ? `height: ${layout.debugTopHeight}px; flex: none;`
               : 'flex: none;'
     )
+
+    const columnId = `debug-column-${Math.random().toString(36).slice(2, 8)}`
+    let collapseButton: HTMLButtonElement | undefined = $state()
+    let expandButton: HTMLButtonElement | undefined = $state()
+    /** A button's collapse or opening, which hands the focus to the button that undoes it. */
+    async function setCollapsed(collapsed: boolean) {
+        workbenchLayout.setDebugCollapsed(collapsed)
+        await tick()
+        ;(collapsed ? expandButton : collapseButton)?.focus()
+    }
 </script>
 
+{#if layout.debugCollapsed}
+    <div class="debug-strip" style:width="{DEBUG_STRIP_WIDTH}px">
+        <button
+            class="strip-button"
+            aria-expanded="false"
+            aria-controls={columnId}
+            title="Show the registers and memory"
+            bind:this={expandButton}
+            onclick={() => setCollapsed(false)}
+        >
+            <FaAngleDoubleLeft />
+            <span class="strip-label">{stripLabel}</span>
+        </button>
+    </div>
+{/if}
+
 <aside
+    id={columnId}
     class="debug-column"
     style={layout.debugWidth !== null ? `width: ${layout.debugWidth}px;` : ''}
     class:automatic={layout.debugWidth === null}
+    class:collapsed={layout.debugCollapsed}
     bind:clientWidth={measuredWidth}
     bind:clientHeight={columnHeight}
     aria-label="Debugger"
@@ -90,8 +143,19 @@
                         memorySize={MEMORY_SIZE[language]}
                         inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                         currentAddress={emulator.memory.global.address}
-                        onAddressChange={(address) => emulator.setGlobalMemoryAddress(address)}
+                        onAddressChange={(address) => moveMemoryView(session, ui, address)}
+                        hideLabel={emulator.memory.global.rowSize < 16}
                     />
+                    <button
+                        class="collapse-button"
+                        aria-expanded="true"
+                        aria-controls={columnId}
+                        title="Collapse the registers and memory"
+                        bind:this={collapseButton}
+                        onclick={() => setCollapsed(true)}
+                    >
+                        <FaAngleDoubleRight />
+                    </button>
                 </div>
                 <div class="memory-grid">
                     <MemoryVisualiser
@@ -112,6 +176,8 @@
                         callStackAddresses={makeColorizedLabels(emulator.callStack)}
                         pokeable={session.pokeable}
                         onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
+                        cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
+                        markedAddress={markedMemoryAddress(session, ui)}
                     />
                 </div>
             </div>
@@ -156,7 +222,7 @@
                                 id="debug:{tool.id}"
                                 title={tool.title}
                                 style={toolSectionStyle(tool)}
-                                bodyStyle={toolBodyStyle(tool, '24rem')}
+                                bodyStyle={toolBodyStyle('24rem')}
                             >
                                 <DebugToolContent {tool} />
                             </CollapsibleSection>
@@ -181,6 +247,97 @@
         overflow-x: hidden;
         overflow-y: auto;
         scrollbar-gutter: stable;
+
+        /* collapsed to its strip: still built, and none of its widths, the registers' lock
+           included, holds the Workbench open */
+        &.collapsed {
+            display: none;
+        }
+    }
+
+    /* the collapsed column, a card as tall as the column was, which opens it again from anywhere
+       along it */
+    .debug-strip {
+        display: flex;
+        flex: none;
+        min-height: 0;
+        background-color: var(--wb-surface);
+        border-radius: var(--wb-radius);
+        border: var(--wb-card-edge);
+        overflow: hidden;
+    }
+
+    .strip-button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+        width: 100%;
+        padding: 0.6rem 0;
+        border: none;
+        background: transparent;
+        color: var(--secondary-text);
+        font: inherit;
+        font-size: 0.8rem;
+        cursor: pointer;
+
+        :global(svg) {
+            flex: none;
+            width: 0.8rem;
+            height: 0.8rem;
+        }
+
+        &:hover {
+            background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+        }
+
+        &:focus-visible {
+            outline: solid 0.1rem var(--accent);
+            outline-offset: -0.2rem;
+        }
+    }
+
+    /* read top to bottom, as a collapsed panel's title is in an IDE, and cut short with an
+       ellipsis when the column is shorter than all it names */
+    .strip-label {
+        writing-mode: vertical-rl;
+        white-space: nowrap;
+        min-height: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0.85;
+    }
+
+    /* the column's own control, ruled off from memory's page buttons before it so that its
+       arrows do not read as one more page: a narrow strip from the card's top edge down to the
+       controls' rule, flush with the card's right edge */
+    .collapse-button {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 2.5rem;
+        margin: -0.3rem -0.3rem -0.3rem 0;
+        padding: 0;
+        border: none;
+        border-left: 1px solid var(--wb-line, var(--tertiary));
+        border-radius: 0;
+        background: transparent;
+        color: var(--secondary-text);
+        cursor: pointer;
+
+        :global(svg) {
+            width: 0.8rem;
+            height: 0.8rem;
+        }
+
+        &:hover {
+            background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+        }
+
+        &:focus-visible {
+            outline: solid 0.1rem var(--accent);
+            outline-offset: -0.1rem;
+        }
     }
 
     /* the column's scrolling content: at least as tall as the column, and 170vh when the Debug

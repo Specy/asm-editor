@@ -10,6 +10,7 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import HighlightedText from '#cmp/search/HighlightedText.svelte'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import { resolveHref } from '#lib/hrefs.ts'
     import type { SectionDocument } from '#lib/search/payload.ts'
 
     interface Props {
@@ -39,7 +40,7 @@
                 centered={false}
                 simpleCode
             />
-            <a class="open" href={section.href} target="_blank" rel="noopener">
+            <a class="open" href={resolveHref(section.href)} target="_blank" rel="noopener">
                 Open the lecture
                 <span class="external" aria-hidden="true"><FaExternalLinkAlt /></span>
             </a>

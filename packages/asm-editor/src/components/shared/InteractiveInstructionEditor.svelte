@@ -1,3 +1,15 @@
+<script lang="ts" module>
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+
+    /**
+     * Whether there is a built program to look at: one being debugged, or a Test's result, which
+     * keeps its last Core readable. The dock's Build turns into Stop on the same condition.
+     */
+    export function hasBuiltProgram(emulator: Emulator) {
+        return emulator.canExecute || !!emulator.compiledCode
+    }
+</script>
+
 <script lang="ts">
     import Editor from '#cmp/specific/project/Editor.svelte'
     import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
@@ -7,6 +19,8 @@
         type DockAction,
         type DockCompilation
     } from '#cmp/specific/project/ExecutionDock.svelte'
+    import { DockSoundState } from '#cmp/specific/project/dockSound.svelte.ts'
+    import { wakeAudio } from '#lib/languages/peripherals/audio/audioContext.ts'
     import { clampBigInt } from '#lib/utils.ts'
     import { terminationSummary } from '#lib/languages/termination.ts'
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
@@ -36,7 +50,6 @@
     } from '#lib/sourceCompilation/records.ts'
     import { createProjectLanguageSessionId } from '#lib/languages/service/uri.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
-    import { type Emulator } from '#lib/languages/Emulator.ts'
     import StdOutRenderer from '#cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '#cmp/specific/project/testcases/TestcasesEditor.svelte'
     import type monaco from 'monaco-editor'
@@ -88,6 +101,12 @@
         showScreen?: boolean
         /** Whether the Screen panel starts unfolded; the small layout folds it away by default. */
         openScreen?: boolean
+        /**
+         * Whether the memory, the registers, the flags, the PC and the Screen wait for a built
+         * program, leaving the code (and the console and Testcases) alone until then. Off by
+         * default: every panel asked for is there from the start.
+         */
+        hideUntilBuilt?: boolean
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
@@ -122,6 +141,7 @@
         showPc: showPcProp,
         showScreen: showScreenProp,
         openScreen = false,
+        hideUntilBuilt = false,
         testcases = $bindable([]),
         embedded = false,
         emulator = $bindable(),
@@ -164,8 +184,12 @@
               )
             : diagnostics
     )
+    //a Playground has exactly one Program, its authored entry (programs.md, decision 12), which
+    //Build builds from whichever tab is shown; a C entry has to be compiled first
+    const programEntry = $derived(session?.project.selectedProgram)
     const buildDisabled = $derived(
-        (session && !!sourceLanguage(session.project.entry)) || emulator.compilerErrors.length > 0
+        (session && (programEntry === undefined || !!sourceLanguage(programEntry))) ||
+            emulator.compilerErrors.length > 0
     )
     const selectedIsSource = $derived(!!selectedFile && !!sourceLanguage(selectedFile))
     const displayedAssemblyFile = $derived(
@@ -254,19 +278,23 @@
               }
             : undefined
     )
-    let showMemory = $derived(showMemoryProp ?? true)
-    let showFlags = $derived(showFlagsProp ?? true)
-    let showRegisters = $derived(showRegistersProp ?? true)
+    const built = $derived(hasBuiltProgram(emulator))
+    //with `hideUntilBuilt` the machine's panels have nothing to say before a Build, so they leave
+    //the room to the code until there is a program in them, and leave again on Stop
+    const revealed = $derived(!hideUntilBuilt || built)
+    let showMemory = $derived((showMemoryProp ?? true) && revealed)
+    let showFlags = $derived((showFlagsProp ?? true) && revealed)
+    let showRegisters = $derived((showRegistersProp ?? true) && revealed)
     //a read in a host that hides the console opens it, and it stays open for the rest of the page
     //(the plan's decision 10, docs/design/environment-library-plan.md): there is nowhere else to
     //type the answer
     let consoleRevealed = $state(false)
     let showConsole = $derived((showConsoleProp ?? layout === 'fullscreen') || consoleRevealed)
     let showTestcases = $derived(showTestcasesProp ?? false)
-    let showPc = $derived(showPcProp ?? layout === 'fullscreen')
+    let showPc = $derived((showPcProp ?? layout === 'fullscreen') && revealed)
     //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
     //derive that explicit request from their `screen` fence flag; x86 has no graphics device.
-    let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language))
+    let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language) && revealed)
     //no Project here, so a Playground runs on the language's default Settings
     const settings = $derived(resolveProjectSettings(language, undefined))
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
@@ -359,7 +387,9 @@
     $effect(() => {
         //Tracked read outside `untrack`, so editing the playground keeps arming the live check.
         const source = session ? $state.snapshot(session.sources) : code
-        if (session && sourceLanguage(session.project.entry)) return
+        //nothing to check in a C entry, which is compiled first; with none (the chat's agent
+        //deleted it) the check reports why nothing builds
+        if (session && programEntry !== undefined && sourceLanguage(programEntry)) return
         untrack(() =>
             typeof source === 'string' ? emulator.setCode(source) : emulator.setSources(source)
         )
@@ -402,12 +432,13 @@
         })
     })
     //an embed is an iframe of a fixed height, which the registers card may not outgrow: it is the
-    //card that is held to what the frame leaves it, the embed's padding and the console under it,
-    //and the Register files that shrink inside it and scroll, whatever the flags and the PC above
-    //them take. A minimum height on the files would win over that and push the frame into scrolling
+    //card that is held to what the frame leaves it, the embed's padding (`--embed-padding`, set by
+    //the embed page) and the console under it, and the Register files that shrink inside it and
+    //scroll, whatever the flags and the PC above them take. A minimum height on the files would win
+    //over that and push the frame into scrolling
     let embeddedRegistersStyle = $derived(
         embedded
-            ? `max-height: calc(var(--screen-height) - 1rem - ${showConsole ? '4.5rem' : '0px'});`
+            ? `max-height: calc(var(--screen-height) - 2 * var(--embed-padding, 0.5rem) - ${showConsole ? '4.5rem' : '0px'});`
             : ''
     )
 
@@ -427,7 +458,15 @@
         showPc || showRegisters || (showFlags && emulator.statusRegisters?.length > 0)
     )
 
+    const sound = new DockSoundState(() => emulator.audioActivity)
+
+    /** Sound is unlocked inside the press that starts a Build, Run or Step, as the Workbench does. */
+    function wakeSound() {
+        if (language !== 'X86') wakeAudio()
+    }
+
     async function buildCode() {
+        wakeSound()
         if (building || running || compiling || buildDisabled) return
         try {
             running = false
@@ -436,8 +475,8 @@
             if (typeof source === 'string') emulator.setCode(source)
             else emulator.setSources(source)
             await emulator.compile(undoHistorySize(settings), source)
-            if (session) {
-                session.selected = session.project.entry
+            if (session && programEntry !== undefined) {
+                session.selected = programEntry
                 activePath = session.selected
             }
         } catch (e) {
@@ -455,6 +494,7 @@
      * turns the Run button into Pause here too, and what keeps Step and Undo out of a run.
      */
     async function startRun() {
+        wakeSound()
         if (building || running || compiling) return
         running = true
         if (layout === 'fullscreen') {
@@ -472,6 +512,7 @@
     }
 
     async function stepCode() {
+        wakeSound()
         try {
             await emulator.step()
         } catch (e) {
@@ -504,10 +545,11 @@
             ? testcases.length > 0
             : testcases.length > 0 && !showTestcases
     )
+    //the caller's own controls, such as "Try in the editor", keep the far end of the dock, after
+    //Test and the Testcases that belong with it
     const allDockActions = $derived<DockAction[]>(
         showTestcases
             ? [
-                  ...dockActions,
                   {
                       label: 'Testcases',
                       title: 'Show the Testcases',
@@ -520,7 +562,8 @@
                             ? 'green'
                             : undefined,
                       onClick: () => (testcasesVisible = !testcasesVisible)
-                  }
+                  },
+                  ...dockActions
               ]
             : dockActions
     )
@@ -591,17 +634,15 @@
             <ExecutionDock
                 attached
                 fill={viewport.deviceClass === 'phone'}
-                debugging={emulator.canExecute || !!emulator.compiledCode}
+                debugging={built}
                 building={building || compiling}
                 {running}
                 {buildDisabled}
                 {compilation}
                 compileOnly={selectedIsSource}
-                buildLabel={selectedFile && selectedFile !== session?.project.entry
-                    ? 'Build entry'
-                    : 'Build'}
                 executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
                 canUndo={emulator.canUndo}
+                sound={sound.value}
                 hasTests={offersTest}
                 actions={allDockActions}
                 onBuild={buildCode}
@@ -768,6 +809,7 @@
                 onAddressChange={(e) => {
                     emulator.setGlobalMemoryAddress(e)
                 }}
+                hideLabel={emulator.memory.global.rowSize < 16}
             />
         </div>
         <div class="memory-page">
@@ -814,13 +856,16 @@
                         //what was chosen, as on the project page; a program without one keeps the
                         //choice for as long as the page lives
                         const source = session
-                            ? (session.project.files[session.project.entry]?.content ?? '')
+                            ? programEntry === undefined
+                                ? ''
+                                : (session.project.files[programEntry]?.content ?? '')
                             : code
                         const rewritten = rewriteScreenDirective(source, display, next)
                         const baseChanged = next.baseAddress !== display.baseAddress
                         if (rewritten !== null) {
-                            if (session) session.edit(session.project.entry, rewritten)
-                            else code = rewritten
+                            if (!session) code = rewritten
+                            else if (programEntry !== undefined)
+                                session.edit(programEntry, rewritten)
                         }
                         display = next
                         displayOrigin = rewritten !== null ? 'directive' : 'user'
@@ -880,7 +925,7 @@
                         {#if showRegsColumn}
                             {@render fullscreenRegsColumn()}
                         {/if}
-                        {#if showMemory && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
+                        {#if showMemory && (!children || !(!running && !built))}
                             {@render fullscreenMemoryPanel()}
                         {:else if !running && children}
                             <Card

@@ -66,7 +66,7 @@ export function createNumericHoverProvider(
                 (candidate) => offset >= candidate.start && offset < candidate.end
             )
             if (!literal) return null
-            const markdown = numericLiteralMarkdown(literal, options.bits)
+            const markdown = numberMarkdown(literal.value, options.bits, byteOrder(options.dialect))
             if (!markdown) return null
 
             return {
@@ -193,15 +193,27 @@ function parseNumericLiteral(
     }
 }
 
-function numericLiteralMarkdown(
-    literal: NumericLiteral,
-    bits: AssemblyInsightOptions['bits']
+/** The order a Target keeps a number's bytes in memory: the 68000's is big-endian, the rest little. */
+function byteOrder(dialect: AssemblyInsightOptions['dialect']): 'little' | 'big' {
+    return dialect === 'm68k' ? 'big' : 'little'
+}
+
+/**
+ * The card a number shows on hover, at a width of `bits`: its decimal value (signed and unsigned
+ * when they differ), hexadecimal and binary, and, when its bytes in memory read as text, that text
+ * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision 5).
+ * A Listing's and a Pseudocode's numbers show the same card. Null for a value the width cannot hold.
+ */
+export function numberMarkdown(
+    value: bigint,
+    bits: AssemblyInsightOptions['bits'],
+    order: 'little' | 'big' = 'little'
 ): string | null {
     const modulus = 1n << BigInt(bits)
     const signedMinimum = -(1n << BigInt(bits - 1))
-    if (literal.value < signedMinimum || literal.value >= modulus) return null
+    if (value < signedMinimum || value >= modulus) return null
 
-    const unsigned = literal.value < 0n ? literal.value + modulus : literal.value
+    const unsigned = value < 0n ? value + modulus : value
     const signed = unsigned >= modulus / 2n ? unsigned - modulus : unsigned
     const differs = signed !== unsigned
     const fullHex = unsigned.toString(16).padStart(differs ? bits / 4 : 1, '0')
@@ -209,14 +221,42 @@ function numericLiteralMarkdown(
     const decimalRows = differs
         ? [`- Signed: \`${signed}\``, `- Unsigned: \`${unsigned}\``]
         : [`- Decimal: \`${unsigned}\``]
+    const text = bytesAsText(unsigned, order)
 
     return [
         `**${bits}-bit value**`,
         '',
         ...decimalRows,
         `- Hexadecimal: \`0x${fullHex}\``,
-        `- Binary: \`0b${groupBinary(fullBinary)}\``
+        `- Binary: \`0b${groupBinary(fullBinary)}\``,
+        ...(text === undefined ? [] : [`- Text: ${inlineCode(text)}`])
     ].join('\n')
+}
+
+/**
+ * A value's bytes as text, when they are at least two printable ASCII characters: as many bytes as
+ * the value needs (`0x4142` is two, wherever it is stored), in the order the Target keeps them in
+ * memory, so `0x4c75257240343a41` reads `A:4@r%uL` on a little-endian Target, as a string the
+ * program builds from it does. A value of spaces alone says nothing as text, and has none.
+ */
+function bytesAsText(value: bigint, order: 'little' | 'big'): string | undefined {
+    const bytes: number[] = []
+    for (let rest = value; rest > 0n; rest >>= 8n) bytes.push(Number(rest & 0xffn))
+    if (bytes.length < 2 || !bytes.every((byte) => byte >= 0x20 && byte <= 0x7e)) return undefined
+    if (order === 'big') bytes.reverse()
+    const text = String.fromCharCode(...bytes)
+    return text.trim() ? text : undefined
+}
+
+/**
+ * Markdown code that shows `text` as it is: fenced by more backticks than it holds in a row, and
+ * padded where it starts or ends with a backtick or a space, which the fence would otherwise eat.
+ */
+function inlineCode(text: string): string {
+    const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+    const fence = '`'.repeat(longest + 1)
+    const pad = /^[ `]|[ `]$/.test(text) ? ' ' : ''
+    return `${fence}${pad}${text}${pad}${fence}`
 }
 
 function buildArtifactMarkdown(artifacts: readonly BuildArtifact[]): string {

@@ -8,7 +8,7 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
-    import { makeProject, type AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { defaultEntryPath, makeProject, type AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
 
     const MOBILE_LAYOUT_QUERY = '(max-width: 900px)'
@@ -100,6 +100,7 @@
     >
         <DefaultCodingAgent
             {project}
+            newProgram="move"
             bind:activePath
             bind:editorLanguage
             bind:editorCode
@@ -114,7 +115,11 @@
                 <EmulatorLoader
                     language={editorLanguage}
                     code={project.code}
-                    source={{ files: project.files, entry: project.entry }}
+                    source={{
+                        files: project.files,
+                        //the Project is made with its one Program, `main.<ext>`, read once here
+                        entry: project.selectedProgram ?? defaultEntryPath(project.language)
+                    }}
                     bind:emulator={emulatorInstance}
                     settings={{
                         globalPageElementsPerRow: 16,

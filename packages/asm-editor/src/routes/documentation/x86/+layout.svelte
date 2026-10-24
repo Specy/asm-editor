@@ -18,7 +18,7 @@
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
-    import { x86DocumentedInstructions } from '#lib/languages/X86/X86-documentation.ts'
+    import { x86DocumentedNames } from '#lib/languages/X86/X86-documentation.ts'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -30,17 +30,13 @@
 
     let { children }: Props = $props()
 
-    // The sidebar lists the integer instruction set, the same set that has pages. Search matches
-    // the one line summary as well as the name, so typing "rotate" finds `rol` and `rcl`.
-    let instructions = x86DocumentedInstructions.map((instruction) => ({
-        name: instruction.name,
-        description: instruction.summary
-    }))
+    // The sidebar lists the integer instruction set, the same set that has pages, by category.
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(x86DocumentedNames)].sort((a, b) => a.localeCompare(b))
 
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
-
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -82,48 +78,53 @@
 
     <Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
         <Column padding="0 1rem">
-            <SearchLauncher placeholder="Search the x86 docs and courses" />
+            <SearchLauncher placeholder="Search the x86-64 docs and courses" />
         </Column>
 
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/x86"
-                    title="x86"
+                    href={resolve('/documentation/x86')}
+                    title="x86-64"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/directive"
+                    href={resolve('/documentation/x86/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/registers"
+                    href={resolve('/documentation/x86/registers')}
                     title="Registers & Flags"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/syscall"
+                    href={resolve('/documentation/x86/vector-instructions')}
+                    title="Vector instructions"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href={resolve('/documentation/x86/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/using-c"
+                    href={resolve('/documentation/x86/using-c')}
                     title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/runtime-library"
+                    href={resolve('/documentation/x86/runtime-library')}
                     title="Runtime library"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/executables"
+                    href={resolve('/documentation/x86/executables')}
                     title="Executables"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/x86/all"
+                    href={resolve('/documentation/x86/all')}
                     title="Complete documentation"
                     onClick={() => (menuOpen = false)}
                 />
@@ -139,8 +140,11 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/x86/instruction"
-                    instructions={instructionNames}
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/x86/instruction/[instructionName]', {
+                            instructionName
+                        })}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />
@@ -168,7 +172,7 @@
         {/snippet}
     </Sidebar>
 
-    <SearchPalette {scope} placeholder="Search the x86 docs and courses" />
+    <SearchPalette {scope} placeholder="Search the x86-64 docs and courses" />
 </ThemeScope>
 
 <style lang="scss">

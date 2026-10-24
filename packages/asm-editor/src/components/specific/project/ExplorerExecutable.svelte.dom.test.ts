@@ -19,11 +19,12 @@ function explorer(language: 'X86' | 'MIPS') {
         files: fileSystem.files,
         fileSystem,
         language,
-        entry: 'main.asm',
+        programs: [{ entry: 'main.asm', label: 'main.asm', missing: false }],
+        selectedProgram: 'main.asm',
         selectedPath: 'main.asm',
         locked: false,
         onSelect: vi.fn(),
-        onEntryChange: choose
+        onNewProgram: choose
     })
     const component = mount(Explorer, { target, props })
     flushSync()
@@ -64,7 +65,7 @@ it('keeps an ELF a plain File outside x86 Projects, without a toast or a questio
     }
 })
 
-it('does not change the Entry when a Debug session started while it asked', async () => {
+it('makes no Program when a Debug session started while it asked', async () => {
     let answer!: (value: boolean) => void
     vi.spyOn(Prompt, 'confirm').mockImplementation(
         () => new Promise<boolean>((resolve) => (answer = resolve))

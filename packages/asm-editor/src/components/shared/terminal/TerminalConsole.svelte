@@ -13,8 +13,12 @@
      *
      * A read takes the focus when it starts, and a host whose console is hidden reveals it first
      * (the [plan's](../../../../../../docs/design/environment-library-plan.md) decision 10); only a shown
-     * console counts as attached for that. A touch keyboard opens only for a focus inside a gesture,
-     * so a tap on the console focuses it again.
+     * console counts as attached for that. It takes it from the code editor, a Listing or a
+     * Pseudocode as well, but not from a field someone types in, and while it waits for the line
+     * the console is ringed and its question stands out
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 12). A touch keyboard opens only for a focus inside a gesture, so a tap on the
+     * console focuses it again.
      */
     import { tick, untrack } from 'svelte'
     import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
@@ -73,6 +77,8 @@
     const showsHint = $derived(
         typingRead !== null && prompting && typingRead.line === '' && composition === ''
     )
+    /** A read waiting on what is typed here, which the console marks so it is not missed. */
+    const awaitingInput = $derived(prompting && interactive)
     const empty = $derived(!prefix && !output && !pendingRead && !focused && !composition)
 
     const reader = new TerminalTranscriptReader()
@@ -131,9 +137,9 @@
         if (!input || input.disabled) return
         const active = document.activeElement
         if (active === input) return
-        //someone typing in a field of the page keeps it; the code editor is read only while a
-        //program runs, so it gives the keyboard up
-        if (active instanceof HTMLElement && isTextEntry(active)) return
+        //someone typing in a field of the page keeps it, and so does a dialog; the code editor is
+        //read only while a program runs, so it gives the keyboard up
+        if (active instanceof HTMLElement && (isTextEntry(active) || inOtherDialog(active))) return
         input.focus()
     }
 
@@ -268,13 +274,26 @@
         terminal.sendEndOfInput()
     }
 
-    /** A field of the page someone may be typing in, other than the code editor. */
+    /**
+     * A field of the page someone may be typing in. The code editor's text is none, but the
+     * boxes of its Find, its Go to Symbol and its rename are. A field nobody can type in, read only
+     * or disabled, is none either: the locked Command line of a Debug session, where a tester
+     * typed the program's answer, which went nowhere.
+     */
     function isTextEntry(element: HTMLElement): boolean {
-        if (element.closest('.monaco-editor')) return false
-        if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)
-            return true
-        if (element instanceof HTMLInputElement) return !NON_TEXT_INPUTS.has(element.type)
+        if (element.closest('.monaco-editor'))
+            return element.closest('.monaco-inputbox, .quick-input-widget') !== null
+        if (element instanceof HTMLSelectElement) return !element.disabled
+        if (element instanceof HTMLTextAreaElement) return !element.readOnly && !element.disabled
+        if (element instanceof HTMLInputElement)
+            return !NON_TEXT_INPUTS.has(element.type) && !element.readOnly && !element.disabled
         return element.isContentEditable
+    }
+
+    /** Whether an element is in a dialog, other than one the console is in itself. */
+    function inOtherDialog(element: HTMLElement): boolean {
+        const dialog = element.closest('dialog, [role="dialog"], [role="alertdialog"]')
+        return dialog !== null && !dialog.contains(input ?? null)
     }
 
     const NON_TEXT_INPUTS = new Set([
@@ -306,6 +325,7 @@
 <div
     class="terminal-console"
     class:focused
+    class:awaiting-input={awaitingInput}
     class:interactive
     {style}
     bind:this={scroller}
@@ -413,6 +433,20 @@
         outline-offset: -1px;
     }
 
+    /* a read waiting on a line: ringed whether or not it has the keyboard, and the question at
+       the caret marked in the accent, so that it is not missed below the code */
+    .awaiting-input {
+        outline: 1px solid var(--accent);
+        outline-offset: -1px;
+
+        .hint {
+            padding: 0.05em 0.45em;
+            border-radius: 0.3rem;
+            color: var(--accent);
+            background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+        }
+    }
+
     .screen {
         white-space: pre-wrap;
     }
@@ -426,6 +460,7 @@
 
     .placeholder {
         font-size: 0.8rem;
+        font-style: italic;
     }
 
     .hint {

@@ -3,69 +3,71 @@ import { flushSync, mount, unmount } from 'svelte'
 import MarkdownEditor from './MarkdownEditor.svelte'
 
 vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+//Monaco does not run in jsdom; the editor's text is what these are about, not its colours
+vi.mock('#cmp/specific/project/Editor.svelte', async () => ({
+    default: (await import('./__fixtures__/EditorStub.svelte')).default
+}))
 
-afterEach(() => vi.unstubAllGlobals())
+let dispose = () => {}
+afterEach(() => dispose())
 
-describe('Markdown editor code previews', () => {
-    it.each([
-        { language: 'riscv', lineNumbers: true },
-        { language: 'riscv', lineNumbers: false },
-        { language: 'javascript', lineNumbers: true },
-        { language: 'javascript', lineNumbers: false }
-    ])(
-        'styles $language previews with lineNumbers=$lineNumbers',
-        async ({ language, lineNumbers }) => {
-            vi.stubGlobal(
-                'ResizeObserver',
-                class {
-                    observe() {}
-                    unobserve() {}
-                    disconnect() {}
-                }
-            )
-            const target = document.createElement('div')
-            document.body.appendChild(target)
-            const source =
-                language === 'riscv'
-                    ? 'li a0, 1\n\naddi a0, a0, 2'
-                    : 'const x = 1\n\nconsole.log(x)'
-            const value = `\`\`\`${language}\n${source}\n\`\`\``
-            const component = mount(MarkdownEditor, { target, props: { value, lineNumbers } })
-            // Carta restores scroll positions on mount; jsdom has no scrolling implementation.
-            target.querySelectorAll<HTMLElement>('*').forEach((element) => {
-                element.scroll = () => {}
-            })
-            try {
-                flushSync()
-                const initialBlock = target.querySelector('.carta-renderer pre.code-block')
-                for (
-                    let attempt = 0;
-                    attempt < 200 &&
-                    target.querySelector('.carta-renderer pre.code-block') === initialBlock;
-                    attempt++
-                ) {
-                    await new Promise((resolve) => setTimeout(resolve, 10))
-                }
-                const block = target.querySelector('.carta-renderer pre.code-block')
-                expect(block).not.toBe(initialBlock)
-                expect(block?.querySelector('code')?.textContent).toBe(source)
-                if (language === 'riscv') {
-                    expect(block?.querySelector('.asm-keyword')?.textContent).toBe('li')
-                } else {
-                    expect(block?.classList.contains('shiki')).toBe(true)
-                }
-                expect(block?.querySelectorAll('.code-gutter')).toHaveLength(1)
-                expect(block?.querySelector('.code-gutter')?.textContent).toBe('1\n2\n3')
-                expect(
-                    target
-                        .querySelector<HTMLElement>('.markdown-editor')
-                        ?.style.getPropertyValue('--code-block-gutter-display')
-                ).toBe(lineNumbers ? 'block' : 'none')
-                expect(target.querySelector('textarea')?.value).toBe(value)
-            } finally {
-                await unmount(component)
-                target.remove()
-            }
-        }
-    )
+function render(props: Record<string, unknown>) {
+    const target = document.createElement('div')
+    document.body.appendChild(target)
+    const component = mount(MarkdownEditor, { target, props })
+    flushSync()
+    dispose = () => {
+        unmount(component)
+        target.remove()
+    }
+    return target
+}
+
+function button(target: HTMLElement, label: string) {
+    return [...target.querySelectorAll('button')].find((node) => node.textContent?.trim() === label)
+}
+
+describe('Markdown editor', () => {
+    it('writes the text in Markdown mode and previews it as the Exam session shows it', () => {
+        const target = render({
+            value: 'See [MOVEA](/documentation/m68k/instruction/movea).\n\n```riscv\nli a0, 1\n```'
+        })
+        expect(target.querySelector('textarea')?.dataset.language).toBe('markdown')
+        const preview = target.querySelector('.preview')
+        //links stay out of an Exam, a link into the Documentation as its mark
+        expect(preview?.querySelector('a')).toBeNull()
+        expect(preview?.querySelector('span.doc-link')?.textContent).toBe('MOVEA')
+        expect(preview?.querySelector('pre.code-block .asm-keyword')?.textContent).toBe('li')
+    })
+
+    it('previews what is typed', () => {
+        const target = render({ value: 'before' })
+        const textarea = target.querySelector('textarea')!
+        textarea.value = '## after'
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+        expect(target.querySelector('.preview h2')?.textContent).toBe('after')
+    })
+
+    it('switches between the text and the preview', () => {
+        const target = render({ value: 'text', layout: 'switch' })
+        expect(target.querySelector('.text')?.classList.contains('shown')).toBe(true)
+        expect(target.querySelector('.preview')?.classList.contains('shown')).toBe(false)
+        button(target, 'Preview')?.click()
+        flushSync()
+        expect(target.querySelector('.text')?.classList.contains('shown')).toBe(false)
+        expect(target.querySelector('.preview')?.classList.contains('shown')).toBe(true)
+    })
+
+    it.each(['split', 'auto'] as const)('takes the %s layout it is given', (layout) => {
+        const target = render({ value: 'text', layout })
+        expect(target.querySelector('.markdown-editor')?.classList.contains(layout)).toBe(true)
+    })
+
+    it.each([true, false])('numbers the preview’s code lines: %s', (lineNumbers) => {
+        const target = render({ value: '```riscv\nli a0, 1\n```', lineNumbers })
+        expect(target.querySelector('.preview ._markdown')?.getAttribute('style')).toContain(
+            `--code-block-gutter-display: ${lineNumbers ? 'block' : 'none'}`
+        )
+    })
 })

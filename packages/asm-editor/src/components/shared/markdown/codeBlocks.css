@@ -79,61 +79,65 @@ pre.code-block.code-block-fill {
     border-radius: 0;
 }
 
-/* One class per editor token (`#lib/content/assemblyPalette.ts`), painted with its colour. */
-pre.code-block .asm-comment {
+/* One class per editor token (`#lib/content/assemblyPalette.ts`), painted with its colour, in a code
+   block or in any other code marked `asm-highlight` (an instruction's opened row). */
+:is(pre.code-block, .asm-highlight) .asm-comment {
     color: var(--asm-comment);
     font-style: italic;
 }
-pre.code-block .asm-keyword {
+:is(pre.code-block, .asm-highlight) .asm-keyword {
     color: var(--asm-keyword);
 }
-pre.code-block .asm-keyword-size {
+:is(pre.code-block, .asm-highlight) .asm-keyword-size {
     color: var(--asm-keyword-size);
 }
-pre.code-block .asm-directive {
+:is(pre.code-block, .asm-highlight) .asm-directive {
     color: var(--asm-directive);
 }
-pre.code-block .asm-variable-predefined {
+:is(pre.code-block, .asm-highlight) .asm-variable-predefined {
     color: var(--asm-variable-predefined);
 }
-pre.code-block .asm-data-register {
+:is(pre.code-block, .asm-highlight) .asm-data-register {
     color: var(--asm-data-register);
 }
-pre.code-block .asm-address-register {
+:is(pre.code-block, .asm-highlight) .asm-address-register {
     color: var(--asm-address-register);
 }
-pre.code-block .asm-condition {
+:is(pre.code-block, .asm-highlight) .asm-condition {
     color: var(--asm-condition);
 }
-pre.code-block .asm-number {
+:is(pre.code-block, .asm-highlight) .asm-number {
     color: var(--asm-number);
 }
-pre.code-block .asm-number-hex {
+:is(pre.code-block, .asm-highlight) .asm-number-hex {
     color: var(--asm-number-hex);
 }
-pre.code-block .asm-number-immediate {
+:is(pre.code-block, .asm-highlight) .asm-number-immediate {
     color: var(--asm-number-immediate);
 }
-pre.code-block .asm-string {
+:is(pre.code-block, .asm-highlight) .asm-string {
     color: var(--asm-string);
 }
-pre.code-block .asm-invalid {
+:is(pre.code-block, .asm-highlight) .asm-annotation {
+    color: var(--asm-annotation);
+}
+:is(pre.code-block, .asm-highlight) .asm-invalid {
     color: var(--asm-invalid);
     text-decoration: line-through;
 }
-pre.code-block .asm-label {
+:is(pre.code-block, .asm-highlight) .asm-label {
     text-decoration: underline;
 }
-pre.code-block .asm-bracket-1 {
+:is(pre.code-block, .asm-highlight) .asm-bracket-1 {
     color: var(--asm-bracket-1);
 }
-pre.code-block .asm-bracket-2 {
+:is(pre.code-block, .asm-highlight) .asm-bracket-2 {
     color: var(--asm-bracket-2);
 }
-pre.code-block .asm-bracket-3 {
+:is(pre.code-block, .asm-highlight) .asm-bracket-3 {
     color: var(--asm-bracket-3);
 }
-pre.code-block .asm-bracket-unexpected {
+:is(pre.code-block, .asm-highlight) .asm-bracket-unexpected {
     color: var(--asm-bracket-unexpected);
 }
 

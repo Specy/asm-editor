@@ -811,6 +811,211 @@ describe('output', () => {
     })
 })
 
+describe('Undo', () => {
+    /** A Terminal journaled as an adapter journals it: `at` says which instruction is running. */
+    function makeJournaled(options: Omit<TerminalOptions, 'executionController'> = {}, size = 100) {
+        const made = makeConsole(options)
+        let position: number | null = null
+        made.terminal.trackHistory(() => position, size)
+        return { ...made, at: (next: number | null) => (position = next) }
+    }
+    const bytes = (...values: number[]) => Uint8Array.from(values)
+
+    it('takes back what each instruction printed, newest first', () => {
+        const { terminal, at } = makeJournaled()
+        at(1)
+        terminal.write('one ')
+        at(2)
+        terminal.write('two ')
+        terminal.write('again ')
+        at(4)
+        terminal.write('four')
+        terminal.undoAfter(3)
+        expect(terminal.output).toBe('one two again ')
+        //instruction 3 printed nothing, so there is nothing of it to take back
+        terminal.undoAfter(2)
+        expect(terminal.output).toBe('one two again ')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('one ')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('')
+    })
+
+    it('takes back several instructions at once', () => {
+        const { terminal, at } = makeJournaled()
+        for (const [position, text] of [
+            [1, 'a'],
+            [2, 'b'],
+            [3, 'c']
+        ] as const) {
+            at(position)
+            terminal.write(text)
+        }
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('a')
+    })
+
+    it('puts back the transcript a clear threw away', () => {
+        const { terminal, at } = makeJournaled()
+        at(1)
+        terminal.write('kept')
+        at(2)
+        terminal.write(' gone')
+        terminal.clearOutput()
+        terminal.write('new')
+        at(3)
+        terminal.clearOutput()
+        terminal.undoAfter(2)
+        expect(terminal.output).toBe('new')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('kept')
+    })
+
+    it('holds back again a character a byte write left incomplete', () => {
+        const { terminal, at } = makeJournaled()
+        at(1)
+        terminal.writeBytes(bytes(0x61, 0xc3))
+        at(2)
+        terminal.writeBytes(bytes(0xa9))
+        expect(terminal.output).toBe('aé')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('a')
+        terminal.writeBytes(bytes(0xa9))
+        expect(terminal.output).toBe('aé')
+    })
+
+    it('takes back the replacement character the end of the output wrote', () => {
+        const { terminal, at } = makeJournaled()
+        at(1)
+        terminal.writeBytes(bytes(0x6f, 0xe2))
+        at(2)
+        terminal.flushOutput()
+        expect(terminal.output).toBe('o�')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('o')
+        terminal.writeBytes(bytes(0x82, 0xac))
+        expect(terminal.output).toBe('o€')
+    })
+
+    it('asks again for a line a read took, its echo taken back', async () => {
+        const { terminal, execution, at } = makeJournaled()
+        at(1)
+        terminal.write('> ')
+        at(2)
+        const read = terminal.readAsync('q', execution)
+        terminal.insertText('12\n')
+        expect(await read).toBe('12')
+        expect(terminal.output).toBe('> 12\n')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('> ')
+        expect(terminal.hasPendingInput()).toBe(false)
+        const again = terminal.readAsync('q', execution)
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        terminal.insertText('7\n')
+        expect(await again).toBe('7')
+        expect(terminal.output).toBe('> 7\n')
+    })
+
+    it('asks again for a character a read took', async () => {
+        const { terminal, execution, at } = makeJournaled()
+        at(1)
+        terminal.insertText('x')
+        expect(await terminal.readCharAsync('q', execution)).toBe('x')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('')
+        expect(terminal.hasPendingInput()).toBe(false)
+    })
+
+    it('puts back the rest of a standard-input line, and asks again for the line itself', async () => {
+        const { terminal, execution, at } = makeJournaled()
+        at(1)
+        const first = terminal.readStandardInput(3, 'q', execution)
+        terminal.insertText('12 34\n')
+        expect(text(await first)).toBe('12 ')
+        at(2)
+        expect(text(await terminal.readStandardInput(10, 'q', execution))).toBe('34\n')
+        terminal.undoAfter(1)
+        //the second read took the rest of a line the first one asked for: it takes it again
+        expect(text(await terminal.readStandardInput(10, 'q', execution))).toBe('34\n')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('')
+        expect(terminal.hasPendingInput()).toBe(false)
+    })
+
+    it('puts back a byte a byte read took from the current line', async () => {
+        const { terminal, execution, at } = makeJournaled({ encoding: 'latin-1' })
+        at(1)
+        const read = terminal.readByte('q', execution)
+        terminal.insertText('ab\n')
+        expect(await read).toBe(0x61)
+        at(2)
+        expect(terminal.readBufferedByte()).toBe(0x62)
+        terminal.undoAfter(1)
+        expect(terminal.readBufferedByte()).toBe(0x62)
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('')
+        expect(terminal.readBufferedByte()).toBeUndefined()
+    })
+
+    it('puts the keystrokes a polled device took back in their queues, in order', () => {
+        const { terminal, keyboard, at } = makeJournaled()
+        terminal.insertText('ab')
+        at(1)
+        expect(terminal.takeKeystroke()).toBe(0x61)
+        keyboard.typeText('s')
+        at(2)
+        expect(terminal.takeKeystroke(keyboard)).toBe(0x73)
+        expect(terminal.takeKeystroke(keyboard)).toBe(0x62)
+        let changes = 0
+        terminal.onInputChange(() => changes++)
+        terminal.undoAfter(0)
+        //so a register that mirrors the next keystroke shows it again
+        expect(changes).toBe(1)
+        expect(terminal.takeKeystroke(keyboard)).toBe(0x73)
+        expect(terminal.takeKeystroke(keyboard)).toBe(0x61)
+        expect(terminal.takeKeystroke(keyboard)).toBe(0x62)
+    })
+
+    it('journals nothing between instructions or for a Build that keeps no history', () => {
+        const { terminal, at } = makeJournaled()
+        at(null)
+        terminal.write('between')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('between')
+        terminal.trackHistory(() => 1, 0)
+        terminal.write(' unrecorded')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('between unrecorded')
+    })
+
+    it('keeps records for as many instructions as the history holds, the newest', () => {
+        const { terminal, at } = makeJournaled({}, 2)
+        for (const [position, text] of [
+            [1, 'a'],
+            [2, 'b'],
+            [3, 'c']
+        ] as const) {
+            at(position)
+            terminal.write(text)
+        }
+        //a history of two cannot undo the first instruction, so its record is gone
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('a')
+    })
+
+    it('stops journaling when the Terminal clears, for Build and Stop', () => {
+        const { terminal, at } = makeJournaled()
+        at(1)
+        terminal.write('old')
+        terminal.clear()
+        at(2)
+        terminal.write('new')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('new')
+    })
+})
+
 describe('dialogs', () => {
     it('answers a confirm Yes, No or Cancel, through the modal prompt', async () => {
         const { terminal, execution } = makeConsole()

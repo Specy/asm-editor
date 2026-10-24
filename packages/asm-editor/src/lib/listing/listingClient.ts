@@ -1,5 +1,10 @@
 import ListingWorker from './listing.worker?worker'
-import { ListingError, type Listing, type ListingNameVersion } from './listing'
+import {
+    ListingError,
+    type Listing,
+    type ListingAnnotations,
+    type ListingNameVersion
+} from './listing'
 import type { ListingRequest, ListingResponse } from './protocol'
 
 /**
@@ -18,6 +23,12 @@ export type ListingOrder = {
     /** See `ListingInput.base`. */
     base: number | bigint
     version?: ListingNameVersion
+    /**
+     * An Executable File's renames and comments, by link-time address
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decisions 6 to 12); a library's Listing takes none.
+     */
+    annotations?: ListingAnnotations
     /** From 0 to 1, only for a Listing that takes long enough to show progress for. */
     onProgress?: (fraction: number) => void
 }
@@ -74,7 +85,8 @@ export class ListingClient {
             bytes,
             name: order.name,
             base: Number(order.base),
-            version
+            version,
+            ...(order.annotations ? { annotations: order.annotations } : {})
         }
         return new Promise<Listing>((resolve, reject) => {
             this.pending.set(request.id, { resolve, reject, onProgress: order.onProgress })
@@ -138,11 +150,15 @@ export class ListingClient {
     }
 
     private async generateHere(order: ListingOrder, version: ListingNameVersion) {
-        const [{ loadDecoder }, { generateListing }] = await Promise.all([
+        const [{ loadDecoder }, { generateListing }, { demanglerFor }] = await Promise.all([
             import('./decoder'),
-            import('./generateListing')
+            import('./generateListing'),
+            import('./listingService')
         ])
-        return generateListing(await loadDecoder(), { ...order, version })
+        const decoder = await loadDecoder()
+        const analysis = decoder.analyze(order.bytes)
+        const demangler = await demanglerFor(analysis)
+        return generateListing(decoder, { ...order, version, analysis, demangler })
     }
 
     private post(request: ListingRequest, transfer: Transferable[]) {

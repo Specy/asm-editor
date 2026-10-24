@@ -111,6 +111,8 @@ describe('real Compiler Explorer output', () => {
                 vi.fn(async () => new Response(JSON.stringify(fixture.response)))
             )
             expect(result.map.lines.length).toBe(result.assembly.split('\n').length)
+            //C++ leaves `main` unmangled, so a .cpp program defines it as a .c one does
+            expect(result.definesMain).toBe(true)
             const assembly = result.assembly.split('\n')
             if (fixture.target === 'X86') {
                 //NASM translated from GCC's output, whose header and labels come from no source line
@@ -220,17 +222,17 @@ describe('Compiler Explorer failures', () => {
             ]
         })
     })
-    it('rejects missing main rather than injecting a call to an absent function', async () => {
-        await expect(
-            compileSource(
-                request(),
-                undefined,
-                async () =>
-                    new Response(
-                        JSON.stringify({ code: 0, asm: [{ text: 'helper:' }, { text: 'ret' }] })
-                    )
-            )
-        ).rejects.toThrow('must define int main')
+    it('compiles a source without main, rather than injecting a call to an absent function', async () => {
+        const result = await compileSource(
+            request(),
+            undefined,
+            async () =>
+                new Response(
+                    JSON.stringify({ code: 0, asm: [{ text: 'helper:' }, { text: 'ret' }] })
+                )
+        )
+        expect(result.assembly).toBe('helper:\nret\n')
+        expect(result.definesMain).toBe(false)
     })
     it('handles service errors, malformed responses and truncated output', async () => {
         await expect(
@@ -247,7 +249,7 @@ describe('Compiler Explorer failures', () => {
             )
         ).rejects.toThrow('truncated')
     })
-    it('limits submitted text and enforces the main signature without shifting source line numbers', () => {
+    it('limits submitted text without shifting source line numbers', () => {
         const current = request()
         const body = createCompilerRequest(current).body
         expect(body.files).toContainEqual({
@@ -405,6 +407,49 @@ describe('hosted compilation', () => {
         }
     )
 
+    it('sends what the quoted includes reach, a .c File included, and nothing else', () => {
+        const text = (content: string) => ({ encoding: 'plain' as const, content })
+        const request = createCompilerRequest({
+            ...hosted(),
+            sourcePath: 'c/pacman.c',
+            files: {
+                'c/pacman.c': text('#include "video.c"\n#if __has_include("debug.h")\n#endif\n'),
+                'c/video.c': text('#include "../shared/draw.inc"\nint video;\n'),
+                'shared/draw.inc': text('int draw;\n'),
+                'c/debug.h': text(''),
+                //another Program's source, a header nothing includes and a picture stay home
+                'c/other.c': text('int main(void) { return 0; }\n'),
+                'unused.h': text('#error not sent\n'),
+                'sprites.bmp': { encoding: 'base64', content: 'Qk0=' }
+            }
+        })
+        expect(request.body.files.map((file) => file.filename).sort()).toEqual([
+            'project/c/debug.h',
+            'project/c/pacman.c',
+            'project/c/video.c',
+            'project/shared/draw.inc'
+        ])
+    })
+
+    it.skipIf(!HOST_GCC)('includes a .c File as text, as GCC does', () => {
+        const text = (content: string) => ({ encoding: 'plain' as const, content })
+        const files = {
+            'c/pacman.c': text('#include "parts/video.c"\nint drawn = draw(2);\n'),
+            'c/parts/video.c': text('static int draw(int x) { return x * SCALE; }\n'),
+            'c/parts/scale.h': text('#define SCALE 3\n'),
+            'c/defines.h': text('#define SCALE 7\n')
+        }
+        //video.c does not include scale.h: SCALE is undefined there, and stays so in the output
+        const request = createCompilerRequest({ ...hosted(), sourcePath: 'c/pacman.c', files })
+        const output = preprocess(request)
+        expect(output).toContain('static int draw(int x) { return x * SCALE; }')
+        expect(output).toContain('int drawn = draw(2);')
+        expect(Object.keys(compilationInputs('c/pacman.c', files)).sort()).toEqual([
+            'c/pacman.c',
+            'c/parts/video.c'
+        ])
+    })
+
     it.skipIf(!HOST_GCC)(
         'keeps a Project source named example.c separate from the service input',
         () => {
@@ -465,14 +510,73 @@ describe('hosted compilation', () => {
         expect(result.record).toEqual(
             expect.objectContaining({ runtimeAbi: 'v1', assemblerProfile: 'gnu-compiler-v1' })
         )
-        await expect(
-            compileSource(
-                hosted(),
-                undefined,
-                async () => new Response(JSON.stringify({ code: 0, asm: [{ text: 'helper:' }] }))
-            )
-        ).rejects.toThrow('int main(void) or int main(int argc')
+        expect(result.definesMain).toBe(true)
     })
+
+    // A companion File defines what another File includes, and no `main` of its own (programs.md,
+    // decision 9): it compiles all the same, and says it defines none.
+    it.each(['MIPS', 'RISC-V', 'RISC-V-64'] as const)(
+        'compiles a %s companion File that defines no main',
+        async (target) => {
+            const companion = (...lines: string[]) =>
+                compileSource(
+                    {
+                        sourcePath: 'add.c',
+                        outputPath: generatedAssemblyPath('add.c', target),
+                        files: {
+                            'add.c': {
+                                encoding: 'plain',
+                                content: 'int add(int a, int b) {\n    return a + b;\n}\n'
+                            }
+                        },
+                        target,
+                        optimization: '2',
+                        compiler: 'gcc'
+                    },
+                    undefined,
+                    async () =>
+                        new Response(
+                            JSON.stringify({
+                                code: 0,
+                                asm: [
+                                    '\t.text',
+                                    '\t.align\t2',
+                                    ...lines,
+                                    '\t.ident\t"GCC: (crosstool-NG UNKNOWN) 14.2.0"'
+                                ].map((text) => ({ text }))
+                            })
+                        )
+                )
+            const [add, ret] =
+                target === 'MIPS' ? ['\taddu\t$2,$4,$5', '\tjr\t$31'] : ['\tadd\ta0,a0,a1', '\tret']
+            const result = await companion(
+                '\t.globl\tadd',
+                '\t.type\tadd, @function',
+                'add:',
+                add,
+                ret,
+                '\t.size\tadd, .-add'
+            )
+            expect(result.definesMain).toBe(false)
+            expect(result.assembly).toContain(`add:\n${add}\n`)
+            expect(result.record).toEqual(
+                expect.objectContaining({ sourcePath: 'add.c', target, runtimeAbi: 'v1' })
+            )
+            //a `main` label is the program's only together with its `.globl`
+            expect((await companion('main:', ret)).definesMain).toBe(false)
+            expect((await companion('\t.globl\tmain', 'helper:', ret)).definesMain).toBe(false)
+            //Clang follows each with a comment
+            expect(
+                (
+                    await companion(
+                        '\t.globl\tmain                            # -- Begin function main',
+                        'main:                                   # @main',
+                        ret
+                    )
+                ).definesMain
+            ).toBe(true)
+        }
+    )
 
     it('drops MIPS debug sections, their .previous and their labels, and keeps the rest', async () => {
         const response = {
@@ -506,6 +610,420 @@ describe('hosted compilation', () => {
         expect(result.record).toEqual(
             expect.objectContaining({ runtimeAbi: 'v1', assemblerProfile: 'gnu-compiler-v1' })
         )
+    })
+
+    it('asks Clang at -O0 alone to mark the instructions it gives no source line', () => {
+        const flag = '-mllvm -use-unknown-locations=Enable'
+        expect(createCompilerRequest(hosted()).body.options.userArguments).toContain(flag)
+        expect(
+            createCompilerRequest({ ...hosted(), optimization: '2' }).body.options.userArguments
+        ).not.toContain(flag)
+        expect(
+            createCompilerRequest({ ...hosted(), compiler: 'gcc' }).body.options.userArguments
+        ).not.toContain(flag)
+    })
+
+    // Clang 21.1's output at -O0 for this program, trimmed to main and of its CFI and MIPS frame
+    // directives. The constant a statement starts with has no source line: line 0, or the function's
+    // opening line before prologue_end.
+    const unlocatedSource =
+        'int add(int x, int y) {\n    return x + y;\n}\nint main(void) {\n    int a = 6;\n    int b = 7;\n    if (a < b)\n        a = add(a, 100000);\n    return a;\n}\n'
+    const unlocatedOutput: Record<'RISC-V-64' | 'MIPS', ([string] | [string, number])[]> = {
+        'RISC-V-64': [
+            ['main:'],
+            ['.Lfunc_begin1:'],
+            ['\t.loc\t1 4 0 is_stmt 1'],
+            ['\taddi\tsp, sp, -32', 4],
+            ['\tsd\tra, 24(sp)', 4],
+            ['\tsd\ts0, 16(sp)', 4],
+            ['\taddi\ts0, sp, 32', 4],
+            ['\tli\ta0, 0', 4],
+            ['\tsw\ta0, -20(s0)', 4],
+            ['\tli\ta0, 6', 4],
+            ['.Ltmp2:'],
+            ['\t.loc\t1 5 9 prologue_end'],
+            ['\tsw\ta0, -24(s0)', 5],
+            ['\t.loc\t1 0 9 is_stmt 0'],
+            ['\tli\ta0, 7', 0],
+            ['\t.loc\t1 6 9 is_stmt 1'],
+            ['\tsw\ta0, -28(s0)', 6],
+            ['\t.loc\t1 7 9'],
+            ['\tlw\ta0, -24(s0)', 7],
+            ['\t.loc\t1 7 13 is_stmt 0'],
+            ['\tlw\ta1, -28(s0)', 7],
+            ['\t.loc\t1 7 11'],
+            ['\tbge\ta0, a1, .LBB1_2', 7],
+            ['\tj\t.LBB1_1', 7],
+            ['.LBB1_1:'],
+            ['\t.loc\t1 8 17 is_stmt 1'],
+            ['\tlw\ta0, -24(s0)', 8],
+            ['\t.loc\t1 0 17 is_stmt 0'],
+            ['\tlui\ta1, 24', 0],
+            ['\taddi\ta1, a1, 1696', 0],
+            ['\t.loc\t1 8 13'],
+            ['\tcall\tadd', 8],
+            ['\t.loc\t1 8 11'],
+            ['\tsw\ta0, -24(s0)', 8],
+            ['\t.loc\t1 8 9'],
+            ['\tj\t.LBB1_2', 8],
+            ['.LBB1_2:'],
+            ['\t.loc\t1 9 12 is_stmt 1'],
+            ['\tlw\ta0, -24(s0)', 9],
+            ['\t.loc\t1 9 5 epilogue_begin is_stmt 0'],
+            ['\tld\tra, 24(sp)', 9],
+            ['\tld\ts0, 16(sp)', 9],
+            ['\taddi\tsp, sp, 32', 9],
+            ['\tret', 9],
+            ['.Ltmp3:'],
+            ['.Lfunc_end1:']
+        ],
+        MIPS: [
+            ['main:'],
+            ['$tmp3:'],
+            ['$func_begin1 = $tmp3'],
+            ['\t.loc\t1 4 0 is_stmt 1'],
+            ['\taddiu\t$sp, $sp, -40', 4],
+            ['\tsw\t$ra, 36($sp)', 4],
+            ['\tsw\t$fp, 32($sp)', 4],
+            ['\tmove\t$fp, $sp', 4],
+            ['\tsw\t$zero, 28($fp)', 4],
+            ['\taddiu\t$1, $zero, 6', 4],
+            ['$tmp4:'],
+            ['\t.loc\t1 5 9 prologue_end'],
+            ['\tsw\t$1, 24($fp)', 5],
+            ['\t.loc\t1 0 9 is_stmt 0'],
+            ['\taddiu\t$1, $zero, 7', 0],
+            ['\t.loc\t1 6 9 is_stmt 1'],
+            ['\tsw\t$1, 20($fp)', 6],
+            ['\t.loc\t1 7 9'],
+            ['\tlw\t$1, 24($fp)', 7],
+            ['\t.loc\t1 7 13 is_stmt 0'],
+            ['\tlw\t$2, 20($fp)', 7],
+            ['\t.loc\t1 7 11'],
+            ['\tslt\t$1, $1, $2', 7],
+            ['\tbeqz\t$1, $BB1_3', 7],
+            ['\tnop', 7],
+            ['\tj\t$BB1_2', 7],
+            ['\tnop', 7],
+            ['$BB1_2:'],
+            ['\t.loc\t1 8 17 is_stmt 1'],
+            ['\tlw\t$4, 24($fp)', 8],
+            ['\t.loc\t1 0 17 is_stmt 0'],
+            ['\tlui\t$1, 1', 0],
+            ['\tori\t$5, $1, 34464', 0],
+            ['\t.loc\t1 8 13'],
+            ['\tjal\tadd', 8],
+            ['\tnop', 8],
+            ['\t.loc\t1 8 11'],
+            ['\tsw\t$2, 24($fp)', 8],
+            ['\t.loc\t1 8 9'],
+            ['\tj\t$BB1_3', 8],
+            ['\tnop', 8],
+            ['$BB1_3:'],
+            ['\t.loc\t1 9 12 is_stmt 1'],
+            ['\tlw\t$2, 24($fp)', 9],
+            ['\t.loc\t1 9 5 is_stmt 0'],
+            ['\tmove\t$sp, $fp', 9],
+            ['\tlw\t$fp, 32($sp)', 9],
+            ['\tlw\t$ra, 36($sp)', 9],
+            ['\t.loc\t1 0 5'],
+            ['\taddiu\t$sp, $sp, 40', 0],
+            ['\t.loc\t1 9 5'],
+            ['\tjr\t$ra', 9],
+            ['\tnop', 9],
+            ['$tmp5:'],
+            ['$func_end1:']
+        ]
+    }
+    const unlocated = (
+        target: 'RISC-V-64' | 'MIPS',
+        optimization: Optimization,
+        source = unlocatedSource,
+        output = unlocatedOutput[target]
+    ) =>
+        compileSource(
+            {
+                sourcePath: 'src/main.c',
+                outputPath: generatedAssemblyPath('src/main.c', target),
+                files: { 'src/main.c': { encoding: 'plain', content: source } },
+                target,
+                optimization,
+                compiler: 'clang'
+            },
+            undefined,
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        code: 0,
+                        asm: output.map(([text, line]) => ({
+                            text,
+                            source:
+                                line === undefined ? null : { file: null, line, mainsource: true }
+                        }))
+                    })
+                )
+        ).then((result) =>
+            //each instruction after the one-based source line it maps to, 0 for none
+            result.assembly
+                .split('\n')
+                .flatMap((text, index) =>
+                    /^\t[a-z]/.test(text)
+                        ? [`${(result.map.lines[index]?.line ?? -1) + 1} ${text.trim()}`]
+                        : []
+                )
+                .map((line) => line.replace(/\s+/g, ' '))
+        )
+
+    it("maps Clang's -O0 constants to the statement they begin", async () => {
+        expect(await unlocated('RISC-V-64', '0')).toEqual([
+            '4 addi sp, sp, -32',
+            '4 sd ra, 24(sp)',
+            '4 sd s0, 16(sp)',
+            '4 addi s0, sp, 32',
+            //the return value's slot, before the first statement
+            '4 li a0, 0',
+            '4 sw a0, -20(s0)',
+            '5 li a0, 6',
+            '5 sw a0, -24(s0)',
+            '6 li a0, 7',
+            '6 sw a0, -28(s0)',
+            '7 lw a0, -24(s0)',
+            '7 lw a1, -28(s0)',
+            '7 bge a0, a1, .LBB1_2',
+            '7 j .LBB1_1',
+            '8 lw a0, -24(s0)',
+            '8 lui a1, 24',
+            '8 addi a1, a1, 1696',
+            '8 call add',
+            '8 sw a0, -24(s0)',
+            '8 j .LBB1_2',
+            '9 lw a0, -24(s0)',
+            '9 ld ra, 24(sp)',
+            '9 ld s0, 16(sp)',
+            '9 addi sp, sp, 32',
+            '9 ret'
+        ])
+        expect(await unlocated('MIPS', '0')).toEqual([
+            '4 addiu $sp, $sp, -40',
+            '4 sw $ra, 36($sp)',
+            '4 sw $fp, 32($sp)',
+            '4 move $fp, $sp',
+            '4 sw $zero, 28($fp)',
+            '5 addiu $1, $zero, 6',
+            '5 sw $1, 24($fp)',
+            '6 addiu $1, $zero, 7',
+            '6 sw $1, 20($fp)',
+            '7 lw $1, 24($fp)',
+            '7 lw $2, 20($fp)',
+            '7 slt $1, $1, $2',
+            '7 beqz $1, $BB1_3',
+            '7 nop',
+            '7 j $BB1_2',
+            '7 nop',
+            '8 lw $4, 24($fp)',
+            '8 lui $1, 1',
+            '8 ori $5, $1, 34464',
+            '8 jal add',
+            '8 nop',
+            '8 sw $2, 24($fp)',
+            '8 j $BB1_3',
+            '8 nop',
+            '9 lw $2, 24($fp)',
+            '9 move $sp, $fp',
+            '9 lw $fp, 32($sp)',
+            '9 lw $ra, 36($sp)',
+            '9 addiu $sp, $sp, 40',
+            '9 jr $ra',
+            '9 nop'
+        ])
+    })
+
+    // An && for its value spills each branch's result where the blocks meet: the spill and the
+    // jump end their block with no line, and the reload starts the next one.
+    it('keeps the line before for what ends a block without one', async () => {
+        const source =
+            'int main(void) {\n    int a = 6;\n    int c = a > 1 && a < 9;\n    return c;\n}\n'
+        const output: ([string] | [string, number])[] = [
+            ['main:'],
+            ['.Lfunc_begin0:'],
+            ['\t.loc\t1 1 0'],
+            ['\taddi\tsp, sp, -48', 1],
+            ['\tsd\tra, 40(sp)', 1],
+            ['\tsd\ts0, 32(sp)', 1],
+            ['\taddi\ts0, sp, 48', 1],
+            ['\tli\ta2, 0', 1],
+            ['\tsw\ta2, -20(s0)', 1],
+            ['\tli\ta0, 6', 1],
+            ['.Ltmp0:'],
+            ['\t.loc\t1 2 9 prologue_end'],
+            ['\tsw\ta0, -24(s0)', 2],
+            ['\t.loc\t1 3 13'],
+            ['\tlw\ta0, -24(s0)', 3],
+            ['\t.loc\t1 0 13 is_stmt 0'],
+            ['\tli\ta1, 2', 0],
+            ['\tsd\ta2, -40(s0)', 0],
+            ['\t.loc\t1 3 19'],
+            ['\tblt\ta0, a1, .LBB0_2', 3],
+            ['\tj\t.LBB0_1', 3],
+            ['.LBB0_1:'],
+            ['\t.loc\t1 3 22'],
+            ['\tlw\ta0, -24(s0)', 3],
+            ['\t.loc\t1 3 24'],
+            ['\tslti\ta0, a0, 9', 3],
+            ['\t.loc\t1 0 24'],
+            ['\tsd\ta0, -40(s0)', 0],
+            ['\tj\t.LBB0_2', 0],
+            ['.LBB0_2:'],
+            ['\tld\ta0, -40(s0)', 0],
+            ['\t.loc\t1 3 19'],
+            ['\tandi\ta0, a0, 1', 3],
+            ['\t.loc\t1 3 9'],
+            ['\tsw\ta0, -28(s0)', 3],
+            ['\t.loc\t1 4 12 is_stmt 1'],
+            ['\tlw\ta0, -28(s0)', 4],
+            ['\t.loc\t1 4 5 epilogue_begin is_stmt 0'],
+            ['\tld\tra, 40(sp)', 4],
+            ['\tld\ts0, 32(sp)', 4],
+            ['\taddi\tsp, sp, 48', 4],
+            ['\tret', 4],
+            ['.Ltmp1:'],
+            ['.Lfunc_end0:']
+        ]
+        expect((await unlocated('RISC-V-64', '0', source, output)).slice(6)).toEqual([
+            '2 li a0, 6',
+            '2 sw a0, -24(s0)',
+            '3 lw a0, -24(s0)',
+            '3 li a1, 2',
+            '3 sd a2, -40(s0)',
+            '3 blt a0, a1, .LBB0_2',
+            '3 j .LBB0_1',
+            '3 lw a0, -24(s0)',
+            '3 slti a0, a0, 9',
+            '3 sd a0, -40(s0)',
+            '3 j .LBB0_2',
+            '3 ld a0, -40(s0)',
+            '3 andi a0, a0, 1',
+            '3 sw a0, -28(s0)',
+            '4 lw a0, -28(s0)',
+            '4 ld ra, 40(sp)',
+            '4 ld s0, 32(sp)',
+            '4 addi sp, sp, 48',
+            '4 ret'
+        ])
+    })
+
+    // Compiler Explorer ends a location at any line naming `.data` or `.text`, so it gave these lines
+    // none: Clang's `next.data` for a static local and `__const.main.text` for a local array's
+    // initializer. Its output, trimmed to the functions and `.file` lines concerned.
+    it('maps the instructions that name a static local or an initializer called data or text', async () => {
+        const source =
+            'static int next(void) {\n    static int data = 40;\n    return ++data;\n}\nint main(void) {\n    char text[] = "red;green,blue;;yellow";\n    int sum = next();\n    for (int i = 0; text[i]; i++)\n        sum += text[i] == \';\';\n    return sum;\n}\n'
+        const files: ([string] | [string, number])[] = [
+            ['\t.file\t0 "/app" "/app/example.c" md5 0x277c0bd14813e203b61932a275037f00'],
+            ['\t.file\t1 "example.c" md5 0x277c0bd14813e203b61932a275037f00']
+        ]
+        const riscv: ([string] | [string, number])[] = [
+            ...files,
+            ['next:'],
+            ['.Lfunc_begin1:'],
+            ['\t.loc\t1 1 0 is_stmt 1'],
+            ['\taddi\tsp, sp, -16', 1],
+            ['\tsd\tra, 8(sp)', 1],
+            ['\tsd\ts0, 0(sp)', 1],
+            ['\taddi\ts0, sp, 16', 1],
+            ['.Ltmp2:'],
+            ['\t.loc\t1 3 12 prologue_end'],
+            ['\tlui\ta1, %hi(next.data)'],
+            ['\tlw\ta0, %lo(next.data)(a1)'],
+            ['\taddiw\ta0, a0, 1'],
+            ['\tsw\ta0, %lo(next.data)(a1)'],
+            ['\t.loc\t1 3 5 epilogue_begin is_stmt 0'],
+            ['\tld\tra, 8(sp)', 3],
+            ['\tld\ts0, 0(sp)', 3],
+            ['\taddi\tsp, sp, 16', 3],
+            ['\tret', 3],
+            ['.Ltmp3:'],
+            ['.Lfunc_end1:'],
+            ['\t.data'],
+            ['next.data:'],
+            ['\t.word\t40']
+        ]
+        expect(await unlocated('RISC-V-64', '0', source, riscv)).toEqual([
+            '1 addi sp, sp, -16',
+            '1 sd ra, 8(sp)',
+            '1 sd s0, 0(sp)',
+            '1 addi s0, sp, 16',
+            '3 lui a1, %hi(next.data)',
+            '3 lw a0, %lo(next.data)(a1)',
+            '3 addiw a0, a0, 1',
+            '3 sw a0, %lo(next.data)(a1)',
+            '3 ld ra, 8(sp)',
+            '3 ld s0, 0(sp)',
+            '3 addi sp, sp, 16',
+            '3 ret'
+        ])
+        const mips: ([string] | [string, number])[] = [
+            ['main:'],
+            ['$tmp0:'],
+            ['$func_begin0 = $tmp0'],
+            ...files,
+            ['\t.loc\t1 5 0'],
+            ['\taddiu\t$sp, $sp, -64', 5],
+            ['\tsw\t$ra, 60($sp)', 5],
+            ['\tsw\t$fp, 56($sp)', 5],
+            ['\tmove\t$fp, $sp', 5],
+            ['\tsw\t$zero, 52($fp)', 5],
+            ['$tmp1:'],
+            ['\t.loc\t1 6 10 prologue_end'],
+            ['\tlui\t$3, %hi($__const.main.text)'],
+            ['\taddiu\t$4, $3, %lo($__const.main.text)'],
+            ['\t.loc\t1 0 10 is_stmt 0'],
+            ['\tsw\t$4, 16($fp)', 0],
+            ['\t.loc\t1 6 10'],
+            ['\tlwl\t$1, 22($4)', 6],
+            ['\tlwr\t$1, 19($4)', 6],
+            ['\tswl\t$1, 50($fp)', 6],
+            ['\tlwl\t$2, 3($4)', 6],
+            ['\tlwr\t$2, %lo($__const.main.text)($3)'],
+            ['\tsw\t$2, 28($fp)'],
+            ['\tswr\t$1, 47($fp)'],
+            ['\t.loc\t1 7 15 is_stmt 1'],
+            ['\tjal\tnext', 7],
+            ['\tnop', 7],
+            ['\t.loc\t1 7 9 is_stmt 0'],
+            ['\tsw\t$2, 24($fp)', 7]
+        ]
+        expect(await unlocated('MIPS', '0', source, mips)).toEqual([
+            '5 addiu $sp, $sp, -64',
+            '5 sw $ra, 60($sp)',
+            '5 sw $fp, 56($sp)',
+            '5 move $fp, $sp',
+            '5 sw $zero, 52($fp)',
+            '6 lui $3, %hi($__const.main.text)',
+            '6 addiu $4, $3, %lo($__const.main.text)',
+            '6 sw $4, 16($fp)',
+            '6 lwl $1, 22($4)',
+            '6 lwr $1, 19($4)',
+            '6 swl $1, 50($fp)',
+            '6 lwl $2, 3($4)',
+            '6 lwr $2, %lo($__const.main.text)($3)',
+            '6 sw $2, 28($fp)',
+            '6 swr $1, 47($fp)',
+            '7 jal next',
+            '7 nop',
+            '7 sw $2, 24($fp)'
+        ])
+        //whatever the optimization level, which only Clang's -O0 rules depend on
+        expect(await unlocated('RISC-V-64', '2', source, riscv)).toContain(
+            '3 lui a1, %hi(next.data)'
+        )
+    })
+
+    it('leaves the lines of optimized Clang output as the compiler gave them', async () => {
+        const lines = await unlocated('RISC-V-64', '2')
+        expect(lines).toContain('4 li a0, 6')
+        expect(lines).toContain('0 li a0, 7')
+        expect(lines).toContain('0 lui a1, 24')
     })
 })
 
@@ -555,10 +1073,10 @@ describe('x86 compilation', () => {
         )
         //the translation reads GCC's raw output, its .file and .loc directives included
         expect(Object.values(c.body.options.filters).every((filter) => filter === false)).toBe(true)
+        //src/values.h is a Project header the source does not include, so it is not sent
         expect(c.body.files.map((file) => file.filename).sort()).toEqual(
             [
                 'project/src/main.c',
-                'project/src/values.h',
                 ...Object.keys(headers).map((name) => `sysroot/include/${name}`)
             ].sort()
         )
@@ -584,7 +1102,6 @@ describe('x86 compilation', () => {
         expect(c.body.files.map((file) => file.filename).sort()).toEqual(
             [
                 'project/src/main.c',
-                'project/src/values.h',
                 'sysroot/include/sim.h',
                 ...Object.keys(headers).map((name) => `sysroot/include/${name}`)
             ].sort()
@@ -663,7 +1180,7 @@ describe('x86 compilation', () => {
         expect(result.diagnostics).toEqual([])
     })
 
-    it('requires main among the global definitions rather than any label of that name', async () => {
+    it('finds main among the global definitions rather than any label of that name', async () => {
         const result = await compileSource(
             x86(),
             undefined,
@@ -672,12 +1189,39 @@ describe('x86 compilation', () => {
         expect(result.assembly).toBe(
             '    default rel\n    section .text\n    global main\nmain:\n    xor eax, eax\n    ret\n'
         )
-        for (const unit of [output('helper:', '\tret'), output('main:', '\tret')]) {
-            const error = await failure(x86(), unit)
-            expect(error.message).toBe(
-                'The program must define int main(void) or int main(int argc, char **argv).'
+        expect(result.definesMain).toBe(true)
+        for (const unit of [
+            output('helper:', '\tret'),
+            output('main:', '\tret'),
+            output('\t.weak\tmain', 'main:', '\tret')
+        ])
+            expect((await compileSource(x86(), undefined, respond(unit))).definesMain).toBe(false)
+    })
+
+    // A companion File defines functions a hand-written `main.asm` links as needed (ADR 0033), and
+    // no `main` of its own (programs.md, decision 9): it compiles all the same, and says so.
+    it('compiles a companion File that defines no main', async () => {
+        const result = await compileSource(
+            x86('int sum(int a, int b) {\n    return a + b;\n}\n', 'sum.c'),
+            undefined,
+            respond(
+                output(
+                    '\t.p2align 4',
+                    '\t.globl\tsum',
+                    '\t.type\tsum, @function',
+                    'sum:',
+                    '\tlea\teax, [rdi+rsi]',
+                    '\tret',
+                    '\t.size\tsum, .-sum'
+                )
             )
-        }
+        )
+        expect(result.definesMain).toBe(false)
+        expect(result.assembly).toContain('    global sum\nsum:\n')
+        expect(result.record).toEqual(
+            expect.objectContaining({ sourcePath: 'sum.c', outputPath: 'sum.c.asm' })
+        )
+        expect(result.diagnostics).toEqual([])
     })
 
     it('rejects inline assembly it cannot translate on the line of its asm statement, in its own words', async () => {

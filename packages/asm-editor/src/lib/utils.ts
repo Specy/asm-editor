@@ -1,6 +1,6 @@
 import { SHARE_ID } from '#stores/projectsStore.svelte.ts'
 import lzstring from 'lz-string'
-import type { Project } from '#lib/Project.svelte.ts'
+import { legacyProjectShape, withoutBuildOutputs, type Project } from '#lib/Project.svelte.ts'
 import { serializer } from '#lib/json.ts'
 
 export function clamp(value: number, min: number, max: number): number {
@@ -52,6 +52,14 @@ export function blobDownloader(blob: Blob, fileName: string) {
     a.remove()
     URL.revokeObjectURL(a.href)
 }
+/**
+ * Saves bytes under exactly `fileName`. The Blob is typed as bytes: Chrome names an untyped
+ * download without an extension as text, `crackme.txt` for `crackme`.
+ */
+export function bytesDownloader(bytes: Uint8Array, fileName: string) {
+    const contents = new Uint8Array(bytes).buffer
+    blobDownloader(new Blob([contents], { type: 'application/octet-stream' }), fileName)
+}
 export function textDownloader(text: string, fileName: string) {
     blobDownloader(new Blob([text], { type: 'text/json' }), fileName)
 }
@@ -94,8 +102,16 @@ export class ShareTooLargeError extends Error {
     }
 }
 
+/**
+ * A Project with one Program is shared in the shape before Programs, which an older app the service
+ * worker still serves can open, as archives are; only several Programs or none need the new one
+ * ([programs-plan.md](../../../../docs/design/programs-plan.md), decision 4). The Build outputs
+ * nobody changed are left out, which the person who opens it builds again
+ * ([ADR 0056](../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+ */
 export function createSharePayload(project: Project): string {
-    const p = project.toObject()
+    const snapshot = withoutBuildOutputs(project.toObject())
+    const p = legacyProjectShape(snapshot) ?? snapshot
     p.id = SHARE_ID
     const payload = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
     if (payload.length > SHARE_PAYLOAD_LIMIT) throw new ShareTooLargeError()

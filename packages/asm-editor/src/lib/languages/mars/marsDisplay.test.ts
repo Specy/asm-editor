@@ -38,19 +38,26 @@ describe('the MARS display parameters', () => {
         expect(formatMarsBaseAddress(0xffff0000)).toBe('0xffff0000 (memory map)')
     })
 
-    it('snaps anything off the lists back onto them', () => {
-        const snapped = normalizeMarsDisplay({
-            unitWidth: 3,
+    it('keeps a size off the lists, which MARS lacks and the display takes', () => {
+        const arcade = { ...DEFAULT_PROJECT_DISPLAY, width: 224, height: 288, unitWidth: 3 }
+        expect(normalizeMarsDisplay(arcade)).toEqual(arcade)
+        expect(marsDisplayGeometry(arcade).columns).toBe(74)
+        expect(marsDisplayGeometry(arcade).rows).toBe(288)
+    })
+
+    it('brings anything outside the ranges back into them', () => {
+        const clamped = normalizeMarsDisplay({
+            unitWidth: 0,
             unitHeight: 40,
-            width: 100,
-            height: 900,
+            width: 2000,
+            height: 99.6,
             baseAddress: 0x12345678
         })
-        expect(snapped).toEqual({
-            unitWidth: 2,
+        expect(clamped).toEqual({
+            unitWidth: 1,
             unitHeight: 32,
-            width: 128,
-            height: 1024,
+            width: 1024,
+            height: 100,
             //not one of the five, and kept: a `@screen base=<label>` resolves to wherever the
             //assembler put the label, which is never one of the tool's five menu entries
             baseAddress: 0x12345678

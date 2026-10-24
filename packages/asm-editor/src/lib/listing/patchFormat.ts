@@ -15,7 +15,7 @@ import {
     NO_HOLDERS,
     stringComment as sharedStringComment
 } from './addressNames'
-import { instructionLineText } from './listingText'
+import { instructionLineText, nameComment, withPersonComment } from './listingText'
 import { withoutComment } from './patchResolver'
 
 /**
@@ -27,7 +27,8 @@ import { withoutComment } from './patchResolver'
 
 /**
  * Names for run-time addresses that the Listing has no label at exactly, taken from what a line
- * was written with (`[rel DAT_calm_lynx+0x8]`), so a patched line keeps them.
+ * was written with (`[rel DAT_calm_lynx+0x8]`), so a patched line keeps them while they hold
+ * ({@link hintHolds}).
  */
 export type NameHints = ReadonlyMap<bigint, string>
 
@@ -97,7 +98,13 @@ function listingNaming(listing: Listing, hints: NameHints): AddressNaming<number
                 ? block.name
                 : block.fullName
         },
-        hint: (address) => hints.get(BigInt(address) + base),
+        hint: (address, line) => {
+            const target = BigInt(address) + base
+            const written = hints.get(target)
+            return written !== undefined && hintHolds(listing, written, target, line)
+                ? written
+                : undefined
+        },
         holder: (address) => holderAt(listing.holders ?? NO_HOLDERS, address),
         owner: (address) => functionAt(listing, address)?.address
     }
@@ -117,8 +124,42 @@ export function addressName(
     hints: NameHints = new Map()
 ): string | undefined {
     const address = Number(target - BigInt(listing.base))
-    if (!Number.isSafeInteger(address) || address < 0) return hints.get(target)
+    if (!Number.isSafeInteger(address) || address < 0) {
+        const written = hints.get(target)
+        return written !== undefined && hintHolds(listing, written, target, line)
+            ? written
+            : undefined
+    }
     return nameAddress(listingNaming(listing, hints), address, line)
+}
+
+/**
+ * Whether a name a line was written with (`main+0x8e`, `.LAB_2`, `s_hunter2-0x1`) still names the
+ * run-time `target` in this Listing, read from `line` as `resolveListingNames` reads it: its label
+ * is still called so and is where it was. A rename or a Reset name of the label takes the name
+ * away ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+ * decision 8), and the address is then named as the Listing names it.
+ */
+function hintHolds(listing: Listing, written: string, target: bigint, line: number): boolean {
+    const sign = written.search(/[+-]/)
+    const name = sign < 0 ? written : written.slice(0, sign)
+    let offset = 0n
+    if (sign >= 0) {
+        try {
+            offset = BigInt(written.slice(sign + 1))
+        } catch {
+            return false
+        }
+        if (written[sign] === '-') offset = -offset
+    }
+    const index = ListingIndex.of(listing)
+    const label =
+        index.label(name, line) ??
+        (name.startsWith('$') ? index.label(name.slice(1), line) : undefined)
+    return (
+        label !== undefined &&
+        BigInt.asUintN(64, BigInt(label.address + listing.base) + offset) === target
+    )
 }
 
 /** A decoded instruction's text with its branch and RIP-relative targets named. */
@@ -155,26 +196,46 @@ export function labelledText(
 }
 
 /**
- * The text of the string a RIP-relative operand reaches, from there to its end, quoted as the
- * generator's comments quote one.
+ * The comments an instruction's operands get, as the generator writes them: for each branch or
+ * RIP-relative target a label with a demangled name names, that name
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 9); and the text of
+ * the first string a RIP-relative operand reaches, from there to its end, quoted, after the name
+ * of the same operand if it has one.
  */
-function stringComment(
+function operandComments(
     listing: Listing,
     bytes: Uint8Array,
-    decoded: DecodedInstruction
-): string | undefined {
+    decoded: DecodedInstruction,
+    line: number,
+    hints?: NameHints
+): string[] {
+    const index = ListingIndex.of(listing)
+    const demangledOf = (name: string) => index.label(name, line)?.demangled
     const offsetOf = (address: number) => {
-        const line = lineOfAddress(listing, address)
-        const offset = line < 0 ? -1 : listing.lines.offsets[line]
-        return offset < 0 ? -1 : offset + address - listing.lines.addresses[line]
+        const at = lineOfAddress(listing, address)
+        const offset = at < 0 ? -1 : listing.lines.offsets[at]
+        return offset < 0 ? -1 : offset + address - listing.lines.addresses[at]
     }
+    const comments: string[] = []
+    let quoted = false
     for (const operand of decoded.operands) {
-        if (operand.memoryTarget === undefined) continue
-        const address = Number(operand.memoryTarget - BigInt(listing.base))
-        const comment = sharedStringComment(listing.holders ?? NO_HOLDERS, bytes, address, offsetOf)
-        if (comment) return comment
+        const target = operand.branchTarget ?? operand.memoryTarget
+        if (target === undefined) continue
+        const written =
+            operand.textStart === undefined || operand.textEnd === undefined
+                ? undefined
+                : addressName(listing, target, line, hints)
+        const said = written === undefined ? undefined : nameComment(written, demangledOf)
+        let string: string | undefined
+        if (operand.branchTarget === undefined && !quoted) {
+            const address = Number(target - BigInt(listing.base))
+            string = sharedStringComment(listing.holders ?? NO_HOLDERS, bytes, address, offsetOf)
+            quoted = string !== undefined
+        }
+        if (said !== undefined || string !== undefined)
+            comments.push([said, string].filter((part) => part !== undefined).join(' '))
     }
-    return undefined
+    return comments
 }
 
 /** What a Listing line's bytes hold, decoded: the first instruction, and what follows it. */
@@ -183,9 +244,17 @@ export type DescribedLine = {
     instruction: string
     /** The single-byte `nop`s and any other instructions after it, in the line's bytes. */
     rest: string[]
-    /** The comments the line shows: a string the instruction reaches, then {@link rest}. */
+    /**
+     * The comments the line shows: the demangled names of the labels its operands name and a
+     * string one reaches, then {@link rest}.
+     */
     comments: string[]
-    /** The whole line, indented, as the Listing shows it. */
+    /**
+     * The whole line, indented, as the Listing shows it, with the person's comment the line has
+     * at its end kept there
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 11).
+     */
     text: string
 }
 
@@ -217,9 +286,18 @@ export function describeLine(
         }
     }
     flush()
-    const string = first ? stringComment(listing, bytes, first) : undefined
-    const comments = [...(string ? [string] : []), ...rest]
-    return { instruction, rest, comments, text: instructionLineText(instruction, comments) }
+    const comments = [
+        ...(first ? operandComments(listing, bytes, first, line, hints) : []),
+        ...rest
+    ]
+    const text = instructionLineText(instruction, comments)
+    const person = ListingIndex.of(listing).endOfLineComment(line)
+    return {
+        instruction,
+        rest,
+        comments,
+        text: person === undefined ? text : withPersonComment(text, person)
+    }
 }
 
 /** The bytes a patch writes: the encoding, padded with `nop` to the length of the instruction it replaces. */

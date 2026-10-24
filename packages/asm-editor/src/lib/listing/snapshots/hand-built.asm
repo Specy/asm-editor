@@ -1,9 +1,8 @@
 ; hand-built
 ; ELF64 x86-64 executable at fixed addresses (not PIE)
 ; Statically linked: no dynamic linker, no shared libraries
-; Not stripped: names come from its symbol table, with invented words (v1) for the rest
+; Not stripped: names come from its symbol table
 ; Entry point: 0x400080 (_start)
-; Generated from the file, read-only and never saved: nothing builds from this Listing.
 
 section .text
 

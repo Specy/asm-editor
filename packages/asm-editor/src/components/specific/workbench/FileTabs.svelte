@@ -4,7 +4,11 @@
      * ([the design record](../../../../../../docs/design/workbench.md), File tabs). The row also carries
      * "Live file" while a Debug
      * session shows a File's current contents rather than the Build's own, and a dimmed tab for a
-     * File the language service does not reach from the Entry file.
+     * File the language service does not reach from the Selected program's Entry file. Every Entry
+     * file's tab is marked as its Explorer row is, the Selected program's in the accent colour
+     * ([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 11). The preview
+     * tab, a File opened with a single click in the Explorer that the next one takes the place of,
+     * is named in italics, as an IDE names it; a double click on it keeps it open.
      */
     import FaTimes from '~icons/fa-solid/times'
     import FaColumns from '~icons/fa-solid/columns'
@@ -42,11 +46,15 @@
             {@const unreached =
                 group.sourceView === 'live' &&
                 session.languageAnalysis?.fileStatus[path] === 'not-reachable'}
+            {@const preview = path === group.tabs.preview}
             <div
                 class="tab"
                 class:active
                 class:unreached
-                title={unreached ? `${path}: not analyzed from the Entry file` : path}
+                class:preview
+                title={(unreached
+                    ? `${path}: not analyzed from the selected program's Entry file`
+                    : path) + (preview ? ' (preview: double-click to keep it open)' : '')}
             >
                 <button
                     class="tab-select"
@@ -56,13 +64,21 @@
                     role="tab"
                     aria-selected={active}
                     onclick={() => session.activateTab(path, group)}
+                    ondblclick={() => session.keepOpen(path, group)}
                     onauxclick={(event) => {
                         if (event.button === 1) session.closeTab(path, group)
                     }}
                 >
                     <span class="ellipsis">{labels[index]}</span>
-                    {#if path === session.project.entry}
-                        <span class="entry-mark" title="The Entry file">ENTRY</span>
+                    {#if session.project.program(path)}
+                        {@const selected = path === session.project.selectedProgram}
+                        <span
+                            class="entry-mark"
+                            class:selected
+                            title={selected
+                                ? 'Entry of the selected program'
+                                : 'Entry of a program'}>ENTRY</span
+                        >
                     {/if}
                 </button>
                 <button
@@ -140,7 +156,14 @@
         flex: 1;
         min-width: 0;
         overflow-x: auto;
-        scrollbar-width: thin;
+    }
+
+    /* the app's scrollbar (global.css), thinner and on the strip's own colour, since it takes its
+       height out of the tabs. No `scrollbar-width` here: Chrome drops the ::-webkit-scrollbar
+       rules on an element that sets it, and draws its native bar with arrows */
+    .tabs::-webkit-scrollbar {
+        height: 0.25rem;
+        background: transparent;
     }
 
     .tab {
@@ -168,6 +191,10 @@
 
         &.unreached .tab-select span:first-child {
             opacity: 0.55;
+        }
+
+        /* italics are the preview tab's, as in an IDE */
+        &.preview .tab-select span:first-child {
             font-style: italic;
         }
     }
@@ -207,16 +234,22 @@
         }
     }
 
+    /* every Entry file's, neutral; the Selected program's in the accent colour */
     .entry-mark {
         flex: none;
         padding: 0 0.3rem;
-        color: var(--accent);
-        border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+        color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
+        border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
         border-radius: 999px;
         font-size: 0.5rem;
         font-weight: 700;
         line-height: 0.8rem;
         letter-spacing: 0.04em;
+
+        &.selected {
+            color: var(--accent);
+            border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+        }
     }
 
     .version {

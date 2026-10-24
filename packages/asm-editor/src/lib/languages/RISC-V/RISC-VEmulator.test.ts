@@ -1,5 +1,9 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { synthEntries } from '#lib/documentation/synth.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
+import { RISCV } from '@specy/risc-v'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import {
@@ -22,6 +26,10 @@ import {
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { RISCVCsrRegisterNames } from '#lib/languages/RISC-V/RISC-V-registers.ts'
+import { makeProjectFromArchive } from '#lib/projectArchive.ts'
+import { originalBytes } from '#lib/projectFiles.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
+import { compilationStatus } from '#lib/sourceCompilation/records.ts'
 
 /**
  * RARS's bitmap display and keyboard-and-display registers against the real Core under node, the
@@ -52,6 +60,7 @@ type Options = {
     virtualClock?: boolean
     limit?: number
     fileSystem?: FileSystem
+    audio?: Audio
 }
 
 async function build(code: string, options: Options = {}) {
@@ -61,7 +70,8 @@ async function build(code: string, options: Options = {}) {
         peripherals: {
             keyboard,
             clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined,
-            fileSystem: options.fileSystem
+            fileSystem: options.fileSystem,
+            audio: options.audio
         }
     })
     //the constructor starts a semantic check, and `_checkCode` assembles a throwaway Core whose
@@ -348,6 +358,51 @@ describe('RISC-V bitmap display', () => {
         )
         expect(pixelAt(emulator, 0, 0)).toBe(0xabcdef)
     })
+
+    it('shows only whole frames of a program that sleeps after drawing each one', async () => {
+        //forty frames that each fill the 8 by 8 grid in one color, red then blue, and sleep. The
+        //Screen catches up before every sleep and at the end of every slice, so a slice that ran on
+        //past a sleep into the next frame would show part of the grid in each color
+        const emulator = await build(
+            DATA +
+                `        li      s0, 0
+        li      s2, 40
+frame:  andi    t2, s0, 1
+        li      t1, 0x00ff0000
+        beqz    t2, paint
+        li      t1, 0x000000ff
+paint:  la      t0, display
+        li      t3, 64
+fill:   sw      t1, 0(t0)
+        addi    t0, t0, 4
+        addi    t3, t3, -1
+        bnez    t3, fill
+        li      a7, 32
+        li      a0, 1
+        ecall
+        addi    s0, s0, 1
+        blt     s0, s2, frame
+` +
+                EXIT,
+            { virtualClock: true }
+        )
+        const screen = emulator.peripherals.screen
+        const shown: string[] = []
+        const sync = screen.syncFramebuffer.bind(screen)
+        screen.syncFramebuffer = (...args: Parameters<typeof sync>) => {
+            sync(...args)
+            const colors = new Set<number>()
+            for (let index = 0; index < 64; index++) {
+                colors.add(pixelAt(emulator, index % 8, Math.floor(index / 8)))
+            }
+            shown.push([...colors].map((color) => color.toString(16)).join('+'))
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(shown.length).toBeGreaterThanOrEqual(40)
+        expect(shown.filter((frame) => frame !== 'ff0000' && frame !== 'ff')).toEqual([])
+    })
 })
 
 describe('RISC-V memory-mapped keyboard and display', () => {
@@ -485,6 +540,25 @@ main:
         expect(valueOf(emulator, 's0')).toBe(BigInt('x'.charCodeAt(0)))
         expect(valueOf(emulator, 's1')).toBe(10n)
         expect(emulator.stdOut).toBe('x\n')
+    })
+
+    it('shows what the program drew while it waits for input', async () => {
+        const emulator = await built(
+            DATA +
+                storePixel(0, '0x00ff0000') +
+                `        li      a7, 12
+        ecall
+` +
+                EXIT
+        )
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        //the read suspends the slice, so only the read itself can have brought the Screen up to date
+        expect(emulator.peripherals.terminal.pendingRead).toBeDefined()
+        expect(pixelAt(emulator, 0, 0)).toBe(0xff0000)
+        emulator.peripherals.terminal.insertText('x')
+        await running
+        expect(emulator.errors).toEqual([])
     })
 
     it('refreshes the waiting instruction and registers at each input request', async () => {
@@ -752,12 +826,54 @@ main:
         expect(emulator.peripherals.screen.width).toBe(8)
     })
 
-    it('snaps a size MARS does not offer and still builds', async () => {
-        const emulator = await build('# @screen width=300\n' + DATA + EXIT)
-        expect(emulator.getDisplay?.()?.display.width).toBe(256)
-        expect(emulator.canExecute).toBe(true)
-        expect(emulator.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
-        expect(emulator.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    it('takes a size MARS does not offer without a word, and clamps one past the range', async () => {
+        const custom = await build('# @screen width=300 height=100 unit=1\n' + DATA + EXIT)
+        expect(custom.getDisplay?.()?.display).toMatchObject({ width: 300, height: 100 })
+        expect(custom.peripherals.screen.width).toBe(300)
+        expect(custom.peripherals.screen.height).toBe(100)
+        expect(custom.compilerDiagnostics).toEqual([])
+        const past = await build('# @screen width=3000\n' + DATA + EXIT)
+        expect(past.getDisplay?.()?.display.width).toBe(1024)
+        expect(past.canExecute).toBe(true)
+        expect(past.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
+        expect(past.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    })
+
+    it('reads a labelled base from the Build itself, assembling the program once', async () => {
+        const emulator = await build(PROGRAM)
+        const cores = vi.spyOn(RISCV, 'makeRiscVFromFiles')
+        try {
+            await emulator.compile(200, PROGRAM)
+            expect(cores).toHaveBeenCalledTimes(1)
+        } finally {
+            cores.mockRestore()
+        }
+        expect(emulator.getDisplay?.()?.display.baseAddress).toBe(0x10010020)
+    })
+
+    it('resolves a base named by .eqv through a probe, and still builds the program it runs', async () => {
+        //an .eqv name is text the assembler substitutes, so no symbol table holds it
+        const code = PROGRAM.replace('base=grid', 'base=GRID_AT').replace(
+            '        li      a7, 10',
+            `        .eqv    GRID_AT, 0x10010020
+        la      t0, grid
+        li      t1, 0x00abcdef
+        sw      t1, 0(t0)
+        li      a7, 10`
+        )
+        const emulator = await build(code)
+        expect(emulator.getDisplay?.()).toMatchObject({
+            origin: 'directive',
+            baseLabel: 'GRID_AT',
+            display: { baseAddress: 0x10010020 }
+        })
+        expect(emulator.compilerDiagnostics).toEqual([])
+        //the program assembled after the probe is the one that runs, with its undo history
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(pixelAt(emulator, 0, 0)).toBe(0xabcdef)
+        for (let step = 0; step < 8 && pixelAt(emulator, 0, 0) !== 0; step++) emulator.undo(1)
+        expect(pixelAt(emulator, 0, 0)).toBe(0)
     })
 
     it('keeps the base address and warns when the label does not exist', async () => {
@@ -860,6 +976,141 @@ describe('the RISC-V examples', () => {
         expect(emulator.stdOut).toContain('ms of program time: ')
     })
 
+    describe('the Pac-Man Project', () => {
+        const folder = 'examples/risc-v/pacman'
+        const { project } = makeProjectFromArchive(readFileSync(`${folder}/pacman.asmproj`))
+
+        /** One of its Programs built and run to its title screen, with its own Files to read. */
+        async function toTitle(entry: string) {
+            const sources = programBuildSources(project, entry)
+            const keyboard = new Keyboard()
+            const clock = new ProgramClock({ mode: 'virtual' })
+            const output = new RecordingAudioOutput()
+            const emulator = RISCVEmulator(sources, {
+                peripherals: {
+                    keyboard,
+                    clock,
+                    fileSystem: new FileSystem(project.files),
+                    audio: new Audio({ clock, output })
+                }
+            })
+            await emulator.check()
+            await emulator.compile(0, sources)
+            expect(emulator.errors).toEqual([])
+            //the arcade's own 224 by 288, which its @screen directive asks for and MARS cannot show
+            expect([emulator.peripherals.screen.width, emulator.peripherals.screen.height]).toEqual(
+                [224, 288]
+            )
+            const at = (x: number, y: number) => pixelAt(emulator, x, y)
+            const runUntil = async (done: () => boolean) => {
+                for (let ran = 0; !done(); ran += 250_000) {
+                    expect(ran).toBeLessThan(10_000_000)
+                    await emulator.run(250_000)
+                    expect(emulator.errors).toEqual([])
+                }
+            }
+            //the title, once the Files are read: PUSH SPACE in orange from tile 9 of row 14
+            await runUntil(() => at(72, 112) === 0xffb852)
+            /**
+             * What the game tells the Synth's three channels, frame by frame: each frame starts
+             * with channel 1's volume, and ends with what every channel plays, its Hz and volume.
+             */
+            const frames = () => {
+                const state = [0, 1, 2].map(() => [0, 0])
+                const frames: number[][][] = []
+                for (const command of output.commands) {
+                    if (command.type !== 'synth') continue
+                    for (let i = 0; i < command.writes.length; i += 2) {
+                        const [register, value] = [command.writes[i]!, command.writes[i + 1]!]
+                        if (register >= 0x100) continue
+                        if (register === 0x12 && state.some(([, volume]) => volume)) {
+                            frames.push(state.map((channel) => [...channel]))
+                        }
+                        const channel = state[register >> 5]!
+                        if ((register & 0x1f) === 0x00) channel[0] = value
+                        if ((register & 0x1f) === 0x12) channel[1] = value
+                    }
+                }
+                return frames
+            }
+            //the title is silent: the sound starts with a game, and it is all the Synth's
+            expect(frames()).toEqual([])
+            expect(output.commands.some((command) => command.type === 'note')).toBe(false)
+            return { keyboard, at, runUntil, frames }
+        }
+
+        /**
+         * The start music's first frame, as the arcade's chip played it: the bass's C at 67 Hz,
+         * already fading, and the tune's C at 539 Hz, three octaves up.
+         */
+        const FIRST_FRAME = [
+            [67, 112],
+            [539, 120],
+            [0, 0]
+        ]
+
+        it('is the folder, packed, with its two Programs', () => {
+            //scripts/pack-example-projects.mjs packs the archive from the folder: the two must agree
+            const names = (readdirSync(folder, { recursive: true }) as string[])
+                .map((name) => name.split('\\').join('/'))
+                .filter(
+                    (name) => name !== 'pacman.asmproj' && statSync(`${folder}/${name}`).isFile()
+                )
+                .sort()
+            expect(Object.keys(project.files).sort()).toEqual(names)
+            //Buffer.equals: toEqual walks half a megabyte of bytes one element at a time
+            const differing = names.filter(
+                (name) =>
+                    !Buffer.from(originalBytes(project.files[name]!)).equals(
+                        readFileSync(`${folder}/${name}`)
+                    )
+            )
+            expect(differing).toEqual([])
+            expect(Object.keys(project.programs).sort()).toEqual([
+                'assembly/main.s',
+                'c/pacman.c.riscv'
+            ])
+            //the C Program's assembly is what Compile makes of the sources in the folder: compile
+            //c/pacman.c again in the editor after changing them, then pack
+            const record = project.compilations.find((item) => item.sourcePath === 'c/pacman.c')!
+            expect(record.optimization).toBe('2')
+            expect(compilationStatus(record, project.files, 'RISC-V').stale).toBe(false)
+        })
+
+        it('plays the assembly version, reading its pictures from its Files', async () => {
+            const { keyboard, at, runUntil, frames } = await toTitle('assembly/main.s')
+            //every lit pixel of maze.bmp, a 24 bit bottom-up BMP, is on the Screen under the score
+            const bmp = readFileSync(`${folder}/assets/maze.bmp`)
+            const pixels = bmp.readUInt32LE(10)
+            const wrong: string[] = []
+            for (let y = 0; y < 248; y++) {
+                for (let x = 0; x < 224; x++) {
+                    const p = pixels + (247 - y) * 672 + x * 3
+                    const color =
+                        ((bmp[p + 2] ?? 0) << 16) | ((bmp[p + 1] ?? 0) << 8) | (bmp[p] ?? 0)
+                    if (color && at(x, 24 + y) !== color) wrong.push(`${x},${y}`)
+                }
+            }
+            expect(wrong).toEqual([])
+            //a key starts a game: READY! in yellow, and Pac-Man, round, at his start, once
+            //PLAYER ONE has gone
+            keyboard.typeText(' ')
+            await runUntil(() => at(111, 211) === 0xffff00)
+            expect(at(88, 160)).toBe(0xffff00)
+            //with the start music, played on the Synth with stores
+            expect(frames()[0]).toEqual(FIRST_FRAME)
+        }, 60_000)
+
+        it('plays the C version from the assembly it comes with', async () => {
+            const { keyboard, at, runUntil, frames } = await toTitle('c/pacman.c.riscv')
+            keyboard.typeText(' ')
+            await runUntil(() => at(111, 211) === 0xffff00)
+            expect(at(88, 160)).toBe(0xffff00)
+            //with the start music, played on the Synth through SIM_SYNTH16 and SIM_SYNTH8
+            expect(frames()[0]).toEqual(FIRST_FRAME)
+        }, 60_000)
+    })
+
     it('echoes typed characters through the keyboard and display example', async () => {
         const code = readFileSync('examples/risc-v/keyboard-display.s', 'utf8')
         const emulator = await run(code, { typed: 'abq' })
@@ -872,9 +1123,9 @@ describe('the RISC-V examples', () => {
 
 describe('RISC-V pause', () => {
     it('is taken within a sleep or two of a program that sleeps in a loop', async () => {
-        //the Core serves the sleep inside its `simulate*` call, so only the chunking of the slice
-        //(`marsSlice.ts`) keeps a pause from waiting for the whole instruction budget's worth of
-        //sleeps: four instructions a sleep and a compute slice's budget would be a minute
+        //the Core serves the sleep inside its `simulate*` call, so it is the sleep ending the slice
+        //(`marsSlice.ts`) that keeps a pause from waiting for the whole instruction budget's worth
+        //of sleeps: four instructions a sleep and a compute slice's budget would be a minute
         const emulator = await build(`        .text
 main:
 loop:   li      a7, 32
@@ -2168,5 +2419,241 @@ target:
         //the write syscall is still the entry under it, and undoing far enough still takes it back
         for (let step = 0; step < 16 && written() === 'hello'; step++) emulator.undo(1)
         expect(written()).toBe('')
+    })
+})
+
+describe('RISC-V MIDI services', () => {
+    const notes = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) =>
+            c.type === 'note' ? [[c.pitch, c.durationMs, c.instrument, c.volume]] : []
+        )
+
+    it('plays 31 and 33 with MARS ranges and defaults applied', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            DATA +
+                `        li      a0, 200
+        li      a1, 50
+        li      a2, 40
+        li      a3, 90
+        li      a7, 31
+        ecall
+        li      a0, 64
+        li      a1, 30
+        li      a7, 33
+        ecall
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(notes(output)).toEqual([
+            [60, 50, 40, 90],
+            [64, 30, 40, 90]
+        ])
+    })
+
+    it('waits out a 33 on a testcase virtual clock, in silence', async () => {
+        const output = new RecordingAudioOutput()
+        const code =
+            DATA +
+            `        li      a0, 60
+        li      a1, 5000
+        li      a2, 0
+        li      a3, 100
+        li      a7, 33
+        ecall
+        li      a7, 30
+        ecall
+        li      a7, 1
+        ecall
+` +
+            EXIT
+        const emulator = await build(code, { audio: new Audio({ output }) })
+        const started = performance.now()
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: String((946684800000 + 5000) | 0),
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(performance.now() - started).toBeLessThan(2000)
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(notes(output)).toEqual([])
+    })
+
+    it('takes a Note back with the syscall that played it', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(
+            DATA +
+                `        li      a0, 60
+        li      a1, 5000
+        li      a2, 0
+        li      a3, 100
+        li      a7, 31
+        ecall
+        nop
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        //`li` of a large value is two instructions on RISC-V, so step until the service has run
+        for (let i = 0; i < 10 && notes(output).length === 0; i++) await emulator.step()
+        expect(notes(output)).toEqual([[60, 5000, 0, 100]])
+        emulator.undo(1)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+    })
+})
+
+describe('RISC-V Synth', () => {
+    it('runs the Synth chapter’s example, a note that starts and fades', async () => {
+        const overview = synthEntries('RISC-V', 'risc-v', '/documentation')[0]
+        const example = /```\w+\n([\s\S]*?)```/.exec(overview.searchText)![1]
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + example, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        expect(emulator.errors).toEqual([])
+        const writes = output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+        const gates = writes.filter((value, i) => i % 2 === 1 && writes[i - 1] === 0x10)
+        expect(gates).toEqual([1, 0])
+    })
+
+    const synthWrites = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synth' ? c.writes : []))
+    const uploads = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'synthUpload' ? [[c.offset, ...c.bytes]] : []))
+    /** Channel 0 at 440 Hz and volume 100 with its gate on, then the frequency read back and printed. */
+    const TONE = `        li      t0, 0xffff0100
+        li      t1, 440
+        sh      t1, 0(t0)
+        li      t1, 100
+        sb      t1, 0x12(t0)
+        li      t1, 1
+        sb      t1, 0x10(t0)
+        lhu     a0, 0(t0)
+        li      a7, 1
+        ecall
+`
+
+    it('hands every store in the block to the Synth, which the program reads back', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(DATA + TONE + EXIT, { audio: new Audio({ output }) })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('440')
+        expect(synthWrites(output)).toEqual([0, 440, 0x12, 100, 0x10, 1])
+        expect(output.commands.at(-1)).toEqual({ type: 'releaseChips' })
+    })
+
+    it('decodes a word store into the registers it covers', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            DATA +
+                `        li      t0, 0xffff0100
+        li      t1, 0x08000370
+        sw      t1, 0x20(t0)
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(synthWrites(output)).toEqual([0x20, 0x370, 0x22, 0x800])
+    })
+
+    it('keeps a gate pulsed off and on, in order', async () => {
+        const output = new RecordingAudioOutput()
+        await run(
+            DATA +
+                `        li      t0, 0xffff0100
+        li      t1, 1
+        sb      t1, 0x10(t0)
+        sb      zero, 0x10(t0)
+        sb      t1, 0x10(t0)
+` +
+                EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(synthWrites(output)).toEqual([0x10, 1, 0x10, 0, 0x10, 1])
+    })
+
+    it('copies an upload when it is started, before the program changes its buffer', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(
+            `        .data
+wave:   .byte   1, 2, 3, 4
+        .text
+main:   li      t0, 0xffff0100
+        la      t1, wave
+        sw      t1, 0x180(t0)
+        li      t2, 4
+        sh      t2, 0x184(t0)
+        li      t2, 100
+        sh      t2, 0x186(t0)
+        sb      zero, 0x188(t0)
+        li      t2, 9
+        sb      t2, 0(t1)
+` + EXIT,
+            { audio: new Audio({ output }) }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(uploads(output)).toEqual([[100, 1, 2, 3, 4]])
+    })
+
+    it('plays its rewound registers after an Undo, without uploading again', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(
+            `        .data
+wave:   .byte   1, 2
+        .text
+main:   li      t0, 0xffff0100
+        la      t1, wave
+        sw      t1, 0x180(t0)
+        li      t2, 2
+        sh      t2, 0x184(t0)
+        sb      zero, 0x188(t0)
+        li      t1, 100
+        sb      t1, 0x12(t0)
+        li      t1, 1
+        sb      t1, 0x10(t0)
+        sb      zero, 0x10(t0)
+        nop
+` + EXIT,
+            { audio: new Audio({ output }) }
+        )
+        const gates = () =>
+            synthWrites(output).filter((value, i, all) => i % 2 === 1 && all[i - 1] === 0x10)
+        for (let i = 0; i < 20 && gates().length < 2; i++) await emulator.step()
+        expect(gates()).toEqual([1, 0])
+        expect(uploads(output)).toHaveLength(1)
+        emulator.undo(1)
+        //every register again, the gate back on among them
+        expect(gates()).toEqual([1, 0, 1])
+        expect(uploads(output)).toHaveLength(1)
+        expect(emulator.peripherals.audio.activity.playingForMs).toBe(Infinity)
+    })
+
+    it('plays nothing in a Testcase, whose reads still see the registers', async () => {
+        const output = new RecordingAudioOutput()
+        const code = DATA + TONE + EXIT
+        const emulator = await build(code, { audio: new Audio({ output }) })
+        const results = await emulator.test(
+            code,
+            [{ ...SCREEN_TESTCASE, expectedOutput: '440' }],
+            INSTRUCTION_LIMIT
+        )
+        expect(results[0]?.errors ?? []).toEqual([])
+        expect(results[0]?.passed).toBe(true)
+        expect(synthWrites(output)).toEqual([])
     })
 })

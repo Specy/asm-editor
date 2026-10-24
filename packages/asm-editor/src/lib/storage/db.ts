@@ -16,6 +16,9 @@ export function id(length = 7) {
     }
     return result
 }
+/** A row's fields that the files map and then the Programs replaced, which its rewrite drops. */
+const REPLACED_FIELDS = ['code', 'entry', 'settings', 'testcases', 'display']
+
 export class Db extends Dexie {
     projects!: Table<ProjectData>
     constructor() {
@@ -26,6 +29,9 @@ export class Db extends Dexie {
         //version 2: the one `code` string became the files map with an Entry file and the Settings
         //decisions arrived (docs/design/project-format.md). Every row is rewritten once, through the
         //normalizer that reads every other stored shape, so an old row and a fresh one look alike.
+        //Since a Project holds Programs (ADR 0054) the rewrite gives them in place of the top-level
+        //Entry, Settings, Testcases and Display. A row already at version 2 keeps the earlier shape
+        //until its next save, read meanwhile by the same normalizer, so no version 3 is needed.
         this.version(2)
             .stores({
                 projects: '++id'
@@ -37,8 +43,8 @@ export class Db extends Dexie {
                     .modify((row: StoredProject & Record<string, unknown>) => {
                         try {
                             const normalized = normalizeProjectData(row)
-                            delete row.code
                             Object.assign(row, normalized)
+                            for (const field of REPLACED_FIELDS) delete row[field]
                         } catch (e) {
                             //left as it was: a row this version cannot read is skipped by the reads
                             //below, and a later version may still know what to do with it

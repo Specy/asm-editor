@@ -3,22 +3,18 @@ import type { EntryGenerator, PageServerLoad } from './$types'
 import { chapters } from '#lib/documentation/riscv/riscv.ts'
 import { riscvInstructionMap } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
 import { riscvInstructionContent } from '#lib/documentation/riscv/instructionContent.ts'
-import { instructionDescription } from '#lib/documentation/instructions/content.ts'
+import { riscvInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
 
 export const load = (async ({ params }) => {
     const instruction = riscvInstructionMap.get(params.instructionName)
     if (!instruction) {
         throw error(404, 'Instruction not found')
     }
+    const content = riscvInstructionContent[params.instructionName]
     return {
         props: {
-            instruction,
-            content: riscvInstructionContent[params.instructionName],
-            description: instructionDescription(
-                riscvInstructionContent[params.instructionName],
-                instruction[0].description
-            ),
-            name: params.instructionName
+            document: riscvInstructionDocument(params.instructionName, instruction, content),
+            content
         }
     }
 }) satisfies PageServerLoad

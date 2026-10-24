@@ -8,7 +8,7 @@ It supports MIPS, RISC-V, M68K, Z80, and x86. You can start with your own progra
 
 ## Create a project
 
-Open [Create new project](/projects/create), give it a name, and choose a **Language**. **RISC-V** selects the 32-bit target; **RISC-V-64** selects the 64-bit target. The example at the end of this guide uses **MIPS**.
+Open [Create new project](/projects/create), give it a name, and choose an **Instruction Set**. **RISC-V** selects the 32-bit target; **RISC-V-64** selects the 64-bit target. The example at the end of this guide uses **MIPS**.
 
 Choose a **Template** for a starting program, then press **Create**. The project opens in the editor, also called the Workbench. The file explorer keeps the project's files together; select a file to open it in a tab.
 

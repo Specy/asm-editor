@@ -3,6 +3,7 @@ import {
     type EmulatorDecoration,
     type EmulatorNote,
     type ExecutionStep,
+    type LibraryStretch,
     type RegisterFileDescriptor,
     RegisterSize,
     type SourceBreakpoint,
@@ -11,7 +12,7 @@ import {
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
-import type { BuildSources } from '#lib/projectFiles.ts'
+import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
@@ -25,7 +26,23 @@ export type CompilationError = {
  * (errors *and* warnings) so nothing the assembler said is lost.
  */
 export type CompileResult =
-    | { ok: true; diagnostics?: Diagnostic[] }
+    | {
+          ok: true
+          diagnostics?: Diagnostic[]
+          /**
+           * The executable the Build linked, for a Target whose Builds link one (x86): the Build
+           * output, at the path the Command line names ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+           * None for a Build that loaded an Executable, which is a File already.
+           */
+          program?: Uint8Array
+          /**
+           * The Runtime library members or the start code the program was linked with, which the
+           * debugger opens as `buildLibraryFiles`.
+           */
+          libraryFiles?: ProjectFiles
+          /** What the Log should say about the program built, such as a library it lacks. */
+          notes?: Omit<EmulatorNote, 'id'>[]
+      }
     | { ok: false; diagnostics: Diagnostic[]; report: string }
 
 /**
@@ -41,6 +58,36 @@ export class CompilationFailedError extends Error {
         super(report)
         this.name = 'CompilationFailedError'
         this.diagnostics = diagnostics
+    }
+}
+
+/**
+ * Thrown by `compile()` when the Build could not download something it needs, such as one of the
+ * x86 Core's Bundled libraries or its assembler: the request failed, or nothing arrived for a while.
+ * Nothing is wrong with the program, so its message names what could not be downloaded and says
+ * to Build again ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+ * decision 2), in the Terminal, the Log and the toast alike. When the server `refused` it, with a
+ * status such as 404, the connection is fine and the same request fails again: the site has most
+ * likely been updated since the page loaded, its files renamed, and reloading the page fetches the
+ * new names.
+ */
+export class BuildDownloadError extends Error {
+    constructor(
+        /** What could not be downloaded: "libc.so.6", "the assembler". */
+        readonly resource: string,
+        /** Why, as the message's brackets hold it: "no response for 20 seconds", "404 Not Found". */
+        readonly reason: string,
+        options?: ErrorOptions & { refused?: boolean }
+    ) {
+        super(
+            `Couldn't download ${resource} (${reason}). ${
+                options?.refused
+                    ? 'The site may have been updated: reload the page, then press Build again.'
+                    : 'Check your internet connection, then press Build again.'
+            }`,
+            options
+        )
+        this.name = 'BuildDownloadError'
     }
 }
 
@@ -223,10 +270,19 @@ export abstract class BaseEmulator<R extends string> {
     _libraryCallSite?(): Instruction | null
 
     /**
-     * What the History calls a Step's stretch of library code, from the first library instruction
-     * it ran (`puts in libc.so.6`); undefined to name it after that instruction's File.
+     * Whether the program that just ended is shown on no line, so that what the person reads stays
+     * where it is: a loaded Executable that exited, rather than ended on a signal
+     * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision
+     * 3). Undefined, or false, shows where the program ended.
      */
-    _libraryStretchName?(entered: ExecutionStep): string | undefined
+    _keepsPlaceAtExit?(): boolean
+
+    /**
+     * What the History calls a Step's stretch of library code, from the first library instruction
+     * it ran (`puts in libc.so.6`), and the tooltip of a C++ name it shortens; undefined to name it
+     * after that instruction's File.
+     */
+    _libraryStretchName?(entered: ExecutionStep): Omit<LibraryStretch, 'instructions'> | undefined
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
 

@@ -4,7 +4,7 @@
  * `docs/design/x86-documentation.md`. The output is committed, so this runs when NASM or blink is
  * updated, not as part of the build:
  *
- *   node scripts/x86-docs-generate.mjs [--fetch]
+ *   node scripts/x86-docs-generate.mjs [--fetch] [--xed <checkout>]
  *
  * `--fetch` downloads the two prose sources into `.cache/x86-docs` the first time. Everything else
  * is read out of the x86 Core's checkout, `packages/x86`, which means the instruction table always
@@ -12,13 +12,24 @@
  * syscall list also reads getImplementedSyscalls() from the built Core, so it lists exactly that
  * WASM dispatch table.
  *
+ * The flags come from Intel XED through `x86-docs/xed-flags.txt`, an extract committed beside this
+ * script. `--xed <checkout>` rewrites that extract, and the licence beside it, from a clone of
+ * https://github.com/intelxed/xed (`git clone --depth 1`); without it the run needs no network.
+ *
  * What comes out is deliberately dumb: lists and records, no curation. Which instructions are worth
  * a page, which syscalls a beginner needs and what the registers mean are decisions, and decisions
  * live in `X86-documentation.ts` next to the hand written prose.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
+import {
+    checkNotesUsed,
+    checkXedNames,
+    FLAG_ORDER,
+    flagsOf,
+    resolveXedIclasses
+} from './x86-docs/flags.mjs'
 import {
     cached,
     expandTemplate,
@@ -38,9 +49,21 @@ import {
     readNasmTokens,
     readConditionCodes
 } from './x86-docs/sources.mjs'
+import {
+    formatXedFlags,
+    readXedCheckout,
+    readXedFlags,
+    XED_REPOSITORY,
+    xedFlagsPath,
+    xedLicencePath
+} from './x86-docs/xed.mjs'
 
 const outDir = join(projectRoot, 'src/lib/languages/X86/generated')
 const fetchAllowed = process.argv.includes('--fetch')
+const xedCheckout = process.argv.includes('--xed')
+    ? process.argv[process.argv.indexOf('--xed') + 1]
+    : null
+if (process.argv.includes('--xed') && !xedCheckout) throw new Error('--xed needs a checkout')
 
 /** Assembler pseudo-ops. They are directives that happen to live in the instruction table. */
 const PSEUDO = /^(d[bwdqtoyz]|res[bwdqtoyz]|incbin|equ)$/
@@ -102,11 +125,6 @@ const standardMacros = readNasmStandardMacros()
 const registers = readNasmRegisters()
 const preprocessor = readNasmPreprocessorDirectives()
 const syscalls = await readBlinkSyscalls()
-const insref = parseInsref(
-    await cached('insref.src', { fetch: fetchAllowed }),
-    accepted,
-    conditions
-)
 const opcodes = parseOpcodes(await cached('x86_64.xml', { fetch: fetchAllowed }))
 
 // --- instructions --------------------------------------------------------------------------------
@@ -145,6 +163,13 @@ const NOT_EXTENSIONS = new Set([
 ])
 
 /**
+ * Whether NASM picks an encoding only under one of APX's `{nf}` and `{zu}` prefixes, which the
+ * shape does not show: `{nf} mul eax, ebx, ecx` is the VEX `mulx`, while `mul eax, ebx, ecx` as
+ * written is APX's encoding, and `sal eax, ebx, ecx` does not assemble at all.
+ */
+const needsApxPrefix = (form) => form.flags.includes('NF_R') || form.flags.includes('ZU_R')
+
+/**
  * One entry per operand shape. The table lists a shape once per encoding, so `add r/m32,imm8`
  * appears several times with different bytes, and again as an alias the disassembler ignores. A
  * reader wants the shape, the oldest processor that has it, and anything notable about it.
@@ -157,19 +182,30 @@ function formsOf(entry) {
         const features = form.flags.filter(
             (flag) => groupOf(flag) === 'feature' && !NOT_EXTENSIONS.has(flag)
         )
+        const apx = form.flags.includes('APX')
+        const prefixed = needsApxPrefix(form)
         const notes = form.flags.filter((flag) => NOTABLE_FLAGS.has(flag))
         const key = operands.join(',')
         const shape = byShape.get(key)
         if (!shape) {
-            byShape.set(key, { operands, cpu, features, notes: new Set(notes) })
+            byShape.set(key, { operands, cpu, features, apx, prefixed, notes: new Set(notes) })
             continue
         }
         // The same shape can have a second encoding on a later processor: `setg r/m8` is a P6
-        // instruction that APX re-encodes to take a `{zu}` prefix. What it needs is what its oldest
-        // encoding needs, so a newer encoding must not add its extension to the shape.
-        if (cpuIndex(cpu) < cpuIndex(shape.cpu)) {
+        // instruction that APX re-encodes to take a `{zu}` prefix. What it needs is what the
+        // encoding NASM picks for it as written needs: the first in the table between one of APX
+        // and one outside it, since NASM takes the first that matches (`popcnt r16,r/m16` is
+        // Nehalem's, though its APX encoding is labelled with the older `X86_64`; `jmpabs` is
+        // APX's, though a fallback without it follows), and otherwise the oldest.
+        const replaces =
+            prefixed !== shape.prefixed
+                ? !prefixed
+                : apx === shape.apx && cpuIndex(cpu) < cpuIndex(shape.cpu)
+        if (replaces) {
             shape.cpu = cpu
             shape.features = features
+            shape.apx = apx
+            shape.prefixed = prefixed
         }
         for (const note of notes) shape.notes.add(note)
     }
@@ -180,10 +216,15 @@ function formsOf(entry) {
             shape.notes.delete('LONG')
             shape.notes.delete('NOLONG')
         }
+        // a shape NASM takes only with `{nf}` is APX's syntax, which that encoding's flags do not say
+        const features =
+            shape.prefixed && !shape.features.includes('APX')
+                ? [...shape.features, 'APX']
+                : shape.features
         return {
             operands: shape.operands,
             cpu: shape.cpu,
-            features: [...shape.features],
+            features: [...features],
             notes: [...shape.notes]
         }
     })
@@ -255,6 +296,51 @@ const instructions = accepted
     })
 
 /**
+ * What the editor will publish: the integer sections, minus anything that needs an extension in
+ * every form, which is the rule `X86-documentation.ts` applies. Printed below so the design doc's
+ * coverage numbers come from the command that produces the files, and used to decide which cross
+ * references in the prose become links and which instructions get flags.
+ */
+const DOCUMENTED_SECTIONS = new Set([
+    'Integer data move instructions',
+    'Load effective address',
+    'The basic 8 arithmetic operations',
+    'Bitwise testing',
+    'The basic shift and rotate operations',
+    'Other basic integer arithmetic',
+    'Double width shift',
+    'Sign and zero extension',
+    'Bit operations',
+    'Endianness handling',
+    'Decimal arithmetic',
+    'Atomic operations',
+    'Stack operations',
+    'Jumps',
+    'Conditional instructions',
+    'Call and return',
+    'Interrupts, system calls, and returns',
+    'Flag register instructions',
+    'String instructions',
+    'No operation'
+])
+const documented = instructions.filter(
+    (instruction) =>
+        DOCUMENTED_SECTIONS.has(instruction.section) && instruction.features.length === 0
+)
+const documentedNames = new Set(documented.map((instruction) => instruction.name))
+
+/** The page `/documentation/x86/instruction/<name>`, for the instructions that have one. */
+const pageOf = (name) =>
+    documentedNames.has(name) ? `/documentation/x86/instruction/${name}` : undefined
+
+const insref = parseInsref(
+    await cached('insref.src', { fetch: fetchAllowed }),
+    accepted,
+    conditions,
+    { pageOf }
+)
+
+/**
  * NASM spells the operand size into some names (`retq`, `leavew`, `stosq`) that the appendix
  * documents under one base name. The mapping is written out rather than derived by stripping the
  * last letter, because that rule is wrong at least once: `aadd` is the APX atomic add, not `aad`.
@@ -318,6 +404,44 @@ for (const instruction of instructions) {
     if (!entry) continue
     descriptions[instruction.name] = { title: entry.title, description: entry.description }
 }
+
+// --- flags ---------------------------------------------------------------------------------------
+
+if (xedCheckout) {
+    const checkout = readXedCheckout(xedCheckout)
+    const everything = new Set(checkout.records.map((record) => record.iclass))
+    checkXedNames(everything)
+    const wanted = new Set(
+        documented.flatMap((instruction) =>
+            resolveXedIclasses(instruction.name, everything, DESCRIPTION_ALIASES)
+        )
+    )
+    writeFileSync(
+        xedFlagsPath,
+        formatXedFlags({
+            ...checkout,
+            records: checkout.records.filter((record) => wanted.has(record.iclass))
+        })
+    )
+    writeFileSync(xedLicencePath, checkout.licence)
+}
+
+const xed = readXedFlags()
+const xedRecords = new Map()
+for (const record of xed.records) {
+    xedRecords.set(record.iclass, [...(xedRecords.get(record.iclass) ?? []), record])
+}
+const xedClasses = new Set(xedRecords.keys())
+checkXedNames(xedClasses)
+const notesUsed = new Set()
+const flags = {}
+for (const instruction of documented) {
+    const iclasses = resolveXedIclasses(instruction.name, xedClasses, DESCRIPTION_ALIASES)
+    const entry = flagsOf(instruction.name, iclasses, xedRecords, notesUsed)
+    if (entry) flags[instruction.name] = entry
+}
+checkNotesUsed(notesUsed)
+const unflagged = documented.map((instruction) => instruction.name).filter((name) => !flags[name])
 
 // --- write ---------------------------------------------------------------------------------------
 
@@ -407,6 +531,62 @@ export type X86Description = {
 
 export const X86_DESCRIPTIONS: Record<string, X86Description> = {
 ${Object.entries(descriptions)
+    .map(([name, entry]) => `    ${JSON.stringify(name)}: ${serialise(entry)}`)
+    .join(',\n')}
+}
+`
+)
+
+const STATUS_FLAGS = FLAG_ORDER.filter((flag) => flag !== 'TF' && flag !== 'IF')
+
+writeFileSync(
+    join(outDir, 'x86Flags.ts'),
+    `${header('What each documented instruction does to the flags, for the strip on its page.', [
+        `Flags read and written: Intel XED (${XED_REPOSITORY}), ${xed.version}, commit`,
+        `${xed.commit}, through the extract \`${relative(projectRoot, xedFlagsPath)}\`.`,
+        'Copyright (c) Intel Corporation, SPDX-License-Identifier: Apache-2.0; the licence is',
+        `\`${relative(projectRoot, xedLicencePath)}\`. Modified: XED's instruction classes are joined onto`,
+        "NASM's mnemonics and their records combined into one mark per flag by",
+        '`scripts/x86-docs/flags.mjs`, which also writes the notes.'
+    ])}
+/** A flag of RFLAGS a strip can show. */
+export type X86FlagName = ${FLAG_ORDER.map((flag) => `'${flag}'`).join(' | ')}
+
+/**
+ * What an instruction does to one flag: \`changed\` by its result (or loaded, which the note says),
+ * \`cleared\` to 0, \`set\` to 1, left \`undefined\`, or \`unchanged\`.
+ */
+export type X86FlagKind = 'changed' | 'cleared' | 'set' | 'undefined' | 'unchanged'
+
+export type X86FlagMark = {
+    kind: X86FlagKind
+    /** When the mark needs qualifying, e.g. \`defined only for a count of 1\`, \`loaded from AH\`. */
+    note?: string
+}
+
+/** The status flags and DF on every strip; TF and IF only when the instruction writes them. */
+export type X86FlagMarks = Record<${STATUS_FLAGS.map((flag) => `'${flag}'`).join(' | ')}, X86FlagMark> &
+    Partial<Record<'TF' | 'IF', X86FlagMark>>
+
+export type X86InstructionFlags = {
+    /** The XED instruction classes the marks come from, e.g. \`['SHL']\` for \`sal\`. */
+    xed: string[]
+    marks: X86FlagMarks
+    /** The flags it reads, in \`X86_FLAG_ORDER\`: \`cmovle\` reads ZF, SF and OF. */
+    reads: X86FlagName[]
+    /** What holds for the instruction as a whole, e.g. that a count of 0 changes nothing. */
+    note?: string
+}
+
+/** RFLAGS in bit order, which is the order the registers panel lists them in. */
+export const X86_FLAG_ORDER: X86FlagName[] = ${serialise(FLAG_ORDER)}
+
+/**
+ * Per documented instruction. One XED has no record of (\`${unflagged.join('`, `')}\`) has no entry,
+ * and its page no strip.
+ */
+export const X86_INSTRUCTION_FLAGS: Record<string, X86InstructionFlags> = {
+${Object.entries(flags)
     .map(([name, entry]) => `    ${JSON.stringify(name)}: ${serialise(entry)}`)
     .join(',\n')}
 }
@@ -504,43 +684,15 @@ export const X86_FLAG_MEANINGS: Record<string, string> = ${serialise(
 `
 )
 
-/**
- * What the editor will publish: the integer sections, minus anything that needs an extension in
- * every form, which is the rule `X86-documentation.ts` applies. Printed here so the design doc's
- * coverage numbers come from the command that produces the files.
- */
-const DOCUMENTED_SECTIONS = new Set([
-    'Integer data move instructions',
-    'Load effective address',
-    'The basic 8 arithmetic operations',
-    'Bitwise testing',
-    'The basic shift and rotate operations',
-    'Other basic integer arithmetic',
-    'Double width shift',
-    'Sign and zero extension',
-    'Bit operations',
-    'Endianness handling',
-    'Decimal arithmetic',
-    'Atomic operations',
-    'Stack operations',
-    'Jumps',
-    'Conditional instructions',
-    'Call and return',
-    'Interrupts, system calls, and returns',
-    'Flag register instructions',
-    'String instructions',
-    'No operation'
-])
-const documented = instructions.filter(
-    (instruction) =>
-        DOCUMENTED_SECTIONS.has(instruction.section) && instruction.features.length === 0
-)
 const documentedProse = documented.filter((instruction) => descriptions[instruction.name])
 
 const forms = instructions.reduce((count, instruction) => count + instruction.forms.length, 0)
 console.log(`x86Instructions.ts  ${instructions.length} instructions, ${forms} operand shapes`)
 console.log(`x86Mnemonics.ts     ${instructions.length} names`)
 console.log(`x86Descriptions.ts  ${Object.keys(descriptions).length} descriptions`)
+console.log(
+    `x86Flags.ts         ${Object.keys(flags).length} of ${documented.length} documented instructions; no XED record: ${unflagged.join(', ')}`
+)
 console.log(`x86Syscalls.ts      ${syscalls.length} syscalls exported by the built Core`)
 console.log(
     `x86Tokens.ts        ${directives.length} directives, ${standardMacros.length} standard macros, ${preprocessor.length} preprocessor directives, ${registers.length} registers`

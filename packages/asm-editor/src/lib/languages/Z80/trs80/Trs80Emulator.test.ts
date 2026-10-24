@@ -101,6 +101,28 @@ describe('the TRS-80 display', () => {
         expect(colorAt(screen, 511, 383)).toBe(WHITE)
     })
 
+    it('paints a slice once, however many chunks it ran', async () => {
+        const emulator = await build(BLOCK_COPY)
+        const screen = emulator.peripherals.screen
+        const before = screen.version
+        //the blit runs over several chunks of a few hundred instructions each; painting after every
+        //chunk would show the frame half copied
+        await (
+            emulator as unknown as {
+                _runSlice: (request: object) => Promise<{ reason: string }>
+            }
+        )._runSlice({
+            instructionBudget: 100_000,
+            timeBudgetMs: 50,
+            breakpoints: [],
+            skipBreakpointAtPc: true,
+            runInstructionLimit: 100_000,
+            speedCorrection: 1
+        })
+        expect(screen.version - before).toBe(1)
+        expect(colorAt(screen, 511, 383)).toBe(WHITE)
+    })
+
     it('rewinds with the memory, without journaling a single record', async () => {
         const emulator = await build(STORE_TWO_CELLS)
         await emulator.run(1000)

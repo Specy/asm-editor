@@ -25,7 +25,7 @@ Editing help works locally, before Compile. It covers known language and library
 
 The Compile controls offer Clang or GCC and an optimization level for both targets. Start with **-O0** to follow your statements easily. Higher levels can combine statements, move instructions or remove work whose result is unused.
 
-Compile creates an assembly file and makes it the project's entry file, which Build uses. Compile handles one C or C++ source file at a time; other `.c` or `.cpp` files are not compiled or linked automatically. Compilation needs an internet connection: your selected source and the project's local headers are sent to Compiler Explorer.
+Compile creates an assembly file and makes it the project's entry file, which Build uses. Compile handles one C or C++ source file at a time; other `.c` or `.cpp` files are not compiled or linked automatically. Compilation needs an internet connection: your selected source and the project files its `#include "…"` lines reach are sent to Compiler Explorer, and nothing else of the project.
 
 To use a local header, create `helpers.h` beside your source file in the same project:
 
@@ -45,7 +45,9 @@ int main(void) {
 }
 ```
 
-After changing the source or a local header, **Compile** again, then **Build** to run the updated program.
+A quoted `#include` may name a `.c` file too: the compiler pastes its text in, exactly as it does a header's, so a program can be split across several `.c` files that one source includes. Each file is then part of that one compilation, not a separate one linked later.
+
+After changing the source or a file it includes, **Compile** again, then **Build** to run the updated program.
 
 ## Libraries and simulator services {#libraries}
 
@@ -86,9 +88,9 @@ int main(void) {
 }
 ```
 
-Width and height are display pixels; `unit` is the side length of each colored cell. Each row has `width / unit` cells; select a cell with `y * (width / unit) + x`. Width and height can be 64, 128, 256, 512 or 1024; unit can be 1, 2, 4, 8, 16 or 32.
+Width and height are display pixels; `unit` is the side length of each colored cell. Each row has `width / unit` cells; select a cell with `y * (width / unit) + x`. Width and height can be any whole number of pixels from 1 to 1024, and unit any from 1 to 32. RARS's own display only offers 64, 128, 256, 512 or 1024 and 1, 2, 4, 8, 16 or 32, so a program that also runs there keeps to those.
 
-For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`.
+For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/risc-v/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`.
 
 ## Following execution {#following-execution}
 

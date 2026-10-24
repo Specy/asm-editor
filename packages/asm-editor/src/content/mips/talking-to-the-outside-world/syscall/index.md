@@ -117,6 +117,131 @@ result register. Playground services preserve all other general-purpose and floa
 registers; a service with a documented memory result can still change that memory. Move a register
 result somewhere safe before loading another service number into `$v0`.
 
+## Making sound
+
+Services 31 and 33 play a musical note. Both take the same four inputs:
+
+- `$a0` chooses the **pitch**, or how high or low the note sounds. Use a number from 0 to 127.
+  The example starts at 60, a note called middle C. Adding 1 moves to the next higher note;
+  subtracting 1 moves to the next lower note. Each of these small steps is called a **semitone**.
+- `$a1` gives the **duration** in milliseconds. For example, 300 lasts three tenths of a second,
+  and 1000 lasts one second.
+- `$a2` chooses the **instrument**, using a number from 0 to 127 in the General MIDI instrument
+  list. The example uses 0 for an acoustic grand piano; try changing this number to hear other
+  instrument sounds.
+- `$a3` sets the **volume**, from 0 to 127. Larger values are louder; the example uses 100.
+
+Service 33 waits for the note to end before running the next instruction. Service 31 continues
+without waiting. If you use service 31 again while a previous note is still sounding, the notes
+overlap.
+
+```mips|playground
+.text
+.globl main
+main:
+    li $a1, 300             # each note lasts 300 milliseconds
+    li $a2, 0               # instrument 0, the acoustic grand piano
+    li $a3, 100             # volume 100
+
+    li $v0, 33              # service 33: play a note, then wait for it to end
+    li $a0, 60              # middle C
+    syscall
+    li $a0, 64              # E
+    syscall
+    li $a0, 67              # G
+    syscall
+
+    li $v0, 31              # service 31: play a note and go on at once
+    li $a1, 1000
+    li $a0, 60              # C, E and G again, together: a chord
+    syscall
+    li $a0, 64
+    syscall
+    li $a0, 67
+    syscall
+
+    li $v0, 10
+    syscall
+```
+
+The first three calls use service 33 to play the notes C, E and G one after another. The next
+three calls use service 31 to start those same notes within a few instructions of each other.
+They sound together as a **chord** and finish their one-second duration even though the program
+has already ended.
+
+Neither sound service changes a register, so `$v0` and the other arguments keep their values
+between calls. That is why the example sets the instrument and volume only once. If a pitch,
+instrument or volume is outside 0 to 127, the service uses middle C, the piano or volume 100,
+respectively.
+
+Once a program has made a sound, a **Sound** button in the execution dock turns sound off and on.
+Testcases run silently, and service 33 finishes immediately without a real delay. The testcase
+still counts the note's duration as elapsed program time.
+
+### Waveforms on the Synth
+
+Services 31 and 33 play recorded instrument sounds. The editor also has a **Synth**: a sound chip
+like the ones inside 1980s game consoles and home computers, which the program controls directly.
+
+The Synth's controls are **device registers**: each has a memory address, and storing a value
+there changes a sound setting. The example puts the base address `0xffff0100` in the CPU register
+`$s0`, then uses `sh` and `sb` with offsets from that address to reach the device registers.
+
+The Synth has eight **channels**, each playing one sound at a time. The example uses channel 0
+and these controls:
+
+- the halfword at offset `0` is the **frequency** in Hz (hertz), how many times a second the sound
+  repeats. Middle C, named by pitch number 60 in the previous example, is about 262 Hz here.
+- the byte at `0x11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
+  2 a sawtooth, 3 a sine and 4 noise.
+- the byte at `0x12` sets the overall volume, from 0 to 127. Larger values are louder.
+- the byte at `0x13` sets the **sustain**, the level held while the sound continues, from 0 to 127.
+  Sustain 127 keeps the sound at the chosen volume; lower values reduce that level further.
+- the byte at `0x10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+The example sets volume 100 and sustain 127 so the tone holds at volume 100 until the gate goes
+off. To leave time to hear each pitch, it uses service 32: put 32 in `$v0`, the wait in milliseconds
+in `$a0`, then execute `syscall`. The stores control the sound, and the service supplies the pauses.
+
+```mips|playground
+.text
+.globl main
+main:
+    li $s0, 0xffff0100     # base address of Synth channel 0
+    li $t0, 1
+    sb $t0, 0x11($s0)     # waveform 1: a triangle
+    li $t0, 100
+    sb $t0, 0x12($s0)     # volume 100
+    li $t0, 127
+    sb $t0, 0x13($s0)     # sustain 127: hold at the chosen volume
+
+    li $t0, 262            # middle C, in Hz
+    sh $t0, 0($s0)
+    li $t0, 1
+    sb $t0, 0x10($s0)     # gate on: the note starts
+    li $v0, 32             # service 32: wait
+    li $a0, 400            # for 400 milliseconds
+    syscall
+
+    li $t0, 330            # E: change pitch while the gate stays on
+    sh $t0, 0($s0)
+    syscall                 # wait again: $v0 and $a0 still ask for it
+    li $t0, 392            # G
+    sh $t0, 0($s0)
+    syscall
+
+    sb $zero, 0x10($s0)   # gate off: the note ends
+    li $v0, 10
+    syscall
+```
+
+The gate stays on while the frequency changes from 262 to 330 to 392 Hz. You hear C, E and G as
+one continuing tone that changes pitch, with 400 milliseconds at each pitch. Change the waveform
+number at `0x11` to hear how the shape changes the sound.
+
+The Synth is an extension of this editor; MARS does not provide these device controls. The
+[Synth chapter](/documentation/mips/synth) of the Documentation has more controls and examples.
+
 ## More Playground services
 
 You do not need to memorize this reference. Use it to find the registers for a service before you
@@ -162,6 +287,7 @@ than 1 it writes nothing.
   instruction. The Playground stays responsive, and the service avoids a busy-wait loop that would
   repeatedly spend the program's instruction budget. In a testcase, the clock starts at zero and
   service 32 advances it immediately without a real delay.
+- Services 31 and 33 play a note, as shown above.
 - Service 9 allocates bytes from the heap and returns their address in `$v0`. Under the Playground's
   default memory layout, that heap begins at `0x10040000`; a different memory layout can place it
   elsewhere.

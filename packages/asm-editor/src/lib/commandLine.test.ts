@@ -5,7 +5,9 @@ import {
     compiledEntrySource,
     describeArgv,
     parseCommandLine,
-    programArgv0
+    programArgv0,
+    programLabel,
+    programsByLabel
 } from './commandLine'
 
 /**
@@ -166,5 +168,37 @@ describe('the program a Command line names', () => {
         expect(describeArgv('./crackme', ['hunter2', 'two words'])).toBe(
             'argv[0] = "./crackme"\nargv[1] = "hunter2"\nargv[2] = "two words"'
         )
+    })
+})
+
+/**
+ * What the picker calls a Program, and the order it lists them in, which is also how "the first one
+ * left" is chosen ([programs.md](../../../../docs/design/programs.md), decisions 7, 9 and 13).
+ */
+describe('the label of a Program', () => {
+    const records = [{ sourcePath: 'sort.c', outputPath: 'sort.c.mips' }]
+    const file = { encoding: 'plain', content: '' }
+
+    it('is a compiled program by its source while that File exists, else by its Entry path', () => {
+        const files = { 'sort.c': file, 'sort.c.mips': file, 'main.s': file }
+        expect(programLabel('sort.c.mips', records, files)).toBe('sort.c')
+        expect(programLabel('main.s', records, files)).toBe('main.s')
+        expect(programLabel('sort.c.mips', records, { 'sort.c.mips': file })).toBe('sort.c.mips')
+        expect(programLabel('sort.c.mips', undefined, files)).toBe('sort.c.mips')
+    })
+
+    it('orders Programs by label, then by Entry path, whatever order they were saved in', () => {
+        const project = {
+            programs: { 'z.s': {}, 'sort.c.mips': {}, 'main.s': {}, 'sort.c': {} },
+            files: { 'sort.c': file },
+            compilations: records
+        }
+        expect(programsByLabel(project)).toEqual([
+            { entry: 'main.s', label: 'main.s' },
+            { entry: 'sort.c', label: 'sort.c' },
+            { entry: 'sort.c.mips', label: 'sort.c' },
+            { entry: 'z.s', label: 'z.s' }
+        ])
+        expect(programsByLabel({ programs: {}, files: {} })).toEqual([])
     })
 })

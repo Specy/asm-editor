@@ -1,6 +1,11 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { onMount } from 'svelte'
-    import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import InteractiveInstructionEditor, {
+        hasBuiltProgram
+    } from '#cmp/shared/InteractiveInstructionEditor.svelte'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import { EMBED_BUILT_MESSAGE, type EmbedBuiltMessage } from '#lib/content/embedMessages.ts'
     import {
         type AvailableLanguages,
         cleanTestcases,
@@ -44,17 +49,19 @@
         showFlags: boolean
         showScreen: boolean
         openScreen: boolean
+        /** Whether the memory, registers, flags, PC and Screen wait for the program to be built. */
+        hideUntilBuilt: boolean
         openButton: boolean
         /** The Register file the panel opens on, from a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag. */
         registerFile?: string
     }
 
-    const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
+    const languageOptions: Array<{ key: string; value: AvailableLanguages }> = [
         { key: 'M68K', value: 'M68K' },
         { key: 'MIPS', value: 'MIPS' },
         { key: 'RISC-V', value: 'RISC-V' },
         { key: 'RISC-V-64', value: 'RISC-V-64' },
-        { key: 'X86', value: 'X86' },
+        { key: languageLabel('X86'), value: 'X86' },
         { key: 'Z80', value: 'Z80' }
     ]
     const defaultLanguage: AvailableLanguages = 'M68K'
@@ -69,12 +76,18 @@
         showFlags: false,
         showScreen: false,
         openScreen: false,
+        hideUntilBuilt: false,
         openButton: false,
         registerFile: undefined
     })
     let inIframe = $state(true)
+    //framed by one of our own pages (a lecture, the documentation), whose sections already sit
+    //apart by the Workbench's gap: the frame's own padding is that gap, so its cards line up with
+    //the page's. A frame on someone else's site keeps the roomier padding
+    let framedByUs = $state(false)
     let code = $state(BASE_CODE[defaultLanguage])
     let project = $state<Project>()
+    let loadedEmulator = $state<Emulator | null>(null)
     let ready = $state(false)
     let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
@@ -84,6 +97,7 @@
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     onMount(() => {
         inIframe = window.self !== window.top
+        framedByUs = inIframe && framedBySameOrigin()
         settings = getSettings()
         code = getCodeFromUrl() ?? BASE_CODE[settings.language]
         testcases = cleanTestcases(getTestsFromUrl())
@@ -102,10 +116,24 @@
         return () => clearTimeout(timeoutId)
     })
 
+    /**
+     * The Project the editor opens: the files, or the code, with the embed's Testcases, which are
+     * its one Program's (programs.md, decision 12); a Project's own `programs` would win over
+     * Testcases given beside them.
+     */
+    function editorProject() {
+        if (!project) return makeProject({ code, language: settings.language, testcases })
+        const data = project.toObject()
+        const entry = data.selectedProgram
+        if (entry === undefined) return makeProject(data)
+        return makeProject({
+            ...data,
+            programs: { ...data.programs, [entry]: { ...data.programs[entry], testcases } }
+        })
+    }
+
     function openInEditor() {
-        const opened = project
-            ? makeProject({ ...project.toObject(), testcases })
-            : makeProject({ code, language: settings.language, testcases })
+        const opened = editorProject()
         try {
             window.open(createShareLink(opened), '_blank')
         } catch (error) {
@@ -118,12 +146,13 @@
         code = BASE_CODE[language]
         if (project) {
             const previous = project
+            const entry = previous.selectedProgram
             const source = previous.compilations.find(
-                (record) => record.outputPath === previous.entry
+                (record) => record.outputPath === entry
             )?.sourcePath
             project = makeProject({
                 files: previous.files,
-                entry: source ?? previous.entry,
+                entry: source ?? entry,
                 language
             })
         }
@@ -163,6 +192,15 @@
         }
     }
 
+    function framedBySameOrigin() {
+        try {
+            return window.parent.location.origin === window.location.origin
+        } catch {
+            //another origin's location is not ours to read
+            return false
+        }
+    }
+
     function getSettings() {
         const searchParams = page.url.searchParams
         const showMemory = searchParams.get('showMemory') === 'true'
@@ -175,6 +213,7 @@
         const openScreen = searchParams.get('openScreen') === 'true'
         //asking for the Screen open is asking for one, so a link needs only the one parameter
         const showScreen = openScreen || searchParams.get('showScreen') === 'true'
+        const hideUntilBuilt = searchParams.get('hideUntilBuilt') === 'true'
         const openButton = searchParams.get('openButton') === 'true'
         //the panel itself decides what to do with a file this language has not got, which is to
         //open on the CPU one
@@ -190,6 +229,7 @@
             showFlags,
             showScreen,
             openScreen,
+            hideUntilBuilt,
             openButton,
             registerFile
         } satisfies Settings
@@ -206,6 +246,7 @@
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
         const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const openScreen = settings.openScreen ? 'openScreen=true&' : ''
+        const hideUntilBuilt = settings.hideUntilBuilt ? 'hideUntilBuilt=true&' : ''
         const openButton = settings.openButton ? 'openButton=true&' : ''
         const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
         const props = [
@@ -217,6 +258,7 @@
             showFlags,
             showScreen,
             openScreen,
+            hideUntilBuilt,
             openButton,
             registerFile
         ].join('')
@@ -226,13 +268,15 @@
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
                 : ''
-        const program = project
-            ? encodePlaygroundProgram({
-                  files: $state.snapshot(project.files),
-                  entry: project.entry,
-                  compilations: project.compilations
-              })
-            : undefined
+        const entry = project?.selectedProgram
+        const program =
+            project && entry !== undefined
+                ? encodePlaygroundProgram({
+                      files: $state.snapshot(project.files),
+                      entry,
+                      compilations: project.compilations
+                  })
+                : undefined
         return `${window.location.origin}/embed?${lang}${props}${tests}${program ? `program=${program}` : `code=${compressed}`}`
     }
 
@@ -249,10 +293,21 @@
         //Include file edits and generated assembly in standalone embed/share URLs too.
         if (project) {
             void project.files
-            void project.entry
+            void project.selectedProgram
             void project.compilations
         }
         generateCodeUrl(code, settings, testcases)
+    })
+
+    //a frame whose panels wait for a Build tells the page around it when they come and go, so a
+    //lecture can keep the frame as short as the code until then (`embedMessages.ts`)
+    $effect(() => {
+        if (!inIframe || !settings.hideUntilBuilt) return
+        const built = !!loadedEmulator && hasBuiltProgram(loadedEmulator)
+        window.parent.postMessage(
+            { type: EMBED_BUILT_MESSAGE, built } satisfies EmbedBuiltMessage,
+            '*'
+        )
     })
 </script>
 
@@ -273,8 +328,8 @@
     {/if}
     <Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
         <div
+            class="playground"
             class:embed-builder={!inIframe}
-            class:playground={!inIframe}
             style={inIframe ? 'display: contents' : ''}
         >
             {#if !inIframe}
@@ -289,16 +344,18 @@
 
             <div class:builder-workspace={!inIframe} style={inIframe ? 'display: contents' : ''}>
                 <Column
-                    style={`padding: 0.5rem 0.5rem ${inIframe ? '0.5rem' : '0'}; flex:1; min-width: 0`}
+                    style={`--embed-padding: ${framedByUs ? 'var(--wb-gap)' : '0.5rem'}; padding: var(--embed-padding) var(--embed-padding) ${inIframe ? 'var(--embed-padding)' : '0'}; flex:1; min-width: 0`}
                 >
                     {#if ready}
                         {#key settings.language}
                             <EmulatorLoader
                                 bind:code
+                                bind:emulator={loadedEmulator}
                                 source={project ? playgroundBuildSources(project) : undefined}
                                 language={settings.language}
                                 settings={{
-                                    automaticChecking: !project || !sourceLanguage(project.entry),
+                                    automaticChecking:
+                                        !project || !sourceLanguage(project.selectedProgram ?? ''),
                                     globalPageElementsPerRow: 4,
                                     globalPageSize: 4 * 8
                                 }}
@@ -319,6 +376,7 @@
                                         showScreen={settings.showScreen &&
                                             languageHasScreen(settings.language)}
                                         openScreen={settings.openScreen}
+                                        hideUntilBuilt={settings.hideUntilBuilt}
                                         initialRegisterFile={settings.registerFile}
                                         language={settings.language}
                                         forceMemoryRight={true}
@@ -398,6 +456,13 @@
                                     />
                                 </div>
                                 <div class="share-settings">
+                                    <span>Hide panels until built</span>
+                                    <Switch
+                                        bind:checked={settings.hideUntilBuilt}
+                                        title="Show the memory, registers and screen only once the code is built"
+                                    />
+                                </div>
+                                <div class="share-settings">
                                     <span>Open in editor button</span>
                                     <Switch
                                         bind:checked={settings.openButton}
@@ -405,7 +470,7 @@
                                     />
                                 </div>
                                 <div class="share-settings">
-                                    <span>Language</span>
+                                    <span>Instruction Set</span>
                                     <Select
                                         onChange={changeLanguage}
                                         style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"

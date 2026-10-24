@@ -6,8 +6,8 @@
     "sourcePath": "src/main.c",
     "source": "#include <sim.h>\n\nSIM_SCREEN(screen, 512, 256, 1);\n\nint main(void) {\n    screen[5 * 512 + 7] = sim_rgb(255, 128, 0);\n    sim_exit();\n}\n",
     "compilerId": "rv64-cclang2110",
-    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-addrsig -nostdinc -isystem sysroot/include -march=rv64imfd -mabi=lp64d -iquote 'src' -iquote . -std=c17",
-    "captured": "2026-10-06",
+    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-addrsig -mllvm -use-unknown-locations=Enable -nostdinc -isystem sysroot/include -march=rv64imfd -mabi=lp64d -iquote 'project/src' -iquote project -include 'project/src/main.c' -std=c17",
+    "captured": "2026-10-21",
     "response": {
         "code": 0,
         "stderr": [],

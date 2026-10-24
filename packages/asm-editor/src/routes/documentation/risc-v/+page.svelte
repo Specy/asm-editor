@@ -29,28 +29,28 @@
         <a href={resolve('/documentation/risc-v/syscall')}>Syscalls</a>.
     </p>
     <div class="links">
-        <NavigationLinkButton href="/documentation/risc-v/directive">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/directive')}>
             <div>Directives</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/instruction">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/instruction')}>
             <div>Instructions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/syscall">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/syscall')}>
             <div>Syscalls</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/registers">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/registers')}>
             <div>Registers</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/screen">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/screen')}>
             <div>Screen and I/O</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/using-c">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/using-c')}>
             <div>Using C and C++</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/runtime-library">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/runtime-library')}>
             <div>Runtime library</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/risc-v/all">
+        <NavigationLinkButton href={resolve('/documentation/risc-v/all')}>
             <div>Complete Documentation</div>
         </NavigationLinkButton>
     </div>

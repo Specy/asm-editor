@@ -1,14 +1,19 @@
 <script lang="ts">
     /**
      * A Documentation entry as one compact row: its name, what follows the name and one line of
-     * summary. Clicking it expands the entry in place ([the design record](../../../../../../docs/design/documentation-search.md),
+     * summary. Prose entries show their text directly, in the Workbench cut with a Show all when it
+     * runs long, so the rows after it stay a glance away; clicking any other entry expands it in
+     * place ([the design record](../../../../../../docs/design/documentation-search.md),
      * The Documentation panel).
      */
     import { prefersReducedMotion } from 'svelte/motion'
     import { slide } from 'svelte/transition'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import HighlightedText from '#cmp/search/HighlightedText.svelte'
+    import ClampedContent from '#cmp/shared/layout/ClampedContent.svelte'
     import { hasCodeName, type DocumentationEntry } from '#lib/documentation/entries.ts'
+    import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
+    import { resolveHref } from '#lib/hrefs.ts'
     import EntryBody from '../entries/EntryBody.svelte'
 
     interface Props {
@@ -20,6 +25,16 @@
         disableLinks?: boolean
         /** Shown under the expanded entry: a link to its own page. */
         pageLink?: boolean
+        /**
+         * Name an instruction's **Instruction category** beside its signature: in search results,
+         * where no category heading is left to say it.
+         */
+        showCategory?: boolean
+        /**
+         * Cut a long prose entry with a Show all: in the Workbench's panel, where the rows after it
+         * are what a person mostly comes for. A page shows it whole, to be read through.
+         */
+        clampProse?: boolean
     }
 
     let {
@@ -28,40 +43,70 @@
         ontoggle,
         terms = [],
         disableLinks = false,
-        pageLink = false
+        pageLink = false,
+        showCategory = false,
+        clampProse = false
     }: Props = $props()
+
+    let proseTitle = $state<HTMLElement>()
 </script>
 
-<div class="entry-row" class:expanded data-entry-id={entry.id}>
-    <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>
-        <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
-        <span class="line">
-            <span class="name" class:code={hasCodeName(entry)}
-                ><HighlightedText text={entry.title} {terms} /></span
-            >
-            {#if entry.signature}
-                <span class="signature">{entry.signature}</span>
-            {/if}
-        </span>
-        {#if !expanded}
-            <span
-                class="summary"
-                transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
-                ><HighlightedText text={entry.summary} {terms} /></span
-            >
-        {/if}
-    </button>
-    {#if expanded}
-        <div class="body" transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}>
-            <EntryBody {entry} {disableLinks} />
-            {#if pageLink}
-                <a class="page-link" href={entry.href}>
-                    {entry.kind === 'instruction'
-                        ? 'Open its page, with an example to run'
-                        : 'Open its page'}
-                </a>
+<div
+    class="entry-row"
+    class:expanded={expanded && entry.kind !== 'prose'}
+    class:prose-row={entry.kind === 'prose'}
+    data-entry-id={entry.id}
+>
+    {#if entry.kind === 'prose'}
+        <div class="prose">
+            <h4 class="prose-title" bind:this={proseTitle}>
+                <HighlightedText text={entry.title} {terms} />
+            </h4>
+            {#if clampProse}
+                <ClampedContent {expanded} {ontoggle} anchor={proseTitle}>
+                    <EntryBody {entry} {disableLinks} />
+                </ClampedContent>
+            {:else}
+                <EntryBody {entry} {disableLinks} />
             {/if}
         </div>
+    {:else}
+        <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>
+            <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
+            <span class="line">
+                <span class="name" class:code={hasCodeName(entry)}
+                    ><HighlightedText text={entry.title} {terms} /></span
+                >
+                {#if entry.signature}
+                    <span class="signature">{entry.signature}</span>
+                {/if}
+                {#if showCategory && entry.category}
+                    <span class="category">{categoryLabel(entry.category)}</span>
+                {/if}
+            </span>
+            {#if !expanded}
+                <span
+                    class="summary"
+                    transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+                    ><HighlightedText text={entry.summary} {terms} /></span
+                >
+            {/if}
+        </button>
+        {#if expanded}
+            <div
+                class="body"
+                transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+            >
+                <EntryBody {entry} {disableLinks} />
+                {#if pageLink}
+                    <a class="page-link" href={resolveHref(entry.href)}>
+                        {entry.kind === 'instruction'
+                            ? 'Open its page, with an example to run'
+                            : 'Open its page'}
+                    </a>
+                {/if}
+            </div>
+        {/if}
     {/if}
 </div>
 
@@ -73,11 +118,40 @@
         border-radius: 0.45rem;
         min-width: 0;
     }
+    .entry-row:not(.expanded):not(.prose-row) {
+        content-visibility: auto;
+        contain-intrinsic-block-size: auto 3.1rem;
+        contain: content;
+    }
+    .entry-row.prose-row {
+        content-visibility: auto;
+        contain-intrinsic-block-size: auto 6rem;
+    }
+    @media print {
+        .entry-row:not(.expanded):not(.prose-row),
+        .entry-row.prose-row {
+            content-visibility: visible;
+            contain: none;
+        }
+    }
     .entry-row + .entry-row {
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
     }
     .entry-row.expanded {
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+    }
+    .prose {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.5rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .prose-title {
+        margin: 0;
+        font-size: inherit;
+        font-weight: 600;
     }
     .head {
         display: grid;
@@ -141,6 +215,13 @@
         color: var(--background-text-muted);
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .category {
+        flex: none;
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: var(--background-text-muted);
         white-space: nowrap;
     }
     .summary {

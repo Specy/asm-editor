@@ -24,6 +24,10 @@
         currentAddress: bigint
         bytesPerPage: number
         memorySize: bigint
+        /**
+         * Whether the field leaves out its "Address" caption: callers do above a memory view
+         * narrower than 16 bytes a row, which leaves the controls too little room for it.
+         */
         hideLabel?: boolean
         inputStyle?: string
         style?: string
@@ -53,6 +57,8 @@
     }: Props = $props()
 
     let hexAddress = $derived(currentAddress.toString(16))
+    /** Whether the text is hex digits, which the `0x` before it reads with; a label is not. */
+    const numericAddress = $derived(/^[0-9a-f]*$/i.test(hexAddress.trim()))
     let inputRef = $state<HTMLInputElement | undefined>()
     let addressFocused = $state(false)
     let caretAtEnd = $state(false)
@@ -238,6 +244,15 @@
         return `${row.region.section && group.length > 1 ? row.region.kind : row.region.name}${first ? ` · ${first.displayName ?? first.name}` : ''}`
     }
 
+    /**
+     * A label row's tooltip where it shows a name in place of the raw one, such as an Executable's
+     * demangled C++ name: both, so the raw name stays readable.
+     */
+    function labelTooltip(label: DataLabel): string | undefined {
+        const display = label.displayName ?? label.name
+        return display === label.name ? undefined : `${display}\n${label.name}`
+    }
+
     function updateAddress(value: bigint) {
         const clampedSize = value - (value % BigInt(bytesPerPage))
         const minMaxAddress = clampBigInt(clampedSize, 0n, memorySize - BigInt(bytesPerPage - 1))
@@ -261,9 +276,9 @@
                 {#if !hideLabel}
                     <span class="address-caption"> Address </span>
                 {/if}
-                <span class="hex-address-label" class:hex-address-label-no-prefix={hideLabel}>
-                    0x
-                </span>
+                {#if numericAddress}
+                    <span class="hex-address-label"> 0x </span>
+                {/if}
                 <div class="hex-address-entry">
                     {#if completion}
                         <div class="address-completion" aria-hidden="true">
@@ -391,7 +406,11 @@
                         {/snippet}
                         {#snippet item(row)}
                             {@const destination = row as Destination}
-                            <div class="destination" class:data-label={!!destination.label}>
+                            <div
+                                class="destination"
+                                class:data-label={!!destination.label}
+                                title={destination.label && labelTooltip(destination.label)}
+                            >
                                 {#if destination.region && !destination.label}<span
                                         class="swatch"
                                         style:background={memoryRegionColor(
@@ -482,14 +501,12 @@
         color: var(--red);
         font-size: 0.8rem;
     }
+    .address-caption {
+        margin-right: 0.35rem;
+    }
     .hex-address-label {
-        margin-left: 0.35rem;
         padding: 0.3rem 0;
         opacity: 0.6;
-    }
-    .hex-address-label-no-prefix {
-        margin-left: 0;
-        padding: 0.3rem 0;
     }
     .address-search {
         display: flex;
@@ -579,9 +596,6 @@
         }
         .address-caption {
             display: none;
-        }
-        .hex-address-label {
-            margin-left: 0;
         }
         .region-picker {
             grid-column: 3;

@@ -71,6 +71,23 @@ describe('memory regions', () => {
         expect(() => resolveMemoryAddress('buffer', false, lookup)).toThrow('Build')
         expect(() => resolveMemoryAddress('missing', true, lookup)).toThrow('Unknown label')
     })
+    it('resolves C++ names whose operators hold a +, with an offset after them', () => {
+        const names: Record<string, bigint> = {
+            'std::string::operator+=': 0x2000n,
+            'std::string::operator+=(char const*)': 0x2100n,
+            'operator new(unsigned long)': 0x3000n
+        }
+        const lookup = (name: string) => names[name]
+        expect(resolveMemoryAddress('std::string::operator+=', true, lookup)).toBe(0x2000n)
+        expect(resolveMemoryAddress('std::string::operator+=+16', true, lookup)).toBe(0x2010n)
+        expect(
+            resolveMemoryAddress(' std::string::operator+=(char const*)+0x8 ', true, lookup)
+        ).toBe(0x2108n)
+        expect(resolveMemoryAddress('operator new(unsigned long)', true, lookup)).toBe(0x3000n)
+        expect(() => resolveMemoryAddress('std::string::operator+', true, lookup)).toThrow(
+            'Unknown label: std::string::operator+'
+        )
+    })
     it('reads text segments as unsigned read only ranges and finds overlaps', () => {
         const ranges = textSegmentsReadOnly(
             Int32Array.of(0x00400000, 0x10000000, 0x80000000 | 0, 0x90000000 | 0)

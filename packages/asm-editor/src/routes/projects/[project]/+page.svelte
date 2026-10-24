@@ -16,15 +16,16 @@
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import { Monaco } from '#lib/monaco/Monaco.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
-    import { goto } from '$app/navigation'
+    import { beforeNavigate, goto } from '$app/navigation'
     import { resolve } from '$app/paths'
+    import type { ResolvedPathname } from '$app/types'
     import Page from '#cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import { serializer } from '#lib/json.ts'
-    import { createExamSessionLink, parseLegacyProjectExamPayload } from '#lib/exam.ts'
+    import { examSessionPath, parseLegacyProjectExamPayload } from '#lib/exam.ts'
     import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
 
     let project = $state(makeProject())
@@ -44,6 +45,20 @@
             (dirty && (!preferencesStore.values.autoSave.value || lastSaveFailed))
     )
 
+    /**
+     * Leaving for another page of the site while there are unsaved changes asks first, as leaving
+     * the site does ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 17): a link, or the browser's Back, which Alt+← and the mouse's back button are
+     * outside a Listing and a Pseudocode with somewhere to go. An unload is the browser's to ask
+     * about, through `beforeunload` below, and the page's own navigations have asked already
+     * (`changePage`) or follow a save.
+     */
+    beforeNavigate((navigation) => {
+        if (!unsaved || navigation.willUnload || navigation.type === 'goto') return
+        if (!confirm('You have unsaved changes. Do you want to leave without saving?'))
+            navigation.cancel()
+    })
+
     async function loadProject() {
         const id = page.params.project ?? ''
         if (id === 'exam') {
@@ -61,7 +76,7 @@
                 return
             }
 
-            await goto(createExamSessionLink(migratedExam), { replace: true })
+            await goto(resolve(examSessionPath(migratedExam)), { replace: true })
             return
         }
 
@@ -212,7 +227,7 @@
         toast.logPill('Copied to clipboard')
     }
 
-    async function changePage(page: string) {
+    async function changePage(page: ResolvedPathname) {
         try {
             const stored = await ProjectStore.getProjectFromDb(project.id)
             if (!stored) {
@@ -254,12 +269,12 @@
     />
 </svelte:head>
 
+<!-- leaving asks first only while there are changes nothing will save on its own -->
 <svelte:window
     onbeforeunload={(e) => {
-        if (!page.url.hostname.includes('localhost')) {
-            e.preventDefault()
-            e.returnValue = 'You have unsaved changes'
-        }
+        if (!unsaved) return
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes'
     }}
 />
 
@@ -295,9 +310,9 @@
                                 phone={ui.deviceClass === 'phone'}
                                 drawerOpen={ui.drawerOpen}
                                 onToggleMenu={() => (ui.drawerOpen = !ui.drawerOpen)}
-                                onHome={() => changePage('/')}
-                                onBack={() => changePage('/projects')}
-                                onDonate={() => changePage('/donate')}
+                                onHome={() => changePage(resolve('/'))}
+                                onBack={() => changePage(resolve('/projects'))}
+                                onDonate={() => changePage(resolve('/donate'))}
                                 onShare={() => share(project)}
                             />
                         {/snippet}

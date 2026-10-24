@@ -99,16 +99,18 @@
         background-color: var(--accent2);
         color: var(--accent2-text);
     }
-    /* the console scrolls inside, so the box keeps its height and the icon its corner */
+    /* the console scrolls inside, so the box keeps its height and the icon its corner. A card like
+       the code and the registers around it, inside the same 1px edge */
     .std-out {
         min-height: 4rem;
         max-height: 8rem;
         position: relative;
-        border-radius: 0.5rem;
+        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border-radius: var(--wb-radius, 0.4rem);
         overflow: hidden;
         display: flex;
         flex: 1;
-        background-color: var(--secondary);
+        background-color: var(--wb-surface, var(--secondary));
         color: var(--secondary-text);
         @media screen and (max-width: 1000px) {
             width: 100%;

@@ -9,8 +9,7 @@
         /** The Target, which names the widths a written mutation reports. */
         language: AvailableLanguages
         /**
-         * In a section rather than hanging under a floating window's bar: as wide as the section,
-         * with its height left to it, and rounded alike on every corner.
+         * Fill a section on its surface, with contrasting entries and height left to the section.
          */
         docked?: boolean
     }
@@ -22,10 +21,13 @@
 
 <div class="column tab" class:docked>
     {#if steps.length === 0}
-        <div class="row" style="justify-content: center; padding: 0.4rem">No mutations</div>
+        <div class="row" style="justify-content: center; padding: {docked ? '0.3rem' : '0.4rem'}">
+            No mutations
+        </div>
     {/if}
     {#each steps as step, i (i)}
         <MutationStep
+            {docked}
             {language}
             flags={statusRegisterNames}
             {step}
@@ -53,8 +55,13 @@
         overflow-y: auto;
     }
     .tab.docked {
+        padding: 0.3rem;
+        gap: 0.3rem;
         width: auto;
         max-height: none;
-        border-radius: 0.2rem;
+        border-radius: 0;
+        background-color: var(--wb-surface, var(--secondary));
+        color: var(--secondary-text);
+        box-shadow: none;
     }
 </style>

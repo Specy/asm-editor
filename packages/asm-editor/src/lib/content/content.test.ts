@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
     extractPlaygrounds,
     parsePlaygroundFence,
+    parseTestcaseFence,
     type ContentPlayground
 } from '#lib/content/playgrounds.ts'
 import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
@@ -79,10 +80,13 @@ function inputFor(playground: ContentPlayground): Promise<BuildInput> {
                 ...playground.program,
                 language: playground.settings.language
             })
-            if (sourceLanguage(project.entry)) {
-                await compileProjectSource(project, project.entry, '2', {
+            const entry = playground.program.entry
+            if (sourceLanguage(entry)) {
+                //as `PlaygroundSession.compile` does: the one Program moves, and none is made
+                await compileProjectSource(project, entry, '2', {
                     confirm: async () => false,
-                    signal: AbortSignal.timeout(45_000)
+                    signal: AbortSignal.timeout(45_000),
+                    newProgram: 'none'
                 })
             }
             return playgroundBuildSources(project)
@@ -206,6 +210,19 @@ async function runOnce(
         }
         if (!allowLimit && status === InterpreterStatus.TerminatedWithException) {
             throw new Error(`${nameOf(playground)} stopped with an error`)
+        }
+        //a Linux signal is not an error to the x86 adapter, so a crash would otherwise pass as a run.
+        //A solution is left out: it is written for its exercise's starting registers, which this
+        //run does not set, and runTestcase checks it with them.
+        const termination = emulator.termination
+        const signal = termination?.kind === 'signal' ? termination.name : undefined
+        if (!playground.isSolution && signal !== playground.endsWithSignal) {
+            throw new Error(
+                signal
+                    ? `${nameOf(playground)} ended on ${signal}; a playground that shows a crash ` +
+                          `says so with "endsWithSignal": "${signal}" in its \`testcase\` fence`
+                    : `${nameOf(playground)} was declared to end on ${playground.endsWithSignal} and did not`
+            )
         }
         return {
             terminated: emulator.terminated,
@@ -331,6 +348,27 @@ describe('the register file fence flag', () => {
     it('reads it case-sensitively, as it reads every other flag of a fence', () => {
         expect(parsePlaygroundFence('mips|playground|FPU')?.settings.registerFile).toBeUndefined()
         expect(parsePlaygroundFence('x86|playground|Sse')?.settings.registerFile).toBeUndefined()
+    })
+})
+
+describe('the endsWithSignal testcase key', () => {
+    it('declares a crash without making a Testcase', () => {
+        const parsed = parseTestcaseFence('{ "endsWithSignal": "SIGSEGV" }')
+        expect(parsed.endsWithSignal).toBe('SIGSEGV')
+        expect(parsed.hasTestcase).toBe(false)
+    })
+
+    it('must name a signal', () => {
+        expect(() => parseTestcaseFence('{ "endsWithSignal": "segfault" }')).toThrow(
+            /must name a signal/
+        )
+    })
+
+    it('is attached to the playground above it', () => {
+        const [playground] = extractPlaygrounds(
+            '```x86|playground\nud2\n```\n\n```testcase\n{ "endsWithSignal": "SIGILL" }\n```\n'
+        )
+        expect(playground?.endsWithSignal).toBe('SIGILL')
     })
 })
 

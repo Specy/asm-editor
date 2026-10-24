@@ -1,14 +1,70 @@
 import { isAssemblerProfile } from './assemblerProfiles'
+import { commentProblem } from './annotations/comments'
+import { looksLikeGhidraName, nameProblem } from './annotations/names'
 import { isRuntimeAbiName } from './runtimeAbi'
 
 /** Shared byte and path rules for persistence, assembly, and the FileSystem. */
 export type FileEncoding = 'plain' | 'base64'
-export type ProjectFile = Readonly<{ encoding: FileEncoding; content: string }>
+/**
+ * A **Byte edit** ([ADR 0047](../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
+ * `remove` bytes at `offset` replaced by `insert`, in base64. A File's edits apply in order to its
+ * original bytes. The Hex editor only overwrites, so there `remove` is the inserted length; the
+ * shape also expresses an insertion or a deletion, which a Project is read with, though this
+ * editor writes none yet.
+ */
+export type ByteEdit = Readonly<{ offset: number; remove: number; insert: string }>
+/**
+ * A link-time address, the file address Invented names are derived from
+ * ([ADR 0045](../../../../docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md)),
+ * so an annotation keyed by one does not depend on where a PIE is loaded: `0x` and lower-case hex
+ * digits without leading zeros, as `fileAddress` writes it, of at most `Number.MAX_SAFE_INTEGER`.
+ */
+export type FileAddress = string
+/**
+ * A person's **Annotations** on an Executable, kept beside its bytes as its Byte edits are
+ * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 2):
+ * - `names`: global renames, of a function, data, string or jump-target label, by its address;
+ * - `comments`: line comments, by the address of the line they are on;
+ * - `functionComments`: function comments, by the function's address;
+ * - `locals`: renames of one function's Pseudocode variables, by the function's address, then the
+ *   decompiler's opaque id for the variable (decision 15).
+ *
+ * Each map is omitted when it is empty, and a File keeps no record when all are. Every key and
+ * text is checked by `cleanAnnotations`, which also puts the keys in address order (ids in code
+ * unit order), so the same annotations always save as the same text.
+ */
+export type Annotations = Readonly<{
+    names?: Readonly<Record<FileAddress, string>>
+    comments?: Readonly<Record<FileAddress, string>>
+    functionComments?: Readonly<Record<FileAddress, string>>
+    locals?: Readonly<Record<FileAddress, Readonly<Record<string, string>>>>
+}>
+/**
+ * One File as the Project stores it: its original bytes as `content`; on a File stored as bytes
+ * only, the Byte edits typed over them; and the Annotations a person made on it. Each is omitted
+ * when there are none. Every reader goes through `fileBytes`, which applies the edits. Annotations
+ * change no byte: a Byte edit and a rename of the File keep them, and whatever makes its whole
+ * content new drops them (decision 3).
+ */
+export type ProjectFile = Readonly<{
+    encoding: FileEncoding
+    content: string
+    edits?: readonly ByteEdit[]
+    annotations?: Annotations
+}>
 export type ProjectFiles = Readonly<Record<string, ProjectFile>>
 export const FILE_ENCODINGS: readonly FileEncoding[] = ['plain', 'base64']
 export const FILE_BYTE_LIMIT = 16 * 1024 * 1024
 export const FILE_COUNT_LIMIT = 4096
 export const PATH_BYTE_LIMIT = 1024
+/**
+ * What the Annotations of all a Project's Files take together, in UTF-8 bytes of their keys,
+ * ids, names and comments (decision 5): small enough for an archive's 1 MiB manifest to hold them
+ * beside the Byte edits.
+ */
+export const ANNOTATIONS_BYTE_LIMIT = 256 * 1024
+/** The longest variable id the decompiler's annotations are kept by. */
+export const VARIABLE_ID_LENGTH_LIMIT = 256
 const hasOwn = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key)
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
@@ -49,7 +105,37 @@ export function resolveFilePath(path: string): string {
     return result
 }
 
-export function fileBytes(file: ProjectFile): Uint8Array {
+/**
+ * Decodes canonical base64, the form every byte File and Byte edit is stored in. Decoding is the
+ * validation. A structural regex over the whole string is not an option here:
+ * `(?:[A-Za-z0-9+/]{4})*` overflows V8's backtrack arena above roughly 4.5 million characters, so
+ * any File past about 3.3 MiB threw a RangeError well inside the 16 MiB limit. `atob` rejects an
+ * invalid alphabet and the round trip below rejects everything else, both in linear time.
+ */
+function decodeBase64(text: string): Uint8Array {
+    let raw: string
+    try {
+        raw = atob(text)
+    } catch {
+        throw new ProjectFormatError('Invalid file encoding or base64 content')
+    }
+    if (btoa(raw) !== text) throw new ProjectFormatError('Noncanonical base64 content')
+    //a plain loop: `Uint8Array.from` with a mapping function takes about 50 times as long, over a
+    //second and a half for 16 MiB, and the Hex editor decodes a File again at every Byte edit
+    const bytes = new Uint8Array(raw.length)
+    for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index)
+    return bytes
+}
+
+export function encodeBase64(bytes: Uint8Array): string {
+    let raw = ''
+    for (let i = 0; i < bytes.length; i += 8192)
+        raw += String.fromCharCode(...bytes.subarray(i, i + 8192))
+    return btoa(raw)
+}
+
+/** A File's bytes as stored, before its Byte edits. */
+export function originalBytes(file: ProjectFile): Uint8Array {
     if (file.encoding === 'plain') {
         const bytes = encoder.encode(file.content)
         if (decoder.decode(bytes) !== file.content)
@@ -59,28 +145,540 @@ export function fileBytes(file: ProjectFile): Uint8Array {
     if (file.encoding !== 'base64') {
         throw new ProjectFormatError('Invalid file encoding or base64 content')
     }
-    //Decoding is the validation. A structural regex over the whole string is not an option here:
-    //`(?:[A-Za-z0-9+/]{4})*` overflows V8's backtrack arena above roughly 4.5 million characters,
-    //so any File past about 3.3 MiB threw a RangeError well inside the 16 MiB limit. `atob` rejects
-    //an invalid alphabet and the round trip below rejects everything else, both in linear time.
-    let raw: string
-    try {
-        raw = atob(file.content)
-    } catch {
-        throw new ProjectFormatError('Invalid file encoding or base64 content')
+    return decodeBase64(file.content)
+}
+
+/** A File's bytes as everything reads them: the original with its Byte edits applied. */
+export function fileBytes(file: ProjectFile): Uint8Array {
+    const bytes = originalBytes(file)
+    return file.edits?.length ? applyByteEdits(bytes, file.edits) : bytes
+}
+
+/**
+ * Whether a Byte edit only overwrites, the one kind the editor writes: the File keeps its length,
+ * and every offset names the same byte before and after it.
+ */
+function isOverwrite(edit: ByteEdit) {
+    return edit.remove === base64Length(edit.insert)
+}
+
+/** The byte length of canonical base64, without decoding it. */
+function base64Length(text: string) {
+    if (!text.length) return 0
+    return (text.length / 4) * 3 - (text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0)
+}
+
+/** The bytes of `original` after `edits`, applied in order; `original` is left unchanged. */
+export function applyByteEdits(original: Uint8Array, edits: readonly ByteEdit[]): Uint8Array {
+    if (edits.every(isOverwrite)) {
+        const result = original.slice()
+        for (const edit of edits) {
+            if (edit.offset + edit.remove > result.length)
+                throw new ProjectFormatError('A Byte edit is past the end of its File')
+            result.set(decodeBase64(edit.insert), edit.offset)
+        }
+        return result
     }
-    if (btoa(raw) !== file.content) throw new ProjectFormatError('Noncanonical base64 content')
-    return Uint8Array.from(raw, (character) => character.charCodeAt(0))
+    let result = original
+    for (const edit of edits) {
+        if (edit.offset + edit.remove > result.length)
+            throw new ProjectFormatError('A Byte edit is past the end of its File')
+        const insert = decodeBase64(edit.insert)
+        const next = new Uint8Array(result.length - edit.remove + insert.length)
+        next.set(result.subarray(0, edit.offset))
+        next.set(insert, edit.offset)
+        next.set(result.subarray(edit.offset + edit.remove), edit.offset + insert.length)
+        result = next
+    }
+    return result
+}
+
+/**
+ * Overwrites folded into the fewest sorted runs that do not touch, which apply to the same bytes:
+ * a later edit wins where two overlap. Only overwrites can be merged this way, since an insertion
+ * or a deletion moves every byte after it. Each edit is folded into the runs it overlaps or
+ * touches, so the work is the edits' bytes, however far apart they lie in the File.
+ */
+export function mergeOverwrites(edits: readonly ByteEdit[]): ByteEdit[] {
+    if (!edits.every(isOverwrite))
+        throw new ProjectFormatError('Only overwriting Byte edits can be merged')
+    //sorted by offset, none overlapping or touching another, so their ends are sorted too
+    const runs: { start: number; bytes: Uint8Array }[] = []
+    const endOf = (run: (typeof runs)[number]) => run.start + run.bytes.length
+    for (const edit of edits) {
+        if (!edit.remove) continue
+        const start = edit.offset
+        const end = edit.offset + edit.remove
+        //the first run that ends at or after this edit's start, which it then overlaps or touches
+        let first = 0
+        for (let high = runs.length; first < high;) {
+            const middle = (first + high) >> 1
+            if (endOf(runs[middle]) < start) first = middle + 1
+            else high = middle
+        }
+        let last = first
+        while (last < runs.length && runs[last].start <= end) last++
+        const joined = runs.slice(first, last)
+        const from = Math.min(start, joined[0]?.start ?? start)
+        const to = Math.max(end, joined.length ? endOf(joined[joined.length - 1]) : end)
+        const bytes = new Uint8Array(to - from)
+        for (const run of joined) bytes.set(run.bytes, run.start - from)
+        bytes.set(decodeBase64(edit.insert), start - from)
+        runs.splice(first, joined.length, { start: from, bytes })
+    }
+    return runs.map((run) =>
+        Object.freeze({
+            offset: run.start,
+            remove: run.bytes.length,
+            insert: encodeBase64(run.bytes)
+        })
+    )
+}
+
+/**
+ * Whether a File's Byte edits only overwrite, as the Hex editor's do: it can add to those alone,
+ * since an insertion or a deletion moves every byte after it.
+ */
+export function overwritesOnly(file: ProjectFile): boolean {
+    return (file.edits ?? []).every(isOverwrite)
+}
+
+/**
+ * The text of a File stored as text once `bytes` overwrite its UTF-8 from `offset`, or undefined
+ * when they would leave it no longer UTF-8, which such a File must be. A text File keeps no Byte
+ * edits (ADR 0047): typing over its bytes in the Hex editor changes its text, as typing into its
+ * Text view does.
+ */
+export function overwriteText(text: string, offset: number, bytes: Uint8Array): string | undefined {
+    const next = encoder.encode(text)
+    next.set(bytes, offset)
+    try {
+        return decoder.decode(next)
+    } catch {
+        return undefined
+    }
+}
+
+/** How many bytes a File reads as, edits applied, without decoding a byte File. */
+export function fileByteLength(file: ProjectFile): number {
+    if (file.encoding !== 'base64') return fileBytes(file).length
+    let length = base64Length(file.content)
+    for (const edit of file.edits ?? []) length += base64Length(edit.insert) - edit.remove
+    return length
+}
+
+/**
+ * The UTF-8 length of `text`, without encoding it, for text with no unpaired surrogate, as
+ * `cleanFiles` leaves every text File: each half of a pair is two of the character's four bytes.
+ */
+function utf8Length(text: string) {
+    let length = 0
+    for (let index = 0; index < text.length; index++) {
+        const code = text.charCodeAt(index)
+        length += code < 0x80 ? 1 : code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 2 : 3
+    }
+    return length
+}
+
+/**
+ * What the Files take of the Project's 16 MiB, as `cleanFiles` counts it: each original, and the
+ * bytes each Byte edit puts in (ADR 0047). Read from the stored lengths without decoding a File,
+ * for Files `cleanFiles` checked, whose base64 is canonical and whose text has no lone surrogate.
+ */
+export function storedFilesSize(files: ProjectFiles): number {
+    let size = 0
+    for (const file of Object.values(files)) {
+        size += file.encoding === 'base64' ? base64Length(file.content) : utf8Length(file.content)
+        for (const edit of file.edits ?? []) size += base64Length(edit.insert)
+    }
+    return size
+}
+
+/**
+ * A byte File with `edits` in place of its own over the same original, checked as `cleanFiles`
+ * checks a saved list, against the original's length, which is read from its base64 rather than
+ * decoded: `file` is a record `cleanFiles` checked, so its original needs no checking again, and
+ * a Byte edit costs what its edits do, not the whole File. Its Annotations stay: an overwrite moves
+ * no address.
+ */
+export function withByteEdits(
+    path: string,
+    file: ProjectFile,
+    edits: readonly ByteEdit[]
+): ProjectFile {
+    const length = file.encoding === 'base64' ? base64Length(file.content) : 0
+    const clean = cleanByteEdits(path, { encoding: file.encoding, edits }, length)
+    return Object.freeze({
+        encoding: file.encoding,
+        content: file.content,
+        ...(clean ? { edits: clean } : {}),
+        ...(file.annotations ? { annotations: file.annotations } : {})
+    })
+}
+
+/** A stable text naming a File's Byte edits, empty when it has none, for keys and equality. */
+export function byteEditsKey(file: ProjectFile): string {
+    return file.edits?.length
+        ? file.edits.map((edit) => `${edit.offset},${edit.remove},${edit.insert}`).join(';')
+        : ''
+}
+
+/**
+ * Whether two Files hold the same bytes the same way: encoding, original and Byte edits. Their
+ * Annotations are no part of it, so a rename or a comment never makes a Build stale.
+ */
+export function sameFileContent(left: ProjectFile | undefined, right: ProjectFile | undefined) {
+    if (!left || !right) return left === right
+    return (
+        left.encoding === right.encoding &&
+        left.content === right.content &&
+        byteEditsKey(left) === byteEditsKey(right)
+    )
+}
+
+const ANNOTATION_KINDS: readonly (keyof Annotations)[] = [
+    'names',
+    'comments',
+    'functionComments',
+    'locals'
+]
+/** The kinds a Listing is generated from: renames and comments, not a function's local names. */
+const LISTING_ANNOTATION_KINDS: readonly (keyof Annotations)[] = [
+    'names',
+    'comments',
+    'functionComments'
+]
+const FILE_ADDRESS = /^0x(?:0|[1-9a-f][0-9a-f]*)$/
+
+/** Whether `key` is a {@link FileAddress}: canonical lower-case hex, a safe integer. */
+export function isFileAddress(key: unknown): key is FileAddress {
+    return (
+        typeof key === 'string' &&
+        key.length <= 16 &&
+        FILE_ADDRESS.test(key) &&
+        Number(key) <= Number.MAX_SAFE_INTEGER
+    )
+}
+
+/**
+ * Whether `id` can be a variable id, which the editor keeps as the decompiler gives it without
+ * reading it (decision 15): 1 to {@link VARIABLE_ID_LENGTH_LIMIT} characters, none a control.
+ */
+export function isVariableId(id: unknown): id is string {
+    if (typeof id !== 'string' || !id.length || id.length > VARIABLE_ID_LENGTH_LIMIT) return false
+    for (let index = 0; index < id.length; index++) {
+        const code = id.charCodeAt(index)
+        if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return false
+    }
+    return true
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Strings in the order of their UTF-16 code units, as `sort` without a comparator puts them. */
+function byCodeUnits(left: string, right: string) {
+    return left < right ? -1 : left > right ? 1 : 0
+}
+
+/** Canonical file addresses in address order: the longer is the larger, without leading zeros. */
+function byAddress(left: string, right: string) {
+    return left.length - right.length || byCodeUnits(left, right)
+}
+
+/** A frozen map without a prototype, with `entries` in the order given. */
+function frozenRecord<T>(entries: readonly (readonly [string, T])[]): Readonly<Record<string, T>> {
+    const record: Record<string, T> = Object.create(null)
+    for (const [key, value] of entries) record[key] = value
+    return Object.freeze(record)
+}
+
+/** A saved comment's problem: not text, empty, or what `commentProblem` refuses. */
+function savedCommentProblem(text: unknown): string | undefined {
+    if (typeof text !== 'string') return 'not text'
+    if (!text.trim()) return 'an empty comment'
+    return commentProblem(text)
+}
+
+/** A saved local's name's problem: what any name may not be, or one shaped like Ghidra's own. */
+function savedLocalProblem(name: unknown): string | undefined {
+    if (typeof name !== 'string') return 'not text'
+    const problem = nameProblem(name)
+    if (problem) return problem
+    return looksLikeGhidraName(name)
+        ? `The name “${name}” uses the same format that the decompiler uses. Choose a different name.`
+        : undefined
+}
+
+/** A File's saved renames or comments that are not the shape they are saved in. */
+const damagedAnnotations = (path: string) =>
+    new ProjectFormatError(`${path} has damaged renames or comments and can't be opened.`)
+
+/** A File's saved rename or comment at a key that is no address. */
+const misplacedAnnotation = (path: string, key: string) =>
+    new ProjectFormatError(`${path} has a rename or comment at a bad address (${key}).`)
+
+/** A File's saved local name under a key that is no variable id, shown quoted and cut short. */
+const misplacedLocal = (path: string, id: string) =>
+    new ProjectFormatError(
+        `${path} has a renamed variable with a bad id (${JSON.stringify(id.length > 40 ? `${id.slice(0, 40)}…` : id)}).`
+    )
+
+/** One map of texts by address, checked, in address order; undefined when absent or empty. */
+function cleanAddressTexts(
+    path: string,
+    value: unknown,
+    what: string,
+    problemOf: (text: unknown) => string | undefined
+): Readonly<Record<FileAddress, string>> | undefined {
+    if (value === undefined) return undefined
+    if (!isPlainRecord(value)) throw damagedAnnotations(path)
+    const entries = Object.entries(value).map(([key, text]) => {
+        if (!isFileAddress(key)) throw misplacedAnnotation(path, key)
+        const problem = problemOf(text)
+        if (problem)
+            throw new ProjectFormatError(
+                `${path} has a ${what} at ${key} that can't be used: ${problem}`
+            )
+        return [key, text as string] as const
+    })
+    if (!entries.length) return undefined
+    return frozenRecord(entries.sort((left, right) => byAddress(left[0], right[0])))
+}
+
+/**
+ * A File's saved Annotations, checked as a saved list of Byte edits is: an unknown kind, a key
+ * that is not a canonical file address or variable id, a name that is not one a person may give
+ * (`nameProblem`, and for a local one not shaped like Ghidra's own), or a comment that is empty
+ * or past the limits throws a `ProjectFormatError`. Uniqueness is not checked, since it depends on
+ * the Listing, which a Byte edit can change: a name another label took is not applied
+ * (decision 10). The result is frozen, in address order, without empty maps; undefined when
+ * nothing is left.
+ */
+export function cleanAnnotations(path: string, value: unknown): Annotations | undefined {
+    if (value === undefined) return undefined
+    if (
+        !isPlainRecord(value) ||
+        Object.keys(value).some((key) => !ANNOTATION_KINDS.includes(key as keyof Annotations))
+    )
+        throw damagedAnnotations(path)
+    const names = cleanAddressTexts(path, value.names, 'name', (name) =>
+        typeof name === 'string' ? nameProblem(name) : 'not text'
+    )
+    const comments = cleanAddressTexts(path, value.comments, 'comment', savedCommentProblem)
+    const functionComments = cleanAddressTexts(
+        path,
+        value.functionComments,
+        'function comment',
+        savedCommentProblem
+    )
+    let locals: Annotations['locals']
+    if (value.locals !== undefined) {
+        if (!isPlainRecord(value.locals)) throw damagedAnnotations(path)
+        const functions: (readonly [FileAddress, Readonly<Record<string, string>>])[] = []
+        for (const [key, variables] of Object.entries(value.locals)) {
+            if (!isFileAddress(key)) throw misplacedAnnotation(path, key)
+            if (!isPlainRecord(variables)) throw damagedAnnotations(path)
+            const named = Object.entries(variables).map(([id, name]) => {
+                if (!isVariableId(id)) throw misplacedLocal(path, id)
+                const problem = savedLocalProblem(name)
+                if (problem)
+                    throw new ProjectFormatError(
+                        `${path} has a variable name at ${key} that can't be used: ${problem}`
+                    )
+                return [id, name as string] as const
+            })
+            if (named.length)
+                functions.push([
+                    key,
+                    frozenRecord(named.sort(([left], [right]) => byCodeUnits(left, right)))
+                ])
+        }
+        if (functions.length)
+            locals = frozenRecord(functions.sort((left, right) => byAddress(left[0], right[0])))
+    }
+    const kinds = { names, comments, functionComments, locals }
+    const kept = ANNOTATION_KINDS.filter((kind) => kinds[kind] !== undefined)
+    if (!kept.length) return undefined
+    return Object.freeze(Object.fromEntries(kept.map((kind) => [kind, kinds[kind]]))) as Annotations
+}
+
+/**
+ * The same File with `annotations` in place of its own, checked and put in order as
+ * `cleanAnnotations` does; without a record when they are undefined or empty. Its bytes and Byte
+ * edits stay as they are. The Project's limit on all its Files' Annotations together is the
+ * caller's to check (`storedAnnotationsSize`), as `FileSystem.annotate` does.
+ */
+export function withAnnotations(
+    path: string,
+    file: ProjectFile,
+    annotations: Annotations | undefined
+): ProjectFile {
+    const clean = cleanAnnotations(path, annotations)
+    return Object.freeze({
+        encoding: file.encoding,
+        content: file.content,
+        ...(file.edits ? { edits: file.edits } : {}),
+        ...(clean ? { annotations: clean } : {})
+    })
+}
+
+/** The UTF-8 bytes of a File's Annotations: every key, id, name and comment. */
+function annotationsSize(annotations: Annotations | undefined): number {
+    if (!annotations) return 0
+    let size = 0
+    const texts = (record: Readonly<Record<string, string>> | undefined) => {
+        for (const [key, text] of Object.entries(record ?? {}))
+            size += utf8Length(key) + utf8Length(text)
+    }
+    texts(annotations.names)
+    texts(annotations.comments)
+    texts(annotations.functionComments)
+    for (const [key, variables] of Object.entries(annotations.locals ?? {})) {
+        size += utf8Length(key)
+        texts(variables)
+    }
+    return size
+}
+
+/**
+ * What the Annotations of all `files` take of the Project's {@link ANNOTATIONS_BYTE_LIMIT}, as
+ * `cleanFiles` counts it, for Files whose Annotations it checked.
+ */
+export function storedAnnotationsSize(files: ProjectFiles): number {
+    let size = 0
+    for (const file of Object.values(files)) size += annotationsSize(file.annotations)
+    return size
+}
+
+/** The kinds of `annotations` named, in a fixed order, as text no two different records share. */
+function annotationsText(
+    annotations: Annotations | undefined,
+    kinds: readonly (keyof Annotations)[]
+): string {
+    if (!annotations) return ''
+    const sorted = (
+        record: Readonly<Record<string, unknown>>,
+        order: (left: string, right: string) => number
+    ): [string, unknown][] =>
+        Object.keys(record)
+            .sort(order)
+            .map((key) => [key, record[key]])
+    const parts: [keyof Annotations, unknown][] = []
+    for (const kind of kinds) {
+        const record = annotations[kind]
+        if (!record || !Object.keys(record).length) continue
+        if (kind !== 'locals') {
+            parts.push([kind, sorted(record, byAddress)])
+            continue
+        }
+        const functions = sorted(record, byAddress)
+            .map(([key, variables]) => [
+                key,
+                sorted(variables as Readonly<Record<string, string>>, byCodeUnits)
+            ])
+            .filter(([, variables]) => variables.length)
+        if (functions.length) parts.push([kind, functions])
+    }
+    return parts.length ? JSON.stringify(parts) : ''
+}
+
+/**
+ * A stable text naming a File's Annotations, empty when it has none, for keys and equality: two
+ * Files' keys are equal exactly when their Annotations are, whatever order their keys were added
+ * in.
+ */
+export function annotationsKey(file: Pick<ProjectFile, 'annotations'>): string {
+    return annotationsText(file.annotations, ANNOTATION_KINDS)
+}
+
+/**
+ * The part of {@link annotationsKey} a File's Listing is generated from, its renames and comments,
+ * so that renaming a local, which only its function's Pseudocode shows, leaves the Listing as it
+ * is. Empty when there is none.
+ */
+export function listingAnnotationsKey(file: Pick<ProjectFile, 'annotations'>): string {
+    return annotationsText(file.annotations, LISTING_ANNOTATION_KINDS)
+}
+
+/**
+ * The first `length` bytes a File reads as, edits applied, decoding only as much of it as they
+ * need: recognising a File by its first bytes runs on every check and must not decode 16 MiB.
+ */
+export function fileHead(file: ProjectFile, length: number): Uint8Array {
+    if (file.edits?.length && !file.edits.every(isOverwrite))
+        return fileBytes(file).slice(0, length)
+    let head: Uint8Array
+    if (file.encoding === 'plain') {
+        //every character is at least one byte of UTF-8, so `length` characters are enough
+        head = encoder.encode(file.content.slice(0, length)).slice(0, length)
+    } else {
+        //every four base64 characters are three bytes, and canonical base64 decodes in pieces
+        head = decodeBase64(file.content.slice(0, Math.ceil(length / 3) * 4)).slice(0, length)
+    }
+    for (const edit of file.edits ?? []) {
+        if (edit.offset >= head.length) continue
+        const insert = decodeBase64(edit.insert)
+        head.set(insert.subarray(0, head.length - edit.offset), edit.offset)
+    }
+    return head
+}
+
+/**
+ * The Byte edits stored with a File, checked by applying them in order to its original's
+ * `length`: each in range of the length the edits before it leave, so a Project is never opened
+ * with bytes it would read differently. An insertion or a deletion is as valid as an overwrite
+ * (ADR 0047), so a Project that carries one is read, though this editor writes only overwrites.
+ * Undefined when there are none.
+ */
+function cleanByteEdits(
+    path: string,
+    value: { encoding: FileEncoding; edits?: unknown },
+    length: number
+): readonly ByteEdit[] | undefined {
+    if (value.edits === undefined) return undefined
+    if (!Array.isArray(value.edits)) throw new ProjectFormatError(`Invalid Byte edits for ${path}`)
+    if (!value.edits.length) return undefined
+    if (value.encoding !== 'base64')
+        throw new ProjectFormatError(`Only a File stored as bytes has Byte edits: ${path}`)
+    let current = length
+    return Object.freeze(
+        value.edits.map((edit: unknown) => {
+            if (
+                !edit ||
+                typeof edit !== 'object' ||
+                Object.keys(edit).some(
+                    (key) => key !== 'offset' && key !== 'remove' && key !== 'insert'
+                )
+            )
+                throw new ProjectFormatError(`Invalid Byte edit for ${path}`)
+            const { offset, remove, insert } = edit as Record<string, unknown>
+            if (
+                typeof offset !== 'number' ||
+                typeof remove !== 'number' ||
+                typeof insert !== 'string' ||
+                !Number.isSafeInteger(offset) ||
+                !Number.isSafeInteger(remove) ||
+                offset < 0 ||
+                remove < 0
+            )
+                throw new ProjectFormatError(`Invalid Byte edit for ${path}`)
+            const inserted = decodeBase64(insert).length
+            if (!remove && !inserted) throw new ProjectFormatError(`An empty Byte edit for ${path}`)
+            if (offset + remove > current)
+                throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
+            current += inserted - remove
+            return Object.freeze({ offset, remove, insert })
+        })
+    )
 }
 
 export function bytesFile(bytes: Uint8Array): ProjectFile {
     try {
         return Object.freeze({ encoding: 'plain', content: decoder.decode(bytes) })
     } catch {
-        let raw = ''
-        for (let i = 0; i < bytes.length; i += 8192)
-            raw += String.fromCharCode(...bytes.subarray(i, i + 8192))
-        return Object.freeze({ encoding: 'base64', content: btoa(raw) })
+        return Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) })
     }
 }
 
@@ -94,14 +692,15 @@ export function projectFileFromBytes(bytes: Uint8Array, encoding: FileEncoding):
         return automatic
     }
     if (encoding !== 'base64') throw new ProjectFormatError('Invalid file encoding')
-    let raw = ''
-    for (let i = 0; i < bytes.length; i += 8192) {
-        raw += String.fromCharCode(...bytes.subarray(i, i + 8192))
-    }
-    return Object.freeze({ encoding: 'base64', content: btoa(raw) })
+    return Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) })
 }
 
+/**
+ * A File's text. A File with Byte edits has none: only a File stored as bytes takes them, and it
+ * stays one whatever its edited bytes decode as.
+ */
 export function fileText(file: ProjectFile): string {
+    if (file.edits?.length) throw new ProjectFormatError('File is not readable UTF-8 text')
     try {
         return decoder.decode(fileBytes(file))
     } catch {
@@ -117,6 +716,7 @@ export function cleanFiles(raw: unknown): ProjectFiles {
         throw new ProjectFormatError('Project exceeds the 4,096-file limit')
     const files: Record<string, ProjectFile> = Object.create(null)
     let size = 0
+    let annotated = 0
     for (const [path, value] of entries) {
         if (!isValidFilePath(path)) throw new ProjectFormatError(`Invalid file path: ${path}`)
         if (
@@ -129,11 +729,27 @@ export function cleanFiles(raw: unknown): ProjectFiles {
         }
         if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        const bytes = fileBytes(value)
+        const bytes = originalBytes(value)
+        const edits = cleanByteEdits(path, value, bytes.length)
+        //the original and its Byte edits are both kept, so both count (ADR 0047): the bytes each
+        //edit puts in, an overwrite's length; the File as edited is never longer than all these
         size += bytes.length
+        for (const edit of edits ?? []) size += base64Length(edit.insert)
         if (size > FILE_BYTE_LIMIT)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        files[path] = Object.freeze({ encoding: value.encoding, content: value.content })
+        const annotations = cleanAnnotations(path, value.annotations)
+        annotated += annotationsSize(annotations)
+        //met when a Project is opened or imported: saving is refused earlier, by the FileSystem
+        if (annotated > ANNOTATIONS_BYTE_LIMIT)
+            throw new ProjectFormatError(
+                "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
+            )
+        files[path] = Object.freeze({
+            encoding: value.encoding,
+            content: value.content,
+            ...(edits ? { edits } : {}),
+            ...(annotations ? { annotations } : {})
+        })
     }
     for (const path of Object.keys(files)) {
         const parts = path.split('/')
@@ -210,6 +826,22 @@ export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildC
     })
 }
 
+/**
+ * A text naming a Build configuration, the same for two that `buildConfigurationsEqual` holds
+ * equal, for a saved record to keep in place of the configuration.
+ */
+export function buildConfigurationKey(configuration: BuildConfiguration): string {
+    return JSON.stringify(
+        (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).map((key) => {
+            if (key !== 'compiledLanguages') return configuration[key] ?? null
+            const languages = configuration.compiledLanguages ?? {}
+            return Object.keys(languages)
+                .sort()
+                .map((path) => [path, languages[path]])
+        })
+    )
+}
+
 export function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
     return (
         left.entry === right.entry &&
@@ -217,9 +849,7 @@ export function buildSourcesEqual(left: BuildSources, right: BuildSources): bool
         Object.keys(left.files).length === Object.keys(right.files).length &&
         Object.keys(left.files).every(
             (path) =>
-                hasOwn(right.files, path) &&
-                left.files[path].encoding === right.files[path].encoding &&
-                left.files[path].content === right.files[path].content
+                hasOwn(right.files, path) && sameFileContent(left.files[path], right.files[path])
         )
     )
 }

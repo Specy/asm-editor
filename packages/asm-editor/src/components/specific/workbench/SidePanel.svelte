@@ -3,7 +3,15 @@
      * The panel beside the rail. Every panel opened once stays mounted and is only hidden when
      * another one is shown, so the AI conversation, a documentation search or a half-typed Testcase
      * survive switching. Documentation and Testcases can be maximized over the rest of the Workbench
-     * ([the design record](../../../../../../docs/design/workbench.md), Maximized panels).
+     * ([the design record](../../../../../../docs/design/workbench.md), Maximized panels). The
+     * Testcases are the Selected program's, and with two Programs or more the Testcases and Settings
+     * headers name it, `Settings · sort.c`, so whose they are shows with the bottom panel folded
+     * ([programs.md](../../../../../../docs/design/programs.md), decision 10). Symbols lists the
+     * functions and strings of an Executable
+     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 18). Search finds text in the Project's Files, Listings and Pseudocode, and can be
+     * maximized too ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decisions 23 to 29).
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
@@ -14,8 +22,11 @@
     import TestcasesSummary from '#cmp/specific/project/testcases/TestcasesSummary.svelte'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { documentationLanguageOf } from '#lib/search/scope.ts'
+    import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
+    import SymbolsPanel from './SymbolsPanel.svelte'
+    import SearchPanel from './SearchPanel.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -38,6 +49,17 @@
     const mounted = $derived(
         context.rail.filter((entry) => !entry.action && ui.opened.has(entry.id))
     )
+    /** The Selected program's label in the headers of the panels that are about it. */
+    const programLabel = $derived(
+        session.programChoices.length > 1 &&
+            (active?.id === 'settings' || active?.id === 'testcases')
+            ? session.programChoices.find((choice) => choice.entry === project.selectedProgram)
+                  ?.label
+            : undefined
+    )
+    const title = $derived(
+        active ? (programLabel ? `${active.title} · ${programLabel}` : active.title) : undefined
+    )
 
     /** Run all, which like Test ends a Debug session first: the Testcases run on its Emulator. */
     function runTestcases() {
@@ -51,6 +73,8 @@
      */
     const MIN_WIDTHS: Record<string, string> = {
         explorer: '13rem',
+        symbols: '16rem',
+        search: '18rem',
         testcases: '24rem',
         documentation: '24rem',
         agent: '20rem',
@@ -72,13 +96,17 @@
     class:phone
     class:framed
     class:maximized={ui.maximized || restoring}
-    aria-label={active?.title}
+    aria-label={title}
 >
     <header class="panel-header">
-        <span class="panel-title ellipsis">{active?.title ?? ''}</span>
-        {#if active?.id === 'testcases'}
+        <span class="panel-title ellipsis" {title}
+            >{active?.title ?? ''}{#if programLabel}<span class="program-label"
+                    >{` · ${programLabel}`}</span
+                >{/if}</span
+        >
+        {#if active?.id === 'testcases' && project.selected}
             <TestcasesSummary
-                testcases={project.testcases}
+                testcases={project.selected.testcases}
                 results={session.testcasesResult}
                 onRun={runTestcases}
                 onClear={() => (session.testcasesResult = [])}
@@ -122,7 +150,11 @@
         <div
             class="panel-body"
             class:shown
-            class:gutterless={entry.id === 'explorer' || entry.id === 'testcases'}
+            class:gutterless={entry.id === 'explorer' ||
+                entry.id === 'symbols' ||
+                entry.id === 'search' ||
+                entry.id === 'testcases' ||
+                entry.id === 'documentation'}
         >
             <div
                 class="panel-content"
@@ -133,39 +165,78 @@
                         name={project.name}
                         files={project.files}
                         language={project.language}
-                        entry={project.entry}
+                        programs={session.programChoices}
+                        selectedProgram={project.selectedProgram}
                         fileSystem={project.fileSystem}
                         selectedPath={session.displayedPath}
                         selectedPaths={session.groups.map((group) => group.displayedPath)}
                         onFileDragStart={(event, path) => session.startFileDrag(event, path)}
                         onFileDragEnd={() => session.endFileDrag()}
-                        locked={session.fileSystemLocked || entry.access === 'readonly'}
+                        locked={session.filesLocked || entry.access === 'readonly'}
                         diagnosticCounts={session.diagnosticCounts}
                         onSelect={(path) => {
                             session.selectFile(path)
                             if (ui.deviceClass === 'phone') ui.drawerOpen = false
                         }}
-                        onEntryChange={(path) => session.setEntry(path)}
+                        onPreview={(path) => {
+                            session.previewFile(path)
+                            if (ui.deviceClass === 'phone') ui.drawerOpen = false
+                        }}
+                        onNewProgram={(path) => session.createProgram(path)}
+                        onRemoveProgram={(path) => session.removeProgram(path)}
+                        programLoss={(path) => session.programLoss(path)}
                         onRenamed={(from, to) => session.fileRenamed(from, to)}
                         onDeleted={(path) => session.fileDeleted(path)}
+                        onFilesAdded={(paths) => session.filesAdded(paths)}
                         libraryFiles={Object.keys(emulator.buildLibraryFiles ?? {})}
+                        buildOutputs={session.buildOutputs}
                         hints={context.documentationLinks}
                     />
-                {:else if entry.id === 'testcases'}
-                    <TestcasesList
-                        bind:testcases={project.testcases}
-                        testcasesResult={session.testcasesResult}
-                        editable={session.testcasesEditable}
-                        systemSize={emulator.systemSize}
-                        language={project.language}
-                        registerNames={emulator.registers.map((r) => r.name)}
-                        registerSizes={Object.fromEntries(
-                            emulator.registers.map((r) => [r.name, Number(r.size)])
-                        )}
-                        startingRegisterNames={emulator.startingRegisterNames}
-                        hiddenRegistersNames={emulator.hiddenRegisters}
-                        style="flex: 1; min-height: 0;"
+                {:else if entry.id === 'symbols'}
+                    <SymbolsPanel
+                        {shown}
+                        onReveal={() => {
+                            if (ui.deviceClass === 'phone') ui.drawerOpen = false
+                        }}
                     />
+                {:else if entry.id === 'search'}
+                    <!-- on a phone the drawer holds it: closing the drawer closes the panel -->
+                    <SearchPanel
+                        shown={shown && (!phone || ui.drawerOpen)}
+                        onReveal={() => {
+                            if (phone) ui.drawerOpen = false
+                        }}
+                    />
+                {:else if entry.id === 'testcases'}
+                    {#if project.selected}
+                        <!-- the array itself, so that a Testcase edited in place is the Program's,
+                        keyed by the Program so that which one is unfolded does not carry over -->
+                        {#key project.selectedProgram}
+                            <TestcasesList
+                                bind:testcases={
+                                    () => project.selected?.testcases ?? [],
+                                    (next) => {
+                                        const selected = project.selectedProgram
+                                        if (selected !== undefined)
+                                            project.setProgramTestcases(selected, next)
+                                    }
+                                }
+                                testcasesResult={session.testcasesResult}
+                                editable={session.testcasesEditable}
+                                systemSize={emulator.systemSize}
+                                language={project.language}
+                                registerNames={emulator.registers.map((r) => r.name)}
+                                registerSizes={Object.fromEntries(
+                                    emulator.registers.map((r) => [r.name, Number(r.size)])
+                                )}
+                                startingRegisterNames={emulator.startingRegisterNames}
+                                hiddenRegistersNames={emulator.hiddenRegisters}
+                                style="flex: 1; min-height: 0;"
+                            />
+                        {/key}
+                    {:else}
+                        <p class="no-program">{NO_PROGRAM_MESSAGE}</p>
+                    {/if}
                 {:else if entry.id === 'documentation'}
                     <DocumentationBrowser
                         language={documentationLanguageOf(project.language)}
@@ -223,6 +294,20 @@
         text-transform: uppercase;
     }
 
+    /* a File's name, so not in capitals, which would name another one */
+    .program-label {
+        letter-spacing: normal;
+        text-transform: none;
+    }
+
+    .no-program {
+        margin: 0;
+        padding: 0.8rem;
+        font-size: 0.8rem;
+        line-height: 1.4;
+        color: var(--hint);
+    }
+
     .panel-action {
         display: grid;
         place-items: center;
@@ -255,8 +340,10 @@
             display: flex;
         }
 
-        /* the Explorer seldom scrolls; Testcases reserves room on its own scrolling list */
+        /* The Explorer seldom scrolls; Symbols, Search, Testcases and Documentation reserve their
+           own gutter. */
         &.gutterless {
+            overflow-y: hidden;
             scrollbar-gutter: auto;
         }
     }

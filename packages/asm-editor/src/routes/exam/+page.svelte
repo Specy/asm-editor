@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -51,10 +52,10 @@
     const sectionTypeOptions: Array<{ key: ExamSectionType; value: ExamSectionType }> =
         Object.values(ExamSectionType).map((value) => ({ key: value, value }))
     const assemblyLanguageOptions: Array<{
-        key: AvailableLanguages
+        key: string
         value: AvailableLanguages
     }> = (Object.keys(BASE_CODE) as AvailableLanguages[]).map((value) => ({
-        key: value,
+        key: languageLabel(value),
         value
     }))
 
@@ -390,7 +391,7 @@
                             {#if section.type === ExamSectionType.AssemblyCoding}
                                 {@const assemblySection = section as AssemblyCodingSection}
                                 <Select
-                                    title="Assembly language"
+                                    title="Instruction Set"
                                     wrapperStyle="max-width: 14rem; gap: 0.3rem;"
                                     style="padding: 0.8rem"
                                     value={assemblySection.language}
@@ -576,20 +577,6 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
-    }
-
-    :global(.carta-editor) {
-        height: 100%;
-        flex: 1;
-    }
-
-    :global(.carta-theme__default) {
-        --border-color: var(--border-color-dark);
-        --selection-color: var(--selection-color-dark);
-        --focus-outline: var(--focus-outline-dark);
-        --hover-color: var(--hover-color-dark);
-        --caret-color: var(--caret-color-dark);
-        --text-color: var(--text-color-dark);
     }
 
     @media (max-width: 980px) {

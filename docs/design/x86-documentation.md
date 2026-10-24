@@ -168,9 +168,10 @@ A merged record today looks like this (`--sample jnz`, abridged): NASM 3.00 form
 ## What no source gives us
 
 - **Flags affected per instruction.** insref mentions flags in prose when it feels like it; the
-  Opcodes XML has none; NASM's table has none. Either lift it from iced or asmjit (permissive,
-  generated) or write it for the taught set only. The Z80 page sets the expectation that a flags
-  table is there, so this is the one real gap.
+  Opcodes XML has none; NASM's table has none. Closed on 2026-10-18 from Intel XED (Apache-2.0,
+  v2026.08.23), vendored as the extract `scripts/x86-docs/xed-flags.txt` and generated into
+  `x86Flags.ts` for 270 of the 273 documented instructions
+  ([instruction-layout.md](./instruction-layout.md), decision 5).
 - **The condition code, register value and status flag tables** the prose cross references.
 - **Examples.** Every other language's documentation has runnable snippets. `MIPS.getInstructionSet()`
   ships one per instruction; for x86 they are ours to write, and only for the taught set.
@@ -205,6 +206,7 @@ committed modules under `packages/asm-editor/src/lib/languages/X86/generated/`:
 | `x86Descriptions.ts` | 586 descriptions, converted to markdown                                                                            | `insref.src`                                                                       |
 | `x86Syscalls.ts`     | 138 syscalls with canonical numbers, names and arities exported by the built Core                                  | `getImplementedSyscalls()`, `syscall.c`, `strace.h`                                |
 | `x86Tokens.ts`       | directives, standard macros, preprocessor directives, prefixes, size specifiers, 344 register names, flag meanings | `directiv.dat`, `standard.mac`, `pptok.dat`, `tokens.dat`, `regs.dat`, `iflags.ph` |
+| `x86Flags.ts`        | per documented instruction, what it does to each flag and which flags it reads, with notes where a form decides    | Intel XED `datafiles/*.txt`, through `scripts/x86-docs/xed-flags.txt`              |
 
 [`X86-documentation.ts`](../../packages/asm-editor/src/lib/languages/X86/X86-documentation.ts) is the curated layer on
 top: the documented set, the written descriptions that outrank the generated ones, the registers,
@@ -274,8 +276,39 @@ they were before this work.
 
 - Question 1, the `insref.src` licence, is unchanged: the file stays a cached fetch and the prose it
   produces is committed with its notice in the header of `x86Descriptions.ts`.
-- Flags affected per instruction: still nothing. The condition code table says which flags each
-  condition reads, and no instruction says which it writes.
+- Flags affected per instruction: from XED since 2026-10-18 (`x86Flags.ts`), shown as each
+  instruction page's flags strip. `ibts`, `xbts` and `jmpe` have no XED record and no strip.
 - The x86 course, which is what would define the taught set that deserves hand written prose. Five
   instructions have it today (`syscall`, `movabs`, `cdqe`, `cqo`, `movsxd`), chosen because the
   appendix predates them or because they mean something particular here.
+
+## Vector instructions and what the Core runs (2026-10-22)
+
+The Core runs AVX, AVX2, FMA, BMI and the `v` forms of SSE4, AES and PCLMULQDQ, but the pages
+started out assuming it ran nothing with an extension flag. What changed:
+
+- `x86Support.ts` states, for each form, whether the Core runs it (no extension, or only
+  extensions it runs), is known not to (AVX-512, AVX10, APX, MMX, 3DNow!, XOP, SHA and the other
+  families listed there, and `movbe`, `adcx`, `adox`, `fbld` and `fbstp`, which carry no
+  extension), runs it only as its `v` form (SSE4 and AES, apart from `pmulld`, `movntdqa`,
+  `crc32` and `pclmulqdq`, which Blink runs in their legacy encoding too), or is not known either
+  way. Nothing is claimed about the last: CET, VMX, TSX and the rest say nothing. A form with an
+  MMX register operand counts as MMX whatever NASM tags it, since the Core runs only `emms` of
+  them, and `prefetch` and `prefetchw` run although NASM files them under 3DNow!. A review on
+  2026-10-22 ran every classified form in the Core and found these exceptions.
+- Each Extensions group begins with what the Core does about it: "This emulator does not support
+  AVX-512." for a group it stops at throughout, a sentence naming the forms it leaves out for a
+  group it runs in part, and for SSE4 the instruction to write instead. A mnemonic in a group that
+  runs in part but is itself not run is marked on its line. The same facts reach the hover, the
+  completion detail and the snippets: a snippet offers a form that runs, since the widest form of a
+  vector instruction is its AVX-512 one.
+- A group of vector instructions the Core runs is split under labels by the work they do
+  (`vectorCategories.ts`): NASM files them by the year they arrived. The labels are separate from
+  the shared Instruction categories, which name scalar work; the vector mnemonics have no page of
+  their own, so no Instruction category would show anywhere.
+- The `cmp<predicate>`, FMA order and `qq` aliases NASM adds have the summary of what they stand
+  for (`x86AliasSummaries.ts`); the Opcodes data lists none of them.
+- The "Vector instructions" Chapter explains the registers, the upper-half rules, lanes, memory
+  operands and alignment, and FMA, and the lecture "AVX and 256-bit vectors" teaches them. The
+  Instructions Chapter's per-form "omitted" line is still not drawn (the owner removed it in
+  539d69db); the integer pages show what runs and say nothing of the rest.

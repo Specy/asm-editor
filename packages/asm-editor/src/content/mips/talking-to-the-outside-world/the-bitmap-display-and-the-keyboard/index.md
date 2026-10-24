@@ -6,11 +6,15 @@ have a place: service 10 exits, and service 32 gives a moving or polling program
 
 ## One word is one pixel
 
-The Screen's dimensions come from fixed choices:
+MARS offers the Screen's dimensions as fixed choices:
 
 - **Unit width** and **unit height** are each one of 1, 2, 4, 8, 16 or 32 display pixels. They say
   how large the Screen draws one framebuffer word.
 - **Display width** and **display height** are each one of 64, 128, 256, 512 or 1024 pixels.
+
+The editor also takes any whole number from 1 to 1024 for the display and from 1 to 32 for a unit,
+through **Custom** in the Display menus or a `@screen` comment. MARS itself cannot show those
+sizes.
 
 The word grid has `display width / unit width` columns and
 `display height / unit height` rows. For example, a 256 by 256 display with 16 by 16 units holds a

@@ -110,8 +110,12 @@ export class ListingPatcher {
      */
     patched = $state.raw<PatchedListing | undefined>()
     /**
-     * The lines of this Debug session whose bytes a Poke wrote, a patch or the memory view, with
-     * the names the last patch of each was typed with. Only these are read again.
+     * The instructions of this Debug session whose bytes a Poke wrote, a patch or the memory view,
+     * by their link-time address, with the names the last patch of each was typed with. Only these
+     * are read again, each on the line of its address in the Listing shown then: a Listing made
+     * again during the session, with a person's comment lines or names
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decision 22), or at the address the program was loaded at, has its lines elsewhere.
      */
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- read by `refresh`, which sets the reactive `patched`.
     private readonly written = new Map<number, NameHints>()
@@ -206,7 +210,7 @@ export class ListingPatcher {
         const { site } = preview
         if (this.host.executable()?.document !== site.document) return false
         //before the Poke, so the refresh it ends with reads the line
-        this.written.set(site.line, preview.names)
+        this.written.set(site.listing.lines.addresses[site.line], preview.names)
         this.host.poke(site.address, preview.bytes)
         this.refresh()
         const now = this.host.readMemory(site.address, site.length)
@@ -234,8 +238,8 @@ export class ListingPatcher {
         }
         for (let k = low; k < byAddress.length && addresses[byAddress[k]] < end; k++) {
             const line = byAddress[k]
-            if (kinds[line] === LINE_KIND.instruction && !this.written.has(line))
-                this.written.set(line, NO_NAMES)
+            if (kinds[line] === LINE_KIND.instruction && !this.written.has(addresses[line]))
+                this.written.set(addresses[line], NO_NAMES)
         }
     }
 
@@ -248,10 +252,14 @@ export class ListingPatcher {
             if (this.patched) this.patched = undefined
             return
         }
-        const { addresses, sizes, offsets } = listing.lines
+        const { addresses, sizes, offsets, kinds } = listing.lines
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- built here, then set whole as `patched`.
         const lines = new Map<number, PatchedLine>()
-        for (const [line, names] of [...this.written].sort((a, b) => a[0] - b[0])) {
+        for (const [start, names] of [...this.written].sort((a, b) => a[0] - b[0])) {
+            //an instruction's line, unless the Listing shown now decodes no instruction there
+            const line = lineOfAddress(listing, start)
+            if (line < 0 || addresses[line] !== start || kinds[line] !== LINE_KIND.instruction)
+                continue
             const address = BigInt(addresses[line] + listing.base)
             const original = executable.document.bytes.subarray(
                 offsets[line],
@@ -317,7 +325,7 @@ export class ListingPatcher {
             write.old.length !== write.new.length
         )
             return undefined
-        const hints = this.hints(listing, line, this.written.get(line))
+        const hints = this.hints(listing, line, this.written.get(start))
         const describe = (bytes: readonly number[]) =>
             describeLine(
                 decoder.disassemble(Uint8Array.from(bytes), write.address),

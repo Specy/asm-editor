@@ -1,14 +1,30 @@
 import { RISCV } from '@specy/risc-v'
 
+/**
+ * The RV64 list, which holds every RV32 form too, each marked by whether RV32 accepts it. A form
+ * the Core lists twice, the same example over the same operand tokens, is kept once: the 64 bit
+ * list repeats two `li` forms and `zext.b`, and RV32's list, which is this one filtered, would
+ * otherwise repeat them too.
+ */
 const previousTargetWas64Bit = RISCV.is64Bit()
 RISCV.setIs64Bit(true)
-const riscvIse = RISCV.getInstructionSet().map((i) => ({
-    name: i.name,
-    description: `${i.description}${i.getIsRv64Only() ? ' (64bit)' : ''}`,
-    tokens: i.tokens,
-    example: i.example,
-    isRv64Only: i.getIsRv64Only()
-}))
+const listedForms = new Set<string>()
+const riscvIse = RISCV.getInstructionSet()
+    .filter((i) => {
+        const key = [i.name, i.example.trim(), ...i.tokens.slice(1).map((t) => t.type)].join('\0')
+        if (listedForms.has(key)) return false
+        listedForms.add(key)
+        return true
+    })
+    .map((i) => ({
+        name: i.name,
+        description: i.description,
+        tokens: i.tokens,
+        example: i.example,
+        isRv64Only: i.getIsRv64Only(),
+        isPseudo: i.getIsPseudo(),
+        expansion: i.getExpansion()
+    }))
 RISCV.setIs64Bit(previousTargetWas64Bit)
 
 type RISCVAddressingMode = {
@@ -21,7 +37,12 @@ export type RISCVInstruction = {
     args: RISCVAddressingMode[][]
     description: string
     example: string
+    /** RV32 does not accept the form, so it is listed only for a RISC-V-64 Project. */
     isRv64Only: boolean
+    /** One of RARS's extended instructions, which the assembler expands into real ones. */
+    isPseudo: boolean
+    /** The instructions a pseudo-instruction becomes, as RARS's templates write them; empty otherwise. */
+    expansion: string[]
 }
 
 type RISCVInstructionVariants = [RISCVInstruction, ...RISCVInstruction[]]
@@ -43,7 +64,9 @@ export const riscvInstructionsWithDuplicates = riscvIse.map((ins) => {
                 }
             ] satisfies RISCVAddressingMode[]
         }),
-        isRv64Only: ins.isRv64Only
+        isRv64Only: ins.isRv64Only,
+        isPseudo: ins.isPseudo,
+        expansion: [...ins.expansion]
     } satisfies RISCVInstruction
 })
 
@@ -55,25 +78,6 @@ for (const ins of riscvInstructionsWithDuplicates) {
     } else {
         riscvInstructionMap.set(ins.name, [ins])
     }
-}
-
-export function aggregateArgs(ins: RISCVInstruction[]): RISCVAddressingMode[][] {
-    const args = new Array(Math.max(...ins.map((i) => i.args.length))).fill(
-        undefined
-    ) as RISCVAddressingMode[][]
-    for (const i of ins) {
-        i.args.forEach((a, idx) => {
-            if (args[idx] === undefined) {
-                args[idx] = []
-            }
-            for (const arg of a) {
-                if (!args[idx].some((e) => e.type === arg.type)) {
-                    args[idx].push(arg)
-                }
-            }
-        })
-    }
-    return args
 }
 
 export const riscvInstructionsVariants = [...riscvInstructionMap.values()]
@@ -127,40 +131,6 @@ export function riscvVariantOperands(variant: RISCVInstruction): string[] {
     }
     if (parts.length > 0) operands.push(parts.join(''))
     return operands
-}
-
-export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
-    const allOps = ins.map(riscvVariantOperands)
-    const maxLen = Math.max(...allOps.map((o) => o.length))
-    const result: string[] = []
-
-    for (let pos = 0; pos < maxLen; pos++) {
-        const values = [...new Set(allOps.map((o) => o[pos]).filter(Boolean))]
-        if (values.length <= 1) {
-            result.push(values[0] ?? '')
-        } else {
-            result.push(`[${values.join(' / ')}]`)
-        }
-    }
-
-    return result.join(', ')
-}
-
-export function groupVariantsByDescription(
-    variants: RISCVInstruction[]
-): { description: string; examples: string[] }[] {
-    const groups: { description: string; examples: string[] }[] = []
-    const map = new Map<string, number>()
-    for (const v of variants) {
-        const idx = map.get(v.description)
-        if (idx !== undefined) {
-            groups[idx].examples.push(v.example)
-        } else {
-            map.set(v.description, groups.length)
-            groups.push({ description: v.description, examples: [v.example] })
-        }
-    }
-    return groups
 }
 
 export const RISCVAddressingModes = {

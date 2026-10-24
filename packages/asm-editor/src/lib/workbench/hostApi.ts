@@ -12,7 +12,19 @@ import type { Emulator } from '#lib/languages/Emulator.ts'
 /** A built-in panel is shown, shown but not editable, or not offered at all. */
 export type PanelAccess = 'on' | 'readonly' | 'off'
 
-export type BuiltinPanelId = 'explorer' | 'testcases' | 'documentation' | 'agent' | 'settings'
+/**
+ * `symbols` is offered only in a Project that has an Executable. `search` is the Search panel
+ * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+ * 23), offered in every Target; an Exam switches it off with the Explorer.
+ */
+export type BuiltinPanelId =
+    | 'explorer'
+    | 'symbols'
+    | 'search'
+    | 'testcases'
+    | 'documentation'
+    | 'agent'
+    | 'settings'
 
 /** What a host panel's content is drawn with. */
 export type WorkbenchPanelContext = {
@@ -45,8 +57,14 @@ export type WorkbenchHostLink = {
 /** The sections of the Settings panel, in their order. */
 export type SettingsSectionId =
     | 'project'
-    | 'display'
+    | 'program'
     | 'preferences'
     | 'layout'
     | 'shortcuts'
     | 'theme'
+
+/**
+ * What Settings can be opened at: a section, or the Display configuration, a part of the Program
+ * section ([programs-plan.md](../../../../../docs/design/programs-plan.md), decision 14).
+ */
+export type SettingsTarget = SettingsSectionId | 'display'

@@ -13,10 +13,11 @@
  */
 
 import {
-    X86_INSTRUCTIONS,
+    X86_INSTRUCTIONS as GENERATED_INSTRUCTIONS,
     type X86Instruction,
     type X86InstructionForm
 } from './generated/x86Instructions'
+import { withAliasSummaries } from './x86AliasSummaries'
 import { X86_SIM_ARGUMENT_OVERRIDES } from '../../documentation/x86/syscallBinding'
 import { X86_DESCRIPTIONS } from './generated/x86Descriptions'
 import { X86_SYSCALLS, type X86Syscall } from './generated/x86Syscalls'
@@ -30,11 +31,13 @@ import {
     X86_SIZE_SPECIFIERS
 } from './generated/x86Tokens'
 
+/** NASM's table, with a summary on the spellings that are an alias of another instruction. */
+export const X86_INSTRUCTIONS: X86Instruction[] = withAliasSummaries(GENERATED_INSTRUCTIONS)
+
 export {
     X86_ADDRESS_KEYWORDS,
     X86_DIRECTIVES,
     X86_FLAG_MEANINGS,
-    X86_INSTRUCTIONS,
     X86_PREFIXES,
     X86_PREPROCESSOR_DIRECTIVES,
     X86_PSEUDO_OPS,
@@ -110,6 +113,16 @@ export function hasX86InstructionPage(name: string): boolean {
     return documentedNames.has(name.toLowerCase())
 }
 
+const X86_SIGNED_IMMEDIATE_RULE = `An 8-bit immediate used with a wider operand is sign-extended from −128 through 127. For a 64-bit operation, the longer immediate field is only 32 bits and is also sign-extended; there is no full 64-bit immediate form. The encoded bits determine the value used by the operation. For example, a 32-bit field of \`0xffffffff\` becomes \`0xffffffffffffffff\` (−1), not positive 4294967295. An out-of-range constant can produce a warning and truncated bits; use a register for a value that cannot be represented by these sign extensions.
+
+NASM normally chooses the short immediate encoding when it preserves the value; a \`byte\` qualifier is not required. \`strict\` with an immediate size can prevent that shortening.`
+
+const X86_SHIFT_COUNT_RULE = `The count comes from an immediate or \`cl\`. A 64-bit operand uses the low six bits of the count; 8-, 16- and 32-bit operands use the low five. Thus \`shl rax, 32\` shifts by 32, while \`shl eax, 32\` has a masked count of zero.`
+
+function instructionDescriptions(names: string[], description: string): Record<string, string> {
+    return Object.fromEntries(names.map((name) => [name, description]))
+}
+
 /**
  * Descriptions written here, which outrank the generated ones. Three reasons to write one: the
  * appendix predates long mode and says something that is no longer the whole truth, the instruction
@@ -117,17 +130,393 @@ export function hasX86InstructionPage(name: string): boolean {
  * particular in this editor, which runs a Linux program under blink rather than a bare machine.
  */
 const X86_WRITTEN_DESCRIPTIONS: Record<string, string> = {
+    ...Object.fromEntries(
+        Object.entries({
+            add: 'Adds the source to the destination and stores the sum in the destination. CF reports unsigned carry; OF reports signed overflow.',
+            adc: 'Adds the source and the current carry flag to the destination. This allows a carry from a lower part to be included in a multiword sum.',
+            sub: 'Subtracts the source from the destination and stores the difference there. CF reports unsigned borrow; OF reports signed overflow.',
+            sbb: 'Subtracts the source and the current carry flag from the destination. This carries a borrow into the next part of a multiword subtraction.',
+            cmp: 'Sets flags as if subtracting the source from the destination, without storing the difference. Use signed or unsigned conditional instructions according to how the values should be interpreted.',
+            and: 'Combines corresponding bits with AND and stores the result in the destination. A bit is set only when both input bits are set. CF and OF are cleared.',
+            or: 'Combines corresponding bits with OR and stores the result in the destination. A bit is set when either input bit is set. CF and OF are cleared.',
+            xor: 'Combines corresponding bits with XOR and stores the result in the destination. A bit is set when the input bits differ. CF and OF are cleared.'
+        }).map(([name, operation]) => [
+            name,
+            `${operation}
+
+The destination is a register or memory operand; the source is a register, memory operand or immediate, with at most one memory operand. Register and memory operands have the same width. When the instruction writes a 32-bit register, that write clears the upper half of its 64-bit register.
+
+${X86_SIGNED_IMMEDIATE_RULE}${name === 'and' ? '\n\nFor example, `and rax, 0xffffffff` does not clear the upper 32 bits: its immediate is sign-extended to all ones. `mov eax, eax` clears the upper half while preserving the low 32 bits.' : ''}`
+        ])
+    ),
+
+    test: `Sets flags from a bitwise AND of the operands without storing the result. ZF reports whether all tested bits were zero; CF and OF are cleared.
+
+For a 64-bit operand, an immediate uses a 32-bit field sign-extended to 64 bits. For example, \`test rax, -1\` tests all 64 bits. There is no full 64-bit immediate or sign-extended 8-bit immediate encoding for \`test\`; load a different 64-bit mask into a register if needed.`,
+
+    ...instructionDescriptions(
+        ['shl', 'sal', 'shr', 'sar'],
+        `Shifts the destination by the given count. \`shl\` and its synonym \`sal\` shift left and fill low bits with zeros. \`shr\` shifts right and fills high bits with zeros; \`sar\` shifts right and repeats the original sign bit. When defined, CF receives the last bit shifted out. OF is defined only for a count of one; CF is undefined for a \`shl\` or \`shr\` count at least as large as the operand width.
+
+${X86_SHIFT_COUNT_RULE}`
+    ),
+
+    ...instructionDescriptions(
+        ['rol', 'ror'],
+        `Rotates bits within the destination: \`rol\` moves bits leaving the high end back into the low end; \`ror\` moves bits leaving the low end back into the high end. CF receives the last bit rotated out, and OF is defined only for a count of one.
+
+The count comes from an immediate or \`cl\`. It is first masked to six bits for a 64-bit operand or five bits for smaller operands, then reduced modulo the operand width for the rotation. A 64-bit rotation by 32 therefore exchanges the two 32-bit halves; a count of 64 masks to zero.`
+    ),
+
+    ...instructionDescriptions(
+        ['rcl', 'rcr'],
+        `Rotates the destination together with CF, treating the flag as an extra bit. The rotation ring has 9, 17, 33 or 65 bits for an 8-, 16-, 32- or 64-bit operand. For example, \`rcl al, 1\` moves the old high bit into CF and the old CF into bit 0. \`rcr\` rotates in the opposite direction. OF is defined only for a count of one.
+
+The count comes from an immediate or \`cl\`. It is masked to six bits for a 64-bit operand, or five bits for smaller operands. For byte and word operands, the masked count is then reduced modulo 9 or 17. For 32- and 64-bit operands, the mask limits the count to 31 or 63; a written count of 32 or 64 respectively masks to zero.`
+    ),
+
+    ...instructionDescriptions(
+        ['shld', 'shrd'],
+        `Shifts the destination while supplying incoming bits from a second register of the same width. \`shld\` shifts left and fills the low end from the source's high end; \`shrd\` shifts right and fills the high end from the source's low end. Only the first operand changes. For example, with \`eax = 0x01234567\` and \`ebx = 0x89abcdef\`, \`shld eax, ebx, 4\` leaves \`eax = 0x12345678\`.
+
+The third operand is an immediate or \`cl\`. Its low six bits are used for 64-bit operands and its low five for 16- and 32-bit operands. A masked count of zero leaves the destination and flags unchanged; a count greater than the operand width has an undefined result.`
+    ),
+
+    ...instructionDescriptions(
+        ['bsf', 'bsr'],
+        `Finds a set bit in the source and stores its index in the destination register. \`bsf\` finds the least significant set bit; \`bsr\` finds the most significant. The operands have matching 16-, 32- or 64-bit widths, with indices 0–15, 0–31 or 0–63 respectively.
+
+If the source is zero, ZF is set and the destination is undefined. Otherwise ZF is cleared. A 32-bit destination write clears the upper half of its 64-bit register.`
+    ),
+
+    ...instructionDescriptions(
+        ['bt', 'btc', 'btr', 'bts'],
+        `Copies the selected bit of the first operand into CF. \`bt\` leaves the operand unchanged; \`btc\` complements that bit, \`btr\` clears it and \`bts\` sets it.
+
+For a register operand, the index wraps modulo its width: 16, 32 or 64 bits, so \`bt rax, 63\` tests the top bit of \`rax\`. For a memory operand, a register index is a signed bit offset into a bit string and can select a bit outside the first word, doubleword or quadword. An immediate index is encoded in eight bits; the processor selects within the operand width, and NASM can fold constant high bits into the memory displacement. For a fixed memory bit, an explicit byte displacement and an index within the width make the selected location clear.`
+    ),
+
+    ...instructionDescriptions(
+        [
+            'ja',
+            'jae',
+            'jb',
+            'jbe',
+            'jc',
+            'je',
+            'jg',
+            'jge',
+            'jl',
+            'jle',
+            'jna',
+            'jnae',
+            'jnb',
+            'jnbe',
+            'jnc',
+            'jne',
+            'jng',
+            'jnge',
+            'jnl',
+            'jnle',
+            'jno',
+            'jnp',
+            'jns',
+            'jnz',
+            'jo',
+            'jp',
+            'jpe',
+            'jpo',
+            'js',
+            'jz'
+        ],
+        `Jumps to the target when the condition in the mnemonic is satisfied; otherwise execution continues with the next instruction. The condition reads the current flags, commonly set by \`cmp\` or \`test\`. Signed comparisons use SF and OF; unsigned comparisons use CF. The [condition-code table](/documentation/x86/registers#condition-codes) lists the flag tests and synonymous mnemonics.
+
+Write the target label or address, such as \`jne retry\`. NASM calculates a displacement from the end of the jump. The short form reaches −128 through 127 bytes from that point; the longer near form in 64-bit mode uses a signed 32-bit displacement (about ±2 GiB). NASM normally selects the short form when possible. \`short\` requires the short range, while \`strict near\` keeps the longer form.
+
+Conditional jumps have no register or memory-indirect target form. To conditionally reach an arbitrary 64-bit address, branch around an indirect \`jmp\`.`
+    ),
+
+    ...instructionDescriptions(
+        ['jcxz', 'jecxz', 'jrcxz'],
+        `Jumps when the named counter register is zero, without decrementing it or reading or changing flags. \`jrcxz\` tests \`rcx\`; \`jecxz\` tests \`ecx\` and uses the 32-bit address size in 64-bit mode. \`jcxz target\` tests \`cx\` and is unavailable in 64-bit mode because 16-bit addressing is unavailable. NASM also accepts \`jcxz target, ecx\` and \`jcxz target, rcx\` as explicit-counter aliases for \`jecxz\` and \`jrcxz\`.
+
+The operand is a target label or address. NASM encodes a signed 8-bit displacement from the end of the instruction, reaching −128 through 127 bytes. There is no longer near encoding for these instructions.`
+    ),
+
+    ...instructionDescriptions(
+        ['loop', 'loope', 'loopz', 'loopne', 'loopnz'],
+        `Decrements the counter and jumps if it is nonzero. \`loope\` / \`loopz\` additionally require ZF = 1; \`loopne\` / \`loopnz\` require ZF = 0. The instructions do not change flags.
+
+In 64-bit mode, the default counter is \`rcx\`; \`a32\` selects \`ecx\`. A 16-bit \`cx\` counter is unavailable in this mode. A zero initial counter wraps to its maximum value when decremented.
+
+Write a target label or address. NASM calculates a signed 8-bit displacement from the end of the instruction (−128 through 127 bytes). There is no longer near encoding.`
+    ),
+
+    ...Object.fromEntries(
+        ['loop', 'loope', 'loopz', 'loopne', 'loopnz'].flatMap((family) =>
+            ['w', 'd', 'q'].map((suffix) => {
+                const counter = suffix === 'w' ? 'cx' : suffix === 'd' ? 'ecx' : 'rcx'
+                const condition =
+                    family === 'loope' || family === 'loopz'
+                        ? ' and ZF = 1'
+                        : family === 'loopne' || family === 'loopnz'
+                          ? ' and ZF = 0'
+                          : ''
+                const mode =
+                    suffix === 'w'
+                        ? 'The w suffix selects the 16-bit counter and 16-bit address size. This form is unavailable in 64-bit mode.'
+                        : suffix === 'd'
+                          ? 'The d suffix explicitly selects the 32-bit counter and 32-bit address size, including in 64-bit mode.'
+                          : 'The q suffix explicitly selects the 64-bit counter and address size. This form requires 64-bit mode.'
+                return [
+                    `${family}${suffix}`,
+                    `Decrements \`${counter}\` and jumps if the counter is nonzero${condition}. It leaves flags unchanged. A zero initial counter wraps to its maximum value when decremented.
+
+${mode} The suffix chooses the counter width, not the branch displacement width.
+
+Write a target label or address. NASM calculates a signed 8-bit displacement from the end of the instruction (−128 through 127 bytes). There is no longer near encoding.`
+                ]
+            })
+        )
+    ),
+
+    ...instructionDescriptions(
+        ['enter', 'enterq'],
+        `Creates a stack frame. The first immediate is an unsigned 16-bit byte count for local storage; the second is a nesting level whose low five bits are used (0–31). NASM also accepts a single operand, with nesting level zero.
+
+In 64-bit code, \`enter 32, 0\` has the frame-building effect of:
+
+\`\`\`x86
+push rbp
+mov rbp, rsp
+sub rsp, 32
+\`\`\`
+
+Unlike the \`sub\` in that sequence, \`enter\` leaves flags unchanged. The saved frame pointer is at \`[rbp]\`, and local storage lies below \`rbp\`. Nonzero nesting levels also copy enclosing frame pointers in 8-byte slots and push the new frame pointer. \`enterq\` explicitly selects this 64-bit frame size; \`leave\` can dismantle the frame.`
+    ),
+
+    enterw: `Creates a frame using 16-bit frame pointers: it saves \`bp\`, establishes a new \`bp\` and reserves the unsigned 16-bit byte count given by the first operand. The second operand supplies a nesting level modulo 32; omitting it selects zero. Saved frame-pointer slots are two bytes. In 64-bit mode the stack is still addressed through \`rsp\`; this is not the normal \`rbp\` frame used by 64-bit functions.`,
+
+    enterd: `Creates a frame using 32-bit frame pointers in 16- or 32-bit code. The first operand reserves an unsigned 16-bit byte count for local storage; the second supplies a nesting level modulo 32, with zero assumed if omitted. This 32-bit operand-size form is unavailable in 64-bit mode.`,
+
+    ...instructionDescriptions(
+        ['leave', 'leaveq'],
+        `Dismantles a 64-bit frame by setting \`rsp\` to \`rbp\`, then popping the saved \`rbp\`. It has the effect of \`mov rsp, rbp\` followed by \`pop rbp\` and leaves flags unchanged. It can match an \`enter\` frame or the usual explicit frame setup. \`leaveq\` explicitly selects the 64-bit form.`
+    ),
+
+    leavew: `Dismantles a frame with a 16-bit saved frame pointer. In 64-bit mode it sets \`rsp\` from \`rbp\`, then pops two bytes into \`bp\`, advancing \`rsp\` by 2. It leaves flags unchanged. This is distinct from the normal 64-bit \`leave\` / \`leaveq\` form.`,
+
+    leaved: `Dismantles a 32-bit frame, with the effect of \`mov esp, ebp\` followed by \`pop ebp\` in 32-bit code. This operand-size form is unavailable in 64-bit mode.`,
+
+    ...instructionDescriptions(
+        ['ret', 'retn', 'retq', 'retnq'],
+        `Returns from a near call. In 64-bit mode it pops an 8-byte return address from \`[rsp]\` into \`rip\` and advances \`rsp\` by 8. \`ret\` and \`retn\` are synonyms; the \`q\` suffix explicitly requests the 64-bit form.
+
+The optional sole operand is an unsigned 16-bit count of additional bytes to remove from the stack after popping the return address. For example, \`ret 16\` advances \`rsp\` by 24 in total. A negative spelling does not subtract stack space: encoded \`0xffff\` means cleanup of 65535 bytes.`
+    ),
+
+    ...instructionDescriptions(
+        ['retw', 'retnw'],
+        `Requests a 16-bit near return. NASM accepts this spelling in 64-bit source with an operand-size prefix; ordinary 64-bit calls use \`ret\` or \`retq\`. In 16-bit code it pops a 16-bit offset into \`ip\`. The optional sole immediate operand is an unsigned 16-bit additional cleanup count, not a signed stack adjustment.`
+    ),
+
+    ...instructionDescriptions(
+        ['retd', 'retnd'],
+        `Returns to a 32-bit near offset in 16- or 32-bit code. The optional sole immediate operand is an unsigned 16-bit additional stack-cleanup byte count. This form is unavailable in 64-bit mode.`
+    ),
+
+    ...instructionDescriptions(
+        ['retf', 'retfd', 'retfq', 'retfw'],
+        `Returns across a code-segment boundary by restoring an offset and \`cs\` from the stack. The \`w\`, \`d\` and \`q\` suffixes select 16-, 32- and 64-bit offsets; \`retf\` defaults to a 32-bit offset in 64-bit mode, so a 64-bit far return requires \`retfq\`. Stack slots follow the selected operand size, rather than the packed layout of a far pointer in memory.
+
+The optional sole operand is an unsigned 16-bit additional stack-cleanup byte count. Segment and privilege checks apply, and a privilege-changing return can also restore the stack pointer and stack segment. This is not the return used for an ordinary Linux function call; use near \`ret\` for that.`
+    ),
+
+    ...instructionDescriptions(
+        ['pushf', 'pushfq', 'pushfw', 'pushfd'],
+        `Pushes an image of the flags register. In 64-bit mode, \`pushf\` / \`pushfq\` subtract 8 from \`rsp\` and store a 64-bit image; \`pushfw\` subtracts 2 and stores the low 16 bits. \`pushfd\` is unavailable in this mode. The pushed 64-bit image has RF and VM cleared; it is not an exact copy of every bit of \`rflags\`.`
+    ),
+
+    ...instructionDescriptions(
+        ['popf', 'popfq', 'popfw', 'popfd'],
+        `Restores writable flags from a value popped from the stack. In 64-bit mode, \`popf\` / \`popfq\` consume 8 bytes using \`rsp\`; \`popfw\` consumes 2 and supplies the low 16 bits. \`popfd\` is unavailable in this mode.
+
+Privilege and architectural rules limit which flags can change. In particular, ordinary user code cannot use this instruction to freely change IOPL or IF, and some flags retain their old values. Do not treat the operation as an unrestricted assignment to \`rflags\`.`
+    ),
+
+    div: `Performs unsigned division by the explicit register or memory divisor. The divisor width selects the implicit dividend, quotient and remainder:
+
+| Divisor width | Dividend | Quotient | Remainder |
+| --- | --- | --- | --- |
+| 8 bits | \`ax\` | \`al\` | \`ah\` |
+| 16 bits | \`dx:ax\` | \`ax\` | \`dx\` |
+| 32 bits | \`edx:eax\` | \`eax\` | \`edx\` |
+| 64 bits | \`rdx:rax\` | \`rax\` | \`rdx\` |
+
+The register before the colon is the high half. For a dividend that fits in the low half, clear the high half first; for example, \`xor edx, edx\` before \`div rcx\`. A zero divisor or a quotient too large for its destination causes a divide error. Flags are undefined. Use \`idiv\` for signed division.`,
+
+    idiv: `Performs signed division by the explicit register or memory divisor. The divisor width selects the implicit dividend and outputs: 8 bits divides \`ax\` into quotient \`al\` and remainder \`ah\`; 16 bits divides \`dx:ax\` into \`ax\` and \`dx\`; 32 bits divides \`edx:eax\` into \`eax\` and \`edx\`; 64 bits divides \`rdx:rax\` into \`rax\` and \`rdx\`.
+
+The high half is part of the signed dividend. To divide a signed value held only in the low half, extend it first with \`cbw\`, \`cwd\`, \`cdq\` or \`cqo\` respectively. For example, \`cqo\` then \`idiv rcx\` divides signed \`rax\`. The quotient rounds toward zero; a nonzero remainder has the dividend's sign. A zero divisor or a quotient outside the destination's signed range causes a divide error. Flags are undefined.`,
+
+    mul: `The one-operand form performs unsigned multiplication. Its explicit source width selects the implicit other factor and full product: 8 bits uses \`al\` and produces \`ax\`; 16 bits uses \`ax\` and produces \`dx:ax\`; 32 bits uses \`eax\` and produces \`edx:eax\`; 64 bits uses \`rax\` and produces \`rdx:rax\`. The register before the colon holds the high half. CF and OF are set when that high half is nonzero.
+
+NASM also accepts two- and three-operand \`mul\` spellings as aliases of the corresponding \`imul\` forms. These keep only the destination-width low product; their overflow flags follow signed \`imul\` rules. Use the one-operand form when you need the full unsigned product.`,
+
+    imul: `Performs signed multiplication. With one explicit source, its width selects the implicit factor and full product: 8 bits multiplies \`al\` into \`ax\`; 16 bits multiplies \`ax\` into \`dx:ax\`; 32 bits multiplies \`eax\` into \`edx:eax\`; 64 bits multiplies \`rax\` into \`rdx:rax\`.
+
+With two operands, the destination register is multiplied by the source and keeps only the low destination-width bits. With three, the last two operands are multiplied into the first. \`imul rax, 5\` is shorthand for \`imul rax, rax, 5\`. CF and OF report whether the full signed product fits the destination width; other arithmetic flags are undefined.
+
+${X86_SIGNED_IMMEDIATE_RULE}`,
+
     syscall: `Asks the operating system to do something. \`rax\` holds the call number, the arguments go in \`rdi\`, \`rsi\`, \`rdx\`, \`r10\`, \`r8\` and \`r9\` in that order, and the result comes back in \`rax\`, with a small negative number meaning an error. \`rcx\` and \`r11\` are destroyed by the call itself, so anything kept in them has to be saved first.
 
 Programs here run as Linux programs, so this is the only way a program reaches the console or the file system. The [syscall page](/documentation/x86/syscall) lists the calls this emulator implements.`,
 
-    movabs: `Moves a full 64 bit immediate into a register. \`mov\` takes immediates up to 32 bits and sign extends them, which silently turns a large address into the wrong number, so NASM accepts \`movabs\` as the spelling that means "the whole 64 bits are here". It assembles to a 10 byte instruction, against 5 to 7 for the \`mov\` forms.`,
+    mov: `Copies the source (second operand) into the destination (first operand). Register and memory data normally have the same width, and at most one operand can be memory.
 
-    cdqe: `Sign extends \`eax\` into \`rax\`, so that a 32 bit signed value read from memory or returned by a syscall can be used in 64 bit arithmetic. It takes no operands and touches no other register. \`movsxd rax, eax\` does the same thing in two more bytes.`,
+Writing a 32-bit register clears the upper 32 bits of its 64-bit register: \`mov eax, -1\` leaves \`rax = 0x00000000ffffffff\`. Writing \`ax\` or \`al\` preserves the remaining bits of \`rax\`.
 
-    cqo: `Sign extends \`rax\` into \`rdx:rax\`, filling \`rdx\` with copies of the sign bit. \`idiv\` divides that 128 bit pair, so signed division is written as \`cqo\` then \`idiv\`; forgetting the \`cqo\` leaves whatever \`rdx\` happened to hold in the high half and the result is nonsense rather than an error.`,
+A register-immediate move can load all 64 bits: \`mov rax, 0x123456789abcdef0\` needs no special mnemonic. NASM chooses a shorter encoding when the same value can be obtained by a 32-bit register write or a sign-extended 32-bit immediate. For example, \`mov rax, 1\` can use the former, while \`mov rax, -1\` can use the latter. \`mov rax, strict qword 1\` forces the full 64-bit immediate field.
 
-    movsxd: `Copies a 32 bit source into a 64 bit register, sign extending it. This is the instruction to reach for when a signed 32 bit value has to become a 64 bit one, because the ordinary \`mov eax, ...\` zero extends instead: writing any 32 bit register clears the top half of its 64 bit name.`
+A move of an immediate directly into 64-bit memory has only a 32-bit immediate field, sign-extended to 64 bits. Thus \`mov qword [rdi], -1\` stores eight bytes of ones. To store an arbitrary 64-bit constant, first load it into a register, then store that register. A memory size such as \`qword\` specifies the stored width, not an immediate field of that width.
+
+The accumulator memory-offset forms use \`al\`, \`ax\`, \`eax\` or \`rax\` and an absolute memory address; the address width and the data width are separate. \`CS\` cannot be a destination.`,
+
+    movabs: `An explicit spelling for the full register-immediate encoding, or an accumulator move using an absolute memory offset. For example, \`movabs rax, 1\` keeps the full 64-bit immediate and is 10 bytes, whereas NASM can shorten \`mov rax, 1\` to a 32-bit register write. Both \`mov rax, 0x123456789abcdef0\` and \`movabs rax, 0x123456789abcdef0\` load the complete constant.
+
+The byte, word and doubleword register-immediate forms use their respective immediate widths. The memory forms transfer data between an absolute address and \`al\`, \`ax\`, \`eax\` or \`rax\`. Use an explicit 64-bit memory offset in 64-bit code, for example \`movabs rax, [abs qword 0x1000]\`. Their lengths depend on the address and data widths. The 10-byte length applies to \`movabs reg64, imm64\`.`,
+
+    cdqe: `Sign-extends \`eax\` into \`rax\`, filling bits 63–32 with copies of bit 31. It takes no operands and changes no other register or flags. For example, \`eax = 0xffffffff\` becomes \`rax = -1\`. NASM can assemble \`movsxd rax, eax\` to the same instruction.`,
+
+    cqo: `Sign-extends \`rax\` into \`rdx:rax\`, filling \`rdx\` with copies of the sign bit. Use \`cqo\` before \`idiv rbx\` when the intended dividend is the signed 64-bit value in \`rax\`. \`idiv\` actually divides the signed 128-bit pair, so an unintended high half can produce a wrong quotient or a divide error. A deliberately prepared 128-bit dividend does not need this extension.`,
+
+    movsx: `Copies a signed source into a register, repeating its sign bit when the destination is wider. For example, \`movsx rax, byte [rdi]\` turns a stored \`0xff\` into \`rax = -1\`, and \`movsx rax, ecx\` extends a signed 32-bit value to 64 bits.
+
+For widening moves, the source width is independent of the destination width: \`byte\`, \`word\` and \`dword\` memory sources read 8, 16 and 32 bits. NASM also accepts equal-width and narrowing spellings. \`movsx ax, bx\` copies 16 bits; \`movsx ax, ebx\` retains the low 16 bits. These do not create a wider signed value. A 32-bit destination still clears the upper half of its 64-bit register.`,
+
+    movsxb: `The byte-source spelling of \`movsx\`. It reads an 8-bit register or memory value and sign-extends it into a 16-, 32- or 64-bit destination register. For example, \`movsxb rax, [rdi]\` reads one byte. A 32-bit destination clears the upper half of its 64-bit register after producing the 32-bit result.`,
+
+    movsxw: `The word-source spelling of \`movsx\`. It reads 16 bits and sign-extends them into a 32- or 64-bit destination. For example, \`movsxw rax, [rdi]\` reads two bytes. NASM also accepts a 16-bit destination; that copies the word without widening it. A 32-bit destination clears the upper half of its 64-bit register.`,
+
+    movsxd: `The doubleword-source spelling of \`movsx\`. Its usual use is \`movsxd rax, ecx\`: copy 32 bits and sign-extend them to 64 bits. Writing \`eax\` with an ordinary move would instead clear bits 63–32 of \`rax\`.
+
+NASM also accepts 32- and 16-bit destinations: \`movsxd eax, ecx\` copies the 32-bit value and clears the upper half of \`rax\`; \`movsxd ax, ecx\` retains the low 16 bits. Neither widens the source. \`movsxd rax, eax\` can use the same encoding as \`cdqe\`.`,
+
+    movzx: `Copies an unsigned source into a register, filling added high bits with zeros. For example, \`movzx rax, byte [rdi]\` turns \`0xff\` into 255. The source has its own width; it need not match the destination.
+
+For a 32-bit source and 64-bit destination, NASM uses an ordinary 32-bit move: \`movzx rax, ebx\` has the effect of \`mov eax, ebx\`, whose write clears the upper half of \`rax\`. \`movzxd\` is another spelling for this case.
+
+Some accepted aliases do not widen: \`movzx ax, bx\` copies a word, while \`movzx ax, ebx\` retains only the low 16 bits. These leave the rest of \`rax\` unchanged. The equal-width 32-bit alias is unavailable in 64-bit mode; use \`mov eax, ebx\` for that copy.`,
+
+    movzxb: `The byte-source spelling of \`movzx\`. It reads an unsigned byte and fills the added bits of a 16-, 32- or 64-bit destination with zeros. For example, \`movzxb rax, [rdi]\` reads one byte and produces a value from 0 to 255.`,
+
+    movzxw: `The word-source spelling of \`movzx\`. It reads 16 bits and zero-extends them into a 32- or 64-bit destination. NASM also accepts a 16-bit destination; that copies the word without widening and preserves the remaining bits of the 64-bit register.`,
+
+    movzxd: `Copies a 32-bit source into a 64-bit destination with zeros in the upper half. NASM assembles \`movzxd rax, ebx\` as \`mov eax, ebx\`: every 32-bit register write already clears the high 32 bits.
+
+NASM also accepts a 16-bit destination, such as \`movzxd ax, ebx\`, which retains the low 16 bits and leaves the rest of \`rax\` unchanged. The equal-width 32-bit alias is unavailable in 64-bit mode; use an ordinary \`mov\` for that copy.`,
+
+    lea: `Calculates an effective address without reading memory or changing flags. For example, \`lea rax, [rbx + rcx*4 + 8]\` stores that address calculation in \`rax\`. The brackets describe the calculation; they do not cause a load. NASM also accepts an absolute constant without brackets, such as \`lea rax, 0x1000\`.
+
+In 64-bit mode the address calculation uses 64-bit registers by default, or 32-bit registers with the 32-bit address size; 16-bit addressing is unavailable. The destination independently selects a 16-, 32- or 64-bit result. A narrower destination retains the low bits, and a 32-bit register write clears its upper 32 bits. A 32-bit address calculation stored in a 64-bit destination is zero-extended.`,
+
+    call: `Calls a procedure and saves the address of the following instruction on the stack. An ordinary near call in 64-bit code pushes an 8-byte return address using \`rsp\`; \`ret\` returns to that address.
+
+\`call routine\` names a target address or label. NASM calculates a signed 32-bit displacement from the end of the call, so the target must be within that range (about ±2 GiB). The source operand is the target, not a displacement to add yourself. There is no direct near call with an embedded absolute 64-bit target.
+
+\`call rax\` takes the full target address from \`rax\`. \`call [pointer]\` reads an 8-byte target address from memory. These indirect near calls can reach targets beyond the relative displacement range.
+
+A far call also changes \`cs\`. Its memory pointer stores an offset followed by a 16-bit segment selector: \`word\`, \`dword\` and \`qword\` far pointers have 16-, 32- and 64-bit offsets, for totals of 4, 6 and 10 bytes. Immediate \`segment:offset\` calls are unavailable in 64-bit mode. Far transfers depend on valid operating-system segment descriptors and are not ordinary Linux function calls.`,
+
+    jmp: `Transfers control unconditionally. \`jmp target\` names a label or target address; NASM calculates a displacement from the end of the instruction. A short jump uses a signed 8-bit displacement (−128 through 127 bytes); the ordinary longer near form in 64-bit mode uses a signed 32-bit displacement (about ±2 GiB), not an absolute 64-bit address.
+
+NASM normally chooses a short encoding when the target fits. \`short\` requires that range; \`strict near\` prevents shortening to the 8-bit form.
+
+\`jmp rax\` takes the full target address from the register, and \`jmp [pointer]\` reads an 8-byte target address from memory. These indirect near jumps have no relative displacement limit.
+
+A far jump also changes \`cs\`. A far memory pointer contains the offset first, then a 16-bit selector: 16-, 32- and 64-bit offsets occupy 4, 6 and 10 bytes in total. Immediate \`segment:offset\` jumps are unavailable in 64-bit mode. Far transfers require valid operating-system segment descriptors and are not ordinary branches in a Linux program.`,
+
+    push: `Subtracts 8 from \`rsp\` and stores a 64-bit value at the new stack top by default. For example, \`push rax\` saves eight bytes. A 16-bit operand is also available: \`push ax\` subtracts 2 and stores two bytes. There is no 32-bit general-purpose push in 64-bit mode: \`push eax\` is invalid.
+
+An immediate field can be smaller than the stack value. The default 64-bit push sign-extends an 8-bit or 32-bit immediate to 64 bits: \`push -1\` stores eight bytes of ones. NASM chooses the short encoding when possible; \`push strict qword 1\` keeps the 32-bit immediate field while still pushing eight bytes. \`push word 1\` instead pushes two bytes. No push encodes a full 64-bit immediate; load an arbitrary 64-bit constant into a register, then push it.
+
+The stack pointer remains \`rsp\` in 64-bit mode. An address-size prefix changes how an explicit memory source is addressed, not which stack pointer the push uses. Only \`fs\` and \`gs\` segment pushes are available in this mode; \`push cs\`, \`push ds\`, \`push es\` and \`push ss\` are unavailable.`,
+
+    pop: `Loads the 64-bit value at \`[rsp]\` into the destination, then adds 8 to \`rsp\` by default. A 16-bit operand pops two bytes instead: \`pop ax\` adds 2. There is no 32-bit general-purpose pop in 64-bit mode, so \`pop eax\` is invalid. Popping into \`rsp\` replaces it with the loaded value.
+
+An address-size prefix changes an explicit memory destination's addressing, not the stack pointer used to read the value. For a memory destination based on \`rsp\`, the destination address is calculated after the stack increment. Only \`fs\` and \`gs\` segment pops are available in 64-bit mode; loading them is subject to segment-selector checks.`,
+
+    ...Object.fromEntries(
+        ['movs', 'cmps', 'lods', 'stos', 'scas'].flatMap((family) =>
+            [
+                ['b', 1, 'al'],
+                ['w', 2, 'ax'],
+                ['d', 4, 'eax'],
+                ['q', 8, 'rax']
+            ].map(([suffix, bytes, accumulator]) => {
+                const operations: Record<string, string> = {
+                    movs: 'Copies the element at `[rsi]` to `[rdi]` without changing flags.',
+                    cmps: 'Sets flags as if subtracting the element at `[rdi]` from the element at `[rsi]`, without storing a result.',
+                    lods: `Loads the element at \`[rsi]\` into \`${accumulator}\` without changing flags.`,
+                    stos: `Stores \`${accumulator}\` at \`[rdi]\` without changing flags.`,
+                    scas: `Sets flags as if subtracting the element at \`[rdi]\` from \`${accumulator}\`, without storing a result.`
+                }
+                const operation = operations[family]
+                const registers =
+                    family === 'movs' || family === 'cmps'
+                        ? '`rsi` and `rdi`'
+                        : family === 'lods'
+                          ? '`rsi`'
+                          : '`rdi`'
+                const addressRegisters =
+                    family === 'movs' || family === 'cmps'
+                        ? '`esi` and `edi`'
+                        : family === 'lods'
+                          ? '`esi`'
+                          : '`edi`'
+                const repetition =
+                    family === 'cmps' || family === 'scas'
+                        ? '`repe` / `repz` repeats while ZF = 1, and `repne` / `repnz` repeats while ZF = 0. Each stops when the counter reaches zero; a nonzero initial counter permits the first comparison before testing its result.'
+                        : '`rep` repeats until the counter reaches zero.'
+                const distinction =
+                    suffix === 'd' && (family === 'cmps' || family === 'movs')
+                        ? ' This describes the no-operand string instruction; operand forms using XMM registers perform separate scalar floating-point operations.'
+                        : ''
+                return [
+                    `${family}${suffix}`,
+                    `${operation}${distinction}
+
+The ${suffix} suffix selects an element of ${bytes} byte${bytes === 1 ? '' : 's'}. After each element, the instruction increases ${registers} by ${bytes} when DF = 0, or decreases ${registers} by ${bytes} when DF = 1. In 64-bit mode the default addresses use ${registers}. The \`a32\` address-size prefix instead uses ${addressRegisters}; 16-bit string addressing is unavailable.
+
+${repetition} The counter is \`rcx\` by default or \`ecx\` with \`a32\`. If it starts at zero, a repeated instruction accesses no element. The data width is independent of this address and counter width.`
+                ]
+            })
+        )
+    ),
+
+    ...Object.fromEntries(
+        ['ins', 'outs'].flatMap((family) =>
+            [
+                ['b', 1],
+                ['w', 2],
+                ['d', 4]
+            ].map(([suffix, bytes]) => {
+                const input = family === 'ins'
+                const operation = input
+                    ? 'Reads an element from the I/O port numbered in `dx` into `[rdi]`.'
+                    : 'Writes the element at `[rsi]` to the I/O port numbered in `dx`.'
+                return [
+                    `${family}${suffix}`,
+                    `${operation} The ${suffix} suffix selects ${bytes} byte${bytes === 1 ? '' : 's'} per element; no quadword form exists. Flags are unchanged.
+
+After the transfer, \`${input ? 'rdi' : 'rsi'}\` increases by ${bytes} when DF = 0 or decreases by ${bytes} when DF = 1. In 64-bit mode addresses use this 64-bit register by default; \`a32\` selects \`${input ? 'edi' : 'esi'}\`. The \`rep\` prefix repeats using \`rcx\`, or \`ecx\` with \`a32\`, as the counter. A zero initial repeat count performs no transfer. Access to I/O ports is subject to operating-system privilege checks.`
+                ]
+            })
+        )
+    ),
+
+    bswap: `Reverses the byte order of a 32- or 64-bit register. For example, \`bswap rax\` exchanges byte 0 with byte 7, byte 1 with byte 6, and so on. A 32-bit result also clears the register's upper 32 bits. There is no defined 16-bit form; \`xchg al, ah\` swaps the bytes of \`ax\`.`
 }
 
 /** Corrected visible one-line summaries where the imported assembler text has obvious typos. */
@@ -174,14 +563,6 @@ export function hasX86Description(name: string): boolean {
 
 export function formatX86Form(name: string, form: X86InstructionForm): string {
     return form.operands.length ? `${name} ${form.operands.join(', ')}` : name
-}
-
-/** One line for the top of an instruction page: the operand shapes, deduplicated and joined. */
-export function formatX86InstructionSummary(instruction: X86Instruction): string {
-    const shapes = [
-        ...new Set(instruction.forms.map((form) => formatX86Form(instruction.name, form)))
-    ]
-    return shapes.join(' | ')
 }
 
 /**
@@ -429,6 +810,19 @@ export const X86_DOCUMENTED_REGISTER_FILES: X86RegisterFileDoc[] = [
         ]
     },
     {
+        id: 'avx',
+        title: 'AVX registers',
+        intro: 'AVX doubles the width of the vector registers. `ymm0` to `ymm15` are 256 bits wide, and the `xmm` registers of the SSE file are their low halves: writing `xmm3` with an SSE instruction changes the lower half of `ymm3` and leaves the upper half alone, while the AVX forms of the same instructions, which are written with a `v` in front (`vaddps`, `vmovdqu`), say how much of the register they mean. A **128 bit** AVX instruction writes the lower half and **clears the upper half**; a **256 bit** one, written with `ymm` operands, writes both. That is why AVX code that mixes the two forms often ends with `vzeroupper`, which clears every upper half so that the next SSE instruction does not pay for them.\n\nAVX instructions take a separate destination: `vaddps ymm0, ymm1, ymm2` adds `ymm1` and `ymm2` and writes `ymm0`, leaving both sources as they were. Most of them work on the two 128 bit halves independently, which is why a shuffle such as `vpshufb` cannot move a byte from one half to the other; the few that cross, such as `vperm2f128`, `vpermd` and `vinsertf128`, say so in their names.\n\nThe emulator runs AVX, AVX2, FMA, BMI and the rest of the instructions a compiler emits with `-mavx2`, but not the 512 bit AVX-512 registers.',
+        registers: [
+            {
+                name: 'ymm0 to ymm15',
+                bits: 256,
+                description:
+                    'Sixteen 256 bit registers. Read as doubles they are four lanes, read as singles eight, and read as raw bits thirty-two bytes. The lower 128 bits are the register of the same number in the SSE file, so a value shown there is the lower half of the row shown here.'
+            }
+        ]
+    },
+    {
         id: 'x87',
         title: 'x87 registers',
         intro: 'The x87 unit is the floating point hardware x86 had before SSE, and it is still what the `f` instructions use. Its eight registers are a **stack** rather than a numbered file: `st0` is always the top, `fld` and `fld1` push a value onto it and rename everything below, and `faddp` adds the top two and pops, so the same register name means a different value after every push. Programs written today use SSE for arithmetic and reach for x87 mainly for the operations SSE has no instruction for, such as `fsin`, `fcos` or `fpatan`.\n\nThis emulator keeps the stack as ordinary 64 bit doubles rather than the 80 bit extended values real hardware computes with, so a long chain of x87 arithmetic can differ from a physical processor in the last bits of the result.\n\nA slot the stack has not filled, or has popped, keeps whatever bits it last held. The panel shows those rows blank rather than the stale value, the way `info float` prints Empty in gdb, and the bits are still a hover away; `ftag` is the register that says which slots are live.',
@@ -636,7 +1030,7 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     exit: 'Ends the program with the status in `rdi`. It never returns, and a program that reaches the end of its code without calling it runs into whatever bytes follow.',
     exit_group:
         'Ends every thread of the program with the status in `rdi`. For a program with one thread it is `exit`.',
-    mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to.',
+    mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a Project File copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of a Project File returns `-ENODEV`.',
     mprotect:
         'Changes the read, write, or execute permissions of the `rsi` bytes starting at the page-aligned address in `rdi`.',
     munmap: 'Unmaps the mapping of `rsi` bytes at the address in `rdi`.',
@@ -644,26 +1038,42 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     pipe: 'Creates a pair of connected file descriptors and writes both integers to the two-element array at `rdi`; reads from one end receive bytes written to the other.',
     dup: 'Returns a new file descriptor that refers to the same open file description as the descriptor in `rdi`.',
     dup2: 'Makes descriptor `rsi` refer to the same open file description as `rdi`, closing the old `rsi` first if needed.',
-    readv: 'Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read.',
-    writev: 'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written.',
+    readv: 'Reads into the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, from the descriptor in `rdi`; returns the total bytes read. An error in a later buffer can be returned after earlier buffers have already changed, rather than returning the earlier partial byte count. Check those buffers before retrying after an error.',
+    writev: 'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi`; returns the total bytes written. The buffers are gathered into one payload before writing. If a capacity limit refuses the write, none of that payload is written.',
+    pwritev:
+        'Writes the buffers listed by the `iovec` array at `rsi`, with `rdx` entries, to the descriptor in `rdi` at the offset in `r10`; returns the total bytes written without changing the descriptor’s position. The buffers are gathered into one payload before writing. If a capacity limit refuses the write, none of that payload is written.',
     nanosleep: 'Sleeps for the interval at `rdi`, a pair of seconds and nanoseconds.',
     getpid: 'Returns the process id.',
-    clock_gettime:
-        'Writes the current run’s elapsed program time to the `timespec` structure at `rsi` (seconds and nanoseconds). This is simulator time, not calendar time.',
-    time: 'Returns the current run’s elapsed program time in whole seconds, and also stores it at the address in `rdi` unless `rdi` is 0.',
+    clock_gettime: `Writes the clock selected by \`rdi\` to the \`timespec\` structure at \`rsi\` (seconds and nanoseconds).
+
+\`CLOCK_REALTIME\`, \`CLOCK_REALTIME_COARSE\` and \`CLOCK_TAI\` report Unix epoch time: host calendar time interactively, and 2000-01-01 UTC plus virtual elapsed time in Testcases. \`CLOCK_TAI\` shares realtime without a leap-second offset.
+
+\`CLOCK_PROCESS_CPUTIME_ID\` and \`CLOCK_THREAD_CPUTIME_ID\` count executed instructions at nominal 100 MHz, exclude waiting time, and rewind with Undo. Monotonic clocks and \`CLOCK_BOOTTIME\` report elapsed time; virtual elapsed time advances only through waits.`,
+    time: 'Returns calendar time in whole seconds since the Unix epoch, and also stores it at the address in `rdi` unless `rdi` is 0. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time.',
+    getitimer:
+        'Writes the remaining delay and repeat interval of the timer selected by `rdi` to the `itimerval` structure at `rsi`. Only `ITIMER_REAL` is supported. `ITIMER_VIRTUAL` and `ITIMER_PROF` return `-EOPNOTSUPP`.',
+    setitimer:
+        'Sets the timer selected by `rdi` from the `itimerval` structure at `rsi`, and writes the previous settings at `rdx` when that pointer is nonzero. Only `ITIMER_REAL` is supported; it sends `SIGALRM` when its delay expires. `ITIMER_VIRTUAL` and `ITIMER_PROF` return `-EOPNOTSUPP`.',
+    wait4: 'Returns `-ECHILD` immediately because this environment has no child processes.',
     ioctl: 'Asks a device the descriptor in `rdi` refers to for something outside the ordinary read and write interface, chosen by the request in `rsi`.',
     sendfile:
         'Copies up to `r10` bytes from the input descriptor in `rsi` to the output descriptor in `rdi`, optionally updating the input position through the pointer in `rdx`.',
     getcwd: 'Writes the current working directory as a NUL-terminated path to the buffer at `rdi`, up to `rsi` bytes.',
     chdir: 'Changes the program’s current working directory to the path at `rdi`.',
     fchdir: 'Changes the program’s current working directory to the directory referred to by descriptor `rdi`.',
-    rename: 'Renames or moves the path at `rdi` to the path at `rsi`.',
-    mkdir: 'Creates a directory at the path in `rdi`; `rsi` supplies its permission mode.',
-    rmdir: 'Removes the empty directory named by the path at `rdi`.',
-    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor.',
+    rename: 'Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+    renameat:
+        'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+    renameat2:
+        'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`.',
+    mkdir: 'Requests a directory at the path in `rdi`, with the mode in `rsi`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths.',
+    mkdirat:
+        'Requests a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths.',
+    rmdir: 'Requests removal of the empty directory named by the path at `rdi`. Project directories cannot be removed this way: they exist only as prefixes of File paths and disappear when their last File is removed.',
+    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last File also removes that implicit directory.',
     uname: 'Writes system name and version fields to the Linux `struct utsname` buffer at `rdi`.',
     gettimeofday:
-        'Writes the current run’s elapsed program time, in seconds and microseconds, to the `timeval` structure at `rdi`; this is not calendar time.',
+        'Writes calendar time since the Unix epoch, in seconds and microseconds, to the `timeval` structure at `rdi`. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time.',
     getrusage:
         'Writes resource-usage counters for the selected process or children to the `rusage` structure at `rsi`.',
     sysinfo:

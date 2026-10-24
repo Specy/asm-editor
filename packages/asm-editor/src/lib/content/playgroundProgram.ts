@@ -11,7 +11,7 @@ import {
     sourceLanguage,
     type CompilationRecord
 } from '#lib/sourceCompilation/records.ts'
-import { projectBuildSources } from '#lib/buildSources.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
 
 /** Named files passed to an embed; the target remains the embed's `language` setting. */
 export type PlaygroundProgram = {
@@ -45,12 +45,16 @@ export function decodePlaygroundProgram(encoded: string): PlaygroundProgram {
     return cleanPlaygroundProgram(JSON.parse(text))
 }
 
-/** Use the same assembler provenance and runtime startup as a Project Build. */
+/**
+ * Use the same assembler provenance and runtime startup as a Project Build, for the Playground's
+ * one Program (programs.md, decision 12).
+ */
 export function playgroundBuildSources(project: Project): BuildSources {
-    if (sourceLanguage(project.entry)) {
+    const entry = project.selectedProgram
+    if (entry !== undefined && sourceLanguage(entry)) {
         //There is no assembly to check yet. The Build action compiles the real source before
         //using this input; keep the emulator idle without marking valid C as an assembly error.
-        return { files: {}, entry: project.entry }
+        return { files: {}, entry }
     }
-    return projectBuildSources(project)
+    return programBuildSources(project)
 }

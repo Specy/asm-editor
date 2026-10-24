@@ -76,8 +76,11 @@
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
 
     let canvas: HTMLCanvasElement | undefined = $state()
-    let viewportWidth = $state(0)
-    let viewportHeight = $state(0)
+    //the stage's content box rather than its clientWidth, which counts padding: the padding is the
+    //room the focus ring is drawn in, and the canvas is fitted to what is left inside it
+    let stageBox: DOMRectReadOnly | undefined = $state()
+    let viewportWidth = $derived(stageBox?.width ?? 0)
+    let viewportHeight = $derived(stageBox?.height ?? 0)
     //the Screen has no runes, so the GUI mirrors what the frame loop reads from it; the values
     //here are only the seed for the first frame
     let logicalWidth = $state(untrack(() => screen.width))
@@ -115,9 +118,11 @@
     let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
 
     //the stage's width is the one measurement that does not depend on its height, so the height a
-    //fitted Screen needs to fill it comes from it alone
+    //fitted Screen needs to fill it comes from it alone. It belongs to the page's container: the
+    //floating window has a box of its own, and a stage held taller than it would fit the width
+    //alone and push the bottom of a tall Screen out of the window
     let widthFitHeight = $derived(
-        heightFromWidth && fitToPanel && viewportWidth > 0 && logicalWidth > 0
+        heightFromWidth && !expanded && fitToPanel && viewportWidth > 0 && logicalWidth > 0
             ? Math.floor((viewportWidth * logicalHeight) / logicalWidth)
             : 0
     )
@@ -428,17 +433,19 @@
     </button>
 {/snippet}
 
-<!-- the padding is a frame around the stage rather than padding on it, because the stage is what
-     is measured: `clientWidth` counts padding, and fitting to a box that is larger than the box
-     the canvas actually has is what used to spill the image into a scrollbar -->
+<!-- the stage is measured by its content box, so the canvas is never fitted into the stage's own
+     padding: that is the room the focus ring is drawn in, inside the box that clips it. The
+     viewport's padding is the rest of the frame, and the two add up to the same gap around the
+     image whether the ring is showing or not -->
 {#snippet stage()}
     <div class="screen-viewport">
         <div
             class="screen-stage"
             class:fitting={fitToPanel}
-            style={widthFitHeight > 0 ? `min-height: ${widthFitHeight}px;` : ''}
-            bind:clientWidth={viewportWidth}
-            bind:clientHeight={viewportHeight}
+            style={widthFitHeight > 0
+                ? `min-height: calc(${widthFitHeight}px + 2 * var(--focus-ring));`
+                : ''}
+            bind:contentRect={stageBox}
         >
             <canvas
                 bind:this={canvas}
@@ -575,13 +582,16 @@
         color: var(--accent-text);
     }
 
-    /* only the frame the stage sits in; the stage is the box the canvas is fitted to */
+    /* only the frame the stage sits in; the stage's content box is the box the canvas is fitted
+       to, and its padding is the focus ring's, so the frame is what is left of the gap around the
+       image once the ring has its room */
     .screen-viewport {
+        --focus-ring: 0.15rem;
         display: flex;
         flex: 1;
         min-width: 0;
         min-height: 0;
-        padding: 0.3rem;
+        padding: calc(0.3rem - var(--focus-ring));
     }
 
     /* a scroll container, so the canvas never widens the column it sits in and an actual-size
@@ -591,6 +601,7 @@
         flex: 1;
         min-width: 0;
         min-height: 0;
+        padding: var(--focus-ring);
         overflow: auto;
     }
 
@@ -629,12 +640,11 @@
 
     /* The ring follows focus itself, not :focus-visible: a click is how most users hand the
        keyboard to the program, and they have to see that the editor's shortcuts are now off. It is
-       drawn *inside* the canvas, because the stage around it is a clipping box in both containers —
-       hidden while fitting, a scroll container at actual size — and an outward ring loses its
-       outer half to it. The alternative was room to draw it in, which is padding the panel has
-       nowhere to take from without shrinking the image. */
+       drawn outside the canvas so it never covers a pixel, in the stage's padding: the stage clips
+       in both containers — hidden while fitting, a scroll container at actual size — so that
+       padding is the only room it has, and it is there whether the canvas has focus or not, so
+       focusing it moves nothing. */
     canvas.focused {
-        outline: 0.15rem solid var(--accent);
-        outline-offset: -0.15rem;
+        outline: var(--focus-ring) solid var(--accent);
     }
 </style>

@@ -20,7 +20,6 @@ import {
     formatX86Form,
     x86DocumentedInstructions,
     x86InstructionsBySection,
-    x86InstructionTitle,
     x86SyscallArgs,
     x86SyscallMap,
     type X86Instruction,
@@ -28,24 +27,32 @@ import {
     type X86TokenDoc
 } from '#lib/languages/X86/X86-documentation.ts'
 import { capitalize } from '#lib/utils.ts'
+import { x86IsUnsupported, x86List, x86Support } from '#lib/languages/X86/x86Support.ts'
 import {
     fillPlaceholders,
     names,
-    plainText,
     proseEntries,
     summaryOf,
     type Chapter,
     type DocumentationEntry,
     type EntryField
 } from '../entries'
+import { x86InstructionCategories } from './categories'
+import { VECTOR_CATEGORIES, VECTOR_SECTIONS, vectorCategory } from './vectorCategories'
+import { x86FormTags } from '../instructions/formTags'
+import { withInstructionCategory } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { isShortEncoding, x86InstructionDocument } from './instructionDocument'
 import directivesProse from './directives.md?raw'
 import extensionsProse from './extensions.md?raw'
 import registersProse from './registers.md?raw'
 import syscallsProse from './syscalls.md?raw'
 import usingCProse from './using-c.md?raw'
 import executablesProse from './executables.md?raw'
+import vectorProse from './vector-instructions.md?raw'
 import runtimeProse from './runtime-library.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
+import { runtimeFunctionDocumentation } from '../runtimeFunctions'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { x86CallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
@@ -86,119 +93,43 @@ function interleave(
 
 // --- instructions -------------------------------------------------------------------------------
 
-/** Registers a form names on its own, which a `reg` or `r/m` operand accepts too. */
-const NAMED_REGISTERS = new Set(
-    'al ah ax eax rax bl bh bx ebx rbx cl ch cx ecx rcx dl dh dx edx rdx'.split(' ')
-)
-
-/** An operand without its width or encoding hint: `r/m64` reads `r/m`, `imm8 {short}` `imm`. */
-function operandKind(operand: string): string {
-    return operand
-        .replace(/\s*\{[^}]*\}/g, '')
-        .replace(/\b(reg|r\/m|mem|imm)(8|16|32|64|80|128)?(na)?\b/g, '$1')
-}
-
-/** True when `wide` accepts every operand `narrow` does: `al` is a `reg`, and a `reg` an `r/m`. */
-function within(narrow: string, wide: string): boolean {
-    if (narrow === wide) return true
-    switch (wide) {
-        case 'r/m':
-            return ['reg', 'mem', 'moffs'].includes(narrow) || NAMED_REGISTERS.has(narrow)
-        case 'reg':
-            return NAMED_REGISTERS.has(narrow)
-        case 'mem':
-            return narrow === 'moffs'
-        case 'imm':
-            return narrow === '1'
-        default:
-            return false
-    }
-}
-
-/** True when shape `wide` accepts everything shape `narrow` does, operand by operand. */
-function covers(wide: string, narrow: string): boolean {
-    if (!wide || !narrow || wide === narrow) return false
-    const wides = wide.split(', ')
-    const narrows = narrow.split(', ')
-    return (
-        wides.length === narrows.length &&
-        narrows.every((operand, index) => within(operand, wides[index]))
-    )
-}
-
-/** Notes on a form a program here does not write: legacy modes, the kernel's, undocumented. */
-const UNUSUAL_FORMS = ['NOLONG', 'PRIV', 'OBSOLETE', 'UNDOC']
-
-/** How many operand shapes a row shows; `mov` alone has 65 forms, and the page lists them all. */
-const SIGNATURE_SHAPES = 3
-
-/** A shape of registers, memory and immediates in general, rather than of particular registers. */
-function isGeneral(shape: string): boolean {
-    return shape.split(', ').every((operand) => ['reg', 'r/m', 'mem', 'imm'].includes(operand))
-}
-
-/**
- * An instruction's operand shapes for its row, without their widths. The forms a 64 bit program
- * writes are the ones shown, a shape a wider one covers is left out (`al, imm` beside `r/m, imm`),
- * the general shapes come first and a row that has to cut stops after them (`push r/m | imm | …`
- * rather than a segment register), and optional operands are bracketed, as in `ret [imm]`.
- */
-function instructionSignature(instruction: X86Instruction): string | undefined {
-    const plain = instruction.forms.filter((form) => form.features.length === 0)
-    const usual = plain.filter((form) => !form.notes.some((note) => UNUSUAL_FORMS.includes(note)))
-    const forms = usual.length > 0 ? usual : plain.length > 0 ? plain : instruction.forms
-    const shapes = [...new Set(forms.map((form) => form.operands.map(operandKind).join(', ')))]
-    const kept = shapes.filter((shape) => !shapes.some((other) => covers(other, shape)))
-    const operands = kept
-        .filter(Boolean)
-        .sort((a, b) => Number(isGeneral(b)) - Number(isGeneral(a)))
-    if (operands.length === 0) return undefined
-    const general = operands.filter(isGeneral).length
-    const count =
-        operands.length <= SIGNATURE_SHAPES
-            ? operands.length
-            : Math.min(general || SIGNATURE_SHAPES, SIGNATURE_SHAPES)
-    const shown = operands.slice(0, count).join(' | ')
-    const cut = count < operands.length ? `${shown} | …` : shown
-    return kept.includes('') ? `[${cut}]` : cut
-}
-
-/**
- * An instruction's row: its one line summary or the appendix's heading, which is also the title of
- * its page, then the first sentence of its description, then the mnemonic for the few that have
- * neither.
- */
-function instructionSummary(instruction: X86Instruction, description: string): string {
-    const title = x86InstructionTitle(instruction.name)
-    if (title !== instruction.name) return plainText(title)
-    return summaryOf(description) || instruction.name
-}
-
 function instructions(): Chapter {
     const entries = [...x86DocumentedInstructions]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((instruction): DocumentationEntry => {
             const description = describeX86Instruction(instruction.name)
-            const summary = instructionSummary(instruction, description)
+            const document = x86InstructionDocument(instruction)
             const forms = instruction.forms.map((form) => formatX86Form(instruction.name, form))
-            return {
+            const entry: DocumentationEntry = {
                 id: `x86/instructions/${instruction.name}`,
                 language: 'x86',
                 chapter: 'instructions',
                 kind: 'instruction',
                 title: instruction.name,
                 names: names(instruction.name),
-                signature: instructionSignature(instruction),
-                summary,
+                signature: documentSignature(document, isShortEncoding),
+                summary: document.summary,
                 href: `${BASE}/instruction/${instruction.name}`,
                 anchor: instruction.name,
-                view: { type: 'x86-instruction', instruction },
+                view: { type: 'instruction', document: () => document },
                 // The section too: the rows are alphabetical, so NASM's heading is only found here.
-                searchText: [...new Set([description, summary, instruction.section])]
+                searchText: [
+                    ...new Set([
+                        description,
+                        document.longName,
+                        document.summary,
+                        instruction.section
+                    ])
+                ]
                     .filter(Boolean)
                     .join('\n'),
                 code: [...new Set(forms)].join('\n')
             }
+            return withInstructionCategory(
+                entry,
+                x86InstructionCategories[instruction.name],
+                instruction.forms.map(x86FormTags)
+            )
         })
     return {
         id: 'instructions',
@@ -224,16 +155,105 @@ function memberSummary(members: X86Instruction[]): string {
 /**
  * `` - `aadd` — Atomically ADD ``: the mnemonic and its one line. In an integer section's group the
  * line names the extension too, `` - `jmpabs` (APX) ``, because that is the reason the instruction
- * is listed here; every other group's heading already names its extension.
+ * is listed here; every other group's heading already names its extension. A mnemonic of a group
+ * that runs in part and has no form the Core runs says so on its line.
  */
-function memberLine(member: X86Instruction, withFeatures: boolean): string {
+function memberLine(member: X86Instruction, withFeatures: boolean, notRun?: string): string {
     const text =
         X86_SUMMARY_OVERRIDES[member.name.toLowerCase()] ??
         member.summary.replaceAll('Singed', 'Signed')
     const summary = text ? ` — ${text}` : ''
     const features =
         withFeatures && member.features.length > 0 ? ` (${member.features.join(', ')})` : ''
-    return `- ${code(member.name)}${summary}${features}`
+    const unsupported = notRun ? ` *(${notRun})*` : ''
+    return `- ${code(member.name)}${summary}${features}${unsupported}`
+}
+
+/** The extensions of the forms the Core is known not to run, without repeats. */
+function missingFamilies(members: X86Instruction[], kind: 'family' | 'v-form'): string[] {
+    return [
+        ...new Set(
+            members.flatMap((member) =>
+                x86Support(member)
+                    .missing.filter((reason) => reason.kind === kind)
+                    .map((reason) => reason.family)
+            )
+        )
+    ]
+}
+
+/**
+ * What a group says first about the Core and its instructions: nothing when it is not known to
+ * stop at any of them, the extension that is missing when it stops at all of them, and what is
+ * left out when only some forms or mnemonics are.
+ */
+function supportNote(members: X86Instruction[]): string | undefined {
+    const supports = members.map(x86Support)
+    const families = missingFamilies(members, 'family')
+    const vForms = missingFamilies(members, 'v-form')
+    if (families.length === 0 && vForms.length === 0) return undefined
+    if (members.every(x86IsUnsupported)) {
+        if (families.length === 0) {
+            const [first] = members
+            return `**This emulator runs ${x86List(vForms)} only in its \`v\` form.** Write \`v${first.name}\`, not \`${first.name}\`: the encodings without the \`v\` prefix stop the program with SIGILL, an illegal instruction.`
+        }
+        return `**This emulator does not support ${x86List(families)}.** A program that reaches one of these instructions stops with SIGILL, an illegal instruction.`
+    }
+    // only where every other form is known to run can the note say that they do
+    const rest = supports.every((support) => support.unknown === 0) ? ' the other forms run' : ''
+    const sentences: string[] = []
+    if (vForms.length > 0) {
+        sentences.push(
+            `${x86List(vForms)} instructions run only in their \`v\` form: a legacy encoding stops the program with SIGILL.`
+        )
+    }
+    if (families.length > 0) {
+        sentences.push(
+            `The ${x86List(families)} forms of these instructions are not supported by this emulator${rest ? `;${rest}` : ''}.`
+        )
+    }
+    return sentences.join(' ')
+}
+
+/**
+ * The markdown of an Extensions group: its support note, then its mnemonics, under a label per kind
+ * of work when the group is one of vector instructions ({@link VECTOR_SECTIONS}) the Core runs. A
+ * mnemonic of a partly supported group that the Core is known not to run is marked on its line.
+ */
+function groupMarkdown(members: X86Instruction[], integer: boolean, vectors: boolean): string {
+    const supports = new Map(members.map((member) => [member, x86Support(member)]))
+    const mixed =
+        members.some((member) => supports.get(member)!.any) && members.some(x86IsUnsupported)
+    const line = (member: X86Instruction) => {
+        const reasons = supports.get(member)!.missing
+        let notRun: string | undefined
+        if (mixed && x86IsUnsupported(member)) {
+            notRun = reasons.every((reason) => reason.kind === 'v-form')
+                ? `runs only as \`v${member.name}\``
+                : `not supported: ${x86List([...new Set(reasons.map((reason) => reason.family))])}`
+        }
+        return memberLine(member, integer, notRun)
+    }
+    const note = supportNote(members)
+    const vector =
+        vectors &&
+        members.some(
+            (member) => supports.get(member)!.any && vectorCategory(member.name) !== undefined
+        )
+    const parts: string[] = note ? [note] : []
+    if (!vector) {
+        parts.push(members.map(line).join('\n'))
+        return parts.join('\n\n')
+    }
+    const labelled = [
+        ...VECTOR_CATEGORIES.map((category) => ({ label: category.label, id: category.id })),
+        { label: 'Other', id: undefined }
+    ]
+    for (const { label, id } of labelled) {
+        const inCategory = members.filter((member) => vectorCategory(member.name) === id)
+        if (inCategory.length > 0) parts.push(`**${label}**\n\n${inCategory.map(line).join('\n')}`)
+    }
+    return parts.join('\n\n')
 }
 
 /**
@@ -258,7 +278,7 @@ function extensions(): Chapter {
     groups.sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
     const entries = groups.map(({ title, members, integer }): DocumentationEntry => {
         const anchor = headingSlug(title)
-        const markdown = members.map((member) => memberLine(member, integer)).join('\n')
+        const markdown = groupMarkdown(members, integer, VECTOR_SECTIONS.has(title))
         const features = [...new Set(members.flatMap((member) => member.features))].map((feature) =>
             [feature, X86_FLAG_MEANINGS[feature]].filter(Boolean).join(': ')
         )
@@ -282,8 +302,7 @@ function extensions(): Chapter {
         language: 'x86',
         title: 'Extensions',
         href,
-        description:
-            'Extension mnemonics grouped under NASM’s headings, with a short summary. NASM accepting an instruction does not guarantee emulator execution.',
+        description: 'Extension mnemonics grouped under NASM’s headings, with a short summary.',
         entries: [
             ...proseEntries({
                 language: 'x86',
@@ -540,7 +559,13 @@ function syscallEntry(syscall: X86Syscall, href: string): DocumentationEntry {
         { label: 'Out', value: [output, ...outputBuffers].join(' ') }
     ]
     if (syscall.blocking) {
-        fields.push({ label: 'Waits', value: 'This call can wait for the outside world.' })
+        fields.push({
+            label: 'Waits',
+            value:
+                syscall.name === 'wait4'
+                    ? 'Returns immediately with ECHILD; this environment has no child processes.'
+                    : 'This call can wait for the outside world.'
+        })
     }
     //searched as MIPS's and RISC-V's are, without the C prototype
     const searchText = [description, ...fields.map((field) => `${field.label}: ${field.value}`)]
@@ -618,9 +643,31 @@ function usingC(): Chapter {
     }
 }
 
+/** The vector registers and the instructions that use them, and what this emulator runs of them. */
+function vectorInstructions(): Chapter {
+    const href = `${BASE}/vector-instructions`
+    return {
+        id: 'vector-instructions',
+        language: 'x86',
+        title: 'Vector instructions',
+        href,
+        description:
+            'The ymm registers and the AVX, AVX2, FMA and BMI instructions: which run here, how they treat the upper half of a register, which cross between 128-bit lanes, and how memory operands are sized and aligned.',
+        entries: proseEntries({
+            language: 'x86',
+            chapter: 'vector-instructions',
+            chapterHref: href,
+            markdown: vectorProse,
+            openingTitle: 'Vector instructions'
+        })
+    }
+}
+
 /**
- * Running a program built outside the editor: an **Executable**, shown as its **Listing**
- * ([binary-import.md](../../../../../../docs/design/binary-import.md)).
+ * Running a program built outside the editor: an **Executable**, shown in the **Hex editor** and
+ * as its **Listing** ([binary-import.md](../../../../../../docs/design/binary-import.md),
+ * [file-views.md](../../../../../../docs/design/file-views.md)), and the **Build output**, the
+ * program an x86 Build links and saves as one.
  */
 function executables(): Chapter {
     const href = `${BASE}/executables`
@@ -630,7 +677,7 @@ function executables(): Chapter {
         title: 'Executables',
         href,
         description:
-            'Import and debug an x86-64 Linux executable, inspect its Listing, and patch instructions during a paused run.',
+            'Import and debug an x86-64 Linux executable, read and edit its bytes, inspect its Listing, patch instructions during a paused run, and open the program a Build links.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'executables',
@@ -653,10 +700,7 @@ function runtimeLibrary(): Chapter {
         }),
         ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
             const convention = x86CallingConvention(entry.prototype)
-            const doc =
-                entry.name === 'getenv'
-                    ? 'Always returns NULL; this Runtime library does not expose environment variables.'
-                    : entry.doc
+            const doc = runtimeFunctionDocumentation(entry.name, entry.doc)
             return {
                 id: `x86/runtime-library/${entry.name}`,
                 language: 'x86',
@@ -702,6 +746,7 @@ export function chapters(): Chapter[] {
         extensions(),
         directives(),
         registersAndFlags(),
+        vectorInstructions(),
         syscalls(),
         usingC(),
         runtimeLibrary(),

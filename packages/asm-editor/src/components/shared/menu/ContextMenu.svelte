@@ -151,7 +151,7 @@
         max-width: min(18rem, calc(100vw - 8px));
         margin: 0;
         padding: 0.25rem;
-        border: none;
+        border: 1px solid var(--tertiary);
         border-radius: 0.4rem;
         background-color: var(--secondary);
         color: var(--secondary-text);

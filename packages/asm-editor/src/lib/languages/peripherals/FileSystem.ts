@@ -1,14 +1,29 @@
 import {
+    annotationsKey,
     bytesFile,
     cleanFiles,
+    projectFileFromBytes,
+    encodeBase64,
     fileBytes,
+    fileByteLength,
     fileText,
+    mergeOverwrites,
+    overwriteText,
+    overwritesOnly,
+    storedAnnotationsSize,
+    storedFilesSize,
+    withAnnotations,
+    withByteEdits,
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
+    ANNOTATIONS_BYTE_LIMIT,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
+    type Annotations,
     type BuildSources,
+    type ByteEdit,
+    type FileEncoding,
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
@@ -25,8 +40,14 @@ function decodeStandalone(bytes: Uint8Array): string | null {
     }
 }
 
-/** `file` caches this node's storage representation, dropped whenever `bytes` changes. */
-type Node = { bytes: Uint8Array; file?: ProjectFile }
+/**
+ * `file` caches this node's storage representation, dropped whenever `bytes` changes and put back
+ * by an Undo that restores the bytes it stood for, so a File's record (its original, Byte edits and
+ * Annotations) comes back as it was rather than rebuilt from its bytes. `busy` marks the running
+ * program's own File, its Build output, which the program reads but never changes; `built` marks
+ * one only presented to it, which is no File of the Project.
+ */
+type Node = { bytes: Uint8Array; file?: ProjectFile; busy?: true; built?: true }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
 type Inverse = { bytes: number; filesChanged?: true; restore: () => void }
 /** A Core-owned instruction identity. Values are compared exactly, without numeric coercion. */
@@ -72,7 +93,11 @@ export enum FileErrorCode {
     /** A malformed path, count, position, seek origin or open mode. */
     InvalidArgument = 'EINVAL',
     /** A path that climbs out of the Project root. */
-    AccessDenied = 'EACCES'
+    AccessDenied = 'EACCES',
+    /** A write to, or a truncation of, the running program's own File: the Build output. */
+    TextBusy = 'ETXTBSY',
+    /** A rename or removal of the Build output, which the running program was started from. */
+    Busy = 'EBUSY'
 }
 
 /**
@@ -176,6 +201,15 @@ function noFile(path: string, found: Exclude<Lookup, { kind: 'file' }>) {
     return new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
 }
 
+/**
+ * The failure for changing the Build output, the File the running program was started from, named
+ * as Linux names it: a write or truncation is ETXTBSY, a rename or removal EBUSY.
+ */
+function busyFile(path: string, code: FileErrorCode.TextBusy | FileErrorCode.Busy) {
+    const reason = code === FileErrorCode.TextBusy ? 'Text file busy' : 'Device or resource busy'
+    return new FileSystemGuestError(code, `${reason}: ${path}`)
+}
+
 /** A byte count or position the program passed: a non-negative safe integer, or EINVAL. */
 function checkCount(value: number, what: string) {
     if (!Number.isSafeInteger(value) || value < 0)
@@ -235,12 +269,127 @@ export class FileSystem {
         this.assertEditable()
         this.commit(files)
     }
-    writeBytes(path: string, bytes: Uint8Array, replace = true) {
+    /**
+     * Replaces a File's whole content, which becomes its new original: any Byte edits and
+     * Annotations it had are dropped, as for an upload over it (ADR 0047). It is stored as text
+     * when the bytes decode as UTF-8, unless `encoding` says how.
+     */
+    writeBytes(path: string, bytes: Uint8Array, replace = true, encoding?: FileEncoding) {
         this.assertEditable()
         path = resolveFilePath(path)
         if (!replace && hasOwn(this.files, path))
             throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
-        this.commit({ ...this.files, [path]: bytesFile(bytes) })
+        const file = encoding ? projectFileFromBytes(bytes, encoding) : bytesFile(bytes)
+        this.commit({ ...this.files, [path]: file })
+    }
+    /**
+     * Overwrites `bytes` at `offset` of a File stored as bytes, as a Byte edit kept apart from its
+     * original ([ADR 0047](../../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)).
+     * The File keeps its length and stays a byte File, whatever its bytes decode as. A File whose
+     * edits insert or delete, which a Project can carry, takes none: only overwrites merge.
+     */
+    editBytes(path: string, offset: number, bytes: Uint8Array) {
+        this.assertEditable()
+        path = resolveFilePath(path)
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (file.encoding !== 'base64')
+            throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
+        if (!overwritesOnly(file))
+            throw new ProjectFormatError(
+                `${path} has Byte edits that insert or delete bytes, which this editor cannot add to`
+            )
+        if (
+            !Number.isSafeInteger(offset) ||
+            offset < 0 ||
+            offset + bytes.length > fileByteLength(file)
+        )
+            throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
+        if (!bytes.length) return
+        const edits = mergeOverwrites([
+            ...(file.edits ?? []),
+            { offset, remove: bytes.length, insert: encodeBase64(bytes) }
+        ])
+        this.commitByteEdits(path, file, edits)
+    }
+    /**
+     * Puts back a whole list of Byte edits over a File's unchanged original, as the Hex editor's
+     * Undo and Redo do: `editBytes` only adds to a list, and an Undo needs the list as it was. The
+     * list is checked as a saved one is, so it must fit the original it is put over.
+     */
+    setByteEdits(path: string, edits: readonly ByteEdit[]) {
+        this.assertEditable()
+        path = resolveFilePath(path)
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (file.encoding !== 'base64')
+            throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
+        this.commitByteEdits(path, file, edits)
+    }
+    /**
+     * Overwrites `bytes` at `offset` of a File stored as text, whose bytes are its UTF-8: its text
+     * changes, as typing into it does, and it keeps no Byte edits (ADR 0047). The File keeps its
+     * length, and the bytes must leave it UTF-8. Like a Byte edit it moves no address, so the
+     * File keeps its Annotations.
+     */
+    overwriteText(path: string, offset: number, bytes: Uint8Array) {
+        this.assertEditable()
+        path = resolveFilePath(path)
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (file.encoding !== 'plain')
+            throw new ProjectFormatError(
+                `Only a File stored as text has its text overwritten: ${path}`
+            )
+        if (
+            !Number.isSafeInteger(offset) ||
+            offset < 0 ||
+            offset + bytes.length > fileByteLength(file)
+        )
+            throw new ProjectFormatError(`An overwrite is past the end of ${path}`)
+        if (!bytes.length) return
+        const text = overwriteText(file.content, offset, bytes)
+        if (text === undefined)
+            throw new ProjectFormatError(
+                `Not saved: ${path} is stored as text, and these bytes would leave it no longer UTF-8`
+            )
+        this.commit({
+            ...this.files,
+            [path]: Object.freeze({
+                encoding: 'plain',
+                content: text,
+                ...(file.annotations ? { annotations: file.annotations } : {})
+            })
+        })
+    }
+    /**
+     * Replaces a File's Annotations
+     * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 20), or takes them all away with undefined. They change no byte, so unlike every
+     * other change this is allowed while a Debug session holds the Files: the session's record of
+     * the File takes them and publishes it, so that its next publish keeps them, and no instruction
+     * Undo takes them back. The record is checked as a saved one is, and the Project's Annotations
+     * together must stay within 256 KiB; a refused change leaves the Files as they were. Its File
+     * change notice saves them as any change to the Files is saved. A record the same as the
+     * File's changes nothing and tells no one.
+     */
+    annotate(path: string, annotations: Annotations | undefined) {
+        path = resolveFilePath(path)
+        if (this.active) {
+            this.active.annotate(path, annotations)
+            return
+        }
+        const file = this.files[path]
+        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        if (annotationsKey(file) === annotationsKey({ annotations })) return
+        const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
+        files[path] = withAnnotations(path, file, annotations)
+        if (storedAnnotationsSize(files) > ANNOTATIONS_BYTE_LIMIT)
+            throw new ProjectFormatError(
+                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            )
+        this.store.write(Object.freeze(files))
+        this.notify(true)
     }
     writeText(path: string, text: string, replace = true) {
         const file = { encoding: 'plain' as const, content: text }
@@ -273,11 +422,26 @@ export class FileSystem {
         this.notify(true)
     }
     /**
+     * Writes a byte File's new list of Byte edits. Nothing else changed, so instead of `cleanFiles`
+     * over the whole Project, which decodes every File and every edit, the new list is checked
+     * against the File's original and the Project's size is read from the stored lengths: a Byte
+     * edit typed into a 16 MiB File costs what the edits do.
+     */
+    private commitByteEdits(path: string, file: ProjectFile, edits: readonly ByteEdit[]) {
+        const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
+        files[path] = withByteEdits(path, file, edits)
+        if (storedFilesSize(files) > FILE_BYTE_LIMIT)
+            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+        this.store.write(Object.freeze(files))
+        this.notify(true)
+    }
+    /**
      * The Debug session's own publish. It validated each path through `resolveFilePath`'s rules,
      * refused File/directory collisions as it applied them and enforced the size and count limits
-     * through `capacity`, and every File it publishes came from `bytesFile`, so re-running
-     * `cleanFiles` here would decode and re-encode the whole Project on every Core step that
-     * touches a File.
+     * through `capacity`, and every File it publishes came from `bytesFile`, is a record it was
+     * given, which `cleanFiles` checked, or is one `annotate` checked through `withAnnotations` and
+     * the Annotations' limit, so re-running `cleanFiles` here would decode and re-encode the whole
+     * Project on every Core step that touches a File.
      */
     private publishSessionFiles(files: ProjectFiles) {
         this.store.write(files)
@@ -333,6 +497,7 @@ export class FileSystemSession {
     private stopped = false
     private firstDescriptor: number
     private maxOpen: number
+    private builtPath: string | undefined
     constructor(
         files: ProjectFiles,
         private budget: number,
@@ -356,6 +521,68 @@ export class FileSystemSession {
     }
     private ensureActive() {
         if (this.stopped) throw new Error('FileSystem session has ended')
+    }
+    /**
+     * Keeps the Build output at `path`, the File a person's Build saved the program it linked in
+     * ([ADR 0056](../../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)),
+     * from that program while it runs: it reads it like any other File, where the Command line
+     * says it was started from, but cannot write, truncate, rename or remove it, as Linux keeps a
+     * running program's own File. False, keeping nothing, when no File has the path, or the
+     * session keeps or presents one already.
+     */
+    protectBuildOutput(path: string): boolean {
+        this.ensureActive()
+        path = resolveSessionPath(path)
+        const found = this.lookup(path)
+        if (this.builtPath !== undefined || found.kind !== 'file') return false
+        found.node.busy = true
+        this.builtPath = path
+        return true
+    }
+    /**
+     * Shows the program a Build linked at `path` without saving it: a Testcase's, and a Build's
+     * in a Project that cannot change. It reads it as `protectBuildOutput`'s, but it is no File of
+     * the Project, so it is never published and counts toward no limit. False, placing nothing,
+     * when a File or a folder of the session has the path already.
+     */
+    presentBuildOutput(path: string, bytes: Uint8Array): boolean {
+        this.ensureActive()
+        path = resolveSessionPath(path)
+        if (path === '' || this.builtPath !== undefined || this.lookup(path).kind !== 'missing')
+            return false
+        this.paths.set(path, { bytes, busy: true, built: true })
+        this.builtPath = path
+        return true
+    }
+    /** Where the session keeps or presents the running program's own File, if it does. */
+    get buildOutputPath(): string | undefined {
+        return this.builtPath
+    }
+    /**
+     * `FileSystem.annotate` while this session holds the Files: the File's record, made from its
+     * bytes when the program has changed them, takes `annotations`, and the session publishes it,
+     * so that every later publish keeps them. It is journaled in no instruction's frame, so no
+     * instruction Undo takes it back, but an Undo of a program's write puts back the record from
+     * before the write, with the Annotations it had then (decision 3). A presented program, which
+     * is no File of the Project, takes none.
+     */
+    annotate(path: string, annotations: Annotations | undefined) {
+        this.ensureActive()
+        const node = this.paths.get(path)
+        if (!node || node.built)
+            throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        const file = node.file ?? bytesFile(node.bytes)
+        if (annotationsKey(file) === annotationsKey({ annotations })) return
+        const next = withAnnotations(path, file, annotations)
+        const records: Record<string, ProjectFile> = Object.create(null)
+        for (const [other, each] of this.paths) if (each.file) records[other] = each.file
+        records[path] = next
+        if (storedAnnotationsSize(records) > ANNOTATIONS_BYTE_LIMIT)
+            throw new ProjectFormatError(
+                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+            )
+        node.file = next
+        this.flush()
     }
     private record(change: Inverse) {
         this.ensureActive()
@@ -477,6 +704,7 @@ export class FileSystemSession {
     private flush() {
         const files: Record<string, ProjectFile> = Object.create(null)
         for (const [path, node] of this.paths) {
+            if (node.built) continue
             node.file ??= bytesFile(node.bytes)
             files[path] = node.file
         }
@@ -490,10 +718,12 @@ export class FileSystemSession {
     private capacity(node?: Node, length = 0, extra = false) {
         if (length > FILE_BYTE_LIMIT)
             throw new FileSystemGuestError(FileErrorCode.TooLarge, 'File too large (16 MiB)')
-        const nodes = new Set([
-            ...this.paths.values(),
-            ...Array.from(this.handles.values(), (h) => h.node)
-        ])
+        //a presented program is no File of the Project, and never changes
+        const nodes = new Set(
+            [...this.paths.values(), ...Array.from(this.handles.values(), (h) => h.node)].filter(
+                (target) => !target.built
+            )
+        )
         let bytes = extra ? length : 0
         for (const target of nodes) bytes += target === node ? length : target.bytes.length
         if (bytes > FILE_BYTE_LIMIT || nodes.size + Number(extra) > FILE_COUNT_LIMIT)
@@ -588,6 +818,8 @@ export class FileSystemSession {
         if (found.kind === 'file') {
             if (flags.create && flags.exclusive)
                 throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
+            if (found.node.busy && (flags.access !== 'read' || flags.truncate))
+                throw busyFile(path, FileErrorCode.TextBusy)
             node = found.node
         } else {
             if (found.kind !== 'missing' || !flags.create) throw noFile(path, found)
@@ -734,7 +966,10 @@ export class FileSystemSession {
     truncate(path: string, length: number) {
         this.ensureActive()
         checkCount(length, 'file length')
-        this.resize(this.fileAt(resolveSessionPath(path)), length)
+        path = resolveSessionPath(path)
+        const node = this.fileAt(path)
+        if (node.busy) throw busyFile(path, FileErrorCode.TextBusy)
+        this.resize(node, length)
     }
     /**
      * `truncate` through a descriptor, which reaches its File even after the path was removed. The
@@ -769,6 +1004,26 @@ export class FileSystemSession {
         if (found.kind === 'file') return { kind: 'file', size: found.node.bytes.length }
         if (found.kind === 'directory') return { kind: 'directory', size: 0 }
         return undefined
+    }
+    /**
+     * The whole of the File at `path` as it is now, or undefined when there is none: the Audio
+     * Peripheral's Sound Files, read in one go. It changes nothing, so it journals nothing.
+     *
+     * The File's own bytes, not a copy, which a caller must never change and must copy to keep: an
+     * append after an Undo can reuse their buffer. Every write gives the File a new array, so the
+     * same array read again is the same content, which spares EASy68K's retry-while-busy loop a copy
+     * of the whole Sound on every try.
+     */
+    readWhole(path: string): Uint8Array | undefined {
+        this.ensureActive()
+        let resolved: string
+        try {
+            resolved = resolveSessionPath(path)
+        } catch {
+            return undefined
+        }
+        const found = this.lookup(resolved)
+        return found.kind === 'file' ? found.node.bytes : undefined
     }
     /** `stat` through a descriptor, which reaches its File even after the path was removed. */
     fstat(fd: number): FileStat {
@@ -810,12 +1065,13 @@ export class FileSystemSession {
      */
     private appendBytes(node: Node, bytes: Uint8Array): void {
         const oldLength = node.bytes.length
+        const oldFile = node.file
         this.record({
             bytes: 16,
             filesChanged: true,
             restore: () => {
                 node.bytes = node.bytes.subarray(0, oldLength)
-                node.file = undefined
+                node.file = oldFile
             }
         })
         const required = oldLength + bytes.length
@@ -849,6 +1105,7 @@ export class FileSystemSession {
         else end = oldLength
         if (oldLength === bytes.length && start === end) return false
         const before = node.bytes.slice(start, end)
+        const oldFile = node.file
         this.record({
             bytes: before.length + 16,
             filesChanged: true,
@@ -857,7 +1114,7 @@ export class FileSystemSession {
                 restored.set(node.bytes.subarray(0, oldLength))
                 restored.set(before, start)
                 node.bytes = restored
-                node.file = undefined
+                node.file = oldFile
             }
         })
         node.bytes = bytes
@@ -873,8 +1130,10 @@ export class FileSystemSession {
         from = resolveSessionPath(from)
         to = resolveSessionPath(to)
         const node = this.fileAt(from)
+        if (node.busy) throw busyFile(from, FileErrorCode.Busy)
         if (from === to) return
         const target = this.lookup(to)
+        if (target.kind === 'file' && target.node.busy) throw busyFile(to, FileErrorCode.Busy)
         if (target.kind === 'file')
             throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${to}`)
         if (target.kind !== 'missing') throw noFile(to, target)
@@ -893,6 +1152,7 @@ export class FileSystemSession {
         this.ensureActive()
         path = resolveSessionPath(path)
         const node = this.fileAt(path)
+        if (node.busy) throw busyFile(path, FileErrorCode.Busy)
         this.record({
             bytes: node.bytes.length + path.length * 2,
             filesChanged: true,

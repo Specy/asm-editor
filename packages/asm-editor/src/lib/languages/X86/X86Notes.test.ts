@@ -8,8 +8,6 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { analyze } from '@specy/x86/elf'
 import type { BuildSources } from '#lib/projectFiles.ts'
-import { functionAtLine, instructionAddressAt } from '#lib/listing/listing.ts'
-import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import { X86Emulator } from './X86Emulator.svelte'
 
 const fixtureBytes = (name: string) =>
@@ -107,38 +105,29 @@ describe('a system call the Core does not implement', () => {
 
 describe('an instruction the Core cannot run', () => {
     it('is named with its address when the program ends on SIGILL there', async () => {
-        //the fixture calls its AVX2 function only with more than four Arguments
-        const sources = executableSources('avx')
-        const emulator = await emulatorFor(sources, '1 2 3 4 5')
-        await emulator.compile(0, sources)
-        await emulator.run(0)
+        //AVX-512, which the Core does not run: AVX and AVX2 it does
+        const emulator = await ranInto('vaddps zmm0, zmm1, zmm2')
         expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
-        //the first AVX instruction of `vector_sum`, where the Listing has it
-        const listing = emulator.listings!.session.get('avx')!.listing!
-        const line = listing.text.split('\n').findIndex((text) => text.trim() === 'vmovd xmm0, edi')
-        const address = PIE_LOAD_BASE + instructionAddressAt(listing, line)!
-        expect(functionAtLine(listing, line)?.name).toBe('vector_sum')
-        expect(emulator.pc).toBe(BigInt(address))
         expect(texts(emulator)).toEqual([
-            `The program ran \`vmovd xmm0, edi\` at \`0x${address.toString(16)}\`, which the emulator does not support`
+            `The program stopped at \`vaddps zmm0, zmm1, zmm2\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support AVX-512 instructions yet.`
         ])
         expect(emulator.notes[0].tone).toBe('warning')
+        expect(emulator.termination).toMatchObject({
+            unsupported: "stopped: AVX-512 isn't supported yet"
+        })
     })
 
     it('is noted when a Step ends the program there, and again after an Undo and a Step', async () => {
-        const sources = executableSources('avx')
-        const emulator = await emulatorFor(sources, '1 2 3 4 5')
+        const sources = assembledSources(
+            'global _start\nsection .text\n_start:\n    nop\n    vaddps zmm0, zmm1, zmm2\n'
+        )
+        const emulator = await emulatorFor(sources)
         await emulator.compile(100, sources)
-        const listing = emulator.listings!.session.get('avx')!.listing!
-        const line = listing.text.split('\n').findIndex((text) => text.trim() === 'vmovd xmm0, edi')
-        const address = instructionAddressAt(listing, line)!
-        const note = `The program ran \`vmovd xmm0, edi\` at \`0x${(PIE_LOAD_BASE + address).toString(16)}\`, which the emulator does not support`
-        emulator.toggleAddressBreakpoint(address, 'avx')
-        await emulator.run(0)
-        expect(emulator.line).toBe(line)
+        await emulator.step()
         expect(emulator.notes).toEqual([])
         await emulator.step()
         expect(emulator.termination).toMatchObject({ kind: 'signal', name: 'SIGILL' })
+        const note = `The program stopped at \`vaddps zmm0, zmm1, zmm2\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support AVX-512 instructions yet.`
         expect(texts(emulator)).toEqual([note])
         //an Undo takes the end back, and the Step that ends it again says it again, once
         emulator.undo()
@@ -146,6 +135,125 @@ describe('an instruction the Core cannot run', () => {
         await emulator.step()
         expect(emulator.terminated).toBe(true)
         expect(texts(emulator)).toEqual([note, note])
+    })
+
+    /** A Run of a program whose first instruction is this one. */
+    async function ranInto(instruction: string) {
+        const sources = assembledSources(
+            `global _start\nsection .text\n_start:\n    ${instruction}\n`
+        )
+        const emulator = await emulatorFor(sources)
+        await emulator.compile(0, sources)
+        await emulator.run(0)
+        return emulator
+    }
+
+    it('says AVX-512 for an EVEX encoding, after segment and address-size prefixes too', async () => {
+        //each as written, and as the note names it
+        const instructions = [
+            ['vaddps zmm0, zmm1, zmm2', 'vaddps zmm0, zmm1, zmm2'],
+            ['vmovdqu32 zmm0, [rax]', 'vmovdqu32 zmm0, zword [rax]'],
+            //64 62 and 65 67 62
+            ['fs vaddps zmm0, zmm1, zmm2', 'vaddps zmm0, zmm1, zmm2'],
+            ['gs a32 vmovdqu32 zmm0, [eax]', 'vmovdqu32 zmm0, zword gs:[eax]']
+        ]
+        for (const [source, decoded] of instructions) {
+            const emulator = await ranInto(source)
+            expect(emulator.termination, source).toEqual({
+                kind: 'signal',
+                number: 4,
+                name: 'SIGILL',
+                description: 'Illegal instruction',
+                unsupported: "stopped: AVX-512 isn't supported yet"
+            })
+            expect(texts(emulator), source).toEqual([
+                `The program stopped at \`${decoded}\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support AVX-512 instructions yet.`
+            ])
+        }
+    })
+
+    it('says APX for an APX instruction, in EVEX map 4 or after REX2', async () => {
+        //push2 and the three-operand mul are EVEX map 4, jmpabs is D5 (REX2)
+        for (const source of ['push2 rax, rbx', 'mul eax, ebx, ecx', 'jmpabs 0x401000']) {
+            const emulator = await ranInto(source)
+            expect(emulator.termination, source).toEqual({
+                kind: 'signal',
+                number: 4,
+                name: 'SIGILL',
+                description: 'Illegal instruction',
+                unsupported: "stopped: APX isn't supported yet"
+            })
+            //the decoder reads no APX instruction, so the Log has no text to name one by
+            expect(emulator.notes, source).toEqual([])
+        }
+    })
+
+    it('names the extension of a VEX instruction the Core does not run', async () => {
+        //each as written, as the note names it, what the run's status says, and the note's words
+        const instructions = [
+            //VAES: the 128-bit vaesenc runs
+            [
+                'vaesenc ymm0, ymm1, ymm2',
+                'vaesenc ymm0, ymm1, ymm2',
+                "stopped: 256-bit AES and carry-less multiplication aren't supported yet",
+                '256-bit AES and carry-less multiplication instructions'
+            ],
+            //the AVX-512 mask instructions are VEX
+            [
+                'kmovw k1, eax',
+                'kmovw k1, eax',
+                "stopped: AVX-512 isn't supported yet",
+                'AVX-512 instructions'
+            ],
+            [
+                'vgf2p8affineqb xmm0, xmm1, xmm2, 0',
+                'vgf2p8affineqb xmm0, xmm1, xmm2, 0x00',
+                "stopped: GFNI isn't supported yet",
+                'GFNI instructions'
+            ],
+            //a family that is already a plural, and says what it is
+            [
+                'vsha512rnds2 ymm0, ymm1, xmm2',
+                'vsha512rnds2 ymm0, ymm1, xmm2',
+                "stopped: the SHA extensions aren't supported yet",
+                'the SHA extensions'
+            ]
+        ]
+        for (const [source, decoded, unsupported, family] of instructions) {
+            const emulator = await ranInto(source)
+            expect(emulator.termination, source).toMatchObject({ name: 'SIGILL', unsupported })
+            expect(texts(emulator), source).toEqual([
+                `The program stopped at \`${decoded}\` (\`0x${emulator.pc.toString(16)}\`): this emulator doesn't support ${family} yet.`
+            ])
+        }
+    })
+
+    it('runs the VEX instructions, and keeps the signal for an encoding no processor accepts', async () => {
+        const emulator = await ranInto('vaddps ymm0, ymm1, ymm2')
+        //it runs, and the program then falls off the end of its code
+        expect(emulator.termination).toMatchObject({ name: 'SIGSEGV' })
+        //66 0F 38 00 is pshufb; as VEX with no prefix it is nothing
+        const invalid = await ranInto('db 0xc4, 0xe2, 0x78, 0x00, 0xc1')
+        expect(invalid.termination).toEqual({
+            kind: 'signal',
+            number: 4,
+            name: 'SIGILL',
+            description: 'Illegal instruction'
+        })
+    })
+
+    it('keeps the signal for an instruction of another extension', async () => {
+        //AES-NI, which the Core does not run either: 66 0F 38 DC
+        const emulator = await ranInto('aesenc xmm0, xmm1')
+        expect(emulator.termination).toEqual({
+            kind: 'signal',
+            number: 4,
+            name: 'SIGILL',
+            description: 'Illegal instruction'
+        })
+        expect(texts(emulator)).toEqual([
+            `The program stopped at \`aesenc xmm0, xmm1\` (\`0x${emulator.pc.toString(16)}\`): this emulator can't run that instruction.`
+        ])
     })
 
     it('is not noted for a program that runs no such instruction', async () => {
@@ -160,15 +268,12 @@ describe('an instruction the Core cannot run', () => {
 
     it('is not noted for ud2 or bytes that are no instruction, which fail on any processor', async () => {
         for (const instruction of ['ud2', 'db 0x06']) {
-            const sources = assembledSources(
-                `global _start\nsection .text\n_start:\n    ${instruction}\n`
-            )
-            const emulator = await emulatorFor(sources)
-            await emulator.compile(0, sources)
-            await emulator.run(0)
-            expect(emulator.termination, instruction).toMatchObject({
+            const emulator = await ranInto(instruction)
+            expect(emulator.termination, instruction).toEqual({
                 kind: 'signal',
-                name: 'SIGILL'
+                number: 4,
+                name: 'SIGILL',
+                description: 'Illegal instruction'
             })
             expect(emulator.notes, instruction).toEqual([])
         }
@@ -186,11 +291,13 @@ describe('a library the Core does not bundle', () => {
         const sources = executableSources('crackme', bytes)
         const emulator = await emulatorFor(sources)
         await emulator.compile(0, sources)
-        expect(texts(emulator)).toEqual(['libz.so.6 is not one of the bundled libraries'])
+        expect(texts(emulator)).toEqual([
+            "This emulator doesn't have libz.so.6, so the program may not start."
+        ])
         expect(emulator.compilerDiagnostics).toEqual([
             expect.objectContaining({
                 severity: 'warning',
-                message: 'libz.so.6 is not one of the bundled libraries'
+                message: "This emulator doesn't have libz.so.6, so the program may not start."
             })
         ])
         //the dynamic linker then fails with its own message

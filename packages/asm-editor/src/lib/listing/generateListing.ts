@@ -1,4 +1,10 @@
-import type { DecodedInstruction, ListingDecoder } from './decoder'
+import {
+    demangledName,
+    listForms,
+    type DemangledName
+} from '#lib/languages/demangle/demangledNames.ts'
+import type { Demangler } from '#lib/languages/demangle/loadDemangler.ts'
+import type { DecodedInstruction, ElfAnalysis, ListingDecoder } from './decoder'
 import {
     findRegion,
     readElfModel,
@@ -11,7 +17,9 @@ import {
 import {
     LINE_KIND,
     ListingError,
+    PERSON_COMMENT,
     type Listing,
+    type ListingAnnotations,
     type ListingFunction,
     type ListingLabel,
     type ListingLabelKind,
@@ -26,7 +34,15 @@ import {
     nameAddress,
     stringComment as sharedStringComment
 } from './addressNames'
-import { instructionLineText } from './listingText'
+import {
+    commentedLine,
+    commentLines,
+    demangledComment,
+    endOfLineComment,
+    instructionLineText,
+    nameComment,
+    withPersonComment
+} from './listingText'
 import {
     calledNames,
     mainFromStart,
@@ -50,6 +66,21 @@ export type ListingInput = {
     version: ListingNameVersion
     /** Called now and then with the share of the work done, from 0 to 1. */
     onProgress?: (fraction: number) => void
+    /** The decoder's analysis of `bytes`, when the caller has made it already. */
+    analysis?: ElfAnalysis
+    /**
+     * The C++ demangler, for a program with mangled names: its labels then carry their demangled
+     * forms and its comments say them
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decisions 1, 2 and 9).
+     * Without it the Listing names everything raw.
+     */
+    demangler?: Demangler
+    /**
+     * An Executable File's Annotations: its labels renamed and its person's comments written
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
+     * decisions 6 to 12). A Bundled library's Listing and the Build output take none.
+     */
+    annotations?: ListingAnnotations
 }
 
 export { ListingError }
@@ -60,7 +91,15 @@ type CodeEntry = DecodedInstruction | CodeData
 /** A stretch of code still to decode. */
 type CodePiece = { data: false; address: number; size: number }
 
-type Name = { name: string; origin: ListingNameOrigin }
+/**
+ * A name at an address. `from` is the Listing's own name for a label the person renamed, which
+ * `name` then is; `conflict` the person's name for it when another label has that name.
+ */
+type Name = { name: string; origin: ListingNameOrigin; from?: string; conflict?: string }
+
+/** A PLT stub's or a GOT slot's name, which the library symbol bound there fixes (decision 6). */
+const LIBRARY_BOUND = /@(?:plt|plt_resolver|got)(?:_\d+)?$/
+const NO_ADDRESSES: readonly number[] = []
 
 const PRINTABLE = new Uint8Array(256)
 for (let byte = 0x20; byte < 0x7f; ++byte) PRINTABLE[byte] = 1
@@ -85,6 +124,11 @@ function floorIndex(sorted: Float64Array, value: number): number {
     return found
 }
 
+/** Comment parts said of one thing, by a space: `name "text"`, `vtable for X+0x10 "text"`. */
+function joined(...parts: (string | undefined)[]): string {
+    return parts.filter((part) => part !== undefined).join(' ')
+}
+
 function hexByte(byte: number) {
     return `0x${byte < 16 ? '0' : ''}${byte.toString(16)}`
 }
@@ -99,7 +143,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     const progress = input.onProgress ?? (() => undefined)
     const hex = (address: number) => `0x${(address + base).toString(16)}`
 
-    const analysis = decoder.analyze(bytes)
+    const analysis = input.analysis ?? decoder.analyze(bytes)
     if (!analysis.isElf) throw new ListingError('not an ELF file')
     const machine = bytes.length >= 20 ? bytes[18] | (bytes[19] << 8) : 0
     if (bytes[4] !== 2 || bytes[5] !== 1 || machine !== 62)
@@ -113,12 +157,17 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
 
     // Names the file gives, by address; invented ones come later, once the starts are known.
     const used = new Map<string, number>()
+    // The `_N` a name was numbered with where another had taken it. Its demangled forms are told
+    // rather than left to guess it, since the demangler reads `_ZZL8greetingvE4text_2` as
+    // `greeting()::text` too, its `_2` a discriminator.
+    const numbering = new Map<string, string>()
     const namesAt = new Map<number, Name[]>()
     const taken = (name: string) => used.has(name)
     const claim = (address: number, name: string, origin: ListingNameOrigin) => {
         if (used.get(name) === address) return
         const unique = numberedName(name, taken)
         used.set(unique, address)
+        if (unique !== name) numbering.set(unique, unique.slice(name.length))
         const names = namesAt.get(address) ?? []
         names.push({ name: unique, origin })
         namesAt.set(address, names)
@@ -492,6 +541,134 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     for (const address of dataLabels)
         if (!namesAt.has(address))
             claim(address, inventName('DAT_', address, taken, version), 'invented')
+
+    // Every name is claimed: the demangled forms of the C++ ones, by name. A name the demangler
+    // cannot read, or whose forms fail, stays raw.
+    const demangled = new Map<string, DemangledName>()
+    if (input.demangler) {
+        const { describe } = input.demangler
+        for (const name of used.keys()) {
+            if (!name.startsWith('_Z')) continue
+            try {
+                const forms = demangledName(name, describe, numbering.get(name) ?? '')
+                if (forms) demangled.set(name, forms)
+            } catch {
+                // Shown raw.
+            }
+        }
+    }
+    const demangledOf = (name: string) => demangled.get(name)
+    /** A label line, with its demangled name as its comment. */
+    const labelLine = (name: string) => {
+        const forms = demangled.get(name)
+        return forms ? commentedLine(`${name}:`, [demangledComment(forms)]) : `${name}:`
+    }
+
+    // The person's names, once every name is claimed and demangled, so that no Invented name
+    // changes with them (ADR 0045). A renamed label's demangled forms stay keyed by its raw name,
+    // so its text has no demangled comment.
+    const blockLocals = new Map<number, Name>()
+    /** A jump target's name inside its function: `.LAB_3`, or the person's `.retry`. */
+    const blockLocal = (target: number) =>
+        blockLocals.get(target)?.name ?? `.LAB_${blockNumber.get(target)}`
+    if (input.annotations?.names?.size) rename(input.annotations.names)
+
+    /**
+     * Applies the person's names (decisions 6 to 10): each replaces the name operands use at its
+     * address, or a jump target's `.LAB_n` within its function. A PLT stub's or a GOT slot's
+     * stays the library's. A name must be unique as written: a global's among every label and
+     * the library symbols the stubs and slots stand for, a jump target's among its function's.
+     * One that another label has, by the Listing's naming or by a rename of a lower address, is
+     * not applied, and its label says so; that can free the raw name it would have replaced, so
+     * the rest are checked again until none more is refused.
+     */
+    function rename(names: ReadonlyMap<number, string>) {
+        type Wanted = { address: number; name: string; key: string; raw: string; block: boolean }
+        const blockKey = (target: number, local: string) => `${functionAt(target)}\0${local}`
+        const wanted: Wanted[] = []
+        for (const address of [...names.keys()].sort((a, b) => a - b)) {
+            const name = names.get(address)!
+            const own = namesAt.get(address)
+            if (own) {
+                const [first] = own
+                if (
+                    first.origin === 'plt' ||
+                    first.origin === 'got' ||
+                    LIBRARY_BOUND.test(first.name)
+                )
+                    continue
+                if (name && name !== first.name)
+                    wanted.push({ address, name, key: name, raw: first.name, block: false })
+            } else if (blockNumber.has(address)) {
+                const raw = `.LAB_${blockNumber.get(address)}`
+                const local = `.${name}`
+                if (name && local !== raw)
+                    wanted.push({
+                        address,
+                        name: local,
+                        key: blockKey(address, local),
+                        raw: blockKey(address, raw),
+                        block: true
+                    })
+            }
+        }
+        if (!wanted.length) return
+        // `puts` of `puts@plt`, `stdin` of `stdin@GLIBC_2.2.5`: the Pseudocode prints them bare.
+        const libraries = new Map<string, number>()
+        for (const [name, address] of used) {
+            const at = name.indexOf('@')
+            if (at <= 0) continue
+            const library = name.slice(0, at)
+            const known = libraries.get(library)
+            libraries.set(library, known === undefined || known === address ? address : -1)
+        }
+        const blockOwners = new Set(
+            wanted.filter((each) => each.block).map((each) => functionAt(each.address))
+        )
+        let applied = wanted
+        for (;;) {
+            const owners = new Map(used)
+            if (blockOwners.size)
+                for (const [target, number] of blockNumber)
+                    if (blockOwners.has(functionAt(target)))
+                        owners.set(blockKey(target, `.LAB_${number}`), target)
+            for (const each of applied)
+                if (owners.get(each.raw) === each.address) owners.delete(each.raw)
+            const kept = applied.filter((each) => {
+                const holder =
+                    owners.get(each.key) ?? (each.block ? undefined : libraries.get(each.key))
+                if (holder !== undefined && holder !== each.address) return false
+                owners.set(each.key, each.address)
+                return true
+            })
+            if (kept.length === applied.length) break
+            applied = kept
+        }
+        const named = new Set(applied)
+        for (const each of wanted) {
+            const { address, name } = each
+            if (each.block) {
+                const raw = `.LAB_${blockNumber.get(address)}`
+                blockLocals.set(
+                    address,
+                    named.has(each)
+                        ? { name, origin: 'block', from: raw }
+                        : { name: raw, origin: 'block', conflict: name }
+                )
+                continue
+            }
+            const [first, ...aliases] = namesAt.get(address)!
+            namesAt.set(
+                address,
+                named.has(each)
+                    ? [
+                          { name, origin: first.origin, from: first.name },
+                          ...aliases.filter((alias) => alias.name !== name)
+                      ]
+                    : [{ ...first, conflict: name }, ...aliases]
+            )
+        }
+    }
     progress(0.6)
 
     // How an operand names an address, from inside a given function: the rules a patched line
@@ -502,7 +679,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     }
     const blockName = (target: number, from: number) => {
         const owner = functionAt(target)
-        const local = `.LAB_${blockNumber.get(target)}`
+        const local = blockLocal(target)
         return owner === from ? local : `${primary(sortedStarts[owner])}${local}`
     }
     const naming: AddressNaming<number> = {
@@ -534,28 +711,26 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
                 if (absolute && operand.immediate !== undefined) {
                     const value = Number(operand.immediate)
                     if (namesAt.has(value) && !blockNumber.has(value)) {
+                        const name = primary(value)
                         const string = strings.has(value) ? stringComment(value) : undefined
-                        comments.push(string ? `${primary(value)} ${string}` : primary(value))
+                        comments.push(joined(name, nameComment(name, demangledOf), string))
                     }
                 }
                 continue
             }
             if (operand.branchTarget !== undefined) {
                 const target = Number(operand.branchTarget)
-                edits.push([
-                    operand.textStart,
-                    operand.textEnd,
-                    addressName(target, from) ?? hex(target)
-                ])
+                const name = addressName(target, from)
+                edits.push([operand.textStart, operand.textEnd, name ?? hex(target)])
+                const said = name === undefined ? undefined : nameComment(name, demangledOf)
+                if (said) comments.push(said)
             } else if (operand.memoryTarget !== undefined) {
                 const target = Number(operand.memoryTarget)
-                edits.push([
-                    operand.textStart,
-                    operand.textEnd,
-                    `[rel ${addressName(target, from) ?? hex(target)}]`
-                ])
+                const name = addressName(target, from)
+                edits.push([operand.textStart, operand.textEnd, `[rel ${name ?? hex(target)}]`])
+                const said = name === undefined ? undefined : nameComment(name, demangledOf)
                 const string = stringComment(target)
-                if (string) comments.push(string)
+                if (said || string) comments.push(joined(said, string))
             }
         }
         edits.sort((a, b) => b[0] - a[0])
@@ -564,7 +739,10 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         if (absolute && text.includes('[0x')) {
             const match = /(?<![:\w])\[0x([\da-f]+)\]/.exec(text)
             const value = match ? parseInt(match[1], 16) : Number.NaN
-            if (namesAt.has(value) && !blockNumber.has(value)) comments.push(primary(value))
+            if (namesAt.has(value) && !blockNumber.has(value)) {
+                const name = primary(value)
+                comments.push(joined(name, nameComment(name, demangledOf)))
+            }
         }
         return instructionLineText(text, comments)
     }
@@ -585,13 +763,91 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         lineSizes.push(size)
         lineOffsets.push(offset)
     }
-    const label = (
-        name: string,
-        fullName: string,
-        kind: ListingLabelKind,
-        origin: ListingNameOrigin,
-        address: number
-    ) => labels.push({ name, fullName, kind, origin, address, line: text.length })
+    const label = (entry: Name, fullName: string, kind: ListingLabelKind, address: number) => {
+        const { name, origin, from, conflict } = entry
+        const record: ListingLabel = { name, fullName, kind, origin, address, line: text.length }
+        // A renamed label's forms are its raw name's, which the hover still gives.
+        const forms = kind === 'block' ? undefined : demangled.get(from ?? name)
+        if (from !== undefined) record.renamed = forms ? { from, demangled: forms } : { from }
+        else if (forms) record.demangled = forms
+        if (conflict !== undefined) record.renameConflict = conflict
+        labels.push(record)
+    }
+
+    // The person's comments (decisions 11 and 12): a line comment on the line holding its
+    // address, at its end or above it; a function comment above its function's labels, or above
+    // the line holding its address when no function starts there. Each of their lines is noted,
+    // so that navigation reads their words as text.
+    const lineComments = input.annotations?.comments
+    const functionComments = input.annotations?.functionComments
+    const sortedAddresses = (
+        comments: ReadonlyMap<number, string> | undefined,
+        keep: (address: number) => boolean
+    ) => {
+        const kept = [...(comments ?? [])]
+            .filter(([address, comment]) => comment && keep(address))
+            .map(([address]) => address)
+        return kept.length ? Float64Array.from(kept).sort() : undefined
+    }
+    const commentAddresses = sortedAddresses(lineComments, () => true)
+    const strayFunctionComments = sortedAddresses(
+        functionComments,
+        (address) => !functionStarts.has(address)
+    )
+    const personLines: number[] = []
+    const personAddresses: number[] = []
+    const personKinds: number[] = []
+    const personLengths: number[] = []
+    const notePerson = (line: number, address: number, kind: number, length: number) => {
+        personLines.push(line)
+        personAddresses.push(address)
+        personKinds.push(kind)
+        personLengths.push(length)
+    }
+    /** A person's comment as lines of their own: kind `comment`, the address it annotates. */
+    const writeComment = (comment: string, address: number, kind: number, indent: string) => {
+        for (const line of commentLines(comment, indent)) {
+            notePerson(text.length, address, kind, line.length - indent.length)
+            emit(LINE_KIND.comment, line, address)
+        }
+    }
+    /** The addresses of an ascending list in `[start, end)`. */
+    const within = (sorted: Float64Array | undefined, start: number, end: number) => {
+        if (!sorted) return NO_ADDRESSES
+        let low = 0
+        let high = sorted.length
+        while (low < high) {
+            const middle = (low + high) >> 1
+            if (sorted[middle] < start) low = middle + 1
+            else high = middle
+        }
+        const found: number[] = []
+        for (let at = low; at < sorted.length && sorted[at] < end; ++at) found.push(sorted[at])
+        return found
+    }
+    /** The label an inline data line defines, noted once the comments above that line are. */
+    let pendingLabel: (() => void) | undefined
+    /**
+     * A line covering bytes, an instruction or data, with the person's comments at addresses it
+     * holds: one short line comment at its end, else each above it, after any function comment.
+     */
+    const emitBytes = (kind: number, line: string, address: number, size: number, offset = -1) => {
+        if (commentAddresses || strayFunctionComments) {
+            for (const at of within(strayFunctionComments, address, address + size))
+                writeComment(functionComments!.get(at)!, at, PERSON_COMMENT.function, '')
+            const found = within(commentAddresses, address, address + size)
+            const only = found.length === 1 ? lineComments!.get(found[0])! : undefined
+            if (only !== undefined && endOfLineComment(only)) {
+                line = withPersonComment(line, only)
+                notePerson(text.length, found[0], PERSON_COMMENT.end, only.length + 2)
+            } else
+                for (const at of found)
+                    writeComment(lineComments!.get(at)!, at, PERSON_COMMENT.above, '    ')
+        }
+        pendingLabel?.()
+        pendingLabel = undefined
+        emit(kind, line, address, size, offset)
+    }
 
     for (const line of header()) emit(LINE_KIND.comment, line)
     // Where data must start a new line: a label, a string, the end of an object.
@@ -621,9 +877,9 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     const regionEnd = (region: Region) => {
         for (const address of namesAfter.get(region) ?? []) {
             const [first, ...aliases] = namesAt.get(address)!
-            for (const { name, origin } of [...aliases, first]) {
-                label(name, name, 'data', origin, address)
-                emit(LINE_KIND.label, `${name}:`, address)
+            for (const entry of [...aliases, first]) {
+                label(entry, entry.name, 'data', address)
+                emit(LINE_KIND.label, labelLine(entry.name), address)
             }
         }
     }
@@ -640,6 +896,8 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
                 owner = functionAt(address)
                 if (open) open.endLine = text.length
                 emit(LINE_KIND.blank, '')
+                const comment = functionComments?.get(address)
+                if (comment) writeComment(comment, address, PERSON_COMMENT.function, '')
                 open = {
                     name: primary(address),
                     address,
@@ -656,17 +914,21 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             // Aliases first: a `.LAB_n` below belongs, as in NASM, to the label just above it,
             // which is the name operands use.
             const [primaryName, ...aliases] = namesAt.get(address) ?? []
-            for (const { name, origin } of primaryName ? [...aliases, primaryName] : []) {
-                if (name === primaryName.name && open?.address === address) open.line = text.length
-                label(name, name, 'function', origin, address)
-                emit(LINE_KIND.label, `${name}:`, address)
+            for (const entry of primaryName ? [...aliases, primaryName] : []) {
+                if (entry === primaryName && open?.address === address) open.line = text.length
+                label(entry, entry.name, 'function', address)
+                emit(LINE_KIND.label, labelLine(entry.name), address)
             }
             const block = blockNumber.get(address)
             if (block !== undefined) {
-                label(`.LAB_${block}`, blockName(address, -2), 'block', 'block', address)
-                emit(LINE_KIND.label, `.LAB_${block}:`, address)
+                const entry: Name = blockLocals.get(address) ?? {
+                    name: `.LAB_${block}`,
+                    origin: 'block'
+                }
+                label(entry, blockName(address, -2), 'block', address)
+                emit(LINE_KIND.label, `${entry.name}:`, address)
             }
-            emit(
+            emitBytes(
                 LINE_KIND.instruction,
                 instructionLine(item, owner),
                 address,
@@ -703,6 +965,21 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             if (boundaries[middle] <= start) next = middle + 1
             else high = middle
         }
+        // The comment saying the demangled name of an inline label, for the first line after it.
+        let named: string | undefined
+        /** A data line, with that comment and its own, if any. */
+        const commented = (line: string, comment?: string) => {
+            if (named === undefined && comment === undefined) return line
+            // A GOT slot's own name and the stub it points to say the same: once.
+            const said =
+                named === undefined
+                    ? [comment!]
+                    : comment && comment !== named
+                      ? [named, comment]
+                      : [named]
+            named = undefined
+            return commentedLine(line, said)
+        }
         let at = start
         while (at < end) {
             while (next < boundaries.length && boundaries[next] <= at) ++next
@@ -712,15 +989,24 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             const [first, ...aliases] = namesAt.get(at) ?? []
             const names = first ? [...aliases, first] : []
             const kind: ListingLabelKind = strings.has(at) ? 'string' : 'data'
-            names.forEach(({ name, origin }, i) => {
-                label(name, name, kind, origin, at)
-                if (inline && i === names.length - 1) prefix = `${name}: `
-                else emit(LINE_KIND.label, `${name}:`, at)
+            const address = at
+            names.forEach((entry, i) => {
+                const { name } = entry
+                if (inline && i === names.length - 1) {
+                    // Defined on the data line, below any comment written above it.
+                    pendingLabel = () => label(entry, name, kind, address)
+                    prefix = `${name}: `
+                    const forms = demangled.get(name)
+                    if (forms) named = demangledComment(forms)
+                } else {
+                    label(entry, name, kind, address)
+                    emit(LINE_KIND.label, labelLine(name), address)
+                }
             })
             const linePrefix = prefix || '    '
             if (at >= fileEnd) {
                 const size = limit - at
-                emit(LINE_KIND.data, `${linePrefix}resb ${size}`, at, size)
+                emitBytes(LINE_KIND.data, commented(`${linePrefix}resb ${size}`), at, size)
                 at = limit
                 continue
             }
@@ -736,9 +1022,11 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
                         if (byte === 10) break
                     }
                     if (lineEnd === at + stringSize - 1) lineEnd++
-                    emit(
+                    emitBytes(
                         LINE_KIND.data,
-                        `${first ? linePrefix : '    '}db ${stringOperands(region, lineStart, lineEnd)}`,
+                        commented(
+                            `${first ? linePrefix : '    '}db ${stringOperands(region, lineStart, lineEnd)}`
+                        ),
                         lineStart,
                         lineEnd - lineStart,
                         region.offset + lineStart - region.address
@@ -752,7 +1040,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             const stop = Math.min(limit, fileEnd)
             const pointer = at % 8 === 0 && at + 8 <= stop ? pointerAt(at) : undefined
             if (pointer !== undefined) {
-                emit(LINE_KIND.data, `${linePrefix}dq ${pointer}`, at, 8, offset)
+                emitBytes(
+                    LINE_KIND.data,
+                    commented(`${linePrefix}dq ${pointer}`, nameComment(pointer, demangledOf)),
+                    at,
+                    8,
+                    offset
+                )
                 at += 8
                 continue
             }
@@ -760,9 +1054,9 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             while (zeros < stop && fileByte(region, zeros) === 0 && !model.relocations.has(zeros))
                 ++zeros
             if (zeros - at >= ZERO_RUN) {
-                emit(
+                emitBytes(
                     LINE_KIND.data,
-                    `${linePrefix}times ${zeros - at} db 0`,
+                    commented(`${linePrefix}times ${zeros - at} db 0`),
                     at,
                     zeros - at,
                     offset
@@ -783,7 +1077,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             }
             const values: string[] = []
             for (let byte = at; byte < lineEnd; ++byte) values.push(hexByte(fileByte(region, byte)))
-            emit(LINE_KIND.data, `${linePrefix}db ${values.join(', ')}`, at, lineEnd - at, offset)
+            emitBytes(
+                LINE_KIND.data,
+                commented(`${linePrefix}db ${values.join(', ')}`),
+                at,
+                lineEnd - at,
+                offset
+            )
             at = lineEnd
         }
     }
@@ -838,8 +1138,8 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         } else lines.push('; Statically linked: no dynamic linker, no shared libraries')
         lines.push(
             analysis.stripped
-                ? `; Stripped: no symbol table; other names come from dynamic symbols, relocations and invented words (${version})`
-                : `; Not stripped: names come from its symbol table, with invented words (${version}) for the rest`
+                ? '; Stripped: no symbol table; other names come from dynamic symbols and relocations'
+                : '; Not stripped: names come from its symbol table'
         )
         if (model.fromSegments)
             lines.push('; No usable section headers: code and data are listed by load segment')
@@ -849,10 +1149,20 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
             )
         if (main !== undefined && namesAt.get(main)?.[0].origin === 'main')
             lines.push(`; main: ${hex(main)}, the address _start passes to __libc_start_main`)
-        lines.push(
-            '; Generated from the file, read-only and never saved: nothing builds from this Listing.'
-        )
         return lines
+    }
+
+    // What lists name the functions with demangled names by, telling their collisions apart.
+    if (demangled.size) {
+        const listed = listForms(
+            functions.map(({ name }) => ({ name, demangled: demangled.get(name) }))
+        )
+        functions.forEach((fn, i) => {
+            const forms = demangled.get(fn.name)
+            if (!forms) return
+            fn.list = listed[i]
+            forms.list = listed[i]
+        })
     }
 
     // Lines covering bytes, in address order: each region's lines already are.
@@ -876,6 +1186,16 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         functions,
         holders,
         entry,
-        main
+        main,
+        ...(personLines.length
+            ? {
+                  comments: {
+                      lines: Int32Array.from(personLines),
+                      addresses: Float64Array.from(personAddresses),
+                      kinds: Uint8Array.from(personKinds),
+                      lengths: Int32Array.from(personLengths)
+                  }
+              }
+            : {})
     }
 }

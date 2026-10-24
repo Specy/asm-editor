@@ -1,0 +1,6 @@
+{
+    "name": "Sampled sound",
+    "description": "Compute a plucked sound into memory, upload it into the Synth's Sample memory and play it at eight pitches by changing the playback rate.",
+    "order": 27,
+    "topic": "sampled-sound"
+}

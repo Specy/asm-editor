@@ -46,8 +46,13 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 
 ## Breakpoint
 
-A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a **Listing** is an address in its **Executable** rather than a line, and stops before the instruction at that address. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. A Breakpoint on a line of **Pseudocode** is the same rule applied through the decompiler's addresses: it places address Breakpoints on the Listing, kept as the Listing's own. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
+
+## Run to Cursor
+
+A Run during a **Debug session** that also stops before the instruction at a line of the running **Executable**'s **Listing**, or, from a line of its **Pseudocode**, before the first instruction of each block mapped to that line, as a **Breakpoint** set there would. Those stops are a Breakpoint for that Run only, never added to the person's, and the Run still stops earlier at any Breakpoint, a **Pause** or the program's end. Like any Run it executes the instruction it starts on, so from the stopped line it runs until the program comes back to it. It is offered while the program is stopped and not waiting for input, on the running program's own Listing and Pseudocode only. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+_Avoid_: run until, continue to here, temporary breakpoint (for the action)
 
 ## Poke
 
@@ -56,8 +61,23 @@ _Avoid_: edit, value edit, override, set value, host write, manual write; patch,
 
 ## Patch
 
-A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes.
+A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes. Distinct from a **Byte edit**, which changes the File.
 _Avoid_: edit, binary patch, hot patch, modification
+
+## Hex editor
+
+The **Workbench**'s view of a **File** stored as bytes, as rows of hexadecimal bytes beside their text, where typing over the bytes makes **Byte edits**. Any byte File the browser cannot preview opens in it, in every **Target**; an **Executable** opens on its **Listing** and can be switched to it. Distinct from the memory view, which shows a **Debug session**'s memory rather than a File.
+_Avoid_: hex view, hex dump, byte viewer
+
+## Preview
+
+The **Workbench**'s view of a **File** as it reads rather than as its bytes or text: a byte File as the browser itself shows its kind, an image, a PDF, audio or video, recognised by the File's first bytes and never by its name, which can be switched to the **Hex editor**; or a Markdown text File rendered, recognised by its name as a C File is, which can be switched back to its text or to the Hex editor.
+_Avoid_: viewer, render, thumbnail
+
+## Byte edit
+
+A change typed into a byte **File** in the **Hex editor**, saved with the **Project** apart from the File's original bytes, which are kept unchanged. It overwrites bytes and never changes the File's length. Everything that reads the File (the **FileSystem**, a Build, the **Listing**, a download) sees the edited bytes, and nothing in the interface yet lists Byte edits or shows the original. The File keeps its **Annotations** through Byte edits and their Undo. Distinct from a **Patch** and any other **Poke**, which change only a Debug session's memory. See [ADR 0047](./docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md).
+_Avoid_: patch (the memory-only **Patch**), binary patch, modification, diff
 
 ## Peripheral
 
@@ -75,9 +95,44 @@ The Peripheral representing keyboard input for a program interacting with the **
 
 The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom.
 
+## Audio
+
+The Peripheral that plays a program's **Notes** and **Sounds** through its **Reference environment**'s sound services: MARS's and RARS's MIDI services, EASy68K's sound tasks and the **Port map**'s audio group. What a program can observe of it, such as whether EASy68K's standard player is busy, follows **Program time**; muting it never changes what a program observes, and in a **Testcase** it is silent and nothing is ever playing.
+_Avoid_: sound player, speaker, sound device
+
+## Note
+
+A pitch played on a General MIDI instrument at a volume for a duration, each 0 to 127 apart from the duration in milliseconds, as MARS's and RARS's MIDI services and the Z80's audio ports ask for it. Distinct from a **Sound**, which comes from a File.
+_Avoid_: tone, beep, MIDI event
+
+## Sound
+
+Audio from a **File**, a WAV, or a MIDI File for EASy68K's DirectX tasks, which a program plays straight from the File or loads into one of 256 numbered slots and plays from there, once or in a loop. Distinct from a **Note**, which the program describes by its pitch rather than a File.
+_Avoid_: clip, wave, sample, audio file (when the playing thing, not the File, is meant)
+
+## Sound chip
+
+The AY-3-8910 the Z80 reaches through the **Port map** at an MSX's ports, 0xA0 to select a register, 0xA1 to write it and 0xA2 to read it: three square-wave tone channels, a noise generator, a mixer, volumes and one hardware envelope, a real chip emulated so that its registers are the lesson. The Z80's waveform sound, where MIPS, RISC-V and the M68K have the **Synth**. See [ADR 0060](./docs/adr/0060-the-z80-gets-a-real-sound-chip-the-others-a-synth.md).
+_Avoid_: PSG (except when naming the chip's family), sound card, synth (for the Z80's chip)
+
+## Synth
+
+The waveform device of MIPS, RISC-V and the M68K, of this project's own design but one a 1980s chip maker could have built: eight **Synth channels** on a 65,536 Hz clock, played by setting their registers. An extension beyond MARS, RARS and EASy68K, which have nothing like it. See [ADR 0061](./docs/adr/0061-the-synth-is-a-chip-that-could-have-been-built.md).
+_Avoid_: synthesizer (for this device; spessasynth is the synthesizer that plays **Notes**), sound chip (that is the Z80's)
+
+## Synth channel
+
+One of the **Synth**'s eight voices: a frequency in Hz, a waveform (pulse with its width, triangle, sawtooth, sine, noise, its own 32-sample wavetable, or samples from **Sample memory**), a volume and an envelope, sounding while its gate is on and fading through its release once it is off.
+_Avoid_: voice (the Audio code's word for any Note or Sound that plays), oscillator, track
+
+## Sample memory
+
+The **Synth**'s own 64 KB of 8-bit signed samples, which a program fills by uploading a buffer from its own memory and a **Synth channel** plays at a rate in samples a second, as the SNES's sound chip plays from its own memory. Distinct from a **Sound**, which plays a File.
+_Avoid_: sample buffer, sample RAM (except when comparing with real chips), DMA buffer
+
 ## Terminal
 
-The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin. Instruction Undo puts the Terminal back as the instruction found it, its output and echo included, and a read it takes back asks again ([ADR 0057](./docs/adr/0057-restore-the-terminal-on-undo.md)).
 
 ## Command line
 
@@ -123,7 +178,7 @@ _Avoid_: RNG, entropy source, random seed (when the source, not one seed, is mea
 
 ## Port map
 
-The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port numbers, read and written with `in` and `out`, grouped by peripheral: the **Console ports** for the **Terminal**, and the ports for the **Screen**, **Keyboard**, **Mouse** and program time. Every port outside the map is an empty bus: writes are ignored and reads return 0xFF. See `docs/adr/0011-z80-peripherals-through-the-port-map.md`.
+The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port numbers, read and written with `in` and `out`, grouped by peripheral: the **Console ports** for the **Terminal**, and the ports for the **Screen**, **Keyboard**, **Mouse**, program time and **Audio**. Every port outside the map is an empty bus: writes are ignored and reads return 0xFF. See `docs/adr/0011-z80-peripherals-through-the-port-map.md`.
 
 ## Console port
 
@@ -131,8 +186,18 @@ The **Port map**'s group for the **Terminal**. A Z80 has no system calls: progra
 
 ## Project
 
-The unit of work the editor saves, opens and shares: one **Target**, its **Files**, its **Settings**, its **Testcases**, its **Display configuration**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
+The unit of work the editor saves, opens and shares: one **Target**, its **Files**, its **Programs**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
 _Avoid_: workspace, folder, program
+
+## Program
+
+One runnable unit of a **Project**: an **Entry file** and the **Settings**, **Display configuration** and **Testcases** it runs with. It is identified by its Entry file, which is the Entry of no other Program, and has no name of its own. A Project's Programs share its **Target** and its **Files**, and a Build builds one Program.
+_Avoid_: project (for this unit), run configuration, launch configuration
+
+## Selected program
+
+The **Program** a **Workbench** currently works on: whose **Settings** and **Testcases** its panels show, which the Build shortcut and the Testcases panel's Run use, and which the **Debug session** belongs to. Building or testing from a pane that shows an Entry file selects that File's Program. Chosen independently of the **Displayed file**.
+_Avoid_: active program, current project, entry (for the Program)
 
 ## Target
 
@@ -178,7 +243,7 @@ _Avoid_: crt0 (the Runtime library's start code, which takes its place once x86 
 
 ## Source compilation
 
-The conversion of a selected higher-level **File** and its project-local headers into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
+The conversion of a selected higher-level **File**, and the Project **Files** its quoted includes reach (headers, or `.c` Files pasted in), into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
 
 ## C/C++ language help
 
@@ -204,11 +269,11 @@ The correspondence between lines of **Generated assembly** and the higher-level 
 
 ## Stale assembly
 
-**Generated assembly** whose source File or a project-local header used to compile it has subsequently changed. Its contents remain available, but its Source map has been removed and the editor identifies it as stale.
+**Generated assembly** whose source File or a File it included when compiled has subsequently changed. Its contents remain available, but its Source map has been removed and the editor identifies it as stale.
 
 ## Project archive
 
-A portable copy of a **Project**, containing all its named **Files**, its **Entry path**, and its configuration and metadata. Distinct from downloading an individual File; it does not contain a running **Debug session**.
+A portable copy of a **Project**, containing all its named **Files**, its **Programs**, and its configuration and metadata. Distinct from downloading an individual File; it does not contain a running **Debug session**.
 
 ## File
 
@@ -225,27 +290,67 @@ A grouping of a **Project**'s **Files** under a shared path prefix. It exists wh
 
 ## Entry path
 
-The **Project**'s configured path from which a Build begins, `main.<ext>` by default. It can temporarily name a missing File; choosing another Entry path is separate from choosing which File the editor shows.
+The path of a **Program**'s **Entry file**, from which its Build begins; a new Project's one Program has `main.<ext>`. It can name a missing File, after the running program removed it or in old saved data; choosing which File the editor shows never changes it.
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing.
+The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing, and the Build button reads Debug.
 _Avoid_: main file, active file, selected file, open file
 
 ## Executable
 
-A **File** holding a program already built for the **Project**'s **Target** by a compiler and linker outside the editor, which a Build loads as it is instead of assembling. Today only an x86-64 Linux ELF in an x86 Project; its own symbols may have been stripped. See [the binary import design](./docs/design/binary-import.md).
+A **File** holding a program already built for the **Project**'s **Target** by a compiler and linker outside the editor, which a Build loads as it is instead of assembling. Today only an x86-64 Linux ELF in an x86 Project; its own symbols may have been stripped. Its **Annotations** are saved with it, apart from its bytes. See [the binary import design](./docs/design/binary-import.md).
 _Avoid_: binary (any File that is not text is binary), imported binary, compiled program, ELF (as a noun)
 
 ## Listing
 
-The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. It is generated whenever it is shown and never saved, and nothing builds from it.
-_Avoid_: disassembly (the decoding that produces it), dump, decompilation, listing file
+The read-only assembly text the editor shows for an **Executable**, or for a shared library it loads: one line per instruction of its code, with the instruction's address and bytes, labelled where a symbol names it. A C++ symbol keeps its mangled name in the text, which every lookup reads, and a comment beside it gives its **Demangled name**. An Executable's Listing is made with its **Annotations**: a **Rename** in place of the name it replaces, a **Comment** at the end of its line or as lines of its own, which stand for the address they annotate and cover no bytes. It is generated whenever it is shown and never saved, and nothing builds from it. An Executable opens on its Listing, at `main` (else the entry point, else the first function), or beside a **Pseudocode** at that Pseudocode's function.
+_Avoid_: disassembly (the decoding that produces it), dump, decompilation (see **Pseudocode**), listing file
+
+## Pseudocode
+
+The read-only C-like text the editor shows for one function of an **Executable**, produced by Ghidra's decompiler from the File's current bytes: the function the **Listing**'s cursor is in, or the program counter's during a **Debug session**, shown beside the Listing and linked to it line by line by address. A C++ program's functions and data read by their **Demangled names** in their namespaces, qualified only as far as the place they are used needs. Its functions, data and variables read by the person's **Renames**, and the decompiler places their **Comments** as C comments, each given to it with the function. It is generated whenever it is shown and never saved, and it reads like C without being meant to compile. See [ADR 0048](./docs/adr/0048-decompiled-code-is-a-view-not-a-file.md).
+_Avoid_: decompiled C, decompilation (when the text is meant), source, C code
+
+## Symbols panel
+
+The **Workbench** side panel that lists the functions and the strings of an **Executable**, read from its **Listing**: the Executable shown in the focused editor pane, or else the **Selected program**'s **Entry file** when it is one. A function's row shows its name, run-time address and size, a string's its text and address; a C++ function is listed by its **Demangled name**, and the filter also matches its mangled name. A row reveals its line in the Listing, which a **Pseudocode** beside it follows, and the jump goes into the pane's **Navigation history**. A function's row menu and F2 give it a **Rename** or a function **Comment**; a renamed function is listed by its Rename, and the filter also finds it by its old names. Its rail entry is offered only in an x86 **Project** that has an Executable. Distinct from Monaco's Go to Symbol, which lists one Listing's labels inside the editor, and from the Explorer, which lists **Files**.
+_Avoid_: symbol table (the ELF's own, which a stripped program lacks), outline, functions window
+
+## Search panel
+
+The **Workbench** side panel that finds text across the **Project**, offered in every **Target** and opened from its rail entry or with Ctrl+Shift+F (⌘⇧F on a Mac): in the Project's text **Files** and, in a Project with an **Executable**, in what the person ticks under "Look in": the Files, each Executable's **Listing** with its **Annotations**, and the **Pseudocode** of every function of each Executable, which it decompiles in the background while it is open. A result opens the File, the Listing or the function at its line, and a jump from a Listing or Pseudocode goes into the pane's **Navigation history**. An **Exam** has none. Distinct from Ctrl+F (one editor), the **Symbols panel** (one Executable's names) and the Documentation's search, whose **Search scope** the place it is made from sets.
+_Avoid_: find in files, global search, grep, search scope (for its ticks)
+
+## Navigation history
+
+The places an editor pane jumped from in a **Listing** or a **Pseudocode**, kept per pane as a browser keeps its history: a line of a Listing, found again by the address it stands for once **Comments** or **Renames** have moved it, or the function a Pseudocode showed, in the version of the **File** it was shown in. Every jump records the place it leaves, in each pane it moves: a double-click on a name, Go to Definition, Go to Symbol, Show in Listing, a row of the **Symbols panel**, a result of the **Search panel**. Go Back and Go Forward (Alt+← and Alt+→, the mouse's back and forward buttons, the context menu) move through it, past places that no longer exist; outside the editor, the keys and the buttons move the focused pane's. It lives as long as the open **Project** and is never saved. Distinct from the History of the **Debug tools**, which records the steps instruction Undo can take back.
+_Avoid_: history (alone, which is the Debug tools' History), back stack, breadcrumbs, jump list
 
 ## Invented name
 
 A name the **Listing** gives an address its **Executable** names nowhere: `FUN_<adjective>_<animal>` for a function, `DAT_<adjective>_<animal>` for data. It is derived from the address in the file, so it is the same on every open and for everyone, from word lists that are never edited once released. Distinct from the names the bytes give (symbols, `name@plt`, an `s_` string's text) and from the numbered `.LAB_n` of a jump target. See [ADR 0045](./docs/adr/0045-invented-names-are-frozen-words-from-file-addresses.md).
 _Avoid_: random name, generated name, placeholder name
+
+## Demangled name
+
+The readable name the editor shows for a C++ symbol of an **Executable**, a **Build output** or a library they load, worked out from the mangled name by LLVM's demangler: `_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEpLERKS4_` is `std::string::operator+=`. Its short form, without parameters and with the standard library's templates shortened (`std::string` for `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>`), names a function in the **Symbols panel**, Go to Symbol, the Call stack and the History, the lists giving the signature instead where overloads share a short form; the **Listing**'s comments give the signature, `std::string::operator+=(std::string const&)`; the **Pseudocode** writes it in its namespaces; a hover gives every form, with the demangler's exact text and the mangled name. The mangled name stays the Listing's label, which its text and every lookup use, and a name the demangler cannot read stays mangled. Distinct from an **Invented name**, which the Listing makes up where nothing names an address, and from a C++ Build's memory labels, which show the demangler's exact text.
+_Avoid_: display name (the code's field for any name shown in place of another), pretty name, unmangled name, symbol name (the mangled one)
+
+## Annotation
+
+A **Rename** or a **Comment** a person adds to an **Executable** that is a **File** of the **Project**, kept on the File apart from its bytes, as its **Byte edits** are, by its link-time address (a variable's Rename also by the decompiler's id for the variable), and shown in its **Listing** and **Pseudocode**. It is saved, archived and shared with the File. Replacing the File's whole content (an upload over it, a program's write) drops it; a Byte edit and a rename of the File keep it, and one whose address no longer fits after a Byte edit stays saved until it fits again. A **Bundled library**'s Listing, the **Build output** and a read-only **Workbench** take none. Each change is one step of the File's own Undo, apart from instruction Undo and the **Hex editor**'s. See [ADR 0055](./docs/adr/0055-annotations-are-kept-on-the-file-apart-from-its-bytes.md).
+_Avoid_: note, markup, bookmark, label (a name of the Listing), metadata
+
+## Rename
+
+A name a person gives in place of the one the **Listing** or the decompiler gave: a function's, a datum's, a string's or a jump target's of an **Executable**, by its address in the file, shown wherever that name is; or a variable's or parameter's of one function of its **Pseudocode**, by the decompiler's id for it. It overrides an **Invented name** and a **Demangled name**, which its hover still gives ("Renamed from"), and Reset name takes it away. A PLT stub, a GOT slot and a parameter a C declaration names keep their names, and a jump target's Rename shows in the Listing only. Distinct from renaming a **File**, which moves its path.
+_Avoid_: alias, symbol, display name (the code's field), relabel
+
+## Comment
+
+Text a person attaches to an address of an **Executable** (a line comment, at an instruction or data line) or to one of its functions (a function comment). The **Listing** writes a line comment at the end of its line when it is one line of at most 60 characters, otherwise above the line, and a function comment above the function's label; the **Pseudocode** has Ghidra place it before the statement whose code holds the address, a function comment above the declaration, and lists at the top those it cannot place. A Comment set on a Pseudocode line is kept at that line's first mapped instruction. Its words are text, never a name to follow. Distinct from the comments the Listing and the decompiler write themselves (a string's text, a **Demangled name**, Ghidra's warnings) and from the comments in a source File's text.
+_Avoid_: note, remark, annotation (for a Comment alone), EOL/PRE/plate comment (Ghidra's kinds)
 
 ## Bundled library
 
@@ -259,15 +364,24 @@ _Avoid_: system code, external code, foreign code
 
 ## Displayed file
 
-The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. An **Executable** is displayed as its **Listing**.
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. A File stored as bytes is displayed in the **Hex editor**, or as a **Preview** when the browser can show its kind; an **Executable** opens on its **Listing** and can be switched to the Hex editor or its **Pseudocode**, unless the **Project** saved another view for it.
 
 ## Build snapshot
 
 The fixed versions of the **Files** and **Entry path** used by one Build, identifying the source of its running program. Later **FileSystem** changes belong to the current Project Files and affect subsequent Builds.
 
+## Build output
+
+The **File** an x86 Build saves the executable it links in, at the path the **Command line** runs it as (the Entry path without its extension), an **Executable** of the **Project** like an uploaded one. While it holds that program unchanged, with no **Byte edits** or **Annotations**, its **Build record** makes it derived: the next Build replaces it without asking, the Explorer marks it From an earlier Build once its sources change, and it is left out of share links, archives and downloaded files. Anything else at its path is replaced only once the person agrees, and a renamed one is the person's own File. See [ADR 0056](./docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md).
+_Avoid_: a.out, binary, compiled program, artifact (the Core's build artifacts are line data, not this File)
+
+## Build record
+
+Saved **Project** metadata on a **Build output**: the Entry its Build built, and fingerprints of the Files that Build read, of its Build configuration and of the File it saved. It tells whether the Build output is stale or changed since, and goes when the File is renamed or removed. The Build's counterpart of a **Compilation record**.
+
 ## Debug session
 
-The lifetime of a built program retained for execution, inspection, and instruction Undo, from a successful Build until Stop or disposal. Program exit does not itself end the session or return host editing access to the **Files**.
+The lifetime of a built program retained for execution, inspection, and instruction Undo, from a successful Build until Stop or disposal. Program exit does not itself end the session or return host editing access to the **Files**. An **Executable** whose program exits is shown on no line, so its **Listing** and **Pseudocode** stay where they were read; one ended by a signal is shown where the signal struck, and an assembled program where it ended.
 
 ## Workbench
 
@@ -284,6 +398,11 @@ _Avoid_: embed editor, small editor, playground editor, inline editor (for the c
 The three views of a **Debug session** that follow execution step by step: the Stack pointer (the memory around the stack pointer), the History (the steps instruction Undo can take back, **Pokes** included) and the Call stack. In the **Workbench** they are floating windows or sections of the debug column, as a **Preference** chooses. Registers, memory and the **Screen** are not debug tools.
 _Avoid_: inspectors, trackers, user tools, floating panels
 
+## Pointer menu
+
+The menu a right click on a register's value or on a memory byte opens during a **Debug session**, which reads the value as an address: Show in memory, which moves the memory view to it and marks the byte until the view is moved by hand; Show in Listing, while the program is an **Executable** and the address is in its own code; Copy as hex and Copy as decimal; and for a byte, Follow pointer, which reads the address stored there at the **Target**'s register width and in its byte order. A click still edits the value, as a **Poke**.
+_Avoid_: context menu (any right-click menu), address menu, value menu
+
 ## Memory region
 
 A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack, the program's **Arguments** and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. The Arguments region sits above the stack and holds what the program was started with, as the Core wrote it at the start: the `argv` array and its strings ("Arguments" on MIPS and RISC-V), or on x86 the whole Linux process-start block with the environment and the auxiliary vector ("Arguments and environment"), its parts named like data labels (`argv`, `argv[1]`). A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. The memory view draws a data or reserved region in chunks, one for each data label in it, so the variables of a section read apart. Distinct from a page, which is the fixed-size window the memory view shows at a time.
@@ -291,12 +410,12 @@ _Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zon
 
 ## Log
 
-The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it), followed by notes on what the program met that the **Emulator** lacks, such as a system call it does not implement or an instruction it cannot run. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+The **Workbench**'s record of what it did for the person: each Build with its result, a failed Build's with the reason its **Diagnostics** do not give, such as a download that failed or stalled, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it; an x86 AVX-512 instruction's illegal-instruction signal reads as "AVX-512 instructions are not currently supported"), followed by notes on what the program met that the **Emulator** lacks, such as a system call it does not implement or an instruction it cannot run. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
 _Avoid_: output, build output, console
 
 ## Settings
 
-Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86, MIPS or RISC-V program's **Arguments**. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+Per-**Program** configuration that changes what the **Emulator** or the program does: the undo history size, the separate **Screen** and **FileSystem** undo budgets, and an x86, MIPS or RISC-V program's **Arguments**. They belong to one **Program**, are edited through the editor's GUI and are never a file the program can see. A Program records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
 _Avoid_: preferences, options, config, global settings
 
 ## Preferences
@@ -306,7 +425,7 @@ _Avoid_: settings, global settings, user settings
 
 ## Display configuration
 
-The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Project**: unit size, display size and base address, distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Project's chosen display; included Files do not supply display configuration.
+The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Program**: unit size, display size and base address, distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Program's chosen display; included Files do not supply display configuration.
 _Avoid_: display settings, screen settings, screen config
 
 ## Exam
@@ -315,7 +434,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input (and, on x86, MIPS and RISC-V, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a **Program**: starting registers/memory/input (and, on x86, MIPS and RISC-V, **Arguments**) and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 
@@ -330,7 +449,27 @@ _Avoid_: doc item, article, card, topic (a **Topic** is what a Lecture teaches)
 ## Chapter
 
 A named group of one language's **Documentation entries** that share a kind or a subject: Instructions, Directives, Trap tasks, Registers, the Screen. It is a heading in the Documentation panel and one page of the language's documentation site.
-_Avoid_: section, category, group (a **Module** groups Lectures)
+_Avoid_: section, category (an **Instruction category** groups instructions inside the Instructions Chapter), group (a **Module** groups Lectures)
+
+## Instruction category
+
+The one kind of work an instruction does, such as Arithmetic or Control flow: its **Documentation entry** is listed under it in the Instructions **Chapter**, and its page, its row and the editor's hover name it. Every language draws its Instruction categories from one shared list and uses the ones that apply, adding one of its own only where nothing in the shared list fits. A mnemonic has exactly one, decided by its main job rather than by what each of its **Instruction forms** does.
+_Avoid_: section (NASM's heading for an x86 instruction), class, family, group
+
+## Instruction form
+
+One operand shape a mnemonic is accepted with, as the **Core**'s assembler lists it: `lw $t1, -100($t2)` and `lw $t1, label` are two forms of MIPS `lw`. A mnemonic's **Documentation entry** lists its forms.
+_Avoid_: variant (in prose; the code's `variants` are forms), overload, syntax
+
+## Form pattern
+
+One row of an instruction's list of forms, standing for every **Instruction form** that differs only in an operand's width or in which register of one class it names: x86 `add r/m, imm` for its 8, 16, 32 and 64-bit forms, Z80 `ld r, r'` for 49 forms. Forms with different **Instruction tags** are never one Form pattern.
+_Avoid_: template, shape, syntax line, variant
+
+## Instruction tag
+
+A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
+_Avoid_: category, flag (a **Status flag** is a CPU bit), badge, attribute
 
 ## Instruction example
 
@@ -343,7 +482,7 @@ _Avoid_: chunk, passage, paragraph
 
 ## Search scope
 
-What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program.
+What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program. Only the Documentation's search has one: the **Search panel**'s "Look in" ticks are the reader's choice, and are not called a scope.
 _Avoid_: corpus, index, search set, filter
 
 ## Course

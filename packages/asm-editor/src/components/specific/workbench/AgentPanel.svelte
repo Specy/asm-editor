@@ -5,6 +5,7 @@
         PROJECT_AGENT_WORKFLOWS,
         projectAgentInstructions
     } from '#cmp/shared/agent/projectAgent.ts'
+    import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import { useWorkbench } from './workbenchContext'
 
     const context = useWorkbench()
@@ -20,13 +21,17 @@
 </script>
 
 <div class="agent-panel">
+    <!-- the agent writes and deletes through the Project's FileSystem and tells the session, as
+         the Explorer does, so the Files and the Selected program are only read here -->
     <DefaultCodingAgent
         {project}
+        host={session}
+        noProgramMessage={NO_PROGRAM_MESSAGE}
         onOpenFile={(path) => session.selectFile(path)}
         editorLanguage={project.language}
-        bind:editorCode={project.code}
-        bind:files={project.files}
-        bind:entry={project.entry}
+        editorCode={project.code}
+        files={project.files}
+        entry={project.selectedProgram}
         activePath={session.displayedPath}
         fileSystem={project.fileSystem}
         emulatorInstance={session.emulator}

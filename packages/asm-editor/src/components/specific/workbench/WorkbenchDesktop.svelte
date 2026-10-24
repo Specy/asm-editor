@@ -3,7 +3,9 @@
      * The Workbench on a desktop: the icon rail, with Back and Save, and its panel; the editor with
      * the execution controls floating over it, above the bottom panel; and while a Debug session
      * exists, the debug column. There is no top bar. Every split drags, and the sizes are
-     * remembered per person ([the design record](../../../../../../docs/design/workbench.md)).
+     * remembered per person ([the design record](../../../../../../docs/design/workbench.md)); the
+     * debug column's splitter also drags it down to its strip and back. The bottom panel grows by
+     * itself for a program's input and output, until the person sizes it during that session.
      */
     import { untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
@@ -13,12 +15,15 @@
     import SidePanel from './SidePanel.svelte'
     import EditorArea from './EditorArea.svelte'
     import BottomPanel from './BottomPanel.svelte'
-    import DebugColumn from './DebugColumn.svelte'
+    import DebugColumn, { DEBUG_STRIP_WIDTH } from './DebugColumn.svelte'
     import { useWorkbench } from './workbenchContext'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { growForProgramIo } from '#lib/workbench/programIoGrowth.svelte.ts'
 
     /** Below this, the editor beside an open panel and the debug column is too narrow to use. */
     const EDITOR_MIN_WIDTH = 360
+    /** A drag of the debug column's splitter below this collapses the column to its strip. */
+    const DEBUG_COLLAPSE_BELOW = LAYOUT_LIMITS.debugWidth.min / 2
     /**
      * The debug column's width left to itself, measured per language and rounded up: its registers
      * beside a row of memory, for the first Build, before the column has been shown and measured.
@@ -31,6 +36,9 @@
         'RISC-V-64': 765,
         X86: 800
     }
+
+    /** How much height the editor keeps above the bottom panel, however far it is dragged or grows. */
+    const EDITOR_MIN_HEIGHT = 160
 
     const { session, ui } = useWorkbench()
     const layout = workbenchLayout.values
@@ -71,14 +79,39 @@
         if (debugging && !wasDebugging && !session.testing) {
             untrack(() => {
                 if (!ui.activePanel) return
-                const debugColumn =
-                    layout.debugWidth ??
-                    (debugWidth || AUTOMATIC_DEBUG_WIDTH[session.project.language])
+                const debugColumn = layout.debugCollapsed
+                    ? DEBUG_STRIP_WIDTH
+                    : (layout.debugWidth ??
+                      (debugWidth || AUTOMATIC_DEBUG_WIDTH[session.project.language]))
                 if (bodyWidth - railWidth - panelWidth - debugColumn < EDITOR_MIN_WIDTH) ui.close()
             })
         }
         wasDebugging = debugging
     })
+
+    //the bottom panel grows back to its default height for the program's input; a compact
+    //layout's is tall already
+    const terminal = session.emulator.peripherals.terminal
+    const programIo = growForProgramIo({
+        get debugging() {
+            return session.debugSession && !session.testing
+        },
+        get reading() {
+            return terminal.pendingRead?.source === 'terminal'
+        },
+        get height() {
+            return layout.bottomHeight
+        },
+        get room() {
+            return mainHeight - EDITOR_MIN_HEIGHT
+        },
+        grow: (height) => workbenchLayout.setBottomHeight(height)
+    })
+
+    function resizeBottom(size: number) {
+        programIo.resized()
+        workbenchLayout.setBottomHeight(size)
+    }
 </script>
 
 <div class="desktop">
@@ -126,9 +159,9 @@
                 size={layout.bottomHeight}
                 direction={-1}
                 min={LAYOUT_LIMITS.bottomHeight.min}
-                max={Math.max(LAYOUT_LIMITS.bottomHeight.min, mainHeight - 160)}
+                max={Math.max(LAYOUT_LIMITS.bottomHeight.min, mainHeight - EDITOR_MIN_HEIGHT)}
                 label="Resize the terminal"
-                onResize={(size) => workbenchLayout.setBottomHeight(size)}
+                onResize={resizeBottom}
             />
             <BottomPanel style="height: {layout.bottomHeight}px; flex: none;" />
         </div>
@@ -137,12 +170,19 @@
                 <Splitter
                     orientation="vertical"
                     size={layout.debugWidth ?? debugWidth}
+                    automatic={layout.debugWidth === null}
                     direction={-1}
                     min={LAYOUT_LIMITS.debugWidth.min}
                     max={Math.max(LAYOUT_LIMITS.debugWidth.min, bodyWidth - 480)}
                     label="Resize the debugger"
+                    collapsed={layout.debugCollapsed}
+                    collapseBelow={DEBUG_COLLAPSE_BELOW}
+                    onCollapse={(collapsed) => workbenchLayout.setDebugCollapsed(collapsed)}
                     onResize={(size) => workbenchLayout.setDebugWidth(size)}
-                    onReset={() => workbenchLayout.setDebugWidth(null)}
+                    onReset={() => {
+                        workbenchLayout.setDebugCollapsed(false)
+                        workbenchLayout.setDebugWidth(null)
+                    }}
                 />
                 <DebugColumn bind:measuredWidth={debugWidth} />
             </div>

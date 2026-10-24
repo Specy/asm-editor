@@ -30,28 +30,28 @@
         <a href={resolve('/documentation/mips/syscall')}>Syscalls</a>.
     </p>
     <div class="links">
-        <NavigationLinkButton href="/documentation/mips/directive">
+        <NavigationLinkButton href={resolve('/documentation/mips/directive')}>
             <div>Directives</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/instruction">
+        <NavigationLinkButton href={resolve('/documentation/mips/instruction')}>
             <div>Instructions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/syscall">
+        <NavigationLinkButton href={resolve('/documentation/mips/syscall')}>
             <div>Syscalls</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/registers">
+        <NavigationLinkButton href={resolve('/documentation/mips/registers')}>
             <div>Registers</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/screen">
+        <NavigationLinkButton href={resolve('/documentation/mips/screen')}>
             <div>Screen and I/O</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/using-c">
+        <NavigationLinkButton href={resolve('/documentation/mips/using-c')}>
             <div>Using C and C++</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/runtime-library">
+        <NavigationLinkButton href={resolve('/documentation/mips/runtime-library')}>
             <div>Runtime library</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/mips/all">
+        <NavigationLinkButton href={resolve('/documentation/mips/all')}>
             <div>Complete Documentation</div>
         </NavigationLinkButton>
     </div>

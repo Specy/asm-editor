@@ -222,6 +222,129 @@ the requested duration. In a testcase, the Playground uses a virtual clock: it s
 service 32 advances it immediately. A testcase that waits for 500 milliseconds therefore observes
 exactly 500 without depending on the speed of the computer running it.
 
+## Making sound
+
+Services 31 and 33 play a note: a sound with a chosen pitch, duration, instrument and volume.
+Both services read the same four arguments:
+
+- `a0`: pitch, from 0 to 127. Increasing the number makes the sound higher; try 60 to start.
+- `a1`: duration in milliseconds. For example, 1000 means one second.
+- `a2`: instrument number, from 0 to 127. Instrument 0 is an acoustic grand piano.
+- `a3`: volume, from 0 to 127. A larger number makes the sound louder.
+
+Set `a7` to 33 to play a note and wait for its requested duration before the next instruction runs.
+This wait still happens when sound is turned off. Service 31 starts the note and returns at once,
+so another call can start a sound while the first is still playing.
+
+Neither service changes any register. The example can therefore reuse `a7`, the duration, the
+instrument and the volume across calls, changing just the pitch for each new note.
+
+```riscv|playground
+.text
+.globl main
+main:
+    li a1, 300              # each note lasts 300 milliseconds
+    li a2, 0                # instrument 0, the acoustic grand piano
+    li a3, 100              # volume 100
+
+    li a7, 33               # service 33: play a note and wait 300 milliseconds
+    li a0, 60               # first pitch
+    ecall
+    li a0, 64               # a higher pitch
+    ecall
+    li a0, 67               # higher again
+    ecall
+
+    li a7, 31               # service 31: play a note and go on at once
+    li a1, 1000
+    li a0, 60               # repeat the same three pitches, now overlapping
+    ecall
+    li a0, 64
+    ecall
+    li a0, 67
+    ecall
+
+    li a7, 10
+    ecall
+```
+
+The three calls to service 33 play the sounds one after another. The three calls to service 31
+start them within a few instructions of each other, so you hear them together. Each of these last
+three sounds plays once for 1000 milliseconds, continuing after the program ends.
+
+A pitch outside 0 to 127 uses pitch 60. An instrument outside that range uses piano 0, and a volume
+outside that range uses 100.
+
+Once a program has made a sound, a **Sound** button in the execution dock turns sound off and on.
+In a testcase nothing is heard, and service 33 completes at once, advancing the virtual clock by
+the note's duration as service 32 does.
+
+### Waveforms on the Synth
+
+Services 31 and 33 play recorded instruments. The editor also has a **Synth**: a sound chip like
+the ones inside 1980s game consoles and home computers, which the program controls directly. It is
+an extension of this editor; RARS does not have it.
+
+The Synth has eight channels, each with its own sound controls. These are **device registers**:
+controls accessed at memory addresses. CPU registers such as `s0` and `t0` hold an address or a
+value; storing a value at a Synth control's address changes the sound.
+
+Channel 0's controls start at `0xffff0100`. The program uses `sh` to store a halfword and `sb` to
+store a byte. Each offset below is added to that starting address:
+
+- the byte at `0x11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
+  2 a sawtooth, 3 a sine and 4 noise.
+- the halfword at offset `0` sets the **frequency** in Hz, the number of repetitions per second.
+  For the triangle used below, 262 Hz is middle C and 440 Hz is the A above middle C. A higher
+  frequency gives a higher pitch.
+- the byte at `0x12` sets volume, from 0 to 127. The byte at `0x13` sets **sustain**, the level
+  held while the note sounds, also from 0 to 127. Sustain 127 holds at the selected volume;
+  sustain 64 holds at about half that level.
+- the byte at `0x10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+In the example, `s0` holds the channel's starting address. The store `sb t0, 0x11(s0)` copies a
+byte from `t0` to that address plus `0x11`, selecting the waveform. The stores control the sound;
+service 32 provides each 400-millisecond wait while it plays.
+
+```riscv|playground
+.text
+.globl main
+main:
+    li s0, 0xffff0100     # channel 0 of the Synth
+    li t0, 1
+    sb t0, 0x11(s0)     # waveform 1: a triangle
+    li t0, 100
+    sb t0, 0x12(s0)     # volume 100
+    li t0, 127
+    sb t0, 0x13(s0)     # sustain: hold at the selected volume
+
+    li t0, 262            # middle C, in Hz
+    sh t0, 0(s0)
+    li t0, 1
+    sb t0, 0x10(s0)     # gate on: the note starts
+    li a7, 32             # service 32: wait
+    li a0, 400            # for 400 milliseconds
+    ecall
+
+    li t0, 330            # E: a new frequency for the same note
+    sh t0, 0(s0)
+    ecall                 # wait again: a7 and a0 still ask for it
+    li t0, 392            # G
+    sh t0, 0(s0)
+    ecall
+
+    sb zero, 0x10(s0)   # gate off: the note ends
+    li a7, 10
+    ecall
+```
+
+You hear C, E and G one after another, each held for 400 milliseconds. The gate stays on through
+both frequency changes: the pitch changes in steps within one continuing sound. The last store
+turns the gate off and ends it.
+
+Change the waveform number at `0x11` to hear how the shape changes the sound. The
+[Synth chapter](/documentation/risc-v/synth) of the Documentation describes the other controls.
+
 ## Common Playground services
 
 This is a curated reference for the services used most often on this page. The
@@ -241,7 +364,9 @@ This is a curated reference for the services used most often on this page. The
 |      11 | print one character            | `a0`                                 |                                           |
 |      12 | read one character             |                                      | `a0`                                      |
 |      30 | milliseconds since run start   |                                      | low word `a0`, high word `a1`             |
+|      31 | play a note                    | `a0` to `a3`                         | returns at once                           |
 |      32 | wait for milliseconds          | `a0`                                 |                                           |
+|      33 | play a note and wait           | `a0` to `a3`                         | returns after the requested duration      |
 |      34 | print hexadecimal              | `a0`                                 | eight hexadecimal digits                  |
 |      35 | print binary                   | `a0`                                 | 32 binary digits                          |
 |      36 | print unsigned decimal         | `a0`                                 |                                           |

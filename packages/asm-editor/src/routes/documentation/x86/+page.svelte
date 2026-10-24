@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
@@ -21,7 +22,7 @@
 />
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">x86-64 Documentation</h1>
-    <SearchLauncher size="full" placeholder="Search the x86 docs and courses" />
+    <SearchLauncher size="full" placeholder="Search the x86-64 docs and courses" />
     <p class="intro">
         x86-64 is the instruction set most desktop and server processors run. It has sixteen 64 bit
         general purpose registers, memory addressed as one flat space, and an instruction for almost
@@ -42,25 +43,28 @@
         of its own code executes whatever bytes follow in memory.
     </p>
     <div class="links">
-        <NavigationLinkButton href="/documentation/x86/instruction">
+        <NavigationLinkButton href={resolve('/documentation/x86/instruction')}>
             <div>Instructions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/directive">
+        <NavigationLinkButton href={resolve('/documentation/x86/directive')}>
             <div>Directives</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/registers">
+        <NavigationLinkButton href={resolve('/documentation/x86/registers')}>
             <div>Registers & Flags</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/syscall">
+        <NavigationLinkButton href={resolve('/documentation/x86/vector-instructions')}>
+            <div>Vector instructions</div>
+        </NavigationLinkButton>
+        <NavigationLinkButton href={resolve('/documentation/x86/syscall')}>
             <div>Syscalls</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/using-c">
+        <NavigationLinkButton href={resolve('/documentation/x86/using-c')}>
             <div>Using C and C++</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/executables">
+        <NavigationLinkButton href={resolve('/documentation/x86/executables')}>
             <div>Executables</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/x86/all">
+        <NavigationLinkButton href={resolve('/documentation/x86/all')}>
             <div>Complete Documentation</div>
         </NavigationLinkButton>
     </div>

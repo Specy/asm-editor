@@ -1,0 +1,6 @@
+{
+    "name": "Play a WAV and a MIDI file",
+    "description": "Create a square-wave WAV for the standard player and a four-note MIDI file for the DirectX player.",
+    "order": 25,
+    "topic": "play-sound-files"
+}

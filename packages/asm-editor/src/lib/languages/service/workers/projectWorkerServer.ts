@@ -18,6 +18,29 @@ type WorkerSession = BuildConfiguration & {
     files: Map<string, ProjectFile>
 }
 
+/** How long a session whose analysis could not run waits before it is analyzed again. */
+export const ANALYSIS_RETRY_MS = 10_000
+
+/**
+ * What an adapter throws when its analysis could not run for a reason that says nothing about the
+ * sources, such as an assembler that could not be downloaded: the session is sent `snapshot`
+ * instead, and, unless `retry` is false because trying again cannot help, its revision is analyzed
+ * again after `ANALYSIS_RETRY_MS` if no edit brought a newer one first.
+ */
+export class AnalysisUnavailableError extends Error {
+    readonly retry: boolean
+
+    constructor(
+        message: string,
+        readonly snapshot: ProjectAnalysisSnapshot,
+        options?: ErrorOptions & { retry?: boolean }
+    ) {
+        super(message, options)
+        this.name = 'AnalysisUnavailableError'
+        this.retry = options?.retry ?? true
+    }
+}
+
 type AnalyzeProject = (
     sources: BuildSources,
     sessionId: string,
@@ -40,6 +63,13 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         pendingSessions.add(sessionId)
         if (flushTimer !== undefined || running) return
         flushTimer = setTimeout(() => void flushAnalyses(), 40)
+    }
+
+    /** Analyzes a revision again later, if it is still the session's latest by then. */
+    function retryAnalysis(sessionId: string, revision: number) {
+        setTimeout(() => {
+            if (sessions.get(sessionId)?.revision === revision) scheduleAnalysis(sessionId)
+        }, ANALYSIS_RETRY_MS)
     }
 
     async function flushAnalyses() {
@@ -67,6 +97,14 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                             snapshot
                         } satisfies ProjectWorkerResponse)
                     } catch (error) {
+                        if (error instanceof AnalysisUnavailableError) {
+                            workerScope.postMessage({
+                                type: 'analysis',
+                                snapshot: error.snapshot
+                            } satisfies ProjectWorkerResponse)
+                            if (error.retry) retryAnalysis(sessionId, revision)
+                            continue
+                        }
                         workerScope.postMessage({
                             type: 'failure',
                             sessionId,

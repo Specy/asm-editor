@@ -1,4 +1,10 @@
 import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import {
+    MARS_NOTE_DEFAULTS,
+    marsNote,
+    type Audio,
+    type Note
+} from '#lib/languages/peripherals/audio/Audio.ts'
 import type { Mouse, MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
 import type { ScreenColor } from '#lib/languages/peripherals/screen/color.ts'
 import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
@@ -66,6 +72,15 @@ export type Z80DeviceHost = {
     screen: Screen
     keyboard: Keyboard
     mouse: Mouse
+    /** The Audio in use, read at the point of use: a Testcase swaps in a silent one. */
+    audio: () => Audio
+    /**
+     * Holds the program after the instruction running now until `loading` settles, then `play`s,
+     * if the run that asked is still the one running: an `out` cannot wait as an `in` does, so the
+     * first Note of a page, which has to wait for the sound bank, asks the adapter to pause the
+     * machine after it instead.
+     */
+    holdForAudio: (loading: Promise<void>, play: () => void) => void
     /**
      * The memory-mapped display, when the adapter wired one up. Without it the Screen only ever
      * draws, which is what every Z80 environment did before ADR 0020.
@@ -137,6 +152,10 @@ export class Z80Device {
      */
     private readonly servedWaits = new Set<Z80PortName>()
     private graphical = false
+    /** What the audio ports set for the Notes to come, MARS's defaults on every run. */
+    private noteInstrument = MARS_NOTE_DEFAULTS.instrument
+    private noteVolume = MARS_NOTE_DEFAULTS.volume
+    private noteDuration = MARS_NOTE_DEFAULTS.duration
 
     constructor(host: Z80DeviceHost) {
         this.host = host
@@ -165,7 +184,7 @@ export class Z80Device {
     /** Whether an `in` on this address is a wait rather than a request for input. */
     static isWaitPort(busAddress: number): boolean {
         const name = Z80Device.portNameOf(busAddress)
-        return name === 'TIME_WAIT' || name === 'TIME_FRAME'
+        return name === 'TIME_WAIT' || name === 'TIME_FRAME' || name === 'NOTE_PLAY_WAIT'
     }
 
     /** Whether a suspended `in` on this address wants one character rather than a whole line. */
@@ -253,6 +272,19 @@ export class Z80Device {
                 return this.servedWaits.delete(name) ? 0 : undefined
             case 'TIME_NOW':
                 return timeByte(this.host.timeHundredths(), parameter)
+            case 'NOTE_PLAY_WAIT':
+                //the Note and its wait are the adapter's, as a time wait is: it plays the Note,
+                //waits its duration and lets the re-executed `in` answer
+                return this.servedWaits.delete(name) ? 0 : undefined
+            case 'NOTE_PLAY':
+            case 'NOTE_INSTRUMENT':
+            case 'NOTE_VOLUME':
+            case 'NOTE_DURATION':
+            case 'SOUND_CHIP_SELECT':
+            case 'SOUND_CHIP_WRITE':
+                return Z80_UNCONNECTED_PORT_VALUE
+            case 'SOUND_CHIP_READ':
+                return this.host.audio().soundChip.read()
         }
     }
 
@@ -327,6 +359,25 @@ export class Z80Device {
                 if (this.inCellMode) throw new Error(cellModeError('The text cursor'))
                 screen.setCursor(screen.cursorColumn, byte)
                 return
+            case 'NOTE_PLAY':
+                this.playNote(this.noteAt(byte))
+                return
+            case 'NOTE_INSTRUMENT':
+                this.setNoteRegister('noteInstrument', byte)
+                return
+            case 'NOTE_VOLUME':
+                this.setNoteRegister('noteVolume', byte)
+                return
+            case 'NOTE_DURATION':
+                //16 bits, the high byte from B as on the WORD port
+                this.setNoteRegister('noteDuration', (parameterOf(busAddress) << 8) | byte)
+                return
+            case 'SOUND_CHIP_SELECT':
+                this.host.audio().soundChip.select(byte)
+                return
+            case 'SOUND_CHIP_WRITE':
+                this.host.audio().soundChip.write(byte)
+                return
             default:
                 //the read-only ports of the Screen, Keyboard, Mouse and time groups: a write is an
                 //input the device has no room for, and dropping it keeps the bus's own convention
@@ -371,7 +422,40 @@ export class Z80Device {
      */
     completeWait(busAddress: number): void {
         const name = Z80Device.portNameOf(busAddress)
-        if (name === 'TIME_WAIT' || name === 'TIME_FRAME') this.servedWaits.add(name)
+        if (name === 'TIME_WAIT' || name === 'TIME_FRAME' || name === 'NOTE_PLAY_WAIT') {
+            this.servedWaits.add(name)
+        }
+    }
+
+    /**
+     * The Note an `in` on the play-and-wait port asks for: its pitch in B, the rest as set, with
+     * MARS's ranges and defaults applied.
+     */
+    noteToWaitFor(busAddress: number): Note {
+        return this.noteAt(parameterOf(busAddress))
+    }
+
+    private noteAt(pitch: number): Note {
+        return marsNote(pitch, this.noteDuration, this.noteInstrument, this.noteVolume)
+    }
+
+    /** Plays a Note now, or once the sound bank is ready, holding the program until then. */
+    private playNote(note: Note): void {
+        const audio = this.host.audio()
+        const loading = audio.prepare('note')
+        if (loading === null) audio.playNote(note)
+        else this.host.holdForAudio(loading, () => audio.playNote(note))
+    }
+
+    /** Sets a register of the audio ports, journaled so an Undo of the `out` puts it back. */
+    private setNoteRegister(
+        register: 'noteInstrument' | 'noteVolume' | 'noteDuration',
+        value: number
+    ): void {
+        const previous = this[register]
+        if (previous === value) return
+        this.host.audio().record(() => (this[register] = previous))
+        this[register] = value
     }
 
     /**
@@ -395,6 +479,9 @@ export class Z80Device {
         this.lastCommand = 0
         this.servedWaits.clear()
         this.graphical = false
+        this.noteInstrument = MARS_NOTE_DEFAULTS.instrument
+        this.noteVolume = MARS_NOTE_DEFAULTS.volume
+        this.noteDuration = MARS_NOTE_DEFAULTS.duration
     }
 
     /** Whether the program has used the Screen, the Keyboard or the Mouse in this run. */

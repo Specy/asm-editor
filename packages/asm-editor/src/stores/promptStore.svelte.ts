@@ -9,6 +9,8 @@ type Prompt = {
     id: number
     question: string
     placeholder: string
+    /** The answer a text prompt's input starts with, for a person to keep or change. */
+    initial: string
     type: PromptType
     resolve: ((value: PromptResult) => void) | null
     cancellable: boolean
@@ -26,6 +28,7 @@ function createPromptStore() {
         question: '',
         id: 0,
         placeholder: '',
+        initial: '',
         type: PromptType.Text,
         resolve: null,
         cancellable: true,
@@ -35,11 +38,13 @@ function createPromptStore() {
         question: string,
         type: PromptType,
         cancellable = true,
-        placeholder = ''
+        placeholder = '',
+        initial = ''
     ): Promise<PromptResult> {
         settle(null)
         prompt.question = question
         prompt.placeholder = placeholder
+        prompt.initial = initial
         prompt.type = type
         prompt.cancellable = cancellable
         prompt.offersCancel = false
@@ -72,12 +77,14 @@ function createPromptStore() {
         await ask(message, PromptType.Alert, true)
     }
 
+    /** A line of text, its input starting empty or with `initial`; null for Cancel. */
     async function askText(
         question: string,
         cancellable = true,
-        placeholder = ''
+        placeholder = '',
+        initial = ''
     ): Promise<string | null> {
-        const result = await ask(question, PromptType.Text, cancellable, placeholder)
+        const result = await ask(question, PromptType.Text, cancellable, placeholder, initial)
         return typeof result === 'string' ? result : null
     }
 
@@ -111,6 +118,7 @@ function createPromptStore() {
     function reset() {
         prompt.question = ''
         prompt.placeholder = ''
+        prompt.initial = ''
         prompt.cancellable = true
         prompt.offersCancel = false
     }
@@ -120,6 +128,9 @@ function createPromptStore() {
         },
         get placeholder() {
             return prompt.placeholder
+        },
+        get initial() {
+            return prompt.initial
         },
         get type() {
             return prompt.type

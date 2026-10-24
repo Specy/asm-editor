@@ -45,6 +45,12 @@ hover is not to link into the panel; both stay as they are.
   Chapters. Clicking a row expands the full entry in place.
 - **Chapters fold.** Clicking a Chapter's heading folds it to the heading and back (added on
   2026-10-01); a chip unfolds the Chapter it jumps to.
+- **Long prose is cut in the panel.** A prose entry, like a Chapter's opening "Making a syscall",
+  shows its text in place rather than as a row. In the Workbench's panel, past about five lines it is
+  cut with a fade and a Show all button in the middle of it, and Show less under the whole text cuts
+  it back, so the rows after it stay a glance away; prose that runs only a line or two past shows
+  whole, and a followed link shows it whole. The documentation pages, `/all` and the Chapter pages,
+  show prose whole, to be read through (added on 2026-10-20).
 - **Search filters and reorders the same rows.** With a query, the Chapters give way to the ranked
   results; a result whose name is exactly the query opens already expanded. Clearing the query brings
   the Chapters back.

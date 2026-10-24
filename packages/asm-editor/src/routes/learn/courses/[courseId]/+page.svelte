@@ -79,7 +79,8 @@
                 <Card background="secondary" style="overflow: hidden">
                     <LecturesMenu
                         lectures={module.lectures}
-                        hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}
+                        courseId={data.course.slug}
+                        moduleId={module.slug}
                         lectureStyle="padding: 0.6rem 1rem"
                     />
                 </Card>

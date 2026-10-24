@@ -9,7 +9,9 @@ import {
 import {
     bytesFile,
     cleanFiles,
+    encodeBase64,
     fileBytes,
+    originalBytes,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
     ProjectFormatError
@@ -507,6 +509,24 @@ describe('FileSystemSession guest failures', () => {
     })
 })
 
+describe('FileSystemSession readWhole', () => {
+    it("hands over a File's own bytes, new ones after a write, and nothing where there is no File", () => {
+        const { run, step } = steppedSession({ 'beep.wav': 'abc' })
+        const first = run.readWhole('beep.wav')!
+        expect(new TextDecoder().decode(first)).toBe('abc')
+        //the same array while the File is unchanged, which is how Audio tells it has not changed
+        expect(run.readWhole('beep.wav')).toBe(first)
+        const fd = step(() => run.open('beep.wav', 'append'))
+        step(() => run.write(fd, new TextEncoder().encode('d')))
+        const second = run.readWhole('beep.wav')!
+        expect(second).not.toBe(first)
+        expect(new TextDecoder().decode(second)).toBe('abcd')
+        expect(new TextDecoder().decode(first)).toBe('abc')
+        expect(run.readWhole('missing.wav')).toBeUndefined()
+        expect(run.readWhole('../outside.wav')).toBeUndefined()
+    })
+})
+
 describe('FileSystemSession stat and list', () => {
     it('stats Files and Directories, which exist while they hold Files', () => {
         const { run, step, undo } = steppedSession({
@@ -690,5 +710,516 @@ describe('FileSystemSession descriptors', () => {
         step(() => run.closeAll())
         //with nothing open there is nothing to record, so no step is needed
         expect(() => run.closeAll()).not.toThrow()
+    })
+})
+
+describe('Byte edits in the FileSystem', () => {
+    /** A byte File `blob` of `ff 00 01 02` with one edit, `41 42` at 1, and a text File. */
+    function edited() {
+        const fs = new FileSystem({
+            blob: { encoding: 'base64', content: encodeBase64(new Uint8Array([0xff, 0, 1, 2])) },
+            'notes.txt': { encoding: 'plain', content: 'notes' }
+        })
+        fs.editBytes('blob', 1, encode('AB'))
+        return fs
+    }
+
+    it('overwrites a byte File, keeping its original apart and its encoding', () => {
+        const fs = edited()
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
+        expect([...originalBytes(fs.files.blob)]).toEqual([0xff, 0, 1, 2])
+        expect(fs.files.blob.edits).toEqual([{ offset: 1, remove: 2, insert: 'QUI=' }])
+        //every byte now decodes as UTF-8, and the File is still one of bytes
+        fs.editBytes('blob', 0, encode('Z'))
+        expect(decode(fs.readBytes('blob'))).toBe('ZAB\x02')
+        expect(fs.files.blob.encoding).toBe('base64')
+        expect(fs.files.blob.edits).toEqual([{ offset: 0, remove: 3, insert: 'WkFC' }])
+        expect(() => fs.readText('blob')).toThrow(ProjectFormatError)
+        //what a Build reads
+        expect([...fileBytes(fs.snapshot('blob').files.blob)]).toEqual([0x5a, 0x41, 0x42, 2])
+    })
+
+    it('refuses a text File, a range past the end and a locked FileSystem', () => {
+        const fs = edited()
+        expect(() => fs.editBytes('notes.txt', 0, encode('N'))).toThrow(
+            'Only a File stored as bytes takes Byte edits'
+        )
+        expect(() => fs.editBytes('blob', 3, encode('XY'))).toThrow('past the end')
+        expect(failure(() => fs.editBytes('missing', 0, encode('X')))).toBe(FileErrorCode.NotFound)
+        const run = fs.beginSession()
+        expect(() => fs.editBytes('blob', 0, encode('X'))).toThrow('Stop')
+        run.stop()
+        fs.editBytes('blob', 3, encode('!'))
+        expect(decode(fs.readBytes('blob').subarray(1))).toBe('AB!')
+    })
+
+    it('overwrites the text of a text File, which must stay UTF-8, keeping no Byte edits', () => {
+        const fs = new FileSystem({ 'notes.md': { encoding: 'plain', content: 'é ok' } })
+        fs.overwriteText('notes.md', 3, encode('OK'))
+        expect(fs.files['notes.md']).toEqual({ encoding: 'plain', content: 'é OK' })
+        //the two bytes of `é` together, but not one of them alone
+        fs.overwriteText('notes.md', 0, Uint8Array.of(0xc3, 0xa8))
+        expect(fs.readText('notes.md')).toBe('è OK')
+        expect(() => fs.overwriteText('notes.md', 0, encode('e'))).toThrow(
+            'notes.md is stored as text, and these bytes would leave it no longer UTF-8'
+        )
+        expect(fs.readText('notes.md')).toBe('è OK')
+        expect(() => fs.overwriteText('notes.md', 4, encode('!!'))).toThrow('past the end')
+        const bytes = new FileSystem({ blob: { encoding: 'base64', content: 'AAAA' } })
+        expect(() => bytes.overwriteText('blob', 0, encode('X'))).toThrow(
+            'Only a File stored as text has its text overwritten'
+        )
+    })
+
+    it('refuses a File whose saved edits insert or delete, which it reads all the same', () => {
+        const inserted = {
+            encoding: 'base64' as const,
+            content: encodeBase64(encode('abc')),
+            edits: [
+                { offset: 1, remove: 0, insert: encodeBase64(encode('XY')) },
+                { offset: 4, remove: 1, insert: '' }
+            ]
+        }
+        const fs = new FileSystem({ blob: inserted })
+        expect(decode(fs.readBytes('blob'))).toBe('aXYb')
+        expect(() => fs.editBytes('blob', 0, encode('Z'))).toThrow(
+            'blob has Byte edits that insert or delete bytes, which this editor cannot add to'
+        )
+        expect(fs.files.blob.edits).toEqual(inserted.edits)
+        //what a Build reads, and a session's program
+        expect(decode(fileBytes(fs.snapshot('blob').files.blob))).toBe('aXYb')
+        const run = fs.beginSession()
+        run.beginInstruction(1)
+        const fd = run.open('blob', { access: 'read' })
+        expect(decode(run.read(fd, 8))).toBe('aXYb')
+        run.endInstruction()
+        run.stop()
+    })
+
+    it('keeps the Project within 16 MiB without checking every File again', () => {
+        //16 MiB less one: the File, and two bytes of UTF-8 in a one-character text File
+        const fs = new FileSystem({
+            blob: {
+                encoding: 'base64',
+                content: encodeBase64(new Uint8Array(FILE_BYTE_LIMIT - 3))
+            },
+            'note.txt': { encoding: 'plain', content: '\u00e9' }
+        })
+        fs.editBytes('blob', 0, new Uint8Array([1]))
+        //over the same byte, the edit takes no more room
+        fs.editBytes('blob', 0, new Uint8Array([2]))
+        const before = fs.files
+        expect(() => fs.editBytes('blob', 2, new Uint8Array([3]))).toThrow(
+            'Project exceeds the 16 MiB file limit'
+        )
+        expect(() =>
+            fs.setByteEdits('blob', [{ offset: 5, remove: 2, insert: encodeBase64(encode('ab')) }])
+        ).toThrow('Project exceeds the 16 MiB file limit')
+        expect(fs.files).toBe(before)
+        fs.editBytes('blob', 0, new Uint8Array([4]))
+        expect(fs.files.blob.edits).toEqual([{ offset: 0, remove: 1, insert: 'BA==' }])
+        //the Files stay as `cleanFiles` leaves them: frozen, and a map with no prototype
+        expect(Object.isFrozen(fs.files)).toBe(true)
+        expect(Object.getPrototypeOf(fs.files)).toBe(null)
+        expect(() => fs.setByteEdits('blob', [{ offset: 0, remove: 1, insert: 'AQ' }])).toThrow(
+            'Noncanonical'
+        )
+    })
+
+    it('drops the edits when the whole content is replaced, as an upload does', () => {
+        const fs = edited()
+        fs.writeBytes('blob', new Uint8Array([9, 0xff]))
+        expect(fs.files.blob).toEqual({ encoding: 'base64', content: 'Cf8=' })
+        //a rename keeps the record
+        const other = edited()
+        other.rename('blob', 'moved')
+        expect(other.files.moved.edits).toHaveLength(1)
+    })
+
+    it("drops the edits at a program's write, which becomes the original", () => {
+        const fs = edited()
+        const run = fs.beginSession()
+        run.beginInstruction(1)
+        const fd = run.open('blob', { access: 'read-write' })
+        expect([...run.read(fd, 4)]).toEqual([0xff, 0x41, 0x42, 2])
+        run.endInstruction()
+        //reading changes nothing
+        expect(fs.files.blob.edits).toHaveLength(1)
+        run.beginInstruction(2)
+        run.pwrite(fd, 3, new Uint8Array([0xfe]))
+        run.endInstruction()
+        expect(fs.files.blob).toEqual({
+            encoding: 'base64',
+            content: encodeBase64(new Uint8Array([0xff, 0x41, 0x42, 0xfe]))
+        })
+    })
+
+    it('restores the original and its edits on Undo, rather than rebuilding them', () => {
+        const fs = edited()
+        const before = fs.files.blob
+        const session = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: (run: typeof session) => T): T =>
+            session.performInstruction(steps++, () => operation(session))
+        const undo = () => session.undo(--steps)
+        const fd = step((run) => run.open('blob', { access: 'read-write' }))
+        //a write that turns every byte into valid UTF-8, which a rebuilt record would make text
+        step((run) => run.pwrite(fd, 0, encode('Z')))
+        step((run) => run.write(fd, encode('more')))
+        expect(fs.files.blob.encoding).toBe('plain')
+        undo()
+        undo()
+        expect(fs.files.blob).toBe(before)
+        //a truncation and an append, undone the same way
+        step((run) => run.ftruncate(fd, 1))
+        step((run) => run.seek(fd, 0, 2))
+        step((run) => run.write(fd, new Uint8Array([0x80])))
+        undo()
+        undo()
+        undo()
+        expect(fs.files.blob).toBe(before)
+        expect(fs.files.blob.edits).toHaveLength(1)
+    })
+
+    it('puts back a whole list of edits, as the Hex editor undoes one', () => {
+        const fs = edited()
+        const before = fs.files.blob.edits!
+        fs.editBytes('blob', 3, encode('!'))
+        fs.setByteEdits('blob', before)
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
+        //an empty list leaves the original, with no edits kept
+        fs.setByteEdits('blob', [])
+        expect(fs.files.blob).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        //checked as a saved list is, and refused where `editBytes` is
+        expect(() => fs.setByteEdits('blob', [{ offset: 3, remove: 2, insert: 'QUI=' }])).toThrow(
+            'past the end'
+        )
+        expect(() => fs.setByteEdits('notes.txt', [])).toThrow('stored as bytes')
+        const run = fs.beginSession()
+        expect(() => fs.setByteEdits('blob', before)).toThrow('Stop')
+        run.stop()
+    })
+})
+
+describe('the saved Build output in a FileSystemSession', () => {
+    const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
+    /** `main.asm` and the program a Build saved from it as `main`, in a Debug session. */
+    function saved() {
+        const fs = new FileSystem({ 'main.asm': { encoding: 'plain', content: 'nop' } })
+        fs.writeBytes('main', program, false, 'base64')
+        const run = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: () => T): T => run.performInstruction(steps++, operation)
+        return { fs, run, step }
+    }
+
+    it('is kept from the program, which reads it but changes nothing of it', () => {
+        const { fs, run, step } = saved()
+        expect(run.protectBuildOutput('./main')).toBe(true)
+        expect(run.buildOutputPath).toBe('main')
+        const reader = step(() => run.open('main', 'read'))
+        expect([...step(() => run.read(reader, 4))]).toEqual([0x7f, 0x45, 0x4c, 0x46])
+        const before = fs.files
+        const cases: [FileErrorCode, () => unknown][] = [
+            [FileErrorCode.TextBusy, () => run.open('main', 'write')],
+            [FileErrorCode.TextBusy, () => run.open('main', { access: 'read', truncate: true })],
+            [FileErrorCode.TextBusy, () => run.truncate('main', 0)],
+            [FileErrorCode.Busy, () => run.remove('main')],
+            [FileErrorCode.Busy, () => run.rename('main', 'other')],
+            [FileErrorCode.Busy, () => run.rename('main.asm', 'main')]
+        ]
+        for (const [code, operation] of cases) expect(failure(() => step(operation))).toBe(code)
+        expect(fs.files).toBe(before)
+    })
+
+    it('stays a File of the Project, published with the rest and counted toward its limits', () => {
+        const { fs, run, step } = saved()
+        run.protectBuildOutput('main')
+        const fd = step(() => run.open('out.txt', 'write'))
+        step(() => run.write(fd, encode('written')))
+        expect(Object.keys(fs.files).sort()).toEqual(['main', 'main.asm', 'out.txt'])
+        //with `main` counted, out.txt growing to the limit less main.asm's 3 bytes passes it
+        const fill = new Uint8Array(FILE_BYTE_LIMIT - 'written'.length - 'nop'.length)
+        expect(failure(() => step(() => run.write(fd, fill)))).toBe(FileErrorCode.NoSpace)
+        //and takes Annotations, as any File of the Project
+        fs.annotate('main', { names: { '0x401000': 'start' } })
+        expect(fs.files.main.annotations).toEqual({ names: { '0x401000': 'start' } })
+    })
+
+    it('is kept only where a File is, and only one', () => {
+        const { run } = saved()
+        expect(run.protectBuildOutput('missing')).toBe(false)
+        expect(run.protectBuildOutput('main')).toBe(true)
+        expect(run.protectBuildOutput('main.asm')).toBe(false)
+        expect(run.presentBuildOutput('other', program)).toBe(false)
+        expect(run.buildOutputPath).toBe('main')
+    })
+})
+
+describe('a program presented by a FileSystemSession', () => {
+    const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
+
+    it('is a File the program lists, stats, opens and reads at its path', () => {
+        const { run, step } = steppedSession({ 'main.asm': 'nop', 'src/a.c': 'x' })
+        expect(run.presentBuildOutput('src/main', program)).toBe(true)
+        expect(run.buildOutputPath).toBe('src/main')
+        expect(run.list('src')).toEqual([
+            { name: 'a.c', kind: 'file' },
+            { name: 'main', kind: 'file' }
+        ])
+        expect(run.stat('./src/main')).toEqual({ kind: 'file', size: program.length })
+        const fd = step(() => run.open('src/main', { access: 'read', create: true }))
+        expect([...step(() => run.read(fd, 4))]).toEqual([0x7f, 0x45, 0x4c, 0x46])
+        expect(run.fstat(fd)).toEqual({ kind: 'file', size: program.length })
+    })
+
+    it('refuses every change to it, as Linux refuses a running executable, changing nothing', () => {
+        const { fs, run, step } = steppedSession({ 'main.asm': 'nop' })
+        run.presentBuildOutput('main', program)
+        const reader = step(() => run.open('main', 'read'))
+        const before = fs.files
+        const cases: [FileErrorCode, () => unknown][] = [
+            [FileErrorCode.TextBusy, () => run.open('main', 'write')],
+            [FileErrorCode.TextBusy, () => run.open('main', 'append')],
+            [FileErrorCode.TextBusy, () => run.open('main', { access: 'read-write' })],
+            [FileErrorCode.TextBusy, () => run.open('main', { access: 'read', truncate: true })],
+            [FileErrorCode.TextBusy, () => run.truncate('main', 0)],
+            [FileErrorCode.Busy, () => run.remove('main')],
+            [FileErrorCode.Busy, () => run.rename('main', 'other')],
+            [FileErrorCode.Busy, () => run.rename('main.asm', 'main')],
+            [
+                FileErrorCode.Exists,
+                () => run.open('main', { access: 'read', create: true, exclusive: true })
+            ],
+            [FileErrorCode.BadDescriptor, () => run.pwrite(reader, 0, encode('x'))],
+            [FileErrorCode.InvalidArgument, () => run.ftruncate(reader, 0)],
+            [FileErrorCode.NotDirectory, () => run.open('main/inner', 'write')]
+        ]
+        for (const [code, operation] of cases) expect(failure(() => step(operation))).toBe(code)
+        expect(fs.files).toBe(before)
+        expect([...step(() => run.read(reader, 8))]).toEqual([...program])
+    })
+
+    it('is never published into the Project, nor counted toward its limits', () => {
+        const { fs, run, step } = steppedSession({ 'main.asm': 'nop' })
+        run.presentBuildOutput('main', new Uint8Array(FILE_BYTE_LIMIT - 8))
+        const fd = step(() => run.open('out.txt', 'write'))
+        step(() => run.write(fd, encode('written')))
+        expect(Object.keys(fs.files).sort()).toEqual(['main.asm', 'out.txt'])
+        expect(fs.files['out.txt']).toEqual({ encoding: 'plain', content: 'written' })
+    })
+
+    it('is not placed where a File or a folder of the Project is', () => {
+        const { run } = steppedSession({ main: 'a note', 'src/main/x.c': 'x' })
+        expect(run.presentBuildOutput('main', program)).toBe(false)
+        expect(run.presentBuildOutput('src/main', program)).toBe(false)
+        expect(run.buildOutputPath).toBeUndefined()
+        expect(run.stat('main')).toEqual({ kind: 'file', size: 6 })
+    })
+})
+
+/**
+ * Annotations ride on a File's record beside its Byte edits
+ * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+ * decisions 3 and 20): changed through `annotate`, kept by every change that leaves the bytes'
+ * addresses where they were, dropped with a whole new content, and made during a Debug session too.
+ */
+describe('Annotations in the FileSystem', () => {
+    const names = (name: string) => ({ names: { '0x1139': name } })
+    /** A byte File `chall` named `check` at 0x1139, and a text File. */
+    function annotated() {
+        const fs = new FileSystem({
+            chall: { encoding: 'base64', content: encodeBase64(new Uint8Array([0xff, 0, 1, 2])) },
+            'notes.txt': { encoding: 'plain', content: 'notes' }
+        })
+        fs.annotate('chall', names('check'))
+        return fs
+    }
+    /** Every File change notice `fs` sends, with whether the Files changed. */
+    function notices(fs: FileSystem) {
+        const seen: boolean[] = []
+        fs.subscribe((filesChanged) => seen.push(filesChanged))
+        return seen
+    }
+
+    it('replaces the record, tells of the change, and takes them away', () => {
+        const fs = annotated()
+        const seen = notices(fs)
+        const bytes = fs.files.chall.content
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.annotate('./chall', { ...names('verify'), comments: { '0x1150': 'here' } })
+        expect(fs.files.chall.annotations).toEqual({
+            ...names('verify'),
+            comments: { '0x1150': 'here' }
+        })
+        expect(fs.files.chall.content).toBe(bytes)
+        expect(seen).toEqual([true])
+        //the same record again changes nothing and tells no one
+        const before = fs.files
+        fs.annotate('chall', { comments: { '0x1150': 'here' }, ...names('verify') })
+        expect(fs.files).toBe(before)
+        expect(seen).toEqual([true])
+        fs.annotate('chall', undefined)
+        expect(fs.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        expect(seen).toEqual([true, true])
+        //the Files stay as `cleanFiles` leaves them
+        expect(Object.isFrozen(fs.files)).toBe(true)
+        expect(Object.getPrototypeOf(fs.files)).toBe(null)
+    })
+
+    it('refuses a missing File and a record that does not hold up, changing nothing', () => {
+        const fs = annotated()
+        const before = fs.files
+        expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)
+        expect(() => fs.annotate('chall', names('rax'))).toThrow(
+            "chall has a name at 0x1139 that can't be used: “rax” is an x86 register. Choose another name."
+        )
+        expect(() => fs.annotate('chall', { comments: { '0x1': 'x'.repeat(4001) } })).toThrow(
+            ProjectFormatError
+        )
+        expect(fs.files).toBe(before)
+    })
+
+    it("keeps the Project's Annotations within 256 KiB together", () => {
+        const fs = annotated()
+        const comments = (count: number) => ({
+            comments: Object.fromEntries(
+                Array.from({ length: count }, (_, index) => [
+                    `0x${(0x100000 + index).toString(16)}`,
+                    'x'.repeat(4000)
+                ])
+            )
+        })
+        fs.annotate('notes.txt', comments(60))
+        const before = fs.files
+        expect(() => fs.annotate('chall', comments(6))).toThrow(
+            'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+        )
+        expect(fs.files).toBe(before)
+        fs.annotate('chall', comments(5))
+    })
+
+    it('keeps them through Byte edits, their Undo, a rename and every other File changing', () => {
+        const fs = annotated()
+        fs.editBytes('chall', 1, encode('AB'))
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.setByteEdits('chall', [])
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.writeText('notes.txt', 'more notes')
+        fs.rename('chall', 'bin/chall')
+        expect(fs.files['bin/chall'].annotations).toEqual(names('check'))
+        //and through a Build's snapshot, which a Debug session's Listing reads
+        expect(fs.snapshot('bin/chall').files['bin/chall'].annotations).toEqual(names('check'))
+    })
+
+    it('keeps them when typing over the bytes of an Executable stored as text', () => {
+        const fs = new FileSystem({ elf: { encoding: 'plain', content: 'ELF text' } })
+        fs.annotate('elf', names('check'))
+        fs.overwriteText('elf', 0, encode('elf'))
+        expect(fs.files.elf).toEqual({
+            encoding: 'plain',
+            content: 'elf text',
+            annotations: names('check')
+        })
+    })
+
+    it('drops them with a whole new content, as an upload over the File does', () => {
+        const fs = annotated()
+        fs.writeBytes('chall', new Uint8Array([0xff, 0, 1, 2]))
+        expect(fs.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==' })
+        const text = new FileSystem({ 'notes.txt': { encoding: 'plain', content: 'notes' } })
+        text.annotate('notes.txt', names('check'))
+        text.writeText('notes.txt', 'notes')
+        expect(text.files['notes.txt']).toEqual({ encoding: 'plain', content: 'notes' })
+    })
+
+    it('takes them during a Debug session, through the record the session publishes', () => {
+        const fs = annotated()
+        const session = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: () => T): T => session.performInstruction(steps++, operation)
+        const fd = step(() => session.open('out.txt', 'write'))
+        expect(() => fs.editBytes('chall', 0, encode('X'))).toThrow('Stop')
+        fs.annotate('chall', names('verify'))
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        //a later publish keeps them, and no instruction Undo takes them back
+        step(() => session.write(fd, encode('log')))
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        session.undo(--steps)
+        expect(fs.files['out.txt']).toEqual({ encoding: 'plain', content: '' })
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        //a program only presented is no File of the Project, and takes none
+        session.presentBuildOutput('program', new Uint8Array([0x7f]))
+        expect(failure(() => fs.annotate('program', names('x')))).toBe(FileErrorCode.NotFound)
+        expect(failure(() => fs.annotate('missing', names('x')))).toBe(FileErrorCode.NotFound)
+        expect(() => fs.annotate('chall', names('int'))).toThrow(
+            '“int” is a C keyword. Choose another name.'
+        )
+        session.stop()
+        expect(fs.files.chall.annotations).toEqual(names('verify'))
+        expect(() => session.annotate('chall', names('late'))).toThrow('ended')
+    })
+
+    it("drops them at a program's write, and an Undo of it brings the record back", () => {
+        const fs = annotated()
+        const before = fs.files.chall
+        const session = fs.beginSession(undefined, 1000)
+        let steps = 0
+        const step = <T>(operation: () => T): T => session.performInstruction(steps++, operation)
+        const fd = step(() => session.open('chall', { access: 'read-write' }))
+        step(() => session.pwrite(fd, 3, new Uint8Array([0xfe])))
+        expect(fs.files.chall).toEqual({
+            encoding: 'base64',
+            content: encodeBase64(new Uint8Array([0xff, 0, 1, 0xfe]))
+        })
+        //made after the write, on the record built from the new bytes
+        fs.annotate('chall', names('after'))
+        expect(fs.files.chall.annotations).toEqual(names('after'))
+        expect(fileBytes(fs.files.chall)).toEqual(new Uint8Array([0xff, 0, 1, 0xfe]))
+        //Undo of the write puts back the record from before it, with the Annotations it had then
+        session.undo(--steps)
+        expect(fs.files.chall).toBe(before)
+        expect(fs.files.chall.annotations).toEqual(names('check'))
+        //an append drops them too, even to a File stored as text
+        fs.annotate('notes.txt', names('notes'))
+        const notes = step(() => session.open('notes.txt', 'append'))
+        step(() => session.write(notes, encode('!')))
+        expect(fs.files['notes.txt']).toEqual({ encoding: 'plain', content: 'notes!' })
+        session.undo(--steps)
+        expect(fs.files['notes.txt'].annotations).toEqual(names('notes'))
+        session.stop()
+    })
+
+    it('takes a renamed File by its new path during a session', () => {
+        const fs = annotated()
+        const session = fs.beginSession(undefined, 1000)
+        session.performInstruction(0, () => session.rename('chall', 'moved'))
+        expect(fs.files.moved.annotations).toEqual(names('check'))
+        fs.annotate('moved', names('moved'))
+        expect(fs.files.moved.annotations).toEqual(names('moved'))
+        expect(failure(() => fs.annotate('chall', names('x')))).toBe(FileErrorCode.NotFound)
+        session.stop()
+    })
+
+    it("refuses a session's record past the Project's 256 KiB together", () => {
+        const fs = annotated()
+        const big = (from: number, count: number) => ({
+            comments: Object.fromEntries(
+                Array.from({ length: count }, (_, index) => [
+                    `0x${(0x100000 + from + index).toString(16)}`,
+                    'x'.repeat(4000)
+                ])
+            )
+        })
+        fs.annotate('notes.txt', big(0, 60))
+        const session = fs.beginSession()
+        const before = fs.files
+        expect(() => fs.annotate('chall', big(0, 6))).toThrow(
+            'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
+        )
+        expect(fs.files).toBe(before)
+        fs.annotate('chall', big(0, 5))
+        expect(Object.keys(fs.files.chall.annotations!.comments!)).toHaveLength(5)
+        session.stop()
     })
 })

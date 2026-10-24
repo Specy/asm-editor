@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { makeProject } from './Project.svelte'
-import { projectBuildSources } from './buildSources'
+import { programBuildSources, projectBuildSources } from './buildSources'
 import { playgroundBuildSources } from './content/playgroundProgram'
 import { buildConfiguration, buildSourcesEqual, normalizeBuildInput } from './projectFiles'
 
@@ -10,16 +10,15 @@ describe('shared build contract', () => {
     it.each(['MIPS', 'RISC-V', 'RISC-V-64', 'X86', 'M68K', 'Z80'] as const)(
         '%s playground and project builds resolve the same settings',
         (language) => {
-            const project = makeProject({
-                language,
-                files,
-                entry: 'main.s',
-                settings: {
-                    riscvAssemblerProfile: 'gnu-compiler-v1',
-                    linkRuntimeLibrary: 'v1'
-                }
-            })
-            expect(playgroundBuildSources(project)).toEqual(projectBuildSources(project))
+            const settings = {
+                riscvAssemblerProfile: 'gnu-compiler-v1',
+                linkRuntimeLibrary: 'v1'
+            } as const
+            const project = makeProject({ language, files, entry: 'main.s', settings })
+            expect(playgroundBuildSources(project)).toEqual(programBuildSources(project))
+            expect(programBuildSources(project)).toEqual(
+                projectBuildSources({ language, files, entry: 'main.s', settings })
+            )
         }
     )
     it('names the source File an x86 Entry of Generated assembly was compiled from', () => {
@@ -44,9 +43,9 @@ describe('shared build contract', () => {
                 }
             ]
         })
-        expect(projectBuildSources(project).entrySource).toBe('main.c')
-        project.entry = 'main.c'
-        expect(projectBuildSources(project).entrySource).toBeUndefined()
+        expect(programBuildSources(project).entrySource).toBe('main.c')
+        project.createProgram('main.c')
+        expect(programBuildSources(project).entrySource).toBeUndefined()
         const sources = normalizeBuildInput({ files, entry: 'main.s', entrySource: 'main.c' })
         expect(sources.entrySource).toBe('main.c')
         expect(buildSourcesEqual(sources, { ...sources, entrySource: 'other.c' })).toBe(false)
@@ -80,11 +79,41 @@ describe('shared build contract', () => {
                     }
                 ]
             })
-            expect(projectBuildSources(project).entrySource).toBe('main.c')
-            project.entry = 'main.c'
-            expect(projectBuildSources(project).entrySource).toBeUndefined()
+            expect(programBuildSources(project).entrySource).toBe('main.c')
+            project.createProgram('main.c')
+            expect(programBuildSources(project).entrySource).toBeUndefined()
         }
     )
+
+    it("builds a Program from its own Entry and Settings, the Selected program's by default", () => {
+        const project = makeProject({
+            language: 'RISC-V',
+            files: { ...files, 'other.s': { encoding: 'plain', content: 'nop' } },
+            programs: {
+                'main.s': { settings: { riscvAssemblerProfile: 'gnu-compiler-v1' }, testcases: [] },
+                'other.s': { settings: {}, testcases: [] }
+            },
+            selectedProgram: 'other.s'
+        })
+        const selected = programBuildSources(project)
+        expect(selected.entry).toBe('other.s')
+        expect(selected.assemblerProfile).toBe('rars')
+        const main = programBuildSources(project, 'main.s')
+        expect(main.entry).toBe('main.s')
+        expect(main.assemblerProfile).toBe('gnu-compiler-v1')
+        expect(main).toEqual(
+            projectBuildSources({
+                files: project.files,
+                entry: 'main.s',
+                language: 'RISC-V',
+                settings: { riscvAssemblerProfile: 'gnu-compiler-v1' }
+            })
+        )
+        expect(() => programBuildSources(project, 'notes.txt')).toThrow(/Entry of no program/)
+        project.removeProgram('main.s')
+        project.removeProgram('other.s')
+        expect(() => programBuildSources(project)).toThrow(/no program/)
+    })
 
     it('preserves every configuration field and compares source languages independent of key order', () => {
         const original = normalizeBuildInput({

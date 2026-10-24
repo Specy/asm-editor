@@ -3,7 +3,7 @@
     "license": "AGPL-3.0",
     "private": true,
     "type": "module",
-    "packageManager": "pnpm@12.7.0",
+    "packageManager": "pnpm@12.13.0",
     "engines": {
         "node": ">=24.11.0"
     },
@@ -23,6 +23,6 @@
     "devDependencies": {
         "typescript": "catalog:",
         "vite-plus": "catalog:",
-        "wrangler": "4.141.0"
+        "wrangler": "4.151.0"
     }
 }

@@ -1,5 +1,5 @@
 import { prototypeOf, x86PrototypeOf } from './simHeader.mjs'
-import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO } from './helpers.mjs'
+import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO, SYNTH_HELPERS } from './helpers.mjs'
 import { parametersOf } from '../source-language-help/declarations.mjs'
 
 const capital = (text) => text[0].toUpperCase() + text.slice(1)
@@ -58,6 +58,15 @@ export function marsHelpCatalog(target, syscalls) {
         entries.push(entry(helper.name, prototypeOf(helper), helper.summary, helperHref))
     const declaration = `${SCREEN_MACRO.name}(${SCREEN_MACRO.parameters.join(', ')})`
     entries.push(entry(SCREEN_MACRO.name, declaration, SCREEN_MACRO.summary, helperHref, 'macro'))
+    for (const helper of SYNTH_HELPERS)
+        entries.push(
+            entry(
+                helper.name,
+                prototypeOf(helper),
+                helper.summary,
+                `/documentation/${route}/synth#from-c`
+            )
+        )
     return { revision: 1, target: language, entries }
 }
 

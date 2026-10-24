@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from './marsDisplay'
 import {
     applyScreenDirective,
     parseScreenDirective,
     readScreenLabelProbe,
+    resolveScreenLabel,
     rewriteScreenDirective,
     type ScreenDirectiveLabelResolver,
     SCREEN_LABEL_PROBE_ADDRESS,
@@ -141,14 +142,25 @@ describe('applying the directive', () => {
         expect(asked).toBe(0)
     })
 
-    it('snaps a size MARS does not offer and warns instead of failing', () => {
-        const applied = apply('# @screen width=300 unit=3')
-        expect(applied.display.width).toBe(256)
-        expect(applied.display.unitWidth).toBe(2)
-        expect(applied.display.unitHeight).toBe(2)
+    it('takes a size MARS does not offer without a word', () => {
+        const applied = apply('# @screen width=224 height=288 unit=3')
+        expect(applied.display).toMatchObject({
+            width: 224,
+            height: 288,
+            unitWidth: 3,
+            unitHeight: 3
+        })
+        expect(applied.diagnostics).toEqual([])
+    })
+
+    it('clamps a size outside the ranges and warns instead of failing', () => {
+        const applied = apply('# @screen width=2000 unit=0')
+        expect(applied.display.width).toBe(1024)
+        expect(applied.display.unitWidth).toBe(1)
+        expect(applied.display.unitHeight).toBe(1)
         expect(applied.diagnostics.map((d) => d.severity)).toEqual(['warning', 'warning'])
-        expect(applied.diagnostics[0]?.message).toContain('64, 128, 256, 512, 1024')
-        expect(applied.diagnostics[1]?.message).toContain('using 2')
+        expect(applied.diagnostics[0]?.message).toContain('not between 1 and 1024')
+        expect(applied.diagnostics[1]?.message).toContain('using 1')
     })
 
     it('reports an unknown setting, a value that is not a number and a base that is neither', () => {
@@ -265,5 +277,35 @@ describe('rewriting the directive', () => {
     it('returns the code as it was when nothing changed', () => {
         const code = '# @screen width=256\nnop'
         expect(rewriteScreenDirective(code, shown, { ...shown })).toBe(code)
+    })
+})
+
+describe('resolveScreenLabel', () => {
+    const table = (labels: Record<string, number>) => ({
+        getAddressOfLabel: (label: string) => labels[label] ?? -1
+    })
+
+    it('reads a label from the assembled program without a probe', () => {
+        const probe = vi.fn(() => 1)
+        expect(resolveScreenLabel(table({ grid: 0x10010020 }), 'grid', probe)).toBe(0x10010020)
+        expect(probe).not.toHaveBeenCalled()
+    })
+
+    it('probes for a name the symbol table does not hold, such as an .eqv name', () => {
+        const probe = vi.fn(() => 0x10040000)
+        expect(resolveScreenLabel(table({}), 'GRID_AT', probe)).toBe(0x10040000)
+        expect(probe).toHaveBeenCalledTimes(1)
+    })
+
+    it('resolves nothing, and does not probe, for a program that did not assemble', () => {
+        const probe = vi.fn(() => 1)
+        expect(resolveScreenLabel(null, 'grid', probe)).toBeNull()
+        expect(probe).not.toHaveBeenCalled()
+    })
+
+    it('reads an address in the upper half of memory unsigned', () => {
+        expect(resolveScreenLabel(table({ map: 0xffff0000 | 0 }), 'map', () => null)).toBe(
+            0xffff0000
+        )
     })
 })

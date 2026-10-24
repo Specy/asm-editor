@@ -319,35 +319,35 @@ const desc = {
     add: 'Adds the value of the first operand to second operand. If the second operand is an address register, the [ADDA](/documentation/m68k/instruction/adda) instruction is used instead.',
     addi: 'Adds the immediate value to the second operand',
     adda: 'Adds the value of the first operand to second operand. It does not change the SR.  When using word size, the first operand is sign extended to long and the second is read and written as a long.',
-    addq: 'Adds the value of the first operand to second operand. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.',
+    addq: 'Adds the value of the first operand to second operand. The first operand value must be between 1 and 8. If the destination is an address register, it is always treated as a long, and the condition codes are not affected.',
     sub: 'Subtracts the value of the first operand from second operand and stores in the second. If the second operand is an address register, the [SUBA](/documentation/m68k/instruction/suba) instruction is used instead.',
     suba: 'Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR. When using word size, the first operand is sign extended to long and the second is read and written as a long.',
-    subq: 'Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.',
+    subq: 'Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is an address register, it is always treated as a long, and the condition codes are not affected.',
     subi: 'Subtracts the immediate value to the second operand',
-    divs: 'Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long',
-    divu: 'Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long',
+    divs: 'Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long',
+    divu: 'Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long',
     muls: 'Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long',
     mulu: 'Multiplies (unsigned) the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long',
-    swap: 'Swaps the two word of the register, you can see the register as [a,b] after the swap it will be [b,a]',
-    clr: 'Sets to 0 all the bits of the destination operand, how many bits are set to 0 depends on the specified size, defaults to long',
+    swap: 'Swaps the two words of the register, you can see the register as [a,b] after the swap it will be [b,a]',
+    clr: 'Sets to 0 all the bits of the destination operand, how many bits are set to 0 depends on the specified size, defaults to word',
     exg: 'Exchanges the values of the two operands, only works in 32 bits',
     neg: 'Flips the sign of the operand, depending on the specified size, defaults to word',
     ext: 'Extends the sign of the operand, depending on the specified size. If the part to extend is negative, it will be filled with 1s, otherwise it will be filled with 0s. Defaults to word',
     tst: 'Compares the operand with 0',
     cmp: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags. If the second operand is an address register, the [CMPA](/documentation/m68k/instruction/cmpa) instruction is used instead.',
     cmpa: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the first operand is sign extended to long and the second is read and written as a long.',
-    cmpm: 'Compares two memory regions, only valid operand is the post increment, it sets the flags accordingly which will be used by the branchin instructions.',
+    cmpm: 'Compares two memory regions, only valid operand is the postincrement, it sets the flags accordingly which will be used by the branching instructions.',
     cmpi: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.',
     bcc: 'Branches to the specified address if {condition code}',
     scc: 'Sets the first byte of the destination operand to $FF (-1) if flags {condition code} is true, otherwise it sets it to 0',
-    dbcc: 'Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1). It reads the operand as a word, so it can run at maximum 64k times',
-    lea: 'Loads the address of the first operand into the second operand, when using indirect addressing, the value is not read, only the address is loaded. For example "lea 4(a0), a0" will load a0 + 4 in a1',
+    dbcc: 'Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement until it reaches -1). It reads the operand as a word, so it can run at maximum 64k times',
+    lea: 'Loads the address of the first operand into the second operand, when using indirect addressing, the value is not read, only the address is loaded. For example "lea 4(a0), a1" will load a0 + 4 in a1',
     pea: 'Same as lea, but it pushes the address to the stack',
-    dbra: 'Decrements the first operand by 1 and branches to the specified address if the first operand is not -1. dbcc is the same as dbf (will decrement untill it reaches -1)',
+    dbra: 'Decrements the first operand by 1 and branches to the specified address if the first operand is not -1. dbra is the same as dbf (will decrement until it reaches -1)',
     bra: 'Branches to the specified address unconditionally',
     jmp: 'Jumps to the specified address unconditionally',
     link: 'Pushes to the stack the long content of the address register, sets the address register to the current stack pointer and then decrements the stack pointer by the specified amount',
-    unlk: 'Sets the SP to the address register, then Pops a long value from the stack and stores the result in the address register',
+    unlk: 'Sets the SP to the address register, then pops a long value from the stack and stores the result in the address register',
     not: 'Inverts the bits of the operand depending on the specified size',
     and: 'Performs a logical AND between the first and second operand, stores the result in the second operand',
     andi: 'Performs a logical AND between the first immediate value and second operand, stores the result in the second operand',
@@ -356,7 +356,7 @@ const desc = {
     eor: 'Performs a logical XOR between the first and second operand, stores the result in the second operand',
     eori: 'Performs a logical XOR between the first immediate value and second operand, stores the result in the second operand',
     lsd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `ls<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with 0s. Defaults to word. (2) `ls<d>.w (An)` shifts a memory word by 1; `.w` is the only size accepted and may be omitted.',
-    asd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `as<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with the sign bit. Defaults to word. Note: ASL sets the overflow flag if the MSB changes during the shift, while ASR always clears it. (2) `as<d>.w (An)` shifts a memory word by 1; `.w` is the only size accepted and may be omitted.',
+    asd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `as<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. ASR fills the new high bits with copies of the sign bit, ASL fills the new low bits with zeros. Defaults to word. Note: ASL sets the overflow flag if the MSB changes during the shift, while ASR always clears it. (2) `as<d>.w (An)` shifts a memory word by 1; `.w` is the only size accepted and may be omitted.',
     rod: 'Rotates the bits of the destination operand to the {direction}. Two forms: (1) `ro<d> Dx/Im, Dn` rotates Dn by the count in Dx or immediate (1–8), any size. Defaults to word. (2) `ro<d>.w (An)` rotates a memory word by 1; `.w` is the only size accepted and may be omitted.',
     roxd: 'Rotates the destination to the {direction} through the extend flag. The register form takes a data-register or immediate count; the memory form rotates one word by one place.',
     btst: 'Tests the bit of the second operand at the position of the value of the first operand, it changes the Z (zero) flag, the destination operand is not modified',
@@ -1710,6 +1710,11 @@ function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T
     return Object.prototype.hasOwnProperty.call(value, key)
 }
 
+/** "Equal" as it reads inside a sentence: "branches if **equal**". */
+function lowerFirst(text: string | undefined): string {
+    return text ? text.charAt(0).toLowerCase() + text.slice(1) : ''
+}
+
 export function uncompoundInstructions(
     instructions: InstructionDocumentation[] | Map<string, InstructionDocumentation>
 ) {
@@ -1724,14 +1729,14 @@ export function uncompoundInstructions(
                     const direction = n.substring(n.length - 1)
                     description = description.replace(
                         '{direction}',
-                        `"**${directionsDescriptions.get(direction)}**"`
+                        `**${lowerFirst(directionsDescriptions.get(direction))}**`
                     )
                 }
                 if (name === 'bcc' || name === 'dbcc') {
                     const code = name === 'dbcc' ? n.substring(2) : n.substring(1)
                     description = description.replace(
                         '{condition code}',
-                        `"**${setConditionsDescriptions.get(code)}**"`
+                        `**${lowerFirst(setConditionsDescriptions.get(code))}**`
                     )
                 }
                 if (name === 'scc') {
@@ -1740,12 +1745,19 @@ export function uncompoundInstructions(
                     if (n === 'sf') code = 'f'
                     description = description.replace(
                         '{condition code}',
-                        `"**${setConditionsDescriptions.get(code)}**"`
+                        `**${lowerFirst(setConditionsDescriptions.get(code))}**`
                     )
                 }
                 const entry = structuredClone(i)
                 entry.name = n
                 entry.description = description
+                // The family shares ASL's flags, but ASR keeps the sign and so always clears V.
+                if (n === 'asr') {
+                    entry.affectsFlags = {
+                        ...entry.affectsFlags,
+                        [M68KFlag.Overflow]: AffectedFlagKind.ToZero
+                    }
+                }
                 map.set(n, entry)
             })
         }

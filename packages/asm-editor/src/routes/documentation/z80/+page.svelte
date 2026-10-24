@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
@@ -37,19 +38,19 @@
         console, so a program can print characters and numbers and read a line back.
     </p>
     <div class="links">
-        <NavigationLinkButton href="/documentation/z80/instruction">
+        <NavigationLinkButton href={resolve('/documentation/z80/instruction')}>
             <div>Instructions</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/z80/directive">
+        <NavigationLinkButton href={resolve('/documentation/z80/directive')}>
             <div>Directives</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/z80/registers">
+        <NavigationLinkButton href={resolve('/documentation/z80/registers')}>
             <div>Registers & Flags</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/z80/io">
+        <NavigationLinkButton href={resolve('/documentation/z80/io')}>
             <div>Input/Output</div>
         </NavigationLinkButton>
-        <NavigationLinkButton href="/documentation/z80/all">
+        <NavigationLinkButton href={resolve('/documentation/z80/all')}>
             <div>Complete Documentation</div>
         </NavigationLinkButton>
     </div>

@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { ResourceDownloadError, X86Emulator } from '@specy/x86'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { AnalysisUnavailableError } from '../workers/projectWorkerServer'
 import { analyzeX86Project, x86DiagnosticToLanguageDiagnostic } from './x86Adapter'
+
+afterEach(() => {
+    vi.restoreAllMocks()
+})
 
 describe('x86 Project analysis adapter', () => {
     it('maps Entry diagnostics into neutral zero-based ranges', () => {
@@ -175,5 +181,67 @@ describe('x86 Project analysis adapter', () => {
             })
         ])
         expect(snapshot.fileStatus).toEqual({ 'main.asm': 'unknown' })
+    })
+
+    it('reports a missing Entry file as the one error, rather than failing', async () => {
+        const snapshot = await analyzeX86Project(
+            normalizeBuildInput({
+                entry: 'gone.asm',
+                files: { 'main.asm': { encoding: 'plain', content: 'nop' } }
+            }),
+            'missing-entry',
+            1
+        )
+        expect(snapshot.diagnostics).toEqual([
+            expect.objectContaining({
+                message: 'Entry file not found: gone.asm',
+                location: expect.objectContaining({ path: 'gone.asm' })
+            })
+        ])
+    })
+
+    it('warns, rather than errs, when the assembler could not be downloaded', async () => {
+        const sources = normalizeBuildInput({
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain',
+                    content: ['global _start', 'section .text', '_start:', '  nop'].join('\n')
+                }
+            }
+        })
+        const check = vi
+            .spyOn(X86Emulator.prototype, 'checkProject')
+            .mockRejectedValueOnce(new ResourceDownloadError('the assembler', 'no data for 20 s'))
+            .mockRejectedValueOnce(
+                new ResourceDownloadError('the assembler', '404 Not Found', { status: 404 })
+            )
+        const unavailable = async () => {
+            const error = await analyzeX86Project(sources, 'test-session', 1).catch((e) => e)
+            expect(error).toBeInstanceOf(AnalysisUnavailableError)
+            return error as AnalysisUnavailableError
+        }
+        //a warning holds no Build back, and the worker tries again
+        const stalled = await unavailable()
+        expect(stalled.retry).toBe(true)
+        expect(stalled.snapshot.diagnostics).toEqual([
+            expect.objectContaining({
+                severity: 'warning',
+                location: expect.objectContaining({ path: 'main.asm' }),
+                message:
+                    "Code checking is paused: couldn't download the assembler (no response for 20 seconds). It will try again shortly."
+            })
+        ])
+        //a server that refused it refuses it again: only a reload helps
+        const refused = await unavailable()
+        expect(refused.retry).toBe(false)
+        expect(refused.snapshot.diagnostics[0]).toMatchObject({
+            severity: 'warning',
+            message:
+                "Code checking is paused: couldn't download the assembler (404 Not Found). Reload the page to check your code."
+        })
+        //and the next check checks
+        check.mockRestore()
+        expect((await analyzeX86Project(sources, 'test-session', 2)).diagnostics).toEqual([])
     })
 })

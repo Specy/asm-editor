@@ -1,22 +1,35 @@
 <script lang="ts">
-    import { executableKind } from '#lib/executables.ts'
     /**
      * The Project's Files as a tree, with the controls that manage them: create, upload, rename or
-     * move, delete, download, and choose the Entry path: the Workbench's Explorer panel. Mutations
-     * are disabled while `locked`, i.e. during a Debug session, and browsing and downloading stay
-     * available. The root row carries the Project's name, "Project" when it has none; it folds the
-     * tree away only when `collapsible`. A right click on a row, or on the empty space, opens its
-     * controls as a menu; only touch screens, which have no right click, also show them as buttons
-     * on the rows. Files dragged in from the computer are uploaded into the folder they are dropped
-     * on. With `hints`, a dismissible card under the tree offers to create a C file where the
-     * language compiles C, to upload an ELF on x86, and links one tip about the language (two
-     * where there is no action to offer), picked at every page load.
+     * move, delete, download, and make a File a Program's Entry or remove that Program: the
+     * Workbench's Explorer panel ([programs.md](../../../../../../docs/design/programs.md),
+     * decision 11). Every Entry file's row carries a mark, the Selected program's in the accent
+     * colour, and a Program whose Entry is missing gets a line above the tree. Mutations are
+     * disabled while `locked`, i.e. during a Debug session or a test run, and browsing and
+     * downloading stay available. The root row carries the Project's name, "Project" when it has
+     * none; it folds the tree away only when `collapsible`. A right click on a row, or on the empty
+     * space, opens its controls as a menu; only touch screens, which have no right click, also
+     * show them as buttons on the rows, the Program ones included, since a long press opens no
+     * menu in iOS Safari. The shown row's buttons sit beside its marks, never over them. Files
+     * dragged in from the computer are uploaded into the folder they are dropped on. With
+     * `hints`, a dismissible card under the tree offers to create a C file where the language
+     * compiles C, to upload an ELF on x86, and links one tip about the language (two where there
+     * is no action to offer), picked at every page load. The Runtime library members a Build
+     * linked are listed apart under the tree: they are no Files of the Project. A Build output, the
+     * File a Build saved the program it linked in, is dimmed and marked From an earlier Build once
+     * its sources have changed.
      */
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import type { ProgramChoice } from '#lib/workbench/WorkbenchSession.svelte.ts'
+    import type { BuildOutputState } from '#lib/buildOutput.ts'
+    import { editorFileKind } from '#lib/workbench/editorFileRouting.ts'
+    import { executableKind } from '#lib/executables.ts'
+    import { writeUploads } from '#lib/workbench/fileUploads.ts'
+    import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
     import { fileBytes, type ProjectFiles } from '#lib/projectFiles.ts'
-    import { blobDownloader } from '#lib/utils.ts'
+    import { bytesDownloader } from '#lib/utils.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import { untrack } from 'svelte'
@@ -30,6 +43,7 @@
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaDownload from '~icons/fa-solid/download'
     import FaFlag from '~icons/fa-solid/flag'
+    import FaRegFlag from '~icons/fa-regular/flag'
     import FaFolder from '~icons/fa-solid/folder'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaFileAlt from '~icons/fa-solid/file-alt'
@@ -54,16 +68,41 @@
         collapsible?: boolean
         files: ProjectFiles
         language?: AvailableLanguages
-        entry: string
+        /** The Project's Programs, by label, as the picker lists them. */
+        programs: readonly ProgramChoice[]
+        /** The Selected program's Entry path, none while the Project has no Program. */
+        selectedProgram?: string
         fileSystem: FileSystem
         selectedPath: string
         selectedPaths?: readonly string[]
         locked?: boolean
         diagnosticCounts?: Readonly<Record<string, { errors: number; warnings: number }>>
         onSelect: (path: string) => void
-        onEntryChange: (path: string) => void
+        /**
+         * A single click on a File's row, which an IDE opens in its preview tab; `onSelect` when
+         * not given. Opening a File any other way (the menu's Open, a File made, renamed or
+         * uploaded) is `onSelect`.
+         */
+        onPreview?: (path: string) => void
+        /** "New program from this file"; without it no File offers to become a Program. */
+        onNewProgram?: (path: string) => void
+        /** "Remove program", which keeps the File; without it no Entry offers it. */
+        onRemoveProgram?: (path: string) => void
+        /**
+         * What deleting the File at `path` takes with it, for the prompts that name it: whether its
+         * Program has Settings decided and how many Testcases. Undefined for a File that is no
+         * Entry.
+         */
+        programLoss?: (path: string) => { settings: boolean; testcases: number } | undefined
         onRenamed?: (from: string, to: string) => void
+        /** A File deleted by the Explorer, or replaced by one moved onto its path. */
         onDeleted?: (path: string) => void
+        /**
+         * Files the Explorer added, by New file, an upload or a drop: a Project with
+         * no Program makes its first from them
+         * ([programs.md](../../../../../../docs/design/programs.md), decision 8).
+         */
+        onFilesAdded?: (paths: string[]) => void
         onFileDragStart?: (event: DragEvent, path: string) => void
         onFileDragEnd?: () => void
         /**
@@ -71,6 +110,12 @@
          * Project's Files: they are not the Project's, and the running program cannot see them.
          */
         libraryFiles?: readonly string[]
+        /**
+         * The Build outputs nobody changed since their Build, by path: Files Builds saved the
+         * programs they linked in, marked when their sources have changed since
+         * ([ADR 0056](../../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+         */
+        buildOutputs?: ReadonlyMap<string, BuildOutputState>
         /** Whether to show the hints card under the tree. */
         hints?: boolean
     }
@@ -80,21 +125,31 @@
         collapsible = false,
         files,
         language = 'M68K',
-        entry,
+        programs,
+        selectedProgram,
         fileSystem,
         selectedPath,
         selectedPaths,
         locked = false,
         diagnosticCounts = {},
         onSelect,
-        onEntryChange,
+        onPreview = onSelect,
+        onNewProgram,
+        onRemoveProgram,
+        programLoss,
         onRenamed,
         onDeleted,
+        onFilesAdded,
         onFileDragStart,
         onFileDragEnd,
         libraryFiles = [],
+        buildOutputs = new Map(),
         hints = false
     }: Props = $props()
+
+    /** The Entry paths of the Programs. */
+    const entries = $derived(new Set(programs.map((program) => program.entry)))
+    const missingEntries = $derived(programs.filter((program) => program.missing))
 
     const collapsedDirectories = new SvelteSet<string>()
     let projectExpanded = $state(true)
@@ -246,6 +301,7 @@
                     false
                 )
                 editing = null
+                onFilesAdded?.([path])
                 expandParents(path)
                 onSelect(path)
             } catch (error) {
@@ -256,6 +312,23 @@
             const previousPath = current.path
             const path = joinPath(dirname(previousPath), typed)
             if (!typed || path === previousPath) return cancelEdit()
+            const lost = replacedProgramLoss(previousPath, path)
+            if (lost) {
+                //the question takes the focus, so the input closes first; No keeps the old name
+                editing = null
+                void confirmReplacedProgram(path, lost).then((confirmed) => {
+                    if (!confirmed) return
+                    try {
+                        fileSystem.rename(previousPath, path)
+                        expandParents(path)
+                        onRenamed?.(previousPath, path)
+                        onSelect(path)
+                    } catch (error) {
+                        reportFailure(error)
+                    }
+                })
+                return
+            }
             try {
                 fileSystem.rename(previousPath, path)
                 editing = null
@@ -341,7 +414,7 @@
 
     /** Whether the drag carries files from the computer rather than one of the tree's own. */
     function draggingUploads(event: DragEvent): boolean {
-        return draggedPath === null && !!event.dataTransfer?.types.includes('Files')
+        return draggedPath === null && carriesComputerFiles(event)
     }
 
     function onTreeDragOver(event: DragEvent) {
@@ -375,7 +448,7 @@
             event.preventDefault()
             setDropFolder(null)
             if (folder === null || locked) return
-            void uploadFiles(Array.from(event.dataTransfer?.files ?? []), folder)
+            void uploadFiles(droppedFiles(event.dataTransfer!), folder)
             return
         }
         const from = draggedPath
@@ -386,15 +459,61 @@
         void moveFile(from, joinPath(folder, basename(from)))
     }
 
+    /**
+     * What deleting the File at `path` takes with it, as a sentence for a prompt, when its Program
+     * has Settings decided or Testcases ([programs.md](../../../../../../docs/design/programs.md),
+     * decision 7): "its Settings and 3 Testcases". Undefined when nothing but the File goes.
+     */
+    function programLossText(path: string): string | undefined {
+        const loss = programLoss?.(path)
+        if (!loss || (!loss.settings && loss.testcases === 0)) return undefined
+        const testcases = `${loss.testcases} Testcase${loss.testcases === 1 ? '' : 's'}`
+        if (!loss.settings) return `its ${testcases}`
+        return loss.testcases > 0 ? `its Settings and ${testcases}` : 'its Settings'
+    }
+
+    /** The prompt's sentence about a deleted Entry's Program, with a space before it, or ''. */
+    function programLossNote(path: string): string {
+        const lost = programLossText(path)
+        return lost ? ` This also deletes its program: ${lost}.` : ''
+    }
+
+    /**
+     * What a rename or move of the Entry file `from` onto `to`, where no File is, deletes: `to` is
+     * then the missing Entry of a Program, which the moved one replaces (decision 7), and that
+     * Program's Settings and Testcases go with it. Undefined when nothing does, as when `from` is
+     * no Entry, whose File the Program at `to` takes as its own.
+     */
+    function replacedProgramLoss(from: string, to: string): string | undefined {
+        if (files[to] || !entries.has(from)) return undefined
+        return programLossText(to)
+    }
+
+    /** Asks before a rename or a move replaces the Program at `to`, which deletes what is `lost`. */
+    async function confirmReplacedProgram(to: string, lost: string): Promise<boolean> {
+        const confirmed = await Prompt.confirm(
+            `Replace the program of ${to}? This deletes ${lost}.`
+        )
+        //a Debug session or a test run may have started while the question was open
+        return confirmed === true && !locked
+    }
+
     async function moveFile(from: string, to: string) {
-        if (from === to) return
+        if (from === to || locked) return
         try {
             if (files[to]) {
                 const replace = await Prompt.confirm(
-                    `"${basename(to)}" already exists in ${dirname(to) || 'the project root'}. Replace it?`
+                    `"${basename(to)}" already exists in ${dirname(to) || 'the project root'}. Replace it?${programLossNote(to)}`
                 )
-                if (!replace) return
+                //a Debug session or a test run may have started while the question was open
+                if (!replace || locked) return
+                //replacing is deleting the File there, its Program with it, then the move
+                //([programs-plan.md](../../../../../../docs/design/programs-plan.md), decision 6)
                 fileSystem.remove(to)
+                onDeleted?.(to)
+            } else {
+                const lost = replacedProgramLoss(from, to)
+                if (lost && !(await confirmReplacedProgram(to, lost))) return
             }
             fileSystem.rename(from, to)
             expandParents(to)
@@ -408,54 +527,65 @@
     }
 
     async function deleteFile(targetPath = selectedPath) {
-        if (!files[targetPath]) return
-        if (!(await Prompt.confirm(`Delete ${targetPath}?`))) return
+        if (!files[targetPath] || locked) return
+        const confirmed = await Prompt.confirm(
+            `Delete ${targetPath}?${programLossNote(targetPath)}`
+        )
+        //a Debug session or a test run may have started while the question was open
+        if (!confirmed || locked) return
         try {
             const previousPath = targetPath
             fileSystem.remove(previousPath)
             //a host that follows deletions picks what to show next itself (the Workbench closes the
-            //File's tab); otherwise the first File left, or the Entry path, takes its place
+            //File's tab and deletes its Program); otherwise the first File left, or the Selected
+            //program's Entry path, takes its place
             if (onDeleted) onDeleted(previousPath)
             else if (previousPath === selectedPath) {
-                onSelect(Object.keys(fileSystem.files)[0] ?? entry)
+                const next = Object.keys(fileSystem.files)[0] ?? selectedProgram
+                if (next !== undefined) onSelect(next)
             }
         } catch (error) {
             reportFailure(error)
         }
     }
 
-    /** Writes files from the computer into `folder` ('' is the root), showing the last one. */
+    /**
+     * "Remove program" (decision 11): the Program goes, asking first when its Settings or Testcases
+     * go with it, and the File stays.
+     */
+    async function removeProgram(path: string) {
+        if (locked || !onRemoveProgram) return
+        const lost = programLossText(path)
+        if (lost) {
+            const confirmed = await Prompt.confirm(
+                `Remove the program of ${path}? This deletes ${lost}; the File stays.`
+            )
+            //a Debug session may have started while the question was open
+            if (!confirmed || locked) return
+        }
+        onRemoveProgram(path)
+    }
+
+    /**
+     * Writes files from the computer into `folder` ('' is the root), showing the last one; see
+     * `writeUploads` for the Program an Executable is offered.
+     */
     async function uploadFiles(uploaded: Iterable<File>, folder = '') {
         if (locked) return
-        let last: string | null = null
-        let executable: string | null = null
-        for (const file of uploaded) {
-            const path = joinPath(folder, file.name)
-            try {
-                if (files[path]) {
-                    const replace = await Prompt.confirm(`${path} already exists. Replace it?`)
-                    if (!replace) continue
-                }
-                const bytes = new Uint8Array(await file.arrayBuffer())
-                fileSystem.writeBytes(path, bytes, true)
-                last = path
-                //only an x86 Project runs ELFs: elsewhere an ELF is just a File
-                if (language !== 'X86') continue
-                const kind = executableKind(bytes)
-                if (kind === 'supported') executable = path
-                else if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
-            } catch (error) {
-                reportFailure(error)
-            }
-        }
-        if (last === null) return
-        expandParents(last)
-        onSelect(last)
-        if (language === 'X86' && executable && executableKind(files[entry]) !== 'supported') {
-            //a Debug session may have started while the question was open
-            if ((await Prompt.confirm(`Make ${executable} the Entry file?`)) && !locked)
-                onEntryChange(executable)
-        }
+        await writeUploads(uploaded, folder, {
+            fileSystem,
+            language,
+            hadProgram: programs.length > 0,
+            isEntry: (path) => entries.has(path),
+            locked: () => locked,
+            onAdded: (added) => {
+                onFilesAdded?.(added)
+                const last = added[added.length - 1]
+                expandParents(last)
+                onSelect(last)
+            },
+            onNewProgram
+        })
     }
 
     let uploadInput: HTMLInputElement
@@ -508,16 +638,48 @@
         ]
     }
 
+    /**
+     * Whether "New program from this file" is offered on a File that is no Entry (decision 6): one
+     * the editor shows as assembly, `.inc` and extension-less ones included since the person chose
+     * it, or in an x86 Project a supported Executable.
+     */
+    function offersProgram(path: string): boolean {
+        const file = files[path]
+        if (language === 'X86' && executableKind(file) === 'supported') return true
+        return editorFileKind(path, file) === 'assembly'
+    }
+
+    function programItems(path: string): ContextMenuEntry[] {
+        if (entries.has(path)) {
+            if (!onRemoveProgram) return []
+            return [
+                {
+                    label: 'Remove program',
+                    icon: FaRegFlag,
+                    disabled: locked,
+                    onSelect: () => void removeProgram(path)
+                }
+            ]
+        }
+        const create = onNewProgram
+        if (!create || !offersProgram(path)) return []
+        return [
+            {
+                label: 'New program from this file',
+                icon: FaFlag,
+                disabled: locked,
+                onSelect: () => {
+                    if (!locked) create(path)
+                }
+            }
+        ]
+    }
+
     function fileItems(path: string): ContextMenuEntry[] {
         return [
             { label: 'Open', icon: FaFileAlt, onSelect: () => onSelect(path) },
-            {
-                label: 'Set as entry file',
-                icon: FaFlag,
-                disabled: locked || path === entry,
-                onSelect: () => onEntryChange(path)
-            },
-            { label: 'Download exact bytes', icon: FaDownload, onSelect: () => downloadFile(path) },
+            ...programItems(path),
+            { label: 'Download', icon: FaDownload, onSelect: () => downloadFile(path) },
             { separator: true },
             {
                 label: 'Rename',
@@ -552,9 +714,7 @@
     function downloadFile(targetPath = selectedPath) {
         const file = files[targetPath]
         if (!file) return
-        const bytes = fileBytes(file)
-        const contents = new Uint8Array(bytes).buffer
-        blobDownloader(new Blob([contents]), basename(targetPath))
+        bytesDownloader(fileBytes(file), basename(targetPath))
     }
 </script>
 
@@ -596,9 +756,11 @@
     </div>
 
     {#if !collapsible || projectExpanded}
-        {#if !files[entry]}
-            <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
-        {/if}
+        {#each missingEntries as program (program.entry)}
+            <div class="entry-warning" title={program.entry}>
+                Program entry missing: {program.entry}
+            </div>
+        {/each}
         <div
             class="file-tree"
             class:drop-target={dropFolder === ''}
@@ -626,7 +788,7 @@
                             style:padding-left={`${0.35 + row.depth * 0.85}rem`}
                         >
                             <span class="disclosure-spacer"></span>
-                            <SourceFileIcon path={draftName} {language} binary={false} />
+                            <SourceFileIcon path={draftName} {language} />
                             <input
                                 class="name-input"
                                 aria-label="Name of the new file"
@@ -698,7 +860,7 @@
                             <SourceFileIcon
                                 path={draftName || row.path}
                                 {language}
-                                binary={files[row.path]?.encoding === 'base64'}
+                                file={files[row.path]}
                             />
                             <input
                                 class="name-input"
@@ -713,6 +875,7 @@
                         </div>
                     </div>
                 {:else}
+                    {@const built = buildOutputs.get(row.path)}
                     <!-- the keyboard opens the menu from the row's focused button, with Shift+F10 or the Menu key -->
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div
@@ -720,11 +883,17 @@
                         class:selected={selectedPaths
                             ? selectedPaths.includes(row.path)
                             : row.path === selectedPath}
-                        class:entry={row.path === entry}
+                        class:entry={entries.has(row.path)}
                         class:binary={files[row.path]?.encoding === 'base64'}
                         class:dragging={draggedPath === row.path}
                         class:menu-open={contextMenu !== null && menuPath === row.path}
-                        title={row.path}
+                        class:built={built !== undefined}
+                        class:stale={built?.stale}
+                        title={!built
+                            ? row.path
+                            : built.stale
+                              ? `${row.path}: from an earlier Build of ${built.entry}; its sources have changed since`
+                              : `${row.path}: built from ${built.entry}`}
                         data-folder={dirname(row.path)}
                         oncontextmenu={(event) => {
                             menuPath = row.path
@@ -737,15 +906,14 @@
                             ondragstart={(event) => startDrag(event, row.path)}
                             ondragend={endDrag}
                             style:padding-left={`${0.35 + row.depth * 0.85}rem`}
-                            onclick={() => onSelect(row.path)}
+                            onclick={() => onPreview(row.path)}
                         >
                             <span class="disclosure-spacer"></span>
-                            <SourceFileIcon
-                                path={row.path}
-                                {language}
-                                binary={files[row.path]?.encoding === 'base64'}
-                            />
+                            <SourceFileIcon path={row.path} {language} file={files[row.path]} />
                             <span class="ellipsis">{row.name}</span>
+                            {#if built?.stale}
+                                <span class="stale-note">From an earlier Build</span>
+                            {/if}
                             {#if diagnosticCounts[row.path]?.errors}
                                 <span
                                     class="diagnostic-count error"
@@ -760,24 +928,41 @@
                                     >{diagnosticCounts[row.path].warnings}</span
                                 >
                             {/if}
-                            {#if row.path === entry}
-                                <span class="entry-mark" title="Project entry file">ENTRY</span>
+                            {#if entries.has(row.path)}
+                                {@const selectedEntry = row.path === selectedProgram}
+                                <span
+                                    class="entry-mark"
+                                    class:selected={selectedEntry}
+                                    title={selectedEntry
+                                        ? 'Entry of the selected program'
+                                        : 'Entry of a program'}>ENTRY</span
+                                >
                             {/if}
                         </button>
                         <div class="row-actions">
-                            {#if row.path !== entry}
+                            {#if entries.has(row.path)}
+                                {#if onRemoveProgram}
+                                    <button
+                                        disabled={locked}
+                                        title="Remove program"
+                                        onclick={() => void removeProgram(row.path)}
+                                    >
+                                        <FaRegFlag />
+                                    </button>
+                                {/if}
+                            {:else if onNewProgram && offersProgram(row.path)}
+                                {@const create = onNewProgram}
                                 <button
                                     disabled={locked}
-                                    title="Set as entry file"
-                                    onclick={() => onEntryChange(row.path)}
+                                    title="New program from this file"
+                                    onclick={() => {
+                                        if (!locked) create(row.path)
+                                    }}
                                 >
                                     <FaFlag />
                                 </button>
                             {/if}
-                            <button
-                                title="Download exact bytes"
-                                onclick={() => downloadFile(row.path)}
-                            >
+                            <button title="Download" onclick={() => downloadFile(row.path)}>
                                 <FaDownload />
                             </button>
                             <button
@@ -816,10 +1001,10 @@
                             <button
                                 class="file-select"
                                 style:padding-left="0.35rem"
-                                onclick={() => onSelect(path)}
+                                onclick={() => onPreview(path)}
                             >
                                 <span class="disclosure-spacer"></span>
-                                <SourceFileIcon {path} {language} binary={false} />
+                                <SourceFileIcon {path} {language} />
                                 <span class="ellipsis">{path.slice(path.lastIndexOf('/') + 1)}</span
                                 >
                             </button>
@@ -849,7 +1034,8 @@
             {/if}
             {#if language === 'X86'}
                 <button class="hint" disabled={locked} onclick={() => pickUploads()}>
-                    You can run Linux binaries. Upload an ELF file to disassemble
+                    You can run Linux binaries. Upload an ELF file to see its bytes, disassemble it
+                    and decompile it
                 </button>
             {/if}
             {#each tips as tip (tip.text)}
@@ -878,12 +1064,13 @@
 </section>
 
 <style lang="scss">
-    /* at most half the panel, its list scrolling under its title past that */
+    /* at most a quarter of the panel each, their lists scrolling under their titles past that,
+       so the Project's own Files keep at least half of it */
     .library-files {
         display: flex;
         flex: none;
         flex-direction: column;
-        max-height: 50%;
+        max-height: 25%;
         margin-top: 0.4rem;
         padding-top: 0.3rem;
         border-top: solid 0.1rem var(--tertiary);
@@ -901,6 +1088,19 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         opacity: 0.7;
+    }
+
+    /* a Build output whose sources have changed since: still there to look at, but dimmed */
+    .tree-row.built.stale .file-select {
+        opacity: 0.55;
+    }
+
+    .stale-note {
+        flex: none;
+        margin-left: auto;
+        font-size: 0.65rem;
+        font-style: italic;
+        white-space: nowrap;
     }
 
     /* a panel of its own under the tree, its hints parted by lines that fade out toward the sides */
@@ -1243,18 +1443,26 @@
         white-space: nowrap;
     }
 
+    /* every Entry file's, neutral; the Selected program's in the accent colour */
     .entry-mark {
         flex: none;
         margin-left: auto;
         padding: 0.02rem 0.3rem;
-        color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+        color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
+        background: color-mix(in srgb, var(--secondary-text) 6%, transparent);
+        border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
         border-radius: 999px;
         font-size: 0.48rem;
         font-weight: 700;
         line-height: 0.72rem;
         letter-spacing: 0.04em;
+
+        /* solid, since the selected row under it is tinted with the accent */
+        &.selected {
+            color: var(--accent-text);
+            background: var(--accent);
+            border-color: var(--accent);
+        }
     }
 
     /* a row's controls are buttons only on touch screens, which have no right click; elsewhere
@@ -1273,11 +1481,12 @@
         pointer-events: none;
         background: linear-gradient(90deg, transparent, var(--tertiary) 22%);
 
+        /* tappable only while shown, which the row's own rules below make them: a hidden row's
+           buttons over its mark and name would take a tap meant for the row */
         button {
             width: 1.38rem;
             height: 1.38rem;
             padding: 0.32rem;
-            pointer-events: auto;
         }
     }
 
@@ -1293,9 +1502,15 @@
             display: flex;
         }
 
+        /* the shown row's buttons take their room beside its marks, the name giving way, so the
+           Entry mark and the counts stay in view rather than under the buttons */
         .tree-row:hover .row-actions,
         .tree-row:focus-within .row-actions,
         .file.selected .row-actions {
+            position: static;
+            flex: none;
+            padding-left: 0;
+            background: none;
             opacity: 1;
             pointer-events: auto;
             color: var(--primary-text);

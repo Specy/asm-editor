@@ -32,8 +32,14 @@ function markdownOf(entry: DocumentationEntry): string[] {
             return [view.markdown ?? '', ...view.fields.map((field) => field.value)]
         case 'swatches':
             return [view.markdown ?? '']
-        case 'm68k-instruction':
-            return [view.instruction.description]
+        case 'instruction': {
+            const document = view.document()
+            return [
+                document.description ?? '',
+                ...document.operands.map((operand) => operand.meaning),
+                ...document.headerFacts
+            ]
+        }
         default:
             return []
     }
@@ -47,6 +53,7 @@ describe('the M68K Documentation', () => {
             ['condition-codes', '/documentation/m68k/condition-codes'],
             ['shift-directions', '/documentation/m68k/shift-direction'],
             ['trap-tasks', '/documentation/m68k/traps'],
+            ['synth', '/documentation/m68k/synth'],
             ['exceptions', '/documentation/m68k/exceptions'],
             ['directives', '/documentation/m68k/directive'],
             ['assembler-features', '/documentation/m68k/assembler-features']
@@ -59,12 +66,15 @@ describe('the M68K Documentation', () => {
         )
         expect(counts).toEqual({
             instructions: 69,
-            'addressing-modes': 9,
+            'addressing-modes': 10,
             //the explanation's two sections, then the 16 codes
             'condition-codes': 18,
             'shift-directions': 1,
-            //the introduction, 5 groups, the colors, the key codes, 51 tasks and the 2 closing sections
-            'trap-tasks': 61,
+            //the introduction, 6 groups, the colors, the key codes, how sound differs, 59 tasks and
+            //the 2 closing sections
+            'trap-tasks': 71,
+            //the introduction and the seven sections after it
+            synth: 8,
             exceptions: 4,
             directives: 18,
             'assembler-features': 1
@@ -100,7 +110,7 @@ describe('the M68K Documentation', () => {
     })
 
     it('has every trap task at the anchor the page has always given it', () => {
-        expect(M68K_TRAP_DOCS).toHaveLength(51)
+        expect(M68K_TRAP_DOCS).toHaveLength(59)
         for (const task of M68K_TRAP_DOCS) {
             const found = entry('trap-tasks', `task-${task.task}`)
             expect(found.kind).toBe('trap-task')
@@ -116,6 +126,8 @@ describe('the M68K Documentation', () => {
             'input',
             'time',
             'files',
+            'sound',
+            'sound-differences',
             'unsupported',
             'differences'
         ]) {
@@ -157,7 +169,13 @@ describe('the M68K Documentation', () => {
         }
         const increments = entry('addressing-modes', 'indirect-post-pre-increment')
         expect(increments.names).toEqual(['(an)+', '-(an)'])
-        expect(markdownOf(increments).join('\n')).toContain('`-(An)`: Pre decrement')
+        expect(markdownOf(increments).join('\n')).toContain('`-(An)`: Predecrement')
+        const overview = entry('addressing-modes', 'overview')
+        expect(overview.signature).toBe('<ea>')
+        expect(markdownOf(overview).join('\n')).toContain('supported addressing modes')
+        const absolute = entry('addressing-modes', 'effective-address')
+        expect(absolute.names).toContain('abs')
+        expect(absolute.names).not.toContain('<ea>')
     })
 
     it('fills in every list and table it generates', () => {
@@ -177,15 +195,14 @@ describe('the M68K Documentation', () => {
         }
     })
 
-    it('groups rejected tasks by reason and distinguishes timing and audio limits', () => {
+    it('groups rejected tasks by reason and leaves the sound tasks out of them', () => {
         const text = markdownOf(entry('trap-tasks', 'unsupported')).join('\n')
         const lines = text.split('\n')
         expect(lines.find((line) => line.includes('`30`'))).toContain('`31`')
         expect(lines.find((line) => line.includes('`30`'))).toContain('cycle count')
-        expect(lines.find((line) => line.includes('`70`'))).toContain('`77`')
-        expect(lines.find((line) => line.includes('`70`'))).toContain('audio output')
-        expect(text).not.toMatch(/`(?:12|16|5[0-9])`/)
-        expect(markdownOf(entry('trap-tasks', 'differences')).join('\n')).toContain('Windows-1252')
+        expect(lines.find((line) => line.includes('`100`'))).toContain('`107`')
+        expect(text).not.toMatch(/`(?:12|16|5[0-9]|7[0-7])`/)
+        expect(markdownOf(entry('trap-tasks', 'text')).join('\n')).toContain('Windows-1252')
     })
 
     it('links only to pages that exist', () => {

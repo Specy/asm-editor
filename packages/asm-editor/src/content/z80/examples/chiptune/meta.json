@@ -1,0 +1,7 @@
+{
+    "name": "Chiptune",
+    "description": "Play a short tune on the MSX sound chip: a lead and a bass on two square-wave channels and noise drums struck by the envelope.",
+    "order": 26,
+    "topic": "chiptune",
+    "template": 8
+}

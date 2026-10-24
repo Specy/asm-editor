@@ -1,9 +1,10 @@
 import { resolve } from '$app/paths'
+import type { ResolvedPathname } from '$app/types'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { documentationLanguageOf, type DocumentationLanguage } from '#lib/search/scope.ts'
 
 /** A line of the Explorer's hints card: what is worth knowing, and where to read about it. */
-export type ExplorerTip = { text: string; href?: string }
+export type ExplorerTip = { text: string; href?: ResolvedPathname }
 
 const course = (courseId: DocumentationLanguage) =>
     resolve('/learn/courses/[courseId]', { courseId })

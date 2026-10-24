@@ -5,9 +5,11 @@
      * ([the design record](../../../../../../docs/design/documentation-search.md), The Documentation panel).
      *
      * With no query, every **Chapter** starts folded under a heading that stays pinned while its
-     * expanded rows scroll. With a query, the Chapters give way to the
-     * ranked results, entries and **Lecture sections** in one list, an entry named exactly what was
-     * typed opened already. A link from one entry to another is followed in place, with Back.
+     * expanded rows scroll; the Instructions Chapter lists its entries under a heading per
+     * **Instruction category**, pinned under the Chapter's. With a query, the Chapters give way to
+     * the ranked results, entries and **Lecture sections** in one list, each instruction naming its
+     * category, an entry named exactly what was typed opened already. A link from one entry to
+     * another is followed in place, with Back.
      */
     import { tick, untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
@@ -18,12 +20,13 @@
     import SearchField from '#cmp/search/SearchField.svelte'
     import { documentationFor } from '#lib/documentation/documentation.ts'
     import type { Chapter, DocumentationEntry } from '#lib/documentation/entries.ts'
+    import { categoryLabel, groupByCategory } from '#lib/documentation/instructions/categories.ts'
     import { resolveDocumentationLink, type DocumentationTarget } from '#lib/documentation/links.ts'
     import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
-    import type { EntryDocument } from '#lib/search/payload.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { DocumentationLanguage, SearchScope } from '#lib/search/scope.ts'
     import EntryRow from './EntryRow.svelte'
+    import { fromIndex } from './fromIndex'
     import LectureSectionCard from './LectureSectionCard.svelte'
 
     interface Props {
@@ -39,10 +42,11 @@
         /** In an Exam: links into the Documentation still work, every other link is text. */
         disableLinks?: boolean
         /**
-         * A one-shot request from outside the panel (Ctrl+K): focus the search box, with a query if
-         * one is given. A new `token` is a new request.
+         * A one-shot request from outside the panel: focus the search box (Ctrl+K), with a query
+         * if one is given, or follow a link into the Documentation (`href`), as a notice's "?"
+         * asks. A new `token` is a new request.
          */
-        request?: { token: number; query?: string } | null
+        request?: { token: number; query?: string; href?: string } | null
     }
 
     let {
@@ -87,6 +91,33 @@
         open.clear()
         unfolded.clear()
     }
+
+    /**
+     * The Instructions Chapter by category, in the shared order, alphabetical under each heading.
+     * Grouped here, not in the data, which keeps the Chapter's own order (ADR 0025). An entry
+     * without a category would drop out, so the Chapter is shown flat unless every entry has one.
+     */
+    function categoryGroups(chapter: Chapter) {
+        if (chapter.id !== 'instructions') return null
+        if (!chapter.entries.every((entry) => entry.category)) return null
+        return groupByCategory(chapter.entries, (entry) => entry.category)
+    }
+
+    const groupsByChapter = $derived(
+        new Map((chapters ?? []).map((chapter) => [chapter.id, categoryGroups(chapter)]))
+    )
+
+    /** Clip the slide without creating a new scroll container for sticky category headings. */
+    function slideChapter(node: HTMLElement, options: { duration: number }) {
+        const transition = slide(node, options)
+        return {
+            ...transition,
+            css: (t: number, u: number) => `${transition.css?.(t, u) ?? ''}; overflow: clip;`
+        }
+    }
+
+    /** Exact border-box sizes, including fractional pixels, so pinned headings meet without a gap. */
+    const titleSizes = $state<Record<string, ResizeObserverSize[]>>({})
 
     const byId = $derived(
         new Map(
@@ -157,7 +188,7 @@
 
     $effect(() => {
         const current = request
-        if (!current) return
+        if (!current || current.href !== undefined) return
         untrack(() => {
             if (current.query !== undefined) setQuery(current.query)
             void tick().then(() =>
@@ -169,6 +200,22 @@
         })
     })
 
+    /** The request whose link was followed, once the Chapters it needs had loaded. */
+    let followedRequest = -1
+    $effect(() => {
+        const current = request
+        const loaded = chapters
+        if (current?.href === undefined || !loaded || current.token === followedRequest) return
+        followedRequest = current.token
+        const href = current.href
+        untrack(() => {
+            const target = resolveDocumentationLink(href, loaded)
+            if (target) follow(target)
+            //another language's page, which this panel does not hold, as its own links do
+            else if (variant === 'panel' && !disableLinks) window.open(href, '_blank', 'noopener')
+        })
+    })
+
     function setQuery(text: string) {
         query = text
         pinned = null
@@ -177,25 +224,6 @@
     function toggle(key: string) {
         if (open.has(key)) open.delete(key)
         else open.add(key)
-    }
-
-    /** An entry the index knows but this page's entries do not: shown from what the index holds. */
-    function fromIndex(document: EntryDocument): DocumentationEntry {
-        return {
-            id: document.id,
-            language: document.language,
-            chapter: document.chapter,
-            kind: document.entryKind,
-            title: document.title,
-            codeName: document.codeName,
-            names: document.names,
-            signature: document.signature || undefined,
-            summary: document.summary,
-            href: document.href,
-            anchor: document.id,
-            view: { type: 'markdown', markdown: document.text },
-            searchText: document.text
-        }
     }
 
     type Shown = SearchResult | { pinnedEntry: DocumentationEntry }
@@ -335,6 +363,8 @@
                         ontoggle={() => toggle(result.pinnedEntry.id)}
                         {terms}
                         {disableLinks}
+                        showCategory
+                        clampProse
                     />
                 {:else if result.kind === 'entry'}
                     {@const entry = byId.get(result.entry.id) ?? fromIndex(result.entry)}
@@ -344,6 +374,8 @@
                         ontoggle={() => toggle(entry.id)}
                         {terms}
                         {disableLinks}
+                        showCategory
+                        clampProse
                     />
                 {:else}
                     <LectureSectionCard
@@ -374,8 +406,17 @@
         <div class="scroll" bind:this={scroller}>
             {#each chapters as chapter (chapter.id)}
                 {@const isFolded = !unfolded.has(chapter.id)}
-                <section class="chapter" class:folded={isFolded} data-chapter={chapter.id}>
-                    <h3 class="chapter-title">
+                {@const groups = groupsByChapter.get(chapter.id) ?? null}
+                <section
+                    class="chapter"
+                    class:folded={isFolded}
+                    class:categorized={!!groups}
+                    data-chapter={chapter.id}
+                    style:--chapter-title-height={titleSizes[chapter.id]?.[0]
+                        ? `${titleSizes[chapter.id][0].blockSize}px`
+                        : undefined}
+                >
+                    <h3 class="chapter-title" bind:borderBoxSize={titleSizes[chapter.id]}>
                         <button
                             type="button"
                             class="chapter-toggle"
@@ -391,18 +432,42 @@
                     {#if !isFolded}
                         <div
                             class="chapter-entries"
-                            transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+                            class:categorized={!!groups}
+                            transition:slideChapter={{
+                                duration: prefersReducedMotion.current ? 0 : 200
+                            }}
                             onintroend={() => finishChapterScroll(chapter.id)}
                         >
-                            {#each chapter.entries as entry (entry.id)}
-                                <EntryRow
-                                    {entry}
-                                    expanded={open.has(entry.id)}
-                                    ontoggle={() => toggle(entry.id)}
-                                    {disableLinks}
-                                    pageLink={variant === 'page'}
-                                />
-                            {/each}
+                            {#if groups}
+                                {#each groups as group (group.category)}
+                                    <div class="category-group">
+                                        <h4 class="category-title">
+                                            {categoryLabel(group.category)}
+                                        </h4>
+                                        {#each group.items as entry (entry.id)}
+                                            <EntryRow
+                                                {entry}
+                                                expanded={open.has(entry.id)}
+                                                ontoggle={() => toggle(entry.id)}
+                                                {disableLinks}
+                                                pageLink={variant === 'page'}
+                                                clampProse={variant === 'panel'}
+                                            />
+                                        {/each}
+                                    </div>
+                                {/each}
+                            {:else}
+                                {#each chapter.entries as entry (entry.id)}
+                                    <EntryRow
+                                        {entry}
+                                        expanded={open.has(entry.id)}
+                                        ontoggle={() => toggle(entry.id)}
+                                        {disableLinks}
+                                        pageLink={variant === 'page'}
+                                        clampProse={variant === 'panel'}
+                                    />
+                                {/each}
+                            {/if}
                         </div>
                     {/if}
                 </section>
@@ -433,17 +498,24 @@
         flex: 1;
         min-width: 0;
     }
+    /* as tall as the search field beside it, and as wide as the field's own height */
     .back {
         display: flex;
         flex: none;
-        width: 2rem;
-        height: 2rem;
-        padding: 0.55rem;
+        align-self: stretch;
+        align-items: center;
+        justify-content: center;
+        width: calc(1.4rem + 0.9rem);
+        padding: 0;
         border: none;
-        border-radius: 0.4rem;
+        border-radius: 0.5rem;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         cursor: pointer;
+    }
+    .back :global(svg) {
+        width: 0.9rem;
+        height: 0.9rem;
     }
     .note {
         margin: 0;
@@ -478,6 +550,7 @@
         flex: 1;
         min-height: 0;
         overflow-y: auto;
+        scrollbar-gutter: stable;
         padding: 0 var(--documentation-spacing) 0.8rem;
     }
     .page .scroll {
@@ -490,27 +563,43 @@
         gap: 0.3rem;
     }
     .chapter {
+        --chapter-border-width: 1px;
         display: flex;
         flex-direction: column;
         margin-bottom: var(--documentation-spacing);
-        border: 0.1rem solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        /* an open Chapter is a well darker than the panel, like an open Settings section; its edge
+           is drawn over the panel, as a card's is, or it would sink into the well and vanish */
+        background-color: var(--background);
+        background-clip: padding-box;
+        border: var(--chapter-border-width) solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        /* The sticky heading carries the top border so it stays visible while scrolling. */
+        border-top: none;
         border-radius: 0.5rem;
+    }
+    .chapter.folded {
+        border-bottom: none;
     }
     .chapter-title {
         position: sticky;
         top: 0;
-        z-index: 1;
-        margin: 0;
+        z-index: 2;
+        will-change: transform;
+        margin: 0 calc(-1 * var(--chapter-border-width));
         font-size: 0.95rem;
         background-color: var(--wb-section-header, var(--tertiary));
         color: var(--secondary-text);
-        border-radius: 0.4rem 0.4rem 0 0;
-        border-bottom: 1px solid
+        border: var(--chapter-border-width) solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        border-radius: 0.5rem 0.5rem 0 0;
+        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
     }
     .chapter.folded .chapter-title {
-        border-radius: 0.4rem;
-        border-bottom: none;
+        border-radius: 0.5rem;
+        box-shadow: none;
+    }
+    .chapter.categorized .chapter-title {
+        box-shadow: none;
     }
     .chapter-entries {
         display: flex;
@@ -518,6 +607,46 @@
         gap: 0.05rem;
         padding: 0.5rem;
         min-width: 0;
+    }
+    .chapter-entries.categorized {
+        padding-top: 0;
+    }
+    .category-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.05rem;
+        min-width: 0;
+    }
+    .category-group + .category-group {
+        margin-top: 0.4rem;
+    }
+    /* pinned under the Chapter's own heading while its group scrolls past, edge to edge, with a
+       rule and a shadow under it so the rows going by read as passing beneath it */
+    .category-title {
+        position: sticky;
+        top: var(--chapter-title-height, 2.2rem);
+        z-index: 1;
+        will-change: transform;
+        margin: 0 -0.5rem;
+        padding: 0.35rem 1rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--secondary-text);
+        background-color: var(--wb-section-header, var(--tertiary));
+        border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        border-bottom: 1px solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+    }
+    /* a prose entry's title, brought back into view by Show less, lands below the pinned heading */
+    .chapter :global(.prose-title) {
+        scroll-margin-top: calc(var(--chapter-title-height, 2.2rem) + 0.5rem);
+    }
+    /* a row brought into view lands below both pinned headings */
+    .category-group :global(.entry-row) {
+        scroll-margin-top: calc(var(--chapter-title-height, 2.2rem) + 1.8rem);
     }
     .chapter-toggle {
         display: flex;
@@ -552,6 +681,13 @@
     .page .chapter-title {
         top: 3.2rem;
         font-size: 1.1rem;
+    }
+    .page .category-title {
+        top: calc(3.2rem + var(--chapter-title-height, 2.6rem));
+        font-size: 0.8rem;
+    }
+    .page .category-group :global(.entry-row) {
+        scroll-margin-top: calc(3.2rem + var(--chapter-title-height, 2.6rem) + 2rem);
     }
     @media (prefers-reduced-motion: reduce) {
         .chevron {

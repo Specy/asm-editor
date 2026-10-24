@@ -2,7 +2,7 @@
 
 ASM Editor lets you write C or C++, compile it to assembly, and debug the result in your browser. Source and generated instructions appear side by side, with the simulator's registers, memory, terminal, and execution history available alongside them.
 
-The supported targets are **MIPS**, **RISC-V** (RV32), **RISC-V-64** (RV64), and **X86**. You can use the same workspace to inspect compiler output, compare optimization levels, or work on a program that combines C/C++ with assembly.
+The supported targets are **MIPS**, **RISC-V** (RV32), **RISC-V-64** (RV64), and **x86-64**. You can use the same workspace to inspect compiler output, compare optimization levels, or work on a program that combines C/C++ with assembly.
 
 ![C source linked to generated RISC-V assembly, with a game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
 

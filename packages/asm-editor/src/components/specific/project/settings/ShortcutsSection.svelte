@@ -83,7 +83,7 @@
             <div class="row" style="gap:0.3rem">
                 <Button
                     active={entry[1].id === selectedId}
-                    cssVar="secondary"
+                    cssVar="tertiary"
                     onClick={() => {
                         selectedId = entry[1].id
                     }}
@@ -107,7 +107,7 @@
                     <Button
                         hasIcon
                         style="min-height: 2.2rem"
-                        cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'secondary'}
+                        cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'tertiary'}
                         disabled={entry[0] === entry[1].defaultValue}
                         onClick={() => shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
                     >

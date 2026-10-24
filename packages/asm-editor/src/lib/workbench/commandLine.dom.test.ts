@@ -11,6 +11,9 @@ import { CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { parseCommandLine } from '#lib/commandLine.ts'
 import CommandLine from '#cmp/specific/workbench/CommandLine.svelte'
+import TerminalView from '#cmp/specific/workbench/TerminalView.svelte'
+import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import type { CommandLineState } from './WorkbenchSession.svelte'
 
@@ -43,11 +46,31 @@ function setup(data: Parameters<typeof editorGroupsFixture>[1] = {}) {
 
 describe('the Command line', () => {
     it('names an Executable by its Entry path and an assembled program without the extension', () => {
-        const { session, project } = setup()
+        const { session } = setup()
         expect(session.commandLine).toMatchObject({ program: 'crackme', text: '', locked: false })
-        project.entry = 'main.asm'
+        session.createProgram('main.asm')
         flushSync()
         expect(session.commandLine?.program).toBe('main')
+    })
+
+    it("is the Selected program's, and there is none without a Program", () => {
+        const { session, project } = setup()
+        session.setProgramArguments('hunter2')
+        session.createProgram('main.asm')
+        flushSync()
+        //each Program has its own Arguments
+        expect(session.commandLine).toMatchObject({ program: 'main', text: '' })
+        session.setProgramArguments('swordfish')
+        session.selectProgram('crackme')
+        flushSync()
+        expect(session.commandLine).toMatchObject({ program: 'crackme', text: 'hunter2' })
+        expect(project.program('main.asm')?.settings).toEqual({ programArguments: 'swordfish' })
+        session.removeProgram('crackme')
+        session.removeProgram('main.asm')
+        flushSync()
+        expect(session.commandLine).toBeUndefined()
+        session.setProgramArguments('ignored')
+        expect(project.programs).toEqual({})
     })
 
     it('names a compiled program after the source File its Generated assembly came from', () => {
@@ -125,12 +148,12 @@ describe('the Command line', () => {
         const { session, project, emulator } = setup()
         session.setProgramArguments('hunter2 "two words"')
         flushSync()
-        expect(project.settings).toEqual({ programArguments: 'hunter2 "two words"' })
+        expect(project.selected?.settings).toEqual({ programArguments: 'hunter2 "two words"' })
         expect(emulator.programArguments).toBe('hunter2 "two words"')
         expect(session.commandLine?.parsed).toEqual({ args: ['hunter2', 'two words'] })
         session.setProgramArguments('')
         flushSync()
-        expect(project.settings).toEqual({})
+        expect(project.selected?.settings).toEqual({})
         expect(session.commandLine?.text).toBe('')
     })
 
@@ -147,12 +170,12 @@ describe('the Command line', () => {
         })
         //typing is refused, and a change from the Settings panel waits for the next Build
         session.setProgramArguments('swordfish')
-        expect(project.settings.programArguments).toBe('hunter2')
+        expect(project.selected?.settings.programArguments).toBe('hunter2')
         session.applySettings({ programArguments: 'swordfish' })
         flushSync()
         expect(session.commandLine).toMatchObject({ text: 'hunter2', locked: true })
-        //so does renaming the Entry, which a Build snapshot keeps
-        project.entry = 'main.asm'
+        //so does moving the Program, which a Build snapshot keeps
+        project.renameProgram('crackme', 'main.asm')
         flushSync()
         expect(session.commandLine?.program).toBe('crackme')
 
@@ -174,7 +197,7 @@ describe('the Command line', () => {
         disposers.push(fixture.dispose)
         expect(fixture.session.commandLine?.locked).toBe(true)
         fixture.session.setProgramArguments('b')
-        expect(fixture.project.settings.programArguments).toBe('a')
+        expect(fixture.project.selected?.settings.programArguments).toBe('a')
     })
 
     it('shows a Build its Arguments stopped in the Problems until they are typed again', async () => {
@@ -274,5 +297,80 @@ describe('the Command line component', () => {
         expect(target.querySelector('[title]')?.getAttribute('title')).toContain(
             'Stop the Debug session to change it.'
         )
+    })
+})
+
+describe('a read the program waits on, below the Command line', () => {
+    /** The Terminal tab of an x86 Project during a Debug session, its Command line locked. */
+    function terminalTab() {
+        const executionController = new ExecutionController(() => {})
+        const terminal = new Terminal({ executionController })
+        const target = document.createElement('div')
+        document.body.append(target)
+        const component = mount(TerminalView, {
+            target,
+            props: {
+                terminal,
+                interactive: true,
+                commandLine: {
+                    program: 'crackme',
+                    text: 'hunter2',
+                    parsed: parseCommandLine('hunter2'),
+                    locked: true
+                }
+            }
+        })
+        flushSync()
+        disposers.push(() => {
+            terminal.cancelPendingInput()
+            unmount(component)
+            target.remove()
+        })
+        return {
+            terminal,
+            execution: executionController.capture(),
+            arguments: target.querySelector('input')!,
+            console: target.querySelector('textarea')!,
+            ring: () =>
+                target.querySelector('.terminal-console')!.classList.contains('awaiting-input')
+        }
+    }
+
+    it('takes the keyboard from the locked Command line, the console ringed to say where to type', () => {
+        //a tester typed the answer into the Arguments, which no one can type in during the session
+        //(reverse-engineering-ux.md, decision 12)
+        const tab = terminalTab()
+        expect(tab.arguments.readOnly).toBe(true)
+        tab.arguments.focus()
+        void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(tab.console)
+        expect(tab.ring()).toBe(true)
+    })
+
+    it('leaves the keyboard in a field someone can type in', () => {
+        const tab = terminalTab()
+        const filter = document.createElement('input')
+        document.body.append(filter)
+        disposers.push(() => filter.remove())
+        filter.focus()
+        void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(filter)
+        expect(tab.ring()).toBe(true)
+    })
+
+    it('takes the keyboard from a Listing or a Pseudocode, as from any code', () => {
+        const tab = terminalTab()
+        const editor = document.createElement('div')
+        editor.className = 'monaco-editor'
+        const text = document.createElement('textarea')
+        editor.append(text)
+        document.body.append(editor)
+        disposers.push(() => editor.remove())
+        text.focus()
+        void tab.terminal.readAsync('Password: ', tab.execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(tab.console)
     })
 })

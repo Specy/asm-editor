@@ -16,7 +16,7 @@ export function makeProjectFromExecutable(
             language: 'X86',
             name,
             files: { [name]: bytesFile(bytes) },
-            entry: name
+            programs: { [name]: { settings: {}, testcases: [] } }
         })
     }
 }

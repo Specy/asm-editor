@@ -31,9 +31,13 @@ import {
     MARS_TRANSMITTER_DATA
 } from '#lib/languages/mars/MarsDevices.ts'
 import {
+    DISPLAY_SIZE_MAX,
+    DISPLAY_SIZE_MIN,
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
-    MARS_UNIT_SIZE_CHOICES
+    MARS_UNIT_SIZE_CHOICES,
+    UNIT_SIZE_MAX,
+    UNIT_SIZE_MIN
 } from '#lib/languages/mars/marsDisplay.ts'
 import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
 import { makeRiscVCore } from '#lib/languages/RISC-V/RISC-V-core.ts'
@@ -53,6 +57,18 @@ import { parseRuntimeSourcePath } from './runtimeLibrary'
  * the device constants and the Cores.
  */
 
+import {
+    SYNTH_BASES,
+    SYNTH_CHANNEL_COUNT,
+    SYNTH_CHANNEL_REGISTERS,
+    SYNTH_CHANNEL_SIZE,
+    SYNTH_GATE,
+    SYNTH_LOOP,
+    SYNTH_UPLOAD_REGISTERS,
+    SYNTH_WAVEFORMS,
+    SYNTH_WAVETABLE_SIZE,
+    SYNTH_WAVETABLES
+} from '#lib/languages/synthRegisters.ts'
 const address = (label: string) =>
     MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label)!.address
 const DATA: Omit<SimHeaderData, 'syscalls'> = {
@@ -66,8 +82,24 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
     display: {
         sizes: MARS_DISPLAY_SIZE_CHOICES,
         units: MARS_UNIT_SIZE_CHOICES,
+        sizeMin: DISPLAY_SIZE_MIN,
+        sizeMax: DISPLAY_SIZE_MAX,
+        unitMin: UNIT_SIZE_MIN,
+        unitMax: UNIT_SIZE_MAX,
         staticData: address('static data'),
         staticDataEnd: 0x10400000
+    },
+    synth: {
+        base: SYNTH_BASES.mips,
+        channelCount: SYNTH_CHANNEL_COUNT,
+        channelSize: SYNTH_CHANNEL_SIZE,
+        channelRegisters: SYNTH_CHANNEL_REGISTERS,
+        uploadRegisters: SYNTH_UPLOAD_REGISTERS,
+        waveforms: SYNTH_WAVEFORMS,
+        wavetables: SYNTH_WAVETABLES,
+        wavetableSize: SYNTH_WAVETABLE_SIZE,
+        gate: SYNTH_GATE,
+        loop: SYNTH_LOOP
     }
 }
 const TARGETS = Object.keys(SIM_HEADER_TARGETS) as SimHeaderTargetName[]
@@ -181,6 +213,9 @@ describe.each(TARGETS)('<sim.h> for %s', (target) => {
 
     it('caps SIM_SCREEN at the static data the Cores have room for', () => {
         expect(text).toContain('* 4 <= 4128768, \\')
+        //any size the display takes, not only the ones MARS's and RARS's tool lists
+        expect(text).toContain('(width) >= 1 && (width) <= 1024')
+        expect(text).toContain('(unit) >= 1 && (unit) <= 32')
         expect(text).toContain('# @screen width=')
         expect(text).toContain('#ifdef __cplusplus\n#define __SIM_STATIC_ASSERT static_assert')
     })
@@ -219,11 +254,11 @@ describe('<sim.h> for x86_64', () => {
             const [index] = definitions
             const attribute = binding.noreturn ? '__attribute__((__noreturn__)) ' : ''
             expect(lines[index]).toBe(`static inline ${attribute}${x86SimPrototype(binding)} {`)
-            //its doc comment names the call and its number, then the Documentation's description
+            //its doc comment names the call and its number, then the Documentation's description on one line
             const comment = lines[index - 1]
             expect(comment).toMatch(/^\/\*\* .* \*\/$/)
             expect(comment).toContain(`/** ${syscall.name}, syscall ${syscall.number}.`)
-            expect(comment).toContain(describeX86Syscall(syscall.name))
+            expect(comment).toContain(describeX86Syscall(syscall.name).replace(/\s+/g, ' ').trim())
             //the number in rax, each argument in its register, one syscall naming them all
             const body = lines.slice(index + 1, lines.indexOf('}', index))
             expect(body[0]).toBe(`    register long rax __asm__("rax") = ${syscall.number};`)

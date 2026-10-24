@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { extractPlaygrounds } from '#lib/content/playgrounds.ts'
 import { createEmulator } from '#lib/languages/Emulator.ts'
 import { makeProject } from '#lib/Project.svelte.ts'
-import { projectBuildSources } from '#lib/buildSources.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
 import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
 import { compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { loadDecoder } from '#lib/listing/decoder.ts'
@@ -40,13 +40,13 @@ describe('blog worked examples', () => {
                         async () => new Response(JSON.stringify(fixture.response))
                     )
             })
-            const emulator = await createEmulator('MIPS', projectBuildSources(project), {
+            const emulator = await createEmulator('MIPS', programBuildSources(project), {
                 language: 'MIPS',
                 automaticChecking: false
             })
             try {
                 const results = await emulator.test(
-                    projectBuildSources(project),
+                    programBuildSources(project),
                     [
                         {
                             input: [],
@@ -138,13 +138,13 @@ describe('blog worked examples', () => {
                 entry: 'first-branch',
                 files: { 'first-branch': { encoding: 'base64', content: bytes.toString('base64') } }
             })
-            const emulator = await createEmulator('X86', projectBuildSources(project), {
+            const emulator = await createEmulator('X86', programBuildSources(project), {
                 language: 'X86',
                 automaticChecking: false
             })
             try {
                 const results = await emulator.test(
-                    projectBuildSources(project),
+                    programBuildSources(project),
                     [
                         {
                             input: [input],

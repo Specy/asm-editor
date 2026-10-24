@@ -10,7 +10,10 @@ import { formatTime } from '#lib/utils.ts'
  *   MARS and RARS do from their 4.0.0 Cores.
  * - `end`: it ran past its last instruction (MARS's and RARS's "dropped off bottom", the Z80's
  *   cliff), or the Core says only that it is over.
- * - `signal`: a Linux signal ended it, named as a shell names it: `Segmentation fault`.
+ * - `signal`: a Linux signal ended it, named as a shell names it: `Segmentation fault`. When the
+ *   signal says only that the emulator cannot run what a real processor would, `unsupported` says
+ *   that in its place: "stopped: AVX-512 isn't supported yet" for SIGILL on an AVX-512 (EVEX)
+ *   instruction.
  * - `error`: a runtime error ended it. A Core reports one by throwing, so `GenericEmulator` records
  *   it from what was thrown, never an adapter.
  *
@@ -19,7 +22,13 @@ import { formatTime } from '#lib/utils.ts'
 export type Termination =
     | { kind: 'exit'; code?: number }
     | { kind: 'end' }
-    | { kind: 'signal'; number: number; name: string; description: string }
+    | {
+          kind: 'signal'
+          number: number
+          name: string
+          description: string
+          unsupported?: string
+      }
     | { kind: 'error'; message: string }
 
 export type TerminationWordingOptions = {
@@ -33,7 +42,7 @@ export type TerminationWordingOptions = {
 /**
  * How the program ended, as one clause the Log, the info lines and the coding agent share:
  * "exited with code 3", "exited", "ran past its last instruction", "Segmentation fault (signal
- * 11)", "stopped by an error: …".
+ * 11)", "stopped: AVX-512 isn't supported yet", "stopped by an error: …".
  */
 export function describeTermination(
     termination: Termination,
@@ -47,7 +56,10 @@ export function describeTermination(
         case 'end':
             return 'ran past its last instruction'
         case 'signal':
-            return `${termination.description} (signal ${termination.number})`
+            return (
+                termination.unsupported ??
+                `${termination.description} (signal ${termination.number})`
+            )
         case 'error':
             return options.errorMessage === false
                 ? 'stopped by an error'

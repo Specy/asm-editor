@@ -72,8 +72,10 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
+    assembledCore,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
+    resolveScreenLabel,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '#lib/languages/mars/screenDirective.ts'
@@ -109,7 +111,9 @@ export {
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
  * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
- * history: about 5 400. The earlier estimate of 2 800 was taken while the Core kept the program
+ * history: about 4 800 (`npm run measure`, three runs of 4 700 to 5 000, after the undo recorder
+ * stopped counting in longs; the harness measured about 1 600 on the same loop before that). The
+ * estimate of 2 800 before that was taken while the Core kept the program
  * counter in a long Register and added one to the cycle and instret counters on every instruction -
  * TeaVM compiles long arithmetic into BigInt operations, each of which allocates - read the
  * self-modifying-code setting out of a map on every instruction fetch, fetched through four calls
@@ -124,11 +128,11 @@ export {
  * and exit calls on a Core that is single threaded; and the two counters recorded an undo entry
  * each, where one entry covers both.
  */
-const RISCV_INSTRUCTIONS_PER_MS = 5_432
+const RISCV_INSTRUCTIONS_PER_MS = 4_800
 
 /**
- * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
- * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). Four
+ * How much wall time one `simulate*` call aims at, which is also about how far a chunk can carry the
+ * slice past its deadline before the next check (`marsSlice.ts`). Four
  * milliseconds is about twenty thousand instructions of this Core's compute and a dozen calls in a
  * compute slice: the Core spends under a fifth of a microsecond on each instruction, so a chunk
  * that large hides the call.
@@ -152,7 +156,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * like the devices and registered on each freshly assembled Core.
      */
     private readonly handlers: MarsHandlers
-    /** The chunking of a slice, which is what keeps a sleeping program's slice short (`marsSlice.ts`). */
+    /** The chunking of a slice, which is what keeps it near its deadline (`marsSlice.ts`). */
     private readonly pacer = new MarsSlicePacer(RISCV_CHUNK_TARGET_MS)
     /** RARS's five display parameters, from the project and changed from the Screen panel. */
     private display: ProjectDisplay
@@ -168,6 +172,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
+    /** Whether a slice is running the Core, which is when a sleep ends the call (`pauseAtSleep`). */
+    private slicing = false
     /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
     private programArgv: string[] = []
 
@@ -198,7 +204,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         this.devices = new MarsDevices({
             screen: this._peripherals.screen,
             keyboard: this._peripherals.keyboard,
-            terminal: this._peripherals.terminal
+            terminal: this._peripherals.terminal,
+            audio: () => this._peripherals.audio
         })
         this.devices.setDisplay(this.display)
         this.handlers = new MarsHandlers({
@@ -210,6 +217,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 this.state.interrupt = interrupt
                 //RARS advances PC before invoking the ecall's asynchronous handler.
                 if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
+            },
+            pauseAtSleep: () => {
+                if (this.slicing) this.riscv?.pause()
             },
             fileSystem: () => this.fileSystemSession,
             instructionSerial: () => this.requireRiscV().getCurrentInstructionSerial()
@@ -361,9 +371,6 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _checkCode(sources: BuildSources): Diagnostic[] {
         //the bitness decides which instructions assemble (`ld` is RV64 only), so pin the module
         //global before creating the throwaway instance, exactly like `_compile` does
-        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
-        //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(sources).diagnostics
         RISCV.setIs64Bit(this.is64Bit)
         const files = textAssemblyFiles(sources)
         const riscv = makeRiscVCore(
@@ -375,6 +382,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
+        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
+        //is being typed and does not vanish half a second after a Build replaces this list; read
+        //last, since a name only a probe resolves assembles another Core over this one
+        const directive = this.readScreenDirective(
+            sources,
+            assembledCore(riscv, result)
+        ).diagnostics
         return this.withRuntimeHints(sources, [
             ...directive,
             ...includedScreenDiagnostics(files, sources.entry, lines),
@@ -384,34 +398,24 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.riscv = null
-        //before the Core is built, so the first instruction and a Testcase alike run on the display
-        //the source asked for; the label probe assembles a throwaway Core, which the real assembly
-        //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(sources)
+        const files = textAssemblyFiles(sources)
+        let { riscv, result } = this.assembleProgram(sources, files, undoSize)
+        //before the first instruction, so it and a Testcase alike run on the display the source
+        //asked for, its base label read from this assembly. A name only the probe resolves
+        //assembles a throwaway Core over the state every Core shares, so the program is assembled
+        //again after it
+        let probed = false
+        const configured = this.readScreenDirective(sources, assembledCore(riscv, result), () => {
+            probed = true
+        })
+        if (probed) ({ riscv, result } = this.assembleProgram(sources, files, undoSize))
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
         //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
-        //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
+        //a re-sync here would repaint the Screen `clear()` has just blanked with the program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        //creation + assembly is synchronous, so pinning the module global here cannot be
-        //interleaved with another instance's creation
-        RISCV.setIs64Bit(this.is64Bit)
-        const files = textAssemblyFiles(sources)
-        const riscv = makeRiscVCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
-        //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
-        //stored by every `initialize`, a Testcase's included, before its starting registers
-        riscv.setProgramArguments(this.programArgv)
-        const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
         const diagnostics = this.withRuntimeHints(sources, [
@@ -429,8 +433,31 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             }
         }
         this.riscv = riscv
-        this._buildLibraryFiles = this.libraryFiles(sources, riscv)
-        return { ok: true, diagnostics }
+        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, riscv) }
+    }
+
+    /** A Core for the program, assembled for a Build. */
+    private assembleProgram(
+        sources: BuildSources,
+        files: Record<string, string>,
+        undoSize: number
+    ) {
+        //creation + assembly is synchronous, so pinning the module global here cannot be
+        //interleaved with another instance's creation
+        RISCV.setIs64Bit(this.is64Bit)
+        const riscv = makeRiscVCore(
+            files,
+            sources.entry,
+            buildAssemblerProfile(sources),
+            this.runtimeLink(sources)
+        )
+        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
+        //the size has to be set *before* assembling: setting it afterwards would only size the next
+        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
+        riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //stored by every `initialize`, a Testcase's included, before its starting registers
+        riscv.setProgramArguments(this.programArgv)
+        return { riscv, result: riscv.assemble() }
     }
 
     /**
@@ -471,6 +498,16 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         registerHandlers(riscv, this.handlers.makeHandlerMap())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
         this.devices.attach(riscv, this.display)
+        //what an instruction does to the Terminal, a handler's or a device's, is journaled under the
+        //serial its Undo group carries ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
+        const instruction = () => {
+            const serial = riscv.getCurrentInstructionSerial()
+            return serial === null ? null : BigInt(serial)
+        }
+        this._peripherals.terminal.trackHistory(instruction, normalizeUndoSize(undoSize))
+        //and so are the Notes it plays
+        //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
+        this._peripherals.audio.track(instruction, normalizeUndoSize(undoSize))
     }
 
     _dispose(): void {
@@ -491,15 +528,26 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
-     * What the program's `@screen` comment asks for, on top of the display the Screen has now.
+     * What the program's `@screen` comment asks for, on top of the display the Screen has now, its
+     * base label read from `assembled`, the program's Core when it assembled; `onProbe` is told
+     * when that took a probe, which assembles a Core of its own.
      *
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(sources: BuildSources) {
+    private readScreenDirective(
+        sources: BuildSources,
+        assembled: JsRiscV | null,
+        onProbe?: () => void
+    ) {
         const code = sourceText(sources)
         const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(sources, label)
+            resolveScreenLabel(assembled, label, () => {
+                //the GNU profile's symbol table is all its probe ever read
+                if (sources.assemblerProfile === 'gnu-compiler-v1') return null
+                onProbe?.()
+                return this.probeLabelAddress(sources, label)
+            })
         )
         return {
             ...configured,
@@ -511,19 +559,16 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
-     * The address a `@screen base=<label>` names. The Core has no lookup by name — `getLabelAtAddress`
-     * only goes the other way — so the program is assembled once more with one extra `.word <label>`
-     * at a fixed address and that word is read back: the assembler itself resolves the name, which is
-     * what makes `.eqv` names, forward references and text labels all work.
+     * The address of a `@screen base=` name the program's symbol table does not hold, such as an
+     * `.eqv` name: the program is assembled once more with one extra `.word <name>` at a fixed
+     * address and that word is read back, since the assembler itself resolves the name in it.
      */
-    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
+    private probeLabelAddress(sources: BuildSources, label: string): number | null {
         try {
             RISCV.setIs64Bit(this.is64Bit)
             const probeSources = updateEntryText(
                 sources,
-                sources.assemblerProfile === 'gnu-compiler-v1'
-                    ? sourceText(sources)
-                    : screenLabelProbeSource(sourceText(sources), label)
+                screenLabelProbeSource(sourceText(sources), label)
             )
             const probe = makeRiscVCore(
                 textAssemblyFiles(probeSources),
@@ -532,12 +577,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
-            //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
-            if (sources.assemblerProfile === 'gnu-compiler-v1') {
-                const address = probe.getAddressOfLabel(label)
-                return address === -1 ? null : address >>> 0
-            }
             return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
         } catch {
             return null
@@ -983,30 +1023,34 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _undo(): void {
         const riscv = this.requireRiscV()
         const group = riscv.getUndoGroupsUpTo(1)[0]
-        //the FileSystem session keys its frames by the instruction serial, and a Poke has no
-        //instruction identity to undo file operations by, so it is rolled back by the Core alone
-        //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
+        //the FileSystem session and the Terminal key their records by the instruction serial, and a
+        //Poke has no instruction identity to undo their changes by, so it is rolled back by the Core
+        //alone ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
         const serial = group?.kind === 'instruction' ? group.serial : undefined
         if (serial !== undefined && !(this.fileSystemSession?.canUndoAfter(serial) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
         //an exit and a failure were the newest things the program did, so they are the first
         //undone: the Core puts the exit back itself
-        riscv.undo()
+        this.devices.rewind(() => riscv.undo())
         this.failedAt = null
-        if (serial !== undefined) this.fileSystemSession?.undoAfter(serial)
+        const readSynth = () => this.devices.readSynthBlock()
+        if (serial === undefined) return this._peripherals.audio.resyncSynth(readSynth)
+        this.fileSystemSession?.undoAfter(serial)
+        this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
+        this._peripherals.audio.undoAfter(BigInt(serial) - 1n, readSynth)
     }
 
     /**
      * The Core stops for input by leaving the pending `simulate*` promise unsettled, and serves a
-     * `sleep` the same way, so both are served inside the slice and only the budget, a breakpoint
-     * or the end of the program end one. The budget is spent in chunks by the pacer, which is what
-     * keeps the slice of a sleeping program, and the pause it holds off, to about one sleep
-     * (`marsSlice.ts`). The Core names its stop reason but reports no instruction count, so a chunk
-     * that came back runnable ran its whole limit.
+     * `sleep` the same way. A read is served inside the slice; a sleep ends it, through the handler's
+     * `pauseAtSleep`, so the slice ends where the program's frame does and the next one starts on a
+     * fresh frame. The budget is spent in chunks by the pacer, which keeps a slice near its deadline
+     * (`marsSlice.ts`), and every chunk is charged what the Core says it executed.
      *
      * The bitmap display catches up once per slice rather than once per stored word, which is what
-     * keeps the observer cheap; a program that sleeps flushes from the handler too.
+     * keeps the observer cheap; a program that sleeps or waits for input flushes from the handler
+     * too.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const riscv = this.requireRiscV()
@@ -1014,18 +1058,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         if (riscv.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(riscv, request.breakpoints)
         this.handlers.beginExecution()
-        return this.coreCall(() =>
-            this.pacer.run(
-                request,
-                RISCV_INSTRUCTIONS_PER_MS,
-                this._peripherals.clock,
-                async (limit) => {
+        this.slicing = true
+        try {
+            return await this.coreCall(() =>
+                this.pacer.run(request, RISCV_INSTRUCTIONS_PER_MS, async (limit) => {
                     const stop = await riscv.simulateWithBreakpointsAndLimit(breakpoints, limit)
-                    if (endsProgram(stop)) return 'terminated'
-                    return stop === StopReason.BREAKPOINT ? 'breakpoint' : 'ran'
-                }
+                    const instructions = riscv.getLastRunInstructionCount()
+                    if (endsProgram(stop)) return { outcome: 'terminated', instructions }
+                    if (stop === StopReason.BREAKPOINT)
+                        return { outcome: 'breakpoint', instructions }
+                    return { outcome: stop === StopReason.PAUSE ? 'paused' : 'ran', instructions }
+                })
             )
-        )
+        } finally {
+            this.slicing = false
+        }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

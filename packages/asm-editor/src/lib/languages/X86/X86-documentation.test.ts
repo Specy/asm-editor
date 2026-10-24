@@ -18,7 +18,6 @@ import {
     X86_SYSCALLS,
     describeX86Instruction,
     describeX86Syscall,
-    formatX86InstructionSummary,
     hasX86Description,
     hasX86InstructionPage,
     x86DocumentedNames,
@@ -95,7 +94,8 @@ describe('the generated instruction table', () => {
 
 describe('descriptions', () => {
     it('takes the condition families from the entry that documents them', () => {
-        expect(describeX86Instruction('jnz')).toContain('conditional jump')
+        expect(describeX86Instruction('jnz')).toMatch(/conditional jumps?/i)
+        expect(describeX86Instruction('jnz')).toBe(describeX86Instruction('jne'))
         expect(describeX86Instruction('setne')).toContain('condition')
     })
 
@@ -103,13 +103,16 @@ describe('descriptions', () => {
         // `Jcc` expands over the condition list, so it can reach `jz` and never `jmp` or `jecxz`,
         // both of which are their own instructions with their own entries.
         expect(describeX86Instruction('jmp')).not.toContain('conditional jump')
-        expect(describeX86Instruction('jecxz')).toContain('CX')
-        expect(describeX86Instruction('movsb')).toContain('copies the byte')
+        expect(describeX86Instruction('jecxz')).toContain('`ecx`')
+        expect(describeX86Instruction('movsb')).toMatch(/copies.*\[rsi\].*\[rdi\]/i)
     })
 
-    it('follows the size suffix aliases', () => {
+    it('shares return aliases while keeping string element widths distinct', () => {
         expect(describeX86Instruction('retq')).toBe(describeX86Instruction('ret'))
-        expect(describeX86Instruction('stosq')).toBe(describeX86Instruction('stosb'))
+        expect(describeX86Instruction('stosq')).toContain('`rax`')
+        expect(describeX86Instruction('stosq')).toContain('8 bytes')
+        expect(describeX86Instruction('stosb')).toContain('`al`')
+        expect(describeX86Instruction('stosb')).toContain('1 byte')
         expect(describeX86Instruction('pushf')).toContain('flags')
     })
 
@@ -117,7 +120,7 @@ describe('descriptions', () => {
         const syscall = describeX86Instruction('syscall')
         expect(syscall).toContain('rax')
         expect(syscall).toContain('/documentation/x86/syscall')
-        expect(describeX86Instruction('movabs')).toContain('64 bit immediate')
+        expect(describeX86Instruction('movabs')).toContain('64-bit immediate')
     })
 
     it('falls back to the summary, and says so', () => {
@@ -125,12 +128,6 @@ describe('descriptions', () => {
         expect(describeX86Instruction('vpmovm2b').length).toBeGreaterThan(0)
         expect(hasX86Description('vpmovm2b')).toBe(false)
         expect(hasX86Description('add')).toBe(true)
-    })
-
-    it('summarises the operand shapes', () => {
-        const summary = formatX86InstructionSummary(x86InstructionMap.get('lea')!)
-        expect(summary).toContain('lea reg64, mem')
-        expect(summary.split(' | ').length).toBe(x86InstructionMap.get('lea')!.forms.length)
     })
 })
 
@@ -187,9 +184,11 @@ describe('condition codes', () => {
 })
 
 describe('the register files', () => {
-    it('describes the two the registers panel shows beside the general registers', () => {
-        expect(X86_DOCUMENTED_REGISTER_FILES.map((file) => file.id)).toEqual(['sse', 'x87'])
-        const [sse, x87] = X86_DOCUMENTED_REGISTER_FILES
+    it('describes the three the registers panel shows beside the general registers', () => {
+        expect(X86_DOCUMENTED_REGISTER_FILES.map((file) => file.id)).toEqual(['sse', 'avx', 'x87'])
+        const [sse, avx, x87] = X86_DOCUMENTED_REGISTER_FILES
+        expect(avx.registers.map((register) => register.name)).toEqual(['ymm0 to ymm15'])
+        expect(avx.registers.map((register) => register.bits)).toEqual([256])
         expect(sse.registers.map((register) => register.name)).toEqual(['xmm0 to xmm15', 'mxcsr'])
         expect(x87.registers.map((register) => register.name)).toEqual([
             'st0 to st7',

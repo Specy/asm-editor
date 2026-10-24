@@ -1,14 +1,23 @@
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
+import { debugName, memoryLabelName, type DebugName } from '#lib/languages/demangle/debugNames.ts'
+import type { Describe } from '#lib/languages/demangle/demangledNames.ts'
+import {
+    loadDemangler,
+    loadedDemangler,
+    needsDemangler
+} from '#lib/languages/demangle/loadDemangler.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
-import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
-import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { loadDecoder, type DecodedInstruction, type ListingDecoder } from '#lib/listing/decoder.ts'
+import { byteEditsKey, fileBytes, type Annotations, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     functionAtLine,
     instructionAddressAt,
     lineOfAddress,
-    type Listing
+    type Listing,
+    type ListingFunction
 } from '#lib/listing/listing.ts'
 import { listingClient } from '#lib/listing/listingClient.ts'
+import { ListingIndex } from '#lib/listing/listingNavigation.ts'
 import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
 import { ListingPatcher } from '#lib/listing/listingPatcher.svelte.ts'
 import {
@@ -18,6 +27,7 @@ import {
 } from '#lib/listing/listingPaths.ts'
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
+    BuildDownloadError,
     EmulatorStatus,
     type CompileResult,
     type Instruction
@@ -25,11 +35,13 @@ import {
 import {
     type ArgumentsArea,
     type BuildArtifact,
+    type DataLabel,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
     isLineBreakpoint,
+    type LibraryStretch,
     type MutationOperation,
     type PokeWrite,
     type RegisterFileDescriptor,
@@ -52,10 +64,12 @@ import {
     decodeFpuState,
     locateDiagnosticSpan,
     readLogicalStTags,
+    ResourceDownloadError,
     EmulatorStatus as CoreEmulatorStatus,
     RegisterSize as CoreRegisterSize,
     X86_REGISTER_NAMES,
     X86_SSE_REGISTERS,
+    X86_YMM_REGISTERS,
     X86_X87_REGISTERS,
     type ExecutionStep as CoreExecutionStep,
     type MonacoError as CoreMonacoError,
@@ -66,6 +80,7 @@ import {
     type X86Emulator as CoreX86Emulator,
     type X86FpuState,
     type X86LoadedObject,
+    type X86Progress,
     type X86WaitRequest,
     type X86RegisterName
 } from '@specy/x86'
@@ -85,7 +100,10 @@ import {
     x86CoreProject,
     X86_START_UNIT_FILES
 } from './x86StartUnit'
+import { downloadReason } from './x86Downloads'
 import type { Termination } from '#lib/languages/termination.ts'
+import { X86_INSTRUCTIONS } from './generated/x86Instructions'
+import { x86FormSupport } from './x86Support'
 
 /**
  * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with
@@ -124,6 +142,15 @@ const X86_REGISTER_FILES: RegisterFileDescriptor[] = [
         ]
     },
     {
+        //the upper halves of these are the only part not already in the SSE file, but a row reads
+        //as one 256 bit value because that is what a 256 bit instruction wrote
+        id: 'avx',
+        label: 'AVX',
+        size: RegisterSize.Oct,
+        formats: ['double', 'single', 'hex'],
+        registers: Array.from({ length: 16 }, (_, i) => ({ name: `ymm${i}` }))
+    },
+    {
         id: 'x87',
         label: 'x87',
         //Blink keeps the stack as 64 bit doubles rather than as 80 bit extended values, so a row is
@@ -153,8 +180,119 @@ export const DEFAULT_X86_FLAGS = [
 /** Linux's signal for an instruction the processor cannot run. */
 const SIGILL = 4
 
+/** The longest an x86 instruction can be, prefixes included. */
+const MAX_INSTRUCTION_LENGTH = 15n
+
 /** Instructions whose only purpose is to raise SIGILL, which a real processor raises too. */
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
+
+/**
+ * What the run's status says of a program that ended on an instruction of an extension the Core
+ * does not run, in place of "Illegal instruction"
+ * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
+ * 1), for the family a reader knows it by: "stopped: AVX-512 isn't supported yet". A real
+ * processor with that extension would run it.
+ */
+function unsupportedText(family: string): string {
+    // `the SHA extensions` and `SM3 and SM4` are plurals
+    const plural = family.startsWith('the ') || family.includes(' and ')
+    return `stopped: ${family} ${plural ? "aren't" : "isn't"} supported yet`
+}
+
+/**
+ * The instructions of a family the Core does not run, as the Log's note names them: "AVX-512
+ * instructions", "the SHA extensions".
+ */
+function unsupportedInstructions(family: string): string {
+    // `the SHA extensions` already says what they are
+    return family.startsWith('the ') ? family : `${family} instructions`
+}
+
+/** The prefixes a VEX or EVEX prefix may follow: the segment overrides and the address size. */
+const PREFIXES_BEFORE_VEX = new Set([0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x67])
+
+/** The prefixes REX2 may follow: any legacy prefix, the operand size, `lock` and `rep` too. */
+const PREFIXES_BEFORE_REX2 = new Set([...PREFIXES_BEFORE_VEX, 0x66, 0xf0, 0xf2, 0xf3])
+
+/** The EVEX map of the legacy instructions APX extends, `push2` and `pop2` among them. */
+const APX_EVEX_MAP = 4
+
+/** The families only an EVEX or REX2 instruction can belong to. */
+const EVEX_FAMILIES = new Set(['AVX-512', 'AVX10', 'APX'])
+
+/** The widest of `xmm`, `ymm` and `zmm`, by the letters their names begin with: 0 for none. */
+function vectorWidth(letters: readonly string[]): number {
+    return Math.max(0, ...letters.map((letter) => ['x', 'y', 'z'].indexOf(letter) + 1))
+}
+
+/** The widest vector register a decoded instruction names, as {@link vectorWidth} counts. */
+function decodedVectorWidth(decoded: DecodedInstruction): number {
+    return vectorWidth([...decoded.text.matchAll(/\b([xyz])mm\d+\b/g)].map((match) => match[1]))
+}
+
+/** The widest vector register a form names, as {@link vectorWidth} counts. */
+function formVectorWidth(operands: readonly string[]): number {
+    return vectorWidth(operands.map((operand) => /^([xyz])mmreg/.exec(operand)?.[1] ?? ''))
+}
+
+/**
+ * The extension of an instruction the Core stopped at with SIGILL, when it is one the Core does not
+ * run, from its bytes in 64-bit mode, after its prefixes:
+ *
+ * - `62` (EVEX, `bound` outside 64-bit mode): APX in map 4, where APX puts the legacy instructions
+ *   it extends, and AVX-512 (or AVX10, its successor) in any other.
+ * - `D5` (REX2, `aad` outside 64-bit mode): APX.
+ * - `C4` or `C5` (VEX, `les` and `lds` outside 64-bit mode): whatever the decoded mnemonic's forms
+ *   of the same vector width need, when that is one extension: `vaesenc ymm0, …` is VAES,
+ *   `vaesenc xmm0, …` the AES the Core runs. A VEX instruction the Core refuses can belong to an
+ *   extension it does not run (VAES, GFNI, the AVX-512 mask instructions) or be an encoding no
+ *   processor accepts; it is named only in the first case.
+ *
+ * Any other instruction is `undefined`, and keeps the signal.
+ */
+function unsupportedFamily(
+    bytes: Uint8Array,
+    decoded: DecodedInstruction | undefined
+): string | undefined {
+    const first = bytes.findIndex((byte) => !PREFIXES_BEFORE_VEX.has(byte))
+    if (bytes[first] === 0x62) {
+        // the payload's low three bits are the map
+        return (bytes[first + 1] & 0x07) === APX_EVEX_MAP ? 'APX' : 'AVX-512'
+    }
+    if (bytes.find((byte) => !PREFIXES_BEFORE_REX2.has(byte)) === 0xd5) return 'APX'
+    if (bytes[first] !== 0xc4 && bytes[first] !== 0xc5) return undefined
+    if (!decoded || decoded.isInvalid) return undefined
+    const instruction = X86_INSTRUCTIONS.find(({ name }) => name === decoded.mnemonic)
+    if (!instruction) return undefined
+    const width = decodedVectorWidth(decoded)
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and read here; nothing tracks it.
+    const families = new Set<string>()
+    for (const form of instruction.forms) {
+        if (formVectorWidth(form.operands) !== width) continue
+        const support = x86FormSupport(instruction.name, form)
+        // a form of that width the Core runs leaves nothing to say why this one did not
+        if (support === 'runs') return undefined
+        if (support === 'unknown' || support.kind !== 'family') continue
+        // AVX-512 is VEX only in its mask instructions, which name no vector register
+        if (width > 0 && EVEX_FAMILIES.has(support.family)) continue
+        families.add(support.family)
+    }
+    return families.size === 1 ? [...families][0] : undefined
+}
+
+/** What the dock says while a Build waits on each of the Core's phases. */
+function buildPhaseText(progress: X86Progress): string {
+    switch (progress.phase) {
+        case 'download':
+            return `Downloading ${progress.resource}…`
+        case 'assemble':
+            return 'Assembling…'
+        case 'link':
+            return 'Linking…'
+        case 'load':
+            return 'Loading the program…'
+    }
+}
 
 export async function X86Emulator(source: BuildInput, options: EmulatorSettings = {}) {
     let wrapper: AsmEditorX86Emulator | null = null
@@ -343,31 +481,58 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * A program that ended on an instruction the Core cannot run, which a real processor would
-     * (AVX and later, most often): SIGILL at an address whose bytes decode as an instruction. An
+     * (AVX-512 and later, most often): SIGILL at an address whose bytes decode as an instruction. An
      * undefined instruction (`ud2`) raises SIGILL on any processor, and bytes that are no
-     * instruction at all are the program's own fault; the Log says nothing more about either.
+     * instruction at all are the program's own fault; the Log says nothing more about either. An
+     * instruction of an extension the Core does not run is named with what the run's status says
+     * of it, and nothing more.
      */
     _terminationNotes(): { tone: 'warning'; text: string }[] {
+        const illegal = this.illegalInstruction()
+        const decoded = illegal?.decoded
+        if (!illegal || !decoded || decoded.isInvalid) return []
+        if (UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
+        const stopped = `The program stopped at \`${decoded.text}\` (\`0x${illegal.address.toString(16)}\`)`
+        const family = unsupportedFamily(illegal.bytes, decoded)
+        return [
+            {
+                tone: 'warning',
+                text: family
+                    ? `${stopped}: this emulator doesn't support ${unsupportedInstructions(family)} yet.`
+                    : `${stopped}: this emulator can't run that instruction.`
+            }
+        ]
+    }
+
+    /**
+     * The instruction a program that ended on SIGILL stopped at, the bytes from its address on,
+     * and what the decoder reads in them when it has loaded. The bytes are the longest an
+     * instruction can be where they are mapped: the Core gives an instruction its decoder does not
+     * know, APX's among them, a single byte, and the encoding is in the bytes after it.
+     */
+    private illegalInstruction():
+        | { address: bigint; bytes: Uint8Array; decoded: DecodedInstruction | undefined }
+        | undefined {
         const core = this.core
         const reason = core?.stopReason
         if (
             !core ||
-            !this.decoder ||
             reason?.kind !== 'signal' ||
             reason.signal?.number !== SIGILL ||
             reason.address === undefined
         )
-            return []
-        const read = core.getInstructionAt(reason.address)
-        if (!read?.bytes) return []
-        const [decoded] = this.decoder.disassemble(read.bytes, reason.address)
-        if (!decoded || decoded.isInvalid || UNDEFINED_INSTRUCTIONS.has(decoded.mnemonic)) return []
-        return [
-            {
-                tone: 'warning',
-                text: `The program ran \`${decoded.text}\` at \`0x${reason.address.toString(16)}\`, which the emulator does not support`
-            }
-        ]
+            return undefined
+        const { address } = reason
+        let bytes: Uint8Array | undefined
+        try {
+            bytes = core.readMemoryBytes(address, MAX_INSTRUCTION_LENGTH)
+        } catch {
+            //the instruction ends near the end of what is mapped
+            bytes = core.getInstructionAt(address)?.bytes
+        }
+        if (!bytes) return undefined
+        const [decoded] = this.decoder?.disassemble(bytes, address) ?? []
+        return { address, bytes, decoded }
     }
 
     /**
@@ -387,9 +552,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core ?? null
     }
 
-    async compile(historySize: number, sourceOverride?: BuildInput): Promise<void> {
+    async compile(
+        historySize: number,
+        sourceOverride?: BuildInput,
+        signal?: AbortSignal
+    ): Promise<void> {
         const currentCompile = this.compileQueue.then(() =>
-            super.compile(historySize, sourceOverride)
+            super.compile(historySize, sourceOverride, signal)
         )
         this.compileQueue = currentCompile.catch(() => undefined)
         await currentCompile
@@ -437,6 +606,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _beginExecutionSession(): void {
         if (!this.fileSystemSession) throw new Error('Missing x86 FileSystem session')
+        //the program reads its own File, the Build output, but cannot write, rename or remove it
+        //while it runs, as Linux refuses for a running executable (ETXTBSY, EBUSY)
+        const output = this.fileSystemSession.buildOutputPath
+        if (output !== undefined) this.requireCore().setProtectedPath('/project/' + output)
         this.requireCore().mountProjectFileSystem(this.fileSystemSession)
         this.executable = this.loadingExecutable
         this.loadingExecutable = undefined
@@ -502,10 +675,18 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * Loads the Runtime library a Build links, or the list of library functions that explains an
-     * undefined `printf` in a Build that does not link it.
+     * undefined `printf` in a Build that does not link it. For an Executable with C++ names, loads
+     * the demangler before the Core loads the program, for the debug tools and the memory view to
+     * show its names and its libraries' demangled; if it does not load, they show them raw.
      */
     async _prepareBuild(sources: BuildSources): Promise<void> {
-        if (executableKind(sources.files[sources.entry]) !== 'none') return
+        const entry = sources.files[sources.entry]
+        const kind = executableKind(entry)
+        if (kind === 'supported') {
+            if (needsDemangler(executableAnalysis(entry!))) await loadDemangler().catch(() => {})
+            return
+        }
+        if (kind !== 'none') return
         if (sources.runtimeAbi === undefined) await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
         else await prepareX86Runtime(sources)
     }
@@ -514,6 +695,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.compiling = true
         try {
             return await this.compileSources(sources)
+        } catch (error) {
+            //a library or the assembler that could not be downloaded: Build again, and it is
+            //downloaded again, after a reload of the page when the server refused it
+            if (error instanceof ResourceDownloadError)
+                throw new BuildDownloadError(error.resource, downloadReason(error), {
+                    cause: error,
+                    refused: error.status !== undefined
+                })
+            throw error
         } finally {
             this.compiling = false
             if (this.clearAfterCompile) {
@@ -542,38 +732,46 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             //binary's takes seconds, and finds `main` by the Listing's own rules from `_start`
             const document = this._listings!.openExecutable(sources.entry, file)!
             const bytes = fileBytes(file)
-            const [info, start] = await Promise.all([
-                //the Executable's own File can be read but not written, deleted or renamed while
-                //it runs
-                core.loadExecutable(bytes, {
-                    protectedPath: '/project/' + sources.entry
-                }),
-                this.programStartOf(bytes)
-            ])
-            this._buildLibraryFiles = undefined
-            this.loadingExecutable = { path: sources.entry, file, document, start }
+            this.reportBuildPhase('Loading the program…')
+            //neither wait outlasts a Cancel: the Core gives up a load that a later one or a clear
+            //superseded, and Zydis's chunk import has no limit of its own
+            const [info, start] = await this.whileBuildIsCurrent(
+                Promise.all([
+                    //the Executable's own File can be read but not written, deleted or renamed
+                    //while it runs
+                    core.loadExecutable(bytes, {
+                        protectedPath: '/project/' + sources.entry,
+                        onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
+                    }),
+                    this.programStartOf(bytes)
+                ])
+            )
+            this.loadingExecutable = {
+                path: sources.entry,
+                file,
+                document,
+                start,
+                annotations: file.annotations
+            }
             //the dynamic linker will fail to load the program with its own message, on stderr
-            for (const name of info.missing)
-                this.addNote({
-                    tone: 'warning',
-                    text: `${name} is not one of the bundled libraries`
-                })
+            const missing = info.missing.map(
+                (name) => `This emulator doesn't have ${name}, so the program may not start.`
+            )
             return {
                 ok: true,
-                diagnostics: info.missing.map((name) =>
-                    executableDiagnostic(
-                        sources.entry,
-                        `${name} is not one of the bundled libraries`,
-                        'warning'
-                    )
-                )
+                diagnostics: missing.map((text) =>
+                    executableDiagnostic(sources.entry, text, 'warning')
+                ),
+                notes: missing.map((text) => ({ tone: 'warning' as const, text }))
             }
         }
         //sources that could not be resolved, such as Generated assembly that needs a Runtime
         //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const linked = linksX86StartUnit(sources)
-        const result = await core.compileProject(x86CoreProject(sources))
+        const result = await core.compileProject(x86CoreProject(sources), {
+            onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
+        })
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
         const diagnostics = result.diagnostics.map((diagnostic) =>
@@ -584,7 +782,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             const library = sources.runtimeAbi
                 ? loadedRuntimeLibrary(sources.runtimeAbi, 'X86')
                 : undefined
-            this._buildLibraryFiles = library
+            const libraryFiles = library
                 ? Object.fromEntries(
                       Object.entries(library.members).map(([path, content]) => [
                           path,
@@ -594,7 +792,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 : linked || sources.x86Support
                   ? X86_START_UNIT_FILES
                   : undefined
-            return { ok: true, diagnostics }
+            //the linked executable, a copy, which becomes the Build output (ADR 0050)
+            return {
+                ok: true,
+                diagnostics,
+                program: core.getExecutable() ?? undefined,
+                libraryFiles
+            }
         }
         return { ok: false, diagnostics, report: result.report }
     }
@@ -605,6 +809,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         core.initialize(this.undoSize)
         this.recordingRandom = true
         this.undoRecording = true
+        //what an instruction prints is journaled under its serial while the Core records it, so
+        //Undo takes the output back with the instruction (ADR 0057); start-up code is no history
+        this._peripherals.terminal.trackHistory(() => {
+            if (!this.undoRecording || this.core !== core) return null
+            const serial = core.getCurrentInstructionSerial()
+            return serial === null ? null : BigInt(serial)
+        }, this.undoSize)
     }
 
     _dispose(): void {
@@ -625,9 +836,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /**
      * The Core's Call stack, each frame on its Listing line. A frame in a library whose Listing
      * has not been made keeps the Core's name and no line: going to it makes the Listing then.
+     * A loaded Executable's C++ names read demangled, their signature and raw name in the tooltip
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11): a frame
+     * of a Listing's function as the Symbols panel lists it, the signature where it has overloads.
      */
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
+        const describe = this.describe()
         return (
             this.core?.getCallStack().map((frame) => {
                 const located = this.locate(frame.target, false)
@@ -637,9 +852,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 const { listing, base } = located
                 const start = listing && located.line >= 0 && functionAtLine(listing, located.line)
                 const named = start && start.address + base === Number(frame.target)
+                const { name, detail } = named
+                    ? listedFunctionName(listing, start, describe)
+                    : frameName(frame, describe)
                 return {
                     ...frame,
-                    name: named ? start.name : frameName(frame),
+                    name,
+                    ...(detail ? { detail } : {}),
                     address: frame.target,
                     file: located.file || undefined,
                     line: named ? start.line : located.line
@@ -769,16 +988,43 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     private programListing(executable: LoadedExecutable, object: X86LoadedObject) {
         const base = Number(object.base)
-        if (executable.document.base !== base && this._listings) {
-            executable.document = this._listings.open({
-                name: executable.document.name,
-                base,
-                content: executable.file.content,
-                bytes: () => fileBytes(executable.file)
-            })
-            this.listingOpened(executable.path, executable.document)
-        }
+        if (executable.document.base !== base) this.openProgramListing(executable, base)
         return { path: executable.path, document: executable.document }
+    }
+
+    /**
+     * Opens the Executable's Listing again, at `base` and with the Annotations its File has now,
+     * and once the session shows it, shows that one instead, whose lines the program's addresses
+     * are then read on as soon as it is ready.
+     */
+    private openProgramListing(executable: LoadedExecutable, base: number) {
+        if (!this._listings) return
+        const document = this._listings.open({
+            name: executable.document.name,
+            base,
+            content: executable.file.content,
+            edits: byteEditsKey(executable.file),
+            ...(executable.annotations ? { annotations: executable.annotations } : {}),
+            bytes: () => fileBytes(executable.file)
+        })
+        if (document === executable.document) return
+        executable.document = document
+        if (executable === this.executable) this.listingOpened(executable.path, document)
+    }
+
+    /**
+     * The Annotations of the running Executable's File, as a rename or a comment made during the
+     * Debug session leaves them ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 22): its Listing is opened again with them, at the address it runs at, so the
+     * program's lines, the Call stack, the memory view's labels and the address box take them at
+     * once. The Build snapshot's record keeps the bytes the program runs, which they do not change.
+     */
+    setExecutableAnnotations(path: string, annotations: Annotations | undefined): void {
+        for (const executable of [this.executable, this.loadingExecutable]) {
+            if (executable?.path !== path || executable.annotations === annotations) continue
+            executable.annotations = annotations
+            this.openProgramListing(executable, executable.document.base)
+        }
     }
 
     /** A library's Listing, under `@lib/<soname>`, generated the first time the run is in it. */
@@ -895,6 +1141,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return null
     }
 
+    /**
+     * A loaded Executable that exited leaves its Listing and Pseudocode where the person was
+     * reading ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 3): its last instructions are libc's, and its own code there is `_start`'s call of
+     * `__libc_start_main`, which `main` returned to and which says nothing. A signal is shown where
+     * it struck (`_getLastInstruction`), and an assembled program where it ended.
+     */
+    _keepsPlaceAtExit(): boolean {
+        return !!this.executable && this.core?.stopReason?.kind === 'exit'
+    }
+
     /** The instruction that ends where a return address begins, the call that pushed it. */
     private callBefore(returnAddress: bigint): Instruction | null {
         const located = this.locate(returnAddress - 1n)
@@ -912,31 +1169,43 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * A Step's stretch of library code, named in the History after what it called: the function
      * a PLT stub of the Executable jumps to and the library its GOT slot leads to now the call
      * has bound it (`puts in libc.so.6`), or for a call straight into a library the symbol it
-     * entered.
+     * entered. A C++ function reads demangled (`std::ostream::operator<< in libstdc++.so.6`), its
+     * signature and raw name in the tooltip.
      */
-    _libraryStretchName(entered: ExecutionStep): string | undefined {
+    _libraryStretchName(entered: ExecutionStep): Omit<LibraryStretch, 'instructions'> | undefined {
         const core = this.core
         const executable = this.executable
         if (!core || !executable) return undefined
         const pc = BigInt(entered.pc)
         const object = this.objectAt(pc)
         if (!object) return undefined
-        if (!object.main) return libraryFunctionName(core, pc, object)
+        const describe = this.describe()
+        if (!object.main) return libraryFunctionName(core, pc, object, describe)
         const offset = pc - object.base
         const stub = executableAnalysis(executable.file).plt.find(
             (candidate) => candidate.address === offset
         )
         if (!stub) return undefined
-        const name = stub.name.replace(/@plt(_resolver)?$/, '')
+        const { name, detail } = debugName(stub.name.replace(/@plt(_resolver)?$/, ''), describe)
+        const tooltip = detail ? { detail } : {}
         try {
             const slot = core.readMemoryBytes(stub.got + object.base, 8n)
             const target = new DataView(slot.buffer, slot.byteOffset, 8).getBigUint64(0, true)
             const library = this.objectAt(target)
-            if (library && !library.main) return `${name} in ${libraryName(library)}`
+            if (library && !library.main)
+                return { library: `${name} in ${libraryName(library)}`, ...tooltip }
         } catch {
             //an unreadable slot names the function alone
         }
-        return name
+        return { library: name, ...tooltip }
+    }
+
+    /**
+     * The demangler's reading of names while a loaded Executable runs, once `_prepareBuild` has
+     * loaded it; undefined for an assembled program, whose names stay as the Core gives them.
+     */
+    private describe(): Describe | undefined {
+        return this.executable ? loadedDemangler()?.describe : undefined
     }
 
     /** A running program's Listing, which once ready says where the program is. */
@@ -1008,8 +1277,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     /**
-     * One block read per file rather than one shared by both: the Core copies the whole 356 byte
-     * block over the bridge in a single call, so a refresh costs two of them, and sharing one read
+     * One block read per file rather than one shared by both: the Core copies the whole 612 byte
+     * block over the bridge in a single call, so a refresh costs one per file, and sharing one read
      * would mean caching a block without being told when a refresh begins. The raw block is
      * decoded here instead of asking for `getFpuState`, because the x87 tag word that says which
      * stack slots hold a value is read from the very same bytes, and the blanks are wanted on
@@ -1069,12 +1338,19 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 section: layout.sections[Number(layout.items[i + 3])],
                 alignment: layout.items[i + 4]
             })
+        //a loaded Executable's C++ data read demangled, as the memory view's picker, its search,
+        //the grid's hover and the address box show and take a `displayName`
+        const describe = this.describe()
         return memoryLayoutFromItems(
             items,
-            layout.symbols.map((symbol) => ({
-                ...symbol,
-                section: layout.sections[symbol.section]
-            }))
+            layout.symbols.map((symbol) => {
+                const displayName = memoryLabelName(symbol.name, describe)
+                return {
+                    ...symbol,
+                    section: layout.sections[symbol.section],
+                    ...(displayName ? { displayName } : {})
+                }
+            })
         )
     }
     _getHeapBounds() {
@@ -1114,9 +1390,69 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             ]
         }
     }
+
+    /**
+     * Where a name the memory view's address box takes is at run time: a symbol the Core knows, or
+     * else a label of the running Executable's Listing, such as an Invented name (`FUN_…`, `DAT_…`)
+     * or an `s_` string ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 4), or a C++ label by a short name or signature only one address has
+     * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11). A jump
+     * target's `.LAB_n` names a place only inside its function, so it is none.
+     */
     _resolveMemoryLabel(name: string) {
-        return this.core?.resolveMemoryLabel(name)
+        const executable = this.executable
+        const listing = executable?.document.listing
+        //a person's name first, which the Listing keeps unique: a symbol of a library may have it
+        const renamed = listing && ListingIndex.of(listing).label(name, -1)
+        if (executable && renamed?.renamed && renamed.kind !== 'block')
+            return BigInt(renamed.address) + this.programBase(executable)
+        const symbol = this.core?.resolveMemoryLabel(name)
+        if (symbol !== undefined) return symbol
+        if (!executable || !listing) return undefined
+        //on no line, a bare `.LAB_n` is no label
+        const index = ListingIndex.of(listing)
+        const label = index.label(name, -1) ?? index.demangledLabel(name)
+        return label && label.kind !== 'block'
+            ? BigInt(label.address) + this.programBase(executable)
+            : undefined
     }
+
+    /**
+     * The memory view's labels, a symbol of the running Executable that the person renamed by
+     * their name ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
+     * decision 8), as its `displayName`, which the picker, its search, the grid's hover and the
+     * address box show and take: read from the Listing the session shows, so a rename made during
+     * the session shows once its Listing is made again. The raw name stays the label's.
+     */
+    override get dataLabels() {
+        const labels = super.dataLabels
+        const executable = this.executable
+        const listing = executable && this._listings?.session.get(executable.path)?.listing
+        if (!executable || !listing || !listing.labels.some((label) => label.renamed)) return labels
+        const kept = this.renamedLabels
+        if (kept?.labels === labels && kept.listing === listing) return kept.renamed
+        const base = this.programBase(executable)
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and read here only.
+        const names = new Map<string, { name: string; address: bigint }>()
+        for (const label of listing.labels)
+            if (label.renamed && label.kind !== 'block')
+                names.set(label.renamed.from, {
+                    name: label.name,
+                    address: BigInt(label.address) + base
+                })
+        const renamed = labels.map((label) => {
+            const person = names.get(label.name)
+            return person?.address === label.address
+                ? { ...label, displayName: person.name }
+                : label
+        })
+        this.renamedLabels = { labels, listing, renamed }
+        return renamed
+    }
+    /** The last labels `dataLabels` renamed, by the labels and the Listing it read. */
+    private renamedLabels:
+        | { labels: readonly DataLabel[]; listing: Listing; renamed: DataLabel[] }
+        | undefined
 
     _getSp(): bigint {
         return this.core?.getSp() ?? 0n
@@ -1160,19 +1496,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.hasTerminated() ?? true
     }
 
-    /** The Core's stop reason: an exit with its status, or the signal that ended the program. */
+    /**
+     * The Core's stop reason: an exit with its status, or the signal that ended the program, which
+     * for an instruction of an extension the Core does not run says so.
+     */
     _getTermination(): Termination | undefined {
         const core = this.core
         if (!core?.hasTerminated()) return undefined
         const reason = core.stopReason
         if (reason?.kind === 'exit') return { kind: 'exit', code: reason.exitCode }
-        if (reason?.kind === 'signal' && reason.signal)
-            return {
-                kind: 'signal',
-                number: reason.signal.number,
-                name: reason.signal.name,
-                description: reason.signal.description
-            }
+        if (reason?.kind === 'signal' && reason.signal) {
+            const { number, name, description } = reason.signal
+            const illegal = this.illegalInstruction()
+            const family = illegal && unsupportedFamily(illegal.bytes, illegal.decoded)
+            const signal = { kind: 'signal' as const, number, name, description }
+            return family ? { ...signal, unsupported: unsupportedText(family) } : signal
+        }
         return { kind: 'end' }
     }
 
@@ -1259,6 +1598,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const position = step && this.randomPositions.get(step.serial)
         if (position !== undefined) this._peripherals.random.seek(position)
         if (step) this.randomPositions.delete(step.serial)
+        //serials only grow, so a Poke's is past every instruction it could take output back from
+        if (step) this._peripherals.terminal.undoAfter(BigInt(step.serial) - 1n)
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
@@ -1423,10 +1764,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
 type LoadedExecutable = {
     path: string
+    /** As the Build took it, whose bytes the program runs. */
     file: ProjectFile
     document: ListingDocument
     /** Its entry point and `main`, link-time, found at Build (`findProgramStart`). */
     start: { entry: number; main?: number } | undefined
+    /**
+     * The Annotations its Listing is made with: the Build's, then the File's as the person changes
+     * them during the session (`setExecutableAnnotations`).
+     */
+    annotations: Annotations | undefined
 }
 
 /** The sections a linker puts PLT stubs in: lazy `.plt`, `.plt.sec` with CET, `.plt.got`, `.iplt`. */
@@ -1453,10 +1800,42 @@ function pltRanges(file: ProjectFile): [start: number, end: number][] {
     ])
 }
 
+/**
+ * A frame's name from the Listing function it starts: a C++ function's list form, as the Symbols
+ * panel and Go to Symbol show it, with the signature and raw name its label carries as the
+ * tooltip; a renamed function's person's name, with the name it was renamed from as the tooltip;
+ * else its name, demangled here when the Listing was made without the demangler.
+ */
+function listedFunctionName(
+    listing: Listing,
+    fn: ListingFunction,
+    describe: Describe | undefined
+): DebugName {
+    const renamed = ListingIndex.of(listing).label(fn.name, fn.line)?.renamed
+    if (renamed) {
+        const signature = renamed.demangled?.signature
+        return {
+            name: fn.name,
+            detail: signature
+                ? `Renamed from ${signature}\n${renamed.from}`
+                : `Renamed from ${renamed.from}`
+        }
+    }
+    const demangled =
+        fn.list === undefined
+            ? undefined
+            : ListingIndex.of(listing).label(fn.name, fn.line)?.demangled
+    if (fn.list === undefined || !demangled) return debugName(fn.name, describe)
+    return { name: fn.list, detail: `${demangled.signature}\n${fn.name}` }
+}
+
 /** A frame's name without a Listing: its symbol, and how far into it the call went. */
-function frameName(frame: { name: string; address: bigint; target: bigint }): string {
-    if (!frame.name || frame.target === frame.address) return frame.name
-    return `${frame.name}+0x${(frame.target - frame.address).toString(16)}`
+function frameName(
+    frame: { name: string; address: bigint; target: bigint },
+    describe: Describe | undefined
+): DebugName {
+    if (!frame.name || frame.target === frame.address) return debugName(frame.name, describe)
+    return debugName(frame.name, describe, `+0x${(frame.target - frame.address).toString(16)}`)
 }
 
 /** What a loaded library is called: its soname, as its Listing's path says it. */
@@ -1465,10 +1844,17 @@ function libraryName(object: X86LoadedObject): string {
 }
 
 /** The function a call into a library entered, by the symbol starting there, and its library. */
-function libraryFunctionName(core: CoreX86Emulator, pc: bigint, object: X86LoadedObject): string {
+function libraryFunctionName(
+    core: CoreX86Emulator,
+    pc: bigint,
+    object: X86LoadedObject,
+    describe: Describe | undefined
+): Omit<LibraryStretch, 'instructions'> {
     const symbol = core.runtime.resolveSymbol(pc)
     const library = libraryName(object)
-    return symbol && symbol.address === pc && symbol.name ? `${symbol.name} in ${library}` : library
+    if (!symbol || symbol.address !== pc || !symbol.name) return { library }
+    const { name, detail } = debugName(symbol.name, describe)
+    return { library: `${name} in ${library}`, ...(detail ? { detail } : {}) }
 }
 
 /** Where an address is shown, with the Listing it was found in and that Listing's load base. */
@@ -1494,6 +1880,8 @@ function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {
             return CoreRegisterSize.Long
         case RegisterSize.Quad:
             return CoreRegisterSize.Quad
+        case RegisterSize.Oct:
+            return CoreRegisterSize.Oct
         case RegisterSize.Double:
         default:
             return CoreRegisterSize.Double
@@ -1512,6 +1900,9 @@ function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
         //wide, so the width has to survive the crossing
         case CoreRegisterSize.Quad:
             return RegisterSize.Quad
+        //an AVX register write: the undo history names it `ymm<n>` and the panel shows it 32 bytes wide
+        case CoreRegisterSize.Oct:
+            return RegisterSize.Oct
         case CoreRegisterSize.Double:
         default:
             return RegisterSize.Double
@@ -1538,6 +1929,7 @@ function isEmptyStTag(tag: number): boolean {
 const WORD_MASK = 0xffffn
 const LONG_MASK = 0xffffffffn
 const QUAD_MASK = (1n << 128n) - 1n
+const OCT_MASK = (1n << 256n) - 1n
 
 //one buffer for the module: an x87 row is a double on the way out and a bit pattern on the way in,
 //and the panel converts eight of them on every refresh
@@ -1545,6 +1937,7 @@ const doubleBits = new DataView(new ArrayBuffer(8))
 
 function registerFileNames(id: string): readonly string[] {
     if (id === 'sse') return X86_SSE_REGISTERS
+    if (id === 'avx') return X86_YMM_REGISTERS
     if (id === 'x87') return X86_X87_REGISTERS
     throw new Error(`Unknown X86 register file: ${id}`)
 }
@@ -1555,6 +1948,7 @@ function registerFileNames(id: string): readonly string[] {
  */
 function fpuStateValues(id: string, state: X86FpuState): bigint[] {
     if (id === 'sse') return [...state.xmm, BigInt(state.mxcsr >>> 0)]
+    if (id === 'avx') return [...state.ymm]
     if (id === 'x87') {
         return [
             ...state.st.map(toDoubleBits),
@@ -1579,6 +1973,11 @@ function withFpuRegisterValue(
         const xmm = [...state.xmm]
         xmm[index] = value & QUAD_MASK
         return { ...state, xmm }
+    }
+    if (id === 'avx') {
+        const ymm = [...state.ymm]
+        ymm[index] = value & OCT_MASK
+        return { ...state, ymm }
     }
     //the first eight names of the x87 file are the stack and the last three the control words
     if (index < 8) {

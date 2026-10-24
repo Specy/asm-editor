@@ -1,15 +1,19 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
 import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
+import { m68kInstructionDocument } from '#lib/documentation/m68k/instructionDocument.ts'
 
 export const load = (async ({ params }) => {
     const instruction = M68KUncompoundedInstructions.get(params.instructionName)
-    if (!instruction) {
+    // Read here, so the page never loads the Core to list the forms.
+    const document = m68kInstructionDocument(params.instructionName)
+    if (!instruction || !document) {
         throw error(404, 'Instruction not found')
     }
     return {
         props: {
-            instruction
+            document,
+            example: instruction.interactiveExample?.code
         }
     }
 }) satisfies PageServerLoad

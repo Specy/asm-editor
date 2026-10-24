@@ -1,8 +1,15 @@
 import { buildSourcesEqual } from '#lib/projectFiles.ts'
+import {
+    buildOutputCollision,
+    buildOutputNote,
+    buildOutputPath,
+    type BuildOutputHost
+} from '#lib/buildOutput.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
     BaseEmulator,
+    BuildDownloadError,
     CompilationFailedError,
     type EmulatorConfig,
     type Instruction
@@ -14,6 +21,7 @@ import {
     createMemoryTab,
     resetMemoryTab,
     type Diagnostic,
+    type EmulatorInterrupt,
     type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
@@ -45,8 +53,10 @@ import {
 } from '#lib/languages/peripherals/peripheralSet.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import { Audio, QUIET_AUDIO, type AudioActivity } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import {
+    afterNextPaint,
     COMPUTE_SLICE_MS,
     nextSpeedCorrection,
     type ExecutionSlice,
@@ -183,11 +193,17 @@ function argumentsProblem(error: CompilationFailedError): string | undefined {
 type SliceLoopEnd = 'stopped' | 'paused' | 'limit'
 
 /**
- * A sliced run other than a Run's: the Breakpoints it stops on instead of the person's, and
- * whether a Breakpoint on the instruction it starts at stops it before that instruction runs.
+ * How a sliced run differs from a plain Run: the Breakpoints it stops on instead of the person's
+ * or beside them, and whether a Breakpoint on the instruction it starts at stops it before that
+ * instruction runs.
  */
 type SliceLoopOptions = {
     breakpoints?: readonly SourceBreakpoint[]
+    /**
+     * Breakpoints a Run stops on besides the person's, which their list never holds: Run to
+     * Cursor's, resolved with theirs on every slice.
+     */
+    alsoBreakAt?: readonly SourceBreakpoint[]
     skipBreakpointAtStart?: boolean
     /** False for a run Pause does not stop, as no test run's does: a Testcase's run to `main`. */
     pausable?: boolean
@@ -244,6 +260,13 @@ export abstract class GenericEmulator<T, R extends string>
      * in a seeded one, and adapters read `_peripherals.random` at the point of use.
      */
     private readonly interactiveRandom: RandomSource
+    /**
+     * The Audio of interactive runs, kept for the same reason: a Testcase swaps in a silent one
+     * ([audio.md](../../../../../docs/design/audio.md#how-long-a-note-or-sound-plays)), and adapters
+     * read `_peripherals.audio` at the point of use.
+     */
+    private readonly interactiveAudio: Audio
+    private audioActivityState = $state.raw<AudioActivity>(QUIET_AUDIO)
     private semanticCheckId = 0
     /**
      * What the slices of the current run have taught about how fast this program runs, multiplied
@@ -276,6 +299,11 @@ export abstract class GenericEmulator<T, R extends string>
      * for the debugger to open. They are never part of the Project or its FileSystem.
      */
     protected _buildLibraryFiles: ProjectFiles | undefined = $state.raw()
+    /** Where the program a person's Build links goes, see `setBuildOutputHost`. */
+    private buildOutputHost: BuildOutputHost | undefined
+    /** What the Build in progress waits for, see `buildPhase`, and the execution it belongs to. */
+    private phase = $state<string | undefined>()
+    private phaseExecution: ExecutionGeneration | undefined
     /** The Listings of an adapter whose Builds can load Executables, see `listings`. */
     protected _listings: ListingDocuments | undefined
     /** What Undo takes back next, newest last; see `UndoSegment`. */
@@ -351,6 +379,11 @@ export abstract class GenericEmulator<T, R extends string>
         }
         this.interactiveClock = this._peripherals.clock
         this.interactiveRandom = this._peripherals.random
+        this.interactiveAudio = this._peripherals.audio
+        this.interactiveAudio.onNote = (text) => this.addNote({ tone: 'warning', text })
+        //an injected Audio may have played already
+        this.audioActivityState = this.interactiveAudio.activity
+        this.interactiveAudio.subscribe((activity) => (this.audioActivityState = activity))
 
         this.state = $state({
             systemSize: options.systemSize,
@@ -776,12 +809,21 @@ export abstract class GenericEmulator<T, R extends string>
      * A line, through the Terminal's Line discipline. `options` are how the program set up its
      * reads to show what is typed, where its environment lets it (EASy68K's tasks 12 and 16).
      */
+    /**
+     * Shows the read the program now waits on, after sending what it played: the person may take a
+     * while to answer, and a beep before a prompt has to be heard before the answer, not after.
+     */
+    private waitOnInput(interrupt: EmulatorInterrupt): void {
+        this._peripherals.audio.flush()
+        this.state.interrupt = interrupt
+    }
+
     protected async requestInput(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.state.interrupt = { type: 'ReadInput', message: question }
+        this.waitOnInput({ type: 'ReadInput', message: question })
         try {
             return await this._peripherals.terminal.readAsync(question, execution, options)
         } finally {
@@ -799,7 +841,7 @@ export abstract class GenericEmulator<T, R extends string>
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.state.interrupt = { type: 'ReadInput', message: question }
+        this.waitOnInput({ type: 'ReadInput', message: question })
         try {
             return await this._peripherals.terminal.readCharAsync(question, execution, options)
         } finally {
@@ -816,7 +858,7 @@ export abstract class GenericEmulator<T, R extends string>
         question: string,
         execution: ExecutionGeneration
     ) {
-        this.state.interrupt = { type: 'StandardInput', message: question }
+        this.waitOnInput({ type: 'StandardInput', message: question })
         try {
             return await this._peripherals.terminal.readStandardInput(length, question, execution)
         } finally {
@@ -829,7 +871,7 @@ export abstract class GenericEmulator<T, R extends string>
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
     protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.state.interrupt = { type: 'ReadInput', message: question }
+        this.waitOnInput({ type: 'ReadInput', message: question })
         try {
             return await this._peripherals.terminal.readByte(question, execution)
         } finally {
@@ -858,7 +900,8 @@ export abstract class GenericEmulator<T, R extends string>
      * Where a program that ended is shown: its last instruction, or, when that is library code
      * Steps do not enter, its call into the library, as a stop there is shown (`stopInstruction`).
      * A crash is the adapter's `_getLastInstruction`, shown where it happened, inside a library
-     * too. `fallback` is the line when nothing says, read only then.
+     * too. A program the adapter keeps the place of (`_keepsPlaceAtExit`) is shown on no line, in
+     * the File it was in. `fallback` is the line when nothing says, read only then.
      */
     private selectLastExecuted(fallback: number | (() => number) = -1): void {
         const fallbackLine = () => {
@@ -869,6 +912,10 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         try {
+            if (this._keepsPlaceAtExit?.()) {
+                this.state.line = -1
+                return
+            }
             const instruction = this._getLastInstruction?.()
             if (instruction) {
                 this.selectInstruction(instruction)
@@ -919,6 +966,8 @@ export abstract class GenericEmulator<T, R extends string>
         const noted = this.endNoted
         this.endNoted = terminated
         if (terminated && !noted) {
+            //a program that ended on its own lets its Notes and one-shots play out, never its loops
+            this._peripherals.audio.stopLoops()
             try {
                 for (const note of this._terminationNotes?.() ?? []) this.addNote(note)
             } catch (e) {
@@ -929,6 +978,7 @@ export abstract class GenericEmulator<T, R extends string>
 
     /** Ends the program on a runtime error, which `readTermination` then leaves standing. */
     private endWithError(message: string): void {
+        this._peripherals.audio.stopLoops()
         this.state.terminated = true
         this.state.termination = { kind: 'error', message }
     }
@@ -964,6 +1014,7 @@ export abstract class GenericEmulator<T, R extends string>
                 //newest first: the first library instruction, then the call that reached it
                 const [entered, call] = this._getUndoHistoryRange(skip + segment.entries - 2, 2)
                 if (!call) break
+                const named = entered && this._libraryStretchName?.(entered)
                 rows.push({
                     ...call,
                     undoable:
@@ -973,11 +1024,12 @@ export abstract class GenericEmulator<T, R extends string>
                             true),
                     stretch: {
                         library:
-                            (entered && this._libraryStretchName?.(entered)) ??
+                            named?.library ??
                             entered?.file
                                 ?.slice(entered.file.lastIndexOf('/') + 1)
                                 .replace(/\.s$/, '') ??
                             'library',
+                        ...(named?.detail ? { detail: named.detail } : {}),
                         instructions: segment.entries
                     }
                 })
@@ -993,7 +1045,8 @@ export abstract class GenericEmulator<T, R extends string>
      * termination and only loses it here, which is what the design record asks for.
      */
     private resetPeripherals(): void {
-        const { terminal, screen, keyboard, mouse, clock, random } = this._peripherals
+        const { terminal, screen, keyboard, mouse, clock, random, audio } = this._peripherals
+        audio.reset()
         terminal.clear()
         terminal.useInteractiveInput()
         this.applyScreenHistoryBudget()
@@ -1242,6 +1295,7 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.clock = new ProgramClock({ mode: 'virtual' })
         this._peripherals.clock.start()
         this._peripherals.random = new RandomSource({ mode: 'seeded' })
+        this._peripherals.audio = new Audio({ silent: true })
     }
 
     /**
@@ -1256,11 +1310,13 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.clock.reset()
         this._peripherals.random = this.interactiveRandom
         this._peripherals.random.reset()
+        this._peripherals.audio = this.interactiveAudio
     }
 
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        this.phase = undefined
         this._clearExecution?.()
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
@@ -1319,11 +1375,61 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateStatusRegisters()
     }
 
-    async compile(historySize: number, sourceOverride: BuildInput | undefined): Promise<void> {
+    /**
+     * Builds the program and runs it to where a Debug session starts. A Build `signal` aborted
+     * before its turn at the Core comes does not start: one queued behind another that is still
+     * finishing, as a cancelled Build whose download has not given up yet is. A Build already under
+     * way is ended by `clear()`, as Stop ends it.
+     */
+    async compile(
+        historySize: number,
+        sourceOverride: BuildInput | undefined,
+        signal?: AbortSignal
+    ): Promise<void> {
+        if (signal?.aborted) return
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
-        return this.duringCoreOperation(() =>
-            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem, true)
+        return this.duringCoreOperation(async () => {
+            //a Core assembles in one synchronous call that holds the page, for seconds on a large
+            //program: the host's sign that a Build began, such as the dock's spinner, is painted
+            //first, so it is on screen for the whole wait rather than only after it
+            await afterNextPaint()
+            if (signal?.aborted) return
+            await this.compileInternal(
+                historySize,
+                sourceOverride,
+                this._peripherals.fileSystem,
+                true
+            )
+        })
+    }
+
+    /**
+     * What the Build in progress is waiting for, in words for the dock to say while it lasts, such
+     * as "Downloading libc.so.6…" ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 2); undefined when there is nothing more to say than that it builds, which is all
+     * an adapter that reports nothing ever says.
+     */
+    get buildPhase(): string | undefined {
+        return this.phase
+    }
+
+    /** Says what the Build in progress waits for now; a Build that was cleared says nothing more. */
+    protected reportBuildPhase(phase: string | undefined): void {
+        if (this.phaseExecution && this.executionController.isCurrent(this.phaseExecution))
+            this.phase = phase
+    }
+
+    /**
+     * Waits for `promise` only while the Build in progress lasts: `clear()`, which Cancel and Stop
+     * call, ends the wait at once with an error, even when `promise` never settles, so that the
+     * Build pressed next does not wait for it. For an adapter's wait that nothing else bounds, such
+     * as a chunk import, or a Core's load that a later one supersedes safely.
+     */
+    protected whileBuildIsCurrent<T>(promise: Promise<T>): Promise<T> {
+        return this.executionController.whileCurrent(
+            this.phaseExecution ?? this.executionController.capture(),
+            promise
         )
     }
 
@@ -1349,6 +1455,8 @@ export abstract class GenericEmulator<T, R extends string>
         this.semanticCheckId += 1
         this.debouncer[1]()
         const execution = this.executionController.capture()
+        this.phase = undefined
+        this.phaseExecution = execution
         let entry = this._sources.entry
         try {
             const sources =
@@ -1356,8 +1464,11 @@ export abstract class GenericEmulator<T, R extends string>
                     ? $state.snapshot(this._sources)
                     : normalizeBuildInput(sourceOverride)
             entry = sources.entry
-            await prepareMemoryNames(sources)
-            await this._prepareBuild?.(sources)
+            //chunk imports, which nothing bounds: a Build cancelled while they hang ends at once
+            //rather than holding every later Build behind it
+            await this.executionController.whileCurrent(execution, prepareMemoryNames(sources))
+            if (this._prepareBuild)
+                await this.executionController.whileCurrent(execution, this._prepareBuild(sources))
             this.executionController.ensureCurrent(execution)
             this.passProgramArguments(sources, programArguments)
             const result = await this._compile(sources, historySize)
@@ -1370,6 +1481,17 @@ export abstract class GenericEmulator<T, R extends string>
             //a successful build replaces the semantic check's list so stale squiggles drop and the
             //warnings the assembler emitted while succeeding are shown
             this.state.compilerDiagnostics = result.diagnostics ?? []
+            //only now, for the Build still current: a cancelled one says nothing of its program
+            this._buildLibraryFiles = result.libraryFiles
+            for (const note of result.notes ?? []) this.addNote(note)
+            const output = await this.placeBuildOutput(
+                sources,
+                result.program,
+                stopInUserCode,
+                fileSystem,
+                execution
+            )
+            this.executionController.ensureCurrent(execution)
             this._initialize(historySize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
@@ -1377,7 +1499,18 @@ export abstract class GenericEmulator<T, R extends string>
                 Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
                 this.fileDescriptorOptions()
             )
-            this._buildSources = sources
+            if (output?.saved) this.fileSystemSession.protectBuildOutput(output.path)
+            else if (output) this.fileSystemSession.presentBuildOutput(output.path, output.bytes)
+            //the Build output it saved is one of the Files the Debug session shows as the Build's
+            this._buildSources = output?.saved
+                ? Object.freeze({
+                      ...sources,
+                      files: Object.freeze({
+                          ...sources.files,
+                          [output.path]: fileSystem.files[output.path]
+                      })
+                  })
+                : sources
             this._beginExecutionSession?.()
             this.addDecorations()
             this.state.canExecute = true
@@ -1387,6 +1520,7 @@ export abstract class GenericEmulator<T, R extends string>
                 try {
                     const start = this._programStart?.()
                     if (start) {
+                        this.reportBuildPhase('Starting the program…')
                         const end = await this.runToProgramStart(
                             start.breakpoint,
                             execution,
@@ -1434,10 +1568,75 @@ export abstract class GenericEmulator<T, R extends string>
                 this.state.compilerDiagnostics = [diagnostic]
                 throw new CompilationFailedError(report, [diagnostic])
             }
-            this.addError(this._stringifyError(e))
+            //the Terminal says what could not be downloaded and to Build again, in every language's
+            //words alike
+            this.addError(e instanceof BuildDownloadError ? e.message : this._stringifyError(e))
             this.debouncer[1]()
             throw e
+        } finally {
+            if (this.executionController.isCurrent(execution)) this.phase = undefined
         }
+    }
+
+    /**
+     * Where the program a Build linked goes ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)):
+     * at the path the Command line names, where the run's FileSystem has it for the program. A
+     * person's Build (`build`) has its host save it there as the Build output, `saved`, before the
+     * Debug session takes the Files, asking first when that replaces something; else, or without
+     * a host, it is only presented to the program. A Testcase's program takes the place of a Build
+     * output in its own FileSystem. The Entry, a folder, or a File the person keeps there keeps it
+     * out, and for a person's Build the Log says why.
+     */
+    private async placeBuildOutput(
+        sources: BuildSources,
+        program: Uint8Array | undefined,
+        build: boolean,
+        fileSystem: FileSystem,
+        execution: ExecutionGeneration
+    ): Promise<{ path: string; bytes: Uint8Array; saved: boolean } | undefined> {
+        if (!program) return undefined
+        const path = buildOutputPath(sources)
+        const note = (text: string) => {
+            if (build) this.addNote({ tone: 'warning', text })
+            return undefined
+        }
+        //`main` as the Entry itself would be the source it was built from
+        if (path === sources.entry || path === sources.entrySource)
+            return note(buildOutputNote(path, 'source'))
+        const host = this.buildOutputHost
+        if (build && host) {
+            const asked = new AbortController()
+            const claim = await this.executionController
+                .whileCurrent(execution, host.claim(path, asked.signal))
+                .catch((error: unknown) => {
+                    //a Build that was cancelled while it asked takes its question back
+                    asked.abort()
+                    throw error
+                })
+            this.executionController.ensureCurrent(execution)
+            if (claim === 'save') {
+                try {
+                    host.save(sources, path, program)
+                    return { path, bytes: program, saved: true }
+                } catch (error) {
+                    //a Project at its limits still runs the program it cannot keep
+                    note(buildOutputNote(path, 'unsaved', this._stringifyError(error)))
+                    return buildOutputCollision(fileSystem.files, path)
+                        ? undefined
+                        : { path, bytes: program, saved: false }
+                }
+            }
+            if (claim !== 'present') return note(claim.note)
+        }
+        const collision = buildOutputCollision(fileSystem.files, path)
+        if (!build && collision === 'file' && host?.isBuildOutput(path)) {
+            //the Testcase's own FileSystem, which nothing saves
+            fileSystem.writeBytes(path, program, true, 'base64')
+            return { path, bytes: program, saved: true }
+        }
+        if (collision)
+            return note(buildOutputNote(path, collision === 'folder' ? 'folder' : 'kept'))
+        return { path, bytes: program, saved: false }
     }
 
     dispose(): void {
@@ -1500,11 +1699,34 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
+        return this.runUntil(haltLimit)
+    }
+
+    /**
+     * Run to Cursor ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md),
+     * decision 11): a Run that also stops before any of `targets`, temporary Breakpoints that are
+     * gone once it returns, however it ends. It is a Run in every other way: sliced, paused and
+     * stopped as one ([ADR 0007](../../../../../docs/adr/0007-generic-emulator-run-scheduling.md)),
+     * stopping at the person's Breakpoints on the way, and running the instruction it starts on even
+     * when a target names it ([ADR 0023](../../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)),
+     * so from the cursor's own instruction it runs until the program comes back to it.
+     */
+    async runTo(
+        targets: readonly SourceBreakpoint[],
+        haltLimit: number
+    ): Promise<InterpreterStatus> {
+        return this.runUntil(haltLimit, [...targets])
+    }
+
+    private async runUntil(
+        haltLimit: number,
+        targets?: readonly SourceBreakpoint[]
+    ): Promise<InterpreterStatus> {
         if (!this.state.canExecute) return InterpreterStatus.Terminated
         const execution = this.executionController.capture()
         return this.duringCoreOperation(() =>
             this.executionController.isCurrent(execution)
-                ? this.runInternal(haltLimit)
+                ? this.runInternal(haltLimit, targets)
                 : Promise.resolve(InterpreterStatus.Terminated)
         )
     }
@@ -1583,8 +1805,7 @@ export abstract class GenericEmulator<T, R extends string>
                     //takes effect at the next slice
                     breakpoints: options.breakpoints
                         ? [...options.breakpoints]
-                        : (this.breakpointResolver?.(this.state.breakpoints) ??
-                          this.state.breakpoints),
+                        : this.runBreakpoints(options.alsoBreakAt),
                     skipBreakpointAtPc: firstSlice,
                     runInstructionLimit: haltLimit,
                     speedCorrection: this.speedCorrection
@@ -1595,6 +1816,8 @@ export abstract class GenericEmulator<T, R extends string>
                 throw error
             }
             firstSlice = false
+            //what the slice started or stopped is heard now, a slice late at most
+            this._peripherals.audio.flush()
             this.learnSliceSpeed(
                 slice,
                 targetMs,
@@ -1789,12 +2012,26 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateStatusRegisters()
     }
 
-    private async runInternal(haltLimit: number): Promise<InterpreterStatus> {
+    /**
+     * The Breakpoints a Run's slice stops on: the person's, with `targets` beside them, resolved
+     * together so a target on a C or C++ line stops where a Breakpoint there would.
+     */
+    private runBreakpoints(targets: readonly SourceBreakpoint[] = []): SourceBreakpoint[] {
+        const breakpoints = targets.length
+            ? [...this.state.breakpoints, ...targets]
+            : this.state.breakpoints
+        return this.breakpointResolver?.(breakpoints) ?? breakpoints
+    }
+
+    private async runInternal(
+        haltLimit: number,
+        targets?: readonly SourceBreakpoint[]
+    ): Promise<InterpreterStatus> {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         const execution = this.executionController.capture()
         try {
-            await this.runSlices(haltLimit, execution)
+            await this.runSlices(haltLimit, execution, { alsoBreakAt: targets })
             this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
             if (terminated) this._peripherals.terminal.flushOutput()
@@ -2031,9 +2268,11 @@ export abstract class GenericEmulator<T, R extends string>
             } catch (lookupError) {
                 console.error(lookupError)
             }
+            this._peripherals.audio.flush()
             this.reportRuntimeFailure(e, failed)
             throw e
         }
+        this._peripherals.audio.flush()
         this.refreshCoreViews()
         return this._hasTerminated()
     }
@@ -2250,6 +2489,15 @@ export abstract class GenericEmulator<T, R extends string>
         this.breakpointResolver = resolver
     }
 
+    /**
+     * Where the program a person's Build links goes: the Workbench that owns the Project saves it
+     * as its Build output; with no host it is only presented to the running program, as before a
+     * Workbench takes it.
+     */
+    setBuildOutputHost(host: BuildOutputHost | undefined): void {
+        this.buildOutputHost = host
+    }
+
     toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
         this.toggleSourceBreakpoint({ file, line })
     }
@@ -2462,11 +2710,17 @@ export abstract class GenericEmulator<T, R extends string>
                 return false
             }
             let recorded = false
+            const audio = this._peripherals.audio
             this._beginPoke()
+            //a Poke into the Synth's block plays its registers, but starts no upload
+            audio.synth.poking = true
             try {
                 this._writeMemoryBytes(address, bytes)
             } finally {
                 recorded = this._endPoke()
+                audio.synth.poking = false
+                //and is heard at once, while the program waits for the next Run or Step
+                audio.flush()
                 if (recorded) this.recordHistory(1)
                 //an image that lives in Core memory is re-read rather than journaled, exactly as
                 //after an Undo ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md),
@@ -2546,6 +2800,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get notes(): readonly EmulatorNote[] {
         return this.noteList
+    }
+
+    get audioActivity(): AudioActivity {
+        return this.audioActivityState
     }
 
     /** The Entry path of the sources currently set, which a single-source host never names itself. */

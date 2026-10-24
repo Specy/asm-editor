@@ -5,6 +5,8 @@ import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { MarsHandlers, normalizeUndoSize, toHaltLimit } from '#lib/languages/mars/marsHandlers.ts'
 
 /**
@@ -25,14 +27,18 @@ function setup(
     terminal.useScriptedInput(options.scripted ?? [])
     const session = options.fileSystem === false ? null : new FileSystem().beginSession()
     const interrupts: (EmulatorInterrupt | undefined)[] = []
+    const audioOutput = new RecordingAudioOutput()
+    const audio = new Audio({ output: audioOutput })
     const handlers = new MarsHandlers({
         peripherals: {
             terminal,
             clock: new ProgramClock({ mode: 'virtual' }),
-            random: new RandomSource({ mode: 'seeded' })
+            random: new RandomSource({ mode: 'seeded' }),
+            audio
         },
         executionController,
         devices: { flush: () => {} },
+        pauseAtSleep: () => {},
         setInterrupt: (interrupt) => {
             interrupts.push(interrupt)
         },
@@ -45,6 +51,9 @@ function setup(
         terminal,
         session,
         interrupts,
+        audioOutput,
+        audio,
+        executionController,
         setSerial: (value: string | null) => {
             serial = value
         }
@@ -142,5 +151,54 @@ describe('the MARS and RARS handlers', () => {
             unbounded,
             unbounded
         ])
+    })
+})
+
+describe('MIDI services', () => {
+    const notes = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'note' ? [[c.pitch, c.durationMs]] : []))
+
+    it('plays the Note the Core asked for, heard by the time a sleep starts', async () => {
+        const { map, audioOutput } = setup()
+        await map.midiOut(64, 300, 40, 90)
+        expect(notes(audioOutput)).toEqual([])
+        await map.sleep(300)
+        expect(notes(audioOutput)).toEqual([[64, 300]])
+    })
+
+    it('sends a Note played before a read while the read waits', async () => {
+        const { map, audioOutput } = setup({ scripted: ['5'] })
+        await map.midiOut(64, 300, 0, 100)
+        await map.readInt()
+        expect(notes(audioOutput)).toEqual([[64, 300]])
+    })
+
+    it('lets the program go when Stop comes during the load, without the Note', async () => {
+        const { map, audioOutput, audio, executionController } = setup()
+        audioOutput.holdPrepare = true
+        const call = Promise.resolve(map.midiOut(60, 100, 0, 100))
+        //Stop: the run is superseded and Audio reset, as `clear()` does both
+        executionController.invalidate()
+        audio.reset()
+        await expect(call).rejects.toThrow()
+        audioOutput.settle()
+        await Promise.resolve()
+        expect(audio.activity.soundsStarted).toBe(0)
+        audio.flush()
+        expect(notes(audioOutput)).toEqual([])
+    })
+
+    it('holds the program on the first Note while the sound bank loads', async () => {
+        const { map, audioOutput } = setup()
+        audioOutput.holdPrepare = true
+        let played = false
+        const call = Promise.resolve(map.midiOut(60, 100, 0, 100)).then(() => (played = true))
+        await Promise.resolve()
+        expect(played).toBe(false)
+        audioOutput.settle()
+        await call
+        expect(played).toBe(true)
+        await map.sleep(0)
+        expect(notes(audioOutput)).toEqual([[60, 100]])
     })
 })

@@ -1,5 +1,7 @@
 <script>
-    /** @type {{ target?: string, href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, disabled?: boolean, children?: import('svelte').Snippet}} */
+    import { DEFAULT_BUTTON_VARIANT, isSurfaceButton } from './buttonVariant.ts'
+
+    /** @type {{ target?: string, href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, disabled?: boolean, variant?: import('./buttonVariant.ts').ButtonVariant, bordered?: boolean, children?: import('svelte').Snippet}} */
     let {
         href,
         disabled = false,
@@ -10,14 +12,20 @@
         hasIcon = false,
         title = '',
         cssVar = 'unset',
+        variant = DEFAULT_BUTTON_VARIANT,
+        bordered = false,
         onClick,
         children
     } = $props()
+
+    const surface = $derived(isSurfaceButton(cssVar, bg))
 </script>
 
 <a
     type="button"
-    class="btn"
+    class="btn {variant}"
+    class:surface
+    class:bordered
     class:disabled
     class:hasIcon
     {href}
@@ -33,6 +41,8 @@
 </a>
 
 <style lang="scss">
+    @use './variants.scss';
+
     .btn {
         padding: 0.6rem 1rem;
         border-radius: 0.4rem;
@@ -49,6 +59,8 @@
         user-select: none;
         position: relative;
         cursor: pointer;
+
+        @include variants.workbench('.disabled');
     }
 
     .btn:hover {

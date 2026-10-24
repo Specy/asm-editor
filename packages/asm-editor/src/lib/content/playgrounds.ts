@@ -8,10 +8,10 @@ import { cleanPlaygroundProgram, type PlaygroundProgram } from './playgroundProg
  * fence in `src/content`. Both used to be free to disagree about what a flag means; now a flag is
  * spelled once, here.
  *
- * The renderer walks the hast tree Carta hands it and this module walks the markdown source, because
- * a test has no hast tree and the renderer has no source by the time the transformer runs. What the
- * two share is everything that decides meaning: the fence info string, the flags, and the JSON of an
- * attached `testcase` fence.
+ * The renderer walks the hast tree the Markdown pipeline builds and this module walks the markdown
+ * source, because a test has no hast tree and the renderer has no source by the time the
+ * transformer runs. What the two share is everything that decides meaning: the fence info string,
+ * the flags, and the JSON of an attached `testcase` fence.
  *
  * Plain TypeScript, no runes and no DOM, so the test can import it under node.
  */
@@ -40,9 +40,16 @@ export type PlaygroundSettings = {
  * The Register files a fence can open a Playground on, which are the lower-case labels of the tabs
  * the panel shows ([the design record](../../../../../docs/design/register-files.md)).
  */
-export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'x87'
+export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'avx' | 'x87'
 
-const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = ['fpu', 'cp0', 'csr', 'sse', 'x87']
+const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = [
+    'fpu',
+    'cp0',
+    'csr',
+    'sse',
+    'avx',
+    'x87'
+]
 
 export type PlaygroundFence = {
     settings: PlaygroundSettings
@@ -76,6 +83,11 @@ export type PlaygroundTestcase = {
      * which loop until the reader presses Stop.
      */
     runFor?: number
+    /**
+     * The signal a program that shows a crash ends on, such as `SIGSEGV`. Verification only, like
+     * `runFor`: a playground that ends on a signal it does not declare fails the content test.
+     */
+    endsWithSignal?: string
 }
 
 export function parsePlaygroundLanguage(
@@ -218,8 +230,16 @@ export function parseTestcaseFence(raw: string): PlaygroundTestcase {
     if (value.name !== undefined && typeof value.name !== 'string') {
         throw new Error('"name" must be a string')
     }
+    if (value.endsWithSignal !== undefined && !/^SIG[A-Z]+$/.test(String(value.endsWithSignal))) {
+        throw new Error(
+            `"endsWithSignal" must name a signal, such as "SIGSEGV", got ${value.endsWithSignal}`
+        )
+    }
     return {
         runFor,
+        ...(value.endsWithSignal === undefined
+            ? {}
+            : { endsWithSignal: String(value.endsWithSignal) }),
         hasTestcase: [
             'input',
             'expectedOutput',
@@ -423,6 +443,7 @@ export type ContentPlayground = PlaygroundFence & {
     program?: PlaygroundProgram
     testcase?: Testcase
     runFor?: number
+    endsWithSignal?: string
     /** For an exercise, the `solution` playground that follows it. */
     solution?: ContentPlayground
 }
@@ -464,6 +485,7 @@ export function extractPlaygrounds(markdown: string): ContentPlayground[] {
                 const attached = parseTestcaseFence(next.code)
                 playground.testcase = attached.testcase
                 playground.runFor = attached.runFor
+                playground.endsWithSignal = attached.endsWithSignal
             } catch (e) {
                 failure = (e as Error).message
             }

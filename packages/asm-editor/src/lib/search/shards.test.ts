@@ -20,7 +20,13 @@ describe('shards', () => {
         expect(content.sections).toHaveLength(0)
         expect(content.entries.length).toBeGreaterThan(300)
         const add = content.entries.find((entry) => entry.id === 'mips/instructions/add')!
-        expect(add).toMatchObject({ chapterTitle: 'Instructions', names: ['add'] })
+        expect(add).toMatchObject({
+            chapterTitle: 'Instructions',
+            category: 'arithmetic',
+            names: ['add']
+        })
         expect(add.text).not.toContain('**')
+        const directive = content.entries.find((entry) => entry.id === 'mips/directives/word')!
+        expect(directive.category).toBeUndefined()
     })
 })

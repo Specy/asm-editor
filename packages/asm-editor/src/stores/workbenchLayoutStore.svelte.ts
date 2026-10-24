@@ -21,13 +21,24 @@ export type WorkbenchLayout = {
     bottomHeight: number
     /** Width of the debug column; `null` until dragged, when it fits the registers and memory. */
     debugWidth: number | null
+    /** Whether the debug column is collapsed to its strip, which keeps `debugWidth` for opening. */
+    debugCollapsed: boolean
     /** Height of the registers and memory above the Screen and the Debug tools; `null` is automatic. */
     debugTopHeight: number | null
     /** Whether each collapsible section is collapsed, by section id; missing ones use their default. */
     collapsed: Record<string, boolean>
     /** Each floating Debug tool's window, by tool id. */
     floating: Record<string, FloatingWindowState>
+    /**
+     * What the Search panel looks in, its "Look in" ticks, kept as the person leaves them
+     * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 25
+     * and open question 4).
+     */
+    searchLookIn: SearchLookIn
 }
+
+/** The Search panel's "Look in" ticks: the Project's text Files, the Listings, the Pseudocode. */
+export type SearchLookIn = { files: boolean; listings: boolean; pseudocode: boolean }
 
 const STORAGE_KEY = 'asm-editor_workbench_layout'
 
@@ -42,6 +53,8 @@ export const LAYOUT_LIMITS = {
 const DEFAULT_READING_PANEL_WIDTH = 448
 export const DEFAULT_PANEL_WIDTHS: Readonly<Record<string, number>> = {
     explorer: 256,
+    symbols: 320,
+    search: 352,
     testcases: DEFAULT_READING_PANEL_WIDTH,
     documentation: DEFAULT_READING_PANEL_WIDTH,
     agent: 448,
@@ -57,9 +70,11 @@ export function defaultLayout(): WorkbenchLayout {
         panelWidths: {},
         bottomHeight: DEFAULT_BOTTOM_HEIGHT,
         debugWidth: null,
+        debugCollapsed: false,
         debugTopHeight: null,
         collapsed: {},
-        floating: {}
+        floating: {},
+        searchLookIn: { files: true, listings: true, pseudocode: true }
     }
 }
 
@@ -109,6 +124,8 @@ export function readStoredLayout(json: string | null): WorkbenchLayout {
         layout.bottomHeight
     )
     layout.debugWidth = readOptionalSize(stored.debugWidth, LAYOUT_LIMITS.debugWidth)
+    //a layout stored before the column could collapse has no flag, and opens expanded
+    if (typeof stored.debugCollapsed === 'boolean') layout.debugCollapsed = stored.debugCollapsed
     layout.debugTopHeight = readOptionalSize(stored.debugTopHeight, LAYOUT_LIMITS.debugTopHeight)
     if (isRecord(stored.collapsed)) {
         for (const [id, collapsed] of Object.entries(stored.collapsed)) {
@@ -129,6 +146,12 @@ export function readStoredLayout(json: string | null): WorkbenchLayout {
                     top: Math.round(window.top)
                 }
             }
+        }
+    }
+    if (isRecord(stored.searchLookIn)) {
+        for (const kind of ['files', 'listings', 'pseudocode'] as const) {
+            const ticked = stored.searchLookIn[kind]
+            if (typeof ticked === 'boolean') layout.searchLookIn[kind] = ticked
         }
     }
     return layout
@@ -178,6 +201,10 @@ function createWorkbenchLayoutStore() {
             data.debugWidth = width === null ? null : clamp(width, LAYOUT_LIMITS.debugWidth)
             store()
         },
+        setDebugCollapsed(collapsed: boolean) {
+            data.debugCollapsed = collapsed
+            store()
+        },
         setDebugTopHeight(height: number | null) {
             data.debugTopHeight =
                 height === null ? null : clamp(height, LAYOUT_LIMITS.debugTopHeight)
@@ -189,6 +216,11 @@ function createWorkbenchLayoutStore() {
         },
         setCollapsed(id: string, collapsed: boolean) {
             data.collapsed[id] = collapsed
+            store()
+        },
+        /** Ticks or unticks one of the Search panel's "Look in" places. */
+        setSearchLookIn(kind: keyof SearchLookIn, ticked: boolean) {
+            data.searchLookIn[kind] = ticked
             store()
         },
         floating(id: string): FloatingWindowState | undefined {

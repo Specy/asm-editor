@@ -11,7 +11,11 @@ import {
 import type { CompilationRecord } from './sourceCompilation/records'
 import { compiledEntrySource, languageTakesArguments } from './commandLine'
 
-/** Resolve the same input for execution, live analysis and embedded programs. */
+/**
+ * Resolve the same input for execution, live analysis and embedded programs, from an Entry and the
+ * Settings it runs with, whatever holds them: a Project's Program (`programBuildSources`) or a
+ * Playground's one program.
+ */
 export function projectBuildSources(project: {
     files: ProjectFiles
     entry: string
@@ -45,4 +49,32 @@ export function projectBuildSources(project: {
         ),
         ...resolveRuntimeLink(sources, project.compilations, project.settings?.linkRuntimeLibrary)
     }
+}
+
+/**
+ * The input for building one of a Project's Programs, the Selected program unless another Entry is
+ * named: the Project's Files and Compilation records with that Program's Entry and Settings
+ * ([ADR 0054](../../../../docs/adr/0054-a-project-holds-programs-identified-by-their-entry-file.md)).
+ * Throws when there is no such Program, for the caller to say how to make one.
+ */
+export function programBuildSources(
+    project: {
+        files: ProjectFiles
+        programs: Readonly<Record<string, { settings: ProjectSettingsDecisions }>>
+        selectedProgram?: string
+        language: AvailableLanguages
+        compilations?: readonly CompilationRecord[]
+    },
+    entry: string | undefined = project.selectedProgram
+): BuildSources {
+    if (entry === undefined) throw new Error('This Project has no program')
+    if (!Object.hasOwn(project.programs, entry))
+        throw new Error(`${entry} is the Entry of no program`)
+    return projectBuildSources({
+        files: project.files,
+        entry,
+        language: project.language,
+        compilations: project.compilations,
+        settings: project.programs[entry].settings
+    })
 }

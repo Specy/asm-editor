@@ -13,7 +13,7 @@
     import Row from '#cmp/shared/layout/Row.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
     import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
-    import { mipsInstructionEntries } from '#lib/languages/MIPS/MIPS-documentation.ts'
+    import { mipsInstructionNames } from '#lib/languages/MIPS/MIPS-documentation.ts'
     import MenuLink from '#cmp/documentation/site/MenuLink.svelte'
     import InstructionsMenu from '#cmp/documentation/site/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
@@ -29,11 +29,12 @@
     }
 
     let { children }: Props = $props()
-    let instructions = mipsInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
 
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(mipsInstructionNames)].sort((a, b) => a.localeCompare(b))
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -81,37 +82,37 @@
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/mips"
+                    href={resolve('/documentation/mips')}
                     title="MIPS"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/directive"
+                    href={resolve('/documentation/mips/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/screen"
+                    href={resolve('/documentation/mips/screen')}
                     title="Screen and I/O"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/syscall"
+                    href={resolve('/documentation/mips/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/using-c"
+                    href={resolve('/documentation/mips/using-c')}
                     title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/runtime-library"
+                    href={resolve('/documentation/mips/runtime-library')}
                     title="Runtime library"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/mips/registers"
+                    href={resolve('/documentation/mips/registers')}
                     title="Registers"
                     onClick={() => (menuOpen = false)}
                 />
@@ -127,8 +128,11 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/mips/instruction"
-                    instructions={instructionNames}
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/mips/instruction/[instructionName]', {
+                            instructionName
+                        })}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />

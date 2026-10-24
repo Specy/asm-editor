@@ -1,7 +1,8 @@
 /**
  * One line of markdown as HTML, for the short values of an entry's fields (a syscall's arguments,
- * a port's read side): code, emphasis and links only. A full MarkdownRenderer per field would boot
- * Carta dozens of times on a Chapter page for text that never has more than this.
+ * a port's read side): code, emphasis and links only. A full MarkdownRenderer per field would run
+ * the whole Markdown pipeline dozens of times on a Chapter page for text that never has more than
+ * this.
  *
  * Everything is escaped first, so only the markup built here reaches the page, and a link may only
  * point at our own pages, an anchor or the web.

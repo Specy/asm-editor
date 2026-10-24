@@ -148,6 +148,10 @@ _start:
     syscall
 ```
 
+```testcase
+{ "endsWithSignal": "SIGFPE" }
+```
+
 The next program stops on the load from `0x10`, which is outside this program's mappings. It leaves
 the same sentinel values and parks `rip` on the `mov` that raises `#PF`.
 
@@ -167,6 +171,10 @@ _start:
     syscall
 ```
 
+```testcase
+{ "endsWithSignal": "SIGSEGV" }
+```
+
 `ud2` is an instruction provided specifically to raise `#UD`. Here it stops the run on its own line
 and leaves `r9` at its known value.
 
@@ -183,6 +191,10 @@ _start:
     mov eax, 60
     xor edi, edi
     syscall
+```
+
+```testcase
+{ "endsWithSignal": "SIGILL" }
 ```
 
 The disallowed `in` from the previous lesson follows the same playground rule: it raises `#GP`,
@@ -230,6 +242,10 @@ _start:
     mov eax, 60
     xor edi, edi
     syscall
+```
+
+```testcase
+{ "endsWithSignal": "SIGFPE" }
 ```
 
 When the intended dividend is the 64-bit value in `rax`, clear `rdx` before `div`. This makes the

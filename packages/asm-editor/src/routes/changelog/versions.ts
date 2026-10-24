@@ -11,7 +11,7 @@ export const versions: Version[] = [
         title: 'Compile from C/C++',
         date: new Date('2026-10-05'),
         changes: [
-            'Added compilation of C and C++ to X86, MIPS and RISC-V assembly with Clang or GCC, at every optimization level.',
+            'Added compilation of C and C++ to x86-64, MIPS and RISC-V assembly with Clang or GCC, at every optimization level.',
             'Each C/C++ line is colored and connected to the assembly instructions it produced, and selecting a line highlights its instructions',
             'Breakpoints, stepping and undo follow the C/C++ source while debugging the generated assembly',
             "C/C++ code can use a subset of the standard C/C++ library functions (printf, scanf, malloc, etc.) plus a custom library that allows you to use the simulator's low level syscalls"
@@ -38,7 +38,7 @@ export const versions: Version[] = [
         changes: [
             'MIPS, RISC-V and M68K simulators now implement more instructions and directives',
             "Improved M68K's assembler so that it gives better error messages and warnings",
-            'Stabilized X86 simulator to NASM syntax. Assembling and checking now runs quickly. Added instruction documentation, autocomplete and course.',
+            'Stabilized x86-64 simulator to NASM syntax. Assembling and checking now runs quickly. Added instruction documentation, autocomplete and course.',
             'Added Graphics, Mouse and Keyboard support to MIPS, RISC-V, M68K and Z80 simulators',
             'Added possibility to edit registers and memory while debugging'
         ],
@@ -58,7 +58,7 @@ export const versions: Version[] = [
     },
     {
         version: '9.0.0',
-        title: 'Z80 language',
+        title: 'Z80 instruction set',
         date: new Date('2026-09-01'),
         changes: [
             'Added Z80 assembler/emulator with a port based console',
@@ -67,10 +67,10 @@ export const versions: Version[] = [
     },
     {
         version: '8.0.0',
-        title: 'New X86 emulator',
+        title: 'New x86-64 emulator',
         date: new Date('2026-04-26'),
         changes: [
-            'Changed the X86 emulator to Blink, which now supports the proper debugging tools and features',
+            'Changed the x86-64 emulator to Blink, which now supports the proper debugging tools and features',
             'Added AI assistant for exam review mode, to help professors grade exams faster.'
         ]
     },
@@ -114,19 +114,19 @@ export const versions: Version[] = [
     },
     {
         version: '6.0.0',
-        title: 'RISC-V language',
+        title: 'RISC-V instruction set',
         date: new Date('2025-05-16'),
         changes: ['Added RISC-V assembler/simulator', 'Added RISC-V documentation']
     },
     {
         version: '5.0.0',
-        title: 'X86 language',
+        title: 'x86-64 instruction set',
         date: new Date('2025-04-13'),
-        changes: ['Added X86 assembler/simulator (basic version)']
+        changes: ['Added x86-64 assembler/simulator (basic version)']
     },
     {
         version: '4.0.0',
-        title: 'MIPS language',
+        title: 'MIPS instruction set',
         date: new Date('2025-02-13'),
         changes: [
             'Added MIPS assembler/simulator (mars)',

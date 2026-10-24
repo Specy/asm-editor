@@ -32,7 +32,7 @@ then **Build** on its Generated assembly, followed by **Run**. Optimization defa
 Generated assembly offers **Recompile** when source/header or assembly edits require it.
 Compilation uses the existing
 Compiler Explorer service and needs an internet connection. It compiles one selected source unit
-with its local headers, as in the project editor. Source/header edits require recompilation.
+with the files its quoted includes reach, as in the project editor. Source/header edits require recompilation.
 **Open in editor** preserves all files, their names, the entry, testcases, and compilation records.
 
 Embed URLs accept a compressed `program` containing `{ files, entry, compilations? }`, using the

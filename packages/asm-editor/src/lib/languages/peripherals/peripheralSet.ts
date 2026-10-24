@@ -7,6 +7,7 @@ import { SCREEN_CELL_8X16, SCREEN_CELL_8X8, type ScreenCellSize } from './screen
 import { Screen, type ScreenOptions } from './screen/Screen'
 import type { Terminal } from './Terminal.svelte'
 import { FileSystem } from './FileSystem'
+import { Audio } from './audio/Audio'
 
 /**
  * The peripherals an Emulator owns besides its Terminal, injected at the Emulator boundary so the
@@ -27,6 +28,8 @@ export type InjectedPeripherals = {
     /** Where the random services start from: host randomness, or the fixed seed of a Testcase. */
     random: RandomSource
     fileSystem: FileSystem
+    /** The Notes and Sounds a program plays; silent until the GUI hands it the browser's output. */
+    audio: Audio
 }
 
 /** What a caller may hand an Emulator; anything it leaves out is built from the language defaults. */
@@ -81,5 +84,6 @@ export function createInjectedPeripherals(
     const clock = overrides.clock ?? new ProgramClock()
     const random = overrides.random ?? new RandomSource()
     const fileSystem = overrides.fileSystem ?? new FileSystem()
-    return { screen, keyboard, mouse, clock, random, fileSystem }
+    const audio = overrides.audio ?? new Audio({ clock })
+    return { screen, keyboard, mouse, clock, random, fileSystem, audio }
 }

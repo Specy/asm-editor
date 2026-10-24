@@ -24,8 +24,9 @@
      * clipped settings sections cannot change its coordinates or cover its options. It stays
      * in this DOM subtree, keeping the theme and the parent's outside-click handling intact.
      */
-    import { tick, type Snippet } from 'svelte'
+    import { tick, type Component, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
 
     type SelectOption = {
         key: string | number
@@ -50,6 +51,12 @@
         trigger?: Snippet
         popupWidth?: number
         item?: Snippet<[SelectOption, { selected: boolean; active: boolean }]>
+        /** Always opens the list above the control, as one at the bottom of the screen wants. */
+        openAbove?: boolean
+        /** An icon drawn in place of the triangle, turned over while the list is open. */
+        chevron?: Component
+        /** Added to the list's own style, such as a border that sets it apart from the panel under it. */
+        listStyle?: string
     }
 
     let {
@@ -64,7 +71,10 @@
         item,
         popupHeader,
         trigger,
-        popupWidth
+        popupWidth,
+        openAbove = false,
+        chevron,
+        listStyle = ''
     }: Props = $props()
 
     //SSR safe and unique per instance, so the ids survive hydration
@@ -103,7 +113,8 @@
 
     /**
      * Puts the list under the control, or over it when the room below is both too small and smaller
-     * than the room above, and caps its height to whichever side it landed on. Runs on open and on
+     * than the room above, or always over it when asked, and caps its height to whichever side it
+     * landed on. Runs on open and on
      * every scroll and resize while open, so the list tracks the control the way a native popup does.
      */
     function place() {
@@ -112,7 +123,7 @@
         const below = window.innerHeight - rect.bottom - MARGIN
         const above = rect.top - MARGIN
         const wanted = list?.scrollHeight ?? 0
-        const openUp = below < Math.min(wanted, 160) && above > below
+        const openUp = openAbove || (below < Math.min(wanted, 160) && above > below)
 
         const width = Math.min(popupWidth ?? rect.width, window.innerWidth - MARGIN * 2)
         placement = {
@@ -289,7 +300,14 @@
         <span class="label"
             >{#if trigger}{@render trigger()}{:else}{label}{/if}</span
         >
-        <span class="chevron" aria-hidden="true"></span>
+        {#if chevron}
+            {@const Chevron = chevron}
+            <span class="chevron-icon" class:open aria-hidden="true"
+                ><Icon size={0.65}><Chevron /></Icon></span
+            >
+        {:else}
+            <span class="chevron" aria-hidden="true"></span>
+        {/if}
     </button>
 
     {#if open}
@@ -304,7 +322,7 @@
             transition:popup
             style="top: {placement.top}px; left: {placement.left}px; width: {placement.width}px; max-height: {placement.maxHeight}px; transform-origin: {placement.openUp
                 ? 'bottom'
-                : 'top'};"
+                : 'top'}; {listStyle}"
         >
             {#if popupHeader}<li role="presentation">
                     {@render popupHeader({
@@ -398,6 +416,23 @@
         border-right: 0.32rem solid transparent;
         border-top: 0.36rem solid currentColor;
         opacity: 0.8;
+    }
+
+    .chevron-icon {
+        display: flex;
+        flex-shrink: 0;
+        opacity: 0.8;
+        transition: transform 0.15s ease;
+    }
+
+    .chevron-icon.open {
+        transform: rotate(180deg);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .chevron-icon {
+            transition: none;
+        }
     }
 
     /* fixed, not absolute: an absolutely positioned popup is part of the page's scrollable

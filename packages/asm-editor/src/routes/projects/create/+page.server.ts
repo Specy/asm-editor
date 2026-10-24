@@ -10,6 +10,6 @@ import { blogCatalog } from '#lib/blog/catalog.server.ts'
 export const load: PageServerLoad = async () => {
     return {
         templates: await getProjectTemplates(),
-        gettingStarted: blogCatalog.getPost('getting-started')?.pathname
+        gettingStarted: blogCatalog.getPost('getting-started')?.slug
     }
 }

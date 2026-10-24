@@ -67,7 +67,7 @@ export type AddressNaming<From> = {
     /** A jump target's block: `.LAB_n` inside its own function, `FUN_x.LAB_n` from elsewhere. */
     block(address: number, from: From): string | undefined
     /** A name the text was written with, for an address no label names exactly: a patch's. */
-    hint?(address: number): string | undefined
+    hint?(address: number, from: From): string | undefined
     /** The start of the named object or string that holds the address ({@link holderAt}). */
     holder(address: number): number | undefined
     /** The start of the function that holds the address. */
@@ -88,7 +88,7 @@ export function nameAddress<From>(
     if (label !== undefined) return label
     const block = naming.block(address, from)
     if (block !== undefined) return block
-    const hinted = naming.hint?.(address)
+    const hinted = naming.hint?.(address, from)
     if (hinted !== undefined) return hinted
     for (const start of [naming.holder(address), naming.owner(address)]) {
         const name = start === undefined ? undefined : naming.label(start)

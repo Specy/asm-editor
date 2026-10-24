@@ -51,12 +51,29 @@ export function currentSourceMaps(
  * and `.loc` directives with a single line's instructions.
  */
 export function blockEntryLines(map: CompilationSourceMap, location: SourceLocation): number[] {
+    return blockEntries(0, map.lines.length, (line) => {
+        const mapped = map.lines[line]
+        return mapped ? mapped.path === location.path && mapped.line === location.line : undefined
+    })
+}
+
+/**
+ * `blockEntryLines`'s rule over the assembly lines from `start` to `end` (exclusive), for any map:
+ * `maps(line)` says whether a line's instruction maps to the line looked for (`true`), only to
+ * others (`false`) or to none (`undefined`), which neither starts nor ends a block. A Pseudocode
+ * line's Breakpoints follow it over a function's Listing lines
+ * ([file-views.md](../../../../../docs/design/file-views.md), decision 10).
+ */
+export function blockEntries(
+    start: number,
+    end: number,
+    maps: (line: number) => boolean | undefined
+): number[] {
     const entries: number[] = []
     let inBlock = false
-    for (let line = 0; line < map.lines.length; line++) {
-        const mapped = map.lines[line]
-        if (!mapped) continue
-        const matches = mapped.path === location.path && mapped.line === location.line
+    for (let line = start; line < end; line++) {
+        const matches = maps(line)
+        if (matches === undefined) continue
         if (matches && !inBlock) entries.push(line)
         inBlock = matches
     }

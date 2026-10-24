@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import InteractiveEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import { type AvailableLanguages } from '#lib/Project.svelte.ts'
     import InstructionPreview from './InstructionPreview.svelte'
@@ -47,18 +48,22 @@
      */
     function openInEditor() {
         const project = makeProject({
-            name: `${instructionKey.toUpperCase()} - ${language} example`,
-            description: `Example for the ${language} ${instructionKey} instruction`,
+            name: `${instructionKey.toUpperCase()} - ${languageLabel(language)} example`,
+            description: `Example for the ${languageLabel(language)} ${instructionKey} instruction`,
             language,
             code
         })
-        const target = resolve('/projects/[project]', { project: 'share' })
-        // The route IS resolved, on the line above.
-        goto(`${target}?project=${createSharePayload(project)}`)
+        goto(resolve(`projects/share?project=${createSharePayload(project)}`))
     }
 </script>
 
-<div class="instruction-example playground">
+<!-- the registers wait for a Build, and the flags and the PC above them make that column about 2rem
+     taller than the row's usual 20rem: the code gets the same height from the start, so the console
+     under it stays where it is when they come -->
+<div
+    class="instruction-example playground"
+    style:--instruction-row-min-height={showPc && showFlags ? '22rem' : undefined}
+>
     {#key `${language}/${instructionKey}`}
         <EmulatorLoader
             bind:code
@@ -80,6 +85,7 @@
                     {initialRegisterFile}
                     {initialRegisterFormat}
                     showScreen={false}
+                    hideUntilBuilt
                     forceMemoryRight
                     dockActions={[
                         {
@@ -92,7 +98,7 @@
                 />
             {/snippet}
             {#snippet loading()}
-                <InstructionPreview {code} {language} {showMemory} {showConsole} />
+                <InstructionPreview {code} {language} {showConsole} />
             {/snippet}
         </EmulatorLoader>
     {/key}

@@ -153,10 +153,154 @@ cancelled. Read each task's registers and result codes in the [trap Documentatio
 file changes and positions with the instruction that made them.
 
 The simulator does not provide every device or hardware feature that a program might request.
-Sound tasks 70 to 77 stop with an Audio Peripheral message, and cycle-counter tasks 30 and 31 need
-a 68000 timing model. Serial and network tasks also stop with a reason; the
-[unsupported task list](/documentation/m68k/traps#unsupported) names each one. An invalid argument
-can stop a supported task too, such as base 37 for task 15.
+Cycle-counter tasks 30 and 31 need a 68000 timing model, so they stop with a reason, as serial and
+network tasks do; the [unsupported task list](/documentation/m68k/traps#unsupported) names each one.
+An invalid argument can stop a supported task too, such as base 37 for task 15.
+
+## Making sound
+
+Task 70 plays a WAV file from the project. Put the address of its zero-terminated path in `a1`.
+The task returns 1 in `d0.w` when playback starts. This standard player plays one sound at a time:
+it returns 0 if it is busy, or if an existing file cannot be played as a WAV. If the path does not
+exist, the task leaves `d0` unchanged.
+
+A sound file contains **samples**: successive numbers describing the sound level at successive
+instants. This example uses one byte per sample. These 8-bit samples are unsigned, with `$80` as
+the middle level; repeating `$80` gives silence. The two levels used here, `$C0` and `$40`, are
+equally far above and below that middle.
+
+The program writes 10 high samples, then 10 low samples. Those 20 samples make one complete
+cycle of a **square wave**. At 8,000 samples per second, the cycle repeats 8,000 / 20 = 400 times
+per second: a frequency of **400 Hz**. The array holds 4,000 samples, so the sound lasts
+4,000 / 8,000 = half a second.
+
+A playground starts with no WAV file, so the program creates one. It puts a 44-byte **header**
+before the samples to tell the player their format, sample rate and length. Treat this header
+as reusable setup for the example's one-channel, 8-bit audio. The file tasks write the header
+and samples together, then close the file before task 70 plays it.
+
+```m68k|playground|console|no-registers|no-flags
+RATE    equ 8000            ; samples a second
+LENGTH  equ 4000            ; half a second of them
+
+    lea samples, a0         ; a square wave: 10 samples high, then 10 low
+    move.w #LENGTH/20-1, d1
+wave:
+    moveq #9, d2
+high:
+    move.b #$C0, (a0)+
+    dbra d2, high
+    moveq #9, d2
+low:
+    move.b #$40, (a0)+
+    dbra d2, low
+    dbra d1, wave
+
+    lea name, a1
+    move.b #52, d0          ; create the file; returns its number in d1.l
+    trap #15
+    lea wav, a1
+    move.l #44+LENGTH, d2    ; number of bytes to write
+    move.b #54, d0          ; write from a1 to the file numbered in d1.l
+    trap #15
+    move.b #56, d0          ; close the same file, using d1.l
+    trap #15
+
+    lea name, a1
+    move.b #70, d0          ; play it
+    trap #15
+    move.w d0, d1           ; copy the word-sized playback result
+    ext.l d1               ; extend it to a signed long for task 3
+    move.b #3, d0           ; print the answer
+    trap #15
+    move.b #9, d0
+    trap #15
+
+    org $2000
+name:    dc.b 'tone.wav', 0
+wav:     dc.b 'RIFF', (36+LENGTH)&$FF, (36+LENGTH)>>8, 0, 0, 'WAVE'
+         dc.b 'fmt ', 16, 0, 0, 0       ; a format chunk of 16 bytes:
+         dc.b 1, 0, 1, 0                ; integer PCM, one channel,
+         dc.b RATE&$FF, RATE>>8, 0, 0   ; samples a second,
+         dc.b RATE&$FF, RATE>>8, 0, 0   ; bytes a second,
+         dc.b 1, 0, 8, 0                ; one byte a sample, of 8 bits
+         dc.b 'data', LENGTH&$FF, LENGTH>>8, 0, 0
+samples: ds.b LENGTH
+```
+
+```testcase
+{ "expectedOutput": "1" }
+```
+
+The console shows `1`, and task 9 ends the program while the sound plays on. Task 70's result is
+a word, while task 3 prints a signed long. After `move.w` copies the result to `d1.w`, `ext.l`
+sets the upper half of `d1` to match its sign, giving task 3 the same value in `d1.l`.
+
+The header writes its numbers low byte first, as WAV requires. In `RATE&$FF`, the assembler's
+`&` keeps only the low eight bits, producing the first byte. In `RATE>>8`, `>>` shifts the number
+right by eight bits, producing the next byte. For example, 8,000 is `$1F40`, so these expressions
+emit `$40`, then `$1F`. The following two zeros complete the four-byte value. The length fields
+use the same expressions; all the values in this example fit in two bytes.
+
+Task 71 loads a file into one of 256 numbered slots, and task 72 plays that slot through the
+standard player. The editor implements a second player interface named **DirectX**, selected by
+tasks 73 to 75, which can mix several sounds and play WAV or MIDI files. Tasks 76 and 77 loop or
+stop a slot's sound. The
+[Sound tasks reference](/documentation/m68k/traps#sound) gives the arguments for these options.
+
+Once a program has made a sound, the **Sound** button in the execution dock turns sound off and
+on. Testcases run silently and never leave a sound playing, so the player is never busy there.
+
+### Waveforms on the Synth
+
+The tasks above play sounds stored in files. The editor also has a **Synth**: a sound chip like
+the ones inside 1980s game consoles and home computers, which the program controls directly.
+This editor extension is not available in EASy68K.
+
+The Synth's controls, called **Synth registers**, are reached through memory addresses. Writing
+to one of these addresses directly changes a control. CPU registers such as `d0` and `a0` hold
+the values and addresses used for these writes. Use `move.w` for a word-sized control and
+`move.b` for a byte-sized one. Channel 0, one of the Synth's eight channels, starts at `$E00100`:
+
+- the word at offset `0` is the **frequency** in Hz, how many times a second the sound repeats:
+  440 is the A above middle C, and 262 is middle C.
+- the byte at `$11` chooses the **waveform**, the shape that repeats: 0 is a pulse, 1 a triangle,
+  2 a sawtooth, 3 a sine and 4 noise.
+- the byte at `$12` is the volume, from 0 to 127. The byte at `$13` is **sustain**, also from 0
+  to 127: 127 holds the note at the level chosen by volume, and lower values hold it more quietly.
+- the byte at `$10` holds the **gate**: storing 1 starts a note, and storing 0 ends it.
+
+Task 23 waits for the number of hundredths of a second in `d1.l`. A value of 40 waits 40/100 of
+a second, or four tenths. The Synth keeps playing during the wait.
+
+```m68k|playground|console|no-registers|no-flags
+    lea $E00100, a0         ; put the address $E00100 in a0
+    move.b #1, $11(a0)      ; waveform 1: a triangle
+    move.b #100, $12(a0)    ; volume 100
+    move.b #127, $13(a0)    ; sustain: hold at the chosen volume
+
+    move.w #262, (a0)       ; middle C, in Hz
+    move.b #1, $10(a0)      ; gate on: the note starts
+    move.l #40, d1          ; four tenths of a second, in hundredths
+    move.b #23, d0          ; task 23: wait
+    trap #15
+
+    move.w #330, (a0)       ; E: change pitch while the gate stays on
+    trap #15                ; wait again: d0 and d1 still ask for it
+    move.w #392, (a0)       ; G
+    trap #15
+
+    move.b #0, $10(a0)      ; gate off: the note ends
+    move.b #9, d0
+    trap #15
+```
+
+You should hear three successive pitches, C, E and G, each lasting four tenths of a second.
+There is no printed output. The gate stays on for all three pitches, and each frequency write
+changes the pitch immediately.
+
+Change the waveform number at `$11` to 3 to hear the same pitches with a sine wave. The
+[Synth chapter](/documentation/m68k/synth) of the Documentation describes the remaining controls.
 
 ## Your turn
 

@@ -42,7 +42,20 @@
                 wrapperStyle="min-width: 9rem; max-width: 12rem"
             />
         {/if}
-        {#if entry.type === 'number'}
+        {#if entry.type === 'number' && entry.range}
+            <input
+                class="range"
+                type="range"
+                min={entry.range.min}
+                max={entry.range.max}
+                step={entry.range.step}
+                aria-label={entry.name}
+                bind:value
+                oninput={() => {
+                    dispatcher('changeValue', Number(value))
+                }}
+            />
+        {:else if entry.type === 'number'}
             <input
                 class="number"
                 type="number"
@@ -65,11 +78,15 @@
         padding: 0.2rem 0.4rem;
         font-size: 0.9rem;
     }
+    .range {
+        width: 9rem;
+        accent-color: var(--accent);
+    }
     .number {
         padding: 0.6rem 1rem;
         border-radius: 0.4rem;
         width: 7rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
     }
 </style>

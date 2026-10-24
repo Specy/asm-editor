@@ -247,7 +247,8 @@ Compiled with `-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nos
 | `operator new[](size_t)` | own, `cxx/new_array.cpp` | Calls `operator new`, so replacing `operator new` also changes arrays. |
 | `operator new(size_t, const nothrow_t &)`, `operator new[](…, nothrow)` | own | Return `nullptr` when memory runs out. |
 | `operator new(size_t, align_val_t)`, `operator new[](…, align_val_t)` | own | Over-aligned types (`alignas` beyond the default), through `aligned_alloc`. |
-| `operator delete(void *)` and the array, sized, nothrow and aligned forms | own, one file each | Each forwards to `operator delete(void *)` or `free`, so a program may replace any subset. |
+| `operator new(size_t, align_val_t, const nothrow_t &)`, `operator new[](…, align_val_t, nothrow)` | own | `new (std::nothrow)` of an over-aligned type; returns `nullptr` when memory runs out. |
+| `operator delete(void *)` and the array, sized, nothrow, aligned and aligned nothrow forms | own, one file each | Each forwards to `operator delete(void *)` or `free`, so a program may replace any subset. |
 | placement `operator new`/`delete` | `<new>`, inline | |
 | `std::nothrow`, `std::nothrow_t`, `std::align_val_t`, `std::launder` | `<new>` / own `cxx/nothrow.cpp` | |
 | `__cxa_atexit`, `__cxa_finalize` | musl `exit/atexit.c` | Same list as `atexit`. |

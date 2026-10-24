@@ -140,8 +140,8 @@
         width: 2rem;
         height: 2rem;
         border-radius: 0.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
         cursor: pointer;
     }
     /* a line of text takes the width the row has, and its problem goes on a line of its own */
@@ -160,8 +160,8 @@
         max-width: 16rem;
         padding: 0.6rem 0.8rem;
         border-radius: 0.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
         font-family: 'Fira Code', monospace;
         font-size: 0.85rem;
 
@@ -180,7 +180,7 @@
         padding: 0.6rem 1rem;
         border-radius: 0.4rem;
         width: 7rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
     }
 </style>

@@ -46,12 +46,13 @@ function markdownOf(entry: DocumentationEntry): string {
 }
 
 describe('the x86 Documentation', () => {
-    it('has its eight Chapters at their pages', () => {
+    it('has its nine Chapters at their pages', () => {
         expect(chapters().map((chapter) => [chapter.id, chapter.href])).toEqual([
             ['instructions', '/documentation/x86/instruction'],
             ['extensions', '/documentation/x86/extensions'],
             ['directives', '/documentation/x86/directive'],
             ['registers-and-flags', '/documentation/x86/registers'],
+            ['vector-instructions', '/documentation/x86/vector-instructions'],
             ['syscalls', '/documentation/x86/syscall'],
             ['using-c', '/documentation/x86/using-c'],
             ['runtime-library', '/documentation/x86/runtime-library'],
@@ -66,13 +67,32 @@ describe('the x86 Documentation', () => {
             'overview',
             'what-runs',
             'libraries',
+            'hex-editor',
+            'byte-edits',
+            'elf-parts',
+            'finding',
+            'data-inspector',
             'listing',
             'names',
+            'cpp-names',
+            'symbols',
+            'decompile',
+            'pseudocode',
+            'decompile-time',
+            'renaming',
+            'comments',
+            'annotations',
+            'search',
+            'search-pseudocode',
+            'navigation',
             'stepping',
             'breakpoints',
+            'pseudocode-debugging',
+            'memory',
             'arguments',
             'testcases',
             'patching',
+            'build-output',
             'log-notes',
             'safety'
         ])
@@ -102,9 +122,50 @@ describe('the x86 Documentation', () => {
             '@GLIBC_'
         ])
             expect(text('names')).toContain(name)
+        // C++ names: the Listing keeps the mangled ones, and comments and lists read them
+        expect(text('names')).toContain('[C++ names](#cpp-names)')
+        for (const form of ['_ZNSolsEi', 'std::string', '[deleting]', '8,192'])
+            expect(text('cpp-names')).toContain(form)
         expect(text('patching')).toContain('**Space**')
         expect(text('patching')).toContain('long press')
         expect(text('stepping')).toContain('**Step into library code**')
+        // the Hex editor's switch, what a Byte edit is, and what the Build output is
+        expect(text('hex-editor')).toContain('**Disassemble**')
+        expect(text('byte-edits')).toContain('**Byte edits**')
+        expect(text('byte-edits')).toContain('**Show in Hex**')
+        expect(text('elf-parts')).toContain('**Show in Listing**')
+        expect(text('finding')).toContain('`??`')
+        expect(text('data-inspector')).toContain('**Little**')
+        for (const words of [
+            '**Build output**',
+            '**From an earlier Build**',
+            '**New program from this file**',
+            'rename it'
+        ])
+            expect(text('build-output')).toContain(words)
+        // Decompile: the switch's third view, Ghidra's Pseudocode, its limit and its Breakpoints
+        expect(text('hex-editor')).toContain('**Decompile**')
+        expect(text('decompile')).toContain('Ghidra')
+        expect(text('pseudocode')).toContain('**Go to Definition**')
+        expect(text('decompile-time')).toContain('30 seconds')
+        // renames, comments and their Undo, and the Search panel
+        expect(text('renaming')).toContain('**Reset name**')
+        expect(text('renaming')).toContain('@plt')
+        expect(text('comments')).toContain('**Function comment…**')
+        expect(text('comments')).toContain('Comments that could not be placed')
+        expect(text('annotations')).toContain('**Undo rename or comment**')
+        expect(text('search')).toContain('**Ctrl+Shift+F**')
+        expect(text('search')).toContain('**Look in**')
+        expect(text('search-pseudocode')).toContain('**Cancel**')
+        expect(text('pseudocode-debugging')).toContain('`if (iVar1 == 0) {`')
+        expect(text('build-output')).toContain('Decompile')
+        // finding the way round: the Symbols panel, back and forward, and the pointer menus
+        expect(text('symbols')).toContain('**Strings**')
+        expect(text('navigation')).toContain('**Alt+←**')
+        expect(text('memory')).toContain('**Follow pointer**')
+        // an Executable's Debug, and the Breakpoint actions of the code menus
+        expect(text('stepping')).toContain('**Debug**')
+        expect(text('breakpoints')).toContain('**Run to Cursor**')
     })
 
     it('has an instruction entry for every instruction page, alphabetically', () => {
@@ -117,7 +178,8 @@ describe('the x86 Documentation', () => {
         expect(find('instructions', 'add')).toMatchObject({
             kind: 'instruction',
             names: ['add'],
-            summary: 'Add',
+            summary:
+                'Adds the source (second) operand to the destination (first) operand and leaves the sum in the destination.',
             href: '/documentation/x86/instruction/add',
             anchor: 'add'
         })
@@ -144,11 +206,69 @@ describe('the x86 Documentation', () => {
 
         const jumps = find('extensions', 'Jumps (extensions)')
         expect(jumps).toMatchObject({ names: ['jmpabs'], anchor: 'jumps-extensions' })
-        expect(markdownOf(jumps)).toBe('- `jmpabs` (APX)')
+        expect(markdownOf(jumps)).toBe(
+            '**This emulator does not support APX.** A program that reaches one of these instructions stops with SIGILL, an illegal instruction.\n\n- `jmpabs` (APX)'
+        )
         expect(hasCodeName(jumps)).toBe(false)
         // Only an integer section's group names the extension: the others' headings do already.
         expect(markdownOf(find('extensions', 'Intel AES instructions'))).toContain(
             '- `aesenc` — Perform One Round of an AES Encryption Flow\n'
+        )
+    })
+
+    it('says which vector instructions the emulator does not run', () => {
+        const fp16 = markdownOf(find('extensions', 'AVX512 Bit Algorithms'))
+        expect(fp16.startsWith('**This emulator does not support AVX-512.**')).toBe(true)
+        expect(fp16).not.toContain('not supported:')
+        // a section that shares mnemonics with AVX runs in part, and marks the ones that do not
+        const avx512 = markdownOf(find('extensions', 'AVX-512 instructions'))
+        expect(avx512).toContain('forms of these instructions are not supported by this emulator')
+        expect(avx512).toContain(
+            '- `vmovdqa32` — Move Aligned Doubleword Values *(not supported: AVX-512)*'
+        )
+        // SSE4 and AES run as their v forms only, and the page says what to write instead
+        const sse4 = markdownOf(find('extensions', 'Penryn New Instructions (SSE4.1)'))
+        expect(sse4).toContain('SSE4 instructions run only in their `v` form')
+        expect(sse4).toContain(
+            '- `dppd` — Dot Product of Packed Double Precision Floating-Point Values *(runs only as `vdppd`)*'
+        )
+        // AVX runs, with the AVX-512 forms of its instructions left out
+        const avx = markdownOf(find('extensions', 'Intel AVX instructions'))
+        expect(avx).toContain(
+            'forms of these instructions are not supported by this emulator; the other forms run.'
+        )
+        expect(avx).not.toContain('**This emulator does not support')
+    })
+
+    it('files the vector instructions the emulator runs by the work they do', () => {
+        const avx = markdownOf(find('extensions', 'Intel AVX instructions'))
+        for (const label of [
+            'Moves, loads and stores',
+            'Arithmetic',
+            'Shuffles, permutes and blends'
+        ]) {
+            expect(avx).toContain(`**${label}**\n\n- `)
+        }
+        const [, afterShuffles] = avx.split('**Shuffles, permutes and blends**')
+        expect(afterShuffles.split('\n\n**')[0]).toContain('- `vblendpd`')
+        // a group the emulator runs none of is one list
+        expect(markdownOf(find('extensions', 'AVX512 Bit Algorithms'))).not.toContain(
+            '**Arithmetic**'
+        )
+        // and so is a group that is not one of vector instructions, whatever its mnemonics
+        for (const title of [
+            'BMI1 and BMI2 bit operations',
+            'Intel Transactional Synchronization Extensions (TSX)',
+            'Synchronization and fencing',
+            'XSAVE group (AVX and extended state)',
+            'MMX (SIMD using the x87 register file)'
+        ]) {
+            expect(markdownOf(find('extensions', title)), title).not.toMatch(
+                /^\*\*[A-Z][^*]*\*\*$/m
+            )
+        }
+        expect(markdownOf(find('extensions', 'Intel AVX instructions'))).toMatch(
+            /\*\*Moves, loads and stores\*\*\n\n(?:- .*\n)*- `vldqqu`/
         )
     })
 
@@ -285,7 +405,7 @@ describe('the x86 Documentation', () => {
             ])
         )
         expect(anchors('registers-and-flags')).toEqual(
-            expect.arrayContaining(['registers', 'flags', 'condition-codes', 'sse', 'x87'])
+            expect.arrayContaining(['registers', 'flags', 'condition-codes', 'sse', 'avx', 'x87'])
         )
         expect(anchors('syscalls')).toEqual(expect.arrayContaining(['common', 'all']))
     })
@@ -296,7 +416,7 @@ describe('the x86 Documentation', () => {
             (entry) => entry.kind === 'register' && entry.anchor.startsWith('register-')
         )
         expect(general.map((entry) => entry.title)).toEqual(X86_REGISTERS.map((r) => r.name))
-        expect(entries.filter((entry) => entry.kind === 'register')).toHaveLength(11 + 6)
+        expect(entries.filter((entry) => entry.kind === 'register')).toHaveLength(11 + 7)
         expect(entries.filter((entry) => entry.kind === 'flag')).toHaveLength(7)
         expect(entries.filter((entry) => entry.kind === 'condition-code')).toHaveLength(16)
 
@@ -326,24 +446,24 @@ describe('the x86 Documentation', () => {
             expect(entry.summary.trim(), entry.id).not.toBe('')
             expect(entry.summary, entry.id).not.toMatch(/\n|&apos;/)
         }
+        // nothing describes these four, so their sentence is written in the names table
         for (const name of ['brkpt', 'jmpe', 'movrs', 'nop2']) {
-            expect(find('instructions', name).summary).toBe(name)
+            expect(find('instructions', name).summary).toMatch(/^[A-Z][^.]+\.$/)
         }
-        // The appendix's heading, which is also the page's title, before a long first sentence.
-        expect(find('instructions', 'loop').summary).toBe('Loop with Counter')
-        expect(find('instructions', 'movabs').summary).toBe(
-            'Moves a full 64 bit immediate into a register.'
-        )
+        // a summary the whole row can show, not the appendix's long first sentence
+        expect(find('instructions', 'loop').summary.length).toBeLessThanOrEqual(140)
+        expect(find('instructions', 'movabs').summary).toMatch(/immediate.*absolute memory offset/)
     })
 
-    it("shows an instruction's operand shapes without their widths", () => {
+    it("shows an instruction's first Form patterns, general ones first", () => {
         const signature = (name: string) => find('instructions', name).signature
+        // the accumulator's short encodings are left out: `r/m, imm` covers them
         expect(signature('add')).toBe('r/m, reg | reg, r/m | r/m, imm')
-        expect(signature('mov')).toBe('r/m, reg | reg, r/m | r/m, imm | …')
-        expect(signature('push')).toBe('r/m | imm | …')
-        expect(signature('pop')).toBe('r/m | fs | gs')
-        expect(signature('shl')).toBe('r/m, imm | r/m, cl')
-        expect(signature('ret')).toBe('[imm]')
+        expect(signature('mov')).toBe('r/m, reg | reg, r/m | reg, imm | …')
+        expect(signature('push')).toBe('reg | r/m | imm | …')
+        expect(signature('pop')).toBe('reg | r/m | fs | …')
+        expect(signature('shl')).toBe('r/m, imm8 | r/m, 1 | r/m, cl')
+        expect(signature('ret')).toBe('[imm16]')
         expect(signature('syscall')).toBeUndefined()
     })
 })

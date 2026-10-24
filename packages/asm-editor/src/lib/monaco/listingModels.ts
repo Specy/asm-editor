@@ -1,4 +1,4 @@
-import type { Listing } from '#lib/listing/listing.ts'
+import { LINE_KIND, type Listing } from '#lib/listing/listing.ts'
 import type { PatchedLine } from '#lib/listing/listingPatcher.svelte.ts'
 import { ListingIndex } from '#lib/listing/listingNavigation.ts'
 
@@ -62,19 +62,20 @@ export function sharedAddressDigits(listing: Listing): number {
 }
 
 /**
- * The editor's line numbers for a Listing: each line's run-time address, none on other lines;
- * `short` leaves out the leading digits every address shares.
+ * The editor's line numbers for a Listing: each line's run-time address, none on other lines nor
+ * on a person's comment lines, which hold no bytes; `short` leaves out the leading digits every
+ * address shares.
  */
 export function listingLineNumbers(
     listing: Listing,
     short = false
 ): (lineNumber: number) => string {
-    const { addresses } = listing.lines
+    const { addresses, kinds } = listing.lines
     const dropped = short ? sharedAddressDigits(listing) : 0
     const width = addressRange(listing)[1].length
     return (lineNumber) => {
         const address = addresses[lineNumber - 1]
-        if (!(address >= 0)) return ''
+        if (!(address >= 0) || kinds[lineNumber - 1] === LINE_KIND.comment) return ''
         const text = (address + listing.base).toString(16)
         return dropped ? text.padStart(width, '0').slice(dropped) : text
     }

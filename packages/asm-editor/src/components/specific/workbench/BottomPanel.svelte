@@ -4,8 +4,10 @@
      * Problems (the Diagnostics) ([the design record](../../../../../../docs/design/workbench.md), Bottom
      * panel). A failed Build shows the Problems, a successful one the Terminal, Test the Log.
      * All three stay built, and only the one picked is shown, so switching keeps each where it was.
+     * The tab strip also carries the Program picker, on every tab, while the Project has two
+     * Programs or more ([programs.md](../../../../../../docs/design/programs.md), decision 10).
      */
-    import { untrack, type Snippet } from 'svelte'
+    import { untrack } from 'svelte'
     import FaSpinner from '~icons/fa-solid/spinner'
     import FaTerminal from '~icons/fa-solid/terminal'
     import FaListUl from '~icons/fa-solid/list-ul'
@@ -15,17 +17,14 @@
     import type { BottomTab } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import TerminalView from './TerminalView.svelte'
     import LogView from './LogView.svelte'
+    import ProgramPicker from './ProgramPicker.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
-        /** Controls of the host layout's own at the right end of the tab strip. */
-        actions?: Snippet
-        /** Whether the tab bodies are shown; a compact layout can fold the panel to its tabs. */
-        open?: boolean
         style?: string
     }
 
-    let { actions, open = true, style = '' }: Props = $props()
+    let { style = '' }: Props = $props()
 
     const { session, ui } = useWorkbench()
     const problems = $derived(session.activeDiagnostics.length)
@@ -33,14 +32,17 @@
     const interactive = $derived(session.emulator.canExecute && !session.emulator.terminated)
     const readWaiting = $derived(terminal.pendingRead?.source === 'terminal')
 
-    //a read that starts while no console is on screen picks the Terminal's tab, and the compact
-    //layout unfolds the panel (the plan's decision 10); the caret then takes the keyboard
+    //a read that starts while no console is on screen picks the Terminal's tab (the plan's decision
+    //10); the caret then takes the keyboard
     $effect(() => {
         if (!readWaiting) return
         untrack(() => {
             if (!terminal.consoleAttached) session.bottomTab = 'terminal'
         })
     })
+    //a phone's strip has no room for the tabs' names beside the Program picker, so they are icons
+    //then, named by their tooltip and to a screen reader
+    const iconTabs = $derived(ui.deviceClass === 'phone' && session.programChoices.length >= 2)
     const tabs: { id: BottomTab; label: string; icon: Component }[] = [
         { id: 'terminal', label: 'Terminal', icon: FaTerminal },
         { id: 'log', label: 'Log', icon: FaListUl },
@@ -54,12 +56,15 @@
             <button
                 class="tab"
                 class:active={session.bottomTab === tab.id}
+                class:icon-only={iconTabs}
                 role="tab"
                 aria-selected={session.bottomTab === tab.id}
+                aria-label={iconTabs ? tab.label : undefined}
+                title={iconTabs ? tab.label : undefined}
                 onclick={() => (session.bottomTab = tab.id)}
             >
                 <span class="tab-icon"><tab.icon /></span>
-                {tab.label}
+                {#if !iconTabs}{tab.label}{/if}
                 {#if tab.id === 'problems'}
                     {#if session.analysisSpinnerVisible}
                         <span class="badge pending" title="Analyzing">
@@ -76,17 +81,17 @@
             </button>
         {/each}
         <div class="spacer"></div>
+        <ProgramPicker />
         <!-- a phone's strip has no room for it beside the tabs; the Log says it too -->
         {#if session.runInfo && ui.deviceClass !== 'phone'}
             <span class="run-info" title={session.runInfo}><span>{session.runInfo}</span></span>
         {/if}
-        {@render actions?.()}
     </div>
-    <div class="tab-body" class:hidden={!open || session.bottomTab !== 'terminal'} role="tabpanel">
+    <div class="tab-body" class:hidden={session.bottomTab !== 'terminal'} role="tabpanel">
         <TerminalView
             {terminal}
             errors={session.errorStrings}
-            visible={open && session.bottomTab === 'terminal'}
+            visible={session.bottomTab === 'terminal'}
             {interactive}
             escapes={session.project.language === 'X86'}
             commandLine={session.commandLine}
@@ -94,10 +99,10 @@
             commandLineFocus={session.commandLineFocus}
         />
     </div>
-    <div class="tab-body" class:hidden={!open || session.bottomTab !== 'log'} role="tabpanel">
-        <LogView entries={session.log} visible={open && session.bottomTab === 'log'} />
+    <div class="tab-body" class:hidden={session.bottomTab !== 'log'} role="tabpanel">
+        <LogView entries={session.log} visible={session.bottomTab === 'log'} />
     </div>
-    <div class="tab-body" class:hidden={!open || session.bottomTab !== 'problems'} role="tabpanel">
+    <div class="tab-body" class:hidden={session.bottomTab !== 'problems'} role="tabpanel">
         {#if problems > 0}
             <div class="problems">
                 <ProblemsList
@@ -147,6 +152,7 @@
 
     .tab {
         display: flex;
+        flex: none;
         align-items: center;
         gap: 0.45rem;
         padding: 0 1rem;
@@ -168,6 +174,11 @@
         &.active {
             background-color: var(--secondary);
             border-bottom-color: var(--secondary);
+        }
+
+        &.icon-only {
+            gap: 0.35rem;
+            padding: 0 0.75rem;
         }
     }
 
@@ -221,6 +232,7 @@
 
     .spacer {
         flex: 1;
+        min-width: 0;
     }
 
     .run-info {

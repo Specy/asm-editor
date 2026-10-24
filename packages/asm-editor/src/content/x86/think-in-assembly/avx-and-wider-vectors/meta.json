@@ -1,0 +1,6 @@
+{
+    "name": "AVX and 256-bit vectors",
+    "description": "Use the 256-bit YMM registers for eight binary32 or four binary64 lanes per instruction, with three-operand forms, upper-half rules, lane-crossing permutes, broadcasts, fused multiply-add, horizontal sums and alignment.",
+    "order": 8,
+    "topic": "avx"
+}

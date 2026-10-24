@@ -10,11 +10,17 @@ Accepted scope from the design interview on 2026-10-03. The owner subsequently a
 
 ## Compilation inputs
 
-Compile operates on the selected C or C++ File together with its project-local headers. Each Source compilation produces one Generated assembly output and its source mapping. Compiling and linking several C/C++ translation units together is deferred; the pipeline should allow that extension later.
+Compile operates on the selected C or C++ File together with the Project Files its quoted includes reach. Each Source compilation produces one Generated assembly output and its source mapping. Compiling and linking several C/C++ translation units together is deferred; the pipeline should allow that extension later.
+
+Update 2026-10-23: a quoted include reaches any plain-text File, whatever its extension, where it used to reach only `.h`, `.hpp`, `.hh`, `.hxx` and `.inc` Files, so `#include "video.c"` pastes a `.c` File in as a header is pasted. The first release had decided headers by extension and had not considered a `.c` File included as text, which needs none of the linking the deferred paragraph above is about. Compile now sends Compiler Explorer exactly the Files the scan reaches, rather than every header of the Project, so other Programs' sources and data Files stay in the browser; a `__has_include("…")` counts as reaching its File, and a computed include (`#include NAME`) still conservatively reaches every C or C++ File. The same set decides staleness and the in-flight change check. Include completion offers `.c` and `.cpp` Files beside headers.
 
 Clang is the default compiler for new MIPS and RISC-V sources. The Compile dock also offers GCC, using the same instruction-set and ABI presets; the Compilation record remembers the compiler used for each generated output.
 
 MIPS Clang targets little-endian MIPS32 with the o32 ABI and 32-bit floating-point registers, matching the Runtime library. It uses `-mllvm -disable-mips-delay-filler` to leave nops in branch delay slots, as MARS executes with delayed branching disabled. GCC retains its equivalent `-fno-delayed-branch` preset.
+
+At `-O0`, Clang gives the instruction that loads a constant or an address no source line of its own, so in its line table it reads as the line before it: the previous statement's, or the function's opening line for the first statement. Clang therefore compiles at `-O0` with `-mllvm -use-unknown-locations=Enable`, which marks those instructions with line 0, and the Source map gives a run of them the line of the instruction after it in the same block, or the line before it where the run ends its block (a spill and the jump after it). The first statement's constants come before `prologue_end` and keep the opening line even so; the instructions just before it that only write registers move to its line, back to a store or the frame's own setup. Optimized output keeps the compiler's lines, where line 0 means code merged from several lines.
+
+Compiler Explorer ends a source location at any line that contains `.data`, `.text`, `.section` or `.cfi_endproc`, an instruction's included, until the next `.loc`. Clang names a static local `next.data` and a local array's initializer `__const.main.text`, so an instruction that refers to one would lose its line, together with the `.loc` just before it. The Source map gives those lines the location of the compiler's own `.file` and `.loc` directives, whatever the compiler and optimization level.
 
 The “Include source annotations when compiling” Preference is enabled by default and applies to Clang on the next compilation. Clang preserves basic-block names as comments such as `for.cond`, `for.body`, `if.then`, and `if.else`. These hints are clearest at `-O0`; optimized code can transform or remove the original control-flow structure. GCC output omits source-line and variable/expression annotations.
 
@@ -30,7 +36,7 @@ Derive the initial output path by appending the Project Target's assembly extens
 
 ## Source-map invalidation
 
-Changing the compiled source File or a project-local header used by the Source compilation removes its Source map, mapped highlights, and connectors. Keep the Generated assembly File, both editor panes, and their tabs, and show a stale warning when the assembly is viewed. See the [independent editor panes plan](./independent-editor-panes-plan.md).
+Changing the compiled source File or a File it included removes its Source map, mapped highlights, and connectors. Keep the Generated assembly File, both editor panes, and their tabs, and show a stale warning when the assembly is viewed. See the [independent editor panes plan](./independent-editor-panes-plan.md).
 
 Manual edits to the Generated assembly also remove its Source map, mapped highlights, and connectors while keeping the editors open. Recompiling over manually edited assembly requires an overwrite confirmation. The origin relationship and manual-edit state must remain identifiable after map removal so that invalidation does not disable that confirmation.
 

@@ -80,7 +80,9 @@ describe('notes in the Log', () => {
     it("follow the Build's own entry, whatever the Build ran into", async () => {
         const { session, emulator } = setup()
         emulator.compile = async () => {
-            emulator.notes = [note('libz.so.6 is not one of the bundled libraries')]
+            emulator.notes = [
+                note("This emulator doesn't have libz.so.6, so the program may not start.")
+            ]
             //effects run while the Build is still going
             await tick()
             emulator.notes = [
@@ -94,7 +96,7 @@ describe('notes in the Log', () => {
         flushSync()
         expect(kinds(session.log)).toEqual([
             expect.stringMatching(/^build: Built main\.asm in /),
-            'note: libz.so.6 is not one of the bundled libraries',
+            "note: This emulator doesn't have libz.so.6, so the program may not start.",
             'note: The program did not reach main within 50,000,000 instructions'
         ])
         expect(session.log.slice(1).map((entry) => entry.tone)).toEqual(['warning', 'warning'])
@@ -121,19 +123,21 @@ describe('notes in the Log', () => {
             kind: 'signal',
             number: 4,
             name: 'SIGILL',
-            description: 'Illegal instruction'
+            description: 'Illegal instruction',
+            unsupported: "stopped: AVX-512 isn't supported yet"
         }
         emulator.notes = [
             ...emulator.notes,
             note(
-                'The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support'
+                "The program stopped at `vaddps zmm0, zmm1, zmm2` (`0x555555555195`): this emulator doesn't support AVX-512 instructions yet."
             )
         ]
         flushSync()
         expect(kinds(session.log).slice(-2)).toEqual([
-            'exit: Ran in 12ms, Illegal instruction (signal 4)',
-            'note: The program ran `vmovd xmm0, edi` at `0x555555555195`, which the emulator does not support'
+            "exit: Ran in 12ms, stopped: AVX-512 isn't supported yet",
+            "note: The program stopped at `vaddps zmm0, zmm1, zmm2` (`0x555555555195`): this emulator doesn't support AVX-512 instructions yet."
         ])
+        expect(session.log.at(-2)?.tone).toBe('error')
         //each note once, also when the list is read again
         emulator.notes = [...emulator.notes]
         flushSync()

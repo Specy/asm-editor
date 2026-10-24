@@ -72,7 +72,9 @@ export type ExecutionSliceRequest = {
  * - `limit`: the Core refused to continue because of a limit of its own.
  * - `wait`: the program asked for time to pass ([ADR 0010](../../../../../docs/adr/0010-program-time-without-clock-pacing.md)).
  *   The adapter puts the wait in `wait`; the scheduler awaits it through the execution generation so
- *   Stop cancels it, and then runs the next slice.
+ *   Stop cancels it, and then runs the next slice. MIPS and RISC-V leave `wait` out: their Cores
+ *   serve the wait inside the slice, which ends once it is over, and the scheduler yields instead.
+ *   Either way the slice says nothing about the Core's speed.
  */
 export type ExecutionSliceReason =
     | 'budget'
@@ -90,7 +92,7 @@ export type ExecutionSlice = {
      * which is exact for the case that matters — a compute-only slice.
      */
     instructions: number
-    /** Only with `reason: 'wait'`: what the scheduler waits for before the next slice. */
+    /** Only with `reason: 'wait'`: what the scheduler waits for before the next slice, or a yield without one. */
     wait?: Promise<void>
 }
 
@@ -182,6 +184,32 @@ export function yieldToHost(): Promise<void> {
     return new Promise<void>((resolve) => {
         hostWaiters.push(resolve)
         channel.port2.postMessage(0)
+    })
+}
+
+/**
+ * Waits until the browser has painted a frame, so that what the page shows just before a long
+ * synchronous call, such as a Core assembling a large program in one go, is on screen while the
+ * call holds the page: the dock's Build spinner, which a CSS transform animation keeps turning on
+ * the compositor even while the page's own thread is busy. Measured on the Pac-Man example, RARS
+ * holds the page for one to three seconds, and without this wait whether "Building…" was painted
+ * first depended on whether some earlier await happened to straddle a frame.
+ *
+ * A `requestAnimationFrame` callback runs just before a frame is painted, and a turn handed to the
+ * host from it runs after the paint. A hidden tab paints no frames, so a short timer stands in for
+ * the frame there; outside a browser there is nothing to paint and it resolves at once.
+ */
+export function afterNextPaint(timeoutMs = 100): Promise<void> {
+    if (typeof requestAnimationFrame !== 'function' || typeof document === 'undefined')
+        return Promise.resolve()
+    return new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, timeoutMs)
+        requestAnimationFrame(() => {
+            void yieldToHost().then(() => {
+                clearTimeout(timer)
+                resolve()
+            })
+        })
     })
 }
 

@@ -22,8 +22,13 @@ export function includeSuggestions(
     const source = context.identity.path
     const directory = source.includes('/') ? source.slice(0, source.lastIndexOf('/')) : ''
     const files = context.sources.files
+    //headers, and the C and C++ sources Compile also sends when a quoted include names one; never
+    //the File being edited, which including itself would only loop
     const headers = Object.keys(files).filter(
-        (path) => files[path].encoding === 'plain' && /\.(h|hpp|hh|hxx|inc)$/i.test(path)
+        (path) =>
+            files[path].encoding === 'plain' &&
+            path !== source &&
+            /\.(h|hpp|hh|hxx|inc|c|cc|cpp|cxx)$/i.test(path)
     )
     const headerPaths = new Set(headers)
     const result = new Map<string, IncludeSuggestion>()
@@ -37,7 +42,8 @@ export function includeSuggestions(
                 continue
             }
             if (headerPaths.has(path)) {
-                result.set(name, { name, path, summary: `Project header: ${path}` })
+                const kind = /\.(c|cc|cpp|cxx)$/i.test(path) ? 'source' : 'header'
+                result.set(name, { name, path, summary: `Project ${kind}: ${path}` })
                 return
             }
         }

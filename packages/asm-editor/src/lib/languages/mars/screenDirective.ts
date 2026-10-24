@@ -1,10 +1,13 @@
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
-    MARS_DISPLAY_SIZE_CHOICES,
-    MARS_UNIT_SIZE_CHOICES,
+    clampSize,
+    DISPLAY_SIZE_MAX,
+    DISPLAY_SIZE_MIN,
     type MarsDisplayConfiguration,
     normalizeMarsDisplay,
-    type ProjectDisplay
+    type ProjectDisplay,
+    UNIT_SIZE_MAX,
+    UNIT_SIZE_MIN
 } from './marsDisplay'
 
 /**
@@ -17,7 +20,9 @@ import {
  *
  * It is a comment, so the same file still assembles in real MARS and RARS, where the user sets the
  * five parameters in the tool's own window; and it is read at Build, so the Screen is configured
- * before the first instruction runs and during a Testcase run, rather than part way through.
+ * before the first instruction runs and during a Testcase run, rather than part way through. Its
+ * sizes are any whole number in the display's ranges, not only those the tool's window offers
+ * (`marsDisplay.ts`), and only a size outside them is reported.
  *
  * Plain TypeScript, no runes and no Core: the label a `base=` may name is resolved by the caller,
  * which is the only part that needs an assembler.
@@ -183,11 +188,48 @@ export function applyScreenDirective(
     }
 }
 
+/** The part of an assembled MARS or RARS Core a label lookup needs, which both Cores have. */
+export type ScreenLabelTable = { getAddressOfLabel(label: string): number }
+
+/**
+ * The address a `base=<label>` names, read from the program's own assembly: the symbol table of
+ * the Build's or the check's Core holds every label the program defines, so the program is
+ * assembled once. Only a name the table does not hold, such as a RARS `.eqv` name, which the
+ * assembler substitutes as text rather than defining, falls back to `probe`, which assembles the
+ * program again with `screenLabelProbeSource`. A program that did not assemble (`assembled` null)
+ * defines nothing and resolves nothing, as its probe would not assemble either.
+ *
+ * Until 2026-10-23 every labelled base was probed, before the real assembly, which made a Build
+ * assemble the whole program twice: a second or more on a program the size of the Pac-Man example.
+ */
+export function resolveScreenLabel(
+    assembled: ScreenLabelTable | null,
+    label: string,
+    probe: () => number | null
+): number | null {
+    if (!assembled) return null
+    let address = -1
+    try {
+        address = assembled.getAddressOfLabel(label)
+    } catch {
+        //a Core that cannot answer is asked the other way
+    }
+    return address === -1 ? probe() : address >>> 0
+}
+
+/** A Core whose assembly succeeded, warnings or not, else null: what `resolveScreenLabel` reads. */
+export function assembledCore<T>(
+    core: T,
+    result: { errors: readonly { isWarning: boolean }[] }
+): T | null {
+    return result.errors.some((error) => !error.isWarning) ? null : core
+}
+
 /**
  * The program, plus one `.word <label>` at a fixed address, for the caller to assemble in a
- * throwaway Core and read back: neither Core can look a label up by name — `getLabelAtAddress` only
- * goes the other way — but both assemblers resolve one in a `.word`, `.eqv` names and forward
- * references included.
+ * throwaway Core and read back: the assembler resolves a name in a `.word`, `.eqv` names and
+ * forward references included, where the symbol table `resolveScreenLabel` reads first has no
+ * `.eqv` names.
  */
 export function screenLabelProbeSource(code: string, label: string): string {
     return `${code}\n.data ${hex(SCREEN_LABEL_PROBE_ADDRESS)}\n.word ${label}\n`
@@ -235,15 +277,8 @@ function readEntry(
         directive.base = readBase(directive, value, diagnostics)
         return
     }
-    const sizes: Record<string, readonly number[]> = {
-        unit: MARS_UNIT_SIZE_CHOICES,
-        unitwidth: MARS_UNIT_SIZE_CHOICES,
-        unitheight: MARS_UNIT_SIZE_CHOICES,
-        width: MARS_DISPLAY_SIZE_CHOICES,
-        height: MARS_DISPLAY_SIZE_CHOICES
-    }
-    const choices = sizes[key]
-    if (!choices) {
+    const units = key === 'unit' || key === 'unitwidth' || key === 'unitheight'
+    if (!units && key !== 'width' && key !== 'height') {
         diagnostics.push(
             warnOn(
                 directive,
@@ -259,18 +294,16 @@ function readEntry(
         )
         return
     }
-    const snapped = nearestChoice(parsed, choices)
+    const [min, max] = units ? [UNIT_SIZE_MIN, UNIT_SIZE_MAX] : [DISPLAY_SIZE_MIN, DISPLAY_SIZE_MAX]
+    const snapped = clampSize(parsed, min, max, min)
     if (snapped !== parsed) {
-        //MARS offers these as a combo box, so a value it has no entry for cannot be reproduced
-        //there; the nearest one it does offer keeps the program running and the picture close
+        //the nearest size the display takes keeps the program running and the picture close
         diagnostics.push(
             warnOn(
                 directive,
-                `${name}=${parsed} is not one of ${choices.join(', ')}, the values ${
-                    choices === MARS_UNIT_SIZE_CHOICES
-                        ? 'MARS offers for a unit size'
-                        : 'MARS offers for a display size'
-                }; using ${snapped}.`
+                `${name}=${parsed} is not between ${min} and ${max}, the ${
+                    units ? 'unit sizes' : 'display sizes in pixels'
+                } the screen takes; using ${snapped}.`
             )
         )
     }
@@ -313,19 +346,6 @@ function readNumber(value: string): number | null {
     if (/^0[xX][0-9a-fA-F]+$/.test(value)) return Number.parseInt(value.slice(2), 16)
     if (/^\d+$/.test(value)) return Number.parseInt(value, 10)
     return null
-}
-
-function nearestChoice(value: number, choices: readonly number[]): number {
-    let best = choices[0] ?? 1
-    let bestDistance = Number.POSITIVE_INFINITY
-    for (const choice of choices) {
-        const distance = Math.abs(choice - value)
-        if (distance < bestDistance) {
-            best = choice
-            bestDistance = distance
-        }
-    }
-    return best
 }
 
 function alignDown(address: number): number {

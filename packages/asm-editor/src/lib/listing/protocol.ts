@@ -1,4 +1,4 @@
-import type { Listing, ListingNameVersion } from './listing'
+import type { Listing, ListingAnnotations, ListingNameVersion } from './listing'
 
 /** What the editor asks the Listing worker for: one Listing of one ELF. */
 export type ListingRequest = {
@@ -11,6 +11,8 @@ export type ListingRequest = {
     /** The load base the text's addresses are shifted by; see `ListingInput.base`. */
     base: number
     version: ListingNameVersion
+    /** An Executable File's Annotations, which its Listing is generated with. */
+    annotations?: ListingAnnotations
 }
 
 export type ListingResponse =

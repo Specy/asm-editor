@@ -1,6 +1,6 @@
 <script lang="ts">
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
-    import { executableKind } from '#lib/executables.ts'
     import {
         isCompilationTarget,
         sourceLanguage,
@@ -9,7 +9,7 @@
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
     import FaFileMedical from '~icons/fa-solid/file-medical'
-    import FaFolderOpen from '~icons/fa-solid/folder-open'
+    import FaCopy from '~icons/fa-solid/copy'
     import FaBook from '~icons/fa-solid/book'
     import FaFileAlt from '~icons/fa-solid/file-alt'
     import { useWorkbench } from './workbenchContext'
@@ -22,15 +22,19 @@
 
     const explorer = $derived(context.rail.find((entry) => entry.id === 'explorer'))
     const hasDocumentation = $derived(context.rail.some((entry) => entry.id === 'documentation'))
+    //refused as the Explorer's are: during a Debug session and a test run
     const canCreate = $derived(
-        explorer !== undefined && explorer.access !== 'readonly' && !session.fileSystemLocked
+        explorer !== undefined && explorer.access !== 'readonly' && !session.filesLocked
     )
+    /** Where a File is listed: the Selected program's Entry first, then the other Entries. */
+    function rank(path: string) {
+        if (path === project.selectedProgram) return 0
+        return project.program(path) ? 1 : 2
+    }
     const files = $derived(
         Object.keys(project.files)
             .filter((path) => project.files[path]?.encoding === 'plain')
-            .sort((a, b) =>
-                a === project.entry ? -1 : b === project.entry ? 1 : a.localeCompare(b)
-            )
+            .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
             .slice(0, compact ? 4 : 6)
     )
 
@@ -44,6 +48,7 @@
                 fileLanguage ? sourceTemplate(project.language, fileLanguage) : '',
                 false
             )
+            session.filesAdded([path])
             session.selectFile(path, group)
         } catch (error) {
             console.error(error)
@@ -61,34 +66,11 @@
 
     let elfInput = $state<HTMLInputElement>()
 
-    /** Writes the chosen ELF into the root and shows it, offering it as the Entry file. */
+    /** Writes the chosen ELF into the root and shows it, as a drop on the pane does. */
     async function uploadElf() {
         const file = elfInput?.files?.[0]
         if (elfInput) elfInput.value = ''
-        if (!file || !canCreate) return
-        try {
-            const path = file.name
-            if (
-                project.files[path] &&
-                !(await Prompt.confirm(`${path} already exists. Replace it?`))
-            )
-                return
-            const bytes = new Uint8Array(await file.arrayBuffer())
-            project.fileSystem.writeBytes(path, bytes, true)
-            session.selectFile(path, group)
-            const kind = executableKind(bytes)
-            if (kind !== 'supported') {
-                if (kind !== 'none') toast.warn(`${path}: ${kind.unsupported}`)
-                return
-            }
-            if (executableKind(project.files[project.entry]) === 'supported') return
-            //a Debug session may have started while the question was open
-            if ((await Prompt.confirm(`Make ${path} the Entry file?`)) && !session.fileSystemLocked)
-                session.setEntry(path)
-        } catch (error) {
-            console.error(error)
-            toast.error(error instanceof Error ? error.message : 'File operation failed')
-        }
+        if (file && canCreate) await session.uploadFiles([file], group)
     }
 
     function name(path: string) {
@@ -105,7 +87,9 @@
         {#if !compact}
             <header>
                 <h1>Asm Editor</h1>
-                <p class="tagline">{project.language} · {project.name || 'Project'}</p>
+                <p class="tagline">
+                    {languageLabel(project.language)} · {project.name || 'Project'}
+                </p>
             </header>
         {/if}
         <p class="status">
@@ -131,7 +115,7 @@
                     {#if explorer}
                         <li>
                             <button class="link" onclick={() => ui.open('explorer')}>
-                                <FaFolderOpen /> Open Explorer
+                                <FaCopy /> Open Explorer
                             </button>
                         </li>
                     {/if}
@@ -182,9 +166,15 @@
                     {#if canCreate && project.language === 'X86'}
                         <li>
                             <button class="hint-action" onclick={() => elfInput?.click()}>
-                                You can run Linux binaries. Upload an ELF file to disassemble
+                                You can run Linux binaries. Upload an ELF file to see its bytes,
+                                disassemble it and decompile it
                             </button>
                             <input type="file" hidden bind:this={elfInput} onchange={uploadElf} />
+                        </li>
+                    {/if}
+                    {#if canCreate}
+                        <li>
+                            Drop files from your computer onto an editor to add them to the Project.
                         </li>
                     {/if}
                     <li>Drag a file from the Explorer onto an editor to open it there.</li>

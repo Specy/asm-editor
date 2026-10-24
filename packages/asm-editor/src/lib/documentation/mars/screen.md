@@ -26,7 +26,7 @@ A comment line naming `@screen` sets those five parameters at every **Build**, b
 
 - Order and spacing do not matter, commas are allowed between settings, and `unitWidth`, `unit-width` and `unitwidth` are the same name.
 - What the directive leaves out keeps the value it had, and a program with no `@screen` line changes nothing at all: the configuration stays yours.
-- An unknown setting or a label that does not exist is a _warning_ on the directive's line, never an error: a comment cannot stop a program from assembling. A size off the list is replaced by the nearest one on it, and anything else is left as it was.
+- An unknown setting or a label that does not exist is a _warning_ on the directive's line, never an error: a comment cannot stop a program from assembling. A size outside the ranges is replaced by the nearest one inside them, and anything else is left as it was.
 - Changing a parameter in the **Display** popover afterwards wins, until the next Build reads the comment again.
 
 ## Keyboard and display registers {#keyboard-and-display}
@@ -37,8 +37,8 @@ Four words carry one character each way. What the program transmits is appended 
 
 {keyboardExample}
 
-The receiver never loses a keystroke: what does not fit in the data register waits in a queue behind it, and Ready ({readyBit}) stays set until that queue is empty. Click the screen panel to send keyboard input to the program; its focus ring shows that the editor's own shortcuts are paused. This simulator polls the devices and does not deliver device interrupts, so setting bit 1 of either control register ({interruptBit}) stops the program with an error. Poll Ready instead.
+The receiver accepts typed keys and scripted Testcase input. It never loses a keystroke: what does not fit in the data register waits in a queue behind it, and Ready ({readyBit}) stays set until that queue is empty. Click the screen panel to send keyboard input to the program; its focus ring shows that the editor's own shortcuts are paused. This simulator polls the devices and does not deliver device interrupts, so setting bit 1 of either control register ({interruptBit}) stops the program with an error. Poll Ready instead.
 
 ## Program time
 
-Service `30` (`{service}` before a `{call}`) answers with the time in milliseconds, low word in `{argument}` and high word in `{highArgument}`, and service `32` waits for the milliseconds in `{argument}`. Time is counted from the start of the run, so subtracting two readings measures elapsed time. A wait costs no instructions, which lets a program idle for keyboard input without reaching the execution limit. In a testcase the virtual clock starts at zero and advances only through the program's waits: a five-second wait finishes immediately, and elapsed-time output is repeatable. There is no mouse device in this simulator.
+Service `30` (`{service}` before a `{call}`) answers with the time in milliseconds, low word in `{argument}` and high word in `{highArgument}`, and service `32` waits for the milliseconds in `{argument}`. Time is measured in milliseconds since 1970-01-01 UTC; subtract two readings to measure elapsed time. A wait costs no instructions, which lets a program idle for keyboard input without reaching the execution limit. In a Testcase the virtual clock starts at 2000-01-01 UTC and advances only through the program's waits: a five-second wait finishes immediately, and elapsed-time output is repeatable. There is no mouse device in this simulator.

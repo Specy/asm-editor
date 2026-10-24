@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
     getInstructionDocumentation,
@@ -257,6 +257,48 @@ describe('M68K v2 language tooling', () => {
         ).toBeNull()
     })
 
+    it('names the category of a family member under its heading', async () => {
+        const provider = createM68kHoverProvider(monacoStub)
+        const value = async (line: string, column: number) => {
+            const hover = await provider.provideHover(
+                { getLineContent: () => line } as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+            return hover?.contents.map((content) => content.value) ?? []
+        }
+        // `beq` is a member of the Bcc family, whose category it takes.
+        const [beq, summary, flags, rows] = await value('    beq loop', 6)
+        expect(beq.split('\n\n')).toEqual([
+            '**beq** Branch if equal',
+            '*Control flow · Sizes .b .s .w .l*'
+        ])
+        expect(summary).toMatch(/^Branches /)
+        expect(flags).toBe('Flags: X – · N – · Z – · V – · C –')
+        expect(rows).toBe('`beq label`')
+        // `move <ea>,sr` is privileged, but `move` is not in all of its forms.
+        const [move] = await value('    move.w d0,d1', 6)
+        expect(move.split('\n\n')[1]).toBe('*Data movement*')
+        // Directives have no category.
+        const [org] = await value('    org $1000', 6)
+        expect(org).not.toContain('*')
+    })
+
+    it("links the instruction's Documentation by the page's address", async () => {
+        //Monaco renders a link without a scheme as plain text, so a hover's are absolute
+        vi.stubGlobal('location', { origin: 'https://asm.example' })
+        onTestFinished(() => void vi.unstubAllGlobals())
+        const hover = await createM68kHoverProvider(monacoStub).provideHover(
+            { getLineContent: () => '    move.w d0,d1' } as never,
+            { lineNumber: 1, column: 6 } as never,
+            {} as never
+        )
+        const text = hover?.contents.map((content) => content.value).join('\n\n') ?? ''
+        expect(text).toContain(
+            '[Documentation](https://asm.example/documentation/m68k/instruction/move)'
+        )
+    })
+
     it('tracks the active operand in signature help without counting nested commas', async () => {
         const provider = createM68kSignatureHelpProvider(monacoStub)
         const line = 'move.w 0(a0,d0), '
@@ -297,7 +339,7 @@ describe('M68K v2 language tooling', () => {
     it('formats every new runtime exception for a learner', () => {
         expect(
             getM68kErrorMessage({ type: 'ChkOutOfBounds', value: { value: -1, bound: 9 } })
-        ).toBe(' CHK exception: -1 is outside 0..9')
+        ).toBe('CHK exception: -1 is outside 0..9')
         expect(getM68kErrorMessage({ type: 'OverflowException' })).toContain('TRAPV')
         expect(getM68kErrorMessage({ type: 'IllegalInstruction' })).toContain('Illegal instruction')
         expect(
@@ -306,7 +348,7 @@ describe('M68K v2 language tooling', () => {
                 value: { address: 4096, write: true }
             })
         ).toBe(
-            ' Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
+            'Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
         )
         expect(
             getM68kErrorMessage({
@@ -314,5 +356,16 @@ describe('M68K v2 language tooling', () => {
                 value: { address: 4098, write: false }
             })
         ).toContain('Cannot read from an instruction: address $1002')
+    })
+
+    //a caller follows its own sentence with a space ("Error compiling code. Entry file not found")
+    it('starts a message without a line at its first word, and one with a line after the colon', () => {
+        expect(getM68kErrorMessage(new Error('Entry file not found: gone.s'))).toBe(
+            'Entry file not found: gone.s'
+        )
+        expect(getM68kErrorMessage({ type: 'DivisionByZero' }, 3)).toBe(
+            'Error at line 3: Division by zero'
+        )
+        expect(getM68kErrorMessage('refused', 2)).toBe('Error at line 2: refused')
     })
 })

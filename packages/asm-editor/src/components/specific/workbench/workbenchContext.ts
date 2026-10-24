@@ -13,6 +13,8 @@ import type {
 export type RailEntry = {
     id: string
     title: string
+    /** The rail button's tooltip, when the title alone says too little; else the title. */
+    tooltip?: string
     icon: Component
     group: 'top' | 'bottom'
     /** An action (Share, a host link) runs `onClick` instead of opening a panel. */

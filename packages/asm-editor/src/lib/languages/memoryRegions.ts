@@ -246,9 +246,11 @@ const regionColors = {
     heap: '#ab78e6',
     stack: '#30b4bd',
     arguments: '#d462b6',
-    device: '#e75b75'
+    device: '#e75b75',
+    //an Executable's own tables in the Hex editor: its headers, symbols and strings
+    metadata: '#94a3b8'
 } as const
-export function memoryRegionColor(kind: MemoryRegion['kind']): string {
+export function memoryRegionColor(kind: MemoryRegion['kind'] | 'metadata'): string {
     return `color-mix(in srgb, ${regionColors[kind]} 85%, var(--secondary-text))`
 }
 
@@ -264,7 +266,7 @@ export function resolveMemoryAddress(
         if (label !== undefined) return label
     }
     if (/^(?:0x)?[0-9a-f]+$/i.test(text)) return BigInt(`0x${text.replace(/^0x/i, '')}`)
-    if (!built) throw new Error('Build to use labels')
+    if (!built) throw new Error('Build the program first to go to a label.')
     const match = /^(.*?)(?:\+((?:0x[0-9a-f]+)|[0-9]+))?$/i.exec(text)!
     const address = lookup(match[1])
     if (address === undefined) throw new Error(`Unknown label: ${match[1]}`)

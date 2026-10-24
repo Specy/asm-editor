@@ -99,9 +99,130 @@
             "expect": "x86/executables/names"
         },
         {
+            "query": "mangled names",
+            "top": 2,
+            "expect": "x86/executables/cpp-names"
+        },
+        {
+            "query": "C++ mangled names",
+            "top": 3,
+            "expect": "x86/executables/cpp-names",
+            "meaning": true
+        },
+        {
             "query": "bundled shared libraries",
             "top": 3,
             "expect": "x86/executables/libraries"
+        },
+        {
+            "query": "edit the bytes of a file in hex",
+            "top": 3,
+            "expect": "x86/executables/byte-edits"
+        },
+        {
+            "query": "find hex bytes with a wildcard",
+            "top": 3,
+            "expect": "x86/executables/finding"
+        },
+        {
+            "query": "data inspector byte order",
+            "top": 3,
+            "expect": "x86/executables/data-inspector"
+        },
+        {
+            "query": "section header table tints",
+            "top": 3,
+            "expect": "x86/executables/elf-parts"
+        },
+        {
+            "query": "download the program a build links",
+            "top": 3,
+            "expect": "x86/executables/build-output"
+        },
+        {
+            "query": "decompile a function",
+            "top": 3,
+            "expect": "x86/executables/decompile"
+        },
+        {
+            "query": "what does iVar1 mean in the pseudocode",
+            "top": 3,
+            "expect": "x86/executables/pseudocode"
+        },
+        {
+            "query": "breakpoint on a pseudocode line",
+            "top": 3,
+            "expect": "x86/executables/pseudocode-debugging"
+        },
+        {
+            "query": "decompiling takes too long",
+            "top": 3,
+            "expect": "x86/executables/decompile-time"
+        },
+        {
+            "query": "symbols panel",
+            "top": 3,
+            "expect": "x86/executables/symbols"
+        },
+        {
+            "query": "back and forward in the listing",
+            "top": 3,
+            "expect": "x86/executables/navigation"
+        },
+        {
+            "query": "renames of functions and variables",
+            "top": 3,
+            "expect": "x86/executables/renaming"
+        },
+        {
+            "query": "rename a function",
+            "top": 3,
+            "expect": "x86/executables/renaming",
+            "meaning": true
+        },
+        {
+            "query": "rename a variable in the pseudocode",
+            "top": 3,
+            "expect": "x86/executables/renaming",
+            "meaning": true
+        },
+        {
+            "query": "comment a line of the listing",
+            "top": 3,
+            "expect": "x86/executables/comments"
+        },
+        {
+            "query": "are renames and comments saved",
+            "top": 3,
+            "expect": "x86/executables/annotations"
+        },
+        {
+            "query": "undo a rename or comment",
+            "top": 3,
+            "expect": "x86/executables/annotations",
+            "meaning": true
+        },
+        {
+            "query": "search text in every file of the project",
+            "top": 3,
+            "expect": "x86/executables/search"
+        },
+        {
+            "query": "search every function's pseudocode",
+            "top": 3,
+            "expect": ["x86/executables/search-pseudocode", "x86/executables/search"]
+        },
+        {
+            "query": "type a function name in the memory view",
+            "top": 3,
+            "expect": "x86/executables/memory",
+            "meaning": true
+        },
+        {
+            "query": "run to cursor",
+            "top": 3,
+            "expect": "x86/executables/breakpoints",
+            "meaning": true
         }
     ]
 }

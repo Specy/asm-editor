@@ -12,12 +12,22 @@ import {
 import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '#lib/languages/Z80/trs80/trs80Display.ts'
 import {
     DEFAULT_PROJECT_DISPLAY,
+    DISPLAY_SIZE_MAX,
+    DISPLAY_SIZE_MIN,
     formatMarsBaseAddress,
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
-    MARS_UNIT_SIZE_CHOICES
+    MARS_UNIT_SIZE_CHOICES,
+    UNIT_SIZE_MAX,
+    UNIT_SIZE_MIN
 } from '#lib/languages/mars/marsDisplay.ts'
 import { MARS_RECEIVER_CONTROL } from '#lib/languages/mars/MarsDevices.ts'
+import {
+    SYNTH_BASES,
+    SYNTH_CHANNEL_REGISTERS,
+    SYNTH_UPLOAD_REGISTERS,
+    SYNTH_WAVEFORMS
+} from '#lib/languages/synthRegisters.ts'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -435,16 +445,36 @@ function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
     const base = MARS_RECEIVER_CONTROL >>> 0
     return [
         `- Graphics go through memory, not through a syscall: the screen is a grid of words, one word per pixel, whose low 24 bits are the color (red 23-16, green 15-8, blue 7-0). Words run left to right and then top to bottom. The program must reserve that memory itself, usually with \`.space\`.`,
-        `- The grid has the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')}), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')}) and a base address, which the user can pick in the screen panel among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words.`,
+        `- The grid has the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')} in the real tool, any from ${UNIT_SIZE_MIN} to ${UNIT_SIZE_MAX} here), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')} in the real tool, any from ${DISPLAY_SIZE_MIN} to ${DISPLAY_SIZE_MAX} here) and a base address, which the user can pick in the screen panel among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words.`,
         `- **Any program that draws must configure them itself**, with a comment directive the editor reads at every build, before the first instruction: \`# @screen unit=1 width=256 height=256 base=display\`. \`base\` takes a label the program defines (preferred: the program never has to know the address) or an address such as 0x10010000; \`unit\` sets both unit sizes, \`unitWidth\` and \`unitHeight\` set them apart. Order and spacing are free, anything left out keeps its current value, and a bad value is a warning on that line, not an error. It is a comment, so the file still assembles in the real simulator.`,
         `- Keyboard and console are four words: 0x${base.toString(16)} receiver control (bit 0 Ready, a character is waiting), 0x${(base + 4).toString(16)} receiver data (the character, reading it takes it), 0x${(base + 8).toString(16)} transmitter control (bit 0 Ready, always set) and 0x${(base + 12).toString(16)} transmitter data (storing a character prints it, ASCII 12 clears the console).`,
         `- Setting bit 1 of either control register, the interrupt-enable bit, stops the program with an error: poll the Ready bit instead.`,
-        `- Service 30 (${service} = 30) answers the program time in milliseconds since the run started, low word in ${argument} and high word in the next register; service 32 (${service} = 32, ${argument} = milliseconds) waits. A wait costs no instructions, so a polling loop should sleep about 10 ms instead of spinning, or it will hit the execution limit.`
+        `- Service 30 (${service} = 30) answers the program time in milliseconds since the run started, low word in ${argument} and high word in the next register; service 32 (${service} = 32, ${argument} = milliseconds) waits. A wait costs no instructions, so a polling loop should sleep about 10 ms instead of spinning, or it will hit the execution limit.`,
+        `- Services 31 and 33 play a Note: pitch in ${argument} (0 to 127, 60 is middle C), then the duration in milliseconds, the General MIDI instrument (0 to 127) and the volume (0 to 127) in the next three registers. 31 returns at once, so Notes overlap; 33 waits for the duration like 32, so a melody is a series of 33s. A testcase plays nothing, and 33 advances its virtual clock.`
+    ].join('\n')
+}
+
+/**
+ * The Synth, the same chip for MIPS, RISC-V and the M68K at their own base: generated from the
+ * register model the device reads, so the agent writes exactly the registers that exist.
+ */
+function SYNTH_INFORMATION(base: string, half: string, byte: string, wait: string): string {
+    const registers = [...SYNTH_CHANNEL_REGISTERS, ...SYNTH_UPLOAD_REGISTERS]
+        .map(
+            (register) =>
+                `0x${register.offset.toString(16)} ${register.name.toLowerCase().replaceAll('_', ' ')} (${register.bytes * 8} bits: ${register.description})`
+        )
+        .join('; ')
+    return [
+        `- Waveform sound is the Synth, an extension of this editor that the reference simulator does not have: eight channels whose registers are memory from ${base}, written with plain stores (${half} for a 16-bit register, ${byte} for an 8-bit one) in the target's byte order. Channel n's 32 bytes are at ${base} + n * 0x20; the upload registers are at ${base} + 0x180.`,
+        `- Registers, as offsets: ${registers}.`,
+        `- Waveforms: ${SYNTH_WAVEFORMS.map((waveform, value) => `${value} ${waveform}`).join(', ')}. The frequency register is in Hz (440 is A4), or samples a second for the sample waveform. Set waveform, volume, sustain and the envelope, then turn the gate (control bit 0) on to start a note and off to release it; to strike a note again, turn the gate off and on. A note sounds until its gate goes off, so pace a melody with ${wait}. Each channel's wavetable is 16 bytes at ${base} + 0x100 + n * 0x10, 32 four-bit samples, high half first. Sample memory is 64 KB of signed 8-bit samples, filled by an upload, which copies when its start register is written.`,
+        "- The registers read back what was written. The program's end releases every gate; a testcase is silent."
     ].join('\n')
 }
 
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports projects with assembly, C/C++ sources, local headers and data files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
+The editor supports projects with assembly, C/C++ sources, local headers and data files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse, and sound. There are no imported ROMs and no produced binaries.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
@@ -454,17 +484,20 @@ The editor supports projects with assembly, C/C++ sources, local headers and dat
 - All I/O is "trap #15" with the task number in D0.B, EASy68K's interface. Text and graphics share one window: what a program prints is drawn on the screen at the text cursor as well as appended to the console transcript. The screen starts at 640 by 480 and only the program resizes it, with task 33.
 - These tasks stop the program with an error, so do not use them: ${M68K_REJECTED_TRAP_INFORMATION}. Task 92's bitwise drawing modes (0, 1, 3 and 5 to 15) stop it too.
 ${M68K_TRAP_INFORMATION}
+${SYNTH_INFORMATION(`0x${SYNTH_BASES.m68k.toString(16).toUpperCase()} ($${SYNTH_BASES.m68k.toString(16).toUpperCase()})`, 'move.w', 'move.b', 'task 23 (delay)')}
 
 ## MIPS
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - .data starts at 0x10010000. $sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('$v0', '$a0')}
+${SYNTH_INFORMATION(`0x${SYNTH_BASES.mips.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
 
 ## RISC-V
 - Uses the RARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - RISC-V is 32-bit; RISC-V-64 is 64-bit.
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('a7', 'a0')}
+${SYNTH_INFORMATION(`0x${SYNTH_BASES.riscv.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.
@@ -496,8 +529,8 @@ These instructions take precedence over assembly workflow steps when editing C/C
 - The project language is the target architecture; C is the source language of a .c file. Do not pass "C" as write_to_file's language. Write to an explicit path such as main.c or main.cpp, preserving existing assembly files.
 - C/C++ compilation supports MIPS, RISC-V, RISC-V-64 and X86. Keep a saved project's target; for a fresh C example without a requested target, choose RISC-V using write_to_file's language parameter. M68K and Z80 do not support source compilation.
 - Read existing source before editing. Edit the original C/C++ source or local headers rather than generated assembly. Source and header writes are saved without assembler checks and invalidate execution.
-- Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the local headers to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not linked automatically; use local headers for helpers.
-- Start with optimization "0". compile_source sets the generated assembly as the entry. Then call compile (the assembly Build) before running or stepping. Compiler errors must be fixed in the source and recompiled; a saved source edit alone does not prove validity.
+- Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the Project files its quoted includes reach to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not compiled or linked separately; put helpers in headers, or #include "helpers.c" from the source, which pastes the file in as one compilation.
+- Start with optimization "0". When the source defines main, compile_source makes its generated assembly the selected program's Entry file. Then call compile (the assembly Build) before running or stepping. Compiler errors must be fixed in the source and recompiled; a saved source edit alone does not prove validity.
 - MIPS and RISC-V support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. X86 is freestanding: use <sim.h> for I/O; printf, malloc and the hosted runtime are unavailable.
 - <sim.h> declares simulator services; use search_documentation to find their signatures rather than guessing. C++ uses C++17 with compatibility headers and no full standard library, exceptions or RTTI.
 - Debug execution through the generated assembly. Use generated assembly paths and instruction lines for breakpoints; registers and memory describe the target architecture. Keep user-facing explanations tied to the original source.

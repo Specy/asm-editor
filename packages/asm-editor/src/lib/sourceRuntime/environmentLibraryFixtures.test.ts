@@ -182,8 +182,8 @@ describe('the captured <sim.h> compiles', () => {
             }
             const prepared = createCompilerRequest(requestFor(fixture), sysroot)
             expect(prepared.compilerId).toBe(fixture.compilerId)
-            // These responses were captured before the source moved from example.c/cpp into
-            // an uploaded Project directory. Keep checking every compiler option from that capture.
+            // Most of these responses were captured before the source moved from example.c/cpp
+            // into an uploaded Project directory. Keep checking every compiler option from them.
             const expectedArguments = fixture.userArguments.replace(
                 "-iquote 'src' -iquote .",
                 `-iquote 'project/src' -iquote project -include 'project/${fixture.sourcePath}'`

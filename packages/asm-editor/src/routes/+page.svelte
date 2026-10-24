@@ -50,18 +50,18 @@
 </script>
 
 <svelte:head>
-    <title>Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86 and Z80</title>
+    <title>Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80</title>
     <meta
         name="description"
-        content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
+        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta
         property="og:description"
-        content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
+        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta
         property="og:title"
-        content="Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86 and Z80"
+        content="Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80"
     />
     <!-- The page's schema.org description. {@html} is the only way to emit a <script>
          from a component: <svelte:element this="script"> renders nothing in Svelte, and a
@@ -80,7 +80,7 @@
                 <h1 class="welcome-title" class:textShadow={textShadowPrimary}>
                     The best web IDE for Assembly <br />
                     <span style="font-size: 1.2rem; opacity: 0.8">
-                        M68K, MIPS, RISC-V, X86, Z80
+                        M68K, MIPS, RISC-V, x86-64, Z80
                     </span>
                 </h1>
 
@@ -134,7 +134,7 @@
                             </Icon>
                         </ButtonLink>
                         <Button
-                            style={`${shadow} gap: 0.5rem; ${!installEvent ? 'pointer-events: none; opacity: 0' : ''}`}
+                            style={`${shadow} gap: 0.5rem; min-width: 11.25rem; ${!installEvent ? 'pointer-events: none; opacity: 0' : ''}`}
                             cssVar="secondary"
                             onClick={async () => {
                                 try {
@@ -157,7 +157,7 @@
         <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
         <div class="links-row-wrapper">
             <div class="links-row">
-                <MainPageLinkPreview href="/documentation" title="Documentation page">
+                <MainPageLinkPreview href={resolve('/documentation')} title="Documentation page">
                     {#snippet icon()}
                         <div>
                             <FaBook />
@@ -167,7 +167,10 @@
                         Documentation
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="#codeCompletion" title="Code completion section">
+                <MainPageLinkPreview
+                    href={resolve('/#codeCompletion')}
+                    title="Code completion section"
+                >
                     {#snippet icon()}
                         <div>
                             <FaSearch />
@@ -177,7 +180,7 @@
                         Code completion
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="#tools" title="Tools section">
+                <MainPageLinkPreview href={resolve('/#tools')} title="Tools section">
                     {#snippet icon()}
                         <div>
                             <FaTools />
@@ -187,7 +190,7 @@
                         <div>Tools</div>
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="/embed" title="Embed the app in your website">
+                <MainPageLinkPreview href={resolve('/embed')} title="Embed the app in your website">
                     {#snippet icon()}
                         <div>
                             <FaCode />
@@ -197,7 +200,7 @@
                         Embed
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="/exam" title="Create an exam for students">
+                <MainPageLinkPreview href={resolve('/exam')} title="Create an exam for students">
                     {#snippet icon()}
                         <div>
                             <FaDumbbell />
@@ -207,7 +210,7 @@
                         Exam
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href="/chat" title="AI Chat">
+                <MainPageLinkPreview href={resolve('/chat')} title="AI Chat">
                     {#snippet icon()}
                         <div>
                             <SparklesIcon style="font-size: 1.8rem" />
@@ -317,7 +320,7 @@
                         <GoLinkExternal />
                     </div>
                 </a>
-                to get help with M68K, MIPS, RISC-V, X86 and Z80 assembly.
+                to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
             </div>
         </MainPageSection>
         <MainPageSection id="embed" reverse>

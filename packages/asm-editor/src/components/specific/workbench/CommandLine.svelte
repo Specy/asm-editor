@@ -2,9 +2,10 @@
     /**
      * The Terminal's first line, the **Command line** `$ ./crackme hunter2`
      * ([binary-import.md](../../../../../../docs/design/binary-import.md), decision 12): the name the
-     * program starts under, fixed, and its Arguments, typed as in a shell. Outside a Debug session
-     * an edit saves the Project's Setting at once; during one the line is locked to what that run
-     * started with. It is not a shell: Build and Run start the program, and nothing typed here runs.
+     * program starts under, fixed, and its Arguments, typed as in a shell. They are the Selected
+     * program's Setting ([programs.md](../../../../../../docs/design/programs.md), decision 10), and
+     * a Project with no Program has no line. Outside a Debug session an edit saves the Setting at
+     * once; during one the line is locked to what that run started with. It is not a shell: Build and Run start the program, and nothing typed here runs.
      * The words the program will get are its tooltip, and text that does not parse says why beside
      * it. On a phone it stays one line, scrolled sideways.
      */
@@ -85,7 +86,6 @@
         padding: 0.2rem 0.8rem;
         border-bottom: 1px solid var(--wb-line, color-mix(in srgb, var(--hint) 30%, transparent));
         font-family: monospace;
-        scrollbar-width: thin;
     }
 
     .line {

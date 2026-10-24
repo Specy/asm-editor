@@ -8,6 +8,9 @@
     import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
     import Column from '#cmp/shared/layout/Column.svelte'
     import type { BuildInput } from '#lib/projectFiles.ts'
+    import { createBrowserAudioOutput } from '#lib/languages/peripherals/audio/browserAudioOutput.ts'
+    import { setAudioPreferences } from '#lib/languages/peripherals/audio/audioContext.ts'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
     // Define the props the component expects
     interface Props {
@@ -38,6 +41,17 @@
     const injectedPeripherals = untrack(() =>
         createInjectedPeripherals(language, settings?.peripherals)
     )
+    //the page's sound, which an Audio made outside a page never gets; x86 plays nothing
+    if (untrack(() => language) !== 'X86') {
+        injectedPeripherals.audio.setOutput(createBrowserAudioOutput())
+    }
+    //mute and volume are Preferences, which every Emulator on the page shares
+    $effect(() => {
+        setAudioPreferences({
+            enabled: preferencesStore.values.sound.value,
+            volume: preferencesStore.values.soundVolume.value
+        })
+    })
 
     const emulatorPromise = untrack(() =>
         createEmulator(language, source ?? code, {

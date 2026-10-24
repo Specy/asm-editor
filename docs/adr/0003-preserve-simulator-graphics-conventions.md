@@ -11,3 +11,8 @@ EASy68K has a single output window where text tasks and graphics tasks draw into
 - Text output also reaches the Terminal transcript, which EASy68K does not have; this keeps Testcases and the non-graphical view working.
 - MARS's transmitter text lands in the Terminal transcript next to syscall output, where the simulator shows it in the tool's own window, and the transmitter is never busy, so a program that waits for Ready proceeds immediately.
 - The bitwise drawing modes of task 92 (modes 0, 1, 3 and 5 to 15) are deferred: canvas compositing is alpha based, so they need per-pixel work on every primitive, and double buffering covers the sprite-erasing use of the XOR mode, which is the likely first follow-up.
+- The MARS and RARS bitmap display takes sizes the tool does not offer: see the update below.
+
+## Update 2026-10-23: display sizes beyond MARS's lists
+
+MARS's and RARS's bitmap display offers powers of two only: 64 to 1024 pixels a side and units of 1 to 32. The display here takes any whole number in those ranges, from 1 pixel up, through **Custom** in the Display menus, a `@screen` comment or C's `SIM_SCREEN`, so a program can have a screen such as the 224 by 288 of an arcade machine. It is a superset: every program written for the tool's sizes behaves as before, and a size the tool lacks builds without a diagnostic. A program using one shows a different picture in real MARS and RARS, which cannot be configured with it; the Documentation and `<sim.h>` say so. Only a size outside the ranges is still reported, as a warning, and replaced by the nearest one inside them.

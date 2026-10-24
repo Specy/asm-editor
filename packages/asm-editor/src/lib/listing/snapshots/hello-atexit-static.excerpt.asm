@@ -1,10 +1,9 @@
-; Excerpt of the Listing of hello-atexit-static, whose whole text has SHA-256 df247c3e3ecef15e61c3b24d751d3bee80f256307bf9ca133248b0748d7d8016
+; Excerpt of the Listing of hello-atexit-static, whose whole text has SHA-256 5743025537b902f8c403432094bea8eb8c3109b4098cb3edf1e36829579ba57f
 ; hello-atexit-static
 ; ELF64 x86-64 executable at fixed addresses (not PIE)
 ; Statically linked: no dynamic linker, no shared libraries
-; Not stripped: names come from its symbol table, with invented words (v1) for the rest
+; Not stripped: names come from its symbol table
 ; Entry point: 0x401780 (_start)
-; Generated from the file, read-only and never saved: nothing builds from this Listing.
 section .init
 section .plt
 section .text

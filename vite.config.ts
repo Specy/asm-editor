@@ -1,15 +1,16 @@
 import { defineConfig } from 'vite-plus'
 
 /**
- * The Cores are submodules with their own repositories, formatting and lint rules; nothing here
- * formats or lints them.
+ * The Cores, and the decompiler beside them, are submodules with their own repositories,
+ * formatting and lint rules; nothing here formats or lints them.
  */
 const CORES = [
     '/packages/mips/',
     '/packages/risc-v/',
     '/packages/m68k/',
     '/packages/x86/',
-    '/packages/z80/'
+    '/packages/z80/',
+    '/packages/decompiler/'
 ]
 
 /**
@@ -64,6 +65,16 @@ export default defineConfig({
                 ['packages/x86/blink-js/**'],
                 ['packages/x86/blink-js/dist/**']
             ),
+            // The decompiler is not a Core, but a submodule built the same way. Its wasm and
+            // processor descriptions are committed (emsdk is not in mise.toml), so its build only
+            // bundles the wrapper and copies them, the specs and Ghidra's licences into `dist`;
+            // `build/` holds its native and Emscripten build trees, which the build never reads.
+            'build:decompiler': coreBuild(
+                'packages/decompiler/js',
+                'pnpm run build',
+                ['packages/decompiler/**', '!packages/decompiler/build/**'],
+                ['packages/decompiler/js/dist/**']
+            ),
             // trs80 is an npm workspace of its own (see pnpm-workspace.yaml): it installs from its
             // lockfile and builds @specy/z80 with the packages it bundles, as its CD does.
             'build:z80': coreBuild(
@@ -75,7 +86,14 @@ export default defineConfig({
             'build:cores': {
                 command: 'node -e ""',
                 cache: false,
-                dependsOn: ['build:mips', 'build:risc-v', 'build:m68k', 'build:x86', 'build:z80']
+                dependsOn: [
+                    'build:mips',
+                    'build:risc-v',
+                    'build:m68k',
+                    'build:x86',
+                    'build:z80',
+                    'build:decompiler'
+                ]
             }
         }
     },

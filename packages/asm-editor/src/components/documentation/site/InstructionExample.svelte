@@ -35,7 +35,6 @@
             <InstructionPreview
                 {code}
                 language={example.target}
-                {showMemory}
                 showConsole={example.presentation?.showConsole}
             />
         {/if}

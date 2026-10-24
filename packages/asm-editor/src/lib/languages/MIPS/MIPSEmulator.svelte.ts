@@ -70,8 +70,10 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import {
     applyScreenDirective,
+    assembledCore,
     ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
+    resolveScreenLabel,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '#lib/languages/mars/screenDirective.ts'
@@ -107,7 +109,10 @@ export {
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
  * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
- * history: about 11 000. The earlier estimate of 6 500 was taken while the Core read the
+ * history: about 7 000 (`npm run measure`, three runs of 6 800 to 7 100, after the undo recorder
+ * stopped counting in longs; the 11 000 before it was taken on a Core that has since slowed, and
+ * the harness measured about 2 000 on the same loop before the recorder was fixed). The estimate
+ * of 6 500 before that was taken while the Core read the
  * self-modifying-code setting out of a string map on every instruction fetch and the delayed
  * branching setting on every branch - each a hash lookup and a `Boolean.parseBoolean`, which
  * lowercases a fresh string - fetched through five calls that re-checked alignment and both text
@@ -117,11 +122,11 @@ export {
  * around each instruction; TeaVM compiles those to real monitor enter and exit calls and this Core
  * is single threaded, so dropping them made the same loop about five times faster.
  */
-const MIPS_INSTRUCTIONS_PER_MS = 11_022
+const MIPS_INSTRUCTIONS_PER_MS = 7_000
 
 /**
- * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
- * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). A millisecond
+ * How much wall time one `simulate*` call aims at, which is also about how far a chunk can carry the
+ * slice past its deadline before the next check (`marsSlice.ts`). A millisecond
  * is about eleven thousand instructions of compute and fifty calls in a compute slice, which the
  * call overhead measured there puts at half a percent of throughput.
  */
@@ -173,7 +178,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * registered on each freshly assembled Core.
      */
     private readonly handlers: MarsHandlers
-    /** The chunking of a slice, which is what keeps a sleeping program's slice short (`marsSlice.ts`). */
+    /** The chunking of a slice, which is what keeps it near its deadline (`marsSlice.ts`). */
     private readonly pacer = new MarsSlicePacer(MIPS_CHUNK_TARGET_MS)
     /** MARS's five display parameters, from the project and changed from the Screen panel. */
     private display: ProjectDisplay
@@ -189,6 +194,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
+    /** Whether a slice is running the Core, which is when a sleep ends the call (`pauseAtSleep`). */
+    private slicing = false
     /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
     private programArgv: string[] = []
 
@@ -217,7 +224,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         this.devices = new MarsDevices({
             screen: this._peripherals.screen,
             keyboard: this._peripherals.keyboard,
-            terminal: this._peripherals.terminal
+            terminal: this._peripherals.terminal,
+            audio: () => this._peripherals.audio
         })
         this.devices.setDisplay(this.display)
         this.handlers = new MarsHandlers({
@@ -229,6 +237,9 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 this.state.interrupt = interrupt
                 //MARS advances PC before invoking the syscall's asynchronous handler.
                 if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
+            },
+            pauseAtSleep: () => {
+                if (this.slicing) this.mips?.pause()
             },
             fileSystem: () => this.fileSystemSession,
             instructionSerial: () => this.requireMips().getCurrentInstructionSerial()
@@ -364,9 +375,6 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
-        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
-        //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(sources).diagnostics
         const files = textAssemblyFiles(sources)
         const mips = makeMipsCore(
             files,
@@ -377,6 +385,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const result = mips.assemble()
         const lines = tokenizedLines(mips)
         const spans = makeTokenSpanIndex(lines)
+        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
+        //is being typed and does not vanish half a second after a Build replaces this list; read
+        //last, since a name only a probe resolves assembles another Core over this one
+        const directive = this.readScreenDirective(sources, assembledCore(mips, result)).diagnostics
         return this.withRuntimeHints(sources, [
             ...directive,
             ...includedScreenDiagnostics(files, sources.entry, lines),
@@ -386,31 +398,24 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.mips = null
-        //before the Core is built, so the first instruction and a Testcase alike run on the display
-        //the source asked for; the label probe assembles a throwaway Core, which the real assembly
-        //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(sources)
+        const files = textAssemblyFiles(sources)
+        let { mips, result } = this.assembleProgram(sources, files, undoSize)
+        //before the first instruction, so it and a Testcase alike run on the display the source
+        //asked for, its base label read from this assembly. A name only the probe resolves
+        //assembles a throwaway Core over the state every Core shares, so the program is assembled
+        //again after it
+        let probed = false
+        const configured = this.readScreenDirective(sources, assembledCore(mips, result), () => {
+            probed = true
+        })
+        if (probed) ({ mips, result } = this.assembleProgram(sources, files, undoSize))
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
         //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
-        //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
+        //a re-sync here would repaint the Screen `clear()` has just blanked with the program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        const files = textAssemblyFiles(sources)
-        const mips = makeMipsCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
-        //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
-        //stored by every `initialize`, a Testcase's included, before its starting registers
-        mips.setProgramArguments(this.programArgv)
-        const result = mips.assemble()
         const lines = tokenizedLines(mips)
         const spans = makeTokenSpanIndex(lines)
         const diagnostics = this.withRuntimeHints(sources, [
@@ -428,8 +433,28 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             }
         }
         this.mips = mips
-        this._buildLibraryFiles = this.libraryFiles(sources, mips)
-        return { ok: true, diagnostics }
+        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, mips) }
+    }
+
+    /** A Core for the program, assembled for a Build. */
+    private assembleProgram(
+        sources: BuildSources,
+        files: Record<string, string>,
+        undoSize: number
+    ) {
+        const mips = makeMipsCore(
+            files,
+            sources.entry,
+            buildAssemblerProfile(sources),
+            this.runtimeLink(sources)
+        )
+        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
+        //the size has to be set *before* assembling: setting it afterwards would only size the next
+        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
+        mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //stored by every `initialize`, a Testcase's included, before its starting registers
+        mips.setProgramArguments(this.programArgv)
+        return { mips, result: mips.assemble() }
     }
 
     /**
@@ -469,6 +494,16 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         registerHandlers(mips, this.handlers.makeHandlerMap())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
         this.devices.attach(mips, this.display)
+        //what an instruction does to the Terminal, a handler's or a device's, is journaled under the
+        //serial its Undo group carries ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
+        const instruction = () => {
+            const serial = mips.getCurrentInstructionSerial()
+            return serial === null ? null : BigInt(serial)
+        }
+        this._peripherals.terminal.trackHistory(instruction, normalizeUndoSize(undoSize))
+        //and so are the Notes it plays
+        //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
+        this._peripherals.audio.track(instruction, normalizeUndoSize(undoSize))
     }
 
     _dispose(): void {
@@ -489,15 +524,27 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     /**
-     * What the program's `@screen` comment asks for, on top of the display the Screen has now.
+     * What the program's `@screen` comment asks for, on top of the display the Screen has now, its
+     * base label read from `assembled`, the program's Core when it assembled; `onProbe` is told
+     * when that took a probe, which assembles a Core of its own.
      *
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(sources: BuildSources) {
+    private readScreenDirective(
+        sources: BuildSources,
+        assembled: JsMips | null,
+        onProbe?: () => void
+    ) {
         const code = sourceText(sources)
         const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(sources, label)
+            resolveScreenLabel(assembled, label, () => {
+                //GNU assembly cannot place a probe word at a fixed address, and its symbol table
+                //is all a probe would read
+                if (sources.assemblerProfile === 'gnu-compiler-v1') return null
+                onProbe?.()
+                return this.probeLabelAddress(sources, label)
+            })
         )
         return {
             ...configured,
@@ -509,19 +556,16 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     /**
-     * The address a `@screen base=<label>` names. The Core has no lookup by name — `getLabelAtAddress`
-     * only goes the other way — so the program is assembled once more with one extra `.word <label>`
-     * at a fixed address and that word is read back: the assembler itself resolves the name, which is
-     * what makes `.eqv` names, forward references and text labels all work.
+     * The address of a `@screen base=` name the program's symbol table does not hold, such as an
+     * `.eqv` name: the program is assembled once more with one extra `.word <name>` at a fixed
+     * address and that word is read back, since the assembler itself resolves the name in it.
      */
-    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
+    private probeLabelAddress(sources: BuildSources, label: string): number | null {
         try {
-            //GNU assembly cannot place a probe word at a fixed address, but its Core looks labels
-            //up by name instead
-            const gnu = sources.assemblerProfile === 'gnu-compiler-v1'
-            const probeSources = gnu
-                ? sources
-                : updateEntryText(sources, screenLabelProbeSource(sourceText(sources), label))
+            const probeSources = updateEntryText(
+                sources,
+                screenLabelProbeSource(sourceText(sources), label)
+            )
             const probe = makeMipsCore(
                 textAssemblyFiles(probeSources),
                 probeSources.entry,
@@ -529,12 +573,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
-            //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
-            if (gnu) {
-                const address = probe.getAddressOfLabel(label)
-                return address === -1 ? null : address >>> 0
-            }
             return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
         } catch {
             return null
@@ -873,18 +912,22 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     _undo(): void {
         const mips = this.requireMips()
         const group = mips.getUndoGroupsUpTo(1)[0]
-        //the FileSystem session keys its frames by the instruction serial, and a Poke has no
-        //instruction identity to undo file operations by, so it is rolled back by the Core alone
-        //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
+        //the FileSystem session and the Terminal key their records by the instruction serial, and a
+        //Poke has no instruction identity to undo their changes by, so it is rolled back by the Core
+        //alone ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
         const serial = group?.kind === 'instruction' ? group.serial : undefined
         if (serial !== undefined && !(this.fileSystemSession?.canUndoAfter(serial) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
         //an exit and a failure were the newest things the program did, so they are the first
         //undone: the Core puts the exit back itself
-        mips.undo()
+        this.devices.rewind(() => mips.undo())
         this.failedAt = null
-        if (serial !== undefined) this.fileSystemSession?.undoAfter(serial)
+        const readSynth = () => this.devices.readSynthBlock()
+        if (serial === undefined) return this._peripherals.audio.resyncSynth(readSynth)
+        this.fileSystemSession?.undoAfter(serial)
+        this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
+        this._peripherals.audio.undoAfter(BigInt(serial) - 1n, readSynth)
     }
 
     /**
@@ -905,14 +948,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     /**
      * The Core stops for input by leaving the pending `simulate*` promise unsettled, and serves a
-     * `sleep` the same way, so both are served inside the slice and only the budget, a breakpoint
-     * or the end of the program end one. The budget is spent in chunks by the pacer, which is what
-     * keeps the slice of a sleeping program, and the pause it holds off, to about one sleep
-     * (`marsSlice.ts`). The Core reports no instruction count, so a chunk that came back still
-     * runnable ran its whole limit, which is exact for the compute-only case the budget exists for.
+     * `sleep` the same way. A read is served inside the slice; a sleep ends it, through the handler's
+     * `pauseAtSleep`, so the slice ends where the program's frame does and the next one starts on a
+     * fresh frame. The budget is spent in chunks by the pacer, which keeps a slice near its deadline
+     * (`marsSlice.ts`), and every chunk is charged what the Core says it executed.
      *
      * The bitmap display catches up once per slice rather than once per stored word, which is what
-     * keeps the observer cheap; a program that sleeps flushes from the handler too.
+     * keeps the observer cheap; a program that sleeps or waits for input flushes from the handler
+     * too.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const mips = this.requireMips()
@@ -920,18 +963,21 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         if (mips.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(mips, request.breakpoints)
         this.handlers.beginExecution()
-        return this.coreCall(() =>
-            this.pacer.run(
-                request,
-                MIPS_INSTRUCTIONS_PER_MS,
-                this._peripherals.clock,
-                async (limit) => {
+        this.slicing = true
+        try {
+            return await this.coreCall(() =>
+                this.pacer.run(request, MIPS_INSTRUCTIONS_PER_MS, async (limit) => {
                     const stop = await mips.simulateWithBreakpointsAndLimit(breakpoints, limit)
-                    if (endsProgram(stop)) return 'terminated'
-                    return stop === StopReason.BREAKPOINT ? 'breakpoint' : 'ran'
-                }
+                    const instructions = mips.getLastRunInstructionCount()
+                    if (endsProgram(stop)) return { outcome: 'terminated', instructions }
+                    if (stop === StopReason.BREAKPOINT)
+                        return { outcome: 'breakpoint', instructions }
+                    return { outcome: stop === StopReason.PAUSE ? 'paused' : 'ran', instructions }
+                })
             )
-        )
+        } finally {
+            this.slicing = false
+        }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { Z80Emulator } from '#lib/languages/Z80/Z80Emulator.svelte.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
+import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 
 /**
  * The slice contract against a real Core. `@specy/z80` is plain TypeScript, so it is the one adapter
@@ -540,3 +542,231 @@ function colorAt(
     const pixels = screen.visiblePixels
     return (pixels[offset] << 16) | (pixels[offset + 1] << 8) | pixels[offset + 2]
 }
+
+describe('Z80 audio ports', () => {
+    function withAudio(lines: string[]) {
+        const output = new RecordingAudioOutput()
+        const audio = new Audio({ output })
+        const code = ['    org $8000', ...lines].join('\n')
+        const emulator = Z80Emulator(code, { peripherals: { audio } })
+        return { emulator, output, code }
+    }
+    const pitches = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'note' ? [c.pitch] : []))
+    const testcase = {
+        input: [],
+        expectedOutput: '',
+        startingRegisters: {},
+        expectedRegisters: {},
+        startingMemory: [],
+        expectedMemory: []
+    }
+
+    it('waits out a NOTE_PLAY_WAIT on a Testcase clock, in silence', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld b, 0x01',
+            '    ld a, 0xf4      ; 500 ms',
+            '    ld c, 0x64',
+            '    out (c), a',
+            '    ld c, 0x61',
+            '    ld b, 60',
+            '    in a, (c)',
+            '    ld c, 0x52',
+            '    ld b, 0',
+            '    in a, (c)       ; the hundredths since the run started',
+            '    out (0x11), a',
+            '    halt'
+        ])
+        await emulator.compile(100, code)
+        await emulator.runTestcase(testcase, 100_000)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('50')
+        expect(output.commands.filter((c) => c.type === 'note')).toEqual([])
+    })
+
+    it('plays a NOTE_PLAY_WAIT Note before it waits, once', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld b, 0',
+            '    ld a, 20        ; 20 ms',
+            '    ld c, 0x64',
+            '    out (c), a',
+            '    ld c, 0x61',
+            '    ld b, 64',
+            '    in a, (c)',
+            '    halt'
+        ])
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        expect(emulator.terminated).toBe(true)
+        expect(pitches(output)).toEqual([64])
+    })
+
+    it('takes a Note back with the out that played it', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld a, 60',
+            '    out (0x60), a',
+            '    nop'
+        ])
+        await emulator.compile(100, code)
+        await emulator.step()
+        await emulator.step()
+        expect(pitches(output)).toEqual([60])
+        emulator.undo(1)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+    })
+
+    it('plays no Note when Stop comes while the sound bank loads', async () => {
+        for (const lines of [
+            ['    ld a, 60', '    out (0x60), a', '    halt'],
+            ['    ld bc, 0x3c61', '    in a, (c)', '    halt']
+        ]) {
+            const { emulator, output, code } = withAudio(lines)
+            output.holdPrepare = true
+            await emulator.compile(100, code)
+            const run = emulator.run(100_000)
+            await new Promise((resolve) => setTimeout(resolve, 20))
+            emulator.clear()
+            output.settle()
+            await run
+            await new Promise((resolve) => setTimeout(resolve, 0))
+            //not started at all, rather than started and never sent
+            expect(emulator.peripherals.audio.activity.soundsStarted).toBe(0)
+            emulator.peripherals.audio.flush()
+            expect(pitches(output)).toEqual([])
+        }
+    })
+
+    it('still waits for the sound bank when a Breakpoint stops the run after the Note', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld a, 60',
+            '    out (0x60), a',
+            '    ld a, 2',
+            '    halt'
+        ])
+        output.holdPrepare = true
+        await emulator.compile(100, code)
+        emulator.toggleBreakpoint(code.split('\n').indexOf('    ld a, 2'))
+        let finished = false
+        const run = emulator.run(100_000).then(() => (finished = true))
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(finished).toBe(false)
+        output.settle()
+        await run
+        expect(emulator.terminated).toBe(false)
+        expect(pitches(output)).toEqual([60])
+    })
+
+    it('holds a run on the first Note while the sound bank loads', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld a, 60',
+            '    out (0x60), a',
+            '    ld a, 2',
+            '    halt'
+        ])
+        output.holdPrepare = true
+        await emulator.compile(100, code)
+        const run = emulator.run(100_000)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        //the `out` has run, the instruction after it has not
+        expect(emulator.terminated).toBe(false)
+        output.settle()
+        await run
+        expect(emulator.terminated).toBe(true)
+        expect(pitches(output)).toEqual([60])
+    })
+})
+
+describe('Z80 Sound chip', () => {
+    function withAudio(lines: string[]) {
+        const output = new RecordingAudioOutput()
+        const audio = new Audio({ output })
+        const code = ['    org $8000', ...lines].join('\n')
+        const emulator = Z80Emulator(code, { peripherals: { audio } })
+        return { emulator, output, code }
+    }
+    const writes = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'soundChip' ? c.writes : []))
+    /** An MSX's way of setting channel A to 440 Hz at full volume, and reading the period back. */
+    const TONE = [
+        '    ld a, 0',
+        '    out (0xa0), a',
+        '    ld a, 254',
+        '    out (0xa1), a',
+        '    ld a, 1',
+        '    out (0xa0), a',
+        '    ld a, 0xf0      ; only the low four bits are kept',
+        '    out (0xa1), a',
+        '    ld a, 8',
+        '    out (0xa0), a',
+        '    ld a, 15',
+        '    out (0xa1), a',
+        '    ld a, 1',
+        '    out (0xa0), a',
+        '    in a, (0xa2)',
+        '    out (0x11), a',
+        '    ld a, 14        ; the joystick port reads as nothing attached',
+        '    out (0xa0), a',
+        '    in a, (0xa2)',
+        '    out (0x13), a'
+    ]
+
+    it('writes the selected registers in order and reads them back as the chip keeps them', async () => {
+        const { emulator, output, code } = withAudio([...TONE, '    halt'])
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('0FF')
+        expect(writes(output)).toEqual([0, 254, 1, 0, 8, 15])
+        expect(emulator.peripherals.audio.activity.soundsStarted).toBe(1)
+    })
+
+    it('falls silent when the program ends', async () => {
+        const { emulator, output, code } = withAudio([...TONE, '    halt'])
+        await emulator.compile(100, code)
+        await emulator.run(100_000)
+        expect(output.commands.at(-1)).toEqual({ type: 'releaseChips' })
+    })
+
+    it('puts a register back on Undo, and the chip plays from the registers', async () => {
+        const { emulator, output, code } = withAudio([
+            '    ld a, 8',
+            '    out (0xa0), a',
+            '    ld a, 15',
+            '    out (0xa1), a',
+            '    ld a, 3',
+            '    out (0xa1), a',
+            '    in a, (0xa2)',
+            '    nop'
+        ])
+        await emulator.compile(100, code)
+        for (let i = 0; i < 6; i++) await emulator.step()
+        emulator.undo(2)
+        expect(output.commands.at(-1)).toEqual({
+            type: 'soundChipLoad',
+            registers: [0, 0, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0, 0, 0]
+        })
+        expect(emulator.peripherals.audio.soundChip.read()).toBe(15)
+        await emulator.step()
+        await emulator.step()
+        expect(emulator.peripherals.audio.soundChip.read()).toBe(3)
+    })
+
+    it('answers a Testcase as an interactive run does, in silence', async () => {
+        const { emulator, output, code } = withAudio([...TONE, '    halt'])
+        await emulator.compile(100, code)
+        await emulator.runTestcase(
+            {
+                input: [],
+                expectedOutput: '0FF',
+                startingRegisters: {},
+                expectedRegisters: {},
+                startingMemory: [],
+                expectedMemory: []
+            },
+            100_000
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('0FF')
+        expect(output.commands.filter((c) => c.type !== 'stopAll')).toEqual([])
+    })
+})

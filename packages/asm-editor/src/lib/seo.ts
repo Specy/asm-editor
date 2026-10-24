@@ -91,7 +91,7 @@ export function softwareApplicationLd() {
         '@type': 'SoftwareApplication',
         name: 'Asm Editor',
         description:
-            'Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution.',
+            'Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution.',
         url: SITE_URL,
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Any (web browser)',

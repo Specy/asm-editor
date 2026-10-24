@@ -9,6 +9,7 @@ import {
     M68KDirectiveDocumentationList,
     type Size
 } from '#lib/languages/M68K/M68K-documentation.ts'
+import { m68kInstructionForms } from '#lib/languages/M68K/M68K-forms.ts'
 import {
     M68K_COLORS,
     M68K_KEY_CODE_DOCS,
@@ -30,18 +31,25 @@ import {
     type EntryKind,
     type EntrySwatch
 } from '../entries'
+import { m68kInstructionCategories } from './categories'
+import { m68kFormTags } from '../instructions/formTags'
+import { withInstructionCategory } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { m68kInstructionDocument } from './instructionDocument'
 import addressingModesMarkdown from './addressing-modes.md?raw'
 import assemblerFeaturesMarkdown from './assembler-features.md?raw'
 import conditionCodesMarkdown from './condition-codes.md?raw'
 import exceptionsMarkdown from './exceptions.md?raw'
 import shiftDirectionsMarkdown from './shift-directions.md?raw'
 import trapsMarkdown from './traps.md?raw'
+import { synthEntries } from '../synth'
 
 /**
  * The M68K Documentation. Instructions, directives, condition codes and trap tasks come from the
  * same tables the editor's hovers and the agent's prompt read; the explanations around them are the
  * markdown files beside this one, and the lists and tables inside those are filled in from the
- * tables too, so the text cannot drift from what the editor does.
+ * tables too, so the text cannot drift from what the editor does. An instruction's forms, which the
+ * hand-written tables do not list, come from s68k's own instruction table.
  */
 
 const BASE = '/documentation/m68k'
@@ -59,31 +67,52 @@ function prose(
     chapter: string,
     chapterHref: string,
     markdown: string,
-    kind?: EntryKind
+    kind?: EntryKind,
+    openingTitle?: string
 ): DocumentationEntry[] {
-    return proseEntries({ language: 'm68k', chapter, chapterHref, markdown, kind }).map(
-        (entry) => ({ ...entry, summary: summaryOf(entry.searchText.replace(/^\s*>\s?/gm, '')) })
-    )
+    return proseEntries({
+        language: 'm68k',
+        chapter,
+        chapterHref,
+        markdown,
+        kind,
+        openingTitle
+    }).map((entry) => ({
+        ...entry,
+        summary: summaryOf(entry.searchText.replace(/^\s*>\s?/gm, ''))
+    }))
 }
 
 function instructions(): Chapter {
     const href = `${BASE}/instruction`
-    const entries = instructionsDocumentationList.map((instruction): DocumentationEntry => ({
-        id: `m68k/instructions/${instruction.name}`,
-        language: 'm68k',
-        chapter: 'instructions',
-        kind: 'instruction',
-        title: instruction.name,
-        //a family is one entry named by every mnemonic it stands for, so `beq` finds Bcc
-        names: names(instruction.name, ...(instruction.compundNames ?? [])),
-        signature: sizesOf(instruction.sizes),
-        summary: summaryOf(instruction.description),
-        href: `${href}/${instruction.name}`,
-        anchor: instruction.name,
-        view: { type: 'm68k-instruction', instruction },
-        searchText: instruction.description,
-        code: instruction.example
-    }))
+    const entries = instructionsDocumentationList.map((instruction): DocumentationEntry => {
+        const forms = m68kInstructionForms(instruction)
+        const document = m68kInstructionDocument(instruction.name)!
+        return withInstructionCategory(
+            {
+                id: `m68k/instructions/${instruction.name}`,
+                language: 'm68k',
+                chapter: 'instructions',
+                kind: 'instruction',
+                title: instruction.name,
+                //a family is one entry named by every mnemonic it stands for, so `beq` finds Bcc
+                names: names(instruction.name, ...(instruction.compundNames ?? [])),
+                signature: documentSignature(document),
+                summary: document.summary,
+                href: `${href}/${instruction.name}`,
+                anchor: instruction.name,
+                view: {
+                    type: 'instruction',
+                    document: () => document,
+                    example: instruction.interactiveExample?.code
+                },
+                searchText: [document.longName, instruction.description].join('\n'),
+                code: instruction.example
+            },
+            m68kInstructionCategories[instruction.name],
+            forms.map(m68kFormTags)
+        )
+    })
     return {
         id: 'instructions',
         language: 'm68k',
@@ -100,12 +129,13 @@ function instructions(): Chapter {
  * addressing-modes.md: the row's signature, and the spellings an exact search finds it by.
  */
 const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
+    overview: ['<ea>'],
     direct: ['Dn', 'An'],
     indirect: ['(An)'],
     'address-register-displacement': ['d(An)'],
     'indirect-post-pre-increment': ['(An)+', '-(An)'],
-    immediate: ['Im', '#<num>'],
-    'effective-address': ['Ea/<label>', '<ea>'],
+    immediate: ['#imm', 'Im', '#<num>'],
+    'effective-address': ['abs', 'Ea/<label>'],
     'address-register-indexed': ['d(An,Xn)'],
     'program-counter-relative': ['d(PC)', 'd(PC,Xn)'],
     'status-registers': ['sr', 'ccr']
@@ -113,12 +143,16 @@ const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
 
 function addressingModes(): Chapter {
     const href = `${BASE}/addressing-mode`
-    const entries = prose('addressing-modes', href, addressingModesMarkdown, 'addressing-mode').map(
-        (entry): DocumentationEntry => {
-            const syntax = ADDRESSING_MODE_SYNTAX[entry.anchor] ?? []
-            return { ...entry, names: names(...syntax), signature: syntax.join(', ') || undefined }
-        }
-    )
+    const entries = prose(
+        'addressing-modes',
+        href,
+        addressingModesMarkdown,
+        'addressing-mode',
+        'Effective addresses'
+    ).map((entry): DocumentationEntry => {
+        const syntax = ADDRESSING_MODE_SYNTAX[entry.anchor] ?? []
+        return { ...entry, names: names(...syntax), signature: syntax.join(', ') || undefined }
+    })
     return {
         id: 'addressing-modes',
         language: 'm68k',
@@ -269,7 +303,7 @@ function taskEntry(task: M68KTrapDoc, href: string): DocumentationEntry {
 
 /**
  * The tasks that are not supported, one line per reason: neighbouring tasks that share one, such as
- * the eight sound tasks, are listed together before it.
+ * the eight network tasks, are listed together before it.
  */
 function rejectedTaskList(): string {
     const lines: { tasks: string[]; reason: string }[] = []
@@ -284,8 +318,8 @@ function rejectedTaskList(): string {
 
 /**
  * The Chapter in the page's order: the introduction, then each group of tasks after its own
- * introduction (the colors beside the graphics tasks, the key codes beside the keyboard ones), then
- * the tasks that are not supported.
+ * introduction (the colors beside the graphics tasks, the key codes beside the keyboard ones, how
+ * sound differs from EASy68K beside the sound ones), then the tasks that are not supported.
  */
 function trapTasks(): Chapter {
     const href = `${BASE}/traps`
@@ -308,7 +342,8 @@ function trapTasks(): Chapter {
     }
     const beside: Partial<Record<M68KTrapGroup, DocumentationEntry[]>> = {
         graphics: take('colors').map(withSwatches),
-        input: take('key-codes')
+        input: take('key-codes'),
+        sound: take('sound-differences')
     }
     const closing = take('unsupported')
     const entries = [
@@ -392,6 +427,19 @@ function assemblerFeatures(): Chapter {
     }
 }
 
+function synth(): Chapter {
+    const href = `${BASE}/synth`
+    return {
+        id: 'synth',
+        language: 'm68k',
+        title: 'Synth',
+        href,
+        description:
+            'Control eight sound channels through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
+        entries: synthEntries('M68K', 'm68k', href)
+    }
+}
+
 let cached: Chapter[] | null = null
 
 /** The M68K Documentation's Chapters. */
@@ -402,6 +450,7 @@ export function chapters(): Chapter[] {
         conditionCodes(),
         shiftDirections(),
         trapTasks(),
+        synth(),
         exceptions(),
         directives(),
         assemblerFeatures()

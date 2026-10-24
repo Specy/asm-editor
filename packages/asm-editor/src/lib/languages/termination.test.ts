@@ -8,6 +8,14 @@ const SEGFAULT: Termination = {
     description: 'Segmentation fault'
 }
 
+const AVX: Termination = {
+    kind: 'signal',
+    number: 4,
+    name: 'SIGILL',
+    description: 'Illegal instruction',
+    unsupported: "stopped: AVX-512 isn't supported yet"
+}
+
 describe('describeTermination', () => {
     it('says how each kind of end happened', () => {
         expect(describeTermination({ kind: 'exit', code: 3 })).toBe('exited with code 3')
@@ -15,6 +23,8 @@ describe('describeTermination', () => {
         expect(describeTermination({ kind: 'exit' })).toBe('exited')
         expect(describeTermination({ kind: 'end' })).toBe('ran past its last instruction')
         expect(describeTermination(SEGFAULT)).toBe('Segmentation fault (signal 11)')
+        //what the emulator cannot run, in place of the signal it raised
+        expect(describeTermination(AVX)).toBe("stopped: AVX-512 isn't supported yet")
         expect(describeTermination({ kind: 'error', message: 'Bad load' })).toBe(
             'stopped by an error: Bad load'
         )
@@ -35,6 +45,9 @@ describe('terminationSummary', () => {
         expect(terminationSummary(SEGFAULT, 2500)).toBe(
             'Ran in 2.500s, Segmentation fault (signal 11)'
         )
+        expect(terminationSummary(AVX, 12)).toBe(
+            "Ran in 12ms, stopped: AVX-512 isn't supported yet"
+        )
         expect(
             terminationSummary({ kind: 'error', message: 'Bad load' }, 3, { errorMessage: false })
         ).toBe('Ran in 3ms, stopped by an error')
@@ -49,6 +62,7 @@ describe('terminationSummary', () => {
     it('starts with how it ended when no Run measured it', () => {
         expect(terminationSummary({ kind: 'exit', code: 0 }, -1)).toBe('Exited with code 0')
         expect(terminationSummary(SEGFAULT, -1)).toBe('Segmentation fault (signal 11)')
+        expect(terminationSummary(AVX, -1)).toBe("Stopped: AVX-512 isn't supported yet")
         expect(terminationSummary({ kind: 'error', message: 'Bad load' }, -1)).toBe(
             'Stopped by an error: Bad load'
         )

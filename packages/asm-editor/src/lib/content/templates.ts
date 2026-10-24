@@ -14,10 +14,11 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
  * picks one and then finds the lecture reads the same program twice rather than two that disagree.
  *
  * The value of `template` is the order it appears in; the name and description are the Example's
- * own. Each of the six is spelled the same way in every Course, so the picker offers one list
- * whatever language is selected. x86 has four of the six: it has no Screen, and this editor cannot
- * yet hand a typed line to an x86 program, so the drawing and the input programs have no x86
- * Example to be flagged.
+ * own. Each of the eight is spelled the same way in every Course, so the picker offers one list
+ * whatever language is selected. x86 has four of the eight: it has no Screen and no sound, and this
+ * editor cannot yet hand a typed line to an x86 program, so the drawing, the sound and the input
+ * programs have no x86 Example to be flagged. M68K has seven, without the tune: EASy68K has no task
+ * that plays a note.
  *
  * Read from disk rather than bundled: the Examples are 492 KB of markdown and only ~30 short
  * programs are wanted, so this runs in the prerender of `/projects/create` and the page ships the

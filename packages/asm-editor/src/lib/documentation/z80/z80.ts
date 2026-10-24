@@ -1,12 +1,10 @@
 import {
-    formatZ80InstructionSummary,
     groupZ80VariantsByDescription,
     z80ConditionCodes,
     z80Directives,
     z80InstructionEntries,
     z80Operands,
-    z80Registers,
-    type Z80InstructionVariant
+    z80Registers
 } from '#lib/languages/Z80/Z80-documentation.ts'
 import {
     Z80_COLORS,
@@ -30,6 +28,11 @@ import {
     type EntryField,
     type EntrySwatch
 } from '../entries'
+import { z80InstructionCategories } from './categories'
+import { z80FormTags } from '../instructions/formTags'
+import { withInstructionCategory } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { z80InstructionDocument } from './instructionDocument'
 import directivesProse from './directives.md?raw'
 import ioProse from './io.md?raw'
 import registersProse from './registers.md?raw'
@@ -86,49 +89,32 @@ function sectionsOf(entries: DocumentationEntry[]): (anchor: string) => Document
     }
 }
 
-/** How much of an instruction's forms its row shows; `ld` alone has 20 of them. */
-const SIGNATURE_LENGTH = 60
-
-/**
- * The first forms of `formatZ80InstructionSummary`, whole, as many as fit in a row:
- * `ld rr,nnnn | ld (rr),r | ld r,nn | …`. An instruction without operands gets none, since its one
- * form is its own name.
- */
-function instructionSignature(
-    mnemonic: string,
-    variants: Z80InstructionVariant[]
-): string | undefined {
-    const forms = formatZ80InstructionSummary(variants).split(' | ')
-    if (forms.length === 1 && forms[0] === mnemonic) return undefined
-    let signature = forms[0]
-    for (const form of forms.slice(1)) {
-        if (signature.length + form.length + 3 > SIGNATURE_LENGTH) return `${signature} | …`
-        signature += ` | ${form}`
-    }
-    return signature
-}
-
 function instructions(): Chapter {
     const entries = z80InstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
         const descriptions = groupZ80VariantsByDescription(variants)
             .map((group) => group.description)
             .filter(Boolean)
-        return {
+        const document = z80InstructionDocument(mnemonic)
+        const entry: DocumentationEntry = {
             id: `z80/instructions/${mnemonic}`,
             language: 'z80',
             chapter: 'instructions',
             kind: 'instruction',
             title: mnemonic,
             names: names(mnemonic),
-            signature: instructionSignature(mnemonic, variants),
-            //the plainest form comes first, and the instruction's page leads with it too
-            summary: summary(descriptions[0] ?? mnemonic),
+            signature: documentSignature(document),
+            summary: document.summary,
             href: `${BASE}/instruction/${mnemonic}`,
             anchor: mnemonic,
-            view: { type: 'z80-instruction', variants },
-            searchText: descriptions.join('\n'),
+            view: { type: 'instruction', document: () => document },
+            searchText: [document.longName, ...descriptions].join('\n'),
             code: [...new Set(variants.map((variant) => variant.instruction))].join('\n')
         }
+        return withInstructionCategory(
+            entry,
+            z80InstructionCategories[mnemonic],
+            variants.map(z80FormTags)
+        )
     })
     return {
         id: 'instructions',
@@ -411,7 +397,8 @@ function inputOutput(): Chapter {
             section('the-trs-80-display'),
             colorsEntry(section('colors'))
         ],
-        mouse: [section('mouse-views')]
+        mouse: [section('mouse-views')],
+        audio: [section('sound')]
     }
     return {
         id: 'input-output',
@@ -419,7 +406,7 @@ function inputOutput(): Chapter {
         title: 'Input/Output',
         href,
         description:
-            'The ports that connect a program to the terminal, the Screen, the keyboard, the mouse and the clock.',
+            'The ports that connect a program to the terminal, the Screen, the keyboard, the mouse, the clock and Audio.',
         entries: [
             section('ports'),
             ...Z80_PORT_GROUP_DOCS.flatMap((group) => [

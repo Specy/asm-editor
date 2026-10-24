@@ -6,6 +6,7 @@ import {
     RUNNING_PANEL_REFRESH_MS
 } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
+    BuildDownloadError,
     EmulatorStatus,
     type CompileResult,
     type Instruction
@@ -35,6 +36,9 @@ import type { Testcase } from '#lib/Project.svelte.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import { RandomSource } from '#lib/languages/peripherals/RandomSource.ts'
+import { Audio, marsNote } from '#lib/languages/peripherals/audio/Audio.ts'
+import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
+import { makeWav } from '#lib/languages/peripherals/audio/soundFixtures.ts'
 
 /**
  * The scheduler, the injection, the reset path and the Undo rule of phase 3, exercised through a
@@ -109,8 +113,16 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return []
     }
 
-    _compile(): CompileResult {
-        return { ok: true }
+    /** What the fake Core's Build does; the default builds at once. */
+    compileBehavior: () => CompileResult | Promise<CompileResult> = () => ({ ok: true })
+
+    _compile(): CompileResult | Promise<CompileResult> {
+        return this.compileBehavior()
+    }
+
+    /** Says what the Build waits for, as an adapter does from inside `_compile`. */
+    reportPhase(phase: string): void {
+        this.reportBuildPhase(phase)
     }
 
     _initialize(): void {}
@@ -802,6 +814,83 @@ describe('slice scheduling', () => {
     })
 })
 
+/** A Build the test lets finish, and how often the fake Core was asked to build. */
+function waitingBuild(emulator: FakeEmulator, failure?: Error) {
+    const build = { started: 0, finish: () => {} }
+    emulator.compileBehavior = async () => {
+        build.started += 1
+        emulator.reportPhase('Downloading libc.so.6…')
+        await new Promise<void>((resolve) => (build.finish = resolve))
+        if (failure) throw failure
+        return { ok: true }
+    }
+    return build
+}
+
+describe('a Build that waits', () => {
+    it('says what it waits for while it lasts, and nothing once it is done', async () => {
+        const emulator = new FakeEmulator()
+        const build = waitingBuild(emulator)
+        expect(emulator.buildPhase).toBeUndefined()
+        const done = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        expect(emulator.buildPhase).toBe('Downloading libc.so.6…')
+        build.finish()
+        await done
+        expect(emulator.buildPhase).toBeUndefined()
+        expect(emulator.canExecute).toBe(true)
+    })
+
+    it('says nothing more, and builds nothing, once cleared', async () => {
+        const emulator = new FakeEmulator()
+        const build = waitingBuild(emulator)
+        const done = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        emulator.clear()
+        expect(emulator.buildPhase).toBeUndefined()
+        //what the cleared Build's Core says afterwards is dropped
+        emulator.reportPhase('Downloading libm.so.6…')
+        expect(emulator.buildPhase).toBeUndefined()
+        build.finish()
+        await done
+        expect(emulator.canExecute).toBe(false)
+    })
+
+    it('does not start one whose signal was aborted while it waited for the Core', async () => {
+        const emulator = new FakeEmulator()
+        const build = waitingBuild(emulator)
+        const first = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        //Cancel: the first is cleared, and the one pressed meanwhile is aborted before its turn
+        emulator.clear()
+        const controller = new AbortController()
+        const second = emulator.compile(0, '', controller.signal)
+        controller.abort()
+        build.finish()
+        await Promise.all([first, second])
+        expect(build.started).toBe(1)
+        expect(emulator.canExecute).toBe(false)
+        //nor one aborted before it was asked for
+        await emulator.compile(0, '', controller.signal)
+        expect(build.started).toBe(1)
+    })
+
+    it('tells the Terminal what could not be downloaded and to Build again', async () => {
+        const emulator = new FakeEmulator()
+        const failure = new BuildDownloadError('libc.so.6', 'no response for 20 seconds')
+        const build = waitingBuild(emulator, failure)
+        const done = emulator.compile(0, '')
+        await vi.waitFor(() => expect(build.started).toBe(1))
+        build.finish()
+        await expect(done).rejects.toBe(failure)
+        expect(emulator.errors).toEqual([
+            "Couldn't download libc.so.6 (no response for 20 seconds). Check your internet connection, then press Build again."
+        ])
+        expect(emulator.buildPhase).toBeUndefined()
+        expect(emulator.canExecute).toBe(false)
+    })
+})
+
 describe('stop', () => {
     it('cancels a run suspended on a wait', async () => {
         const emulator = new FakeEmulator()
@@ -1045,6 +1134,67 @@ describe('pause', () => {
         expect(await run).toBe(InterpreterStatus.Terminated)
         expect(emulator.canExecute).toBe(true)
         expect(emulator.requests).toHaveLength(1)
+    })
+})
+
+describe('run to cursor', () => {
+    it("stops at its targets or the person's Breakpoints, and keeps none of its own", async () => {
+        //a Run with temporary Breakpoints beside the person's, on every slice of it, which no Run
+        //after it has (reverse-engineering-ux.md, decision 11)
+        const emulator = new FakeEmulator()
+        emulator.toggleBreakpoint(3)
+        emulator.behavior = (_request, index) => {
+            //a Breakpoint set while it runs stops it as well, from the next slice
+            if (index === 0) emulator.toggleBreakpoint(5)
+            return { reason: index < 2 ? 'budget' : 'breakpoint', instructions: 10 }
+        }
+        const target = { file: 'main', address: 0x40 }
+        expect(await emulator.runTo([target], 0)).toBe(InterpreterStatus.Running)
+        expect(emulator.requests.map((request) => request.breakpoints)).toEqual([
+            [{ file: 'main', line: 3 }, target],
+            [{ file: 'main', line: 3 }, { file: 'main', line: 5 }, target],
+            [{ file: 'main', line: 3 }, { file: 'main', line: 5 }, target]
+        ])
+        //the instruction it starts on runs, whichever Breakpoint names it (ADR 0023)
+        expect(emulator.requests.map((request) => request.skipBreakpointAtPc)).toEqual([
+            true,
+            false,
+            false
+        ])
+        expect(emulator.breakpoints).toEqual([
+            { file: 'main', line: 3 },
+            { file: 'main', line: 5 }
+        ])
+        await emulator.run(0)
+        expect(emulator.requests.at(-1)?.breakpoints).toEqual([
+            { file: 'main', line: 3 },
+            { file: 'main', line: 5 }
+        ])
+    })
+
+    it('resolves its targets with the Breakpoints, as a C line is', async () => {
+        const emulator = new FakeEmulator()
+        emulator.setBreakpointResolver((breakpoints) =>
+            breakpoints.map((breakpoint) =>
+                breakpoint.file === 'main.c' ? { file: 'main', line: 9 } : breakpoint
+            )
+        )
+        emulator.behavior = () => ({ reason: 'breakpoint', instructions: 1 })
+        await emulator.runTo([{ file: 'main.c', line: 2 }], 0)
+        expect(emulator.requests[0].breakpoints).toEqual([{ file: 'main', line: 9 }])
+    })
+
+    it('pauses as a Run does, keeping no Breakpoint of its own', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = () => {
+            emulator.pause()
+            return { reason: 'budget', instructions: 10 }
+        }
+        expect(await emulator.runTo([{ file: 'main', line: 4 }], 1000)).toBe(
+            InterpreterStatus.Running
+        )
+        expect(emulator.paused).toBe(true)
+        expect(emulator.breakpoints).toEqual([])
     })
 })
 
@@ -1296,6 +1446,64 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
         expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+})
+
+describe('audio', () => {
+    function withAudio(): { emulator: FakeEmulator; audio: Audio; output: RecordingAudioOutput } {
+        const output = new RecordingAudioOutput()
+        const audio = new Audio({ output })
+        const emulator = new FakeEmulator({ peripherals: { audio } })
+        return { emulator, audio, output }
+    }
+
+    it('runs a Testcase on a silent Audio and gives the interactive one back', async () => {
+        const { emulator, audio } = withAudio()
+        let silentInside = false
+        emulator._runTestcase = async () => {
+            silentInside = emulator.peripherals.audio.silent
+        }
+        await emulator.runTestcase(emptyTestcase, 100)
+        expect(silentInside).toBe(true)
+        expect(emulator.peripherals.audio).toBe(audio)
+    })
+
+    it('sends what a slice started once the slice is over', async () => {
+        const { emulator, audio, output } = withAudio()
+        emulator.behavior = () => {
+            audio.playNote(marsNote(60, 500, 0, 100))
+            expect(output.batches).toEqual([])
+            emulator.hasEnded = true
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(100)
+        expect(output.commands.filter((c) => c.type === 'note')).toHaveLength(1)
+        expect(emulator.audioActivity.soundsStarted).toBe(1)
+    })
+
+    it('stops loops when the program ends, and silences everything on a clear', async () => {
+        const { emulator, audio, output } = withAudio()
+        audio.loadSlot('directx', 0, audio.open({ path: 'loop.wav', bytes: makeWav() }))
+        emulator.behavior = () => {
+            audio.control('directx', 0, 1)
+            audio.playNote(marsNote(60, 5000, 0, 100))
+            emulator.hasEnded = true
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(100)
+        expect(output.commands.filter((c) => c.type === 'stop')).toHaveLength(1)
+        expect(emulator.audioActivity.playingForMs).toBeGreaterThan(0)
+        emulator.clear()
+        expect(output.batches.at(-1)).toEqual([{ type: 'stopAll' }])
+        expect(audio.playSlot('directx', 0)).toBe('Missing')
+    })
+
+    it('writes what Audio has to say into the Log', () => {
+        const { emulator, audio } = withAudio()
+        audio.noteMissing('roger.wav')
+        expect(emulator.notes.map((n) => [n.tone, n.text])).toEqual([
+            ['warning', "Sound File 'roger.wav' not found"]
+        ])
     })
 })
 

@@ -1,18 +1,19 @@
 /**
  * The Environment library, `<sim.h>`, as text: one `static inline` function for each MARS or RARS
- * service a Target's Documentation lists, the keyboard and display registers, and `SIM_SCREEN` for
- * the bitmap display ([ADR 0034](../../../../docs/adr/0034-environment-library-is-header-only.md)); for
+ * service a Target's Documentation lists, the keyboard and display registers, `SIM_SCREEN` for
+ * the bitmap display and the Synth's registers ([ADR 0034](../../../../docs/adr/0034-environment-library-is-header-only.md)); for
  * x86, one for each Linux system call its Documentation lists.
  *
  * Plain JavaScript and no imports, so `generate.mjs` runs it under Node and the editor's tests
  * regenerate the committed headers in memory from the same data. The data comes in as arguments:
  * the syscall entries of `src/lib/documentation/mars/{mips,riscv}Syscalls.ts`, the device
- * registers of `src/lib/languages/mars/MarsDevices.ts` and the display sizes and memory map of
- * `src/lib/languages/mars/marsDisplay.ts`, which the Documentation's Syscalls and Screen chapters
+ * registers of `src/lib/languages/mars/MarsDevices.ts`, the display sizes and memory map of
+ * `src/lib/languages/mars/marsDisplay.ts` and the Synth's registers of
+ * `src/lib/languages/synthRegisters.ts`, which the Documentation's Syscalls and Screen chapters
  * are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
  * its Syscalls chapter shows.
  */
-import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO } from './helpers.mjs'
+import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO, SYNTH_HELPERS } from './helpers.mjs'
 
 /** Where the committed headers live, relative to the repository. */
 export const SIM_HEADER_DIRECTORY = 'src/lib/sourceRuntime/generated/sim'
@@ -237,8 +238,8 @@ ${DEVICE_HELPERS.map((helper) => `/** ${helper.headerDoc(devices, hex)} */\nstat
 /** `sim_rgb` and `SIM_SCREEN`, whose grid may not take more than the static data the Core has room for. */
 function screenSection(display, target) {
     const limit = display.staticDataEnd - display.staticData
-    const size = (value) => display.sizes.map((choice) => `(${value}) == ${choice}`).join(' || ')
-    const unit = display.units.map((choice) => `(unit) == ${choice}`).join(' || ')
+    const size = (value) => `(${value}) >= ${display.sizeMin} && (${value}) <= ${display.sizeMax}`
+    const unit = `(unit) >= ${display.unitMin} && (unit) <= ${display.unitMax}`
     return `/*
  * The bitmap display: a grid of words, one color each, drawn on the Screen.
  *
@@ -250,11 +251,14 @@ function screenSection(display, target) {
  *     ...
  *     screen[y * (256 / 2) + x] = sim_rgb(255, 128, 0);
  *
- * Write it once, outside any function, with numbers ${target.simulator}'s display offers: width
- * and height ${listed(display.sizes)}, unit ${listed(display.units)}. The grid shares the
- * ${limit} bytes of static data, from ${hex(display.staticData)} to ${hex(display.staticDataEnd)}, with the program's
- * other global variables and constants. The heap starts on the first page after static data if
- * it passes the default heap base. A larger display needs a larger unit.
+ * Write it once, outside any function. Width and height are any whole number of pixels from
+ * ${display.sizeMin} to ${display.sizeMax}, and unit any from ${display.unitMin} to ${display.unitMax}; a unit that does not divide them drops
+ * the remainder. ${target.simulator}'s own display only offers ${listed(display.sizes)} for width and
+ * height and ${listed(display.units)} for unit, so a program that runs there too keeps to those.
+ *
+ * The grid shares the ${limit} bytes of static data, from ${hex(display.staticData)} to ${hex(display.staticDataEnd)}, with
+ * the program's other global variables and constants. The heap starts on the first page after
+ * static data if it passes the default heap base. A larger display needs a larger unit.
  */
 
 /** A color for the bitmap display: red, green and blue from 0 to 255, in the low 24 bits. */
@@ -272,11 +276,72 @@ static inline ${prototypeOf(RGB_HELPER)} {
 
 #define ${SCREEN_MACRO.name}(${SCREEN_MACRO.parameters.join(', ')}) \\
     __SIM_STATIC_ASSERT((${size('width')}) && (${size('height')}) && (${unit}), \\
-        "SIM_SCREEN: width and height must be ${listed(display.sizes)}, and unit ${listed(display.units)}, the sizes ${target.simulator}'s bitmap display offers"); \\
+        "SIM_SCREEN: width and height must be from ${display.sizeMin} to ${display.sizeMax} pixels, and unit from ${display.unitMin} to ${display.unitMax}"); \\
     __SIM_STATIC_ASSERT((width) / (unit) * ((height) / (unit)) * 4 <= ${limit}, \\
         "SIM_SCREEN: the grid does not fit in the ${limit} bytes of static data a ${target.language} program has, which its other global variables and constants share; use a larger unit or a smaller display"); \\
     __asm__("# @screen width=" __SIM_EXPANDED_STRING(width) " height=" __SIM_EXPANDED_STRING(height) " unit=" __SIM_EXPANDED_STRING(unit) " base=" #name); \\
     unsigned name[(width) / (unit) * ((height) / (unit))] __attribute__((__aligned__(4)))`
+}
+
+/** The Synth: its registers as constants, two macros to reach them, and three helpers. */
+function synthSection(synth, target) {
+    const base = `${hex(synth.base)}ul`
+    const define = (name, value, comment) =>
+        `#define ${name} ${value}${comment ? ` /* ${comment} */` : ''}`
+    const registers = (list) =>
+        list.map((register) =>
+            define(
+                `SIM_SYNTH_${register.name}`,
+                `0x${register.offset.toString(16)}`,
+                `${register.bytes * 8} bits: ${register.description[0].toLowerCase()}${register.description.slice(1)}`
+            )
+        )
+    return `/*
+ * The Synth is an editor extension with eight sound channels. Its registers are memory from
+ * ${hex(synth.base)}. Set a channel's waveform, volume and envelope, then turn its gate on to start
+ * a note and off to release it:
+ *
+ *     SIM_SYNTH8(0, SIM_SYNTH_WAVEFORM) = SIM_SYNTH_TRIANGLE;
+ *     SIM_SYNTH8(0, SIM_SYNTH_VOLUME) = 100;
+ *     SIM_SYNTH8(0, SIM_SYNTH_SUSTAIN) = 127;
+ *     sim_synth_play(0, 440);
+ *     sim_sleep(500);
+ *     sim_synth_gate(0, 0);
+ *
+ * ${target.simulator} does not provide this chip. The Synth chapter of the Documentation describes
+ * its registers, waveform cycles, sample playback and envelope timing.
+ */
+${define('SIM_SYNTH_BASE', base)}
+${define('SIM_SYNTH_CHANNELS', synth.channelCount)}
+
+/* A channel's registers, from SIM_SYNTH_BASE + channel * ${hex(synth.channelSize)}. */
+${registers(synth.channelRegisters).join('\n')}
+
+/* The waveform register's values. */
+${synth.waveforms.map((waveform, value) => define(`SIM_SYNTH_${waveform.toUpperCase()}`, value)).join('\n')}
+
+/* The control register's bits. */
+${define('SIM_SYNTH_GATE', hex(synth.gate) + 'u', 'on attacks, off releases')}
+${define('SIM_SYNTH_LOOP', hex(synth.loop) + 'u', 'the sample waveform loops')}
+
+/* Each channel's wavetable: ${synth.wavetableSize} bytes of 32 four-bit samples, the first of each pair in the high half. */
+#define SIM_SYNTH_TABLE(channel) \\
+    ((volatile unsigned char *)(SIM_SYNTH_BASE + ${hex(synth.wavetables)}u + (unsigned long)(channel) * ${hex(synth.wavetableSize)}u))
+
+/* Shared upload registers, with offsets from SIM_SYNTH_BASE rather than a channel's address.
+ * A program write to the start register copies immediately; a memory-view Poke does not copy. */
+${registers(synth.uploadRegisters).join('\n')}
+
+/* A channel's register of 8 or 16 bits, to read or write. */
+#define SIM_SYNTH8(channel, offset) \\
+    (*(volatile unsigned char *)(SIM_SYNTH_BASE + (unsigned long)(channel) * ${hex(synth.channelSize)}u + (offset)))
+#define SIM_SYNTH16(channel, offset) \\
+    (*(volatile unsigned short *)(SIM_SYNTH_BASE + (unsigned long)(channel) * ${hex(synth.channelSize)}u + (offset)))
+#define SIM_SYNTH_UPLOAD8(offset) (*(volatile unsigned char *)(SIM_SYNTH_BASE + (offset)))
+#define SIM_SYNTH_UPLOAD16(offset) (*(volatile unsigned short *)(SIM_SYNTH_BASE + (offset)))
+#define SIM_SYNTH_UPLOAD32(offset) (*(volatile unsigned *)(SIM_SYNTH_BASE + (offset)))
+
+${SYNTH_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body()}\n}`).join('\n\n')}`
 }
 
 /**
@@ -293,7 +358,7 @@ export function generateSimHeader(targetName, data) {
             : 'src/lib/documentation/mars/riscvSyscalls.ts'
     return `/*
  * <sim.h>: the Environment library of ${target.language}, one function for each ${target.simulator} service the
- * Documentation lists, and the keyboard, display and bitmap display.
+ * Documentation lists, the keyboard, display and bitmap display, and the Synth.
  *
  * Generated by scripts/sim-header/generate.mjs from ${source}
  * and ${target.simulator}'s device registers. Do not edit it: regenerate it.
@@ -321,6 +386,8 @@ ${services.map((syscall) => serviceFunction(syscall, target)).join('\n\n')}
 ${deviceFunctions(data.devices, target.simulator)}
 
 ${screenSection(data.display, target)}
+
+${synthSection(data.synth, target)}
 
 #ifdef __cplusplus
 }

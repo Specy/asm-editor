@@ -1,59 +1,53 @@
 <script lang="ts">
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { languageAccent } from '#lib/languages/languageColors.ts'
+    import type { ProjectFile } from '#lib/projectFiles.ts'
+    import FaLinux from '~icons/fa-brands/linux'
+    import FaMarkdown from '~icons/fa-brands/markdown'
+    import FaPython from '~icons/fa-brands/python'
     import FaFile from '~icons/fa-solid/file'
-    import FaFileCode from '~icons/fa-solid/file-code'
     import FaFileAlt from '~icons/fa-solid/file-alt'
+    import FaFileAudio from '~icons/fa-solid/file-audio'
+    import FaFileCode from '~icons/fa-solid/file-code'
+    import FaFileCsv from '~icons/fa-solid/file-csv'
+    import FaFileImage from '~icons/fa-solid/file-image'
+    import FaFilePdf from '~icons/fa-solid/file-pdf'
+    import FaFileVideo from '~icons/fa-solid/file-video'
     import FaMicrochip from '~icons/fa-solid/microchip'
     import OctFileBinary from '~icons/octicon/file-binary-16'
+    import { assemblyLanguageOf, fileIconKind } from './fileIconKind'
 
     let {
         path,
         language,
-        binary = false
-    }: { path: string; language: AvailableLanguages; binary?: boolean } = $props()
+        file
+    }: {
+        path: string
+        language: AvailableLanguages
+        /** The File's content, by which its bytes name its kind; none for a name being typed. */
+        file?: ProjectFile | Uint8Array
+    } = $props()
 
-    const assemblyExtensions: Record<string, AvailableLanguages> = {
-        m68k: 'M68K',
-        x68: 'M68K',
-        mips: 'MIPS',
-        riscv: 'RISC-V',
-        x86: 'X86',
-        z80: 'Z80'
-    }
-
-    const extension = $derived(path.split('/').pop()?.split('.').slice(1).pop()?.toLowerCase())
+    const kind = $derived(fileIconKind(path, language, file))
     const assemblyLanguage = $derived(
-        extension && ['asm', 's', 'inc'].includes(extension)
-            ? language
-            : extension === 'riscv' && language === 'RISC-V-64'
-              ? language
-              : Object.prototype.hasOwnProperty.call(assemblyExtensions, extension ?? '')
-                ? assemblyExtensions[extension!]
-                : undefined
-    )
-    const kind = $derived(
-        binary
-            ? 'binary'
-            : extension === 'c'
-              ? 'c'
-              : ['cpp', 'cc', 'cxx'].includes(extension ?? '')
-                ? 'cpp'
-                : ['h', 'hpp', 'hh', 'hxx'].includes(extension ?? '')
-                  ? 'header'
-                  : assemblyLanguage
-                    ? 'assembly'
-                    : ['txt', 'md'].includes(extension ?? '')
-                      ? 'text'
-                      : 'file'
+        kind === 'assembly' ? assemblyLanguageOf(path, language) : undefined
     )
     const label = $derived(
         {
+            executable: 'ELF executable',
+            image: 'Image',
+            pdf: 'PDF document',
+            audio: 'Audio file',
+            video: 'Video file',
+            binary: 'Binary file',
             c: 'C source file',
             cpp: 'C++ source file',
-            header: extension === 'h' ? 'C header file' : 'C++ header file',
+            header: /\.h$/i.test(path) ? 'C header file' : 'C++ header file',
             assembly: `${assemblyLanguage} assembly file`,
-            binary: 'Binary file',
+            markdown: 'Markdown file',
+            python: 'Python file',
+            table: 'Table file',
+            code: 'Code file',
             text: 'Text file',
             file: 'File'
         }[kind]
@@ -62,9 +56,7 @@
 
 <span
     class="source-file-icon {kind}"
-    style:color={kind === 'assembly' && assemblyLanguage
-        ? languageAccent(assemblyLanguage)
-        : undefined}
+    style:color={assemblyLanguage ? languageAccent(assemblyLanguage) : undefined}
     title={label}
     aria-hidden="true"
 >
@@ -80,12 +72,28 @@
                 />
             {/if}
         </svg>
-    {:else if kind === 'header'}
+    {:else if kind === 'executable'}
+        <FaLinux />
+    {:else if kind === 'image'}
+        <FaFileImage />
+    {:else if kind === 'pdf'}
+        <FaFilePdf />
+    {:else if kind === 'audio'}
+        <FaFileAudio />
+    {:else if kind === 'video'}
+        <FaFileVideo />
+    {:else if kind === 'binary'}
+        <OctFileBinary />
+    {:else if kind === 'header' || kind === 'code'}
         <FaFileCode />
     {:else if kind === 'assembly'}
         <FaMicrochip />
-    {:else if kind === 'binary'}
-        <OctFileBinary />
+    {:else if kind === 'markdown'}
+        <FaMarkdown />
+    {:else if kind === 'python'}
+        <FaPython />
+    {:else if kind === 'table'}
+        <FaFileCsv />
     {:else if kind === 'text'}
         <FaFileAlt />
     {:else}
@@ -121,6 +129,26 @@
 
         &.binary {
             color: #b48bdb;
+        }
+
+        &.executable {
+            color: #e3be5a;
+        }
+
+        &.image {
+            color: #6cc08e;
+        }
+
+        &.pdf {
+            color: #e57373;
+        }
+
+        &.audio {
+            color: #e09a56;
+        }
+
+        &.video {
+            color: #d483c4;
         }
     }
 </style>

@@ -18,7 +18,7 @@
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
-    import { riscvInstructionEntries } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
+    import { riscvInstructionNames } from '#lib/languages/RISC-V/RISC-V-documentation.ts'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -29,11 +29,12 @@
     }
 
     let { children }: Props = $props()
-    let instructions = riscvInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
 
-    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
+    // Alphabetical: the sidebar is for finding a mnemonic by name, and the Workbench's
+    // Documentation panel is what groups them by category.
+    const instructionNames = [...new Set(riscvInstructionNames)].sort((a, b) => a.localeCompare(b))
 
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
@@ -81,37 +82,37 @@
         <MaskedScroll>
             <Column gap="1rem" padding="0 1rem">
                 <MenuLink
-                    href="/documentation/risc-v"
+                    href={resolve('/documentation/risc-v')}
                     title="RISC-V"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/directive"
+                    href={resolve('/documentation/risc-v/directive')}
                     title="Directives"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/screen"
+                    href={resolve('/documentation/risc-v/screen')}
                     title="Screen and I/O"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/syscall"
+                    href={resolve('/documentation/risc-v/syscall')}
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/using-c"
+                    href={resolve('/documentation/risc-v/using-c')}
                     title="Using C and C++"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/runtime-library"
+                    href={resolve('/documentation/risc-v/runtime-library')}
                     title="Runtime library"
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
-                    href="/documentation/risc-v/registers"
+                    href={resolve('/documentation/risc-v/registers')}
                     title="Registers"
                     onClick={() => (menuOpen = false)}
                 />
@@ -127,8 +128,11 @@
                     </h2>
                 {/snippet}
                 <InstructionsMenu
-                    hrefBase="/documentation/risc-v/instruction"
-                    instructions={instructionNames}
+                    hrefOf={(instructionName) =>
+                        resolve('/documentation/risc-v/instruction/[instructionName]', {
+                            instructionName
+                        })}
+                    names={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />

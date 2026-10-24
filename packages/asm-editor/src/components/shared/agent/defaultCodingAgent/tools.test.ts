@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { createDefaultCodingAgentTools } from './tools'
-import { makeProject } from '#lib/Project.svelte.ts'
-import { projectBuildSources } from '#lib/buildSources.ts'
+import { createDefaultCodingAgentTools, projectAgentBuildSources, projectFilesAdded } from './tools'
+import { makeProject, type Project } from '#lib/Project.svelte.ts'
 import {
     compilerExplorerDriver,
     SourceCompilationError,
@@ -665,15 +664,16 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             expect(files['temp.s']).toBeUndefined()
         })
 
-        it('refuses to delete the sole entry file', async () => {
-            const { context } = createTestContext({ 'main.s': 'code' })
+        it('deletes the sole entry file of a host without programs', async () => {
+            const { context, files } = createTestContext({ 'main.s': 'code' })
             const tools = createDefaultCodingAgentTools(context)
             const result = (await tools.delete_file.execute({
                 path: 'main.s'
             })) as unknown as ToolExecutionResult
 
-            expect(result.success).toBe(false)
-            expect(result.error).toContain('sole entry file')
+            expect(result).toMatchObject({ success: true, deleted: 'main.s' })
+            expect(result.note).toBeUndefined()
+            expect(files['main.s']).toBeUndefined()
         })
     })
 
@@ -1604,31 +1604,127 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
     })
 })
 
+/**
+ * The tools over a Project as DefaultCodingAgent hands it to them without a Workbench session, the
+ * chat page's case: writes and deletions through its FileSystem, then the host's Program rules.
+ */
+function projectContext(project: Project) {
+    const emulator = createMockEmulator()
+    const { context } = createTestContext({}, emulator)
+    context.getProject = () => project
+    context.getEditorLanguage = () => project.language
+    context.getFiles = () => project.files
+    context.getFile = (path) => (path in project.files ? project.fileSystem.readText(path) : null)
+    context.setFile = (path, code) => {
+        const added = !(path in project.files)
+        project.fileSystem.writeText(path, code)
+        if (added) projectFilesAdded(project, [path])
+    }
+    context.deleteFile = (path) => {
+        project.fileSystem.remove(path)
+        project.removeProgram(path)
+    }
+    context.getEntryPath = () => project.selectedProgram
+    context.getActivePath = () => undefined
+    context.getBuildSources = () => projectAgentBuildSources(project, 'No program here.')
+    context.noProgramMessage = 'No program here.'
+    context.setActivePath = vi.fn()
+    return { project, emulator, context, tools: createDefaultCodingAgentTools(context) }
+}
+
+describe('Programs', () => {
+    it('deletes the sole entry file and its program, without asking', async () => {
+        const { project, emulator, tools } = projectContext(
+            makeProject({ language: 'RISC-V', code: 'li a0, 1' })
+        )
+        const result = await tools.delete_file.execute({ path: 'main.riscv' })
+        expect(result).toMatchObject({
+            success: true,
+            deleted: 'main.riscv',
+            deletedProgram: true,
+            note: 'Deleted main.riscv and its program.',
+            remainingFiles: []
+        })
+        expect(project.programs).toEqual({})
+        expect(project.selectedProgram).toBeUndefined()
+        //the Emulator is told why nothing builds, as a Workbench session tells it
+        expect(emulator.setSources).toHaveBeenLastCalledWith(
+            expect.objectContaining({ entry: 'main.riscv', assemblyError: 'No program here.' })
+        )
+    })
+
+    it('deletes a file that is no entry and keeps the program', async () => {
+        const { project, tools } = projectContext(
+            makeProject({ language: 'RISC-V', code: 'li a0, 1' })
+        )
+        project.fileSystem.writeText('notes.txt', 'todo')
+        const result = await tools.delete_file.execute({ path: 'notes.txt' })
+        expect(result).toMatchObject({ success: true, deleted: 'notes.txt' })
+        expect(result).not.toHaveProperty('deletedProgram')
+        expect(project.selectedProgram).toBe('main.riscv')
+    })
+
+    it('reports no program instead of making up main.<ext>', async () => {
+        const { tools } = projectContext(
+            makeProject({
+                language: 'RISC-V',
+                files: { 'notes.txt': { encoding: 'plain', content: 'todo' } },
+                programs: {}
+            })
+        )
+        expect(await tools.list_files.execute({})).toMatchObject({
+            success: true,
+            entry: null,
+            note: 'No program here.',
+            files: [{ path: 'notes.txt', isEntry: false }]
+        })
+        expect(await tools.view_file.execute({})).toMatchObject({
+            success: false,
+            error: 'No program here.'
+        })
+        expect(await tools.compile.execute({})).toMatchObject({
+            success: false,
+            errorKind: 'execution_state',
+            error: 'No program here.'
+        })
+        //an explicit path still reads
+        expect(await tools.view_file.execute({ path: 'notes.txt' })).toMatchObject({
+            success: true,
+            code: 'todo',
+            entry: null
+        })
+    })
+
+    it('makes the first program from a new assembly file the agent writes', async () => {
+        const { project, tools } = projectContext(
+            makeProject({ language: 'RISC-V', files: {}, programs: {} })
+        )
+        await tools.write_to_file.execute({ path: 'helpers.inc', code: 'nop' })
+        expect(project.programs).toEqual({})
+        await tools.write_to_file.execute({ path: 'sort.riscv', code: 'li a0, 1' })
+        expect(project.selectedProgram).toBe('sort.riscv')
+        expect(await tools.list_files.execute({})).toMatchObject({ entry: 'sort.riscv' })
+    })
+})
+
 describe('C/C++ agent workflow', () => {
     function sourceContext(language: SupportedLanguage = 'RISC-V') {
-        const project = makeProject({ language, code: 'original assembly' })
-        const emulator = createMockEmulator()
-        const { context } = createTestContext({}, emulator)
-        context.getProject = () => project
-        context.getEditorLanguage = () => project.language
-        context.getFiles = () => project.files
-        context.getFile = (path) =>
-            path in project.files ? project.fileSystem.readText(path) : null
-        context.setFile = (path, code) => project.fileSystem.writeText(path, code)
-        context.getEntryPath = () => project.entry
-        context.getBuildSources = () => projectBuildSources(project)
-        context.setActivePath = vi.fn()
-        return { project, emulator, context, tools: createDefaultCodingAgentTools(context) }
+        return projectContext(makeProject({ language, code: 'original assembly' }))
     }
 
+    /** Compiles every source to a global `main`, except `add.c`, a companion that defines none. */
     function mockSourceCompiler() {
         return vi
             .spyOn(compilerExplorerDriver, 'compile')
             .mockImplementation(async (request: CompilationRequest) => {
-                const assembly = '.text\nmain:\nli a0, 42\nret\n'
+                const definesMain = request.sourcePath !== 'add.c'
+                const assembly = definesMain
+                    ? '.text\n.globl main\nmain:\nli a0, 42\nret\n'
+                    : '.text\nadd:\nadd a0, a0, a1\nret\n'
                 const outputFingerprint = fileFingerprint({ encoding: 'plain', content: assembly })!
                 return {
                     assembly,
+                    definesMain,
                     diagnostics: [],
                     record: {
                         sourcePath: request.sourcePath,
@@ -1649,7 +1745,13 @@ describe('C/C++ agent workflow', () => {
                     map: {
                         sourcePath: request.sourcePath,
                         outputFingerprint,
-                        lines: [null, null, { path: request.sourcePath, line: 0 }, null]
+                        lines: assembly
+                            .split('\n')
+                            .map((line) =>
+                                /^(li|add) /.test(line)
+                                    ? { path: request.sourcePath, line: 0 }
+                                    : null
+                            )
                     }
                 }
             })
@@ -1657,7 +1759,7 @@ describe('C/C++ agent workflow', () => {
 
     it('writes and edits C and headers without assembler checks or replacing assembly', async () => {
         const { project, emulator, tools } = sourceContext()
-        const entry = project.entry
+        const entry = project.selectedProgram
         for (const path of ['main.c', 'helpers.h', 'main.cpp']) {
             const written = await tools.write_to_file.execute({ path, code: 'int answer = 42;' })
             expect(written).toMatchObject({
@@ -1674,7 +1776,9 @@ describe('C/C++ agent workflow', () => {
             expect(project.fileSystem.readText(path)).toBe('int answer = 43;')
         }
         expect(project.code).toBe('original assembly')
-        expect(project.entry).toBe(entry)
+        //a C File never makes a Program of its own; its Compile does (programs.md, decision 8)
+        expect(project.selectedProgram).toBe(entry)
+        expect(Object.keys(project.programs)).toEqual([entry])
         expect(emulator.check).not.toHaveBeenCalled()
         expect(emulator.clear).toHaveBeenCalled()
     })
@@ -1691,8 +1795,12 @@ describe('C/C++ agent workflow', () => {
             expect(result).toMatchObject({
                 success: true,
                 outputPath: 'main.c.riscv',
+                entry: 'main.c.riscv',
+                program: 'created',
                 canExecute: false
             })
+            expect(project.selectedProgram).toBe('main.c.riscv')
+            expect(Object.keys(project.programs).sort()).toEqual(['main.c.riscv', 'main.riscv'])
             expect(compiler).toHaveBeenCalledWith(
                 expect.objectContaining({
                     sourcePath: 'main.c',
@@ -1702,9 +1810,9 @@ describe('C/C++ agent workflow', () => {
                 expect.any(AbortSignal)
             )
             expect(project.compilations).toHaveLength(1)
-            expect(project.sourceMaps[project.entry]).toBeDefined()
+            expect(project.sourceMaps['main.c.riscv']).toBeDefined()
             const built = await tools.compile.execute({})
-            expect(built).toMatchObject({ success: true })
+            expect(built).toMatchObject({ success: true, entry: 'main.c.riscv' })
             expect(emulator.compile).toHaveBeenCalledWith(
                 100,
                 expect.objectContaining({
@@ -1749,14 +1857,15 @@ describe('C/C++ agent workflow', () => {
             .mockRejectedValue(new SourceCompilationError('bad C source'))
         try {
             const { project, tools } = sourceContext()
-            const entry = project.entry
+            const entry = project.selectedProgram
             await tools.write_to_file.execute({ path: 'main.c', code: 'broken' })
             expect(await tools.compile_source.execute({ path: 'main.c' })).toMatchObject({
                 success: false,
                 errorKind: 'compile_error',
                 error: 'bad C source'
             })
-            expect(project.entry).toBe(entry)
+            expect(project.selectedProgram).toBe(entry)
+            expect(Object.keys(project.programs)).toEqual([entry])
             expect(project.compilations).toEqual([])
         } finally {
             compiler.mockRestore()
@@ -1772,13 +1881,62 @@ describe('C/C++ agent workflow', () => {
                 code: 'int main(void) { return 42; }'
             })
             await tools.compile_source.execute({ path: 'main.c' })
-            project.fileSystem.writeText(project.entry, 'manual edits')
+            project.fileSystem.writeText('main.c.riscv', 'manual edits')
             context.confirmSourceOverwrite = vi.fn(async () => false)
             expect(await tools.compile_source.execute({ path: 'main.c' })).toMatchObject({
                 success: false
             })
             expect(context.confirmSourceOverwrite).toHaveBeenCalledOnce()
             expect(project.code).toBe('manual edits')
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    it('compiles a companion source without main and leaves the programs alone', async () => {
+        const compiler = mockSourceCompiler()
+        try {
+            const { project, tools } = sourceContext()
+            await tools.write_to_file.execute({
+                path: 'add.c',
+                code: 'int add(int a, int b) { return a + b; }'
+            })
+            expect(await tools.compile_source.execute({ path: 'add.c' })).toMatchObject({
+                success: true,
+                outputPath: 'add.c.riscv',
+                entry: 'main.riscv',
+                program: 'none',
+                note: 'add.c defines no main, so no program was made for it.'
+            })
+            expect(Object.keys(project.programs)).toEqual(['main.riscv'])
+            expect(project.selectedProgram).toBe('main.riscv')
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    //as on the chat page, a host with exactly one Program (programs.md, decision 12)
+    it('moves the one program to the generated assembly where the host keeps one', async () => {
+        const compiler = mockSourceCompiler()
+        try {
+            const { project, context } = sourceContext()
+            project.setProgramSettings('main.riscv', { programArguments: 'one two' })
+            context.newProgram = 'move'
+            const tools = createDefaultCodingAgentTools(context)
+            expect(tools.compile_source.description).toContain('the program moves')
+            await tools.write_to_file.execute({
+                path: 'main.c',
+                code: 'int main(void) { return 42; }'
+            })
+            expect(await tools.compile_source.execute({ path: 'main.c' })).toMatchObject({
+                success: true,
+                entry: 'main.c.riscv',
+                program: 'moved'
+            })
+            expect(Object.keys(project.programs)).toEqual(['main.c.riscv'])
+            expect(project.selectedProgram).toBe('main.c.riscv')
+            expect(project.selected?.settings).toEqual({ programArguments: 'one two' })
+            expect(project.files['main.riscv']).toBeDefined()
         } finally {
             compiler.mockRestore()
         }
@@ -1809,6 +1967,10 @@ describe('C/C++ agent workflow', () => {
         expect(prompt).toContain('C/C++ source workflow')
         expect(prompt).toContain('printf("Hello from C\\n")')
         expect(prompt).toContain('Then call compile')
+        //true of a host that moves its one Program to the assembly and of one that makes another
+        expect(prompt).toContain(
+            "compile_source makes its generated assembly the selected program's Entry file"
+        )
         const readOnly = buildDefaultCodingAgentPrompt({
             enabledToolNames: ['view_file'],
             enabledWorkflows: []

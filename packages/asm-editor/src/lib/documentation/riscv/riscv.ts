@@ -1,5 +1,4 @@
 import {
-    formatAggregatedArgs,
     riscvDirectivesMap,
     riscvInstructionEntries,
     riscvRegisterFiles,
@@ -15,21 +14,27 @@ import {
     type DocumentationEntry
 } from '../entries'
 import { screenEntries } from '../mars/screen'
+import { synthEntries } from '../synth'
 import { documented, syscallFields, syscallSummary } from '../mars/syscalls'
 import directivesIntro from './directives.md?raw'
 import runtimeIntro from './runtime-library.md?raw'
 import usingCIntro from './using-c.md?raw'
 import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
+import { runtimeFunctionDocumentation } from '../runtimeFunctions'
 import { riscvCallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import registersIntro from './registers.md?raw'
 import syscallsIntro from './syscalls.md?raw'
 import { riscvInstructionContent } from './instructionContent'
-import { withInstructionContent } from '../instructions/resolve'
+import { riscvInstructionCategories } from './categories'
+import { riscvFormTags } from '../instructions/formTags'
+import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
+import { documentSignature } from '../instructions/document'
+import { riscvInstructionDocument } from '../mars/instructionDocument'
 
 /**
  * The RISC-V Documentation, which RISC-V-64 Projects read too: the instruction list is the RV64
- * one, and an instruction that exists only there says so.
+ * one, and a form that exists only there is tagged RV64 only.
  */
 
 const BASE = '/documentation/risc-v'
@@ -37,7 +42,12 @@ const BASE = '/documentation/risc-v'
 function instructions(): Chapter {
     const entries = riscvInstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
         const descriptions = [...new Set(variants.map((variant) => variant.description))]
-        return withInstructionContent(
+        const document = riscvInstructionDocument(
+            mnemonic,
+            variants,
+            riscvInstructionContent[mnemonic]
+        )
+        const entry = withInstructionContent(
             {
                 id: `risc-v/instructions/${mnemonic}`,
                 language: 'risc-v',
@@ -45,15 +55,20 @@ function instructions(): Chapter {
                 kind: 'instruction',
                 title: mnemonic,
                 names: names(mnemonic),
-                signature: formatAggregatedArgs(variants),
-                summary: summaryOf(variants[0].description),
+                signature: documentSignature(document),
+                summary: document.summary,
                 href: `${BASE}/instruction/${mnemonic}`,
                 anchor: mnemonic,
-                view: { type: 'riscv-instruction', variants },
-                searchText: descriptions.join('\n'),
+                view: { type: 'instruction', document: () => document },
+                searchText: [document.longName, ...descriptions].join('\n'),
                 code: [...new Set(variants.map((variant) => variant.example))].join('\n')
             },
             riscvInstructionContent[mnemonic]
+        )
+        return withInstructionCategory(
+            entry,
+            riscvInstructionCategories[mnemonic],
+            variants.map(riscvFormTags)
         )
     })
     return {
@@ -202,6 +217,19 @@ function screen(): Chapter {
     }
 }
 
+function synth(): Chapter {
+    const href = `${BASE}/synth`
+    return {
+        id: 'synth',
+        language: 'risc-v',
+        title: 'Synth',
+        href,
+        description:
+            'Control eight sound channels through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
+        entries: synthEntries('RISC-V', 'risc-v', href)
+    }
+}
+
 /** The C library a Build links when the Project or its Compilation asks for it. */
 function runtimeLibrary(): Chapter {
     const href = `${BASE}/runtime-library`
@@ -214,6 +242,7 @@ function runtimeLibrary(): Chapter {
         }),
         ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
             const convention = riscvCallingConvention(entry.prototype)
+            const doc = runtimeFunctionDocumentation(entry.name, entry.doc)
             return {
                 id: `risc-v/runtime-library/${entry.name}`,
                 language: 'risc-v',
@@ -222,12 +251,12 @@ function runtimeLibrary(): Chapter {
                 title: entry.name,
                 names: names(entry.name),
                 signature: `<${entry.header}>`,
-                summary: summaryOf(entry.doc),
+                summary: summaryOf(doc),
                 href: `${href}#${entry.name}`,
                 anchor: entry.name,
                 view: {
                     type: 'fields',
-                    markdown: entry.doc,
+                    markdown: doc,
                     fields: [
                         { label: 'Declaration', value: `\`${entry.prototype}\`` },
                         { label: 'Header', value: `\`<${entry.header}>\`` },
@@ -235,7 +264,7 @@ function runtimeLibrary(): Chapter {
                     ],
                     example: `call ${entry.name}`
                 },
-                searchText: `${entry.prototype}. ${entry.doc}`
+                searchText: `${entry.prototype}. ${doc}`
             }
         })
     ]
@@ -278,6 +307,7 @@ export function chapters(): Chapter[] {
         syscalls(),
         registers(),
         screen(),
+        synth(),
         runtimeLibrary(),
         usingC()
     ]

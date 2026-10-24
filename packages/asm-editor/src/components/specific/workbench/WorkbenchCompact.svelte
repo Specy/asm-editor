@@ -12,7 +12,6 @@
     import { untrack } from 'svelte'
     import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
     import { prefersReducedMotion } from 'svelte/motion'
-    import FaAngleRight from '~icons/fa-solid/angle-right'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
@@ -34,6 +33,7 @@
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle } from './debugTools'
+    import { markedMemoryAddress, memoryCellMenu, moveMemoryView } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
 
@@ -57,8 +57,6 @@
     //a page of memory, which the registers fill beside it and are no taller than under it
     let memoryBox: readonly ResizeObserverSize[] | undefined = $state()
     const memoryHeight = $derived(memoryBox?.[0]?.blockSize ?? 0)
-    const bottomOpen = $derived(!workbenchLayout.isCollapsed('compact:bottom', false))
-    const readWaiting = $derived(emulator.peripherals.terminal.pendingRead?.source === 'terminal')
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
     const panelShown = $derived(phone ? ui.drawerOpen : !!ui.activePanel)
     let restoring = $state(false)
@@ -74,25 +72,18 @@
     //the Screen's size and controls, which its section shows in its own header while it is open
     let screenHeader: ScreenHeader | undefined = $state()
     const screenOpen = $derived(!workbenchLayout.isCollapsed('compact:screen', true))
+    //the bar builds the controls group's Program (programs-plan.md, decision 8), so it is there
+    //while that pane shows an Entry file that is no C or C++, whose pane has Compile instead
     const executionBar = $derived(
         session.debugSession ||
-            session.groups.length > 1 ||
-            !sourceLanguage(session.controlsGroup.displayedPath)
+            (session.controlsGroup.displayedProgram !== undefined &&
+                !sourceLanguage(session.controlsGroup.displayedPath))
     )
     //the Debug session's sections are built at the first Build and only hidden after a Stop
     let debugged = false
     const debugSectionsBuilt = $derived.by(() => {
         if (session.debugSession) debugged = true
         return debugged
-    })
-
-    //a read unfolds the bottom panel, whose Terminal tab the panel itself picks (the plan's
-    //decision 10), so that there is a console to type the answer in
-    $effect(() => {
-        if (!readWaiting) return
-        untrack(() => {
-            if (!bottomOpen) workbenchLayout.setCollapsed('compact:bottom', false)
-        })
     })
 
     //a phone's drawer always shows a panel beside its rail: the last one, or the first there is
@@ -125,26 +116,15 @@
             />
             {#if !phone && executionBar}
                 <div class="controls-bar">
-                    <ExecutionControls fill group={session.controlsGroup} showCompilation={false} />
+                    <ExecutionControls
+                        fill
+                        group={session.controlsGroup}
+                        showCompilation={false}
+                        showViews={false}
+                    />
                 </div>
             {/if}
-            <BottomPanel
-                open={bottomOpen}
-                style={bottomOpen
-                    ? 'height: var(--compact-bottom-height); flex: none;'
-                    : 'flex: none;'}
-            >
-                {#snippet actions()}
-                    <button
-                        class="fold"
-                        title={bottomOpen ? 'Fold the panel' : 'Unfold the panel'}
-                        aria-expanded={bottomOpen}
-                        onclick={() => workbenchLayout.setCollapsed('compact:bottom', bottomOpen)}
-                    >
-                        <span class="chevron" class:open={bottomOpen}><FaAngleRight /></span>
-                    </button>
-                {/snippet}
-            </BottomPanel>
+            <BottomPanel style="height: var(--compact-bottom-height); flex: none;" />
             {#if debugSectionsBuilt}
                 <div class="debug-sections" class:hidden={!session.debugSession}>
                     <CollapsibleSection id="compact:registers" title="Registers & memory">
@@ -168,7 +148,8 @@
                                         inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                                         currentAddress={emulator.memory.global.address}
                                         onAddressChange={(address) =>
-                                            emulator.setGlobalMemoryAddress(address)}
+                                            moveMemoryView(session, ui, address)}
+                                        hideLabel={emulator.memory.global.rowSize < 16}
                                     />
                                 </div>
                                 <MemoryVisualiser
@@ -188,6 +169,8 @@
                                     callStackAddresses={makeColorizedLabels(emulator.callStack)}
                                     pokeable={session.pokeable}
                                     onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
+                                    cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
+                                    markedAddress={markedMemoryAddress(session, ui)}
                                 />
                             </div>
                         </div>
@@ -213,7 +196,7 @@
                                 id="compact:{tool.id}"
                                 title={tool.title}
                                 style="flex: 1 1 16rem; min-width: min(16rem, 100%);"
-                                bodyStyle={toolBodyStyle(tool, '22rem')}
+                                bodyStyle={toolBodyStyle('22rem')}
                             >
                                 <DebugToolContent {tool} />
                             </CollapsibleSection>
@@ -329,28 +312,6 @@
         pointer-events: none;
         /* out among the cards rather than over the code */
         --execution-tray: var(--wb-surface);
-    }
-
-    .fold {
-        display: grid;
-        place-items: center;
-        width: 2rem;
-        background: transparent;
-        color: var(--secondary-text);
-        cursor: pointer;
-    }
-
-    .chevron {
-        display: grid;
-        place-items: center;
-        width: 0.8rem;
-        height: 0.8rem;
-        transform: rotate(-90deg);
-        transition: transform 0.15s;
-
-        &.open {
-            transform: rotate(90deg);
-        }
     }
 
     .debug-sections.hidden {

@@ -1,12 +1,8 @@
 ## Ports
 
-A Z80 has no system calls. Programs reach the outside world with `in` and `out`, which address one of 256 ports: `out (n), a` sends A to port `n`, `in a, (n)` reads a byte back. The `(c)` forms (`out (c), r` and `in r, (c)`) take the port number from C, which lets a program compute it, and put B on the high byte of the address bus, which is how a read carries a parameter: the key code, the mouse view, the byte of the clock, the length of a wait.
+A Z80 has no system calls. Programs reach the outside world with `in` and `out`, which address one of 256 ports: `out (n), a` sends A to port `n`, `in a, (n)` reads a byte back. The `(c)` forms (`out (c), r` and `in r, (c)`) take the port number from C, which lets a program compute it, and put B on the high byte of the address bus. For a parameterized read, set B to the documented key code, mouse view, clock-byte index, wait duration or pitch before `in`.
 
-The emulator connects the ports below to the Terminal, Screen, keyboard, mouse, and program clock. Every other port behaves like an empty bus: writes are dropped and reads answer `0xFF`. Reads from console ports `0x10`–`0x14` wait for input; `0x50` waits for its requested delay and `0x51` waits for the next frame. Keyboard-state, mouse, clock-now, and other status reads return immediately, so they can be polled in a loop. Invalid console number input stops the program with an error.
-
-The character port `0x10` reads a Terminal line one byte at a time, ending it with newline `0x0A` when you press Enter. Once the program uses a Screen, Keyboard or Mouse port, character input comes from the focused Screen one keystroke at a time; Enter still gives the character port `0x0A`. The last-key ports report the EASy68K Enter **key code** `0x0D`. Click the Screen to focus it before typing.
-
-For example, `ld c,0x30` / `ld b,0` / `in a,(c)` polls whether a key is waiting; the returned `A` is 1 or 0. To wait for a character, `in a,(0x10)` pauses until input is available, then returns the character in `A`. With the `(c)` form, `C` selects the low-byte port and `B` supplies the high address byte; for parameterized reads, set `B` to the documented parameter before `in`.
+The emulator connects the ports below to the Terminal, Screen, keyboard, mouse, program clock, and Audio. Every other port behaves like an empty bus: writes are dropped and reads answer `0xFF`. Reads from console ports `0x10`–`0x14` wait for input; `0x50` waits for its requested delay, `0x51` waits for the next frame, and `0x61` plays a note and waits for its requested duration. Keyboard-state, mouse, clock-now, and other status reads return immediately, so they can be polled in a loop. Invalid console number input stops the program with an error.
 
 ## Screen commands
 
@@ -34,4 +30,12 @@ Put one of these in B before reading a mouse port.
 
 {views}
 
-The editor-defined `TIME_NOW` port retains elapsed hundredths since the run started, as specified by its port map. It is not a calendar clock.
+## Sound {#sound}
+
+The audio ports play notes with a pitch, instrument, volume, and duration. General MIDI is a standard list of instrument sounds; instrument numbers here start at **0**, with 0 for acoustic grand piano, 40 for violin, 56 for trumpet, and 73 for flute. No MIDI file or external instrument is needed. Each increase of 1 in pitch moves up one semitone (one piano-key step, counting white and black keys): 60 is middle C, 62 is D, 64 is E, and 67 is G.
+
+For tones, noise and volume envelopes controlled through registers, the [Sound chip](#sound-chip) at ports `0xA0` to `0xA2` is an emulated AY-3-8910 with three square-wave channels, noise and an envelope. A program can use the audio ports, the Sound chip, or both.
+
+At most 64 notes sound at once; starting another stops the oldest. The editor supplies a General MIDI sound bank, a collection of instrument sounds. The browser loads it automatically on the first note or MIDI-file request after opening or reloading the editor page; that request waits for loading. The bank is shared across later runs and projects.
+
+After a program requests sound, the **Sound** button appears in the execution dock as a mute/unmute control. It sets **Play sound** in **Preferences**, where **Sound volume** is also available. Both settings apply across projects. Muting leaves program-visible timing and results unchanged.

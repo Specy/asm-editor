@@ -1,3 +1,5 @@
+import type { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
@@ -7,10 +9,11 @@ import {
     type MarsDisplayGeometry,
     type ProjectDisplay
 } from './marsDisplay'
+import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '../synthRegisters'
 
 /**
- * The MARS and RARS memory-mapped devices: the bitmap display and the keyboard-and-display
- * simulator, driven through the Core's memory observers. MIPS and RISC-V share this module because
+ * The MARS and RARS memory-mapped devices: the bitmap display, the keyboard-and-display simulator
+ * and the **Synth** this project adds beside them, driven through the Core's memory observers. MIPS and RISC-V share this module because
  * the two tools are the same tool — RARS's are ports of MARS's — and both Cores expose the same
  * observer API.
  *
@@ -95,7 +98,17 @@ export type MarsDeviceHost = {
         Terminal,
         'write' | 'clearOutput' | 'peekKeystroke' | 'takeKeystroke' | 'onInputChange'
     >
+    /**
+     * The Audio whose Synth the block at 0xFFFF0100 drives, read at each store since a Testcase
+     * swaps in a silent one; without it the block is plain memory.
+     */
+    audio?: () => Audio
 }
+
+/** The Synth's block, the same on MARS and RARS. */
+const SYNTH_BASE = SYNTH_BASES.mips
+/** How much an upload's source read is split into when the whole of it cannot be read. */
+const READ_CHUNK = 4096
 
 export class MarsDevices {
     private readonly host: MarsDeviceHost
@@ -126,6 +139,13 @@ export class MarsDevices {
     private receiverArmed = false
     /** The framebuffer registration, kept apart so a display change can replace only it. */
     private framebufferHandle: number | null = null
+    /** Set while the Core rewinds, whose restoring stores are not the program's writes. */
+    private rewinding = false
+    /**
+     * Whether the bitmap display covers the Synth's block, as it does at MARS's "memory map" base,
+     * 0xffff0000: its words are then pixels, and the Synth is off rather than played by drawing.
+     */
+    private synthCovered = false
 
     constructor(host: MarsDeviceHost) {
         this.host = host
@@ -142,6 +162,12 @@ export class MarsDevices {
 
     regions(): import('../commonLanguageFeatures.svelte').DeviceRegion[] {
         const regions = [{ name: 'MMIO', start: 0xffff0000n, end: 0xffff0010n }]
+        if (this.host.audio && !this.synthCovered)
+            regions.push({
+                name: 'Synth',
+                start: BigInt(SYNTH_BASE),
+                end: BigInt(SYNTH_BASE + SYNTH_BLOCK_SIZE)
+            })
         if (this.geometry)
             regions.push({
                 name: 'Bitmap display',
@@ -231,6 +257,25 @@ export class MarsDevices {
     }
 
     /**
+     * Runs the Core's `undo`, whose restoring stores reach the observers as ordinary writes: the
+     * Synth must not take them for the program's, an upload's start register least of all. Undo
+     * re-reads the Synth's block afterwards instead, with `readSynthBlock`.
+     */
+    rewind(undo: () => void): void {
+        this.rewinding = true
+        try {
+            undo()
+        } finally {
+            this.rewinding = false
+        }
+    }
+
+    /** The Synth's 512 bytes as memory holds them, for the Undo that has just rewound them. */
+    readSynthBlock(): ArrayLike<number> {
+        return this.core ? readBytes(this.core, SYNTH_BASE, SYNTH_BLOCK_SIZE) : []
+    }
+
+    /**
      * Reads the whole grid back, the path Undo takes: framebuffer mode journals nothing, so the
      * image comes from the memory the Core has already rolled back
      * ([ADR 0005](../../../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
@@ -269,6 +314,9 @@ export class MarsDevices {
     private configureDisplay(display: ProjectDisplay, options = { sync: true }): void {
         const geometry = marsDisplayGeometry(display)
         this.geometry = geometry
+        this.synthCovered =
+            geometry.baseAddress >>> 0 < SYNTH_BASE + SYNTH_BLOCK_SIZE &&
+            (geometry.endAddress >>> 0) + 4 > SYNTH_BASE
         this.words = new Int32Array(geometry.words)
         this.dirtyBlocks = new Uint8Array(Math.ceil(geometry.words / DIRTY_BLOCK_WORDS))
         this.host.screen.useFramebuffer(geometry.columns, geometry.rows)
@@ -325,6 +373,7 @@ export class MarsDevices {
                 this.onTransmitterDataWrite(value)
             )
         )
+        this.observeSynth(core)
         //the display is always willing to take a character, so a program polling the Ready bit
         //before its first store finds it set
         core.setPeripheralWord(MARS_TRANSMITTER_CONTROL | 0, MARS_READY_BIT)
@@ -361,6 +410,29 @@ export class MarsDevices {
         )
         core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, MARS_READY_BIT)
         this.receiverArmed = true
+    }
+
+    /**
+     * Hands every store into the Synth's block to the Synth as it happens, inside the storing
+     * instruction, so that an upload copies before the program's next instruction can change its
+     * source, and a gate pulsed off and on within a slice still retriggers.
+     */
+    private observeSynth(core: MarsCore): void {
+        const audio = this.host.audio
+        if (!audio) return
+        const bus: SynthBus = {
+            littleEndian: true,
+            read: (address, length) => readBytes(core, address, length)
+        }
+        const handle = core.addMemoryWriteObserver(
+            SYNTH_BASE | 0,
+            (SYNTH_BASE + SYNTH_BLOCK_SIZE - 4) | 0,
+            (address, length, value) => {
+                if (this.rewinding || this.synthCovered) return
+                audio().synth.store((address >>> 0) - SYNTH_BASE, length, value, bus)
+            }
+        )
+        this.handles.push(handle)
     }
 
     private onReceiverDataRead(): void {
@@ -443,5 +515,31 @@ export class MarsDevices {
             else high = middle - 1
         }
         return readable(0) ? low + 1 : 0
+    }
+}
+
+/**
+ * `length` bytes of the Core's memory from `address`, 0 to 255 each; what the Core cannot read, an
+ * upload whose source runs off the end of a segment, reads as 0.
+ */
+function readBytes(core: MarsCore, address: number, length: number): Uint8Array {
+    const bytes = new Uint8Array(length)
+    try {
+        bytes.set(core.readMemoryBytes(address | 0, length).map((byte) => byte & 0xff))
+        return bytes
+    } catch {
+        for (let offset = 0; offset < length; offset += READ_CHUNK) {
+            const size = Math.min(READ_CHUNK, length - offset)
+            try {
+                const chunk = core.readMemoryBytes((address + offset) | 0, size)
+                bytes.set(
+                    chunk.map((byte) => byte & 0xff),
+                    offset
+                )
+            } catch {
+                //left as zeros
+            }
+        }
+        return bytes
     }
 }

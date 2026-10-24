@@ -1,8 +1,9 @@
 <script lang="ts">
     import FaArrowRight from '~icons/fa-solid/arrow-right'
+    import type { ResolvedPathname } from '$app/types'
 
     interface Props {
-        href: string
+        href: ResolvedPathname
         /**
          * Marks what the link leads to, for a list where each entry stands for something with a
          * colour of its own. Left out, the button is the neutral one every other list uses.

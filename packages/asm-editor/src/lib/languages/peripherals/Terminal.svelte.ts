@@ -10,6 +10,7 @@ import {
     type TerminalEnter,
     type TextStreamDecoder
 } from './terminalText'
+import { TerminalHistory, type TerminalPosition } from './TerminalHistory'
 
 export type TerminalInputSource =
     | {
@@ -38,6 +39,8 @@ export type TerminalKeyboard = {
     hasTypedInput(): boolean
     peekCharacter(): string | undefined
     readCharacter(): string | undefined
+    /** Puts a character a polled device took back at the front of the queue, for Undo. */
+    unreadCharacter(character: string): void
     onTypedInput(listener: () => void): () => void
 }
 
@@ -115,6 +118,25 @@ type PendingRead = {
     cancel: () => void
 }
 
+/**
+ * The Terminal as one instruction found it, kept the first time the instruction changes it, which is
+ * what an Undo of the instruction puts back
+ * ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md)). Within an
+ * instruction the transcript only grows, a clear aside, so its length is all there is to keep of it.
+ */
+type TerminalRecord = {
+    readonly position: TerminalPosition
+    readonly length: number
+    /** The bytes of a character a byte write left incomplete. */
+    readonly held: Uint8Array
+    /** The rest of the standard-input line, replaced as it is read and never written into. */
+    readonly lineBuffer: Uint8Array
+    /** The transcript as the instruction's first clear found it; what came before is its start. */
+    cleared?: string
+    /** The keystrokes a polled device took, oldest first, which Undo puts back in their queues. */
+    taken?: { queue: TerminalKeyboard; character: string }[]
+}
+
 /** One interactive read in progress, from its first keystroke to the Enter that ends it. */
 type ActiveRead = {
     kind: TerminalReadKind
@@ -165,6 +187,10 @@ class TerminalTypedInput implements TerminalKeyboard {
 
     readCharacter(): string | undefined {
         return this.typed.shift()
+    }
+
+    unreadCharacter(character: string): void {
+        this.typed.unshift(character)
     }
 
     onTypedInput(listener: () => void): () => void {
@@ -224,6 +250,7 @@ export class Terminal {
      * read takes a line one byte at a time.
      */
     private lineBuffer: Uint8Array = new Uint8Array(0)
+    private readonly history = new TerminalHistory<TerminalRecord>()
     private inputListeners: (() => void)[] = []
     /**
      * How many console components are shown on the page to type in, see `attachConsole`. Plain,
@@ -273,6 +300,7 @@ export class Terminal {
 
     /** Text the program wrote, or an echo. Ends a character a byte write left incomplete first. */
     write(text: string): void {
+        this.journal()
         this.flushOutput()
         this._output += text
     }
@@ -282,14 +310,16 @@ export class Terminal {
      * across two writes is held back until the rest of it arrives.
      */
     writeBytes(bytes: ArrayLike<number>): void {
+        this.journal()
         const text = this.decoder.decode(bytes)
         if (text.length > 0) this._output += text
     }
 
     /** The end of the program's output: a character left incomplete shows as U+FFFD. */
     flushOutput(): void {
-        const rest = this.decoder.end()
-        if (rest.length > 0) this._output += rest
+        if (this.decoder.held().length === 0) return
+        this.journal()
+        this._output += this.decoder.end()
     }
 
     prepend(text: string): void {
@@ -301,17 +331,70 @@ export class Terminal {
      * and the bytes of the current standard-input line are the program's input, not its output.
      */
     clearOutput(): void {
+        const record = this.journal()
+        if (record) record.cleared ??= this._output
         this.decoder.reset()
         this._output = ''
     }
 
-    /** Everything a program left behind, for Build, Stop and the start of each Testcase. */
+    /**
+     * Everything a program left behind, for Build, Stop and the start of each Testcase, its Undo
+     * journal included: the Build that follows starts its own with `trackHistory`.
+     */
     clear(): void {
         this.cancelPendingInput()
+        this.history.clear()
         this.clearOutput()
         this.lineBuffer = new Uint8Array(0)
         this.typedInput.clear()
         this.notifyInputChange()
+    }
+
+    // ------------------------------------------------------------------- undo
+
+    /**
+     * Journals what the Build about to run does to the Terminal, for Undo
+     * ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md)): `position` names
+     * the Core instruction running when the program changes the Terminal, or null between
+     * instructions, and `capacity` is how many entries the Core's history keeps.
+     */
+    trackHistory(position: () => TerminalPosition | null, capacity: number): void {
+        this.history.track(position, capacity)
+    }
+
+    /**
+     * Puts the Terminal back as it was before the instructions after `position`, which the Core has
+     * just rolled back: the transcript, a character a byte write left incomplete, the rest of the
+     * standard-input line, and the keystrokes a polled device took. What a read took from the typed
+     * input stays taken, so stepping the read again asks again.
+     */
+    undoAfter(position: TerminalPosition): void {
+        let restored = false
+        this.history.undoAfter(position, (record) => {
+            restored = true
+            const taken = record.taken ?? []
+            for (let index = taken.length - 1; index >= 0; index--) {
+                taken[index].queue.unreadCharacter(taken[index].character)
+            }
+            this._output = (record.cleared ?? this._output).slice(0, record.length)
+            this.decoder.hold(record.held)
+            this.lineBuffer = record.lineBuffer
+        })
+        //a device that mirrors the next keystroke in a register, MARS's receiver, shows it again
+        if (restored) this.notifyInputChange()
+    }
+
+    /**
+     * The record of the instruction about to change the Terminal, kept on its first change. Every
+     * change a program makes goes through here first; null when nothing is journaled.
+     */
+    private journal(): TerminalRecord | null {
+        return this.history.current((position) => ({
+            position,
+            length: this._output.length,
+            held: this.decoder.held(),
+            lineBuffer: this.lineBuffer
+        }))
     }
 
     // ---------------------------------------------------------- configuration
@@ -474,8 +557,10 @@ export class Terminal {
         if (this.lineBuffer.length === 0) {
             const line = await this.readStandardInputLine(question, execution)
             if (line === null) return new Uint8Array(0)
+            this.journal()
             this.lineBuffer = encodeText(line.text + (line.newline ? LINE_FEED : ''), this.encoding)
         }
+        this.journal()
         const bytes = this.lineBuffer.slice(0, length)
         this.lineBuffer = this.lineBuffer.subarray(bytes.length)
         this.notifyInputChange()
@@ -496,6 +581,7 @@ export class Terminal {
         if (scripted !== null) text = scripted + LINE_FEED
         else if (this._keyboardInput !== null) text = await this.readCharacter(question, execution)
         else text = `${(await this.readLine('line', question, execution))?.text ?? ''}${LINE_FEED}`
+        this.journal()
         this.lineBuffer = encodeText(text, this.encoding)
         const byte = this.readBufferedByte()
         if (byte === undefined) throw new Error(NO_INPUT_LEFT_ERROR)
@@ -508,6 +594,7 @@ export class Terminal {
      */
     readBufferedByte(): number | undefined {
         if (this.lineBuffer.length === 0) return undefined
+        this.journal()
         const byte = this.lineBuffer[0]
         this.lineBuffer = this.lineBuffer.subarray(1)
         this.notifyInputChange()
@@ -547,8 +634,12 @@ export class Terminal {
             return this.readBufferedByte()
         }
         for (const queue of this.keystrokeQueues(screenKeyboard)) {
-            const character = queue.readCharacter()
+            const character = queue.peekCharacter()
             if (character === undefined) continue
+            //no read asked for it, so Undo puts it back rather than ask for it again
+            const record = this.journal()
+            queue.readCharacter()
+            if (record) (record.taken ??= []).push({ queue, character })
             this.notifyInputChange()
             return character.codePointAt(0)
         }
@@ -778,6 +869,7 @@ export class Terminal {
      * are ever erased, so a backspace cannot eat program output.
      */
     private eraseEcho(read: ActiveRead, erased: string): void {
+        this.journal()
         if (this._output.endsWith(erased)) this._output = this._output.slice(0, -erased.length)
         read.echo?.(BACKSPACE)
     }

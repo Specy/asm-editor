@@ -3,6 +3,12 @@
  * tool, with its own choice lists and defaults, so a program written against either simulator shows
  * the same picture here. MIPS and RISC-V share it because RARS's tool is a port of MARS's.
  *
+ * The tool's lists are where the sizes stop being MARS's: it offers powers of two only, and this
+ * display takes any whole number of pixels in the same ranges, so a program can have the 224 by 288
+ * of an arcade machine. A program using one of the sizes MARS lacks shows the same picture here and
+ * a different one in MARS, which cannot be configured with it. Decided on 2026-10-23
+ * ([ADR 0003](../../../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md)).
+ *
  * The user picks these in the Screen panel's header and they are stored in the project's display
  * field, because every example states them in its header comment and a project has to reopen with
  * the same display.
@@ -22,18 +28,35 @@ export type ProjectDisplay = {
     /** The width in Screen pixels of one memory word, 1 to 32; also the GUI's actual-size zoom. */
     unitWidth: number
     unitHeight: number
-    /** MARS's display area in pixels, 64 to 1024. The word grid is this divided by the unit size. */
+    /** The display area in pixels, 1 to 1024. The word grid is this divided by the unit size. */
     width: number
     height: number
     /** Where the word grid starts in Core memory. A number, not a bigint: MARS's own choices fit. */
     baseAddress: number
 }
 
-/** "Unit Width/Height in Pixels": how many screen pixels one memory word covered in MARS. */
+/**
+ * "Unit Width/Height in Pixels": how many screen pixels one memory word covered in MARS. The
+ * popover's menu; any whole number from `UNIT_SIZE_MIN` to `UNIT_SIZE_MAX` is a unit size here.
+ */
 export const MARS_UNIT_SIZE_CHOICES = [1, 2, 4, 8, 16, 32] as const
 
-/** "Display Width/Height in Pixels": the size of MARS's own display area. */
+/**
+ * "Display Width/Height in Pixels": the size of MARS's own display area. The popover's menu; any
+ * whole number from `DISPLAY_SIZE_MIN` to `DISPLAY_SIZE_MAX` is a display size here.
+ */
 export const MARS_DISPLAY_SIZE_CHOICES = [64, 128, 256, 512, 1024] as const
+
+/** The unit sizes the display takes: MARS's smallest and largest, and every size between. */
+export const UNIT_SIZE_MIN = 1
+export const UNIT_SIZE_MAX = 32
+
+/**
+ * The display sizes it takes, in pixels: up to MARS's largest, whose grid of 1024 by 1024 words is
+ * already all of static data, and down to a single pixel.
+ */
+export const DISPLAY_SIZE_MIN = 1
+export const DISPLAY_SIZE_MAX = 1024
 
 /**
  * "Base address for display". MARS builds this list from its `Memory` constants and defaults to
@@ -83,19 +106,27 @@ export type MarsDisplayGeometry = {
 }
 
 /**
- * Snaps a stored display onto MARS's choice lists. `cleanDisplay` in `Project.svelte` already makes
- * the five fields finite integers; this is what keeps a hand-edited project file, or a share link
- * from a future version with longer lists, from producing a Screen no tool could have configured.
+ * Brings a stored display into the ranges the display takes. `cleanDisplay` in `Project.svelte`
+ * already makes the five fields finite integers; this is what keeps a hand-edited project file, or
+ * a share link from a future version with larger limits, from producing a Screen of no size or of
+ * more words than memory holds. A size off MARS's lists is kept: it is not a mistake any more.
  */
 export function normalizeMarsDisplay(display: ProjectDisplay | undefined): ProjectDisplay {
     const source = display ?? DEFAULT_PROJECT_DISPLAY
+    const defaults = DEFAULT_PROJECT_DISPLAY
     return {
-        unitWidth: nearestChoice(source.unitWidth, MARS_UNIT_SIZE_CHOICES),
-        unitHeight: nearestChoice(source.unitHeight, MARS_UNIT_SIZE_CHOICES),
-        width: nearestChoice(source.width, MARS_DISPLAY_SIZE_CHOICES),
-        height: nearestChoice(source.height, MARS_DISPLAY_SIZE_CHOICES),
+        unitWidth: clampSize(source.unitWidth, UNIT_SIZE_MIN, UNIT_SIZE_MAX, defaults.unitWidth),
+        unitHeight: clampSize(source.unitHeight, UNIT_SIZE_MIN, UNIT_SIZE_MAX, defaults.unitHeight),
+        width: clampSize(source.width, DISPLAY_SIZE_MIN, DISPLAY_SIZE_MAX, defaults.width),
+        height: clampSize(source.height, DISPLAY_SIZE_MIN, DISPLAY_SIZE_MAX, defaults.height),
         baseAddress: nearestBaseAddress(source.baseAddress)
     }
+}
+
+/** A whole number within `min` and `max`, the nearest one to `value`; `fallback` for a non-number. */
+export function clampSize(value: number, min: number, max: number, fallback: number): number {
+    if (!Number.isFinite(value)) return fallback
+    return Math.min(max, Math.max(min, Math.round(value)))
 }
 
 /**
@@ -141,19 +172,6 @@ export function formatMarsBaseAddress(address: number): string {
     const hex = `0x${(address >>> 0).toString(16).padStart(8, '0')}`
     const choice = MARS_BASE_ADDRESS_CHOICES.find((entry) => entry.address >>> 0 === address >>> 0)
     return choice ? `${hex} (${choice.label})` : hex
-}
-
-function nearestChoice(value: number, choices: readonly number[]): number {
-    let best = choices[0] ?? 1
-    let bestDistance = Number.POSITIVE_INFINITY
-    for (const choice of choices) {
-        const distance = Math.abs(choice - value)
-        if (distance < bestDistance) {
-            best = choice
-            bestDistance = distance
-        }
-    }
-    return best
 }
 
 /**

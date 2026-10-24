@@ -1,11 +1,19 @@
 import {
+    VARIANTS as CTOR_DTOR_VARIANTS,
+    type CtorDtorVariant,
+    type DemangledName
+} from '#lib/languages/demangle/demangledNames.ts'
+import {
     functionAtLine,
     LINE_KIND,
     lineOfAddress,
+    PERSON_COMMENT,
+    personCommentIndex,
     type Listing,
     type ListingLabel,
     type ListingNameOrigin
 } from './listing'
+import { commentStart, demangledComment } from './listingText'
 
 /**
  * Reading a Listing's text for navigation: the name under the cursor, the label it means, every
@@ -52,7 +60,9 @@ export function listingTokenAt(line: string, column: number): ListingToken | und
 /** Lookups on one Listing, built when first needed and kept with it. */
 export class ListingIndex {
     private labelsByName?: Map<string, ListingLabel>
+    private labelsByDemangledName?: Map<string, ListingLabel | null>
     private lineStarts?: Uint32Array
+    private demangles?: boolean
 
     constructor(readonly listing: Listing) {}
 
@@ -78,6 +88,94 @@ export class ListingIndex {
             return owner ? this.labelsByName.get(owner.name + name) : undefined
         }
         return this.labelsByName.get(name)
+    }
+
+    /**
+     * The label a demangled name means, as lists and hovers write it: a short name
+     * (`std::ostream::operator<<@plt`), a signature (`std::string::operator+=(std::string const&)`)
+     * or a list form (`game::Player::Player(std::string) [complete]`), when only labels at one
+     * address have it ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision
+     * 11): a class's constructors share a short name, which then means none of them.
+     */
+    demangledLabel(name: string): ListingLabel | undefined {
+        if (!this.labelsByDemangledName) {
+            const named = new Map<string, ListingLabel | null>()
+            for (const label of this.listing.labels) {
+                const { demangled } = label
+                if (!demangled) continue
+                for (const form of new Set([
+                    demangled.short,
+                    demangled.signature,
+                    demangled.list
+                ])) {
+                    const known = named.get(form)
+                    if (known === undefined) named.set(form, label)
+                    else if (known && known.address !== label.address) named.set(form, null)
+                }
+            }
+            this.labelsByDemangledName = named
+        }
+        return this.labelsByDemangledName.get(name) ?? undefined
+    }
+
+    /**
+     * Whether a column of a line's text is in a comment's demangled name
+     * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 9): text, whose
+     * words are no names even where one is also a label's, as `main` in
+     * `; main::'lambda'(int)::operator()(int) const`. A comment says the demangled name of a
+     * label the line names (in its code, or in an earlier comment, `; _ZSt4cout std::cout`) or
+     * defines, then any offset (`+0x10`).
+     */
+    inDemangledComment(text: string, line: number, column: number): boolean {
+        this.demangles ??= this.listing.labels.some((label) => label.demangled)
+        if (!this.demangles) return false
+        const comment = commentStart(text)
+        if (column <= comment) return false
+        for (let at = 0; at < text.length;) {
+            if (!NAME_CHARACTER.test(text[at])) {
+                ++at
+                continue
+            }
+            const start = at
+            while (at < text.length && NAME_CHARACTER.test(text[at])) ++at
+            const demangled = this.label(text.slice(start, at), line)?.demangled
+            if (!demangled) continue
+            const said = demangledComment(demangled)
+            for (
+                let found = text.indexOf(said, comment);
+                found >= 0 && found <= column;
+                found = text.indexOf(said, found + 1)
+            ) {
+                const offset = /^[+-]0x[\da-f]+/.exec(text.slice(found + said.length))
+                if (column < found + said.length + (offset?.[0].length ?? 0)) return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Whether a column of a line's text is in a person's comment
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 11): text, whose words are never names, nor numbers to follow, even where one is a label's,
+     * as `main` in `; calls main twice`. `text` is the line as shown, which a Debug session's
+     * patch may have rewritten before the comment it keeps at its end.
+     */
+    inPersonComment(text: string, line: number, column: number): boolean {
+        const at = personCommentIndex(this.listing, line)
+        return at >= 0 && column >= text.length - this.listing.comments!.lengths[at]
+    }
+
+    /**
+     * The person's comment a line has at its end, as they wrote it, or undefined: what a patched
+     * line keeps after its new code.
+     */
+    endOfLineComment(line: number): string | undefined {
+        const at = personCommentIndex(this.listing, line)
+        const comments = this.listing.comments
+        if (at < 0 || comments!.kinds[at] !== PERSON_COMMENT.end) return undefined
+        const end = this.offsetOfLine(line + 1) - 1
+        //the length counts its `; `
+        return this.listing.text.slice(end - comments!.lengths[at] + 2, end)
     }
 
     /** The line a number names, when it is a run-time address the Listing covers. */
@@ -122,8 +220,17 @@ export class ListingIndex {
             if (at > 0 && NAME_CHARACTER.test(text[at - 1])) continue
             if (end < text.length && NAME_CHARACTER.test(text[end])) continue
             const line = this.lineOfOffset(at)
-            const start = at - this.offsetOfLine(line)
-            if (insideString(text.slice(this.offsetOfLine(line), at), start)) continue
+            const lineStart = this.offsetOfLine(line)
+            const start = at - lineStart
+            if (insideString(text.slice(lineStart, at), start)) continue
+            const commented = personCommentIndex(this.listing, line) >= 0
+            if (this.demangles !== false || commented) {
+                const lineEnd = text.indexOf('\n', at)
+                const lineText = text.slice(lineStart, lineEnd < 0 ? undefined : lineEnd)
+                if (commented && this.inPersonComment(lineText, line, start)) continue
+                if (this.demangles !== false && this.inDemangledComment(lineText, line, start))
+                    continue
+            }
             spans.push({ line, start, end: start + name.length })
         }
         return spans
@@ -181,18 +288,101 @@ const ORIGINS: Record<ListingNameOrigin, (label: ListingLabel, listing: Listing)
     block: (label, listing) => {
         const owner = functionAtLine(listing, label.line)
         return owner
-            ? `A place a jump goes to inside \`${owner.name}\`.`
+            ? `A place a jump goes to inside ${markdownCode(owner.list ?? owner.name)}.`
             : 'A place a jump goes to.'
     }
 }
 
-/** What a hover says about a label: its name, its run-time address and where the name comes from. */
+/** Where a label's name comes from, as a hover says it: "Named by the symbol table." */
+export function nameOrigin(listing: Listing, label: ListingLabel): string {
+    return ORIGINS[label.origin](label, listing)
+}
+
+/**
+ * What a hover says about a label: its name, its run-time address and where the name comes from.
+ * A C++ name reads by its signature, then its other forms and its mangled name
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 10).
+ */
 export function labelHoverMarkdown(listing: Listing, label: ListingLabel): string {
+    const address = `\`${runTimeAddress(listing, label.address)}\``
+    const { demangled, renamed } = label
+    const conflict =
+        label.renameConflict === undefined
+            ? []
+            : [
+                  `You renamed this to ${markdownCode(label.renameConflict)}, but another label already has that name, so the original name is shown instead.`
+              ]
+    if (renamed)
+        //the person's name, then what it was, as the hover gave it before
+        return [
+            `**${label.fullName}** at ${address}`,
+            `Renamed from ${markdownCode(renamed.demangled?.signature ?? renamed.from)}.`,
+            ...(renamed.demangled ? demangledNameMarkdown(renamed.demangled, renamed.from) : []),
+            nameOrigin(listing, label)
+        ].join('\n\n')
+    if (!demangled)
+        return [
+            `**${label.fullName}** at ${address}`,
+            ...conflict,
+            nameOrigin(listing, label)
+        ].join('\n\n')
     return [
-        `**${label.fullName}** at \`${runTimeAddress(listing, label.address)}\``,
-        '',
-        ORIGINS[label.origin](label, listing)
-    ].join('\n')
+        `**${markdownCode(demangled.signature)}** at ${address}`,
+        ...demangledNameMarkdown(demangled, label.fullName),
+        ...conflict,
+        nameOrigin(listing, label)
+    ].join('\n\n')
+}
+
+/**
+ * What a hover says of a demangled name under a title giving its signature
+ * ([cpp-demangling.md](../../../../../docs/design/cpp-demangling.md), decision 10): the
+ * demangler's own text where the signature reads otherwise, then the short name where it differs
+ * from the signature, the raw name the program and the Listing's text use, and the constructor's
+ * or destructor's variant the raw name marks:
+ *
+ * - "As the demangler writes it: `std::__cxx11::basic_string<char, …>::operator+=(…)`"
+ * - "Short name `game::Player::~Player`; mangled name `_ZN4game6PlayerD0Ev`, where `D0` marks the
+ *   deleting destructor, which frees the object once it is destroyed."
+ */
+export function demangledNameMarkdown(demangled: DemangledName, raw: string): string[] {
+    const { signature, suffix, text } = demangled
+    //the demangler's text says nothing more when the signature is that text, its Listing's suffix
+    //and a variant's mark: no template shortened, no return type left out, no clone rewritten
+    const plain = text + suffix
+    const same = signature === plain || signature.startsWith(`${plain} [`)
+    const short =
+        demangled.short === signature ? '' : `Short name ${markdownCode(demangled.short)}; mangled`
+    const variant = demangled.variant && variantWords(demangled, demangled.variant)
+    return [
+        ...(same ? [] : [`As the demangler writes it: ${markdownCode(text)}`]),
+        `${short || 'Mangled'} name ${markdownCode(raw)}${variant ? `, where ${variant}` : ''}.`
+    ]
+}
+
+/** What a hover says of a constructor's or destructor's variant: "`D0` marks the deleting destructor". */
+function variantWords(demangled: DemangledName, variant: CtorDtorVariant): string | undefined {
+    const destructor = demangled.pseudocode.name.startsWith('~')
+    const code = Object.keys(CTOR_DTOR_VARIANTS).find(
+        (candidate) =>
+            CTOR_DTOR_VARIANTS[candidate] === variant &&
+            candidate.startsWith(destructor ? 'D' : 'C')
+    )
+    if (!code) return undefined
+    const what = `\`${code}\` marks the ${variant} ${destructor ? 'destructor' : 'constructor'}`
+    return variant === 'deleting' ? `${what}, which frees the object once it is destroyed` : what
+}
+
+/**
+ * Markdown code that shows `text` as it is: fenced by more backticks than it holds in a row, and
+ * padded where it starts or ends with a backtick or a space, which the fence would otherwise eat.
+ * A C++ name holds `<`, `*` and `_`, which plain Markdown would read as markup.
+ */
+export function markdownCode(text: string): string {
+    const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+    const fence = '`'.repeat(longest + 1)
+    const pad = /^[ `]|[ `]$/.test(text) ? ' ' : ''
+    return `${fence}${pad}${text}${pad}${fence}`
 }
 
 /**

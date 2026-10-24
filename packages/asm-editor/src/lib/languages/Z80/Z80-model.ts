@@ -216,17 +216,43 @@ export const Z80_PORTS = {
     /** Waits for the next animation frame and answers 0: the pacing of an animated program. */
     TIME_FRAME: 0x51,
     /** One byte of the hundredths of a second since the run started; B selects the byte, 0 lowest. */
-    TIME_NOW: 0x52
+    TIME_NOW: 0x52,
+
+    /** Plays a Note at the written pitch with the instrument, volume and duration set, and goes on. */
+    NOTE_PLAY: 0x60,
+    /** Plays a Note at the pitch in B, waits its duration and answers 0. */
+    NOTE_PLAY_WAIT: 0x61,
+    /** The General MIDI instrument of the next Notes, 0 to 127. */
+    NOTE_INSTRUMENT: 0x62,
+    /** The volume of the next Notes, 0 to 127. */
+    NOTE_VOLUME: 0x63,
+    /** The duration of the next Notes in milliseconds: B the high byte, the written value the low. */
+    NOTE_DURATION: 0x64,
+
+    /** Selects which of the Sound chip's 16 registers the next write or read reaches, as on the MSX. */
+    SOUND_CHIP_SELECT: 0xa0,
+    /** Writes the selected Sound chip register. */
+    SOUND_CHIP_WRITE: 0xa1,
+    /** Reads the selected Sound chip register back. */
+    SOUND_CHIP_READ: 0xa2
 } as const
 
 export type Z80PortName = keyof typeof Z80_PORTS
 
 /** The peripheral a port belongs to. The documentation page and the agent prompt group by it. */
-export type Z80PortGroup = 'console' | 'screen' | 'keyboard' | 'mouse' | 'time'
+export type Z80PortGroup =
+    | 'console'
+    | 'screen'
+    | 'keyboard'
+    | 'mouse'
+    | 'time'
+    | 'audio'
+    | 'sound-chip'
 
 /**
- * The four groups of [ADR 0011](../../../../../../docs/adr/0011-z80-peripherals-through-the-port-map.md)
- * plus the console ports they extend, in the order the documentation shows them.
+ * The groups of [ADR 0011](../../../../../../docs/adr/0011-z80-peripherals-through-the-port-map.md),
+ * the audio and Sound chip ones of its 2026-10-23 updates included, plus the console ports they
+ * extend, in the order the documentation shows them.
  */
 export const Z80_PORT_GROUP_DOCS: {
     group: Z80PortGroup
@@ -239,7 +265,7 @@ export const Z80_PORT_GROUP_DOCS: {
         title: 'Console',
         range: '0x10 - 0x14',
         description:
-            'The Terminal: one port per output format, and the input reads that pause the program until a line (or a keystroke on the Screen) is available. What is printed here is also drawn at the Screen’s text cursor, in 8 by 8 cells.'
+            'One port per output format. Console output goes to the Terminal and, in drawing mode, to the Screen’s text cursor in 8 by 8 cells. In TRS-80 mode it goes only to the Terminal.'
     },
     {
         group: 'screen',
@@ -253,7 +279,7 @@ export const Z80_PORT_GROUP_DOCS: {
         title: 'Keyboard',
         range: '0x30 - 0x33',
         description:
-            'Input from the focused Screen, polled: whether a typed character is waiting (read it from the character port), whether a given key is held, and the last key pressed and released. Key codes are EASy68K’s, the same table every environment here uses: letters and digits are the ASCII code of their capital, 0x25 to 0x28 are the arrows left, up, right and down, 0x20 is the space bar and 0x0D is Enter.'
+            'Input from the focused Screen, polled: whether a typed character is waiting (read it from the character port), whether a given key is held, and the last key pressed and released. Key codes are EASy68K’s, the same table every environment here uses: letters and digits are the ASCII code of their capital, 0x25 to 0x28 are the arrows left, up, right and down, 0x20 is the space bar and 0x0D is Enter. The Enter key code is distinct from the newline character 0x0A returned by CHAR.'
     },
     {
         group: 'mouse',
@@ -267,7 +293,21 @@ export const Z80_PORT_GROUP_DOCS: {
         title: 'Program time',
         range: '0x50 - 0x52',
         description:
-            'Waiting and elapsed time. A wait and a frame sync are reads that suspend the program without blocking the editor: the machine re-executes the `in` when the time has passed, so Stop still answers and the Screen still repaints. Testcases run on a virtual clock, where waits complete at once and time starts at zero.'
+            'Delay the program, synchronize animation frames, or read elapsed time. Waits leave the editor responsive: Stop still works and the Screen can repaint.'
+    },
+    {
+        group: 'audio',
+        title: 'Audio',
+        range: '0x60 - 0x64',
+        description:
+            'Play notes with a pitch, instrument sound, and volume, each numbered from 0 to 127, and a duration in milliseconds. General MIDI is the standard list of instrument sounds. Write a pitch to NOTE_PLAY (0x60) to start a note and continue immediately, allowing notes to overlap as a chord. Read NOTE_PLAY_WAIT (0x61) with the pitch in B to play a note and wait for its requested duration; a sequence of these reads can play a melody. Testcases are silent, and waits complete immediately while advancing the virtual clock.'
+    },
+    {
+        group: 'sound-chip',
+        title: 'Sound chip',
+        range: '0xA0 - 0xA2',
+        description:
+            "The AY-3-8910 is the sound chip used in the MSX, ZX Spectrum 128 and Amstrad CPC. Here it uses the MSX register ports and 1.7897725 MHz clock, so compatible AY register programming uses the same port addresses and periods. It has three square-wave tone channels, A, B and C. Each channel can mix its tone with noise and use either a fixed volume or an envelope that changes the volume over time. All channels share one noise generator and one envelope.\n\nSelect a register through `0xA0`, then write it through `0xA1` or read it through `0xA2`. Two-byte periods use the lower-numbered register for the low byte.\n\n| Registers | Bits kept | Meaning |\n| --- | --- | --- |\n| 0/1, 2/3, 4/5 | 8 low + 4 high | Tone periods for A, B and C, 0 to 4095 |\n| 6 | 5 | Shared noise period, 0 to 31 |\n| 7 | 8 | Mixer: bits 0–2 disable the tones of A/B/C; bits 3–5 disable their noise. A 0 bit enables that source. Bits 6/7 are I/O-direction controls; they are retained on readback but have no effect here because the I/O ports are unconnected. |\n| 8, 9, 10 | 5 | Volumes for A, B and C: bit 4 clear uses bits 0–3 as fixed volume, 0 to 15; bit 4 set follows the shared envelope instead |\n| 11/12 | 8 low + 8 high | Shared envelope period, 0 to 65,535 |\n| 13 | 4 | Shared envelope shape, 0 to 15; every write restarts it for all channels following the envelope |\n| 14, 15 | none | Unconnected I/O ports: read `0xFF`, writes ignored |\n\nA tone's frequency is 1,789,772.5 ÷ (16 × period) Hz: period 254 is about 440 Hz, the A above middle C. The noise generator advances at the same clock ÷ (16 × noise period) rate; smaller periods give faster, brighter noise. Tone, noise and envelope periods of 0 act as 1, while still reading back as 0.\n\nOne complete envelope rise or fall takes 256 × envelope period ÷ 1,789,772.5 seconds. The shape selects what follows that first rise or fall:\n\n| Shape | First movement | Then |\n| --- | --- | --- |\n| 0–3 | Fall from full volume to 0 | Hold at 0 |\n| 4–7 | Rise from 0 to full volume | Drop to 0 and hold |\n| 8 | Fall | Repeat falling ramps |\n| 9 | Fall | Hold at 0 |\n| 10 | Fall | Alternate rising and falling ramps |\n| 11 | Fall | Jump to full volume and hold |\n| 12 | Rise | Repeat rising ramps |\n| 13 | Rise | Hold at full volume |\n| 14 | Rise | Alternate falling and rising ramps |\n| 15 | Rise | Drop to 0 and hold |\n\nChanging the noise period affects every channel with noise enabled. Writing register 13 retriggers every channel using the envelope, even if its shape value is unchanged.\n\n| Note | C | C♯ | D | D♯ | E | F | F♯ | G | G♯ | A | A♯ | B |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| Period from middle C | 428 | 404 | 381 | 360 | 339 | 320 | 302 | 285 | 269 | 254 | 240 | 226 |\n\nAn octave lower doubles the tone period and an octave higher halves it. Every Build starts with every register 0, so every channel is silent. The chip keeps sounding while the program is paused or stopped at a breakpoint, and falls silent when the program ends. Testcases are silent and retain the same register readback."
     }
 ]
 
@@ -387,7 +427,7 @@ export const Z80_SCREEN_COMMAND_DOCS: {
         name: 'MODE_CELLS',
         command: Z80_SCREEN_COMMANDS.MODE_CELLS,
         description:
-            "The TRS-80's memory-mapped display: the Screen becomes 64 by 16 character cells and shows the kilobyte of memory at 0x3C00, one byte per cell. Characters 128 to 191 are 2 by 3 blocks, for 128 by 48 chunky pixels, and the keyboard matrix at 0x3800 answers reads. The drawing commands above are not available in this mode; a program draws by storing bytes. The same mode a `; @screen trs80` comment asks for before the program starts."
+            'Switches to the [TRS-80 display](/documentation/z80/io#the-trs-80-display). Draw by storing bytes in video memory; see that section for the memory map, character encoding and keyboard matrix.'
     },
     {
         name: 'MODE_DRAWING',
@@ -476,8 +516,8 @@ export const Z80_PORT_DOCS: Z80PortDoc[] = [
         port: Z80_PORTS.CHAR,
         group: 'console',
         title: 'Character',
-        write: 'Prints the byte as a character (Latin-1) and draws it at the Screen’s text cursor. 0x0A prints a newline.',
-        read: 'Returns the next character of the input line, pausing for input when the line has been consumed. The line ends with a newline character (0x0A). Once the program has touched a Screen, Keyboard or Mouse port the characters come from the focused Screen instead, one keystroke at a time, and are echoed at the text cursor.',
+        write: 'Prints the byte as a Latin-1 character to the Terminal and, in drawing mode, at the Screen’s text cursor. 0x0A prints a newline. At the bottom, text scrolls the whole Screen up one cell row, graphics included. In TRS-80 mode output goes only to the Terminal.',
+        read: 'Reads a Terminal line one character at a time, pausing when no input is buffered. Pressing Enter ends the line with newline 0x0A. Using a Screen, Keyboard or Mouse port in drawing mode, other than a display-mode command, switches character input to the Screen for the rest of the run. Click the Screen to focus it before typing. Each read then takes one keystroke; Enter still returns 0x0A. Typed characters are echoed at the text cursor while in drawing mode.',
         example: `        .org 0x8000
         ld hl, msg
 loop:   ld a, (hl)
@@ -735,7 +775,7 @@ msg:    .asciz "HELLO"`,
         group: 'screen',
         title: 'Text cursor row',
         write: 'Moves the text cursor to a row, in 8 by 8 character cells: 0 to 23 on the default Screen. Out of range values are clamped.',
-        read: 'The row the text cursor is on. Text scrolls the whole Screen up one cell row at the bottom, graphics included.'
+        read: 'The row the text cursor is on.'
     },
     {
         name: 'KEY_AVAILABLE',
@@ -851,7 +891,7 @@ wait:   in a, (c)
         group: 'time',
         title: 'Wait',
         write: 'Ignored.',
-        read: 'Waits B hundredths of a second, then answers 0. The editor stays responsive and Stop still works: the machine simply re-executes the `in` when the time is up. In a testcase the wait completes at once.',
+        read: 'Waits B hundredths of a second, then answers 0. In a testcase the wait completes at once and advances the virtual clock by the requested duration.',
         example: `        .org 0x8000
         ld c, 0x50
         ld b, 25        ; a quarter of a second
@@ -867,7 +907,7 @@ wait:   in a, (c)
         group: 'time',
         title: 'Frame sync',
         write: 'Ignored.',
-        read: 'Waits for the next animation frame, then answers 0. One read per frame is how an animation runs at the display’s own pace instead of as fast as the host can go; with double buffering, present the frame first and sync afterwards.',
+        read: 'Waits for the next animation frame, then answers 0. One read per frame is how an animation runs at the display’s own pace instead of as fast as the host can go; with double buffering, present the frame first and sync afterwards. In a testcase the wait completes at once and advances the virtual clock.',
         example: `        .org 0x8000
         ld b, 10        ; ten frames
 loop:   push bc
@@ -885,7 +925,7 @@ loop:   push bc
         group: 'time',
         title: 'Elapsed time',
         write: 'Ignored.',
-        read: 'One byte of the number of hundredths of a second since the run started, selected by B: 0 the lowest byte, 3 the highest. A testcase reads a virtual clock that starts at zero and only moves when the program waits, so a test is reproducible.',
+        read: 'One byte of the number of hundredths of a second since the run started, selected by B: 0 the lowest byte, 3 the highest. This is elapsed time, not a calendar clock. A testcase reads a virtual clock that starts at zero and only moves when the program waits, so a test is reproducible.',
         example: `        .org 0x8000
         ld c, 0x50
         ld b, 10        ; wait a tenth of a second
@@ -896,6 +936,172 @@ loop:   push bc
         out (0x11), a
         halt`,
         exampleShows: 'the hundredths of a second the program has been running, about 10.'
+    },
+    {
+        name: 'NOTE_PLAY',
+        port: Z80_PORTS.NOTE_PLAY,
+        group: 'audio',
+        title: 'Play a note',
+        write: 'Writing a pitch starts a note and continues immediately, so notes can overlap. Pitch runs from 0 to 127: 60 is middle C, 62 is D, 64 is E, and each step is one semitone. The note uses the instrument, volume, and duration last set through the other audio ports. A pitch of 128 or more becomes 60, as in MARS service 31. The first note or MIDI-file request after opening or reloading the editor page waits while the browser loads the sound bank, the collection of instrument sounds; later runs share it.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 60        ; C
+        out (0x60), a
+        ld a, 64        ; E, sounding with it
+        out (0x60), a
+        ld a, 67        ; G: a C major chord
+        out (0x60), a
+        halt`,
+        exampleShows:
+            'No text output; plays a C major chord on the piano for one second, continuing after the program ends.'
+    },
+    {
+        name: 'NOTE_PLAY_WAIT',
+        port: Z80_PORTS.NOTE_PLAY_WAIT,
+        group: 'audio',
+        title: 'Play a note and wait',
+        write: 'Ignored.',
+        read: 'Read with `in r,(c)` and the pitch in B to play a note using the instrument, volume, and duration already set. Waits for the requested duration, then returns 0, like MARS service 33. A sequence of these reads can play a melody. Muting or stopping the audible note does not shorten the wait. Testcases are silent; the wait completes immediately and advances the virtual clock by the duration.',
+        example: `        .org 0x8000
+        ld b, 0
+        ld a, 150       ; 150 ms per note
+        ld c, 0x64
+        out (c), a
+        ld c, 0x61
+        ld b, 60        ; C
+        in a, (c)
+        ld b, 64        ; then E
+        in a, (c)
+        ld b, 67        ; then G
+        in a, (c)
+        ld a, '!'
+        out (0x10), a
+        halt`,
+        exampleOutput: '!'
+    },
+    {
+        name: 'NOTE_INSTRUMENT',
+        port: Z80_PORTS.NOTE_INSTRUMENT,
+        group: 'audio',
+        title: 'Instrument',
+        write: 'Selects the instrument sound for later notes from the General MIDI list, numbered from 0 to 127: 0 is acoustic grand piano, 40 violin, 56 trumpet, and 73 flute. Values of 128 or more select 0 (piano), as in MARS. Every run starts at 0 (piano).',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 40        ; violin
+        out (0x62), a
+        ld a, 69        ; A above middle C
+        out (0x60), a
+        halt`,
+        exampleShows: 'No text output; plays an A on the violin for one second.'
+    },
+    {
+        name: 'NOTE_VOLUME',
+        port: Z80_PORTS.NOTE_VOLUME,
+        group: 'audio',
+        title: 'Volume',
+        write: 'Sets the volume for later notes, from 0 (silent) to 127 (loudest). Values of 128 or more become 100, the MARS default. Every run starts at 100.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 30        ; quietly
+        out (0x63), a
+        ld a, 60
+        out (0x60), a
+        halt`,
+        exampleShows: 'No text output; plays a quiet middle C.'
+    },
+    {
+        name: 'NOTE_DURATION',
+        port: Z80_PORTS.NOTE_DURATION,
+        group: 'audio',
+        title: 'Duration',
+        write: 'Sets the duration for later notes in milliseconds. Use `out (c),r` with C = 0x64: B supplies the high byte and the written register supplies the low byte, giving a duration up to 65,535 milliseconds. Every run starts at 1000 milliseconds, the MARS default.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld b, 0x07      ; 0x07D0 = 2000 ms
+        ld a, 0xd0
+        ld c, 0x64
+        out (c), a
+        ld a, 48        ; a low C for two seconds
+        out (0x60), a
+        halt`,
+        exampleShows: 'No text output; plays a low C for two seconds.'
+    },
+    {
+        name: 'SOUND_CHIP_SELECT',
+        port: Z80_PORTS.SOUND_CHIP_SELECT,
+        group: 'sound-chip',
+        title: 'Select a Sound chip register',
+        write: 'Selects the register, 0 to 15, that the next writes to SOUND_CHIP_WRITE (0xA1) and reads from SOUND_CHIP_READ (0xA2) reach; it stays selected until the next write here. Registers 14 and 15 are the chip’s two I/O ports, which the MSX wires to its joysticks: nothing is attached here, so they read 0xFF and writes to them are ignored. A number of 16 or more selects nothing, as on the chip.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld a, 0         ; register 0: channel A's period, low byte
+        out (0xa0), a
+        ld a, 254       ; 254 is 440 Hz
+        out (0xa1), a
+        ld a, 1         ; register 1: the period's high four bits
+        out (0xa0), a
+        xor a
+        out (0xa1), a
+        ld a, 7         ; register 7: the mixer
+        out (0xa0), a
+        ld a, 0xbe      ; only channel A's tone on
+        out (0xa1), a
+        ld a, 8         ; register 8: channel A's volume
+        out (0xa0), a
+        ld a, 15        ; the loudest
+        out (0xa1), a
+        ld c, 0x50
+        ld b, 100       ; let it sound for a second
+        in a, (c)
+        halt`,
+        exampleShows:
+            'No text output; plays a square wave at 440 Hz for a second, which stops when the program ends.'
+    },
+    {
+        name: 'SOUND_CHIP_WRITE',
+        port: Z80_PORTS.SOUND_CHIP_WRITE,
+        group: 'sound-chip',
+        title: 'Write a Sound chip register',
+        write: 'Writes the selected register. Each keeps only its own bits: four of a tone period’s high register, five of the noise period and of a volume, four of the envelope shape. Writing the envelope shape, register 13, restarts the envelope, even with the shape it already has; this retriggers all channels following the shared envelope.',
+        read: 'Returns 0xFF; this port only accepts writes.',
+        example: `        .org 0x8000
+        ld hl, chord    ; pairs of a register and its value
+        ld b, 10        ; ten of them
+next:   ld a, (hl)
+        out (0xa0), a
+        inc hl
+        ld a, (hl)
+        out (0xa1), a
+        inc hl
+        djnz next
+        ld c, 0x50
+        ld b, 200       ; two seconds
+        in a, (c)
+        halt
+chord:  .byte 0, 0xac, 1, 1     ; A: period 428, middle C
+        .byte 2, 0x53, 3, 1     ; B: period 339, E
+        .byte 4, 0x1d, 5, 1     ; C: period 285, G
+        .byte 7, 0xb8           ; the three tones on, no noise
+        .byte 8, 12, 9, 12      ; volumes of A and B
+        .byte 10, 12            ; and of C`,
+        exampleShows: 'No text output; plays a C major chord on the three channels for two seconds.'
+    },
+    {
+        name: 'SOUND_CHIP_READ',
+        port: Z80_PORTS.SOUND_CHIP_READ,
+        group: 'sound-chip',
+        title: 'Read a Sound chip register',
+        write: 'Ignored.',
+        read: 'Returns the selected register as the chip holds it: what was last written, less the bits the register does not keep. Registers 14 and 15, and a number of 16 or more, read 0xFF.',
+        example: `        .org 0x8000
+        ld a, 1         ; channel A's period, high bits
+        out (0xa0), a
+        ld a, 0xff
+        out (0xa1), a
+        in a, (0xa2)    ; the register keeps four bits
+        out (0x11), a
+        halt`,
+        exampleOutput: '15'
     }
 ]
 

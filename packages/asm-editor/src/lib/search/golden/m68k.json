@@ -11,6 +11,11 @@
         { "query": "how do I print a number", "top": 3, "expect": "m68k/trap-tasks/task-3" },
         { "query": "set the pen color", "top": 1, "expect": "m68k/trap-tasks/task-80" },
         {
+            "query": "shift",
+            "top": 3,
+            "expect": ["m68k/instructions/asd", "m68k/instructions/lsd"]
+        },
+        {
             "query": "post increment",
             "top": 1,
             "expect": "m68k/addressing-modes/indirect-post-pre-increment"
