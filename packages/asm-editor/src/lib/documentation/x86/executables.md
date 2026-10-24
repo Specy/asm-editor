@@ -54,7 +54,7 @@ Click any byte in the Hex editor to place the caret:
 - Press **Tab** and **Shift+Tab** to switch between the hex and text columns.
 - Use **Undo** (**Ctrl+Z**) and **Redo** (**Ctrl+Shift+Z** or **Ctrl+Y**) to step through your byte changes.
 
-Changes made in the Hex editor are saved as **Byte edits** alongside the original file. The Listing, the Pseudocode, **Debug**, **Download exact bytes**, and project archives all use the edited bytes, while your [renames and comments](#annotations) remain intact.
+Changes made in the Hex editor are saved as **Byte edits** alongside the original file. The Listing, the Pseudocode, **Debug**, **Download**, and project archives all use the edited bytes, while your [renames and comments](#annotations) remain intact.
 
 Files are read-only while a Debug session is active. To test a quick instruction change in memory while paused, [patch the instruction](#patching) in the Listing; to make a permanent change to the file, press **Stop**, right-click the line in the Listing, choose **Show in Hex**, and edit the bytes there.
 

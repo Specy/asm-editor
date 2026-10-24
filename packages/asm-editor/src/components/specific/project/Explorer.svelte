@@ -679,7 +679,7 @@
         return [
             { label: 'Open', icon: FaFileAlt, onSelect: () => onSelect(path) },
             ...programItems(path),
-            { label: 'Download exact bytes', icon: FaDownload, onSelect: () => downloadFile(path) },
+            { label: 'Download', icon: FaDownload, onSelect: () => downloadFile(path) },
             { separator: true },
             {
                 label: 'Rename',
@@ -962,10 +962,7 @@
                                     <FaFlag />
                                 </button>
                             {/if}
-                            <button
-                                title="Download exact bytes"
-                                onclick={() => downloadFile(row.path)}
-                            >
+                            <button title="Download" onclick={() => downloadFile(row.path)}>
                                 <FaDownload />
                             </button>
                             <button

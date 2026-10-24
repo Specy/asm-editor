@@ -150,21 +150,16 @@ describe('the Entry marks', () => {
                 button.getAttribute('title')
             )
         for (const path of ['main.s', 'sort.s'])
-            expect(titles(path), path).toEqual([
-                'Remove program',
-                'Download exact bytes',
-                'Rename',
-                'Delete'
-            ])
+            expect(titles(path), path).toEqual(['Remove program', 'Download', 'Rename', 'Delete'])
         for (const path of ['macros.inc', 'lib', 'src/main.s'])
             expect(titles(path), path).toEqual([
                 'New program from this file',
-                'Download exact bytes',
+                'Download',
                 'Rename',
                 'Delete'
             ])
         for (const path of ['notes.txt', 'add.c', 'chall'])
-            expect(titles(path), path).toEqual(['Download exact bytes', 'Rename', 'Delete'])
+            expect(titles(path), path).toEqual(['Download', 'Rename', 'Delete'])
         const press = async (path: string, title: string) => {
             view.row(path).querySelector<HTMLButtonElement>(`button[title="${title}"]`)!.click()
             flushSync()

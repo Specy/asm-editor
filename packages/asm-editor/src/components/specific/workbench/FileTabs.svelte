@@ -156,7 +156,14 @@
         flex: 1;
         min-width: 0;
         overflow-x: auto;
-        scrollbar-width: thin;
+    }
+
+    /* the app's scrollbar (global.css), thinner and on the strip's own colour, since it takes its
+       height out of the tabs. No `scrollbar-width` here: Chrome drops the ::-webkit-scrollbar
+       rules on an element that sets it, and draws its native bar with arrows */
+    .tabs::-webkit-scrollbar {
+        height: 0.25rem;
+        background: transparent;
     }
 
     .tab {

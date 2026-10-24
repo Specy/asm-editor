@@ -66,7 +66,7 @@ it('lists a Build output among the Files, with no section of its own', () => {
     expect(row.title).toBe('main: built from main.asm')
     //a File like any other: dragged, renamed, downloaded
     expect(row.querySelector('[draggable="true"]')).not.toBeNull()
-    expect(row.querySelector('[title="Download exact bytes"]')).not.toBeNull()
+    expect(row.querySelector('[title="Download"]')).not.toBeNull()
     expect(view.target.textContent).not.toContain('Build output')
     expect(view.target.textContent).not.toContain('Keep as File')
     row.querySelector<HTMLButtonElement>('.file-select')!.click()

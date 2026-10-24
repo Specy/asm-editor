@@ -197,7 +197,7 @@ it('downloads a File as its exact bytes under its name, typed so no extension is
         flushSync()
         await tick()
         const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-            (candidate) => candidate.textContent?.trim() === 'Download exact bytes'
+            (candidate) => candidate.textContent?.trim() === 'Download'
         )!
         item.click()
         expect(saved.map(({ name }) => name)).toEqual(['crackme'])
