@@ -138,9 +138,12 @@ jobs:
         needs: cores
         runs-on: ubuntu-latest
         steps:
+            # The whole history, which the sitemap dates each lecture from. A shallow clone still
+            # builds, with the lectures left undated.
             - uses: actions/checkout@v7
               with:
                   submodules: true
+                  fetch-depth: 0
             - uses: ./.github/actions/setup-workspace
             - uses: actions/download-artifact@v8
               with:

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { NOINDEX_PAGES, SITE_URL } from '#lib/seo.ts'
 import { blogCatalog } from '#lib/blog/catalog.server.ts'
 import { M68KUncompoundedInstructions } from '#lib/languages/M68K/M68K-documentation.ts'
@@ -43,6 +44,44 @@ function courseRoutes() {
     return [...courses, ...lectures]
 }
 
+/**
+ * The date of the last commit that touched each lecture's `index.md`, by its route, read from one
+ * `git log` over the whole content folder rather than one process per lecture. A shallow clone has
+ * lost the history that dates most of them and a build outside a checkout has none, and either way
+ * the lectures go without a date rather than one that only says when the clone was made. The
+ * workflow that builds the deployed site fetches the full history for this.
+ */
+function lectureDates(): Map<string, string> {
+    const dates = new Map<string, string>()
+    const git = (...args: string[]) =>
+        execFileSync('git', args, {
+            encoding: 'utf-8',
+            maxBuffer: 64 * 1024 * 1024,
+            stdio: ['ignore', 'pipe', 'ignore']
+        })
+    let log: string
+    try {
+        if (git('rev-parse', '--is-shallow-repository').trim() !== 'false') return dates
+        // Run from the app's folder, as the build is: `--relative` keeps the paths relative to it.
+        log = git('log', '--format=%x00%cs', '--name-only', '--relative', '--', 'src/content')
+    } catch {
+        return dates
+    }
+    let date = ''
+    for (const line of log.split('\n')) {
+        if (line.startsWith('\0')) {
+            date = line.slice(1)
+            continue
+        }
+        const lecture = /^src\/content\/([^/]+)\/([^/]+)\/([^/]+)\/index\.md$/.exec(line)
+        if (!lecture) continue
+        const route = `/learn/courses/${lecture[1]}/${lecture[2]}/${lecture[3]}`
+        // newest commit first, so the first date a file is listed under is its last change
+        if (!dates.has(route)) dates.set(route, date)
+    }
+    return dates
+}
+
 /** One entry per documented instruction, from the same maps the pages themselves load,
  *  so the sitemap cannot list a page that does not exist or miss one that does. */
 function instructionRoutes() {
@@ -71,8 +110,12 @@ function escapeXml(value: string) {
         .replace(/'/g, '&apos;')
 }
 
+/**
+ * A `<lastmod>` only where the page's date is known: a lecture's last commit and a blog post's own
+ * dates, with a tag page and the blog index dated by their newest post. Every other page goes
+ * without one, since a build date on every URL tells a crawler nothing.
+ */
 export const GET = async () => {
-    const buildDate = new Date().toISOString().slice(0, 10)
     const routes = [...staticRoutes(), ...courseRoutes(), ...instructionRoutes()]
     const blogDates = new Map(
         blogCatalog.posts.map((post) => [post.pathname, post.dateUpdated ?? post.datePublished])
@@ -87,13 +130,14 @@ export const GET = async () => {
     const latestBlogDate = [...blogDates.values()].sort().at(-1)
     if (latestBlogDate) blogDates.set('/blog', latestBlogDate)
     routes.push(...blogDates.keys())
+    const dates = new Map([...lectureDates(), ...blogDates])
 
-    const entries = [...new Set(routes)].map(
-        (route) => `    <url>
-        <loc>${escapeXml(SITE_URL + route)}</loc>
-        ${route === '/blog' && !latestBlogDate ? '' : `<lastmod>${blogDates.get(route) ?? buildDate}</lastmod>`}
+    const entries = [...new Set(routes)].map((route) => {
+        const date = dates.get(route)
+        return `    <url>
+        <loc>${escapeXml(SITE_URL + route)}</loc>${date ? `\n        <lastmod>${date}</lastmod>` : ''}
     </url>`
-    )
+    })
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
