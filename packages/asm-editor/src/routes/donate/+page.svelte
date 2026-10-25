@@ -57,10 +57,9 @@
         <Header>Support Asm Editor</Header>
         <div class="intro">
             <p>
-                Thanks for using Asm Editor! It is free and open source.
-                If it helped you, you can support the development of
-                new features and ISAs with a monthly
-                sponsorship or a one-time donation.
+                Thanks for using Asm Editor! It is free and open source. If it helped you, you can
+                support the development of new features and ISAs with a monthly sponsorship or a
+                one-time donation.
             </p>
             <p>
                 You can also find my other apps on <a href="https://specy.app">specy.app</a>.
