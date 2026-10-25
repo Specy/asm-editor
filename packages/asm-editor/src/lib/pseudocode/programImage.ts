@@ -33,7 +33,7 @@ const POINTER_SIZE = 8
 export const ZERO_FILL_LIMIT = 16 * 1024 * 1024
 
 export type ProgramImageInput = {
-    /** The Executable's bytes, its Byte edits applied (`fileBytes`): the Listing's bytes. */
+    /** The Executable's bytes (`fileBytes`): the Listing's bytes. */
     bytes: Uint8Array
     listing: Listing
     /** The ELF analysis of those bytes (`executableAnalysis`). */

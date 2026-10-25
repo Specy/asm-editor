@@ -26,6 +26,7 @@
     import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
     import SymbolsPanel from './SymbolsPanel.svelte'
+    import EditHistoryPanel from './EditHistoryPanel.svelte'
     import SearchPanel from './SearchPanel.svelte'
     import { useWorkbench } from './workbenchContext'
 
@@ -74,6 +75,7 @@
     const MIN_WIDTHS: Record<string, string> = {
         explorer: '13rem',
         symbols: '16rem',
+        history: '16rem',
         search: '18rem',
         testcases: '24rem',
         documentation: '24rem',
@@ -188,6 +190,10 @@
                         onRenamed={(from, to) => session.fileRenamed(from, to)}
                         onDeleted={(path) => session.fileDeleted(path)}
                         onFilesAdded={(paths) => session.filesAdded(paths)}
+                        onPictureCreated={(path) => {
+                            session.openInPixelEditor(path)
+                            if (ui.deviceClass === 'phone') ui.drawerOpen = false
+                        }}
                         libraryFiles={Object.keys(emulator.buildLibraryFiles ?? {})}
                         buildOutputs={session.buildOutputs}
                         hints={context.documentationLinks}
@@ -196,6 +202,12 @@
                     <SymbolsPanel
                         {shown}
                         onReveal={() => {
+                            if (ui.deviceClass === 'phone') ui.drawerOpen = false
+                        }}
+                    />
+                {:else if entry.id === 'history'}
+                    <EditHistoryPanel
+                        onPick={() => {
                             if (ui.deviceClass === 'phone') ui.drawerOpen = false
                         }}
                     />

@@ -5,6 +5,10 @@
 3. Click the Screen so it receives the keyboard, then press space.
 4. Move with **W A S D**, or **Z Q S D**, or **8 4 5 6** on the number pad. **P** pauses.
 
+## The pictures
+
+`assets/` holds the pictures both versions read when they start: `sprites.bmp`, `tiles.bmp` and `maze.bmp`, 24-bit BMPs, and `maze.txt`. Open a picture and choose **Pixels** under the editor to redraw it; the next **Run** reads what you drew. Black is transparent in `sprites.bmp`.
+
 ## The assembly version
 
 `assembly/main.s` is the Entry file of the game.

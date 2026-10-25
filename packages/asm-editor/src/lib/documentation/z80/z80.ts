@@ -395,7 +395,8 @@ function inputOutput(): Chapter {
             section('screen-commands'),
             ...Z80_SCREEN_COMMAND_DOCS.map((command) => commandEntry(command, href)),
             section('the-trs-80-display'),
-            colorsEntry(section('colors'))
+            colorsEntry(section('colors')),
+            section('pictures')
         ],
         mouse: [section('mouse-views')],
         audio: [section('sound')]

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import FilePreview from './FilePreview.svelte'
 import { formatDuration, pdfDisplay, PREVIEW_UNAVAILABLE } from './previewSupport'
-import { encodeBase64, type ProjectFile } from '#lib/projectFiles.ts'
+import { encodeBase64, overwriteBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import type { FilePreview as PreviewKind } from '#lib/fileKinds.ts'
 
 //`#lib/utils.ts`, whose download the PDF notice uses, reaches the projects store and its
@@ -166,7 +166,7 @@ describe('the Preview', () => {
     it('makes a new URL when the bytes change, and revokes the old one', () => {
         const { props, dispose } = setup('photo', PNG, { preview: 'image', mime: 'image/png' })
         expect(made).toHaveLength(1)
-        props.file = { ...props.file, edits: [{ offset: 8, remove: 1, insert: 'AQ==' }] }
+        props.file = overwriteBytes(props.file, [{ offset: 8, bytes: Uint8Array.of(1) }])!.file
         flushSync()
         expect(made).toHaveLength(2)
         expect(revoked).toEqual([made[0].url])

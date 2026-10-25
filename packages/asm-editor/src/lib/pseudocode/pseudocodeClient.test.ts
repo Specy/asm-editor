@@ -17,7 +17,13 @@ import { loadDecoder, type ListingDecoder } from '../listing/decoder'
 import { generateListing } from '../listing/generateListing'
 import type { Listing, ListingAnnotations } from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
-import { encodeBase64, fileBytes, type Annotations, type ProjectFile } from '../projectFiles'
+import {
+    encodeBase64,
+    fileBytes,
+    overwriteBytes,
+    type Annotations,
+    type ProjectFile
+} from '../projectFiles'
 import { inThreadWorker } from './inThreadWorker'
 import {
     BACKGROUND_TIME_LIMIT_MS,
@@ -67,10 +73,8 @@ function listingOf(file: ProjectFile, annotations?: ListingAnnotations, name = '
 const crackmeFile = (): ProjectFile => ({ encoding: 'base64', content: encodeBase64(crackme()) })
 
 /** Overwrites "Correct!"'s `e` (at 0x2023, in a segment whose offset is its address). */
-const editedCrackme = (): ProjectFile => ({
-    ...crackmeFile(),
-    edits: [{ offset: 0x2023, remove: 1, insert: btoa('x') }]
-})
+const editedCrackme = (): ProjectFile =>
+    overwriteBytes(crackmeFile(), [{ offset: 0x2023, bytes: new TextEncoder().encode('x') }])!.file
 
 type Counts = {
     loads: number

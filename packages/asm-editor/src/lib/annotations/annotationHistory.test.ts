@@ -5,7 +5,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { AnnotationHistory, type AnnotationChange } from './annotationHistory'
 import { rename, setComment } from './annotations'
-import { withAnnotations, type Annotations, type ProjectFile } from '#lib/projectFiles.ts'
+import {
+    overwriteBytes,
+    withAnnotations,
+    type Annotations,
+    type ProjectFile
+} from '#lib/projectFiles.ts'
 
 const original: ProjectFile = { encoding: 'base64', content: 'f0VMRgIBAQA=' }
 const named = (annotations: Annotations | undefined, file = original) =>
@@ -74,13 +79,21 @@ describe('the annotation history', () => {
         expect(run.undo()).toBeUndefined()
     })
 
-    it('keeps its steps over a Byte edit, which keeps the Annotations', () => {
+    it('keeps its steps over an overwrite, which keeps the Annotations', () => {
         const run = session()
         run.change(rename(undefined, 0x1139, 'check'), at(0x1139))
-        run.file = { ...run.file, edits: [{ offset: 0, remove: 1, insert: 'AA==' }] }
+        const before = run.file
+        const overwritten = overwriteBytes(before, [{ offset: 0, bytes: Uint8Array.of(0) }])!
+        run.file = overwritten.file
+        //as the Workbench tells it of each
+        run.history.overwritten('chall', before, run.file)
         expect(run.undo()?.annotations).toBeUndefined()
-        expect(run.file.edits).toHaveLength(1)
+        expect(run.file.content).toBe(overwritten.file.content)
         expect(run.file.annotations).toBeUndefined()
+        //a change the history was not told of still starts it again
+        run.change(rename(undefined, 0x1139, 'check'), at(0x1139))
+        run.file = overwriteBytes(run.file, [{ offset: 0, bytes: Uint8Array.of(1) }])!.file
+        expect(run.undo()).toBeUndefined()
     })
 
     it('starts again over a new content, which dropped the Annotations', () => {

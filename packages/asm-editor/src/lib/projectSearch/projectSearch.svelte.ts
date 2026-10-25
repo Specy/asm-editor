@@ -279,7 +279,7 @@ export class ProjectSearch {
                 untrack(() => {
                     const docs: SearchDocument[] = []
                     for (const { path, status, listing } of states) {
-                        //one made again (a rename, a comment, a Byte edit) is searched as it was
+                        //one made again (a rename, a comment, an overwrite) is searched as it was
                         //until it is ready
                         const searched =
                             status === 'ready'

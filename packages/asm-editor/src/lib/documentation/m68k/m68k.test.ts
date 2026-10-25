@@ -72,7 +72,7 @@ describe('the M68K Documentation', () => {
             'shift-directions': 1,
             //the introduction, 6 groups, the colors, the key codes, how sound differs, 59 tasks and
             //the 2 closing sections
-            'trap-tasks': 71,
+            'trap-tasks': 72,
             //the introduction and the seven sections after it
             synth: 8,
             exceptions: 4,
@@ -128,6 +128,7 @@ describe('the M68K Documentation', () => {
             'files',
             'sound',
             'sound-differences',
+            'pictures',
             'unsupported',
             'differences'
         ]) {

@@ -3,17 +3,12 @@ import {
     bytesFile,
     cleanFiles,
     projectFileFromBytes,
-    encodeBase64,
     fileBytes,
-    fileByteLength,
     fileText,
-    mergeOverwrites,
-    overwriteText,
-    overwritesOnly,
+    overwriteBytes,
     storedAnnotationsSize,
     storedFilesSize,
     withAnnotations,
-    withByteEdits,
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
@@ -22,7 +17,7 @@ import {
     FILE_COUNT_LIMIT,
     type Annotations,
     type BuildSources,
-    type ByteEdit,
+    type ByteRun,
     type FileEncoding,
     type ProjectFile,
     type ProjectFiles
@@ -42,7 +37,7 @@ function decodeStandalone(bytes: Uint8Array): string | null {
 
 /**
  * `file` caches this node's storage representation, dropped whenever `bytes` changes and put back
- * by an Undo that restores the bytes it stood for, so a File's record (its original, Byte edits and
+ * by an Undo that restores the bytes it stood for, so a File's record (its encoding and
  * Annotations) comes back as it was rather than rebuilt from its bytes. `busy` marks the running
  * program's own File, its Build output, which the program reads but never changes; `built` marks
  * one only presented to it, which is no File of the Project.
@@ -67,6 +62,15 @@ type Lookup =
     | { kind: 'missing' }
     | { kind: 'below-file' }
 export type FileStore = { read: () => ProjectFiles; write: (files: ProjectFiles) => void }
+export type { ByteRun }
+/**
+ * A change to one File's bytes that the **Edit journal** can take back
+ * ([ADR 0063](../../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)):
+ * runs written over them, or a whole new content stored as `encoding`, Canvas size's.
+ */
+export type ByteChange =
+    | Readonly<{ runs: readonly ByteRun[] }>
+    | Readonly<{ content: Uint8Array; encoding: FileEncoding }>
 
 /**
  * Why a file operation failed, named after the errno a POSIX system reports for the same failure,
@@ -270,9 +274,8 @@ export class FileSystem {
         this.commit(files)
     }
     /**
-     * Replaces a File's whole content, which becomes its new original: any Byte edits and
-     * Annotations it had are dropped, as for an upload over it (ADR 0047). It is stored as text
-     * when the bytes decode as UTF-8, unless `encoding` says how.
+     * Replaces a File's whole content: any Annotations it had are dropped, as for an upload over
+     * it. It is stored as text when the bytes decode as UTF-8, unless `encoding` says how.
      */
     writeBytes(path: string, bytes: Uint8Array, replace = true, encoding?: FileEncoding) {
         this.assertEditable()
@@ -283,84 +286,47 @@ export class FileSystem {
         this.commit({ ...this.files, [path]: file })
     }
     /**
-     * Overwrites `bytes` at `offset` of a File stored as bytes, as a Byte edit kept apart from its
-     * original ([ADR 0047](../../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)).
-     * The File keeps its length and stays a byte File, whatever its bytes decode as. A File whose
-     * edits insert or delete, which a Project can carry, takes none: only overwrites merge.
+     * Makes `changes` to one File, in order, as one save, and returns for each, in the same order,
+     * the change that takes it back, so that made last first they take every change back: what
+     * the Hex and Pixel editors write, and what the Edit journal writes back
+     * ([ADR 0063](../../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)).
+     * Runs overwrite, so the File keeps its length, its encoding and its Annotations; a File
+     * stored as text must stay UTF-8. A whole new content drops the Annotations, as `writeBytes`
+     * does. A refused change, past the File's end or the Project's 16 MiB, leaves it as it was.
      */
-    editBytes(path: string, offset: number, bytes: Uint8Array) {
+    changeBytes(path: string, changes: readonly ByteChange[]): ByteChange[] {
         this.assertEditable()
         path = resolveFilePath(path)
-        const file = this.files[path]
-        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
-        if (file.encoding !== 'base64')
-            throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
-        if (!overwritesOnly(file))
-            throw new ProjectFormatError(
-                `${path} has Byte edits that insert or delete bytes, which this editor cannot add to`
-            )
-        if (
-            !Number.isSafeInteger(offset) ||
-            offset < 0 ||
-            offset + bytes.length > fileByteLength(file)
-        )
-            throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
-        if (!bytes.length) return
-        const edits = mergeOverwrites([
-            ...(file.edits ?? []),
-            { offset, remove: bytes.length, insert: encodeBase64(bytes) }
-        ])
-        this.commitByteEdits(path, file, edits)
-    }
-    /**
-     * Puts back a whole list of Byte edits over a File's unchanged original, as the Hex editor's
-     * Undo and Redo do: `editBytes` only adds to a list, and an Undo needs the list as it was. The
-     * list is checked as a saved one is, so it must fit the original it is put over.
-     */
-    setByteEdits(path: string, edits: readonly ByteEdit[]) {
-        this.assertEditable()
-        path = resolveFilePath(path)
-        const file = this.files[path]
-        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
-        if (file.encoding !== 'base64')
-            throw new ProjectFormatError(`Only a File stored as bytes takes Byte edits: ${path}`)
-        this.commitByteEdits(path, file, edits)
-    }
-    /**
-     * Overwrites `bytes` at `offset` of a File stored as text, whose bytes are its UTF-8: its text
-     * changes, as typing into it does, and it keeps no Byte edits (ADR 0047). The File keeps its
-     * length, and the bytes must leave it UTF-8. Like a Byte edit it moves no address, so the
-     * File keeps its Annotations.
-     */
-    overwriteText(path: string, offset: number, bytes: Uint8Array) {
-        this.assertEditable()
-        path = resolveFilePath(path)
-        const file = this.files[path]
-        if (!file) throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
-        if (file.encoding !== 'plain')
-            throw new ProjectFormatError(
-                `Only a File stored as text has its text overwritten: ${path}`
-            )
-        if (
-            !Number.isSafeInteger(offset) ||
-            offset < 0 ||
-            offset + bytes.length > fileByteLength(file)
-        )
-            throw new ProjectFormatError(`An overwrite is past the end of ${path}`)
-        if (!bytes.length) return
-        const text = overwriteText(file.content, offset, bytes)
-        if (text === undefined)
-            throw new ProjectFormatError(
-                `Not saved: ${path} is stored as text, and these bytes would leave it no longer UTF-8`
-            )
-        this.commit({
-            ...this.files,
-            [path]: Object.freeze({
-                encoding: 'plain',
-                content: text,
-                ...(file.annotations ? { annotations: file.annotations } : {})
-            })
+        const before = this.files[path]
+        if (!before)
+            throw new FileSystemGuestError(FileErrorCode.NotFound, `File not found: ${path}`)
+        let file = before
+        const inverses = changes.map((change): ByteChange => {
+            if ('runs' in change) {
+                const written = overwriteBytes(file, change.runs)
+                if (written && !written.restore.length) return { runs: [] }
+                if (!written)
+                    throw new ProjectFormatError(
+                        `Not saved: ${path} is stored as text, and these bytes would leave it no longer UTF-8`
+                    )
+                file = written.file
+                return { runs: written.restore }
+            }
+            const inverse = { content: fileBytes(file), encoding: file.encoding }
+            file = projectFileFromBytes(change.content, change.encoding)
+            return inverse
         })
+        if (file === before) return inverses
+        //nothing else changed, so instead of `cleanFiles` over the whole Project, which decodes
+        //every File, the size is read from the stored lengths: typing into a 16 MiB File costs what
+        //the change does
+        const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
+        files[path] = file
+        if (storedFilesSize(files) > FILE_BYTE_LIMIT)
+            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+        this.store.write(Object.freeze(files))
+        this.notify(true)
+        return inverses
     }
     /**
      * Replaces a File's Annotations
@@ -419,20 +385,6 @@ export class FileSystem {
     }
     private commit(files: ProjectFiles) {
         this.store.write(cleanFiles(files))
-        this.notify(true)
-    }
-    /**
-     * Writes a byte File's new list of Byte edits. Nothing else changed, so instead of `cleanFiles`
-     * over the whole Project, which decodes every File and every edit, the new list is checked
-     * against the File's original and the Project's size is read from the stored lengths: a Byte
-     * edit typed into a 16 MiB File costs what the edits do.
-     */
-    private commitByteEdits(path: string, file: ProjectFile, edits: readonly ByteEdit[]) {
-        const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
-        files[path] = withByteEdits(path, file, edits)
-        if (storedFilesSize(files) > FILE_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        this.store.write(Object.freeze(files))
         this.notify(true)
     }
     /**

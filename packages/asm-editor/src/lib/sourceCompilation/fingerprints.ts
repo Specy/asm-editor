@@ -1,4 +1,4 @@
-import { byteEditsKey, type ProjectFile } from '#lib/projectFiles.ts'
+import type { ProjectFile } from '#lib/projectFiles.ts'
 
 /** A deterministic 128-bit content fingerprint, for change detection, not authentication. */
 export function contentFingerprint(text: string): string {
@@ -22,12 +22,8 @@ export function contentFingerprint(text: string): string {
         .join('')
 }
 
-/**
- * A File's content fingerprint, Byte edits included. A File without edits keeps the fingerprint it
- * had before edits existed, which saved Compilation records still hold.
- */
+/** A File's content fingerprint: its encoding and content, never its Annotations. */
 export function fileFingerprint(file: ProjectFile | undefined): string | undefined {
     if (!file) return undefined
-    const edits = byteEditsKey(file)
-    return contentFingerprint(`${file.encoding}\0${file.content}${edits ? `\0${edits}` : ''}`)
+    return contentFingerprint(`${file.encoding}\0${file.content}`)
 }

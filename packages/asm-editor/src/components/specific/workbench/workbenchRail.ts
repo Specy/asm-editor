@@ -5,6 +5,7 @@ import FaFlask from '~icons/fa-solid/flask'
 import FaBook from '~icons/fa-solid/book'
 import FaShareAlt from '~icons/fa-solid/share-alt'
 import FaCog from '~icons/fa-solid/cog'
+import FaHistory from '~icons/fa-solid/history'
 import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
 import type {
     BuiltinPanelId,
@@ -20,6 +21,8 @@ export type WorkbenchRailOptions = {
     access: Partial<Record<BuiltinPanelId, PanelAccess>>
     /** Whether the Project has an Executable, for which the Symbols panel is offered. */
     symbolsOffered: boolean
+    /** Whether the Project has a File stored as bytes or a File with Edit steps, for which the Edit history is offered. */
+    historyOffered?: boolean
     /** The Testcases icon's dot, for the last run's result. */
     testcasesDot?: RailEntry['dot']
     hostPanels: readonly WorkbenchHostPanel[]
@@ -34,7 +37,8 @@ export type WorkbenchRailOptions = {
  * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md), decision
  * 23), Testcases, Documentation, the host's panels and, in a Project that has an Executable,
  * Symbols ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
- * decision 18); at the bottom the AI assistant, Share, the host's links and panels, and Settings.
+ * decision 18), then in one that has a File stored as bytes or with Edit steps, the Edit history
+ * ([pixel-editor.md](../../../../../../docs/design/pixel-editor.md), decision 12); at the bottom the AI assistant, Share, the host's links and panels, and Settings.
  * A built-in panel the host switched off is left out.
  */
 export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
@@ -89,6 +93,16 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
             false,
             undefined,
             'Symbols: the functions and strings of the program'
+        )
+    if (options.historyOffered)
+        builtin(
+            'history',
+            'Edit history',
+            FaHistory,
+            'top',
+            false,
+            undefined,
+            'View and restore edits made in the pixel and hex editors'
         )
     builtin('agent', 'AI assistant', SparklesIcon, 'bottom')
     if (options.onShare) {

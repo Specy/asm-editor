@@ -42,7 +42,7 @@ These bundled Linux libraries are used only by imported Executables. Programs co
 
 Switch to **Hex** in the dock to inspect the file's raw bytes. Each row shows the file offset, 16 hexadecimal bytes (8 on narrow screens), and the corresponding ASCII text (with non-printable bytes shown as `.`).
 
-Use the switch in the execution dock to move between **Hex**, **Disassemble** ([Listing](#listing)), and **Decompile** ([Pseudocode](#decompile)). Starting **Debug** switches a single Hex pane to **Disassemble** so you can see the program counter, Breakpoints, and Patches (a pane on **Decompile** stays there); split the editor if you want to keep Hex and Disassemble visible side by side.
+Use the switch in the execution dock to move between **Disassemble** ([Listing](#listing)), **Decompile** ([Pseudocode](#decompile)), and **Hex**. Starting **Debug** switches a single Hex pane to **Disassemble** so you can see the program counter, Breakpoints, and Patches (a pane on **Decompile** stays there); split the editor if you want to keep Hex and Disassemble visible side by side.
 
 Other binary files in a project also open in the Hex editor. Media files and documents (images, PDFs, audio, video) open in **Preview** with a toggle to switch to **Hex**.
 
@@ -54,7 +54,7 @@ Click any byte in the Hex editor to place the caret:
 - Press **Tab** and **Shift+Tab** to switch between the hex and text columns.
 - Use **Undo** (**Ctrl+Z**) and **Redo** (**Ctrl+Shift+Z** or **Ctrl+Y**) to step through your byte changes.
 
-Changes made in the Hex editor are saved as **Byte edits** alongside the original file. The Listing, the Pseudocode, **Debug**, **Download**, and project archives all use the edited bytes, while your [renames and comments](#annotations) remain intact.
+Changes made in the Hex editor overwrite the file's bytes: the Listing, the Pseudocode, **Debug**, **Download**, and project archives all use the edited bytes, while your [renames and comments](#annotations) remain intact. The **Edit history** panel in the side rail lists each run of typing, newest first; choose one to go back, or forward, to just after it. The history is kept in your browser beside the project, never in its archives or share links, and it is forgotten when something else changes the file, such as an upload or a program writing to it.
 
 Files are read-only while a Debug session is active. To test a quick instruction change in memory while paused, [patch the instruction](#patching) in the Listing; to make a permanent change to the file, press **Stop**, right-click the line in the Listing, choose **Show in Hex**, and edit the bytes there.
 
@@ -144,7 +144,7 @@ Open the **Symbols** panel (the tags icon in the left rail) to browse all **Func
 
 - **Follows the Listing cursor**: The Pseudocode pane shows whichever function the Listing cursor is inside. Moving the cursor to another function in the Listing (or clicking a function in the Symbols panel) decompiles that function.
 - **Linked lines**: Matching background colors connect each Pseudocode line to the assembly instructions that produced it. Selecting lines in either pane highlights the corresponding lines in the other. Function prologue/epilogue instructions like `endbr64` or `push rbp` that do not map to a C statement remain uncolored.
-- **Local and live**: Decompilation runs locally in your browser from the Executable's current bytes. Byte edits, [renames](#renaming), and [comments](#comments) automatically update the Pseudocode. Shared library Listings (`@lib/libc.so.6`) are not decompiled.
+- **Local and live**: Decompilation runs locally in your browser from the Executable's current bytes. Edits in the Hex editor, [renames](#renaming), and [comments](#comments) automatically update the Pseudocode. Shared library Listings (`@lib/libc.so.6`) are not decompiled.
 
 ## Reading the Pseudocode {#pseudocode}
 
@@ -218,7 +218,7 @@ Renames and comments have their own undo history across the Listing, Pseudocode,
 - Press **Ctrl+Z** (**⌘Z** on Mac) or choose **Undo rename or comment** in the context menu to undo your last annotation change.
 - Press **Ctrl+Shift+Z** or **Ctrl+Y** (or **Redo rename or comment**) to redo it.
 
-Annotations are saved with the Executable file in your project (including in project archives and share links) and survive [Byte edits](#byte-edits) and file renames. You can add or edit renames and comments whenever the program is stopped or paused at a breakpoint during a Debug session.
+Annotations are saved with the Executable file in your project (including in project archives and share links) and survive [edits to its bytes](#byte-edits) and file renames. You can add or edit renames and comments whenever the program is stopped or paused at a breakpoint during a Debug session.
 
 ## Searching the Project {#search}
 
@@ -319,7 +319,7 @@ While a Debug session is paused, you can replace an instruction in memory to tes
 
 If the replacement instruction is shorter than the original, the remaining bytes are padded with `nop`. Replacements that encode to more bytes than the original instruction are rejected so they do not overwrite the following instruction.
 
-**Patches modify memory only**: the next **Debug** / **Build** reloads the original file bytes. Debugger **Undo** can revert a patch as long as no irreversible step (such as reading from standard input) happened after the patch. To make a change permanent in the file, use [Byte edits](#byte-edits) in the Hex editor.
+**Patches modify memory only**: the next **Debug** / **Build** reloads the original file bytes. Debugger **Undo** can revert a patch as long as no irreversible step (such as reading from standard input) happened after the patch. To make a change permanent in the file, [edit its bytes](#byte-edits) in the Hex editor.
 
 ## The Build output {#build-output}
 
@@ -331,7 +331,7 @@ You can use the **Build output** just like an imported Executable:
 - Download it from the Explorer to run on a 64-bit Linux machine.
 - Right-click it and choose **New program from this file** to debug the binary directly instead of stepping through your source file.
 
-When you edit your source files, the Explorer marks the binary **From an earlier Build** and replaces it automatically on the next Build. If you make Byte edits, renames, or comments on the Build output, the next Build asks before overwriting your changes; to keep a separate copy that later Builds will not touch, rename it in the Explorer.
+When you edit your source files, the Explorer marks the binary **From an earlier Build** and replaces it automatically on the next Build. If you edit the bytes of the Build output, or rename or comment on it, the next Build asks before overwriting your changes; to keep a separate copy that later Builds will not touch, rename it in the Explorer.
 
 ## Log notes {#log-notes}
 

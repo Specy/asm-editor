@@ -88,7 +88,18 @@ export interface ProjectData {
      * restored with `openTabs` ([file-views.md](../../../../docs/design/file-views.md), decision 8).
      */
     fileViews?: Record<string, FileView>
+    /**
+     * The cell grid the Pixel editor draws over each picture that has one turned on, lines every
+     * `width` × `height` pixels, restored with `fileViews`
+     * ([pixel-editor.md](../../../../docs/design/pixel-editor.md), decision 8).
+     */
+    cellGrids?: Record<string, CellGrid>
 }
+
+/** A Pixel editor's cell grid: a line every `width` columns and every `height` rows. */
+export type CellGrid = Readonly<{ width: number; height: number }>
+/** The largest cell, a picture's own largest size. */
+export const CELL_GRID_MAX = 1024
 
 /**
  * Anything a Project may come back as: the current shape, the shape before Programs whose one
@@ -108,6 +119,7 @@ export type StoredProject = Partial<
         | 'openTabs'
         | 'activeTab'
         | 'fileViews'
+        | 'cellGrids'
         | 'builds'
     >
 > & {
@@ -128,6 +140,7 @@ export type StoredProject = Partial<
     openTabs?: unknown
     activeTab?: unknown
     fileViews?: unknown
+    cellGrids?: unknown
     builds?: unknown
 }
 
@@ -159,9 +172,11 @@ function pickEntry(entry: unknown, files: ProjectFiles, language: AvailableLangu
 
 /** Unusable editor state never prevents a Project from opening. */
 function cleanEditorTabs(
-    raw: { openTabs?: unknown; activeTab?: unknown; fileViews?: unknown } | undefined,
+    raw:
+        | { openTabs?: unknown; activeTab?: unknown; fileViews?: unknown; cellGrids?: unknown }
+        | undefined,
     files: ProjectFiles
-): Pick<ProjectData, 'openTabs' | 'activeTab' | 'fileViews'> {
+): Pick<ProjectData, 'openTabs' | 'activeTab' | 'fileViews' | 'cellGrids'> {
     const usable = (path: unknown): path is string =>
         typeof path === 'string' && isValidFilePath(path) && Object.hasOwn(files, path)
     const openTabs = Array.isArray(raw?.openTabs)
@@ -172,11 +187,29 @@ function cleanEditorTabs(
             ? raw.activeTab
             : undefined
     const fileViews = cleanFileViews(raw?.fileViews, usable)
+    const cellGrids = cleanCellGrids(raw?.cellGrids, usable)
     return {
         ...(openTabs !== undefined ? { openTabs } : {}),
         ...(activeTab !== undefined ? { activeTab } : {}),
-        ...(fileViews !== undefined ? { fileViews } : {})
+        ...(fileViews !== undefined ? { fileViews } : {}),
+        ...(cellGrids !== undefined ? { cellGrids } : {})
     }
+}
+
+/** The cell grids of Files that still exist, each side a whole number from 1 to 1024. */
+function cleanCellGrids(
+    raw: unknown,
+    usable: (path: unknown) => path is string
+): Record<string, CellGrid> | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+    const side = (value: unknown): value is number =>
+        Number.isInteger(value) && (value as number) >= 1 && (value as number) <= CELL_GRID_MAX
+    const grids = Object.entries(raw).flatMap(([path, grid]): [string, CellGrid][] => {
+        if (!usable(path) || !grid || typeof grid !== 'object') return []
+        const { width, height } = grid as Record<string, unknown>
+        return side(width) && side(height) ? [[path, { width, height }]] : []
+    })
+    return grids.length ? Object.fromEntries(grids) : undefined
 }
 
 /** The saved views of Files that still exist, by the same rule as the tabs; none is no map. */
@@ -293,13 +326,13 @@ export function withoutBuildOutputs(data: ProjectData): ProjectData {
     const files: Record<string, ProjectData['files'][string]> = Object.create(null)
     for (const [path, file] of Object.entries(data.files))
         if (!derived.has(path)) files[path] = file
-    const { openTabs, activeTab, fileViews, builds, ...rest } = data
+    const { openTabs, activeTab, fileViews, cellGrids, builds, ...rest } = data
     const kept = builds?.filter((record) => !derived.has(record.outputPath))
     return {
         ...rest,
         files: Object.freeze(files),
         ...(kept?.length ? { builds: kept } : {}),
-        ...cleanEditorTabs({ openTabs, activeTab, fileViews }, files)
+        ...cleanEditorTabs({ openTabs, activeTab, fileViews, cellGrids }, files)
     }
 }
 
@@ -374,7 +407,8 @@ function contentKey(project: ProjectData): string {
         builds: project.builds,
         openTabs: project.openTabs,
         activeTab: project.activeTab,
-        fileViews: project.fileViews
+        fileViews: project.fileViews,
+        cellGrids: project.cellGrids
     })
 }
 
@@ -498,6 +532,7 @@ type ProjectMetadata = {
     openTabs?: string[]
     activeTab?: string
     fileViews?: Record<string, FileView>
+    cellGrids?: Record<string, CellGrid>
 }
 
 const metaVersion = 2
@@ -615,6 +650,11 @@ export function makeProject(data?: StoredProject) {
             ])
         )
         const fileViews = state.fileViews && Object.fromEntries(Object.entries(state.fileViews))
+        const cellGrids =
+            state.cellGrids &&
+            Object.fromEntries(
+                Object.entries(state.cellGrids).map(([path, grid]) => [path, { ...grid }])
+            )
         //each snapshot is taken where it is returned: the server build of a `.svelte.ts` drops a
         //`$state.snapshot` that is a declaration's whole value, which would hand out the state
         return {
@@ -636,7 +676,8 @@ export function makeProject(data?: StoredProject) {
                 ...(state.openTabs !== undefined ? { openTabs: state.openTabs } : {}),
                 ...(state.activeTab !== undefined ? { activeTab: state.activeTab } : {})
             }),
-            ...(fileViews !== undefined ? { fileViews } : {})
+            ...(fileViews !== undefined ? { fileViews } : {}),
+            ...(cellGrids !== undefined ? { cellGrids } : {})
         } as ProjectData
     }
 
@@ -665,7 +706,8 @@ export function makeProject(data?: StoredProject) {
             ...(snapshot.builds ? { builds: snapshot.builds } : {}),
             ...(snapshot.openTabs !== undefined ? { openTabs: snapshot.openTabs } : {}),
             ...(snapshot.activeTab !== undefined ? { activeTab: snapshot.activeTab } : {}),
-            ...(snapshot.fileViews !== undefined ? { fileViews: snapshot.fileViews } : {})
+            ...(snapshot.fileViews !== undefined ? { fileViews: snapshot.fileViews } : {}),
+            ...(snapshot.cellGrids !== undefined ? { cellGrids: snapshot.cellGrids } : {})
         }
         const metaJson = serializer.stringify(meta, null, 4)
         const commentCharacter = COMMENT_CHARACTER[snapshot.language]
@@ -744,6 +786,7 @@ export function makeProject(data?: StoredProject) {
         state.openTabs = merged.openTabs
         state.activeTab = merged.activeTab
         state.fileViews = merged.fileViews
+        state.cellGrids = merged.cellGrids
         state.builds = merged.builds
         reconcileSourceMaps()
     }
@@ -932,6 +975,18 @@ export function makeProject(data?: StoredProject) {
                 { fileViews: Object.fromEntries(next) },
                 state.files
             ).fileViews
+        },
+        get cellGrids() {
+            return state.cellGrids
+        },
+        /** Remembers a picture's cell grid, or with none that it has none, as `setFileView` does. */
+        setCellGrid(path: string, grid: CellGrid | undefined) {
+            const next = Object.entries(state.cellGrids ?? {}).filter(([key]) => key !== path)
+            if (grid) next.push([path, grid])
+            state.cellGrids = cleanEditorTabs(
+                { cellGrids: Object.fromEntries(next) },
+                state.files
+            ).cellGrids
         },
         get sourceMaps() {
             return sourceMaps

@@ -32,6 +32,11 @@
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let linkedMigrationNoticeShown = false
 
+    /**
+     * The Edit journals of the Project's Files, saved with it, one store a Project
+     * ([ADR 0063](../../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)).
+     */
+    const journals = $derived(ProjectStore.journalStore(project.id))
     /** A change the Workbench reported since the last successful save. */
     let dirty = $state(false)
     let lastSaveFailed = $state(false)
@@ -138,7 +143,7 @@
             project.set({ id: newProject.id })
             goto(resolve('/projects/[project]', { project: project.id }))
         } else {
-            const result = await ProjectStore.save(project)
+            const result = await ProjectStore.save(project, journals)
             if (result.local === 'failed') {
                 //Not silenced by autosave: nothing was stored, so the user has to know now.
                 toast.error(
@@ -296,6 +301,7 @@
                     <Workbench
                         {project}
                         {unsaved}
+                        editJournals={journals}
                         onSave={async ({ silent }) => {
                             const saved = await save(project, silent)
                             lastSaveFailed = !saved

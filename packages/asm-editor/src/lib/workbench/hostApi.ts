@@ -13,13 +13,15 @@ import type { Emulator } from '#lib/languages/Emulator.ts'
 export type PanelAccess = 'on' | 'readonly' | 'off'
 
 /**
- * `symbols` is offered only in a Project that has an Executable. `search` is the Search panel
+ * `symbols` is offered only in a Project that has an Executable, `history`, the Edit history, only
+ * in one that has a File stored as bytes or a File with Edit steps. `search` is the Search panel
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
  * 23), offered in every Target; an Exam switches it off with the Explorer.
  */
 export type BuiltinPanelId =
     | 'explorer'
     | 'symbols'
+    | 'history'
     | 'search'
     | 'testcases'
     | 'documentation'

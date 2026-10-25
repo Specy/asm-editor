@@ -141,6 +141,8 @@ The experiments ran in Node 24 against the editor's own modules (the Listing gen
 
 ### How Byte edits are saved, which annotations follow
 
+_Since 2026-10-25_ ([ADR 0063](../adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)) a File holds its current bytes and no Byte edits: an overwrite in the Hex or Pixel editor keeps the Annotations, as a Byte edit did, and the record below describes the code before it.
+
 - **The record.** A `ProjectFile` is `{ encoding, content, edits? }` (`E/lib/projectFiles.ts` :19-23). `cleanFiles` (:401-445) copies only those three fields (:428-432), so any other field is dropped on every load, import and share link: annotations need adding there. `withByteEdits` (:264-276), which every Byte edit and the Hex editor's Undo go through (`FileSystem.commitByteEdits`, `E/lib/languages/peripherals/FileSystem.ts` :387), also builds a new record of those three, and would drop them too.
 - **Replacing content.** `FileSystem.writeBytes` (:271-278) makes a new record from the bytes (`bytesFile`), which is how decision 3's drop falls out: the Explorer's upload (`E/components/specific/project/Explorer.svelte` :587) and Keep as File (:762) use it. `overwriteText` (:328-350) builds a plain record without Byte edits and would need to keep annotations; `rename` (:364-376) moves the record as it is.
 - **During a Debug session.** The FileSystem session keeps each File's record beside its bytes (`Node.file`, :38-44, set from the Project at :465-466), drops it when the program changes the bytes (`replaceBytes` :992-1017, `appendBytes` :961-990, which keeps a plain record only when the appended bytes are text) and puts it back when instruction Undo restores the bytes, so `flush` (:619-626) republishes the original record rather than one rebuilt from the bytes. So an Undo brings back the record, Byte edits and annotations included, as [the file views plan](./file-views-plan.md)'s decision 4 made it; the flattening its research table describes is gone. The session publishes its records over the Project's, so an annotation made during the session that is not also in the session's record would be lost at the next publish.
@@ -519,7 +521,7 @@ Proposed for [CONTEXT.md](../../CONTEXT.md) and added there on 2026-10-23, adapt
 
 ### Annotation
 
-A **Rename** or a **Comment** a person adds to an **Executable** of the **Project**, saved with that **File** apart from its bytes, as its **Byte edits** are, and shown in its **Listing** and **Pseudocode**. Replacing the File's whole content (an upload over it, a program's write) drops them; a Byte edit keeps them. A **Bundled library**'s Listing and the **Build output** take none. One Rename or Comment is one step of Undo, apart from instruction Undo.
+A **Rename** or a **Comment** a person adds to an **Executable** of the **Project**, saved with that **File** apart from its bytes, as its **Byte edits** are, and shown in its **Listing** and **Pseudocode**. Replacing the File's whole content (an upload over it, a program's write) drops them; a Byte edit keeps them. (The glossary as it read then; since ADR 0063 an overwrite in the Hex editor keeps them.) A **Bundled library**'s Listing and the **Build output** take none. One Rename or Comment is one step of Undo, apart from instruction Undo.
 _Avoid_: note, markup, bookmark, label (a name of the Listing)
 
 ### Rename

@@ -13,8 +13,10 @@ import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocu
 import type { ListingOrder } from '#lib/listing/listingClient.ts'
 import type { AvailableLanguages, StoredProject } from '#lib/Project.svelte.ts'
 import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
-import { encodeBase64 } from '#lib/projectFiles.ts'
+import { encodeBase64, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import type { EditJournalStore, SavedJournal } from '#lib/editJournal.ts'
 import { PREVIEW_UNAVAILABLE } from '#cmp/specific/workbench/preview/previewSupport.ts'
+import { makeBmp } from '#lib/pixels/bmp.ts'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
@@ -297,16 +299,19 @@ describe('the Hex editor in a session', () => {
     it("types over a byte File's bytes and a text File's text through the FileSystem", () => {
         const { session, project } = setup()
         expect(session.editFileBytes('blob.bin', 1, Uint8Array.from([0xff]))).toBe(true)
-        expect(project.files['blob.bin'].edits).toEqual([{ offset: 1, remove: 1, insert: '/w==' }])
-        expect(session.setFileByteEdits('blob.bin', [])).toBe(true)
-        expect(project.files['blob.bin'].edits).toBeUndefined()
-        //a text File keeps no Byte edits: its text changes, and must stay UTF-8
+        expect([...fileBytes(project.files['blob.bin'])]).toEqual([1, 0xff, 3, 4])
+        expect(session.undoFileEdit('blob.bin')).toBe(1)
+        expect(project.files['blob.bin']).toEqual({ encoding: 'base64', content: 'AQIDBA==' })
+        //a text File's text changes, and must stay UTF-8
         const notes = project.files['notes.txt'].content
         expect(session.editFileBytes('notes.txt', 0, Uint8Array.from([0x41]))).toBe(true)
         expect(project.files['notes.txt']).toEqual({
             encoding: 'plain',
             content: 'A' + notes.slice(1)
         })
+        expect(session.undoFileEdit('notes.txt')).toBe(0)
+        expect(project.files['notes.txt'].content).toBe(notes)
+        expect(session.undoFileEdit('notes.txt', true)).toBe(0)
         //refused, and said why, rather than thrown
         expect(session.editFileBytes('notes.txt', 0, Uint8Array.from([0xff]))).toBe(false)
         expect(session.editFileBytes('blob.bin', 3, Uint8Array.from([1, 2]))).toBe(false)
@@ -367,7 +372,7 @@ describe('the Hex editor in a session', () => {
         expect(session.project.files['ascii.pdf'].content).toBe('%PDF-1.7\n%%EOF\n')
     })
 
-    it('keeps the bytes of a File whose saved edits insert or delete read-only', () => {
+    it('types over the bytes Byte edits a Project saved before left', () => {
         const { session } = setup('MIPS', {
             entry: 'main.s',
             files: {
@@ -376,30 +381,99 @@ describe('the Hex editor in a session', () => {
                     encoding: 'base64',
                     content: 'AQIDBA==',
                     edits: [{ offset: 1, remove: 0, insert: '/w==' }]
-                }
+                } as ProjectFile
             }
         })
         const group = session.groups[0]
         session.selectFile('inserted.bin')
         flushSync()
         expect(group.displayedView).toBe('hex')
-        expect(group.bytesReadOnly).toBe(
-            'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
-        )
-        expect(session.editFileBytes('inserted.bin', 0, Uint8Array.from([0]))).toBe(false)
+        expect(group.bytesReadOnly).toBeUndefined()
+        expect([...fileBytes(session.project.files['inserted.bin'])]).toEqual([1, 0xff, 2, 3, 4])
+        expect(session.editFileBytes('inserted.bin', 0, Uint8Array.from([0]))).toBe(true)
     })
 
-    it("keeps a File's Undo across a rename and drops it with the File", () => {
+    it("carries a File's Edit steps across a rename, and drops them once something else changes it", () => {
         const { session, project } = setup()
-        const blob = project.files['blob.bin']
-        session.byteEditHistory.record('blob.bin', blob, 0)
+        expect(session.editFileBytes('blob.bin', 0, Uint8Array.of(9))).toBe(true)
         project.fileSystem.rename('blob.bin', 'moved.bin')
         session.fileRenamed('blob.bin', 'moved.bin')
-        expect(session.byteEditHistory.undo('moved.bin', blob)).toEqual({ edits: [], offset: 0 })
-        session.byteEditHistory.record('moved.bin', blob, 0)
-        project.fileSystem.remove('moved.bin')
-        session.fileDeleted('moved.bin')
-        expect(session.byteEditHistory.undo('moved.bin', blob)).toBeUndefined()
+        expect(session.undoFileEdit('moved.bin')).toBe(0)
+        expect([...fileBytes(project.files['moved.bin'])][0]).toBe(1)
+        expect(session.undoFileEdit('moved.bin', true)).toBe(0)
+        expect([...fileBytes(project.files['moved.bin'])][0]).toBe(9)
+        //an upload over it
+        project.fileSystem.writeBytes('moved.bin', Uint8Array.of(7, 7), true, 'base64')
+        expect(session.fileJournal('moved.bin')).toBeUndefined()
+        expect(session.undoFileEdit('moved.bin')).toBeUndefined()
+        expect([...fileBytes(project.files['moved.bin'])]).toEqual([7, 7])
+    })
+
+    it('saves what a Hex editor typed before Undo takes it back', () => {
+        const { session, project } = setup()
+        let pending: Uint8Array | undefined = Uint8Array.of(5)
+        session.registerTypingFlush(() => {
+            if (pending) session.editFileBytes('blob.bin', 2, pending)
+            pending = undefined
+        })
+        expect(session.undoFileEdit('blob.bin')).toBe(2)
+        expect(project.files['blob.bin']).toEqual({ encoding: 'base64', content: 'AQIDBA==' })
+        expect(session.fileJournal('blob.bin')?.redo.map((step) => step.label)).toEqual(['Typing'])
+    })
+
+    it('keeps the Edit journal with each save of the Project, for Undo after a reload', async () => {
+        const kept = new Map<string, SavedJournal>()
+        const reads = new Map<string, () => SavedJournal | undefined>()
+        const editJournals: EditJournalStore = {
+            load: async () => new Map(kept),
+            changed: (path, read) => void reads.set(path, read)
+        }
+        /** As the project page saves: the journals read with the Project's snapshot, as IndexedDB keeps them. */
+        const save = (project: { toObject(): { files: StoredProject['files'] } }) => {
+            const files = project.toObject().files
+            for (const [path, read] of reads) {
+                const journal = read()
+                if (journal) kept.set(path, structuredClone(journal))
+                else kept.delete(path)
+            }
+            reads.clear()
+            return files
+        }
+        const first = setup(undefined, {}, { editJournals })
+        first.session.editFileBytes('blob.bin', 0, Uint8Array.of(9))
+        first.session.editFileBytes('blob.bin', 1, Uint8Array.of(8))
+        //nothing is kept before the Project is saved
+        expect(kept.size).toBe(0)
+        const files = save(first.project)
+        expect(kept.get('blob.bin')?.undo).toHaveLength(2)
+        //a change the tab closed before saving is in neither
+        first.session.editFileBytes('blob.bin', 2, Uint8Array.of(7))
+        reads.clear()
+        const second = setup(undefined, { files }, { editJournals })
+        await vi.waitFor(() => expect(second.session.fileJournal('blob.bin')?.undo).toHaveLength(2))
+        expect(second.session.undoFileEdit('blob.bin')).toBe(1)
+        expect([...fileBytes(second.project.files['blob.bin'])]).toEqual([9, 2, 3, 4])
+        //one whose File is gone is forgotten at the next save
+        reads.clear()
+        kept.set('gone.bin', kept.get('blob.bin')!)
+        const third = setup(undefined, { files }, { editJournals })
+        await vi.waitFor(() => expect(reads.has('gone.bin')).toBe(true))
+        save(third.project)
+        expect(kept.has('gone.bin')).toBe(false)
+        expect(kept.has('blob.bin')).toBe(true)
+    })
+
+    it('keeps a previewed File in preview when Undo has nothing to take back', () => {
+        const { session } = setup()
+        const group = session.groups[0]
+        session.previewFile('blob.bin')
+        flushSync()
+        const preview = group.tabs.preview
+        expect(preview).toBe('blob.bin')
+        expect(session.undoFileEdit('blob.bin')).toBeUndefined()
+        expect(group.tabs.preview).toBe('blob.bin')
+        session.editFileBytes('blob.bin', 0, Uint8Array.of(9))
+        expect(group.tabs.preview).toBeUndefined()
     })
 })
 
@@ -551,5 +625,72 @@ describe('a Preview the browser cannot show', () => {
         flushSync()
         expect(group.displayedView).toBe('preview')
         expect(group.bytesNotice).toBeUndefined()
+    })
+})
+
+describe('a picture in the Pixel editor', () => {
+    const sprite = encodeBase64(makeBmp({ width: 8, height: 8, format: 'rgb32' }))
+    function pictures() {
+        return setup('RISC-V', {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'nop' },
+                'sprite.bmp': { encoding: 'base64', content: sprite },
+                'image.png': { encoding: 'base64', content: png }
+            }
+        })
+    }
+
+    it('offers Pixels between Preview and Hex, and only for a BMP it draws in', () => {
+        const { session } = pictures()
+        const group = session.groups[0]
+        session.selectFile('sprite.bmp')
+        flushSync()
+        expect(group.displayedView).toBe('preview')
+        expect(group.viewSwitch).toEqual(['preview', 'pixels', 'hex'])
+        session.selectFile('image.png')
+        flushSync()
+        expect(group.viewSwitch).toEqual(['preview', 'hex'])
+    })
+
+    it('opens a new picture in Pixels, which the Project then saves as its view', () => {
+        const { session } = pictures()
+        session.openInPixelEditor('sprite.bmp')
+        flushSync()
+        expect(session.groups[0].displayedPath).toBe('sprite.bmp')
+        expect(session.groups[0].displayedView).toBe('pixels')
+        expect(session.project.fileViews).toEqual({ 'sprite.bmp': 'pixels' })
+    })
+
+    it("carries a picture's cell grid with its renames and drops it with the File", () => {
+        const { session } = pictures()
+        session.cellGridChosen('sprite.bmp', { width: 8, height: 4 })
+        session.project.fileSystem.rename('sprite.bmp', 'art/hero.bmp')
+        session.fileRenamed('sprite.bmp', 'art/hero.bmp')
+        expect(session.project.cellGrids).toEqual({ 'art/hero.bmp': { width: 8, height: 4 } })
+        session.project.fileSystem.remove('art/hero.bmp')
+        session.fileDeleted('art/hero.bmp')
+        expect(session.project.cellGrids).toBeUndefined()
+    })
+
+    it('saves a stroke and a Canvas size as Edit steps, gone back to from the Edit history', () => {
+        const { session } = pictures()
+        const original = session.project.files['sprite.bmp']
+        const runs = [{ offset: 54, bytes: Uint8Array.of(1, 2, 3) }]
+        expect(session.editFileByteRuns('sprite.bmp', runs, 'Pencil')).toBe(true)
+        const drawn = session.project.files['sprite.bmp']
+        const resized = makeBmp({ width: 12, height: 8, format: 'rgb32' })
+        expect(session.resizePicture('sprite.bmp', resized, 'Canvas size 12 × 8')).toBe(true)
+        expect(session.fileJournal('sprite.bmp')?.undo.map((step) => step.label)).toEqual([
+            'Pencil',
+            'Canvas size 12 × 8'
+        ])
+        expect(fileBytes(session.project.files['sprite.bmp'])).toEqual(resized)
+        expect(session.goToFileEdit('sprite.bmp', 1)).toBe(true)
+        expect(session.project.files['sprite.bmp'].content).toBe(drawn.content)
+        expect(session.undoFileEdit('sprite.bmp')).toBe(54)
+        expect(session.project.files['sprite.bmp']).toEqual(original)
+        expect(session.goToFileEdit('sprite.bmp', 2)).toBe(true)
+        expect(fileBytes(session.project.files['sprite.bmp'])).toEqual(resized)
     })
 })

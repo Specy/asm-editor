@@ -11,7 +11,7 @@
     const document = $derived(group.requestedPseudocode)
     /**
      * The Pseudocode the pane shows of the same function while it is decompiled again, after a
-     * rename, a comment or a Byte edit: it stays in view until the new one is ready
+     * rename, a comment or an overwrite: it stays in view until the new one is ready
      * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
      * 22), under no "Decompiling…".
      */

@@ -51,14 +51,17 @@ export const LAYOUT_LIMITS = {
 
 /** A side panel's width before it is dragged, in pixels (the rem sizes of the plan at 16px). */
 const DEFAULT_READING_PANEL_WIDTH = 448
+/** The one width Search, Settings and the Edit history open at. */
+const DEFAULT_TOOL_PANEL_WIDTH = 416
 export const DEFAULT_PANEL_WIDTHS: Readonly<Record<string, number>> = {
     explorer: 256,
     symbols: 320,
-    search: 352,
+    search: DEFAULT_TOOL_PANEL_WIDTH,
+    history: DEFAULT_TOOL_PANEL_WIDTH,
     testcases: DEFAULT_READING_PANEL_WIDTH,
     documentation: DEFAULT_READING_PANEL_WIDTH,
     agent: 448,
-    settings: 416
+    settings: DEFAULT_TOOL_PANEL_WIDTH
 }
 /** The default width of a panel a host adds. */
 export const DEFAULT_HOST_PANEL_WIDTH = 384

@@ -24,6 +24,10 @@ Characters `0x20` to `0x7F` are text. Characters `128` to `191` are 2 by 3 block
 
 A color is one byte: three bits of red in bits 7-5, three of green in bits 4-2 and two of blue in bits 1-0. Each field is stretched over the screen's eight bits by repeating it, so `0xFF` is white and `0xE0` pure red.
 
+## Pictures in Files {#pictures}
+
+A program can draw a picture kept in a File of the project, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. In a Z80 project a new picture is 8-bit and stored top-down, and its 256-entry palette is the 3-3-2 colors above, so each pixel byte is already the color byte the pen takes. `#insert "sprite.bmp"` copies the whole File into the program when it is assembled: its pixels start after the label in front of it by the offset held in the File's bytes 10 to 13, which is 1078 in an 8-bit picture **New picture** made (a 54-byte header and the 1,024-byte palette), and each row takes the width rounded up to a multiple of 4 bytes. What you draw is in the program at the next **Build**.
+
 ## Mouse views
 
 Put one of these in B before reading a mouse port.

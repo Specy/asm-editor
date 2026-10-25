@@ -18,7 +18,13 @@ import { loadDecoder, type ListingDecoder } from '../listing/decoder'
 import { generateListing } from '../listing/generateListing'
 import type { Listing, ListingAnnotations } from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
-import { encodeBase64, fileBytes, type Annotations, type ProjectFile } from '../projectFiles'
+import {
+    encodeBase64,
+    fileBytes,
+    overwriteBytes,
+    type Annotations,
+    type ProjectFile
+} from '../projectFiles'
 import { inThreadWorker } from './inThreadWorker'
 import { BACKGROUND_TIME_LIMIT_MS, PseudocodeClient } from './pseudocodeClient'
 import {
@@ -461,10 +467,9 @@ describe('the Search panel’s Pseudocode cache', () => {
         const plain = fileOf(bytes)
         await run(cache, 'crackme', plain, listingOf(plain))
         changes.length = 0
-        const edited: ProjectFile = {
-            ...plain,
-            edits: [{ offset: 0x2023, remove: 1, insert: btoa('x') }]
-        }
+        const edited = overwriteBytes(plain, [
+            { offset: 0x2023, bytes: new TextEncoder().encode('x') }
+        ])!.file
         cache.update('crackme', edited, listingOf(edited))
         expect(changes).toEqual([
             { type: 'removed', path: 'crackme', addresses: expect.any(Array) },

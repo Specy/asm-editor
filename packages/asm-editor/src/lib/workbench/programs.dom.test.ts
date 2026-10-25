@@ -366,7 +366,7 @@ describe("a pane's dock", () => {
         const executable = dock(session, right)
         expect(assembly.buttons()).toEqual(['Build'])
         expect(assembly.button('Build')!.title).toBe('Assemble the program and start debugging it')
-        expect(executable.buttons()).toEqual(['Debug', 'Hex', 'Disassemble', 'Decompile'])
+        expect(executable.buttons()).toEqual(['Debug', 'Disassemble', 'Decompile', 'Hex'])
         const debug = executable.button('Debug')!
         expect(debug.textContent?.trim()).toBe('Debug')
         expect(debug.title).toBe('Load the program and start debugging it')

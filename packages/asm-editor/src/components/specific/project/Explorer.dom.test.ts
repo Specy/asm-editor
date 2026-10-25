@@ -150,11 +150,7 @@ it('downloads a File as its exact bytes under its name, typed so no extension is
     HTMLElement.prototype.hidePopover ??= function () {}
     const fileSystem = new FileSystem({
         'main.asm': { encoding: 'plain', content: 'nop' },
-        crackme: {
-            encoding: 'base64',
-            content: 'f0VMRgIBAQ==',
-            edits: [{ offset: 1, remove: 1, insert: 'RA==' }]
-        }
+        crackme: { encoding: 'base64', content: 'f0RMRgIBAQ==' }
     })
     const target = document.createElement('div')
     document.body.append(target)
@@ -202,7 +198,6 @@ it('downloads a File as its exact bytes under its name, typed so no extension is
         item.click()
         expect(saved.map(({ name }) => name)).toEqual(['crackme'])
         expect(saved[0].blob.type).toBe('application/octet-stream')
-        //the edited bytes, as every reader of the File sees them
         expect(new Uint8Array(await saved[0].blob.arrayBuffer())).toEqual(
             new Uint8Array([0x7f, 0x44, 0x4c, 0x46, 2, 1, 1])
         )
@@ -245,3 +240,77 @@ it("opens a File's row in preview with a click, or selects it when the host has 
         target.remove()
     }
 })
+
+it.each<[AvailableLanguages, number, number]>([
+    ['RISC-V', 32, 0],
+    ['MIPS', 32, 0],
+    ['M68K', 32, 0],
+    ['X86', 32, 0],
+    ['Z80', 8, 256]
+])(
+    'makes a new picture in %s in the Screen’s layout, as bytes, and opens it to draw in',
+    async (language, bits, colours) => {
+        const fileSystem = new FileSystem({
+            'main.s': { encoding: 'plain', content: 'nop' },
+            'art/sprite.bmp': { encoding: 'plain', content: 'taken' }
+        })
+        const target = document.createElement('div')
+        document.body.append(target)
+        HTMLElement.prototype.showPopover ??= function () {}
+        HTMLElement.prototype.hidePopover ??= function () {}
+        const created = vi.fn()
+        const added = vi.fn()
+        const component = mount(Explorer, {
+            target,
+            props: {
+                get files() {
+                    return fileSystem.files
+                },
+                fileSystem,
+                language,
+                programs: programsAt('main.s'),
+                selectedProgram: 'main.s',
+                selectedPath: 'main.s',
+                onSelect: vi.fn(),
+                onFilesAdded: added,
+                onPictureCreated: created
+            }
+        })
+        try {
+            flushSync()
+            //from the folder's menu: its name taken, the next one is offered
+            const folder = target.querySelector<HTMLElement>('[title="art"]')!
+            folder.dispatchEvent(
+                new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 5 })
+            )
+            flushSync()
+            //the menu focuses its first entry a tick after it opens
+            await tick()
+            const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+                (entry) => entry.textContent?.includes('New picture in this folder')
+            )!
+            item.click()
+            flushSync()
+            await tick()
+            const dialog = target.querySelector<HTMLFormElement>('.new-picture')!
+            expect(dialog.querySelector<HTMLInputElement>('input[type=text]')!.value).toBe(
+                'sprite1.bmp'
+            )
+            dialog.requestSubmit()
+            flushSync()
+            const file = fileSystem.files['art/sprite1.bmp']
+            expect(file.encoding).toBe('base64')
+            const bytes = fileSystem.readBytes('art/sprite1.bmp')
+            const view = new DataView(bytes.buffer, bytes.byteOffset)
+            expect([view.getInt32(18, true), view.getInt32(22, true)]).toEqual([16, -16])
+            expect(view.getUint16(28, true)).toBe(bits)
+            expect(view.getUint32(46, true)).toBe(colours)
+            expect(added).toHaveBeenCalledWith(['art/sprite1.bmp'])
+            expect(created).toHaveBeenCalledWith('art/sprite1.bmp')
+            expect(target.querySelector('.new-picture')).toBeNull()
+        } finally {
+            await unmount(component)
+            target.remove()
+        }
+    }
+)

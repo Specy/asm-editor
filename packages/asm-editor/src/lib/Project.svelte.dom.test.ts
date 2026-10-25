@@ -121,3 +121,30 @@ it('keeps an Entry named __proto__ through a save and a reload, its view too', (
     expect(reloaded.selected?.testcases.map((item) => item.expectedOutput)).toEqual(['a'])
     expect(reloaded.fileViews).toEqual({ ['__proto__']: 'hex' })
 })
+
+it("keeps a picture's cell grid through a save and a reload, and drops unusable ones", () => {
+    const picture = { encoding: 'base64' as const, content: 'Qk0=' }
+    const project = makeProject({
+        language: 'RISC-V',
+        files: {
+            ['__proto__']: picture,
+            'sheet.bmp': picture,
+            'main.s': { encoding: 'plain', content: 'nop' }
+        },
+        cellGrids: {
+            ['__proto__']: { width: 8, height: 8 },
+            'sheet.bmp': { width: 16, height: 24 },
+            'main.s': { width: 0, height: 8 },
+            'gone.bmp': { width: 8, height: 8 }
+        }
+    })
+    expect(project.cellGrids).toEqual({
+        ['__proto__']: { width: 8, height: 8 },
+        'sheet.bmp': { width: 16, height: 24 }
+    })
+    const reloaded = makeProject(JSON.parse(JSON.stringify(project.toObject())))
+    expect(reloaded.cellGrids).toEqual(project.cellGrids)
+    reloaded.setCellGrid('sheet.bmp', undefined)
+    reloaded.setCellGrid('main.s', { width: 1024, height: 1025 })
+    expect(reloaded.cellGrids).toEqual({ ['__proto__']: { width: 8, height: 8 } })
+})

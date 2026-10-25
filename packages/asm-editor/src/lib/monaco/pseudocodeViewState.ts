@@ -5,7 +5,7 @@ import type { DecompiledLine } from '@specy/decompiler'
  * Keeping an editor on the same place of a function's Pseudocode when the function is decompiled
  * again ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
  * decision 22): a comment adds lines above a statement, a rename makes a line longer or shorter,
- * a Byte edit changes the code. The cursor, the selection and the first visible line move to the
+ * an overwrite changes the code. The cursor, the selection and the first visible line move to the
  * line standing for the same thing (a statement by its instructions' addresses, a comment by the
  * address it is kept at, a declaration by the names it declares), and a cursor on a name to the
  * same name, whatever it is called now.

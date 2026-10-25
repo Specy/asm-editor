@@ -27,7 +27,7 @@ import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { RISCVCsrRegisterNames } from '#lib/languages/RISC-V/RISC-V-registers.ts'
 import { makeProjectFromArchive } from '#lib/projectArchive.ts'
-import { originalBytes } from '#lib/projectFiles.ts'
+import { fileBytes } from '#lib/projectFiles.ts'
 import { programBuildSources } from '#lib/buildSources.ts'
 import { compilationStatus } from '#lib/sourceCompilation/records.ts'
 
@@ -1061,7 +1061,7 @@ describe('the RISC-V examples', () => {
             //Buffer.equals: toEqual walks half a megabyte of bytes one element at a time
             const differing = names.filter(
                 (name) =>
-                    !Buffer.from(originalBytes(project.files[name]!)).equals(
+                    !Buffer.from(fileBytes(project.files[name]!)).equals(
                         readFileSync(`${folder}/${name}`)
                     )
             )

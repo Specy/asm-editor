@@ -61,23 +61,33 @@ _Avoid_: edit, value edit, override, set value, host write, manual write; patch,
 
 ## Patch
 
-A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes. Distinct from a **Byte edit**, which changes the File.
+A **Poke** that replaces one instruction of an **Executable**'s code, typed on its line of the **Listing** during a **Debug session** and assembled to fit the bytes it replaces, a shorter encoding padded with `nop`. It lives in memory only: it is undone like any Poke, gone at the next Build, and the Executable's File never changes. Distinct from an **Edit step** of the **Hex editor**, which changes the File.
 _Avoid_: edit, binary patch, hot patch, modification
 
 ## Hex editor
 
-The **Workbench**'s view of a **File** stored as bytes, as rows of hexadecimal bytes beside their text, where typing over the bytes makes **Byte edits**. Any byte File the browser cannot preview opens in it, in every **Target**; an **Executable** opens on its **Listing** and can be switched to it. Distinct from the memory view, which shows a **Debug session**'s memory rather than a File.
+The **Workbench**'s view of a **File** stored as bytes, as rows of hexadecimal bytes beside their text, where typing over the bytes changes them, each pause an **Edit step** Undo can take back. Any byte File the browser cannot preview opens in it, in every **Target**; an **Executable** opens on its **Listing** and can be switched to it. Distinct from the memory view, which shows a **Debug session**'s memory rather than a File.
 _Avoid_: hex view, hex dump, byte viewer
 
 ## Preview
 
-The **Workbench**'s view of a **File** as it reads rather than as its bytes or text: a byte File as the browser itself shows its kind, an image, a PDF, audio or video, recognised by the File's first bytes and never by its name, which can be switched to the **Hex editor**; or a Markdown text File rendered, recognised by its name as a C File is, which can be switched back to its text or to the Hex editor.
+The **Workbench**'s view of a **File** as it reads rather than as its bytes or text: a byte File as the browser itself shows its kind, an image, a PDF, audio or video, recognised by the File's first bytes and never by its name, which can be switched to the **Hex editor**, and an uncompressed BMP to the **Pixel editor** too; or a Markdown text File rendered, recognised by its name as a C File is, which can be switched back to its text or to the Hex editor.
 _Avoid_: viewer, render, thumbnail
 
-## Byte edit
+## Pixel editor
 
-A change typed into a byte **File** in the **Hex editor**, saved with the **Project** apart from the File's original bytes, which are kept unchanged. It overwrites bytes and never changes the File's length. Everything that reads the File (the **FileSystem**, a Build, the **Listing**, a download) sees the edited bytes, and nothing in the interface yet lists Byte edits or shows the original. The File keeps its **Annotations** through Byte edits and their Undo. Distinct from a **Patch** and any other **Poke**, which change only a Debug session's memory. See [ADR 0047](./docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md).
-_Avoid_: patch (the memory-only **Patch**), binary patch, modification, diff
+The **Workbench**'s view of a BMP **File** stored uncompressed as its pixels, where drawing changes them and never the File's layout, offered by the view switch's Pixels button beside the File's **Preview** and **Hex editor**. Distinct from the Preview, which only shows the File, and from the **Screen**, which shows a running program's pixels rather than a File's. See [the Pixel editor design](./docs/design/pixel-editor.md).
+_Avoid_: sprite editor, image editor, BMP editor, paint
+
+## Edit step
+
+One change a person made to a **File** in the **Hex editor** or the **Pixel editor**: a stroke, a fill, a recolour, a Canvas size or a burst of typing. Its bytes are written into the File, and the bytes it overwrote, with a label and a time, are kept in the File's Edit journal beside the **Project**, in the browser that made the change rather than in the Project, so that Undo writes them back and Redo writes the change again, across a reload. A File's journal keeps at most 1 MiB, its oldest steps dropped past it, and is dropped when the File changes any other way. Archives and share links carry no steps. See [ADR 0063](./docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md).
+_Avoid_: Byte edit (the edits kept apart from an original before ADR 0063), action, command, history entry, revision
+
+## Edit history
+
+The **Workbench** side panel that lists the **Edit steps** of every File that has them, the one the focused editor pane shows in the **Hex editor** or the **Pixel editor** first, each newest first, and goes back or forward to just after any of them, opening the File in that editor when no pane shows it there. Distinct from the History **Debug tool**, which lists the instructions a **Debug session** can undo.
+_Avoid_: history (alone), undo history, timeline, versions
 
 ## Peripheral
 
@@ -339,7 +349,7 @@ _Avoid_: display name (the code's field for any name shown in place of another),
 
 ## Annotation
 
-A **Rename** or a **Comment** a person adds to an **Executable** that is a **File** of the **Project**, kept on the File apart from its bytes, as its **Byte edits** are, by its link-time address (a variable's Rename also by the decompiler's id for the variable), and shown in its **Listing** and **Pseudocode**. It is saved, archived and shared with the File. Replacing the File's whole content (an upload over it, a program's write) drops it; a Byte edit and a rename of the File keep it, and one whose address no longer fits after a Byte edit stays saved until it fits again. A **Bundled library**'s Listing, the **Build output** and a read-only **Workbench** take none. Each change is one step of the File's own Undo, apart from instruction Undo and the **Hex editor**'s. See [ADR 0055](./docs/adr/0055-annotations-are-kept-on-the-file-apart-from-its-bytes.md).
+A **Rename** or a **Comment** a person adds to an **Executable** that is a **File** of the **Project**, kept on the File apart from its bytes, by its link-time address (a variable's Rename also by the decompiler's id for the variable), and shown in its **Listing** and **Pseudocode**. It is saved, archived and shared with the File. Replacing the File's whole content (an upload over it, a program's write) drops it; a change typed in the **Hex editor** and a rename of the File keep it, and one whose address no longer fits after such a change stays saved until it fits again. A **Bundled library**'s Listing, the **Build output** and a read-only **Workbench** take none. Each change is one step of the File's own Undo, apart from instruction Undo and the **Hex editor**'s. See [ADR 0055](./docs/adr/0055-annotations-are-kept-on-the-file-apart-from-its-bytes.md).
 _Avoid_: note, markup, bookmark, label (a name of the Listing), metadata
 
 ## Rename
@@ -364,7 +374,7 @@ _Avoid_: system code, external code, foreign code
 
 ## Displayed file
 
-The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. A File stored as bytes is displayed in the **Hex editor**, or as a **Preview** when the browser can show its kind; an **Executable** opens on its **Listing** and can be switched to the Hex editor or its **Pseudocode**, unless the **Project** saved another view for it.
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation. A File stored as bytes is displayed in the **Hex editor**, or as a **Preview** when the browser can show its kind, and an uncompressed BMP can be switched to the **Pixel editor**; an **Executable** opens on its **Listing** and can be switched to the Hex editor or its **Pseudocode**, unless the **Project** saved another view for it.
 
 ## Build snapshot
 
@@ -372,7 +382,7 @@ The fixed versions of the **Files** and **Entry path** used by one Build, identi
 
 ## Build output
 
-The **File** an x86 Build saves the executable it links in, at the path the **Command line** runs it as (the Entry path without its extension), an **Executable** of the **Project** like an uploaded one. While it holds that program unchanged, with no **Byte edits** or **Annotations**, its **Build record** makes it derived: the next Build replaces it without asking, the Explorer marks it From an earlier Build once its sources change, and it is left out of share links, archives and downloaded files. Anything else at its path is replaced only once the person agrees, and a renamed one is the person's own File. See [ADR 0056](./docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md).
+The **File** an x86 Build saves the executable it links in, at the path the **Command line** runs it as (the Entry path without its extension), an **Executable** of the **Project** like an uploaded one. While it holds that program unchanged, its bytes as the Build saved them and with no **Annotations**, its **Build record** makes it derived: the next Build replaces it without asking, the Explorer marks it From an earlier Build once its sources change, and it is left out of share links, archives and downloaded files. Anything else at its path is replaced only once the person agrees, and a renamed one is the person's own File. See [ADR 0056](./docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md).
 _Avoid_: a.out, binary, compiled program, artifact (the Core's build artifacts are line data, not this File)
 
 ## Build record

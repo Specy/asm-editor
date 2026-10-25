@@ -2,7 +2,7 @@ import type { DecompiledLine, DecompiledVariable } from '@specy/decompiler'
 import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import type { Listing, ListingFunction } from '#lib/listing/listing.ts'
 import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
-import { byteEditsKey, type ProjectFile } from '#lib/projectFiles.ts'
+import type { ProjectFile } from '#lib/projectFiles.ts'
 import { functionAnnotations, functionAnnotationsKey } from './pseudocodeAnnotations'
 import {
     PseudocodeClient,
@@ -147,7 +147,7 @@ export class PseudocodeDocuments {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read by hovers and prompts when asked; nothing renders from it.
     private readonly defaultNames = new Map<
         string,
-        { content: string; edits: string; names: Map<string, string> }
+        { content: string; names: Map<string, string> }
     >()
     /** A short number for each Listing document, which the documents' keys name. */
     private readonly listingIds = new WeakMap<ListingDocument, number>()
@@ -259,11 +259,10 @@ export class PseudocodeDocuments {
     /** The names the decompiler gives the variables of the function at `address` of these bytes. */
     private defaultNamesOf(path: string, file: ProjectFile, address: number): Map<string, string> {
         const key = `${path}\0${address}`
-        const edits = byteEditsKey(file)
         let kept = this.defaultNames.get(key)
-        if (kept?.content !== file.content || kept.edits !== edits) {
+        if (kept?.content !== file.content) {
             // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Filled as documents settle; read when a hover or prompt asks.
-            kept = { content: file.content, edits, names: new Map() }
+            kept = { content: file.content, names: new Map() }
             this.defaultNames.set(key, kept)
             if (this.defaultNames.size > KEPT_DEFAULT_NAMES)
                 this.defaultNames.delete(this.defaultNames.keys().next().value!)

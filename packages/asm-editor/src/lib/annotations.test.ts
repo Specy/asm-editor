@@ -16,8 +16,8 @@ import {
     ProjectFormatError,
     sameFileContent,
     storedAnnotationsSize,
+    overwriteBytes,
     withAnnotations,
-    withByteEdits,
     ANNOTATIONS_BYTE_LIMIT,
     type Annotations,
     type ProjectFile
@@ -183,15 +183,17 @@ describe('saved Annotations', () => {
 describe('a File with Annotations', () => {
     const annotated = cleanFiles({ chall: { ...chall, annotations } }).chall
 
-    it('keeps them through a Byte edit and the Undo of one', () => {
-        const edited = withByteEdits('chall', annotated, [{ offset: 1, remove: 1, insert: 'QQ==' }])
+    it('keeps them through an overwrite and the Undo of one', () => {
+        const { file: edited, restore } = overwriteBytes(annotated, [
+            { offset: 1, bytes: Uint8Array.of(0x41) }
+        ])!
         expect(edited.annotations).toBe(annotated.annotations)
-        expect(edited.edits).toHaveLength(1)
-        expect(withByteEdits('chall', edited, [])).toEqual(annotated)
+        expect(edited.content).not.toBe(annotated.content)
+        expect(overwriteBytes(edited, restore)!.file).toEqual(annotated)
     })
 
-    it('takes new ones over the same bytes and Byte edits, checked, or none', () => {
-        const edited = withByteEdits('chall', chall, [{ offset: 1, remove: 1, insert: 'QQ==' }])
+    it('takes new ones over the same bytes, checked, or none', () => {
+        const edited = overwriteBytes(chall, [{ offset: 1, bytes: Uint8Array.of(0x41) }])!.file
         const named = withAnnotations('chall', edited, rename(undefined, 0x1139, 'check'))
         expect(named).toEqual({ ...edited, annotations: { names: { '0x1139': 'check' } } })
         expect(Object.isFrozen(named)).toBe(true)

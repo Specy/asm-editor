@@ -18,7 +18,7 @@ import {
     projectDownload,
     projectToArchive
 } from '#lib/projectArchive.ts'
-import { bytesFile, fileBytes, ProjectFormatError } from '#lib/projectFiles.ts'
+import { bytesFile, fileBytes, ProjectFormatError, type ProjectFile } from '#lib/projectFiles.ts'
 
 const encoder = new TextEncoder()
 
@@ -244,20 +244,27 @@ describe('Programs in an archive', () => {
     const manifestOf = (archive: Uint8Array) =>
         serializer.parse<Manifest>(new TextDecoder().decode(unzipSync(archive)['project.json']))
 
-    it('writes one Program in the shape before Programs, as version 1, or 2 with Byte edits', () => {
+    it('writes one Program in the shape before Programs, as version 1, edited Files too', () => {
         const one = makeProject({ language: 'RISC-V', files, entry: 'sort.s' })
         const manifest = manifestOf(projectToArchive(one))
         expect(manifest.version).toBe(1)
         expect(manifest.project).toMatchObject({ entry: 'sort.s', settings: {}, testcases: [] })
         expect(manifest.project).not.toHaveProperty('programs')
         expect(manifest.project).not.toHaveProperty('selectedProgram')
+        //a File holds its current bytes (ADR 0063): Byte edits saved before are applied, and an
+        //archive holds them as the File
         const edited = makeProject({
             language: 'RISC-V',
-            files: { ...files, 'data.bin': { encoding: 'base64', content: '/wAB', edits } },
+            files: {
+                ...files,
+                'data.bin': { encoding: 'base64', content: '/wAB', edits } as ProjectFile
+            },
             entry: 'sort.s'
         })
-        expect(manifestOf(projectToArchive(edited)).version).toBe(2)
-        expect(manifestOf(projectToArchive(edited)).project.entry).toBe('sort.s')
+        const archive = projectToArchive(edited)
+        expect(manifestOf(archive).version).toBe(1)
+        expect(manifestOf(archive).files['data.bin']).toEqual({ encoding: 'base64' })
+        expect([...unzipSync(archive)['files/data.bin']]).toEqual([0xff, 0x41, 1])
     })
 
     it('round trips several Programs, a missing Entry and the selection through version 3', () => {
@@ -286,14 +293,17 @@ describe('Programs in an archive', () => {
         expect(Object.keys(imported.files)).toEqual(['main.s', 'sort.s'])
     })
 
-    it('keeps Byte edits in a version 3 archive', () => {
+    it('writes an edited File as its bytes in a version 3 archive', () => {
         const project = makeProject({
             ...several(),
-            files: { ...files, 'data.bin': { encoding: 'base64', content: '/wAB', edits } }
+            files: {
+                ...files,
+                'data.bin': { encoding: 'base64', content: '/wAB', edits } as ProjectFile
+            }
         })
         const archive = projectToArchive(project)
         expect(manifestOf(archive).version).toBe(3)
-        expect(manifestOf(archive).files['data.bin'].edits).toEqual(edits)
+        expect(manifestOf(archive).files['data.bin'].edits).toBeUndefined()
         expect([...fileBytes(makeProjectFromArchive(archive).project.files['data.bin'])]).toEqual([
             0xff, 0x41, 1
         ])
@@ -458,109 +468,74 @@ describe('large binary Files', () => {
     })
 })
 
-describe('Byte edits in an archive', () => {
+describe('Byte edits a Project saved before, in an archive', () => {
     const edits = [{ offset: 1, remove: 2, insert: 'QUI=' }]
-    function editedProject() {
-        return makeProject({
-            language: 'X86',
-            entry: 'chall',
-            files: {
-                chall: { encoding: 'base64', content: '/wABAg==', edits },
-                'notes.txt': { encoding: 'plain', content: 'hunter2?' }
-            }
-        })
+    const metadata = {
+        id: '',
+        name: 'Edited',
+        description: '',
+        language: 'X86',
+        entry: 'chall',
+        settings: {},
+        createdAt: 0,
+        updatedAt: 0,
+        testcases: []
     }
+    /** A version `version` archive whose `chall` is `ff 00 01 02` with `archivedEdits` beside it. */
+    const archive = (version: number, archivedEdits: unknown) =>
+        zipSync({
+            'project.json': encoder.encode(
+                JSON.stringify({
+                    version,
+                    project: metadata,
+                    files: { chall: { encoding: 'base64', edits: archivedEdits } }
+                })
+            ),
+            'files/chall': new Uint8Array([0xff, 0, 1, 2])
+        })
     const manifestOf = (archive: Uint8Array) =>
         JSON.parse(new TextDecoder().decode(unzipSync(archive)['project.json']))
-    const originalOf = (archive: Uint8Array, path: string) => [
-        ...unzipSync(archive)[`files/${path}`]
-    ]
 
-    it('keeps the original bytes under files/ and the edits in the manifest, as version 2', () => {
-        const archive = projectToArchive(editedProject())
-        const manifest = manifestOf(archive)
-        expect(manifest.version).toBe(2)
-        expect(manifest.files).toEqual({
-            chall: { encoding: 'base64', edits },
-            'notes.txt': { encoding: 'plain' }
-        })
-        expect(originalOf(archive, 'chall')).toEqual([0xff, 0, 1, 2])
-        const imported = makeProjectFromArchive(archive).project
-        expect(imported.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==', edits })
-        expect([...fileBytes(imported.files.chall)]).toEqual([0xff, 0x41, 0x42, 2])
-        expect(imported.files['notes.txt']).toEqual({ encoding: 'plain', content: 'hunter2?' })
+    it('are applied as the archive is read, and written again as the File', () => {
+        const imported = makeProjectFromArchive(archive(2, edits)).project
+        //a File holds its current bytes (ADR 0063)
+        expect(imported.files.chall).toEqual({ encoding: 'base64', content: '/0FCAg==' })
+        const written = projectToArchive(imported)
+        expect(manifestOf(written).version).toBe(1)
+        expect(manifestOf(written).files.chall).toEqual({ encoding: 'base64' })
+        expect([...unzipSync(written)['files/chall']]).toEqual([0xff, 0x41, 0x42, 2])
     })
 
-    it('keeps an insertion and a deletion, which a later version may save', () => {
+    it('are read with an insertion and a deletion', () => {
         const kept = [
             { offset: 2, remove: 0, insert: 'QUI=' },
             { offset: 0, remove: 1, insert: '' }
         ]
-        const project = makeProject({
-            language: 'MIPS',
-            entry: 'main.s',
-            files: {
-                'main.s': { encoding: 'plain', content: 'nop' },
-                'chall.bin': { encoding: 'base64', content: '/wABAg==', edits: kept }
-            }
-        })
-        const archive = projectToArchive(project)
-        expect(manifestOf(archive).files['chall.bin']).toEqual({ encoding: 'base64', edits: kept })
-        expect(originalOf(archive, 'chall.bin')).toEqual([0xff, 0, 1, 2])
-        const imported = makeProjectFromArchive(archive).project.files['chall.bin']
-        expect(imported).toEqual({ encoding: 'base64', content: '/wABAg==', edits: kept })
+        const imported = makeProjectFromArchive(archive(2, kept)).project.files.chall
         expect([...fileBytes(imported)]).toEqual([0, 0x41, 0x42, 1, 2])
     })
 
-    it('stays version 1 without any, which older editors read', () => {
-        const project = editedProject()
-        project.fileSystem.writeBytes('chall', new Uint8Array([0xff, 0x41, 0x42, 2]))
-        const archive = projectToArchive(project)
-        const manifest = manifestOf(archive)
-        expect(manifest.version).toBe(1)
-        expect(manifest.files.chall).toEqual({ encoding: 'base64' })
-        expect(makeProjectFromArchive(archive).project.files.chall).toEqual({
-            encoding: 'base64',
-            content: '/0FCAg=='
-        })
-    })
-
-    it('refuses edits in a version 1 manifest and edits that do not fit the original', () => {
-        const metadata = {
-            id: '',
-            name: 'Edited',
-            description: '',
-            language: 'X86',
-            entry: 'chall',
-            settings: {},
-            createdAt: 0,
-            updatedAt: 0,
-            testcases: []
-        }
-        const archive = (version: number, archivedEdits: unknown) =>
-            zipSync({
-                'project.json': encoder.encode(
-                    JSON.stringify({
-                        version,
-                        project: metadata,
-                        files: { chall: { encoding: 'base64', edits: archivedEdits } }
-                    })
-                ),
-                'files/chall': new Uint8Array([0xff, 0])
-            })
+    it('are refused in a version 1 manifest, and when they do not fit the original', () => {
         expect(() => makeProjectFromArchive(archive(1, edits))).toThrow('Malformed manifest')
         expect(() => makeProjectFromArchive(archive(2, 'edits'))).toThrow('Malformed manifest')
-        expect(() => makeProjectFromArchive(archive(2, edits))).toThrow('past the end')
+        expect(() =>
+            makeProjectFromArchive(archive(2, [{ offset: 3, remove: 2, insert: 'QUI=' }]))
+        ).toThrow('past the end')
+        //version 5 was never released
         expect(() => makeProjectFromArchive(archive(5, edits))).toThrow('Unsupported')
     })
 
-    it('travels in a share link', () => {
-        const payload = createSharePayload(editedProject())
+    it('are applied in a share link, which carries the File as its bytes', () => {
+        const project = makeProject({
+            language: 'X86',
+            entry: 'chall',
+            files: { chall: { encoding: 'base64', content: '/wABAg==', edits } as ProjectFile }
+        })
+        const payload = createSharePayload(project)
         const shared = makeProject(
             serializer.parse(lzstring.decompressFromEncodedURIComponent(payload))
         )
-        expect(shared.files.chall.edits).toEqual(edits)
-        expect([...fileBytes(shared.files.chall)]).toEqual([0xff, 0x41, 0x42, 2])
+        expect(shared.files.chall).toEqual({ encoding: 'base64', content: '/0FCAg==' })
     })
 })
 
@@ -582,7 +557,7 @@ describe('Annotations in an archive', () => {
             language: 'X86',
             entry: 'chall',
             files: {
-                chall: { encoding: 'base64', content: '/wABAg==', edits, annotations },
+                chall: { encoding: 'base64', content: '/0FCAg==', annotations },
                 'notes.txt': { encoding: 'plain', content: 'hunter2?' }
             }
         })
@@ -619,15 +594,14 @@ describe('Annotations in an archive', () => {
         expect(manifest.project.programs).toEqual({ chall: { settings: {}, testcases: [] } })
         expect(manifest.project).not.toHaveProperty('entry')
         expect(manifest.files).toEqual({
-            chall: { encoding: 'base64', edits, annotations },
+            chall: { encoding: 'base64', annotations },
             'notes.txt': { encoding: 'plain' }
         })
-        expect([...unzipSync(download)['files/chall']]).toEqual([0xff, 0, 1, 2])
+        expect([...unzipSync(download)['files/chall']]).toEqual([0xff, 0x41, 0x42, 2])
         const imported = makeProjectFromArchive(download).project
         expect(imported.files.chall).toEqual({
             encoding: 'base64',
-            content: '/wABAg==',
-            edits,
+            content: '/0FCAg==',
             annotations
         })
         expect(imported.files['notes.txt']).toEqual({ encoding: 'plain', content: 'hunter2?' })
@@ -638,8 +612,6 @@ describe('Annotations in an archive', () => {
     it('stays in the oldest version that holds the Project without any', () => {
         const project = annotatedProject()
         project.fileSystem.annotate('chall', undefined)
-        expect(manifestOf(projectToArchive(project)).version).toBe(2)
-        project.fileSystem.setByteEdits('chall', [])
         expect(manifestOf(projectToArchive(project)).version).toBe(1)
         project.createProgram('notes.txt')
         expect(manifestOf(projectToArchive(project)).version).toBe(3)
@@ -671,7 +643,7 @@ describe('Annotations in an archive', () => {
             expect(
                 makeProjectFromArchive(archive(version, { encoding: 'base64', edits }, project))
                     .project.files.chall
-            ).toEqual({ encoding: 'base64', content: '/wABAg==', edits })
+            ).toEqual({ encoding: 'base64', content: '/0FCAg==' })
             expect(() =>
                 makeProjectFromArchive(
                     archive(version, { encoding: 'base64', annotations }, project)

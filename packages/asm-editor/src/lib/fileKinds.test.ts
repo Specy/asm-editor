@@ -7,7 +7,14 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vite-plus/test'
 import { fileKind, previewSignature } from './fileKinds'
 import { defaultFileView, fileViewsOf, isFileView, resolveFileView } from './fileViews'
-import { bytesFile, encodeBase64, type ProjectFile } from './projectFiles'
+import {
+    bytesFile,
+    encodeBase64,
+    overwriteBytes,
+    projectFileFromBytes,
+    type ProjectFile
+} from './projectFiles'
+import { makeBmp } from './pixels/bmp'
 
 const ascii = (text: string) => Array.from(text, (character) => character.charCodeAt(0))
 const bytes = (...parts: (number | string | number[])[]) =>
@@ -91,7 +98,8 @@ describe('the signature table', () => {
         ['WebM', bytes([0x1a, 0x45, 0xdf, 0xa3, 0x9f]), 'video', 'video/webm']
     ])('recognises %s', (_name, head, preview, mime) => {
         expect(previewSignature(head)).toEqual({ preview, mime })
-        //by its bytes alone, whatever the File is called
+        //by its bytes alone, whatever the File is called; these BMPs are headers without their
+        //pixels, so not ones the Pixel editor takes
         expect(fileKind(byteFile(head), 'MIPS', 'notes.md')).toEqual({ preview, mime })
     })
 
@@ -121,11 +129,10 @@ describe('the signature table', () => {
         expect(fileKind(byteFile(head), 'X86', 'a.png')).toBe('bytes')
     })
 
-    it('reads the bytes as edited, not as stored', () => {
-        const file = {
-            ...byteFile(bytes('XPDF-1.7')),
-            edits: [{ offset: 0, remove: 1, insert: 'JQ==' }]
-        }
+    it('reads the bytes an overwrite left', () => {
+        const file = overwriteBytes(byteFile(bytes('XPDF-1.7')), [
+            { offset: 0, bytes: Uint8Array.of(0x25) }
+        ])!.file
         expect(fileKind(file, 'RISC-V', 'paper')).toEqual({
             preview: 'pdf',
             mime: 'application/pdf'
@@ -144,7 +151,7 @@ describe('Files that are not previewed', () => {
         for (const language of ['MIPS', 'RISC-V', 'RISC-V-64', 'M68K', 'Z80'] as const)
             expect(fileKind(crackme, language, 'crackme')).toBe('bytes')
         //an ELF the editor cannot run, a 32-bit one, is bytes in x86 too
-        const thirtyTwo = { ...crackme, edits: [{ offset: 4, remove: 1, insert: 'AQ==' }] }
+        const thirtyTwo = overwriteBytes(crackme, [{ offset: 4, bytes: Uint8Array.of(1) }])!.file
         expect(fileKind(thirtyTwo, 'X86', 'crackme')).toBe('bytes')
     })
 
@@ -180,7 +187,65 @@ describe('Files that are not previewed', () => {
     })
 })
 
+describe('a BMP the Pixel editor draws in', () => {
+    const fixture = (name: string) =>
+        new Uint8Array(readFileSync(`src/lib/pixels/fixtures/${name}.bmp`))
+
+    it.each([
+        'pillow-1bit',
+        'indexed-4bit',
+        'pillow-8bit',
+        'rgb-16bit-565',
+        'rgb-24bit-top-down',
+        'rgba-32bit-v4',
+        'core-8bit'
+    ])('is marked pixels: %s', (name) => {
+        expect(fileKind(byteFile(fixture(name)), 'M68K', 'sprite.bmp')).toEqual({
+            preview: 'image',
+            mime: 'image/bmp',
+            pixels: true
+        })
+    })
+
+    it('is a Preview alone when compressed, too large, or cut short', () => {
+        const rle = fixture('pillow-8bit')
+        rle[30] = 1
+        const large = makeBmp({ width: 2049, height: 2048, format: 'indexed1', palette: [0, 1] })
+        const short = fixture('pillow-24bit').slice(0, 100)
+        for (const head of [rle, large, short])
+            expect(fileKind(byteFile(head), 'MIPS', 'a.bmp')).toEqual({
+                preview: 'image',
+                mime: 'image/bmp'
+            })
+    })
+
+    it('reads the layout an overwrite left: one that breaks it takes Pixels away', () => {
+        const file = overwriteBytes(byteFile(fixture('pillow-24bit')), [
+            { offset: 28, bytes: Uint8Array.of(2) }
+        ])!.file
+        expect(fileKind(file, 'MIPS', 'a.bmp')).toEqual({ preview: 'image', mime: 'image/bmp' })
+    })
+
+    it('stores a BMP as bytes even when it is all ASCII (plan decision 3)', () => {
+        const dark = bytes([...bmp(40)], new Array(16).fill(0))
+        expect(dark.every((byte) => byte < 0x80)).toBe(true)
+        expect(bytesFile(dark).encoding).toBe('base64')
+        //an archive that kept one as text still opens, as text
+        expect(projectFileFromBytes(dark, 'plain').encoding).toBe('plain')
+        expect(bytesFile(new TextEncoder().encode('BM and some text')).encoding).toBe('plain')
+    })
+})
+
 describe('the views of each kind', () => {
+    it('offers Pixels between the Preview and the bytes of a BMP it draws in', () => {
+        const bmpKind = { preview: 'image', mime: 'image/bmp', pixels: true } as const
+        expect(fileViewsOf(bmpKind)).toEqual(['preview', 'pixels', 'hex'])
+        expect(defaultFileView(bmpKind)).toBe('preview')
+        expect(resolveFileView(bmpKind, 'pixels')).toBe('pixels')
+        expect(resolveFileView({ preview: 'image', mime: 'image/bmp' }, 'pixels')).toBe('preview')
+        expect(isFileView('pixels')).toBe(true)
+    })
+
     it('opens text as text, bytes in the Hex editor, a Preview kind as its Preview', () => {
         expect(fileViewsOf('text')).toEqual(['text'])
         expect(fileViewsOf('bytes')).toEqual(['hex'])
@@ -193,13 +258,16 @@ describe('the views of each kind', () => {
         expect(defaultFileView('executable')).toBe('listing')
         expect(resolveFileView('executable', undefined)).toBe('listing')
         expect(resolveFileView('executable', 'preview', 'hex')).toBe('hex')
-        //the order the view switch offers them: Hex · Disassemble · Decompile
-        expect(fileViewsOf('executable')).toEqual(['hex', 'listing', 'pseudocode'])
+        //the order the view switch offers them: Disassemble · Decompile · Hex, Hex always last
+        expect(fileViewsOf('executable')).toEqual(['listing', 'pseudocode', 'hex'])
     })
 
     it('opens Markdown as its text, offering its Preview and its bytes', () => {
-        //the order the view switch offers them: Text · Preview · Hex
-        expect(fileViewsOf('markdown')).toEqual(['text', 'preview', 'hex'])
+        //the order the view switch offers them: Preview · Text · Hex, a Preview always first
+        expect(fileViewsOf('markdown')).toEqual(['preview', 'text', 'hex'])
+        //but it opens on its text, which is written as much as read
+        expect(defaultFileView('markdown')).toBe('text')
+        expect(resolveFileView('markdown', undefined)).toBe('text')
         expect(resolveFileView('markdown', 'preview')).toBe('preview')
         expect(resolveFileView('markdown', 'listing')).toBe('text')
     })

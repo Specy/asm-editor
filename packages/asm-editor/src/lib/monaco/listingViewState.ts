@@ -4,7 +4,7 @@ import { lineOfPlace, placeOfLine, type Listing } from '#lib/listing/listing.ts'
 /**
  * Keeping an editor on the same addresses when its Listing is made again
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
- * 22): a rename or a comment, a Byte edit, or a Debug session's own load base gives a File's
+ * 22): a rename or a comment, an overwrite, or a Debug session's own load base gives a File's
  * Listing a new document, whose lines may sit elsewhere (a comment written above a line adds lines
  * before it). An editor's cursor and first visible line are then moved to the lines standing for
  * the addresses they stood for, rather than kept at their line numbers.

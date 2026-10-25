@@ -47,6 +47,8 @@
     import FaFolder from '~icons/fa-solid/folder'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaFileAlt from '~icons/fa-solid/file-alt'
+    import FaFileImage from '~icons/fa-solid/file-image'
+    import NewPictureDialog from './NewPictureDialog.svelte'
     import FaPen from '~icons/fa-solid/pen'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTimes from '~icons/fa-solid/times'
@@ -103,6 +105,12 @@
          * ([programs.md](../../../../../../docs/design/programs.md), decision 8).
          */
         onFilesAdded?: (paths: string[]) => void
+        /**
+         * A picture New picture made, which opens in the Pixel editor
+         * ([pixel-editor.md](../../../../../../docs/design/pixel-editor.md), decision 5); `onSelect`
+         * when not given.
+         */
+        onPictureCreated?: (path: string) => void
         onFileDragStart?: (event: DragEvent, path: string) => void
         onFileDragEnd?: () => void
         /**
@@ -140,6 +148,7 @@
         onRenamed,
         onDeleted,
         onFilesAdded,
+        onPictureCreated = onSelect,
         onFileDragStart,
         onFileDragEnd,
         libraryFiles = [],
@@ -241,7 +250,11 @@
 
     //a Debug session starting mid-edit drops the edit, as it disables every other mutation
     $effect(() => {
-        if (locked) untrack(cancelEdit)
+        if (locked)
+            untrack(() => {
+                cancelEdit()
+                newPicture = undefined
+            })
     })
 
     const displayRows = $derived.by((): DisplayRow[] => {
@@ -272,6 +285,31 @@
         if (collapsible) projectExpanded = true
         draftName = initialName
         editing = { mode: 'create', parent }
+    }
+
+    /** The folder New picture is making a picture in, while its dialog is open. */
+    let newPicture = $state<{ folder: string }>()
+
+    function startNewPicture(folder = '') {
+        if (locked) return
+        cancelEdit()
+        newPicture = { folder }
+    }
+
+    /** Writes the picture as bytes, whatever they decode as, and opens it to draw in. */
+    function createPicture(path: string, bytes: Uint8Array): boolean {
+        if (locked) return false
+        try {
+            fileSystem.writeBytes(path, bytes, false, 'base64')
+        } catch (error) {
+            reportFailure(error)
+            return false
+        }
+        newPicture = undefined
+        onFilesAdded?.([path])
+        expandParents(path)
+        onPictureCreated(path)
+        return true
     }
 
     function startRename(path: string) {
@@ -630,6 +668,12 @@
                 onSelect: () => startCreate(folder)
             },
             {
+                label: folder ? 'New picture in this folder' : 'New picture',
+                icon: FaFileImage,
+                disabled: locked,
+                onSelect: () => startNewPicture(folder)
+            },
+            {
                 label: folder ? 'Upload files to this folder' : 'Upload files',
                 icon: FaUpload,
                 disabled: locked,
@@ -742,6 +786,14 @@
                 onclick={() => startCreate()}
             >
                 <FaPlus />
+            </button>
+            <button
+                class="icon-action"
+                disabled={locked}
+                title="Create a BMP image and open it in the pixel editor"
+                onclick={() => startNewPicture()}
+            >
+                <FaFileImage />
             </button>
             <button
                 class="icon-action"
@@ -1048,6 +1100,15 @@
                 {/if}
             {/each}
         </aside>
+    {/if}
+    {#if newPicture}
+        <NewPictureDialog
+            folder={newPicture.folder}
+            {language}
+            exists={(path) => Object.hasOwn(files, path)}
+            onCreate={createPicture}
+            onCancel={() => (newPicture = undefined)}
+        />
     {/if}
     {#if contextMenu}
         <ContextMenu
