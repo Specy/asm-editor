@@ -23,7 +23,7 @@ A color is a long written `$00BBGGRR`: blue in bits 23-16, green in bits 15-8 an
 
 A program can draw a picture it reads from a File of the project, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. A new picture is 32-bit and stored top-down: the pixel at column x and row y is the long at `pixels + 4 × (y × width + x)`. The 68000 reads that long as `$BBGGRR00`, so `lsr.l #8` turns it into a pen color, `$00BBGGRR`. Read the File into memory with the file tasks; its pixels start at the offset held in its bytes 10 to 13, stored least significant byte first, which is 54 in the 32-bit picture **New picture** makes unless told otherwise.
 
-Each stroke is saved with the project when you lift the pointer, and **Undo** in the Pixel editor takes it back. The program reads the picture as you last drew it at its next run.
+Each stroke updates the picture in your project when you release the mouse button or lift your finger. With autosave on, the change is saved immediately. With autosave off, save the project manually to keep your changes. Use **Undo** in the Pixel editor to undo a stroke. The program reads the picture as you last drew it at its next run.
 
 ## Key codes
 

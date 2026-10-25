@@ -305,18 +305,6 @@ export function writeMask(layout: BmpLayout): number {
     return (masks.red | masks.green | masks.blue | masks.alpha) >>> 0
 }
 
-/** The byte span a pixel's bits lie in, for collecting what a drawing changed. */
-export function pixelSpan(layout: BmpLayout, x: number, y: number): [number, number] {
-    const start = rowStart(layout, y)
-    const depth = layout.bitsPerPixel
-    if (depth < 8) {
-        const at = start + ((x * depth) >> 3)
-        return [at, at + 1]
-    }
-    const at = start + x * (depth >> 3)
-    return [at, at + (depth >> 3)]
-}
-
 /** A channel's bits widened to 8, so the largest value of any mask is 255. */
 function widen(value: number, mask: number) {
     const max = mask >>> shiftOf(mask)

@@ -37,6 +37,7 @@
     } from '#lib/pixels/zoom.ts'
     import { CELL_GRID_MAX } from '#lib/Project.svelte.ts'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import { ScopedTheme, ThemeStore, themeCssVariables } from '#stores/themeStore.svelte.ts'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
     import FaPencilAlt from '~icons/fa-solid/pencil-alt'
     import FaSlash from '~icons/fa-solid/slash'
@@ -76,6 +77,12 @@
         onEditRuns: (path: string, runs: readonly ByteRun[], label: string) => boolean
         /** Undo, or Redo, of the File's newest Edit step; false when there was none or it was refused. */
         onUndoEdit: (path: string, redo: boolean) => boolean
+        /**
+         * Whether the File has an Edit step to take back, and one to put back, which turn the
+         * toolbar's Undo and Redo on; a host that cannot tell leaves them on.
+         */
+        canUndo?: boolean
+        canRedo?: boolean
         /** Canvas size: the resized picture's bytes, as an Edit step that replaces the content. */
         onResize: (path: string, bytes: Uint8Array, label: string) => boolean
         onCellGrid: (path: string, grid: CellGrid | undefined) => void
@@ -92,6 +99,8 @@
         cellGrid: savedGrid,
         onEditRuns,
         onUndoEdit,
+        canUndo = true,
+        canRedo = true,
         onResize,
         onCellGrid,
         viewState = { tool: 'pencil', filled: false },
@@ -372,9 +381,29 @@
             grid,
             tool,
             brush,
-            lineWidth
+            lineWidth,
+            themeKey,
+            pixelRatio
         ]
         schedule()
+    })
+
+    /**
+     * The theme's colours as a key, which changes when another theme is chosen or a language's
+     * own is put on, so that the picture's lines and checkerboard are drawn again in the new ones.
+     */
+    const themeKey = $derived(
+        `${ScopedTheme.id ?? ''}${themeCssVariables(ThemeStore.theme, ThemeStore.meta)}`
+    )
+    /** The screen's pixels to a CSS pixel, which moving the window to another screen changes. */
+    let pixelRatio = $state(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1)
+    $effect(() => {
+        //a query true at the present ratio, which stops being true when it changes
+        const query = window.matchMedia?.(`(resolution: ${pixelRatio}dppx)`)
+        if (!query) return
+        const changed = () => (pixelRatio = window.devicePixelRatio || 1)
+        query.addEventListener('change', changed)
+        return () => query.removeEventListener('change', changed)
     })
 
     /** The picture's point at the view's top-left corner. */
@@ -384,13 +413,20 @@
 
     /**
      * The colours the theme gives the lines and the checkerboard, as the browser resolves them,
-     * read again at most twice a second rather than at every frame of a stroke: a theme changes
-     * far less often than that.
+     * read again when the theme changes, and at most twice a second besides rather than at every
+     * frame of a stroke, for a change no key tells of.
      */
-    let colours: { line: string; accent: string; light: string; dark: string; at: number }
+    let colours: {
+        line: string
+        accent: string
+        light: string
+        dark: string
+        at: number
+        key: string
+    }
     function themeColours() {
         const now = performance.now()
-        if (colours && now - colours.at < 500) return colours
+        if (colours && colours.key === themeKey && now - colours.at < 500) return colours
         const read = (name: string) => {
             const probe = probes?.querySelector<HTMLElement>(`.${name}`)
             return probe ? getComputedStyle(probe).color : '#888'
@@ -400,16 +436,51 @@
             accent: read('probe-accent'),
             light: read('probe-check-light'),
             dark: read('probe-check-dark'),
-            at: now
+            at: now,
+            key: themeKey
         }
         return colours
+    }
+
+    /**
+     * The checkerboard under transparent pixels: a tile of the theme's two shades, 8 CSS pixels a
+     * square, at the screen's own pixels, made again when either changes. Filling with it costs one
+     * call where drawing the squares cost one each, ten thousand on a large pane at every frame.
+     */
+    let checker: { pattern: CanvasPattern; light: string; dark: string; ratio: number } | undefined
+    function checkerPattern(
+        context: CanvasRenderingContext2D,
+        theme: { light: string; dark: string },
+        ratio: number
+    ): CanvasPattern | undefined {
+        if (
+            checker?.light === theme.light &&
+            checker.dark === theme.dark &&
+            checker.ratio === ratio
+        )
+            return checker.pattern
+        const tile = document.createElement('canvas')
+        const size = Math.round(16 * ratio)
+        tile.width = size
+        tile.height = size
+        const paint = tile.getContext('2d')
+        if (!paint) return undefined
+        paint.fillStyle = theme.light
+        paint.fillRect(0, 0, size, size)
+        paint.fillStyle = theme.dark
+        paint.fillRect(0, 0, size / 2, size / 2)
+        paint.fillRect(size / 2, size / 2, size / 2, size / 2)
+        const pattern = context.createPattern(tile, 'repeat')
+        if (!pattern) return undefined
+        checker = { pattern, light: theme.light, dark: theme.dark, ratio }
+        return pattern
     }
 
     function draw() {
         if (!canvas || !doc || !picture) return
         const context = canvas.getContext('2d')
         if (!context) return
-        const ratio = window.devicePixelRatio || 1
+        const ratio = pixelRatio
         const [width, height] = [Math.round(viewWidth * ratio), Math.round(viewHeight * ratio)]
         if (canvas.width !== width) canvas.width = width
         if (canvas.height !== height) canvas.height = height
@@ -435,23 +506,16 @@
         ]
         const [vx, vy] = at(sx, sy)
         const [vw, vh] = ((end) => [end[0] - vx, end[1] - vy])(at(ex, ey))
-        if (doc.alpha) {
-            //transparent pixels over a checkerboard in the theme's shades, as the Preview shows them
-            context.fillStyle = theme.light
-            context.fillRect(vx, vy, vw, vh)
-            context.fillStyle = theme.dark
-            const square = 8
-            context.save()
-            context.beginPath()
-            context.rect(vx, vy, vw, vh)
-            context.clip()
-            for (let y = Math.floor((vy - top) / square); y * square + top < vy + vh; y++)
-                for (let x = Math.floor((vx - left) / square); x * square + left < vx + vw; x++)
-                    if ((x + y) % 2 === 0)
-                        context.fillRect(left + x * square, top + y * square, square, square)
-            context.restore()
-        }
         context.imageSmoothingEnabled = false
+        if (doc.alpha) {
+            //transparent pixels over a checkerboard in the theme's shades, as the Preview shows
+            //them: its tile drawn a screen pixel for one of its own, a dark square at the picture's
+            //top-left corner
+            const pattern = checkerPattern(context, theme, ratio)
+            pattern?.setTransform?.(new DOMMatrix([1 / ratio, 0, 0, 1 / ratio, left, top]))
+            context.fillStyle = pattern ?? theme.light
+            context.fillRect(vx, vy, vw, vh)
+        }
         context.drawImage(picture, sx, sy, ex - sx, ey - sy, vx, vy, vw, vh)
         context.lineWidth = 1
         if (zoom >= PIXEL_GRID_ZOOM) {
@@ -1324,7 +1388,7 @@
                     class="tool"
                     title="Undo (Ctrl+Z)"
                     aria-label="Undo"
-                    disabled={locked}
+                    disabled={locked || !canUndo}
                     onclick={() => undo()}><FaUndo /></button
                 >
                 <button
@@ -1332,7 +1396,7 @@
                     class="tool"
                     title="Redo (Ctrl+Shift+Z)"
                     aria-label="Redo"
-                    disabled={locked}
+                    disabled={locked || !canRedo}
                     onclick={() => undo(true)}><FaRedo /></button
                 >
             </div>

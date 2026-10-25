@@ -17,6 +17,10 @@ import { PixelDocument, type PixelViewState } from '#lib/pixels/pixelDocument.ts
 import { PALETTE_16 } from '#lib/pixels/palettes.ts'
 import type { CellGrid } from '#lib/Project.svelte.ts'
 
+//the theme store, which the editor draws its lines and checkerboard in, reaches the projects'
+//IndexedDB, which jsdom does not have
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+
 beforeEach(() => {
     vi.stubGlobal(
         'ResizeObserver',
@@ -97,6 +101,15 @@ function setup(
             return true
         },
         onUndoEdit: (path: string, redo: boolean) => journal.undo(path, redo) !== undefined,
+        //as the Workbench's pane passes them: the journal's, read again as the File changes
+        get canUndo() {
+            void files
+            return !!journal.journalOf('sprite.bmp')?.undo.length
+        },
+        get canRedo() {
+            void files
+            return !!journal.journalOf('sprite.bmp')?.redo.length
+        },
         onResize: (path: string, bytes: Uint8Array, label: string) => {
             labels.push(label)
             journal.change(path, label, { content: bytes, encoding: 'base64' })
@@ -182,11 +195,16 @@ describe('drawing', () => {
 
     it('undoes and redoes a stroke through the shared history', () => {
         const pixels = setup()
+        const enabled = () => [!pixels.button('Undo')!.disabled, !pixels.button('Redo')!.disabled]
+        //nothing to take back or put back yet
+        expect(enabled()).toEqual([false, false])
         pixels.pointer('pointerdown', 2, 2)
         pixels.pointer('pointerup', 2, 2)
         expect(pixels.raw(2, 2)).toBe(WHITE)
+        expect(enabled()).toEqual([true, false])
         pixels.key('z', { ctrlKey: true })
         expect(pixels.raw(2, 2)).toBe(0)
+        expect(enabled()).toEqual([false, true])
         pixels.key('z', { ctrlKey: true, shiftKey: true })
         expect(pixels.raw(2, 2)).toBe(WHITE)
         pixels.button('Undo')!.click()

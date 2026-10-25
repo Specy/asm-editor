@@ -11,7 +11,7 @@ import {
     hasAlpha,
     makeBmp,
     paletteEntry,
-    pixelSpan,
+    rowStart,
     quantise,
     rawOfColour,
     readBmpLayout,
@@ -31,6 +31,18 @@ import { expandColor } from '../languages/Z80/Z80Device'
 const FIXTURES = 'src/lib/pixels/fixtures/'
 const fixture = (name: string) => new Uint8Array(readFileSync(`${FIXTURES}${name}.bmp`))
 const pillow = (name: string) => new Uint8Array(readFileSync(`${FIXTURES}${name}.rgba`))
+
+/** The bytes a pixel's bits lie in, which a write of it may change and no other may. */
+function pixelSpan(layout: BmpLayout, x: number, y: number): [number, number] {
+    const start = rowStart(layout, y)
+    const depth = layout.bitsPerPixel
+    if (depth < 8) {
+        const at = start + ((x * depth) >> 3)
+        return [at, at + 1]
+    }
+    const at = start + x * (depth >> 3)
+    return [at, at + (depth >> 3)]
+}
 
 function layoutOf(bytes: Uint8Array): BmpLayout {
     const reading = readBmpLayout(bytes, bytes.length)

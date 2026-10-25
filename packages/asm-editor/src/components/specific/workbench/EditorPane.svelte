@@ -537,6 +537,8 @@
                     cellGrid={session.project.cellGrids?.[group.displayedPath]}
                     onEditRuns={(path, runs, label) => session.editFileByteRuns(path, runs, label)}
                     onUndoEdit={(path, redo) => session.undoFileEdit(path, redo) !== undefined}
+                    canUndo={!!session.fileJournal(group.displayedPath)?.undo.length}
+                    canRedo={!!session.fileJournal(group.displayedPath)?.redo.length}
                     onResize={(path, bytes, label) => session.resizePicture(path, bytes, label)}
                     onCellGrid={(path, grid) => session.cellGridChosen(path, grid)}
                     viewState={pixelViewState(group.displayedPath)}

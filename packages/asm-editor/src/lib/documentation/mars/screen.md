@@ -20,7 +20,7 @@ Reserve the memory the grid covers, with `.space` or a label of your own. The ex
 
 A program can draw a picture it reads from a File of the project, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. A new picture is 32-bit and stored top-down, the layout of this screen: the pixel at column x and row y is the word at `pixels + 4 × (y × width + x)`, and that word is already the screen's color, so drawing the picture is a copy. Read the File into memory with the file services; its pixels start at the offset held in its bytes 10 to 13, which is 54 in the 32-bit picture **New picture** makes unless told otherwise.
 
-Each stroke is saved with the project when you lift the pointer, and **Undo** in the Pixel editor takes it back. The program reads the picture as you last drew it at its next run. Other BMP layouts open in **Pixels** too, and keep their layout: a 24-bit picture keeps its three bytes a pixel and its rows stored bottom-up, which the program then has to convert.
+Each stroke updates the picture in your project when you release the mouse button or lift your finger. With autosave on, the change is saved immediately. With autosave off, save the project manually to keep your changes. Use **Undo** in the Pixel editor to undo a stroke. The program reads the picture as you last drew it at its next run. Other BMP layouts open in **Pixels** too, and keep their layout: a 24-bit picture keeps its three bytes a pixel and its rows stored bottom-up, which the program then has to convert.
 
 ## Configuring the screen from the program {#screen-directive}
 

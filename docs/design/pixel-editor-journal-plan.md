@@ -4,7 +4,7 @@ Written on 2026-10-25 when the owner chose "current bytes plus an Edit journal" 
 
 ## Where things stand
 
-- **Done** (2026-10-25, after the compaction): steps 1 to 14, recorded in [the plan's implementation record](./pixel-editor-plan.md#implementation-record), "The Edit journal". Typecheck, lint and format are clean; the full suite passes but for the tests that fail only under its load and pass alone; the browser rows P1 to P6 and P8 of [manual-verification.md](../manual-verification.md) were run again. Step 15, the review, follows. Nothing is committed: the owner commits, without a Co-Authored-By trailer.
+- **Done** (2026-10-25, after the compaction): steps 1 to 14, recorded in [the plan's implementation record](./pixel-editor-plan.md#implementation-record), "The Edit journal". Typecheck, lint and format are clean; the full suite passes but for the tests that fail only under its load and pass alone; the browser rows P1 to P6 and P8 of [manual-verification.md](../manual-verification.md) were run again. Step 15, the review, followed, its findings fixed. Committed as `6083b15a` and pushed to `feat/pixel-editor` on 2026-10-25, without a Co-Authored-By trailer.
 - Departures from the steps below: the journal compares a reloaded File by `fileFingerprint` (the Compilation fingerprint, a string) rather than a hash of its own; `FileSystem.changeBytes` takes a list of changes and returns each one's inverse, in place of `overwriteBytes`, `overwriteText` and `replaceContent`; the journal is loaded when the session is created rather than mounted; and the annotation history is carried over overwrites (`AnnotationHistory.overwritten`), since it was keyed by a content that now changes with every overwrite.
 
 ## Target design

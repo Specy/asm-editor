@@ -26,6 +26,11 @@ export type Ink = Readonly<{ index: number }> | Readonly<{ colour: number }>
 /** Erase's ink: transparent, in a picture with an alpha channel (design decision 7). */
 export const TRANSPARENT: Ink = { colour: rgba(0, 0, 0, 0) }
 
+/** How many pixels the colour row is counted from, at most: every pixel of a 512 × 512 picture. */
+const COLOUR_SAMPLES = 512 * 512
+/** How many different colours the colour row counts, at most. */
+const COLOUR_KINDS = 4096
+
 /**
  * Where a pane was in a picture and what it drew with, kept while its tab is open, as the Hex
  * editor keeps its caret: the zoom, the picture's point at the middle of the pane, the tool, the
@@ -218,15 +223,26 @@ export class PixelDocument {
     /**
      * The colours the picture uses most, most first, at most `limit`: the colour row of a picture
      * without a palette ([pixel-editor-plan.md](../../../../../docs/design/pixel-editor-plan.md),
-     * decision 14).
+     * decision 14), counted again after every stroke. A large picture is counted on a grid of
+     * about {@link COLOUR_SAMPLES} of its pixels, evenly spread, and no more than
+     * {@link COLOUR_KINDS} different colours are counted, those first met: a photograph's many
+     * others are each too rare to be among the most used, and counting four million pixels of a
+     * million colours took seconds at every stroke.
      */
     usedColours(limit: number): number[] {
         const counts = new Map<number, number>()
         const pixels = this.pixels
-        for (let at = 0; at < pixels.length; at += 4) {
-            const colour = rgba(pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3])
-            counts.set(colour, (counts.get(colour) ?? 0) + 1)
-        }
+        const stride = Math.max(
+            1,
+            Math.ceil(Math.sqrt((this.width * this.height) / COLOUR_SAMPLES))
+        )
+        for (let y = 0; y < this.height; y += stride)
+            for (let at = y * this.width * 4; at < (y + 1) * this.width * 4; at += 4 * stride) {
+                const colour = rgba(pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3])
+                const count = counts.get(colour)
+                if (count !== undefined) counts.set(colour, count + 1)
+                else if (counts.size < COLOUR_KINDS) counts.set(colour, 1)
+            }
         return [...counts.entries()]
             .sort(([, left], [, right]) => right - left)
             .slice(0, limit)

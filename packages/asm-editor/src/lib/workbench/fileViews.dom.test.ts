@@ -693,26 +693,4 @@ describe('a picture in the Pixel editor', () => {
         expect(session.goToFileEdit('sprite.bmp', 2)).toBe(true)
         expect(fileBytes(session.project.files['sprite.bmp'])).toEqual(resized)
     })
-
-    it('stores a picture an older editor stored as text as bytes from its first stroke', () => {
-        //an 8 × 1 black picture, 24 bits a pixel, whose every byte is ASCII once its one row is
-        //read bottom-up, which a height of 1 rather than -1 says
-        const picture = makeBmp({ width: 8, height: 1, format: 'rgb24' })
-        picture.set([1, 0, 0, 0], 22)
-        const text = new TextDecoder().decode(picture)
-        expect([...new TextEncoder().encode(text)]).toEqual([...picture])
-        const { session } = setup('RISC-V', {
-            entry: 'main.s',
-            files: {
-                'main.s': { encoding: 'plain', content: 'nop' },
-                'ascii.bmp': { encoding: 'plain', content: text }
-            }
-        })
-        const runs = [{ offset: 54, bytes: Uint8Array.of(0xff, 0xff, 0xff) }]
-        expect(session.editFileByteRuns('ascii.bmp', runs, 'Pencil')).toBe(true)
-        expect(session.project.files['ascii.bmp'].encoding).toBe('base64')
-        expect(fileBytes(session.project.files['ascii.bmp'])[54]).toBe(0xff)
-        expect(session.undoFileEdit('ascii.bmp')).toBe(0)
-        expect(session.project.files['ascii.bmp']).toEqual({ encoding: 'plain', content: text })
-    })
 })

@@ -323,4 +323,16 @@ describe('a picture being drawn', () => {
         expect(doc.usedColours(5)).toEqual([rgba(0, 0, 0), rgba(9, 9, 9)])
         expect(doc.usedColours(1)).toEqual([rgba(0, 0, 0)])
     })
+
+    it('finds the colours a large picture uses most from a grid of its pixels', () => {
+        //1024 × 1024, of which the left quarter is red over black, and noise in every colour
+        const doc = PixelDocument.read(makeBmp({ width: 1024, height: 1024, format: 'rgb24' }))!
+        for (let at = 0; at < doc.pixels.length; at += 4) {
+            const x = (at / 4) % 1024
+            if (x < 256) doc.pixels.set([255, 0, 0, 255], at)
+            else if (x % 7 === 0)
+                doc.pixels.set([at & 0xff, (at >> 8) & 0xff, (at >> 16) & 0xff, 255], at)
+        }
+        expect(doc.usedColours(2)).toEqual([rgba(0, 0, 0), rgba(255, 0, 0)])
+    })
 })

@@ -19,7 +19,6 @@ import {
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
 import {
-    fileBytes,
     sameFileContent,
     type Annotations,
     type ProjectFile,
@@ -2931,14 +2930,6 @@ export class WorkbenchSession {
      * labelled `label` ([pixel-editor.md](../../../../../docs/design/pixel-editor.md), decision 12).
      */
     editFileByteRuns(path: string, runs: readonly ByteRun[], label: string): boolean {
-        const file = this.project.files[path]
-        //a picture an older editor stored as text, its bytes being UTF-8, is stored as bytes from
-        //its first stroke on, which its text could not hold
-        if (file?.encoding === 'plain') {
-            const bytes = fileBytes(file)
-            for (const run of runs) bytes.set(run.bytes, run.offset)
-            return this.journalStep(path, label, { content: bytes, encoding: 'base64' })
-        }
         return this.journalStep(path, label, { runs })
     }
     /**
@@ -3001,7 +2992,10 @@ export class WorkbenchSession {
         this.selectFile(path, group)
         return true
     }
-    /** The Edit steps of the File at `path`, for the Edit history; undefined when it has none. */
+    /**
+     * The Edit steps of the File at `path`, which turn the Pixel editor's Undo and Redo on;
+     * undefined when it has none.
+     */
     fileJournal(path: string): FileJournal | undefined {
         void this.journalVersion
         //the File's content, which a change from elsewhere makes the steps no longer fit

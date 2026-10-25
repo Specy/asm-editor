@@ -79,7 +79,8 @@ export class Db extends Dexie {
         //normalizer that reads every other stored shape, so an old row and a fresh one look alike.
         //Since a Project holds Programs (ADR 0054) the rewrite gives them in place of the top-level
         //Entry, Settings, Testcases and Display. A row already at version 2 keeps the earlier shape
-        //until its next save, read meanwhile by the same normalizer, so no version 3 is needed.
+        //until its next save, read meanwhile by the same normalizer, so that needed no version 3;
+        //version 3 below only adds the Edit journals' table.
         this.version(2)
             .stores({
                 projects: '++id'
