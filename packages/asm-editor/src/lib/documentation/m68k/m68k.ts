@@ -341,7 +341,7 @@ function trapTasks(): Chapter {
         return entry ? [entry] : []
     }
     const beside: Partial<Record<M68KTrapGroup, DocumentationEntry[]>> = {
-        graphics: take('colors').map(withSwatches),
+        graphics: [...take('colors').map(withSwatches), ...take('pictures')],
         input: take('key-codes'),
         sound: take('sound-differences')
     }

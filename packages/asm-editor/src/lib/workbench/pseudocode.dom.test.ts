@@ -262,11 +262,11 @@ function pressDecompile(session: WorkbenchSession, group: EditorGroup) {
     disposers.push(() => unmount(app))
     const buttons = [...target.querySelectorAll('[role="group"][aria-label="View"] button')]
     expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-        'Hex',
         'Disassemble',
-        'Decompile'
+        'Decompile',
+        'Hex'
     ])
-    ;(buttons[2] as HTMLButtonElement).click()
+    ;(buttons[1] as HTMLButtonElement).click()
     flushSync()
 }
 

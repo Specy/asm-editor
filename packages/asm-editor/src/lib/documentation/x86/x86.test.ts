@@ -131,7 +131,7 @@ describe('the x86 Documentation', () => {
         expect(text('stepping')).toContain('**Step into library code**')
         // the Hex editor's switch, what a Byte edit is, and what the Build output is
         expect(text('hex-editor')).toContain('**Disassemble**')
-        expect(text('byte-edits')).toContain('**Byte edits**')
+        expect(text('byte-edits')).toContain('**Edit history**')
         expect(text('byte-edits')).toContain('**Show in Hex**')
         expect(text('elf-parts')).toContain('**Show in Listing**')
         expect(text('finding')).toContain('`??`')

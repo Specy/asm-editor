@@ -10,11 +10,11 @@
     <title>x86-64 Executables</title>
     <meta
         name="description"
-        content="Run and debug a compiled x86-64 Linux program: what runs, the bundled libraries, the Hex editor and Byte edits, the Listing and its names, Breakpoints, Arguments, Testcases, patching an instruction and the Build output."
+        content="Run and debug a compiled x86-64 Linux program: what runs, the bundled libraries, editing bytes in the Hex editor, the Listing and its names, Breakpoints, Arguments, Testcases, patching an instruction and the Build output."
     />
     <meta
         property="og:description"
-        content="Run and debug a compiled x86-64 Linux program: what runs, the bundled libraries, the Hex editor and Byte edits, the Listing and its names, Breakpoints, Arguments, Testcases, patching an instruction and the Build output."
+        content="Run and debug a compiled x86-64 Linux program: what runs, the bundled libraries, editing bytes in the Hex editor, the Listing and its names, Breakpoints, Arguments, Testcases, patching an instruction and the Build output."
     />
 </svelte:head>
 

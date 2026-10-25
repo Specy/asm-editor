@@ -10,6 +10,7 @@
     import type { Snippet } from 'svelte'
     import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
     import type { BuildSources } from '#lib/projectFiles.ts'
+    import type { EditJournalStore } from '#lib/editJournal.ts'
     import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
     import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
@@ -34,6 +35,8 @@
         onChange?: () => void
         /** Whether the Project has changes nothing will save on its own; shows Save. */
         unsaved?: boolean
+        /** Where the Edit journal is kept between visits; without one it lasts as long as the page. */
+        editJournals?: EditJournalStore
         access?: Partial<Record<BuiltinPanelId, PanelAccess>>
         /** Whether the documentation's links may navigate; the exam turns them off. */
         documentationLinks?: boolean

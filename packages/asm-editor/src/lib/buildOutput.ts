@@ -111,7 +111,7 @@ export function buildOutputNote(
 /** What a Build asks before it replaces the File at `path`, which `record` says a Build made. */
 export function buildOutputQuestion(path: string, record: BuildRecord | undefined): string {
     return record
-        ? `${path} was changed since a Build saved it. Building replaces it with the program it links, without its Byte edits, renames and comments. Replace it?`
+        ? `${path} was changed since a Build saved it. Building replaces it with the program it links, without the changes made to its bytes, its renames and its comments. Replace it?`
         : `${path} already exists. Building replaces it with the program it links. Replace it?`
 }
 
@@ -144,17 +144,12 @@ export function makeBuildRecord(
 }
 
 /**
- * Whether `file` is the program `record`'s Build saved, as it saved it: the same bytes, no Byte
- * edits and no Annotations. Such a File is derived: a Build replaces it without asking, and it is
- * left out wherever the Project leaves the browser, since a Build makes it again.
+ * Whether `file` is the program `record`'s Build saved, as it saved it: the same bytes and no
+ * Annotations. Such a File is derived: a Build replaces it without asking, and it is left out
+ * wherever the Project leaves the browser, since a Build makes it again.
  */
 export function isUntouchedBuildOutput(record: BuildRecord, file: ProjectFile | undefined) {
-    return (
-        !!file &&
-        !file.edits?.length &&
-        !file.annotations &&
-        fingerprintOf(file) === record.outputFingerprint
-    )
+    return !!file && !file.annotations && fingerprintOf(file) === record.outputFingerprint
 }
 
 /** The record of the Build that saved the File at `path`, if one did. */

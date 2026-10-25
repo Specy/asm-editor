@@ -1,13 +1,13 @@
 /**
  * The Hex editor in jsdom ([file-views.md](../../../../../../../docs/design/file-views.md),
- * decisions 3, 7 and 9; the plan's E3): typing makes Byte edits through the FileSystem, Undo and
- * Redo put back whole lists of them, and the grid draws only the rows in sight.
+ * decisions 3, 7 and 9; the plan's E3): typing overwrites bytes through the Edit journal, whose
+ * Undo and Redo take each run back and put it back, and the grid draws only the rows in sight.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import HexEditor from './HexEditor.svelte'
-import { ByteEditHistory } from './byteEditHistory'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import { EditJournal } from '#lib/editJournal.ts'
 import type { ProjectFileKind } from '#lib/fileKinds.ts'
 import { readFileSync } from 'node:fs'
 import {
@@ -15,7 +15,6 @@ import {
     encodeBase64,
     fileBytes,
     type BuildSources,
-    type ByteEdit,
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
@@ -76,7 +75,7 @@ function setup(
             }
         }
     )
-    const history = new ByteEditHistory()
+    const journal = new EditJournal(fs)
     /** Why each edit the FileSystem refused was refused, as the Workbench would say it. */
     const refused: string[] = []
     const target = document.createElement('div')
@@ -90,21 +89,19 @@ function setup(
         kind: options.kind ?? 'bytes',
         onShowInListing: options.onShowInListing,
         readOnly: options.readOnly,
-        history,
-        //as the Workbench session's: a File stored as text has its text overwritten instead
+        //as the Workbench session's: each run of typing an Edit step
         onEdit: (path: string, offset: number, bytes: Uint8Array) => {
             try {
-                if (files[path].encoding === 'plain') fs.overwriteText(path, offset, bytes)
-                else fs.editBytes(path, offset, bytes)
+                journal.change(path, 'Typing', { runs: [{ offset, bytes }] })
                 return true
             } catch (error) {
                 refused.push((error as Error).message)
                 return false
             }
         },
-        onSetEdits: (path: string, edits: Parameters<FileSystem['setByteEdits']>[1]) => {
-            fs.setByteEdits(path, edits)
-            return true
+        onUndoEdit: (path: string, redo: boolean) => {
+            const made = journal.undo(path, redo)
+            return made && 'runs' in made ? made.runs[0].offset : undefined
         }
     }
     const editor = mount(HexEditor, { target, props })
@@ -116,6 +113,7 @@ function setup(
     }
     return {
         fs,
+        journal,
         refused,
         props,
         target,
@@ -131,7 +129,7 @@ function setup(
 }
 
 describe('typing in the Hex editor', () => {
-    it('overwrites digits in the hex column, shown at once and saved as one Byte edit', () => {
+    it('overwrites digits in the hex column, shown at once and saved as one Edit step', () => {
         vi.useFakeTimers()
         const hex = setup()
         hex.key('ArrowRight')
@@ -140,16 +138,15 @@ describe('typing in the Hex editor', () => {
         expect(hex.cell('hex', 1)!.textContent).toBe('7F')
         expect(hex.cell('hex', 2)!.textContent).toBe('43')
         expect(hex.cell('text', 2)!.textContent).toBe('C')
-        expect(hex.fs.files.blob.edits).toBeUndefined()
+        expect(hex.bytes().slice(0, 3)).toEqual([0x41, 0x42, 0x43])
         hex.type('5')
         expect(hex.cell('text', 2)!.textContent).toBe('E')
         vi.advanceTimersByTime(1000)
         flushSync()
-        expect(hex.fs.files.blob.edits).toEqual([
-            { offset: 1, remove: 2, insert: encodeBase64(Uint8Array.from([0x7f, 0x45])) }
+        expect(hex.journal.journalOf('blob')?.undo.map((step) => step.change)).toEqual([
+            { runs: [{ offset: 1, bytes: Uint8Array.from([0x42, 0x43]) }] }
         ])
         expect(hex.bytes().slice(0, 4)).toEqual([0x41, 0x7f, 0x45, 0x44])
-        expect(hex.status()).toContain('edited')
     })
 
     it('overwrites characters in the text column, Tab moving between the columns', () => {
@@ -174,8 +171,7 @@ describe('typing in the Hex editor', () => {
         hex.key('z', { ctrlKey: true })
         expect(hex.bytes().slice(0, 3)).toEqual([0x00, 0x42, 0x43])
         hex.key('z', { ctrlKey: true })
-        expect(hex.bytes().slice(0, 3)).toEqual([0x41, 0x42, 0x43])
-        expect(hex.fs.files.blob.edits).toBeUndefined()
+        expect(hex.fs.files.blob.content).toBe(encodeBase64(ALPHABET))
         hex.key('y', { ctrlKey: true })
         expect(hex.bytes().slice(0, 3)).toEqual([0x00, 0x42, 0x43])
         hex.key('z', { ctrlKey: true, shiftKey: true })
@@ -195,7 +191,7 @@ describe('typing in the Hex editor', () => {
         hex.key('Tab')
         hex.type('Q')
         hex.key('ArrowRight')
-        expect(hex.fs.files.blob.edits).toBeUndefined()
+        expect(hex.fs.files.blob.content).toBe(encodeBase64(ALPHABET))
         expect(hex.cell('hex', 0)!.textContent).toBe('41')
         expect(hex.status()).toContain('read-only')
         expect(hex.grid.getAttribute('aria-readonly')).toBe('true')
@@ -217,7 +213,7 @@ describe('typing over a File stored as text', () => {
     /** `C3 A9 20 61 62`: a character of two bytes, then ASCII. */
     const notes = { encoding: 'plain', content: 'é ab' } as const
 
-    it('changes its text, keeping no Byte edits, and undoes by writing back what it wrote over', () => {
+    it('changes its text, and undoes by writing back what it wrote over', () => {
         const hex = setup({ file: notes, kind: 'markdown' })
         expect(hex.grid.getAttribute('aria-readonly')).toBe('false')
         hex.key('End')
@@ -660,11 +656,9 @@ describe('typing before a Build', () => {
                 get readOnly() {
                     return group.bytesReadOnly
                 },
-                history: session.byteEditHistory,
                 onEdit: (path: string, offset: number, bytes: Uint8Array) =>
                     session.editFileBytes(path, offset, bytes),
-                onSetEdits: (path: string, edits: readonly ByteEdit[]) =>
-                    session.setFileByteEdits(path, edits),
+                onUndoEdit: (path: string, redo: boolean) => session.undoFileEdit(path, redo),
                 registerFlush: (flush: () => void) =>
                     session.registerTypingFlush(() => {
                         flushes.count++
@@ -703,18 +697,15 @@ describe('typing before a Build', () => {
         const hex = inSession()
         hex.type('7f45')
         //the typing has not paused: nothing is saved yet
-        expect(hex.project.files['blob.bin'].edits).toBeUndefined()
+        expect(hex.blob()).toEqual([0x41, 0x42, 0x43, 0x44])
         await hex.session.build()
         expect(hex.blob()).toEqual([0x7f, 0x45, 0x43, 0x44])
         expect(hex.built).toHaveLength(1)
         expect(hex.blob(hex.built[0].files)).toEqual([0x7f, 0x45, 0x43, 0x44])
-        //and Undo takes it back as one edit
-        expect(hex.session.byteEditHistory.undo('blob.bin', hex.project.files['blob.bin'])).toEqual(
-            {
-                edits: [],
-                offset: 0
-            }
-        )
+        //and Undo takes it back as one Edit step
+        expect(hex.session.fileJournal('blob.bin')?.undo).toHaveLength(1)
+        expect(hex.session.undoFileEdit('blob.bin')).toBe(0)
+        expect(hex.blob()).toEqual([0x41, 0x42, 0x43, 0x44])
         hex.dispose()
     })
 

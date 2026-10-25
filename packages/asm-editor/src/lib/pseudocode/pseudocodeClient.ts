@@ -4,7 +4,7 @@ import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import { executableAnalysis } from '#lib/executables.ts'
 import { KeyIds } from '#lib/keyIds.ts'
 import type { Listing } from '#lib/listing/listing.ts'
-import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import { programImage, programNamesKey } from './programImage'
 import {
     annotationOptions,
@@ -27,6 +27,8 @@ export const PSEUDOCODE_WORKER_SILENCE_MS = 45_000
 export const PSEUDOCODE_WORKER_IDLE_MS = 30_000
 /** How many decompiled functions are kept, across Executables. */
 export const KEPT_PSEUDOCODE = 32
+/** The contents whose numbers are kept, a few Executables and their Build's versions. */
+const KEPT_CONTENTS = 8
 /**
  * How long the decompiler works on a function asked for in the background, for the Search panel,
  * before giving up on it ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
@@ -138,15 +140,15 @@ type Job = {
 
 /**
  * The editor's side of the Pseudocode worker (plan decision 8), one per Workbench session. It
- * keeps one program open in the worker per Executable path, opened with the Executable's bytes,
- * Byte edits included, and its Listing's names (`programImage`), the person's renames among them,
+ * keeps one program open in the worker per Executable path, opened with the Executable's bytes
+ * and its Listing's names (`programImage`), the person's renames among them,
  * and opened again when they change; `release` closes one once no pane shows it, and `hold` keeps
  * one open meanwhile for a batch. Requests are answered one at a time, in order, a pane's before
  * any of the background's ({@link PseudocodePriority}); one asked for again while it waits, by
  * another pane, waits with it. A request carries the function's Annotations: its renamed locals,
  * its comments and its function comment
  * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decisions
- * 13 to 17 and 22). Results are kept by the File's content, its Byte edits, the Listing's base,
+ * 13 to 17 and 22). Results are kept by the File's content, the Listing's base,
  * names version and renames, the function's address and Annotations and the decompiler's version,
  * the last {@link KEPT_PSEUDOCODE} a pane asked for; a failure is not kept when another try may
  * answer: past the decompiler's time limit (a busy machine), or the worker failing.
@@ -177,9 +179,11 @@ export class PseudocodeClient {
     /**
      * A short number for each content string, as `ListingDocuments` keeps them, and apart, for
      * each key of renames (`programNamesKey`) and of a function's Annotations, so that a run of
-     * those never takes a content's number away, which would open its program again.
+     * those never takes a content's number away, which would open its program again. Few
+     * contents: each holds a whole File, every overwrite in the Hex editor makes a new one
+     * (ADR 0063), and the one in use, asked for at each request, keeps its number.
      */
-    private readonly contentIds = new KeyIds(4 * KEPT_PSEUDOCODE)
+    private readonly contentIds = new KeyIds(KEPT_CONTENTS)
     private readonly annotationIds = new KeyIds(4 * KEPT_PSEUDOCODE)
     private nextId = 1
     private nextProgram = 1
@@ -223,7 +227,7 @@ export class PseudocodeClient {
                 address,
                 functionAt(listing, address)?.end ?? address
             )
-        const programKey = `${this.contentIds.of(file.content)}\0${byteEditsKey(file)}\0${listing.base}\0${listing.version}\0${this.annotationIds.of(programNamesKey(listing))}`
+        const programKey = `${this.contentIds.of(file.content)}\0${listing.base}\0${listing.version}\0${this.annotationIds.of(programNamesKey(listing))}`
         const key = `${programKey}\0${address}\0${this.annotationIds.of(functionAnnotationsKey(own))}`
         if (lane === 'visible') this.shown.add(path)
         const kept = this.version === undefined ? undefined : this.kept(key)

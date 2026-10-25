@@ -1,5 +1,5 @@
 import { browser } from '$app/env'
-import { db } from '#lib/storage/db.ts'
+import { db, type ProjectJournals } from '#lib/storage/db.ts'
 import { requestPersistentStorage } from '#lib/storage/persist.ts'
 import {
     type ExternalImport,
@@ -46,10 +46,15 @@ function createProjectStore() {
         return result
     }
 
-    async function save(project: Project): Promise<SaveResult> {
+    /**
+     * Saves a Project, and with it the Edit journals of `journals` that changed, read as its
+     * snapshot is taken so that each fits the File the snapshot holds (ADR 0063).
+     */
+    async function save(project: Project, journals?: ProjectJournals): Promise<SaveResult> {
         if (project.id === SHARE_ID) throw new Error('Cannot save shared project')
         project.updatedAt = new Date().getTime()
         const snapshot = project.toObject()
+        const taken = journals?.take()
         const previous = saveTails.get(project.id) ?? Promise.resolve()
         let finish!: () => void
         const tail = new Promise<void>((resolve) => {
@@ -84,8 +89,9 @@ function createProjectStore() {
         try {
             //The linked write and IndexedDB both use the same immutable save snapshot. Queuing the
             //whole operation prevents a slow old disk write from landing after a newer one.
-            await db.updateProject(makeProject(snapshot))
+            await db.updateProject(makeProject(snapshot), taken?.writes)
         } catch (error) {
+            taken?.putBack()
             //A quota or a blocked database means the work is not stored anywhere. Reported rather
             //than rejected, so autosave's caller can tell the user instead of producing an
             //unhandled rejection that leaves them believing the project is saved.
@@ -128,6 +134,14 @@ function createProjectStore() {
         return db.getProject(id)
     }
 
+    /**
+     * Where a Project's Edit journals are kept, which `save` writes with it; a shared link's, never
+     * saved, has none.
+     */
+    function journalStore(id: string): ProjectJournals | undefined {
+        return id === SHARE_ID ? undefined : db.journalStore(id)
+    }
+
     return {
         get inited() {
             return inited
@@ -143,7 +157,8 @@ function createProjectStore() {
         importFromExternal,
         setFileHandle,
         getProject,
-        getProjectFromDb
+        getProjectFromDb,
+        journalStore
     }
 }
 

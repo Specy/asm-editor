@@ -19,12 +19,14 @@ import {
     loadedEnvironmentHeader
 } from '#lib/sourceRuntime/environmentLibrary.ts'
 import {
+    fileBytes,
     sameFileContent,
     type Annotations,
-    type ByteEdit,
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
+import type { ByteChange, ByteRun } from '#lib/languages/peripherals/FileSystem.ts'
+import { EditJournal, type EditJournalStore, type FileJournal } from '#lib/editJournal.ts'
 import {
     commentAt,
     functionCommentAt,
@@ -49,10 +51,10 @@ import {
     type BuildOutputClaim,
     type BuildOutputState
 } from '#lib/buildOutput.ts'
-import { ByteEditHistory } from '#cmp/specific/workbench/hex/byteEditHistory.ts'
 import {
     defaultEntryPath,
     type AvailableLanguages,
+    type CellGrid,
     type Project,
     type TestcaseResult
 } from '#lib/Project.svelte.ts'
@@ -275,6 +277,11 @@ export type WorkbenchSessionHost = {
     readonly onSave?: (options: { silent: boolean }) => void
     /** Every change to the Project, whether or not autosave saves it. */
     readonly onChange?: () => void
+    /**
+     * Where the Edit journal is kept between visits; without one it lasts as long as the session
+     * ([ADR 0063](../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)).
+     */
+    readonly editJournals?: EditJournalStore
 }
 
 /** Panel toggles the keyboard shortcuts reach, which only the view knows how to open. */
@@ -316,8 +323,14 @@ export class WorkbenchSession {
     private nextGroupId = 1
     private activeTabGroupId = $state('editor-1')
     readonly models: EditorModels
-    /** The Hex editor's Undo and Redo of each File, shared by both panes. */
-    readonly byteEditHistory = new ByteEditHistory()
+    /**
+     * The Undo and Redo of what the Hex and Pixel editors change in each File, shared by every
+     * pane and the Edit history panel, and saved through the host's store
+     * ([ADR 0063](../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)).
+     */
+    readonly editJournal: EditJournal
+    /** Counts the journal's changes, for what shows it: the journal itself is no state. */
+    private journalVersion = $state(0)
     /**
      * The Undo and Redo of each Executable's renames and comments, shared by every pane showing
      * its Listing ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
@@ -337,7 +350,7 @@ export class WorkbenchSession {
      */
     readonly projectSearch: ProjectSearch = new ProjectSearch(searchHost(this))
     /**
-     * How each open Hex editor saves what was typed and not saved yet: typing becomes a Byte edit
+     * How each open Hex editor saves what was typed and not saved yet: typing becomes an Edit step
      * when it pauses, and a Build or a test run locks the Files, so it is saved before either
      * starts, while the Files still take it.
      */
@@ -451,7 +464,6 @@ export class WorkbenchSession {
             file = Object.freeze({
                 encoding: built.encoding,
                 content: built.content,
-                ...(built.edits ? { edits: built.edits } : {}),
                 ...(live.annotations ? { annotations: live.annotations } : {})
             })
         this.snapshotFiles.set(built, { live, file })
@@ -490,6 +502,17 @@ export class WorkbenchSession {
             if (group.tabs.paths.includes(path) && !Object.hasOwn(group.views, path))
                 group.setView(path, group.viewOf(path, kind), false)
         this.project.setFileView(path, saved)
+        this.changed()
+    }
+    /**
+     * Saves a picture's cell grid, or that it has none, beside the views
+     * ([pixel-editor-plan.md](../../../../../docs/design/pixel-editor-plan.md), decision 10).
+     */
+    cellGridChosen(path: string, grid: CellGrid | undefined) {
+        if (this.host.readonly || !this.project.files[path]) return
+        const saved = this.project.cellGrids?.[path]
+        if (saved?.width === grid?.width && saved?.height === grid?.height) return
+        this.project.setCellGrid(path, grid)
         this.changed()
     }
     get executionGroup() {
@@ -629,6 +652,17 @@ export class WorkbenchSession {
         if (project.openTabs) group.tabs = { paths: [...project.openTabs], active: start }
         this.groups = [group]
         this.models = new EditorModels((path, value) => this.fileEdited(path, value))
+        this.editJournal = new EditJournal(
+            {
+                get files() {
+                    return project.fileSystem.files
+                },
+                changeBytes: (path, changes) => this.project.fileSystem.changeBytes(path, changes)
+            },
+            (path) => this.journalChanged(path)
+        )
+        //the steps kept from an earlier visit, as soon as the store gives them
+        if (host.editJournals) void this.loadJournals(host.editJournals)
         this.appliedSelection = project.selectedProgram
         this.effectiveSettings = $derived(
             resolveProjectSettings(this.project.language, this.project.selected?.settings)
@@ -979,7 +1013,7 @@ export class WorkbenchSession {
         })
         //a function's Pseudocode, once decompiled, opens at the line the Listing's cursor is on,
         //rather than where the function shown before it was scrolled to; the same function
-        //decompiled again in the same model (a rename, a comment, a Byte edit) stays where the
+        //decompiled again in the same model (a rename, a comment, an overwrite) stays where the
         //editor is, which moves its cursor to the same place of the new text (decision 22)
         const revealed = new WeakMap<EditorGroup, { document: object; key: string }>()
         //and the Listing it pairs with scrolls to that function, when it is a Listing new to the
@@ -2489,6 +2523,16 @@ export class WorkbenchSession {
     }
 
     /**
+     * A picture New picture made: opened in the Pixel editor, the view the Project then saves for
+     * it ([pixel-editor.md](../../../../../docs/design/pixel-editor.md), decision 5).
+     */
+    openInPixelEditor(path: string) {
+        const group = this.groupForFile(path)
+        group.setView(path, 'pixels')
+        this.selectFile(path, group)
+    }
+
+    /**
      * A single click on a File in the Explorer: opens it in the pane's preview tab, in the place of
      * the File previewed there before, as an IDE does, so that looking through Files does not fill
      * the row. A click on the File the preview tab already shows keeps it open, so a double click
@@ -2748,7 +2792,8 @@ export class WorkbenchSession {
         this.project.renameCompilationFile(from, to)
         let changed = this.programFileRenamed(from, to)
         this.moveFileBreakpoints(from, to)
-        this.byteEditHistory.move(from, to)
+        this.editJournal.rename(from, to)
+        this.journalVersion++
         this.annotationHistory.move(from, to)
         this.pseudocode.search.rename(from, to)
         this.dropAnnotationPrompts(from)
@@ -2756,6 +2801,12 @@ export class WorkbenchSession {
         if (view) {
             this.project.setFileView(from, undefined)
             this.project.setFileView(to, view)
+            changed = true
+        }
+        const grid = this.project.cellGrids?.[from]
+        if (grid) {
+            this.project.setCellGrid(from, undefined)
+            this.project.setCellGrid(to, grid)
             changed = true
         }
         if (changed) this.changed()
@@ -2775,12 +2826,17 @@ export class WorkbenchSession {
         let changed = this.project.program(path) !== undefined
         this.project.removeProgram(path)
         this.moveFileBreakpoints(path)
-        this.byteEditHistory.move(path)
+        this.editJournal.drop(path)
+        this.journalVersion++
         this.annotationHistory.move(path)
         this.pseudocode.search.forget(path)
         this.dropAnnotationPrompts(path)
         if (this.project.fileViews?.[path]) {
             this.project.setFileView(path, undefined)
+            changed = true
+        }
+        if (this.project.cellGrids?.[path]) {
+            this.project.setCellGrid(path, undefined)
             changed = true
         }
         if (changed) this.changed()
@@ -2855,32 +2911,138 @@ export class WorkbenchSession {
             this.typingFlushes.delete(flush)
         }
     }
-    /** Saves what every open Hex editor has typed, before the Files are locked. */
-    private flushTyping() {
+    /**
+     * Saves what every open Hex editor has typed: before the Files are locked, and before the
+     * Edit journal is used, so that Undo takes back what was typed rather than what was before it.
+     */
+    flushTyping() {
         for (const flush of [...this.typingFlushes]) flush()
     }
     /**
-     * Byte edits typed in the Hex editor ([ADR 0047](../../../../../docs/adr/0047-byte-edits-are-kept-apart-from-the-original-bytes.md)):
-     * overwrites `bytes` at `offset`, or with `edits` puts back a whole list for Undo and Redo.
-     * A File stored as text takes no Byte edits: the overwrite changes its text, which must stay
-     * UTF-8. False when the edit is refused, as the Project's limit can refuse it, after saying why.
+     * Typing in the Hex editor: overwrites `bytes` at `offset` as one **Edit step**. A File stored
+     * as text has its text changed, which must stay UTF-8. False when the change is refused, as
+     * the Project's limit can refuse it, after saying why.
      */
     editFileBytes(path: string, offset: number, bytes: Uint8Array): boolean {
-        return this.changeFileBytes(path, () => {
-            const fileSystem = this.project.fileSystem
-            if (this.project.files[path]?.encoding === 'plain')
-                fileSystem.overwriteText(path, offset, bytes)
-            else fileSystem.editBytes(path, offset, bytes)
+        return this.journalStep(path, 'Typing', { runs: [{ offset, bytes }] })
+    }
+    /**
+     * A stroke of the Pixel editor, every run it changed overwritten at once, as one Edit step
+     * labelled `label` ([pixel-editor.md](../../../../../docs/design/pixel-editor.md), decision 12).
+     */
+    editFileByteRuns(path: string, runs: readonly ByteRun[], label: string): boolean {
+        const file = this.project.files[path]
+        //a picture an older editor stored as text, its bytes being UTF-8, is stored as bytes from
+        //its first stroke on, which its text could not hold
+        if (file?.encoding === 'plain') {
+            const bytes = fileBytes(file)
+            for (const run of runs) bytes.set(run.bytes, run.offset)
+            return this.journalStep(path, label, { content: bytes, encoding: 'base64' })
+        }
+        return this.journalStep(path, label, { runs })
+    }
+    /**
+     * Canvas size ([pixel-editor.md](../../../../../docs/design/pixel-editor.md), decisions 9 and
+     * 12): the picture at `path` resized, as an Edit step that replaces its whole content, which
+     * Undo puts back.
+     */
+    resizePicture(path: string, resized: Uint8Array, label: string): boolean {
+        return this.journalStep(path, label, { content: resized, encoding: 'base64' })
+    }
+    /**
+     * Undo, or Redo, of the File's newest Edit step: the offset the change it made starts at, for
+     * a Hex editor's caret, or undefined when there was nothing to take back or put back.
+     */
+    undoFileEdit(path: string, redo = false): number | undefined {
+        let made: ByteChange | undefined
+        const changed = this.changeFileBytes(path, () => {
+            this.flushTyping()
+            made = this.editJournal.undo(path, redo)
+        })
+        if (!changed || !made) return undefined
+        return 'runs' in made ? (made.runs[0]?.offset ?? 0) : 0
+    }
+    /** Goes back, or forward, to just after the File's `applied`th Edit step, the Edit history's. */
+    goToFileEdit(path: string, applied: number): boolean {
+        let done = false
+        const changed = this.changeFileBytes(path, () => {
+            this.flushTyping()
+            done = this.editJournal.goTo(path, applied)
+        })
+        return changed && done
+    }
+    /**
+     * Every File that has Edit steps, with them, for the Edit history, which lists them whatever
+     * the panes show.
+     */
+    editedFiles(): { path: string; journal: FileJournal }[] {
+        void this.journalVersion
+        void this.project.files
+        return this.editJournal.paths().flatMap((path) => {
+            const journal = this.editJournal.journalOf(path)
+            return journal && (journal.undo.length || journal.redo.length)
+                ? [{ path, journal }]
+                : []
         })
     }
-    setFileByteEdits(path: string, edits: readonly ByteEdit[]): boolean {
-        return this.changeFileBytes(path, () => this.project.fileSystem.setByteEdits(path, edits))
+    /**
+     * Opens a File in the editor its Edit steps are made in, as a row of the Edit history does:
+     * the Pixel editor for a picture it draws in, unless the File was last shown in Hex, else the
+     * Hex editor. False for a File that offers neither.
+     */
+    openForEditing(path: string): boolean {
+        if (!this.project.files[path]) return false
+        const views = fileViewsOf(this.kindAt(path))
+        const view: FileView =
+            views.includes('pixels') && this.project.fileViews?.[path] !== 'hex' ? 'pixels' : 'hex'
+        if (!views.includes(view)) return false
+        const group = this.groupForFile(path)
+        group.setView(path, view)
+        this.selectFile(path, group)
+        return true
+    }
+    /** The Edit steps of the File at `path`, for the Edit history; undefined when it has none. */
+    fileJournal(path: string): FileJournal | undefined {
+        void this.journalVersion
+        //the File's content, which a change from elsewhere makes the steps no longer fit
+        void this.project.files[path]
+        return this.editJournal.journalOf(path)
+    }
+    private journalStep(path: string, label: string, change: ByteChange): boolean {
+        return this.changeFileBytes(path, () => this.editJournal.change(path, label, change))
+    }
+    /** Tells the host's store that a File's journal changed, which it saves with the Project. */
+    private journalChanged(path: string) {
+        this.host.editJournals?.changed(path, () => this.editJournal.saved(path))
+    }
+    /**
+     * Gives the journal the steps the store kept, those of Files the Project no longer has
+     * forgotten there.
+     */
+    private async loadJournals(store: EditJournalStore) {
+        try {
+            const saved = await store.load()
+            for (const [path, journal] of saved) {
+                if (Object.hasOwn(this.project.files, path)) this.editJournal.load(path, journal)
+                else store.changed(path, () => undefined)
+            }
+            this.journalVersion++
+        } catch (error) {
+            console.error(error)
+        }
     }
     private changeFileBytes(path: string, change: () => void): boolean {
         if (this.host.readonly || this.fileSystemLocked || this.running || this.building)
             return false
+        const before = this.project.files[path]
         try {
             change()
+            this.journalVersion++
+            const after = this.project.files[path]
+            //an Undo with nothing to take back, or a stroke that changed no byte, changed nothing
+            if (after === before) return true
+            //an overwrite keeps the Annotations, and the Undo of them
+            this.annotationHistory.overwritten(path, before, after)
             //an edited File in preview is kept open, as typing into it does
             this.keepOpen(path)
             return true
@@ -3157,7 +3319,7 @@ export class WorkbenchSession {
 
     /**
      * Scrolls a Listing that just paired with a Pseudocode (opened beside it, switched back to
-     * from the bytes, or made again after a Byte edit) to the function the Pseudocode shows,
+     * from the bytes, or made again after an overwrite) to the function the Pseudocode shows,
      * unless its cursor is in that function already.
      */
     private async revealPseudocodeFunction(listingPane: EditorGroup, pseudocodePane: EditorGroup) {

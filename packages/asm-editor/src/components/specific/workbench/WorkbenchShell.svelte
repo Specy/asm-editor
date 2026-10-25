@@ -3,6 +3,7 @@
     import type { Project } from '#lib/Project.svelte.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
+    import type { EditJournalStore } from '#lib/editJournal.ts'
     import { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
     import { watchViewport } from '#lib/workbench/viewport.svelte.ts'
     import type {
@@ -32,6 +33,7 @@
         onShare?: () => void
         onChange?: () => void
         unsaved?: boolean
+        editJournals?: EditJournalStore
         access?: Partial<Record<BuiltinPanelId, PanelAccess>>
         documentationLinks?: boolean
         searchLectures?: boolean
@@ -50,6 +52,7 @@
         onShare,
         onChange,
         unsaved = false,
+        editJournals,
         access = {},
         documentationLinks = true,
         searchLectures = true,
@@ -79,6 +82,9 @@
                 },
                 get onChange() {
                     return onChange
+                },
+                get editJournals() {
+                    return editJournals
                 }
             })
     )
@@ -169,13 +175,36 @@
      */
     const symbolsOffered = $derived(project.language === 'X86' && hasExecutable(project.files))
 
-    const rail = $derived(
-        workbenchRail({ access, symbolsOffered, testcasesDot, hostPanels, hostLinks, onShare })
+    /**
+     * The Edit history is offered in a Project with a File stored as bytes, which the Hex and Pixel
+     * editors change, and in any whose Files have Edit steps, as typing over a text File in Hex
+     * makes.
+     */
+    const historyOffered = $derived(
+        Object.values(project.files).some((file) => file.encoding === 'base64') ||
+            session.editedFiles().length > 0
     )
 
-    //the open Symbols panel goes with the Project's last Executable
+    const rail = $derived(
+        workbenchRail({
+            access,
+            symbolsOffered,
+            historyOffered,
+            testcasesDot,
+            hostPanels,
+            hostLinks,
+            onShare
+        })
+    )
+
+    //the open Symbols panel goes with the Project's last Executable, the Edit history with its last
+    //byte File
     $effect(() => {
-        if (activePanel === 'symbols' && !rail.some((entry) => entry.id === 'symbols')) ui.close()
+        if (
+            (activePanel === 'symbols' || activePanel === 'history') &&
+            !rail.some((entry) => entry.id === activePanel)
+        )
+            ui.close()
     })
 
     /**

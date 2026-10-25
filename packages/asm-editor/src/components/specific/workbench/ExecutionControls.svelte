@@ -27,6 +27,7 @@
     import FaTh from '~icons/fa-solid/th'
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaEye from '~icons/fa-solid/eye'
+    import FaPaintBrush from '~icons/fa-solid/paint-brush'
     import FaFileCode from '~icons/fa-solid/file-code'
     import FaAlignLeft from '~icons/fa-solid/align-left'
     import {
@@ -73,7 +74,12 @@
             title: "Show the Pseudocode of the function at the Listing's cursor, beside the Listing",
             icon: FaFileCode
         },
-        preview: { label: 'Preview', title: 'Show the File as the browser shows it', icon: FaEye }
+        preview: { label: 'Preview', title: 'Show the File as the browser shows it', icon: FaEye },
+        pixels: {
+            label: 'Pixels',
+            title: 'Draw and edit pixels in this image',
+            icon: FaPaintBrush
+        }
     }
 
     /**

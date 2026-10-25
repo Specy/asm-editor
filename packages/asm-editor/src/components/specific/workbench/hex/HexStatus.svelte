@@ -17,7 +17,6 @@
         selection,
         size,
         digits,
-        edited,
         readOnly,
         region,
         inspectorOpen,
@@ -31,7 +30,6 @@
         selection: number
         size: number
         digits: number
-        edited: boolean
         /** Why the bytes cannot be typed over now, or undefined when they can. */
         readOnly: string | undefined
         /** The name of the Executable's region the caret is in. */
@@ -60,12 +58,6 @@
         <span class="fact">{count(size)}</span>
         {#if region}
             <span class="fact region">{region}</span>
-        {/if}
-        {#if edited}
-            <span
-                class="fact badge"
-                title="The File has Byte edits, kept apart from its original bytes">edited</span
-            >
         {/if}
         {#if readOnly}
             <span class="fact badge read-only" title={readOnly}>read-only</span>

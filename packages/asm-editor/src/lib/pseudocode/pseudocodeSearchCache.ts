@@ -2,7 +2,7 @@ import type { DecompiledLine } from '@specy/decompiler'
 import { executableAnalysis } from '#lib/executables.ts'
 import type { ElfAnalysis } from '#lib/listing/decoder.ts'
 import { LINE_KIND, type Listing, type ListingFunction } from '#lib/listing/listing.ts'
-import { byteEditsKey, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import {
     pseudocodeNameSpans,
     pseudocodeWidenedNames,
@@ -26,7 +26,7 @@ import { isTimeLimit, type PseudocodeClient, type PseudocodeResult } from './pse
  * - it reports each function's text as it comes, and its progress; it stops on `stop`, keeping
  *   what was done;
  * - the cache keeps each function's text and where its function and data names are in it, by the
- *   File's content, Byte edits and load base and each function's own Annotations (its locals'
+ *   File's content and load base and each function's own Annotations (its locals'
  *   names, its comments, its function comment), for the Workbench session, never saved. A global
  *   rename rewrites the texts that name what it renamed rather than decompiling them again
  *   ("The cached text with a new name"), their lines then breaking where a fresh decompilation's
@@ -187,8 +187,6 @@ type ListingFacts = {
 type Version = {
     file: ProjectFile
     listing: Listing
-    /** The File's Byte edits (`byteEditsKey`). */
-    edits: string
     facts: ListingFacts
 }
 
@@ -200,7 +198,6 @@ function sameBytes(left: Version, right: Version): boolean {
     return (
         left.file.encoding === right.file.encoding &&
         left.file.content === right.file.content &&
-        left.edits === right.edits &&
         left.listing.base === right.listing.base &&
         left.listing.version === right.listing.version
     )
@@ -680,6 +677,6 @@ export class PseudocodeSearchCache {
             }
             this.facts.set(listing, facts)
         }
-        return { file, listing, edits: byteEditsKey(file), facts }
+        return { file, listing, facts }
     }
 }

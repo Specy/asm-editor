@@ -3,6 +3,9 @@ import { Z80Emulator } from '#lib/languages/Z80/Z80Emulator.svelte.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
+import { makeBmp } from '#lib/pixels/bmp.ts'
+import { PALETTE_332 } from '#lib/pixels/palettes.ts'
+import { encodeBase64 } from '#lib/projectFiles.ts'
 
 /**
  * The slice contract against a real Core. `@specy/z80` is plain TypeScript, so it is the one adapter
@@ -132,6 +135,30 @@ describe('Z80 source set', () => {
         await emulator.run(100)
         expect(emulator.errors).toEqual([])
         expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(255n)
+    })
+})
+
+describe('a picture in a Z80 program', () => {
+    it('is inserted as drawn, its Byte edits applied, each pixel byte a 3-3-2 color', async () => {
+        const picture = makeBmp({ width: 4, height: 2, format: 'indexed8', palette: PALETTE_332 })
+        //pixel (1, 0) drawn in pure red, 0xE0, as the Pixel editor saves it
+        const edits = [{ offset: 1078 + 1, remove: 1, insert: encodeBase64(Uint8Array.of(0xe0)) }]
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain' as const,
+                    content:
+                        '    org $8000\n    jp start\nsprite:\n    #insert "sprite.bmp"\nstart:\n    ld a, (sprite + 1078 + 1)\n    halt\n'
+                },
+                'sprite.bmp': { encoding: 'base64' as const, content: encodeBase64(picture), edits }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(0xe0n)
     })
 })
 

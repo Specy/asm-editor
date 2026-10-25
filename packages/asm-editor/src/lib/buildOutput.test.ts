@@ -23,7 +23,12 @@ import {
     projectDownload,
     projectToArchive
 } from '#lib/projectArchive.ts'
-import { encodeBase64, type BuildSources, type ProjectFile } from '#lib/projectFiles.ts'
+import {
+    encodeBase64,
+    overwriteBytes,
+    type BuildSources,
+    type ProjectFile
+} from '#lib/projectFiles.ts'
 
 const plain = (content: string): ProjectFile => ({ encoding: 'plain', content })
 const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0, 0, 0])
@@ -82,10 +87,10 @@ describe('a Build record', () => {
             isUntouchedBuildOutput(record, { ...built, content: encodeBase64(program.slice(1)) })
         ).toBe(false)
         expect(
-            isUntouchedBuildOutput(record, {
-                ...built,
-                edits: [{ offset: 0, remove: 1, insert: 'kA==' }]
-            })
+            isUntouchedBuildOutput(
+                record,
+                overwriteBytes(built, [{ offset: 0, bytes: Uint8Array.of(0x90) }])!.file
+            )
         ).toBe(false)
         expect(
             isUntouchedBuildOutput(record, { ...built, annotations: { names: { '0x0': 'x' } } })

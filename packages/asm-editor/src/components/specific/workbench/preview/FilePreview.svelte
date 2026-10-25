@@ -11,7 +11,7 @@
     /**
      * The **Preview** of a byte File ([file-views.md](../../../../../../../docs/design/file-views.md),
      * decision 14): the browser's own view of an image, a PDF, audio or video, from a Blob URL of
-     * the File's bytes with their Byte edits, typed as the signature its first bytes matched and
+     * the File's bytes, typed as the signature its first bytes matched and
      * never as its name suggests, so a File is never shown as a web page. Where the browser cannot
      * show it after all, `onUnavailable` asks the pane for the Hex editor instead, with a note.
      */
@@ -100,12 +100,6 @@
                 <span class="fact">{formatDuration(duration)}</span>
             {/if}
             <span class="fact">{count(size)}</span>
-            {#if file.edits?.length}
-                <span
-                    class="fact badge"
-                    title="The File has Byte edits, kept apart from its original bytes">edited</span
-                >
-            {/if}
         </div>
         {#if kind.preview === 'image'}
             <div class="tools">
@@ -228,12 +222,6 @@
     }
     .mime {
         font-family: monospace;
-    }
-    .badge {
-        padding: 0.05rem 0.4rem;
-        border-radius: 0.6rem;
-        background: color-mix(in srgb, var(--accent) 18%, transparent);
-        opacity: 1;
     }
     .tools {
         display: flex;

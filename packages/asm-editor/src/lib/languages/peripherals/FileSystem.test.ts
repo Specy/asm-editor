@@ -11,7 +11,6 @@ import {
     cleanFiles,
     encodeBase64,
     fileBytes,
-    originalBytes,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
     ProjectFormatError
@@ -713,87 +712,136 @@ describe('FileSystemSession descriptors', () => {
     })
 })
 
-describe('Byte edits in the FileSystem', () => {
-    /** A byte File `blob` of `ff 00 01 02` with one edit, `41 42` at 1, and a text File. */
+describe('changing bytes in the FileSystem', () => {
+    /** A byte File `blob` of `ff 41 42 02`, and a text File. */
     function edited() {
         const fs = new FileSystem({
             blob: { encoding: 'base64', content: encodeBase64(new Uint8Array([0xff, 0, 1, 2])) },
             'notes.txt': { encoding: 'plain', content: 'notes' }
         })
-        fs.editBytes('blob', 1, encode('AB'))
+        fs.changeBytes('blob', [{ runs: [{ offset: 1, bytes: encode('AB') }] }])
         return fs
     }
+    const write = (offset: number, bytes: Uint8Array) => ({ runs: [{ offset, bytes }] })
 
-    it('overwrites a byte File, keeping its original apart and its encoding', () => {
+    it('overwrites a byte File in place, keeping its encoding, and returns what takes it back', () => {
         const fs = edited()
-        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
-        expect([...originalBytes(fs.files.blob)]).toEqual([0xff, 0, 1, 2])
-        expect(fs.files.blob.edits).toEqual([{ offset: 1, remove: 2, insert: 'QUI=' }])
+        expect(fs.files.blob).toEqual({
+            encoding: 'base64',
+            content: encodeBase64(Uint8Array.of(0xff, 0x41, 0x42, 2))
+        })
         //every byte now decodes as UTF-8, and the File is still one of bytes
-        fs.editBytes('blob', 0, encode('Z'))
+        const [inverse] = fs.changeBytes('blob', [write(0, encode('Z'))])
         expect(decode(fs.readBytes('blob'))).toBe('ZAB\x02')
         expect(fs.files.blob.encoding).toBe('base64')
-        expect(fs.files.blob.edits).toEqual([{ offset: 0, remove: 3, insert: 'WkFC' }])
-        expect(() => fs.readText('blob')).toThrow(ProjectFormatError)
+        expect(inverse).toEqual(write(0, Uint8Array.of(0xff)))
         //what a Build reads
         expect([...fileBytes(fs.snapshot('blob').files.blob)]).toEqual([0x5a, 0x41, 0x42, 2])
+        fs.changeBytes('blob', [inverse])
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
     })
 
-    it('refuses a text File, a range past the end and a locked FileSystem', () => {
+    it('overwrites several runs as one save, as a stroke of the Pixel editor does', () => {
+        const fs = new FileSystem({
+            blob: { encoding: 'base64', content: encodeBase64(new Uint8Array(200)) }
+        })
+        let commits = 0
+        fs.subscribe((changed) => changed && commits++)
+        const [inverse] = fs.changeBytes('blob', [
+            {
+                runs: [
+                    { offset: 150, bytes: Uint8Array.of(3) },
+                    { offset: 0, bytes: Uint8Array.of(1) },
+                    { offset: 10, bytes: Uint8Array.of(2) },
+                    { offset: 60, bytes: new Uint8Array() }
+                ]
+            }
+        ])
+        expect(commits).toBe(1)
+        expect([0, 10, 150].map((offset) => fs.readBytes('blob')[offset])).toEqual([1, 2, 3])
+        //the bytes each run overwrote, the last written first
+        expect(inverse).toEqual({
+            runs: [
+                { offset: 10, bytes: Uint8Array.of(0) },
+                { offset: 0, bytes: Uint8Array.of(0) },
+                { offset: 150, bytes: Uint8Array.of(0) }
+            ]
+        })
+        //nothing written is no save
+        expect(fs.changeBytes('blob', [{ runs: [] }])).toEqual([{ runs: [] }])
+        expect(fs.changeBytes('blob', [])).toEqual([])
+        expect(commits).toBe(1)
+    })
+
+    it('makes several changes as one save, each returning what takes it back', () => {
         const fs = edited()
-        expect(() => fs.editBytes('notes.txt', 0, encode('N'))).toThrow(
-            'Only a File stored as bytes takes Byte edits'
+        let commits = 0
+        fs.subscribe((changed) => changed && commits++)
+        const inverses = fs.changeBytes('blob', [
+            write(0, encode('X')),
+            write(0, encode('Y')),
+            write(3, encode('!'))
+        ])
+        expect(commits).toBe(1)
+        expect(decode(fs.readBytes('blob'))).toBe('YAB!')
+        //made in the order given, the last first, they take every change back
+        fs.changeBytes('blob', [...inverses].reverse())
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
+    })
+
+    it('replaces the whole content, returning the old one with its encoding', () => {
+        const fs = edited()
+        fs.annotate('blob', { names: { '0x0': 'start' } })
+        const before = fs.readBytes('blob')
+        const [inverse] = fs.changeBytes('blob', [
+            { content: Uint8Array.of(9, 9, 9, 9, 9, 9), encoding: 'base64' }
+        ])
+        expect([...fs.readBytes('blob')]).toEqual([9, 9, 9, 9, 9, 9])
+        //a whole new content drops the Annotations, as an upload does
+        expect(fs.files.blob.annotations).toBeUndefined()
+        expect(inverse).toEqual({ content: before, encoding: 'base64' })
+        fs.changeBytes('blob', [inverse])
+        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
+        //a text File's comes back as text
+        const [text] = fs.changeBytes('notes.txt', [
+            { content: Uint8Array.of(0xff), encoding: 'base64' }
+        ])
+        expect(text).toEqual({ content: encode('notes'), encoding: 'plain' })
+        fs.changeBytes('notes.txt', [text])
+        expect(fs.files['notes.txt']).toEqual({ encoding: 'plain', content: 'notes' })
+    })
+
+    it('refuses a range past the end, a missing File and a locked FileSystem', () => {
+        const fs = edited()
+        const before = fs.files
+        expect(() => fs.changeBytes('blob', [write(3, encode('XY'))])).toThrow('past the end')
+        //a refused change leaves every change before it unmade
+        expect(() =>
+            fs.changeBytes('blob', [write(0, encode('X')), write(9, encode('X'))])
+        ).toThrow('past the end')
+        expect(fs.files).toBe(before)
+        expect(failure(() => fs.changeBytes('missing', [write(0, encode('X'))]))).toBe(
+            FileErrorCode.NotFound
         )
-        expect(() => fs.editBytes('blob', 3, encode('XY'))).toThrow('past the end')
-        expect(failure(() => fs.editBytes('missing', 0, encode('X')))).toBe(FileErrorCode.NotFound)
         const run = fs.beginSession()
-        expect(() => fs.editBytes('blob', 0, encode('X'))).toThrow('Stop')
+        expect(() => fs.changeBytes('blob', [write(0, encode('X'))])).toThrow('Stop')
         run.stop()
-        fs.editBytes('blob', 3, encode('!'))
+        fs.changeBytes('blob', [write(3, encode('!'))])
         expect(decode(fs.readBytes('blob').subarray(1))).toBe('AB!')
     })
 
-    it('overwrites the text of a text File, which must stay UTF-8, keeping no Byte edits', () => {
+    it('overwrites the text of a text File, which must stay UTF-8', () => {
         const fs = new FileSystem({ 'notes.md': { encoding: 'plain', content: 'é ok' } })
-        fs.overwriteText('notes.md', 3, encode('OK'))
+        fs.changeBytes('notes.md', [write(3, encode('OK'))])
         expect(fs.files['notes.md']).toEqual({ encoding: 'plain', content: 'é OK' })
         //the two bytes of `é` together, but not one of them alone
-        fs.overwriteText('notes.md', 0, Uint8Array.of(0xc3, 0xa8))
+        fs.changeBytes('notes.md', [write(0, Uint8Array.of(0xc3, 0xa8))])
         expect(fs.readText('notes.md')).toBe('è OK')
-        expect(() => fs.overwriteText('notes.md', 0, encode('e'))).toThrow(
+        expect(() => fs.changeBytes('notes.md', [write(0, encode('e'))])).toThrow(
             'notes.md is stored as text, and these bytes would leave it no longer UTF-8'
         )
         expect(fs.readText('notes.md')).toBe('è OK')
-        expect(() => fs.overwriteText('notes.md', 4, encode('!!'))).toThrow('past the end')
-        const bytes = new FileSystem({ blob: { encoding: 'base64', content: 'AAAA' } })
-        expect(() => bytes.overwriteText('blob', 0, encode('X'))).toThrow(
-            'Only a File stored as text has its text overwritten'
-        )
-    })
-
-    it('refuses a File whose saved edits insert or delete, which it reads all the same', () => {
-        const inserted = {
-            encoding: 'base64' as const,
-            content: encodeBase64(encode('abc')),
-            edits: [
-                { offset: 1, remove: 0, insert: encodeBase64(encode('XY')) },
-                { offset: 4, remove: 1, insert: '' }
-            ]
-        }
-        const fs = new FileSystem({ blob: inserted })
-        expect(decode(fs.readBytes('blob'))).toBe('aXYb')
-        expect(() => fs.editBytes('blob', 0, encode('Z'))).toThrow(
-            'blob has Byte edits that insert or delete bytes, which this editor cannot add to'
-        )
-        expect(fs.files.blob.edits).toEqual(inserted.edits)
-        //what a Build reads, and a session's program
-        expect(decode(fileBytes(fs.snapshot('blob').files.blob))).toBe('aXYb')
-        const run = fs.beginSession()
-        run.beginInstruction(1)
-        const fd = run.open('blob', { access: 'read' })
-        expect(decode(run.read(fd, 8))).toBe('aXYb')
-        run.endInstruction()
-        run.stop()
+        expect(() => fs.changeBytes('notes.md', [write(4, encode('!!'))])).toThrow('past the end')
     })
 
     it('keeps the Project within 16 MiB without checking every File again', () => {
@@ -805,56 +853,22 @@ describe('Byte edits in the FileSystem', () => {
             },
             'note.txt': { encoding: 'plain', content: '\u00e9' }
         })
-        fs.editBytes('blob', 0, new Uint8Array([1]))
-        //over the same byte, the edit takes no more room
-        fs.editBytes('blob', 0, new Uint8Array([2]))
+        //an overwrite takes no more room
+        fs.changeBytes('blob', [write(0, new Uint8Array([1]))])
         const before = fs.files
-        expect(() => fs.editBytes('blob', 2, new Uint8Array([3]))).toThrow(
-            'Project exceeds the 16 MiB file limit'
-        )
         expect(() =>
-            fs.setByteEdits('blob', [{ offset: 5, remove: 2, insert: encodeBase64(encode('ab')) }])
+            fs.changeBytes('blob', [
+                { content: new Uint8Array(FILE_BYTE_LIMIT - 1), encoding: 'base64' }
+            ])
         ).toThrow('Project exceeds the 16 MiB file limit')
         expect(fs.files).toBe(before)
-        fs.editBytes('blob', 0, new Uint8Array([4]))
-        expect(fs.files.blob.edits).toEqual([{ offset: 0, remove: 1, insert: 'BA==' }])
         //the Files stay as `cleanFiles` leaves them: frozen, and a map with no prototype
         expect(Object.isFrozen(fs.files)).toBe(true)
         expect(Object.getPrototypeOf(fs.files)).toBe(null)
-        expect(() => fs.setByteEdits('blob', [{ offset: 0, remove: 1, insert: 'AQ' }])).toThrow(
-            'Noncanonical'
-        )
+        expect(fs.readBytes('blob')[0]).toBe(1)
     })
 
-    it('drops the edits when the whole content is replaced, as an upload does', () => {
-        const fs = edited()
-        fs.writeBytes('blob', new Uint8Array([9, 0xff]))
-        expect(fs.files.blob).toEqual({ encoding: 'base64', content: 'Cf8=' })
-        //a rename keeps the record
-        const other = edited()
-        other.rename('blob', 'moved')
-        expect(other.files.moved.edits).toHaveLength(1)
-    })
-
-    it("drops the edits at a program's write, which becomes the original", () => {
-        const fs = edited()
-        const run = fs.beginSession()
-        run.beginInstruction(1)
-        const fd = run.open('blob', { access: 'read-write' })
-        expect([...run.read(fd, 4)]).toEqual([0xff, 0x41, 0x42, 2])
-        run.endInstruction()
-        //reading changes nothing
-        expect(fs.files.blob.edits).toHaveLength(1)
-        run.beginInstruction(2)
-        run.pwrite(fd, 3, new Uint8Array([0xfe]))
-        run.endInstruction()
-        expect(fs.files.blob).toEqual({
-            encoding: 'base64',
-            content: encodeBase64(new Uint8Array([0xff, 0x41, 0x42, 0xfe]))
-        })
-    })
-
-    it('restores the original and its edits on Undo, rather than rebuilding them', () => {
+    it('restores the record on Undo of a Debug session, rather than rebuilding it', () => {
         const fs = edited()
         const before = fs.files.blob
         const session = fs.beginSession(undefined, 1000)
@@ -878,26 +892,6 @@ describe('Byte edits in the FileSystem', () => {
         undo()
         undo()
         expect(fs.files.blob).toBe(before)
-        expect(fs.files.blob.edits).toHaveLength(1)
-    })
-
-    it('puts back a whole list of edits, as the Hex editor undoes one', () => {
-        const fs = edited()
-        const before = fs.files.blob.edits!
-        fs.editBytes('blob', 3, encode('!'))
-        fs.setByteEdits('blob', before)
-        expect([...fs.readBytes('blob')]).toEqual([0xff, 0x41, 0x42, 2])
-        //an empty list leaves the original, with no edits kept
-        fs.setByteEdits('blob', [])
-        expect(fs.files.blob).toEqual({ encoding: 'base64', content: '/wABAg==' })
-        //checked as a saved list is, and refused where `editBytes` is
-        expect(() => fs.setByteEdits('blob', [{ offset: 3, remove: 2, insert: 'QUI=' }])).toThrow(
-            'past the end'
-        )
-        expect(() => fs.setByteEdits('notes.txt', [])).toThrow('stored as bytes')
-        const run = fs.beginSession()
-        expect(() => fs.setByteEdits('blob', before)).toThrow('Stop')
-        run.stop()
     })
 })
 
@@ -1099,12 +1093,16 @@ describe('Annotations in the FileSystem', () => {
         fs.annotate('chall', comments(5))
     })
 
-    it('keeps them through Byte edits, their Undo, a rename and every other File changing', () => {
+    it('keeps them through overwrites, their Undo, a rename and every other File changing', () => {
         const fs = annotated()
-        fs.editBytes('chall', 1, encode('AB'))
+        const [inverse] = fs.changeBytes('chall', [{ runs: [{ offset: 1, bytes: encode('AB') }] }])
         expect(fs.files.chall.annotations).toEqual(names('check'))
-        fs.setByteEdits('chall', [])
-        expect(fs.files.chall.annotations).toEqual(names('check'))
+        fs.changeBytes('chall', [inverse])
+        expect(fs.files.chall).toEqual({
+            encoding: 'base64',
+            content: '/wABAg==',
+            annotations: names('check')
+        })
         fs.writeText('notes.txt', 'more notes')
         fs.rename('chall', 'bin/chall')
         expect(fs.files['bin/chall'].annotations).toEqual(names('check'))
@@ -1115,7 +1113,7 @@ describe('Annotations in the FileSystem', () => {
     it('keeps them when typing over the bytes of an Executable stored as text', () => {
         const fs = new FileSystem({ elf: { encoding: 'plain', content: 'ELF text' } })
         fs.annotate('elf', names('check'))
-        fs.overwriteText('elf', 0, encode('elf'))
+        fs.changeBytes('elf', [{ runs: [{ offset: 0, bytes: encode('elf') }] }])
         expect(fs.files.elf).toEqual({
             encoding: 'plain',
             content: 'elf text',
@@ -1139,7 +1137,9 @@ describe('Annotations in the FileSystem', () => {
         let steps = 0
         const step = <T>(operation: () => T): T => session.performInstruction(steps++, operation)
         const fd = step(() => session.open('out.txt', 'write'))
-        expect(() => fs.editBytes('chall', 0, encode('X'))).toThrow('Stop')
+        expect(() =>
+            fs.changeBytes('chall', [{ runs: [{ offset: 0, bytes: encode('X') }] }])
+        ).toThrow('Stop')
         fs.annotate('chall', names('verify'))
         expect(fs.files.chall.annotations).toEqual(names('verify'))
         //a later publish keeps them, and no instruction Undo takes them back

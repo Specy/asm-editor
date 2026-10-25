@@ -30,7 +30,9 @@
     import EmptyEditor from './EmptyEditor.svelte'
     import HexEditor from './hex/HexEditor.svelte'
     import type { HexViewState } from './hex/hexGrid'
+    import type { PixelViewState } from '#lib/pixels/pixelDocument.ts'
     import FilePreview from './preview/FilePreview.svelte'
+    import PixelEditor from './pixels/PixelEditor.svelte'
     import MarkdownPreview from './preview/MarkdownPreview.svelte'
     import { isPreviewKind } from '#lib/fileKinds.ts'
     import { useWorkbench } from './workbenchContext'
@@ -257,6 +259,16 @@
                 ? session.controlsGroup === group
                 : group.displayedProgram !== undefined)
     )
+    /** Where this pane was in a picture and what it drew with, kept for as long as its tab is open. */
+    function pixelViewState(path: string): PixelViewState {
+        let state = group.pixelViews.get(path)
+        if (!state) {
+            state = { tool: 'pencil', filled: false }
+            group.pixelViews.set(path, state)
+        }
+        return state
+    }
+
     /** Where this pane was in a File's bytes, kept for as long as its tab is open. */
     function hexViewState(path: string): HexViewState {
         let state = group.hexViews.get(path)
@@ -501,9 +513,8 @@
                     kind={group.displayedKind}
                     readOnly={group.bytesReadOnly}
                     notice={group.bytesNotice}
-                    history={session.byteEditHistory}
                     onEdit={(path, offset, bytes) => session.editFileBytes(path, offset, bytes)}
-                    onSetEdits={(path, edits) => session.setFileByteEdits(path, edits)}
+                    onUndoEdit={(path, redo) => session.undoFileEdit(path, redo)}
                     registerFlush={(flush) => session.registerTypingFlush(flush)}
                     reveal={group.hexReveal?.path === group.displayedPath
                         ? group.hexReveal
@@ -514,6 +525,22 @@
                     onShowInListing={group.displayedKind === 'executable'
                         ? (offset) => void session.showInListing(group, offset)
                         : undefined}
+                />
+            {/key}
+        {:else if group.displayedView === 'pixels' && group.displayedFile}
+            <!-- one Pixel editor per File, so each keeps its own zoom, tool and stroke -->
+            {#key group.displayedPath}
+                <PixelEditor
+                    path={group.displayedPath}
+                    file={group.displayedFile}
+                    readOnly={group.bytesReadOnly}
+                    cellGrid={session.project.cellGrids?.[group.displayedPath]}
+                    onEditRuns={(path, runs, label) => session.editFileByteRuns(path, runs, label)}
+                    onUndoEdit={(path, redo) => session.undoFileEdit(path, redo) !== undefined}
+                    onResize={(path, bytes, label) => session.resizePicture(path, bytes, label)}
+                    onCellGrid={(path, grid) => session.cellGridChosen(path, grid)}
+                    viewState={pixelViewState(group.displayedPath)}
+                    dockInset={docked}
                 />
             {/key}
         {:else if group.displayedView === 'preview' && group.displayedFile && isPreviewKind(group.displayedKind)}

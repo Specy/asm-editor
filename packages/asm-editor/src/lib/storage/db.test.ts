@@ -4,6 +4,8 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vite-plus/test'
 import { Db } from './db'
 import { makeProject } from '#lib/Project.svelte.ts'
+import { EditJournal } from '#lib/editJournal.ts'
+import { encodeBase64, type ProjectFile } from '#lib/projectFiles.ts'
 
 /**
  * The one migration a user's browser runs without asking: opening the app after the files map
@@ -115,23 +117,68 @@ describe('the version 2 upgrade', () => {
         }
     })
 
-    it('round trips Byte edits apart from the original bytes through browser storage', async () => {
+    it('applies Byte edits saved before, and keeps the Edit journal beside the Project', async () => {
         const db = new Db()
         try {
-            const edits = [{ offset: 1, remove: 2, insert: 'QUI=' }]
+            //as a Project saved before ADR 0063 kept a File
+            const legacy = {
+                encoding: 'base64',
+                content: '/wABAg==',
+                edits: [{ offset: 1, remove: 2, insert: 'QUI=' }]
+            } as ProjectFile
             const project = makeProject({
                 language: 'X86',
                 entry: 'chall',
-                files: { chall: { encoding: 'base64', content: '/wABAg==', edits } }
+                files: { chall: legacy }
             })
+            const edited = {
+                encoding: 'base64',
+                content: encodeBase64(Uint8Array.of(0xff, 0x41, 0x42, 2))
+            }
+            expect(project.files.chall).toEqual(edited)
             await db.addProject(project)
             const loaded = await db.getProject(project.id)
-            expect(loaded.files.chall).toEqual({ encoding: 'base64', content: '/wABAg==', edits })
-            loaded.fileSystem.editBytes('chall', 3, new Uint8Array([0x43]))
-            await db.updateProject(loaded)
+            const journal = new EditJournal(loaded.fileSystem)
+            journal.change(
+                'chall',
+                'Typing',
+                { runs: [{ offset: 3, bytes: Uint8Array.of(0x43) }] },
+                2
+            )
+            //the journal waits for the Project's save, and is written in its transaction
+            const store = db.journalStore(project.id)
+            store.changed('chall', () => journal.saved('chall'))
+            expect((await store.load()).size).toBe(0)
+            await db.updateProject(loaded, store.take().writes)
             const again = await db.getProject(project.id)
-            expect(again.files.chall.content).toBe('/wABAg==')
-            expect(again.files.chall.edits).toEqual([{ offset: 1, remove: 3, insert: 'QUJD' }])
+            //the File is its bytes, the journal no part of it
+            expect(again.files.chall).toEqual({
+                encoding: 'base64',
+                content: encodeBase64(Uint8Array.of(0xff, 0x41, 0x42, 0x43))
+            })
+            //and Undo works after a reload
+            const reloaded = new EditJournal(again.fileSystem)
+            for (const [path, saved] of await store.load()) reloaded.load(path, saved)
+            expect(
+                reloaded.journalOf('chall')?.undo.map((step) => [step.label, step.time])
+            ).toEqual([['Typing', 2]])
+            reloaded.undo('chall')
+            expect(again.files.chall).toEqual(edited)
+            //a save that failed puts back what it took, unless changed since
+            store.changed('chall', () => undefined)
+            const failed = store.take()
+            failed.putBack()
+            expect([...store.take().writes]).toEqual([['chall', undefined]])
+            //a journal forgotten in a save, and every journal of a Project deleted with it
+            await db.updateProject(again, new Map([['chall', undefined]]))
+            expect((await store.load()).size).toBe(0)
+            await db.updateProject(again, new Map([['chall', journal.saved('chall')]]))
+            const other = makeProject({ language: 'X86', entry: 'chall', files: { chall: edited } })
+            await db.addProject(other)
+            await db.updateProject(other, new Map([['chall', journal.saved('chall')]]))
+            await db.deleteProject(again)
+            expect((await store.load()).size).toBe(0)
+            expect((await db.journalStore(other.id).load()).size).toBe(1)
         } finally {
             db.close()
         }

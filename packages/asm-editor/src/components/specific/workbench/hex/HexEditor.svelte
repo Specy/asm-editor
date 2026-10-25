@@ -1,16 +1,17 @@
 <script lang="ts" module>
     /**
-     * Each original's bytes, decoded once: a Byte edit makes a new File record over the same
-     * original, and decoding a 16 MiB File again on every edit would stall the typing. Keyed by
-     * the content string itself, per encoding, as the ELF analyses are: a key built from it would
-     * copy megabytes at every lookup.
+     * Each content's bytes, decoded once: a rename or a comment makes a new File record over the
+     * same content, and both panes may show it, so a 16 MiB File is not decoded again for each.
+     * Keyed by the content string itself, per encoding, as the ELF analyses are: a key built from
+     * it would copy megabytes at every lookup.
      */
     //a cache read while deriving the bytes, which nothing tracks: a module script's Map is no state
-    const originals = {
+    const decoded = {
         plain: new Map<string, Uint8Array>(),
         base64: new Map<string, Uint8Array>()
     }
-    const KEPT_ORIGINALS = 4
+    //each holds a whole File and its content: the File shown, and the one it was a change ago
+    const KEPT_DECODED = 2
 </script>
 
 <script lang="ts">
@@ -19,13 +20,7 @@
     import { executableAnalysis } from '#lib/executables.ts'
     import { plannedLoadBase } from '#lib/listing/listingPaths.ts'
     import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
-    import {
-        applyByteEdits,
-        originalBytes,
-        overwriteText,
-        type ByteEdit,
-        type ProjectFile
-    } from '#lib/projectFiles.ts'
+    import { fileBytes, overwriteText, type ProjectFile } from '#lib/projectFiles.ts'
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
@@ -35,7 +30,6 @@
     import FaSearch from '~icons/fa-solid/search'
     import FaMapMarkerAlt from '~icons/fa-solid/map-marker-alt'
     import FaListOl from '~icons/fa-solid/list-ol'
-    import { ByteEditHistory } from './byteEditHistory'
     import { INSPECTED_BYTES } from './dataInspector'
     import { elfRegions, regionAt, regionHover, regionSpans, type FileRegion } from './elfRegions'
     import DataInspector from './DataInspector.svelte'
@@ -76,30 +70,31 @@
      * The **Hex editor** ([file-views.md](../../../../../../../docs/design/file-views.md), decisions
      * 2, 3, 7, 8 and 9): a File's bytes as rows of hex beside their text, drawn for the rows in
      * sight only, over the File's whole length. A caret moved by the keys overwrites a digit at a
-     * time in the hex column or a character in the text column; each run of typing is one Byte
-     * edit, and Undo and Redo put back the File's whole list of edits. A File stored as text keeps
-     * no Byte edits: a run of typing changes its text, which must stay UTF-8, and Undo writes back
-     * the bytes it wrote over.
+     * time in the hex column or a character in the text column; each run of typing is one **Edit
+     * step** of the Workbench's Edit journal, which Undo and Redo take back and put back
+     * ([ADR 0063](../../../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)).
+     * A File stored as text has its text changed, which must stay UTF-8.
      */
     interface Props {
         path: string
         file: ProjectFile
         /** An Executable's bytes are tinted by what they are, as memory is by its regions. */
         kind: ProjectFileKind
-        /** Why the bytes take no Byte edits now, or undefined when they do. */
+        /** Why the bytes cannot be typed over now, or undefined when they can. */
         readOnly?: string
         /** A notice above the bytes when the browser could not preview the File. */
         notice?: string
-        /** Shared by every pane, so that a File's Undo is the same whichever pane typed. */
-        history?: ByteEditHistory
         /**
          * Overwrites bytes of the File at `path`, or of a File stored as text its text; false when
          * the edit was refused, which drops what was typed. The path is passed back because what
          * was typed is saved as the editor closes too, when the pane may already show another File.
          */
         onEdit?: (path: string, offset: number, bytes: Uint8Array) => boolean
-        /** Puts back a byte File's whole list of edits, for Undo and Redo. */
-        onSetEdits?: (path: string, edits: readonly ByteEdit[]) => boolean
+        /**
+         * Undo, or Redo, of the File's newest Edit step, shared by every pane: the offset the
+         * change starts at, or undefined when there was none.
+         */
+        onUndoEdit?: (path: string, redo: boolean) => number | undefined
         /**
          * Hands the Workbench the editor's save of what was typed and not saved yet, which it calls
          * before a Build or a test run locks the Files; returns what takes it back.
@@ -122,9 +117,8 @@
         kind,
         readOnly,
         notice,
-        history = new ByteEditHistory(),
         onEdit,
-        onSetEdits,
+        onUndoEdit,
         registerFlush,
         reveal,
         onRevealed,
@@ -146,21 +140,20 @@
     const FALLBACK_ROW_HEIGHT = 24
     /** Room for a vertical scrollbar beside the widest row. */
     const SCROLLBAR = 16
-    /** How long typing waits before it is saved as one Byte edit. */
+    /** How long typing waits before it is saved as one Edit step. */
     const TYPING_PAUSE = 600
 
-    function originalOf(file: ProjectFile): Uint8Array {
-        const cache = originals[file.encoding]
+    function bytesOf(file: ProjectFile): Uint8Array {
+        const cache = decoded[file.encoding]
         const cached = cache.get(file.content)
         if (cached) return cached
-        const bytes = originalBytes(file)
+        const bytes = fileBytes(file)
         cache.set(file.content, bytes)
-        if (cache.size > KEPT_ORIGINALS) cache.delete(cache.keys().next().value!)
+        if (cache.size > KEPT_DECODED) cache.delete(cache.keys().next().value!)
         return bytes
     }
 
-    const original = $derived(originalOf(file))
-    const bytes = $derived(file.edits?.length ? applyByteEdits(original, file.edits) : original)
+    const bytes = $derived(bytesOf(file))
     const size = $derived(bytes.length)
     const digits = $derived(offsetDigits(size))
     const editable = $derived(readOnly === undefined && !!onEdit)
@@ -177,12 +170,11 @@
         spans && offset >= 0 && offset < size ? regionAt(spans, offset) : undefined
 
     /**
-     * Bytes typed and not yet saved, by offset: shown at once, saved as one Byte edit when the
+     * Bytes typed and not yet saved, by offset: shown at once, saved as one Edit step when the
      * typing pauses or the caret leaves the run. They are always one run, since typing only moves
      * the caret forwards and anything else saves them first.
      */
     let pending = $state.raw<ReadonlyMap<number, number>>(new Map())
-    let pendingStart = 0
     let flushTimer: ReturnType<typeof setTimeout> | undefined
     const byteAt = (offset: number) => pending.get(offset) ?? bytes[offset]
 
@@ -316,25 +308,14 @@
         for (const [offset, byte] of pending) run[offset - start] = byte
         return { start, run }
     }
-    /**
-     * Saves what was typed as one Byte edit, with the edits before it for Undo, or over a File
-     * stored as text as a change to its text, with the bytes it wrote over.
-     */
+    /** Saves what was typed as one Edit step, which Undo takes back. */
     function flush() {
         clearTimeout(flushTimer)
         flushTimer = undefined
         if (!pending.size) return
         const { start, run } = typedRun()
-        const before = currentFile
-        const overwritten =
-            before.encoding === 'plain'
-                ? originalOf(before).slice(start, start + run.length)
-                : undefined
         pending = new Map()
-        if (!onEdit?.(ownPath, start, run)) return
-        if (overwritten)
-            history.recordText(ownPath, { offset: start, before: overwritten, after: run })
-        else history.record(ownPath, before, pendingStart)
+        onEdit?.(ownPath, start, run)
     }
     function scheduleFlush() {
         clearTimeout(flushTimer)
@@ -371,7 +352,6 @@
         if (!editable || size === 0) return false
         const typed = typeKey(caret, byteAt(caret.offset), key, size)
         if (!typed) return false
-        if (!pending.size) pendingStart = caret.offset
         //a new map each time, as the state is raw: what the grid draws changes with it
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Replaced, never mutated once stored.
         pending = new Map(pending).set(caret.offset, typed.byte)
@@ -385,27 +365,11 @@
     function undo(redo = false) {
         if (!editable) return
         flush()
-        const step = file.encoding === 'plain' ? undoText(redo) : undoEdits(redo)
-        if (!step) return
+        const offset = onUndoEdit?.(ownPath, redo)
+        if (offset === undefined) return
         anchor = undefined
-        caret = {
-            offset: Math.min(step.offset, Math.max(0, size - 1)),
-            nibble: 0,
-            column: caret.column
-        }
+        caret = { offset: Math.min(offset, Math.max(0, size - 1)), nibble: 0, column: caret.column }
         revealCaret()
-    }
-    function undoEdits(redo: boolean) {
-        if (!onSetEdits) return undefined
-        const step = redo ? history.redo(ownPath, file) : history.undo(ownPath, file)
-        return step && onSetEdits(ownPath, step.edits) ? step : undefined
-    }
-    function undoText(redo: boolean) {
-        if (!onEdit) return undefined
-        const step = redo ? history.redoText(ownPath, bytes) : history.undoText(ownPath, bytes)
-        return step && onEdit(ownPath, step.offset, redo ? step.after : step.before)
-            ? step
-            : undefined
     }
 
     /** The bytes a copy takes: the selection's, or the caret's byte. */
@@ -908,7 +872,6 @@
         selection={selection ? selection.end - selection.start : 0}
         {size}
         {digits}
-        edited={!!file.edits?.length || pending.size > 0}
         {readOnly}
         region={regionOf(caret.offset)?.name}
         {inspectorOpen}

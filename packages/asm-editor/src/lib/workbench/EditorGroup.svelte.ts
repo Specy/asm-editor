@@ -12,9 +12,9 @@ import {
 import { projectSourceModelKey, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { ProjectFileKind } from '#lib/fileKinds.ts'
 import { textFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
-import { overwritesOnly } from '#lib/projectFiles.ts'
 import { fileViewsOf, resolveFileView, type FileView } from '#lib/fileViews.ts'
 import type { HexViewState } from '#cmp/specific/workbench/hex/hexGrid.ts'
+import type { PixelViewState } from '#lib/pixels/pixelDocument.ts'
 import {
     isLineBreakpoint,
     type SourceBreakpoint
@@ -70,6 +70,12 @@ export class EditorGroup {
      */
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read once when a Hex editor opens a File; nothing tracks it.
     readonly hexViews = new Map<string, HexViewState>()
+    /**
+     * Where this pane was in each picture it showed in the Pixel editor and what it drew with,
+     * while its tab is open, read as the Hex editor's places are.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read once when a Pixel editor opens a File; nothing tracks it.
+    readonly pixelViews = new Map<string, PixelViewState>()
     /**
      * Where this pane's code editor left each model, by key: the editor is made anew whenever the
      * pane comes back to code from the bytes or a Preview, and goes back to where the last one was.
@@ -225,7 +231,7 @@ export class EditorGroup {
             const requested = this.requestedPseudocode
             if (requested?.status !== 'decompiling') return (settled = requested)
             //another function of the same Listing, or the same function of a Listing made again
-            //(a rename, a comment, a Byte edit), keeps the one shown until it is decompiled
+            //(a rename, a comment, an overwrite), keeps the one shown until it is decompiled
             return settled?.path === requested.path &&
                 (settled.listingDocument === requested.listingDocument ||
                     settled.fn.address === requested.fn.address)
@@ -248,7 +254,7 @@ export class EditorGroup {
     /**
      * A Listing document as this pane shows it: the one asked for, except that while one made
      * again for the same version of the same File is being generated (after a rename or a comment,
-     * a Byte edit, or at the address a Debug session loaded the program at), the one it showed
+     * an overwrite, or at the address a Debug session loaded the program at), the one it showed
      * stays until the new one is ready, so the text is not taken away for the moment it takes
      * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
      * decision 22). One per derived value, whose last document it keeps.
@@ -329,6 +335,9 @@ export class EditorGroup {
         const place = this.hexViews.get(from)
         this.hexViews.delete(from)
         if (place && to !== undefined) this.hexViews.set(to, place)
+        const drawing = this.pixelViews.get(from)
+        this.pixelViews.delete(from)
+        if (drawing && to !== undefined) this.pixelViews.set(to, drawing)
         if (!Object.hasOwn(this.views, from)) return
         const views = Object.entries(this.views).filter(([path]) => path !== from && path !== to)
         if (to !== undefined) views.push([to, this.views[from]])
@@ -531,8 +540,10 @@ export class EditorGroup {
     }
     /**
      * The views the displayed File can be switched between, in the order the view switch offers
-     * them (decision 4): Hex · Disassemble · Decompile for an Executable, Preview · Hex for a File
-     * the browser can show, and none where there is only one view, as for text and other bytes. A
+     * them (decision 4), a Preview first and Hex last: Disassemble · Decompile · Hex for an
+     * Executable, Preview · Hex for a File the browser can show, Preview · Pixels · Hex for a BMP
+     * the Pixel editor takes, Preview · Text · Hex for Markdown, and none where there is only one
+     * view, as for text and other bytes. A
      * library's Listing is no File and has none.
      */
     get viewSwitch(): readonly FileView[] {
@@ -792,8 +803,7 @@ export class EditorGroup {
     }
     /**
      * Why the displayed File's bytes cannot be typed over now, or undefined when they can: whatever
-     * keeps a File's text read-only, and saved edits that insert or delete bytes, since only
-     * overwrites can be added to. A File stored as text has its text overwritten instead.
+     * keeps a File's text read-only. A File stored as text has its text overwritten instead.
      */
     get bytesReadOnly(): string | undefined {
         const s = this.session
@@ -802,8 +812,6 @@ export class EditorGroup {
         if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
             return 'The Files are read-only during a Debug session: Stop to edit them'
         if (s.running || s.building) return 'The Files are read-only while a Build runs'
-        if (this.displayedFile && !overwritesOnly(this.displayedFile))
-            return 'This File has Byte edits that insert or delete bytes, which this editor cannot add to'
         return undefined
     }
     /** Why a File the browser could not preview is shown in the Hex editor instead. */

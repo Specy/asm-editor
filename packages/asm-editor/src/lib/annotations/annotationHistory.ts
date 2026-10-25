@@ -17,7 +17,7 @@ export type AnnotationStep = Readonly<{
 }>
 
 type Stack = {
-    /** The File the steps were made on: its original, and its Annotations as the last left them. */
+    /** The File the steps were made on: its content, and its Annotations as the last left them. */
     encoding: ProjectFile['encoding']
     content: string
     key: string
@@ -36,11 +36,11 @@ const KEPT_STEPS = 1000
  * which puts back the whole record the File had before it. Neither instruction Undo nor Monaco's
  * text Undo.
  *
- * A File's stack belongs to its original content and to the Annotations its last step left: once
- * the content is replaced (an upload, a program's write), which drops the Annotations, or the
+ * A File's stack belongs to its content and to the Annotations its last step left: once the
+ * content is replaced (an upload, a program's write), which drops the Annotations, or the
  * Annotations change by another way (instruction Undo of a program's write puts back an older
- * record), the steps no longer fit and the stack starts again. A Byte edit keeps it, as it keeps
- * the Annotations.
+ * record), the steps no longer fit and the stack starts again. An overwrite of the Hex or Pixel
+ * editor keeps it, as it keeps the Annotations: the Workbench tells it of each (`overwritten`).
  *
  * A caller makes a change through `FileSystem.annotate` first and records it once it is made, so
  * that a refused change leaves no step; for Undo and Redo it passes what puts back the step's
@@ -142,6 +142,17 @@ export class AnnotationHistory {
 
     canRedo(path: string, file: ProjectFile): boolean {
         return !!this.fitting(path, file)?.redo.length
+    }
+
+    /**
+     * Carries a File's steps over a change the Hex or Pixel editor made to its bytes, from `before`
+     * to `after`, when the change kept its Annotations, as an overwrite does.
+     */
+    overwritten(path: string, before: ProjectFile | undefined, after: ProjectFile | undefined) {
+        const stack = before && after && this.fitting(path, before)
+        if (!stack || annotationsKey(after) !== stack.key) return
+        stack.content = after.content
+        stack.encoding = after.encoding
     }
 
     /** Carries a File's history to its new path, or forgets it with its File. */

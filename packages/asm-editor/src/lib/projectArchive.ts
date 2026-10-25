@@ -19,7 +19,7 @@ import {
     FILE_ENCODINGS,
     PATH_BYTE_LIMIT,
     isValidFilePath,
-    originalBytes,
+    fileBytes,
     projectFileFromBytes,
     ProjectFormatError,
     type Annotations,
@@ -36,8 +36,10 @@ import { unzipSync, zipSync, type Unzipped } from 'fflate'
  * version 4, version 3's shape, gave a File's entry its Annotations
  * ([annotations-and-search.md](../../../../docs/design/annotations-and-search.md), decision 21).
  * An archive is written in the oldest version that holds it, which older editors read: a Project
- * with one Program as version 1, or 2 with Byte edits, one with several or none as 3, and only one
- * with Annotations as 4, which an editor before them refuses as a version it does not know.
+ * with one Program as version 1, one with several or none as 3, and only one with Annotations as
+ * 4, which an editor before them refuses as a version it does not know. Since a File holds its
+ * current bytes ([ADR 0063](../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md))
+ * none is written with Byte edits, so none as version 2; those read are applied as the File is.
  */
 const ARCHIVE_VERSION_WITH_ANNOTATIONS = 4
 const ARCHIVE_VERSION = 3
@@ -56,6 +58,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true })
 
 type ArchivedFile = {
     encoding: FileEncoding
+    /** Read from versions 2 to 4, never written. */
     edits?: readonly ByteEdit[]
     annotations?: Annotations
 }
@@ -87,22 +90,18 @@ export function projectToArchive(project: Project | ProjectData): Uint8Array<Arr
     const legacy = annotated ? undefined : legacyProjectShape(snapshot)
     const projectMetadata = { ...(legacy ?? snapshot) }
     Reflect.deleteProperty(projectMetadata, 'files')
-    const edited = Object.values(files).some((file) => file.edits?.length)
     const manifest: ProjectManifest = {
         version: annotated
             ? ARCHIVE_VERSION_WITH_ANNOTATIONS
             : !legacy
               ? ARCHIVE_VERSION
-              : edited
-                ? ARCHIVE_VERSION_WITHOUT_PROGRAMS
-                : ARCHIVE_VERSION_WITHOUT_EDITS,
+              : ARCHIVE_VERSION_WITHOUT_EDITS,
         project: projectMetadata,
         files: Object.fromEntries(
             Object.entries(files).map(([path, file]) => [
                 path,
                 {
                     encoding: file.encoding,
-                    ...(file.edits ? { edits: file.edits } : {}),
                     ...(file.annotations ? { annotations: file.annotations } : {})
                 }
             ])
@@ -113,9 +112,8 @@ export function projectToArchive(project: Project | ProjectData): Uint8Array<Arr
         throw new ProjectFormatError('Project metadata exceeds the 1 MiB archive limit')
     }
     const entries: Record<string, Uint8Array> = { [MANIFEST_NAME]: manifestBytes }
-    //the original bytes: the Byte edits are in the manifest, kept apart as the Project keeps them
     for (const [path, file] of Object.entries(files))
-        entries[`${FILE_PREFIX}${path}`] = originalBytes(file)
+        entries[`${FILE_PREFIX}${path}`] = fileBytes(file)
     return zipSync(entries, { level: 6 })
 }
 
@@ -259,7 +257,7 @@ export function makeProjectFromArchive(input: ArrayBuffer | Uint8Array): Externa
         throw new ProjectFormatError('Project manifest and archived Files do not match')
     }
 
-    const files: Record<string, ProjectFile> = Object.create(null)
+    const files: Record<string, ProjectFile & Pick<ArchivedFile, 'edits'>> = Object.create(null)
     for (const path of metadataPaths) {
         if (!isValidFilePath(path))
             throw new ProjectFormatError(`Invalid manifest File path: ${path}`)
@@ -267,8 +265,8 @@ export function makeProjectFromArchive(input: ArrayBuffer | Uint8Array): Externa
         if (!archived) throw new ProjectFormatError(`Archived File is missing: ${path}`)
         const info = rawManifest.files[path]
         const file = projectFileFromBytes(archived, info.encoding)
-        //`cleanFiles` below checks the edits against the original they apply to, and the
-        //Annotations as a saved Project's
+        //`cleanFiles` below applies the edits of versions 2 to 4 to the original under `files/`,
+        //and checks the Annotations as a saved Project's
         files[path] = {
             ...file,
             ...(info.edits ? { edits: info.edits } : {}),

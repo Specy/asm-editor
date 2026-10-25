@@ -121,7 +121,7 @@ describe('the Build output in the Workbench', () => {
         expect(group.displayedBuildOutputEntry).toBe('main.asm')
         expect(group.displayedKind).toBe('executable')
         expect(group.displayedView).toBe('listing')
-        expect(group.viewSwitch).toEqual(['hex', 'listing', 'pseudocode'])
+        expect(group.viewSwitch).toEqual(['listing', 'pseudocode', 'hex'])
         //its bytes take edits once no Debug session holds the Files, as any File's
         group.setView('main', 'hex')
         flushSync()
@@ -288,22 +288,24 @@ describe('a Build over a File that is no unchanged Build output', () => {
         expect(session.buildOutputs.get('main')?.entry).toBe('main.asm')
     })
 
-    it('asks once a Byte edit, a rename or a comment changed the Build output', async () => {
+    it('asks once an overwrite, a rename or a comment changed the Build output', async () => {
         const { session, project, linked } = setup()
         await built(session)
         session.stop()
-        project.fileSystem.editBytes('main', 0x40, new Uint8Array([0x90]))
+        const [undo] = project.fileSystem.changeBytes('main', [
+            { runs: [{ offset: 0x40, bytes: new Uint8Array([0x90]) }] }
+        ])
         flushSync()
         expect(session.buildOutputs.has('main')).toBe(false)
         linked.bytes = relinked
         const building = built(session)
         expect(await answer(false)).toBe(
-            'main was changed since a Build saved it. Building replaces it with the program it links, without its Byte edits, renames and comments. Replace it?'
+            'main was changed since a Build saved it. Building replaces it with the program it links, without the changes made to its bytes, its renames and its comments. Replace it?'
         )
         await building
-        expect(project.files.main.edits).toHaveLength(1)
+        expect(fileBytes(project.files.main)[0x40]).toBe(0x90)
         session.stop()
-        project.fileSystem.setByteEdits('main', [])
+        project.fileSystem.changeBytes('main', [undo])
         project.fileSystem.annotate('main', { names: { '0x401000': 'my_start' } })
         flushSync()
         const again = built(session)
@@ -356,7 +358,9 @@ describe('a Testcase’s program', () => {
         await built(session)
         expect(buildOutputHost().isBuildOutput('main')).toBe(true)
         session.stop()
-        project.fileSystem.editBytes('main', 0, new Uint8Array([0x7f]))
+        project.fileSystem.changeBytes('main', [
+            { runs: [{ offset: 0x40, bytes: new Uint8Array([0x90]) }] }
+        ])
         flushSync()
         expect(buildOutputHost().isBuildOutput('main')).toBe(false)
     })

@@ -3,7 +3,6 @@ import { addressMap } from '#lib/annotations/annotations.ts'
 import { executableAnalysis, executableKind } from '#lib/executables.ts'
 import { KeyIds } from '#lib/keyIds.ts'
 import {
-    byteEditsKey,
     fileBytes,
     listingAnnotationsKey,
     type Annotations,
@@ -80,8 +79,6 @@ export type ListingDocumentOrder = {
     base: number
     /** Identifies the bytes: a File's content, or a bundled library's path in the Core. */
     content: string
-    /** A File's Byte edits as `byteEditsKey` names them, which change its bytes too. */
-    edits?: string
     /**
      * An Executable File's Annotations, of which the Listing shows the renames and comments
      * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
@@ -106,9 +103,11 @@ export class ListingDocuments {
     /**
      * A number for each content string and each Annotations key, so a document's key is short:
      * a File's content can be megabytes, its Annotations 256 KiB. Apart, so that a run of renames
-     * and comments never takes the content's number away, which would make its Listing again.
+     * and comments never takes the content's number away, which would make its Listing again. As
+     * many contents as documents: each holds a whole File, and every overwrite in the Hex editor
+     * makes a new one (ADR 0063).
      */
-    private readonly contentIds = new KeyIds(4 * KEPT_DOCUMENTS)
+    private readonly contentIds = new KeyIds(KEPT_DOCUMENTS)
     private readonly annotationIds = new KeyIds(4 * KEPT_DOCUMENTS)
     private readonly annotationKeys = new WeakMap<Annotations, string>()
     /**
@@ -150,7 +149,7 @@ export class ListingDocuments {
      */
     open(order: ListingDocumentOrder): ListingDocument {
         const annotations = this.annotationsKey(order.annotations)
-        const key = `${order.base}\0${order.name}\0${this.contentIds.of(order.content)}\0${order.edits ?? ''}\0${annotations && this.annotationIds.of(annotations)}`
+        const key = `${order.base}\0${order.name}\0${this.contentIds.of(order.content)}\0${annotations && this.annotationIds.of(annotations)}`
         let document = this.documents.get(key)
         if (document) this.documents.delete(key)
         if (!document || (document.status === 'failed' && !document.lasting))
@@ -177,7 +176,6 @@ export class ListingDocuments {
             name: path.slice(path.lastIndexOf('/') + 1),
             base: plannedLoadBase(executableAnalysis(file).pie),
             content: file.content,
-            edits: byteEditsKey(file),
             ...(file.annotations ? { annotations: file.annotations } : {}),
             bytes: () => fileBytes(file)
         })

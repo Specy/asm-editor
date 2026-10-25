@@ -1,6 +1,7 @@
 import type { AvailableLanguages } from './Project.svelte'
 import { executableKind } from './executables'
-import { fileHead, type ProjectFile } from './projectFiles'
+import { fileByteLength, fileHead, type ProjectFile } from './projectFiles'
+import { isBmp, readBmpLayout } from './pixels/bmp'
 import { isMarkdownPath } from './textFileLanguages'
 
 /**
@@ -11,8 +12,17 @@ import { isMarkdownPath } from './textFileLanguages'
  * a rendered Preview.
  */
 
-/** A kind of File the browser shows itself, and the type it is handed as. */
-export type FilePreview = Readonly<{ preview: 'image' | 'pdf' | 'audio' | 'video'; mime: string }>
+/**
+ * A kind of File the browser shows itself, and the type it is handed as; `pixels` for a BMP the
+ * **Pixel editor** draws in ([pixel-editor.md](../../../../docs/design/pixel-editor.md),
+ * decision 3; [pixel-editor-plan.md](../../../../docs/design/pixel-editor-plan.md), decisions 1
+ * and 2).
+ */
+export type FilePreview = Readonly<{
+    preview: 'image' | 'pdf' | 'audio' | 'video'
+    mime: string
+    pixels?: true
+}>
 export type ProjectFileKind = 'text' | 'markdown' | 'executable' | FilePreview | 'bytes'
 
 /**
@@ -84,22 +94,6 @@ function isoBrands(bytes: Uint8Array): string[] | undefined {
 }
 
 const u16 = (bytes: Uint8Array, offset: number) => bytes[offset] | (bytes[offset + 1] << 8)
-const u32 = (bytes: Uint8Array, offset: number) =>
-    (u16(bytes, offset) | (u16(bytes, offset + 2) << 16)) >>> 0
-
-/**
- * The sizes of the DIB headers a BMP can carry, from `BITMAPCOREHEADER`'s 12 to
- * `BITMAPV5HEADER`'s 124.
- */
-const BMP_HEADER_SIZES = [12, 40, 52, 56, 64, 108, 124]
-
-/**
- * A BMP: `BM`, and after the 14-byte file header a DIB header of a size Windows defines, which
- * rules out most Files that merely start with those two letters.
- */
-function isBmp(bytes: Uint8Array) {
-    return bytes.length >= 26 && ascii(bytes, 0, 'BM') && BMP_HEADER_SIZES.includes(u32(bytes, 14))
-}
 
 /**
  * An icon or a cursor: its type, at least one image, and a first directory entry whose reserved
@@ -153,7 +147,7 @@ export function previewSignature(bytes: Uint8Array): FilePreview | undefined {
 }
 
 /**
- * What the File at `path` is, from its bytes with their Byte edits. An ELF is an Executable only
+ * What the File at `path` is, from its bytes. An ELF is an Executable only
  * where a Build can run it, in an x86 Project, as `executableKind` decides; anywhere else it is
  * bytes. A File stored as text is text whatever its first bytes, Markdown by its name, but for a
  * PDF: one written in ASCII alone decodes as text, and is still a PDF to preview.
@@ -171,8 +165,9 @@ export function fileKind(
 }
 
 /**
- * The previewable kind a File's first bytes, with their Byte edits, match; a File stored as text
- * only as a PDF, which `fileKind` explains.
+ * The previewable kind a File's first bytes match; a File stored as text
+ * only as a PDF, which `fileKind` explains. A BMP whose layout the Pixel editor draws in, its
+ * pixels inside the File and not too many, is marked `pixels`.
  */
 export function filePreview(file: ProjectFile): FilePreview | undefined {
     if (file.encoding === 'plain') return file.content.startsWith('%PDF-') ? pdf() : undefined
@@ -182,7 +177,10 @@ export function filePreview(file: ProjectFile): FilePreview | undefined {
     } catch {
         return undefined
     }
-    return previewSignature(head)
+    const preview = previewSignature(head)
+    if (preview?.mime === 'image/bmp' && readBmpLayout(head, fileByteLength(file)).layout)
+        return { ...preview, pixels: true }
+    return preview
 }
 
 export function isPreviewKind(kind: ProjectFileKind | undefined): kind is FilePreview {
