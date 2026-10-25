@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import MarkdownEditor from './MarkdownEditor.svelte'
 
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 //Monaco does not run in jsdom; the editor's text is what these are about, not its colours
 vi.mock('#cmp/specific/project/Editor.svelte', async () => ({
     default: (await import('./__fixtures__/EditorStub.svelte')).default

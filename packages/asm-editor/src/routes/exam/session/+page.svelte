@@ -34,7 +34,8 @@
         type OpenQuestionSection
     } from '#lib/exam.ts'
 
-    import { createDebouncer, makeHash, textDownloader } from '#lib/utils.ts'
+    import { makeHash, textDownloader } from '#lib/utils.ts'
+    import { createDebouncer } from '#lib/debounce.ts'
     import { serializer } from '#lib/json.ts'
     import { toast } from '#stores/toastStore.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'

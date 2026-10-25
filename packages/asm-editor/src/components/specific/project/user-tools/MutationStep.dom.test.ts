@@ -11,7 +11,7 @@ import {
 
 //the row reaches `#lib/utils.ts`, which reaches the projects store, which opens its IndexedDB because
 //this project resolves `browser` as true; jsdom has no IndexedDB, so the database is stubbed away
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 /**
  * A Poke's History row ([the design record](../../../../../../../docs/design/pokes.md)): what was poked

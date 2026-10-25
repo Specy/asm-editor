@@ -8,7 +8,7 @@ import { Prompt } from '#stores/promptStore.svelte.ts'
 
 //nothing here goes near the database, but a shared component on the way could reach the projects
 //store, which opens IndexedDB, which jsdom has not got
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 /**
  * The Testcases panel: the outcome of the last run on each row and inside it, a result going stale

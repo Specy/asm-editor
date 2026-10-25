@@ -1,7 +1,7 @@
 import { browser } from '$app/env'
 import { LANGUAGE_THEMES } from '#lib/Config.ts'
-import { id } from '#lib/storage/db.ts'
-import { createDebouncer } from '#lib/utils.ts'
+import { id } from '#lib/id.ts'
+import { createDebouncer } from '#lib/debounce.ts'
 import { TinyColor } from '@ctrl/tinycolor'
 import structuredClone from '@ungap/structured-clone'
 

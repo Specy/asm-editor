@@ -77,15 +77,20 @@ describe('an x86 Build', () => {
         ])
     })
 
-    it('says when it downloads the assembler, then that it assembles and links', async () => {
+    it('says when it downloads the assembler and the linker, and that it assembles and links', async () => {
         const emulator = await emulatorFor(assembly)
         const said = phases()
         await emulator.compile(0, assembly)
         expect(emulator.canExecute).toBe(true)
-        expect(said()).toEqual(['Downloading the assembler…', 'Assembling…', 'Linking…'])
+        expect(said()).toEqual([
+            'Downloading the assembler…',
+            'Assembling…',
+            'Downloading the linker…',
+            'Linking…'
+        ])
         emulator.clear()
         await emulator.compile(0, assembly)
-        expect(said().slice(3)).toEqual(['Assembling…', 'Linking…'])
+        expect(said().slice(4)).toEqual(['Assembling…', 'Linking…'])
     })
 
     it('ends with what could not be downloaded and to Build again, and builds the next time', async () => {

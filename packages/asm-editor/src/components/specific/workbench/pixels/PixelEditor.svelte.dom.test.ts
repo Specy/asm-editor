@@ -19,7 +19,7 @@ import type { CellGrid } from '#lib/Project.svelte.ts'
 
 //the theme store, which the editor draws its lines and checkerboard in, reaches the projects'
 //IndexedDB, which jsdom does not have
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 beforeEach(() => {
     vi.stubGlobal(

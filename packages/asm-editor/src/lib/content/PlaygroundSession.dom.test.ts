@@ -11,7 +11,7 @@ import { resolveSourceHelpContext } from '#lib/sourceLanguageHelp/context.ts'
 import { includeSuggestions } from '#lib/sourceLanguageHelp/includes.ts'
 import { sourceHelpEntries } from '#lib/sourceLanguageHelp/catalog.ts'
 
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 const text = (content: string) => ({ encoding: 'plain' as const, content })
 const disposers: (() => void)[] = []
 function setup(assemblyEntry = false) {

@@ -9,7 +9,7 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
 
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 beforeAll(() => {
     HTMLElement.prototype.showPopover = () => {}
     HTMLElement.prototype.animate = (() => ({

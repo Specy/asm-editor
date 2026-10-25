@@ -15,7 +15,7 @@ import {
 //the rows reach `#lib/utils.ts`, which reaches the projects store, which opens its IndexedDB because
 //this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection would fail
 //the run, so the database is stubbed away: nothing a Register file row does goes near it
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 //jsdom has no popovers, which the pointer menu opens as
 beforeAll(() => {

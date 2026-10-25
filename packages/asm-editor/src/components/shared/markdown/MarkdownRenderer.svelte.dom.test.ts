@@ -10,7 +10,7 @@ import { EMBED_BUILT_MESSAGE } from '#lib/content/embedMessages.ts'
 //the renderer reaches `#lib/Project.svelte.ts`, which reaches the projects store, which opens its
 //IndexedDB because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's
 //rejection would fail the run, so the database is stubbed away
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 /** Monaco, as far as the renderer's colouring asks it anything; it writes spaces as `&nbsp;`. */
 const colorize = vi.fn(

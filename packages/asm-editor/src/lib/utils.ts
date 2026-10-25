@@ -29,19 +29,6 @@ export function unsignedBigIntToSigned(unsignedBigInt: bigint, numBytes: number)
     return unsignedBigInt
 }
 
-export type Timer = ReturnType<typeof setTimeout>
-
-export function createDebouncer(delay: number): [(callback: () => void) => void, () => void] {
-    let timeoutId: Timer
-    function clear() {
-        clearTimeout(timeoutId)
-    }
-    function debounce(callback: () => void) {
-        clearTimeout(timeoutId)
-        timeoutId = setTimeout(callback, delay)
-    }
-    return [debounce, clear]
-}
 export function blobDownloader(blob: Blob, fileName: string) {
     const a = document.createElement('a')
     a.style.display = 'none'

@@ -8,7 +8,7 @@ import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
 //the panel reaches `#lib/utils.ts`, which reaches the projects store, which opens its IndexedDB
 //because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection
 //would fail the run, so the database is stubbed away: nothing the memory grid does goes near it
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 //jsdom has no popovers, which the pointer menu opens as
 beforeAll(() => {

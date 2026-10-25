@@ -5,7 +5,7 @@ import { renderMarkdown, type MarkdownOptions } from './markdown'
 
 //the playground modules reach the projects store, which opens its IndexedDB because this project
 //resolves `browser` as true; jsdom has none, so the database is stubbed away
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 /**
  * The pipeline's output is what a prerendered page carries and what the browser renders again

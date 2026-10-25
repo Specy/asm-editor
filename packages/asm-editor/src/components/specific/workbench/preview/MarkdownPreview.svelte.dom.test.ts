@@ -4,7 +4,7 @@ import MarkdownPreview from './MarkdownPreview.svelte'
 import { bytesFile, type ProjectFile, type ProjectFiles } from '#lib/projectFiles.ts'
 
 //the renderer reaches the projects store, which opens an IndexedDB jsdom does not have
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 const png = bytesFile(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0]))
 const text = (content: string): ProjectFile => ({ encoding: 'plain', content })

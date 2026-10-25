@@ -15,7 +15,7 @@ import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 
 //the column reaches the projects store, which opens its IndexedDB because this project resolves
 //`browser` as true; jsdom has none, and nothing here goes near it
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 //svelte/motion, which the side panel beside it in the harness loads, reads the reduced motion
 //query as it loads, before any hook runs

@@ -696,8 +696,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         try {
             return await this.compileSources(sources)
         } catch (error) {
-            //a library or the assembler that could not be downloaded: Build again, and it is
-            //downloaded again, after a reload of the page when the server refused it
+            //a library, the assembler or the linker that could not be downloaded: Build again, and
+            //it is downloaded again, after a reload of the page when the server refused it
             if (error instanceof ResourceDownloadError)
                 throw new BuildDownloadError(error.resource, downloadReason(error), {
                     cause: error,

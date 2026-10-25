@@ -66,7 +66,7 @@ import {
 } from '#lib/languages/ExecutionSlice.ts'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '#lib/Project.svelte.ts'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE, PROGRAM_START_INSTRUCTION_LIMIT } from '#lib/Config.ts'
-import { createDebouncer } from '#lib/utils.ts'
+import { createDebouncer } from '#lib/debounce.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import { projectSettingDefault } from '#lib/projectSettings.ts'
 import { RUNTIME_NAMESPACE } from '#lib/runtimeAbi.ts'

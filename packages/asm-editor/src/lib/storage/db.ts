@@ -8,15 +8,8 @@ import {
     type StoredProject
 } from '../Project.svelte'
 import type { EditJournalStore, SavedJournal } from '../editJournal'
+import { id } from '../id'
 
-export function id(length = 7) {
-    let result = ''
-    for (let i = 0; i < length; i++) {
-        const random = Math.random()
-        result += String.fromCharCode(Math.floor(random * 26) + (random < 0.5 ? 65 : 97))
-    }
-    return result
-}
 /** A row's fields that the files map and then the Programs replaced, which its rewrite drops. */
 const REPLACED_FIELDS = ['code', 'entry', 'settings', 'testcases', 'display']
 /** A File's Edit journal as the database keeps it, by its Project's id and its path. */

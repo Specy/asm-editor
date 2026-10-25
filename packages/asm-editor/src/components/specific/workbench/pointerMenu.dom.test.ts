@@ -14,7 +14,7 @@ import {
 
 //the menus reach the projects store, which opens its IndexedDB because this project resolves
 //`browser` as true; jsdom has none, and nothing here goes near it
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 //whether the Entry is an Executable is the ELF analysis's to say; here it is the File's text
 vi.mock('#lib/executables.ts', () => ({
     executableKind: (file: { content?: string } | undefined) =>

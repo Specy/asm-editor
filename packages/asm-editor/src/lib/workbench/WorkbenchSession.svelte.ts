@@ -174,7 +174,7 @@ import {
 import { executableKind } from '#lib/executables.ts'
 import { fileKind, type ProjectFileKind } from '#lib/fileKinds.ts'
 import { defaultFileView, fileViewsOf, type FileView } from '#lib/fileViews.ts'
-import { createDebouncer } from '#lib/utils.ts'
+import { createDebouncer } from '#lib/debounce.ts'
 import { terminationSummary } from '#lib/languages/termination.ts'
 import {
     closeTab,

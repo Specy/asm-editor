@@ -23,7 +23,7 @@ import * as hexSearch from './hexSearch'
 
 //`#lib/utils.ts`, which the data inspector reads numbers through, reaches the projects store and
 //its IndexedDB, which jsdom does not have
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 const writeText = vi.fn(async (_text: string) => {})
 beforeEach(() => {

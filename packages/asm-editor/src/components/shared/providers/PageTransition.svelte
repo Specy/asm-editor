@@ -1,7 +1,7 @@
 <script lang="ts">
     import { afterNavigate, beforeNavigate } from '$app/navigation'
     import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
-    import type { Timer } from '#lib/utils.ts'
+    import type { Timer } from '#lib/debounce.ts'
 
     interface Props {
         refresh?: string

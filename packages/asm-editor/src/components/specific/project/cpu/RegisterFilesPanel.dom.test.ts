@@ -14,7 +14,7 @@ import {
 //the panel reaches `#lib/utils.ts`, which reaches the projects store, which opens its IndexedDB
 //because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's rejection
 //would fail the run, so the database is stubbed away
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 /**
  * What the panel around a poked row does to the open input

@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { clamp, createDebouncer } from '#lib/utils.ts'
+    import { clamp } from '#lib/utils.ts'
+    import { createDebouncer } from '#lib/debounce.ts'
 
     let ref: HTMLElement | undefined = $state()
 

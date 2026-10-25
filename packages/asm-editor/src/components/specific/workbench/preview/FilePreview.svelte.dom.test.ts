@@ -13,7 +13,7 @@ import type { FilePreview as PreviewKind } from '#lib/fileKinds.ts'
 
 //`#lib/utils.ts`, whose download the PDF notice uses, reaches the projects store and its
 //IndexedDB, which jsdom does not have
-vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () => 'test' }))
+vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0])
 const PDF = new TextEncoder().encode('%PDF-1.7\n%%EOF\n')
