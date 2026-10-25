@@ -16,7 +16,12 @@
 
 <div class="chapter">
     {#each chapter.entries as entry (entry.id)}
-        <section class="entry" id={entry.anchor} class:prose={entry.kind === 'prose'}>
+        <section
+            class="entry"
+            id={entry.anchor}
+            class:prose={entry.kind === 'prose'}
+            class:reading-copy={entry.kind === 'prose'}
+        >
             <header>
                 <h2 class="title" class:code={hasCodeName(entry)}>{entry.title}</h2>
                 {#if entry.signature}

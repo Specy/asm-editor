@@ -22,6 +22,7 @@
     import { courseLanguage } from '#lib/search/scope.ts'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd, lectureLd } from '#lib/seo.ts'
+    import LectureInstructions from '#cmp/content/LectureInstructions.svelte'
 
     interface Props {
         data: PageData & { content: string }
@@ -129,7 +130,7 @@
     {/each}
 {/snippet}
 
-<Page cropped="110ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
+<Page cropped="110ch" contentStyle="padding: 1rem; gap: 1rem;">
     <Card padding="1.5rem 0" gap="1rem">
         <Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
             {data.lecture.name}
@@ -149,17 +150,15 @@
             {/if}
         </p>
     {/if}
-    <MarkdownRenderer
-        style="font-size: 1.1rem;"
-        source={data.content}
-        spacing="1.2rem"
-        headingIds
-    />
+    <div class="reading-copy">
+        <MarkdownRenderer source={data.content} spacing="1.2rem" headingIds />
+    </div>
     {#if topicLinks && inGeneralCourse && topicLinks.siblings.length > 0}
         <p class="topic-links">
             Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
         </p>
     {/if}
+    <LectureInstructions groups={data.instructions} language={courseLanguage(data.course.slug)} />
     {#if editorLanguage}
         <div class="editor-section" bind:this={editorSection}>
             {#key editorLanguage}

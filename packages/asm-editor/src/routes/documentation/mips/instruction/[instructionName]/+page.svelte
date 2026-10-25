@@ -17,7 +17,7 @@
 <InstructionPageHead {document} architecture="MIPS" root="/documentation/mips" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <InstructionDocumentView {document} language="MIPS">
+    <InstructionDocumentView {document} language="MIPS" lessons={data.props.lessons}>
         {#snippet example()}
             <InstructionExample
                 instructionKey={document.name}

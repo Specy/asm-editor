@@ -27,7 +27,7 @@
 <InstructionPageHead {document} architecture="Z80" root="/documentation/z80" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <InstructionDocumentView {document} language="Z80">
+    <InstructionDocumentView {document} language="Z80" lessons={data.props.lessons}>
         {#snippet example()}
             {#if component}
                 {@const SvelteComponent_1 = component}

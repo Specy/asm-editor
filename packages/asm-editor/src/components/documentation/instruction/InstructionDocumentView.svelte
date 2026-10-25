@@ -28,6 +28,7 @@
      * its row, puts each fact line under its syntax and cuts a long section by count (decision 9).
      */
     import type { Snippet } from 'svelte'
+    import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import InstructionTagBadge from '#cmp/documentation/entries/InstructionTagBadge.svelte'
     import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
@@ -43,6 +44,7 @@
     import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
     import FlagStrip from './FlagStrip.svelte'
     import FormPatternRow from './FormPatternRow.svelte'
+    import InstructionLessons from './InstructionLessons.svelte'
     import OperandLegend, { symbolSlug } from './OperandLegend.svelte'
 
     interface Props {
@@ -53,9 +55,21 @@
         example?: Snippet
         /** How the forms of an opened row are highlighted. */
         language?: AvailableLanguages
+        /** The mnemonic's other spellings, whose own pages point readers and crawlers here. */
+        aliases?: string[]
+        /** The Lectures whose code uses it, the header's last line on the page. */
+        lessons?: readonly InstructionLesson[]
     }
 
-    let { document, density = 'page', disableLinks = false, example, language }: Props = $props()
+    let {
+        document,
+        density = 'page',
+        disableLinks = false,
+        example,
+        language,
+        aliases = [],
+        lessons = []
+    }: Props = $props()
 
     // the editor's colours for the highlighted forms, as code samples take them
     const palette = $derived(
@@ -162,6 +176,16 @@
                 {/each}
             </p>
         {/if}
+        {#if aliases.length > 0}
+            <p class="header-facts">
+                <InlineMarkdown
+                    source={`Also written as: ${aliases.map((alias) => `\`${alias}\``).join(', ')}`}
+                />
+            </p>
+        {/if}
+        {#if lessons.length > 0 && language}
+            <InstructionLessons {lessons} {language} />
+        {/if}
     </header>
 
     {#if document.flags?.marks}
@@ -244,9 +268,10 @@
     {/if}
 
     {#if document.description}
-        <div class="description">
+        <div class="description" class:reading-copy={!panel}>
             <MarkdownRenderer
                 source={document.description}
+                style="font-size: var(--instruction-prose-size)"
                 centered={false}
                 simpleCode={panel}
                 linksInNewTab={panel}
@@ -263,12 +288,14 @@
 <style>
     .instruction-document {
         --doc-rule: color-mix(in srgb, var(--tertiary) 85%, transparent);
+        --instruction-prose-size: var(--content-prose-size, 1.1rem);
         display: flex;
         flex-direction: column;
         gap: 1.4rem;
         min-width: 0;
     }
     .panel {
+        --instruction-prose-size: 0.92rem;
         gap: 0.8rem;
     }
     .header {
@@ -317,11 +344,8 @@
     .summary {
         margin: 0;
         max-width: 80ch;
-        font-size: 1.05rem;
+        font-size: var(--instruction-prose-size);
         line-height: 1.5;
-    }
-    .panel .summary {
-        font-size: 0.92rem;
     }
     .header-facts {
         max-width: 80ch;
@@ -439,13 +463,16 @@
         color: var(--accent);
         text-decoration: underline;
     }
-    /* the panel reads in the app's own font, as every other entry does (EntryBody) */
+    .description :global(._markdown p),
+    .description :global(._markdown ul),
+    .description :global(._markdown ol) {
+        font-family: inherit;
+        font-weight: normal;
+        font-size: inherit;
+    }
     .panel .description :global(._markdown p),
     .panel .description :global(._markdown ul),
     .panel .description :global(._markdown ol) {
-        font-family: inherit;
-        font-weight: normal;
-        font-size: 0.92rem;
         width: 100%;
         margin: 0;
     }

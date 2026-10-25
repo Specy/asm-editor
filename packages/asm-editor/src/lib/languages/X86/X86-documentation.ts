@@ -765,6 +765,21 @@ export const X86_CONDITION_CODES: X86ConditionCode[] = [
     { code: 'np', aliases: ['po'], meaning: 'parity odd', test: 'PF = 0' }
 ]
 
+/**
+ * The spellings of `jcc`, `setcc` and `cmovcc` that use one of a condition's other names (`jnbe` is
+ * `ja`, `setz` is `sete`), each mapped to the mnemonic of the condition's own code. They assemble to
+ * the same instruction, so their pages say the same thing.
+ */
+export const x86InstructionAliases: ReadonlyMap<string, string> = new Map(
+    ['j', 'set', 'cmov'].flatMap((family) =>
+        X86_CONDITION_CODES.flatMap((condition) =>
+            condition.aliases
+                .map((alias) => [`${family}${alias}`, `${family}${condition.code}`] as const)
+                .filter(([alias, main]) => documentedNames.has(alias) && documentedNames.has(main))
+        )
+    )
+)
+
 export type X86RegisterFileEntry = {
     name: string
     /** The width the registers panel shows the register at, in bits. */

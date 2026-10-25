@@ -27,7 +27,12 @@
 <InstructionPageHead {document} architecture="x86-64" root="/documentation/x86" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
-    <InstructionDocumentView {document} language="X86">
+    <InstructionDocumentView
+        {document}
+        language="X86"
+        aliases={data.props.aliases}
+        lessons={data.props.lessons}
+    >
         {#snippet example()}
             {#if data.props.example}
                 {#if component}

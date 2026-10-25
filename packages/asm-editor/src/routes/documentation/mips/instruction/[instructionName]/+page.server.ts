@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
+import { instructionLessons } from '#lib/content/lectureInstructions.ts'
 import { chapters } from '#lib/documentation/mips/mips.ts'
 import { mipsInstructionMap } from '#lib/languages/MIPS/MIPS-documentation.ts'
 import { mipsInstructionContent } from '#lib/documentation/mips/instructionContent.ts'
@@ -14,7 +15,8 @@ export const load = (async ({ params }) => {
     return {
         props: {
             document: mipsInstructionDocument(params.instructionName, instruction, content),
-            content
+            content,
+            lessons: await instructionLessons('mips', params.instructionName)
         }
     }
 }) satisfies PageServerLoad

@@ -9,10 +9,12 @@
 
 <DefaultNavbar />
 {#key page.url.pathname}
+    <!-- The lists share the column and gutter of /documentation and /learn/courses, so moving
+         between them keeps the title in place; blog.css's .blog-intro does the top spacing. -->
     <Page
         hasNavbar
-        cropped={isArticle ? false : '74rem'}
-        contentStyle={`padding: 2.5rem ${isArticle ? '0' : '1.25rem'} 5rem`}
+        cropped={isArticle ? false : '70rem'}
+        contentStyle={isArticle ? 'padding: 2.5rem 0 5rem' : 'padding: 1rem 1rem 5rem'}
     >
         {@render children()}
     </Page>

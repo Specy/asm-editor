@@ -2,7 +2,7 @@
     "id": "assembly-basics",
     "name": "Assembly basics",
     "authors": ["Specy"],
-    "description": "What every assembly language has in common: registers, memory, addressing modes, flags, branching, loops, the stack, subroutines, and the ways a program reaches the world outside it. Start here if you have never written assembly.",
+    "description": "Learn how CPUs execute assembly programs, with examples covering registers, memory, loops, subroutines and the stack.",
     "image": "",
     "tags": ["assembly"],
     "date": "2025-05-18",
