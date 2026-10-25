@@ -17,6 +17,8 @@
         ontoggle?: () => void
         /** The height it is cut to, in rem, the fade's included. */
         height?: number
+        /** The height of the fade at the bottom of the cut content, in rem. */
+        fade?: number
         /**
          * How far past `height` it may run and still show whole, in rem: a line or two hidden
          * behind a button saves nothing.
@@ -34,6 +36,7 @@
         expanded = $bindable(false),
         ontoggle,
         height = 9.5,
+        fade = 2,
         slack = 3.5,
         anchor,
         children
@@ -69,7 +72,7 @@
     }
 </script>
 
-<div class="clamped-content">
+<div class="clamped-content" style:--fade={`${fade}rem`}>
     <span class="top" bind:this={top}></span>
     <div
         class="clip"
@@ -99,8 +102,6 @@
 
 <style lang="scss">
     .clamped-content {
-        /* the height of the fade, which the Show all button sits low in */
-        --fade: 2rem;
         position: relative;
         display: flex;
         flex-direction: column;

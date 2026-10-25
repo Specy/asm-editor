@@ -11,13 +11,13 @@
             <img src={post.image.src} alt="" loading="lazy" width="1440" height="1000" />
         </div>{/if}
     <div class="blog-card-body">
-        <time class="blog-date" datetime={post.datePublished}
-            >{formatBlogDate(post.datePublished)}</time
-        >
         <h3><a href={resolve('/blog/posts/[slug]', { slug: post.slug })}>{post.title}</a></h3>
         <p>{post.description}</p>
-        <div class="blog-tags">
+        <div class="blog-tags blog-card-footer">
             {#each post.tags as id (id)}<TagLink {id} />{/each}
+            <time class="blog-date" datetime={post.datePublished}
+                >{formatBlogDate(post.datePublished)}</time
+            >
         </div>
     </div>
 </article>

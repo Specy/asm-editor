@@ -1,13 +1,9 @@
 <script lang="ts">
-    import Navbar from '#cmp/shared/layout/Navbar.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
-    import FaBars from '~icons/fa-solid/bars'
     import FaDonate from '~icons/fa-solid/heart'
-    import FaStar from '~icons/fa-solid/star'
 
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import FaTimes from '~icons/fa-solid/times'
-    import Row from '#cmp/shared/layout/Row.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
     import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
@@ -17,7 +13,6 @@
     import { page } from '$app/state'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
-    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
     import { courseTheme } from '#lib/languages/languageColors.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
@@ -39,6 +34,18 @@
 
     let menuOpen = $state(false)
 
+    /** On a lecture the navbar's AI button opens the lecture's agent rather than the AI Chat page */
+    const aiToggle = $derived(
+        lectureAgent.available
+            ? {
+                  open: lectureAgent.open,
+                  label: lectureAgent.open ? 'Close' : 'Ask AI',
+                  title: lectureAgent.open ? 'Close the AI chat' : 'Ask AI about this lecture',
+                  onclick: () => (lectureAgent.open = !lectureAgent.open)
+              }
+            : undefined
+    )
+
     /**
      * A Language course searches its language's Documentation, itself and the General course; the
      * General course searches every Course ([the design record](../../../../../../../docs/design/documentation-search.md)).
@@ -58,74 +65,7 @@
 <!-- A Language course shows its language's colours, the way `/documentation/<language>` does.
      One layout serves every course, so this follows the slug rather than the mount. -->
 <ThemeScope theme={courseTheme(data.course.slug)}>
-    <Navbar style="border-bottom-left-radius: 0;">
-        <Row gap="0.6rem" align="center">
-            <a class="icon" href={resolve('/')} title="Go to the home">
-                <img src="/favicon.png" alt="logo" />
-            </a>
-            <a class="icon" href={resolve('/projects')} title="Go to your projects"> Projects </a>
-            <a class="icon" href={resolve('/documentation')} title="Go to the docs"> Docs </a>
-            <a class="icon" href={resolve('/learn/courses')} title="Learn assembly"> Learn </a>
-            <a class="icon desktop-only" href={resolve('/embed')} title="Embed the website">
-                Embed
-            </a>
-        </Row>
-        <Row gap="0.5rem" align="center" flex1>
-            <div class="star-on-github desktop-only">
-                <ButtonLink
-                    style="gap: 0.5rem; padding: 0.5rem 1rem"
-                    cssVar="secondary"
-                    href="https://github.com/Specy/asm-editor"
-                    target="_blank"
-                    title="Star the project on github"
-                >
-                    <Icon>
-                        <FaStar />
-                    </Icon>
-                    Star on github
-                </ButtonLink>
-            </div>
-            {#if lectureAgent.available}
-                <button
-                    class="icon ai"
-                    onclick={() => (lectureAgent.open = !lectureAgent.open)}
-                    title={lectureAgent.open ? 'Close the AI chat' : 'Ask AI about this lecture'}
-                >
-                    <div class="hidden-very-small">
-                        {#if lectureAgent.open}
-                            <!-- an unplugin icon fills its parent, so it needs the sized box
-                                 `Icon` gives it; `SparklesIcon` carries its own 1em size. -->
-                            <Icon size={1}>
-                                <FaTimes />
-                            </Icon>
-                        {:else}
-                            <SparklesIcon />
-                        {/if}
-                    </div>
-                    {lectureAgent.open ? 'Close' : 'Ask AI'}
-                </button>
-            {:else}
-                <a class="icon ai" href={resolve('/chat')} title="AI Chat">
-                    <div class="hidden-very-small">
-                        <SparklesIcon />
-                    </div>
-                    AI Chat
-                </a>
-            {/if}
-            <div class="mobile-only">
-                <Icon
-                    onClick={() => (menuOpen = !menuOpen)}
-                    label={menuOpen ? 'Close the menu' : 'Open the menu'}
-                >
-                    {#if menuOpen}
-                        <FaTimes />
-                    {:else}
-                        <FaBars />
-                    {/if}
-                </Icon>
-            </div>
-        </Row>
-    </Navbar>
+    <DefaultNavbar {aiToggle} bind:menuOpen style="border-bottom-left-radius: 0;" />
 
     <Sidebar bind:menuOpen menuStyle="gap: 0; overflow-y: hidden;">
         <Column padding="0 1rem 0" gap="1rem">
@@ -201,74 +141,3 @@
     </Sidebar>
     <SearchPalette {scope} {placeholder} />
 </ThemeScope>
-
-<style lang="scss">
-    .icon {
-        height: 2.2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-
-        img {
-            height: 100%;
-        }
-
-        &:hover {
-            color: var(--accent);
-        }
-    }
-
-    .ai {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--accent);
-        padding: 0.3rem 0.8rem;
-        border-radius: 1.5rem;
-        border-bottom-right-radius: 0.4rem;
-        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
-        margin-left: auto;
-    }
-
-    /* A lecture's Ask AI toggle takes the AI Chat link's place and has to read as the same control,
-       so the <button> sheds the defaults the <a> never carried. */
-    button.ai {
-        font: inherit;
-        border: none;
-        cursor: pointer;
-    }
-
-    .mobile-only {
-        display: none;
-    }
-
-    .desktop-only {
-        display: flex;
-    }
-
-    @media (max-width: 600px) {
-        .ai {
-            margin-left: unset;
-            margin-right: auto;
-            font-size: 0.9rem;
-        }
-        .mobile-only {
-            display: flex;
-        }
-        .desktop-only {
-            display: none;
-        }
-        .icon {
-            font-size: 0.9rem;
-        }
-    }
-
-    .hidden-very-small {
-        display: flex;
-    }
-    @media (max-width: 370px) {
-        .hidden-very-small {
-            display: none;
-        }
-    }
-</style>

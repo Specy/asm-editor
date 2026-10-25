@@ -50,7 +50,7 @@
     <meta property="og:image" content={data.course.image} />
 </svelte:head>
 
-<Page cropped style="padding: 1rem;" contentStyle="gap: 2rem">
+<Page cropped contentStyle="padding: 1rem; gap: 2rem">
     <Header noMargin>
         {data.course.name}
     </Header>
@@ -61,9 +61,9 @@
             : 'Search in every course'}
     />
 
-    <Column gap="0.8rem">
+    <div class="reading-copy">
         <MarkdownRenderer source={data.content} />
-    </Column>
+    </div>
     <Column gap="1rem">
         {#each data.course.modules as module (module.slug)}
             <TogglableSection

@@ -1,135 +1,176 @@
 <script lang="ts">
-    import Button from '#cmp/shared/button/Button.svelte'
+    import '#cmp/content/contentPages.css'
+    import type { Component } from 'svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import FaAngleLeft from '~icons/fa-solid/angle-left'
-    import FaPaypal from '~icons/fa-brands/paypal'
-    import Kofi from '#cmp/shared/misc/KoFi.svelte'
-    import Title from '#cmp/shared/layout/Header.svelte'
-    import { afterNavigate } from '$app/navigation'
     import Page from '#cmp/shared/layout/Page.svelte'
-    import Row from '#cmp/shared/layout/Row.svelte'
-    import Card from '#cmp/shared/layout/Card.svelte'
-    import Column from '#cmp/shared/layout/Column.svelte'
-    import { PAST_DONATIONS } from '#src/routes/donate/pastDonations.ts'
-    import { resolve } from '$app/paths'
-    import type { ResolvedPathname } from '$app/types'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import Kofi from '#cmp/shared/misc/KoFi.svelte'
+    import FaGithub from '~icons/fa-brands/github'
+    import FaPaypal from '~icons/fa-brands/paypal'
 
-    let previousPage: ResolvedPathname = $state(resolve('/projects'))
-
-    afterNavigate(({ from, shallow, type }) => {
-        if (shallow && type === 'goto') return
-
-        previousPage = (from?.url.pathname as ResolvedPathname) ?? previousPage
-    })
+    const platforms = [
+        {
+            id: 'github-sponsors',
+            name: 'GitHub Sponsors',
+            about: 'Sponsor the project every month, or once, from your GitHub account.',
+            action: 'Sponsor on GitHub',
+            href: 'https://github.com/sponsors/Specy',
+            icon: FaGithub
+        },
+        {
+            id: 'ko-fi',
+            name: 'Ko-fi',
+            about: 'Buy me a coffee with a one-time donation, by card or PayPal. No account needed.',
+            action: 'Donate on Ko-fi',
+            href: 'https://ko-fi.com/specy',
+            icon: Kofi
+        },
+        {
+            id: 'paypal',
+            name: 'PayPal',
+            about: 'Send a donation of any amount straight from your PayPal account.',
+            action: 'Donate with PayPal',
+            href: 'https://www.paypal.com/paypalme/specydev',
+            icon: FaPaypal
+        }
+    ] satisfies {
+        id: string
+        name: string
+        about: string
+        action: string
+        href: string
+        icon: Component
+    }[]
 </script>
 
-<svelte:head>
-    <title>Donate</title>
-    <meta name="description" content="Donate and support the development of asm-editor" />
-    <meta property="og:description" content="Donate and support the development of asm-editor" />
-    <meta property="og:title" content="Donate" />
-</svelte:head>
+<DefaultNavbar />
+<PageMeta
+    title="Donate | Asm Editor"
+    description="Support the development of Asm Editor, the free web IDE for assembly, with GitHub Sponsors, Ko-fi or PayPal."
+/>
 
-<Page
-    cropped
-    contentStyle="max-width: 40rem; font-size: 1.1rem; line-height: 1.5rem; padding: 1rem;"
->
-    <div class="top-row">
-        <Row align="center">
-            <a href={previousPage} class="go-back" title="Go to previous page">
-                <Button
-                    hasIcon
-                    cssVar="primary"
-                    style="padding: 0.4rem"
-                    title="Go to previous page"
-                >
-                    <Icon size={2}>
-                        <FaAngleLeft />
-                    </Icon>
-                </Button>
-            </a>
-            <Title style="margin: 0">Donate</Title>
-        </Row>
-    </div>
-    <div>
-        Thanks for using my webapp! If you want to help me continue developing new apps and
-        features, you can donate to me using kofi or paypal.
-        <br />
-        <a href="https://specy.app" style="text-decoration: underline; color: var(--accent)">
-            Or visit my website for more apps
-        </a>
-    </div>
-    <div class="links">
-        <a class="link" title="Kofi" href="https://ko-fi.com/specy ">
-            <Icon size={3}>
-                <Kofi />
-            </Icon>
-        </a>
-        <a class="link" title="Paypal" href="https://www.paypal.com/paypalme/specydev">
-            <Icon size={3}>
-                <FaPaypal />
-            </Icon>
-        </a>
-    </div>
-    <h2 style="margin-top: 2rem">Past donations</h2>
-    <Column gap="0.5rem" style="margin-top: 2rem">
-        {#each PAST_DONATIONS as donation, i (i)}
-            <Card background="secondary" padding="1rem" gap="1rem">
-                <Row justify="between">
-                    <h3>
-                        {donation.from}
-                        <span
-                            style="font-size: 1rem; opacity: 0.8; font-weight: normal; margin-left: 1rem"
+<div class="content-pages">
+    <Page cropped="70rem" hasNavbar contentStyle="padding: 1rem">
+        <Header>Support Asm Editor</Header>
+        <div class="intro">
+            <p>
+                Thanks for using Asm Editor! It is free and open source.
+                If it helped you, you can support the development of
+                new features and ISAs with a monthly
+                sponsorship or a one-time donation.
+            </p>
+            <p>
+                You can also find my other apps on <a href="https://specy.app">specy.app</a>.
+            </p>
+        </div>
+        <div class="platforms">
+            {#each platforms as platform (platform.id)}
+                <section class="platform" aria-labelledby={`donate-${platform.id}`}>
+                    <div class="platform-name">
+                        <h2 id={`donate-${platform.id}`}>{platform.name}</h2>
+                        <Icon size={1.8}>
+                            <platform.icon />
+                        </Icon>
+                    </div>
+                    <p>{platform.about}</p>
+                    <div class="platform-footer">
+                        <ButtonLink
+                            href={platform.href}
+                            target="_blank"
+                            style="position: static; width: 100%"
                         >
-                            {Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-                                new Date(donation.date)
-                            )}
-                        </span>
-                    </h3>
-                    <h3>
-                        {donation.amount}€
-                    </h3>
-                </Row>
-                <p>
-                    {donation.message}
-                </p>
-            </Card>
-        {/each}
-    </Column>
-</Page>
+                            {platform.action}
+                        </ButtonLink>
+                    </div>
+                </section>
+            {/each}
+        </div>
+    </Page>
+</div>
 
-<style lang="scss">
-    .top-row {
+<style>
+    .intro {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 4rem;
-        margin-bottom: 2rem;
+        flex-direction: column;
+        gap: 0.8rem;
+        color: var(--background-text-muted);
     }
-
-    .links {
-        display: flex;
-        flex-direction: row;
-        gap: 2rem;
-        margin-top: 1rem;
+    .intro p {
+        margin: 0;
     }
-    .link {
-        border: none;
+    .intro a {
         color: var(--accent);
-        background-color: var(--secondary);
-        border-radius: 0.4rem;
-        padding: 0.6rem 1rem;
+        text-decoration: underline;
     }
-    @media screen and (min-width: 650px) {
-        .go-back {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
+    .platforms {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+        gap: 1rem;
+    }
+
+    /* The same card as the documentation and course lists, with the platform's logo across from its name. */
+    .platform {
+        position: relative;
+        isolation: isolate;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 1rem;
+        padding: 1.2rem;
+        border: 1px solid var(--tertiary);
+        border-radius: 0.75rem;
+        background: var(--secondary);
+        transition: background-color 0.2s;
+    }
+    .platform:hover {
+        background-color: color-mix(in srgb, var(--accent) 3%, var(--secondary));
+    }
+    .platform-name {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+    }
+    h2 {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: -0.015em;
+    }
+    .platform p {
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.6;
+        color: var(--background-text-muted);
+    }
+    .platform-footer {
+        display: flex;
+        margin-top: auto;
+        padding-top: 1rem;
+        border-top: 1px solid var(--tertiary);
+    }
+
+    /* The button's link covers the whole card. */
+    .platform-footer :global(a)::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 0.75rem;
+    }
+
+    @media (max-width: 600px) {
+        .platform {
+            padding: 0.9rem;
         }
     }
-    @media screen and (max-width: 650px) {
-        .top-row {
-            margin-top: 1rem;
+
+    @media (prefers-reduced-motion: reduce) {
+        .platform {
+            transition: none;
         }
     }
 </style>

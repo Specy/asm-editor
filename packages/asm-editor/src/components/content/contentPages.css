@@ -1,0 +1,120 @@
+/* Public docs and courses follow the blog's heading scale, with compact reference material.
+   Keep these rules inside the route layouts so editor panels keep their own density. */
+.content-pages {
+    --content-title-size: 2.75rem;
+    --content-heading-size: 1.8rem;
+    --content-subheading-size: 1.4rem;
+    --content-prose-size: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+}
+
+.learn-pages {
+    --content-title-size: 2.9rem;
+    --content-heading-size: 2rem;
+    --content-subheading-size: 1.55rem;
+    --content-prose-size: 1.15rem;
+}
+
+.content-pages main.content {
+    padding-block: 1.5rem 4rem;
+}
+
+.content-pages main.content h1 {
+    font-family: Rubik, sans-serif;
+    font-size: var(--content-title-size);
+    font-weight: 700;
+    line-height: 1.16;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+}
+
+.content-pages main.content > .column > h1 {
+    margin: 0.75rem 0 1.5rem;
+}
+
+.content-pages main.content .intro,
+.content-pages main.content > .column > p:not(.topic-links) {
+    font-size: 1.2rem;
+    font-weight: 400;
+    line-height: 1.65;
+    max-width: 70ch;
+}
+
+.content-pages main.content .intro {
+    margin-bottom: 2rem;
+}
+
+.content-pages main.content .intro a,
+.content-pages main.content .reading-copy a {
+    text-underline-offset: 0.18em;
+    text-decoration-thickness: 1px;
+}
+
+.content-pages main.content .reading-copy ._markdown {
+    font-size: var(--content-prose-size);
+    line-height: 1.6;
+}
+
+.content-pages main.content .reading-copy ._markdown :is(p, ul, ol) {
+    font-size: inherit;
+    line-height: 1.6;
+    width: min(100%, 70ch);
+}
+
+.content-pages main.content .reading-copy ._markdown :is(h2, h3, h4) {
+    font-family: Rubik, sans-serif;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+}
+
+.content-pages main.content .reading-copy ._markdown h2 {
+    font-size: var(--content-heading-size);
+    margin-top: 2rem;
+}
+
+.content-pages main.content .reading-copy ._markdown h3 {
+    font-size: var(--content-subheading-size);
+    margin-top: 1rem;
+}
+
+.content-pages main.content .reading-copy ._markdown :is(h2, h3):first-child {
+    margin-top: 0;
+}
+
+.docs-pages main.content .chapter > .entry.prose > header .title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+}
+
+@media (max-width: 600px) {
+    .content-pages {
+        --content-title-size: 2.1rem;
+        --content-heading-size: 1.6rem;
+        --content-subheading-size: 1.3rem;
+        --content-prose-size: 1.05rem;
+    }
+
+    .learn-pages {
+        --content-title-size: 2.2rem;
+        --content-heading-size: 1.75rem;
+        --content-subheading-size: 1.4rem;
+        --content-prose-size: 1.1rem;
+    }
+
+    .content-pages main.content {
+        padding-block: 0.75rem 2.5rem;
+    }
+
+    .content-pages main.content .intro,
+    .content-pages main.content > .column > p:not(.topic-links) {
+        font-size: 1.1rem;
+    }
+}

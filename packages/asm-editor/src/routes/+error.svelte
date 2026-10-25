@@ -6,12 +6,12 @@
 <main class="page">
     <div class="center-wrapper">
         <div class="floating-middle">
-            <a href={resolve('/')} title="Go back to the main page">
-                <div class="go-back">
+            <div class="go-back">
+                <a href={resolve('/')} title="Go back to the main page">
                     <div class="go-back-404">404</div>
-                    <ButtonLink href="/" cssVar="accent2">Click to go back</ButtonLink>
-                </div>
-            </a>
+                </a>
+                <ButtonLink href={resolve('/')} cssVar="accent2">Click to go back</ButtonLink>
+            </div>
         </div>
     </div>
 </main>

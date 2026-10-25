@@ -4,13 +4,9 @@
     import SearchPalette from '#cmp/search/SearchPalette.svelte'
     import { languageScope } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
-    import Navbar from '#cmp/shared/layout/Navbar.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
     import { page } from '$app/state'
-    import FaBars from '~icons/fa-solid/bars'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
-    import FaTimes from '~icons/fa-solid/times'
-    import Row from '#cmp/shared/layout/Row.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
     import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
     import { mipsInstructionNames } from '#lib/languages/MIPS/MIPS-documentation.ts'
@@ -18,7 +14,6 @@
     import InstructionsMenu from '#cmp/documentation/site/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
-    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -43,36 +38,7 @@
 </script>
 
 <ThemeScope theme={LANGUAGE_THEMES.MIPS}>
-    <Navbar style="border-bottom-left-radius: 0;">
-        <Row gap="0.6rem" align="center" flex1>
-            <a class="icon" href={resolve('/')} title="Go to the home"
-                ><img src="/favicon.png" alt="logo" /></a
-            >
-
-            <a class="icon" href={resolve('/projects')} title="Go to your projects">Projects</a>
-
-            <a href={resolve('/documentation')}>Docs</a>
-            <a href={resolve('/learn/courses')}>Learn</a>
-
-            <a class="icon ai" href={resolve('/chat')} title="AI Chat">
-                <div class="hidden-very-small"><SparklesIcon /></div>
-                AI Chat
-            </a>
-
-            <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
-                <Icon
-                    onClick={() => (menuOpen = !menuOpen)}
-                    label={menuOpen ? 'Close the menu' : 'Open the menu'}
-                >
-                    {#if menuOpen}
-                        <FaTimes />
-                    {:else}
-                        <FaBars />
-                    {/if}
-                </Icon>
-            </div>
-        </Row>
-    </Navbar>
+    <DefaultNavbar includeEmbed={false} bind:menuOpen style="border-bottom-left-radius: 0;" />
 
     <Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
         <Column padding="0 1rem">
@@ -162,57 +128,3 @@
 
     <SearchPalette {scope} placeholder="Search the MIPS docs and courses" />
 </ThemeScope>
-
-<style lang="scss">
-    .icon {
-        height: 2.2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-
-        img {
-            height: 100%;
-        }
-
-        &:hover {
-            color: var(--accent);
-        }
-    }
-    .ai {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--accent);
-        padding: 0.3rem 0.8rem;
-        border-radius: 1.5rem;
-        border-bottom-right-radius: 0.4rem;
-        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
-        margin-left: auto;
-    }
-
-    .mobile-only {
-        display: none;
-    }
-
-    @media (max-width: 600px) {
-        .mobile-only {
-            display: flex;
-        }
-        .ai {
-            font-size: 0.9rem;
-            margin-left: unset;
-            margin-right: auto;
-        }
-        .icon {
-            font-size: 0.9rem;
-        }
-    }
-    .hidden-very-small {
-        display: flex;
-    }
-    @media (max-width: 370px) {
-        .hidden-very-small {
-            display: none;
-        }
-    }
-</style>

@@ -5,7 +5,6 @@
     import InstructionPreview from '#cmp/documentation/site/InstructionPreview.svelte'
     import InstructionDocumentView from '#cmp/documentation/instruction/InstructionDocumentView.svelte'
     import InstructionPageHead from '#cmp/documentation/instruction/InstructionPageHead.svelte'
-    import InstructionLessons from '#cmp/documentation/instruction/InstructionLessons.svelte'
 
     interface Props {
         data: PageData
@@ -26,7 +25,7 @@
 <InstructionPageHead {document} architecture="M68K" root="/documentation/m68k" />
 
 <Page contentStyle="padding: 1rem; gap: 1rem;" style="flex: 1;">
-    <InstructionDocumentView {document} language="M68K">
+    <InstructionDocumentView {document} language="M68K" lessons={data.props.lessons}>
         {#snippet example()}
             {#if data.props.example}
                 {#if component}
@@ -38,5 +37,4 @@
             {/if}
         {/snippet}
     </InstructionDocumentView>
-    <InstructionLessons lessons={data.props.lessons} />
 </Page>
