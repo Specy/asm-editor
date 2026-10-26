@@ -1784,6 +1784,45 @@ describe('Programs', () => {
         })
     })
 
+    //the chat page makes a new Project, whose one Program is `main.<ext>`, for each language
+    it('writes to the Entry of the language write_to_file switches to', async () => {
+        let project = makeProject({ language: 'RISC-V', code: '' })
+        let emulator = createMockEmulator()
+        //the File the old language's editor showed
+        let activePath: string | undefined = 'main.riscv'
+        const { context } = createTestContext({})
+        context.getProject = () => project
+        context.getEditorLanguage = () => project.language
+        context.setEditorLanguage = (language) => {
+            project = makeProject({ language, code: '' })
+            emulator = createMockEmulator()
+        }
+        context.getEmulator = () => emulator
+        context.getFiles = () => project.files
+        context.getFile = (path) =>
+            path in project.files ? project.fileSystem.readText(path) : null
+        context.setFile = (path, code) => project.fileSystem.writeText(path, code)
+        context.getEntryPath = () => project.selectedProgram
+        context.getActivePath = () => activePath
+        context.setActivePath = (path) => {
+            activePath = path
+        }
+        context.getBuildSources = () => projectAgentBuildSources(project)
+        const tools = createDefaultCodingAgentTools(context)
+        const code = 'li $v0, 10\nsyscall'
+        expect(await tools.write_to_file.execute({ code, language: 'MIPS' })).toMatchObject({
+            success: true,
+            path: 'main.mips',
+            language: 'MIPS',
+            languageChanged: true,
+            files: ['main.mips']
+        })
+        expect(project.fileSystem.readText('main.mips')).toBe(code)
+        expect(emulator.setSources).toHaveBeenLastCalledWith(
+            expect.objectContaining({ entry: 'main.mips' })
+        )
+    })
+
     it('makes the first program from a new assembly file the agent writes', async () => {
         const { project, tools } = projectContext(
             makeProject({ language: 'RISC-V', files: {}, programs: {} })

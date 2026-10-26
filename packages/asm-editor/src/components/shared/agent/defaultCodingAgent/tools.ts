@@ -875,10 +875,6 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
                     (sourceLanguage(path ?? '') && !context.getEditorLanguage()
                         ? 'RISC-V'
                         : undefined)
-                const targetPath = path ?? context.getActivePath?.() ?? context.getEntryPath()
-                if (targetPath === undefined)
-                    return noProgram(context, toolRun, 'Call write_to_file with a path.')
-
                 const previousLanguage = context.getEditorLanguage()
                 const previousEmulator = context.getEmulator()
                 const languageChanged =
@@ -889,6 +885,15 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
                 if (languageChanged && requestedLanguage) {
                     context.setEditorLanguage(requestedLanguage)
                 }
+                //a new language makes the chat page a new Project and a lecture's editor a new
+                //file, so a write that names no path goes to the Entry of that language, not to
+                //the File the old one had active
+                const targetPath =
+                    path ??
+                    (languageChanged ? undefined : context.getActivePath?.()) ??
+                    context.getEntryPath()
+                if (targetPath === undefined)
+                    return noProgram(context, toolRun, 'Call write_to_file with a path.')
 
                 return handleCodeWrite(
                     context,
