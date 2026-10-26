@@ -299,16 +299,6 @@ export abstract class MarsEmulator<
         return this.core ?? null
     }
 
-    protected positionStackTabOnCompile(): void {
-        //legacy parity: the Stack tab shows the page *below* SP, which is the region the stack
-        //actually grows into. Running scrollStackTab() here would snap the tab onto the page
-        //containing SP (0x7ffffffc is not page aligned) and show unwritten memory above the stack.
-        const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-        if (stackTab && !stackTab.userPlaced) {
-            stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
-        }
-    }
-
     _canUndo(): boolean {
         const core = this.core
         if (!core?.canUndo) return false

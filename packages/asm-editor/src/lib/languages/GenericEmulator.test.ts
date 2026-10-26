@@ -1438,6 +1438,8 @@ describe('memory views', () => {
         emulator._getSp = () => sp
         await emulator.compile(0, undefined)
         emulator.setGlobalMemoryAddress(0x2000n)
+        //on the page that holds SP, so that the push below scrolls it
+        emulator.setTabMemoryAddress(0x1000n, emulator.memory.tabs[0].id)
         const pageSize = BigInt(emulator.memory.tabs[0].pageSize)
         //a push that crosses into the page below and writes where the global view looks
         let pushed = 0

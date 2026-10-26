@@ -1724,13 +1724,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /**
      * An Executable starts only in the Build's run to `main`, after `_beginExecutionSession` placed
      * the memory view at its stack pointer, which was still 0: place it again at the stack page, as
-     * an assembled program's is.
+     * an assembled program's is. The Stack tab then snaps onto the page that holds SP.
      */
     protected override positionStackTabOnCompile(): void {
         const global = this.state.memory.global
         if (this.executable && !global.userPlaced)
             global.address = alignDown(this._getSp(), BigInt(global.pageSize))
         super.positionStackTabOnCompile()
+        this.scrollStackTab()
     }
 
     private updateMemoryAddresses(): void {

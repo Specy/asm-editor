@@ -504,17 +504,16 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * Places the Stack memory tab right after a successful compile.
-     * The default points it one page below SP and then lets `scrollStackTab()` snap it to the
-     * page containing SP. Languages whose legacy emulator did not auto-scroll on compile
-     * (M68K) override this to keep the "page below SP" position.
+     * Places the Stack memory tab right after a successful compile: one page below SP, the region
+     * the stack grows into. Snapping it onto the page that holds SP would show the unwritten memory
+     * above a stack that starts page aligned (M68K's 0x2000) or near the end of a page (MARS's and
+     * RARS's 0x7ffffffc).
      */
     protected positionStackTabOnCompile() {
         const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
         if (stackTab && !stackTab.userPlaced) {
             stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
         }
-        this.scrollStackTab()
     }
 
     /**
