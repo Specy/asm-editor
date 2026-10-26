@@ -21,7 +21,6 @@ import {
     createMemoryTab,
     resetMemoryTab,
     type Diagnostic,
-    type EmulatorInterrupt,
     type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
@@ -806,29 +805,32 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
+     * Shows the read the program now waits on, after sending what it played, until `read` answers:
+     * the person may take a while to answer, and a beep before a prompt has to be heard before the
+     * answer, not after.
+     */
+    private async awaitInput<V>(type: string, question: string, read: () => Promise<V>) {
+        this._peripherals.audio.flush()
+        this.state.interrupt = { type, message: question }
+        try {
+            return await read()
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    /**
      * A line, through the Terminal's Line discipline. `options` are how the program set up its
      * reads to show what is typed, where its environment lets it (EASy68K's tasks 12 and 16).
      */
-    /**
-     * Shows the read the program now waits on, after sending what it played: the person may take a
-     * while to answer, and a beep before a prompt has to be heard before the answer, not after.
-     */
-    private waitOnInput(interrupt: EmulatorInterrupt): void {
-        this._peripherals.audio.flush()
-        this.state.interrupt = interrupt
-    }
-
-    protected async requestInput(
+    protected requestInput(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
-        try {
-            return await this._peripherals.terminal.readAsync(question, execution, options)
-        } finally {
-            this.state.interrupt = undefined
-        }
+        return this.awaitInput('ReadInput', question, () =>
+            this._peripherals.terminal.readAsync(question, execution, options)
+        )
     }
 
     /**
@@ -836,47 +838,24 @@ export abstract class GenericEmulator<T, R extends string>
      * the Target's code: the Terminal's Line discipline
      * ([ADR 0036](../../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)).
      */
-    protected async requestCharacter(
+    protected requestCharacter(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
-        try {
-            return await this._peripherals.terminal.readCharAsync(question, execution, options)
-        } finally {
-            this.state.interrupt = undefined
-        }
-    }
-
-    /**
-     * A read of standard input, at most `length` bytes: what is left of the current line, or else a
-     * new one, or no bytes at End of input.
-     */
-    protected async requestStandardInput(
-        length: number,
-        question: string,
-        execution: ExecutionGeneration
-    ) {
-        this.waitOnInput({ type: 'StandardInput', message: question })
-        try {
-            return await this._peripherals.terminal.readStandardInput(length, question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
+        return this.awaitInput('ReadInput', question, () =>
+            this._peripherals.terminal.readCharAsync(question, execution, options)
+        )
     }
 
     /**
      * One byte of input for a port that reads a byte at a time, the Z80's character port: the rest of
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
-    protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
-        try {
-            return await this._peripherals.terminal.readByte(question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
+    protected requestByte(question: string, execution: ExecutionGeneration) {
+        return this.awaitInput('ReadInput', question, () =>
+            this._peripherals.terminal.readByte(question, execution)
+        )
     }
 
     protected getLastExecutedLine(fallback = -1): number {
