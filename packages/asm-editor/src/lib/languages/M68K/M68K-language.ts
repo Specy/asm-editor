@@ -3,13 +3,11 @@ import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
 import {
     AddressingMode,
-    AffectedFlagKind,
     fromSizesToString,
     fromSizeToString,
     getAddressingModeNames,
     getInstructionDocumentation,
     M68KDirectives,
-    M68KFlag,
     M68kInstructions,
     M68KRecognizedDirectives,
     M68KRecognizedInstructions
@@ -338,9 +336,6 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                 (parsed.kind === 'instruction' || parsed.kind === 'directive')
             ) {
                 const documentation = getInstructionDocumentation(operation.name.toLowerCase())
-                const defaultSize = documentation?.defaultSize
-                    ? fromSizeToString(documentation.defaultSize)
-                    : ''
                 if (!documentation) return null
                 const range = new monaco.Range(
                     position.lineNumber,
@@ -348,28 +343,6 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                     position.lineNumber,
                     s68kColumnToUtf16(line, operation.nameSpan.end) + 1
                 )
-                const flagSymbols = [
-                    M68KFlag.Extend,
-                    M68KFlag.Negative,
-                    M68KFlag.Zero,
-                    M68KFlag.Overflow,
-                    M68KFlag.Carry
-                ]
-                const flagHeaders = flagSymbols.map((f) => f).join(' | ')
-                const flagValues = flagSymbols
-                    .map((f) => {
-                        const kind = documentation.affectsFlags[f]
-                        if (kind === AffectedFlagKind.Edits) return '\u2731'
-                        if (kind === AffectedFlagKind.ToZero) return '0'
-                        if (kind === AffectedFlagKind.ToOne) return '1'
-                        return '\u2014'
-                    })
-                    .join(' | ')
-                const flagsTable = `| ${flagHeaders} |\n|${flagSymbols.map(() => ' :---: ').join('|')}|\n| ${flagValues} |`
-                const operands =
-                    documentation.args?.map(
-                        (e, i) => `**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``
-                    ) ?? []
                 const name = operation.name.toLowerCase()
                 const document = parsed.kind === 'instruction' ? m68kHoverDocument(name) : undefined
                 if (document) {
@@ -381,6 +354,14 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                     })
                     return { range, contents: blocks.map((value) => ({ value })) }
                 }
+                // A directive has no page: its operands, sizes, description and example.
+                const defaultSize = documentation.defaultSize
+                    ? fromSizeToString(documentation.defaultSize)
+                    : ''
+                const operands =
+                    documentation.args?.map(
+                        (e, i) => `**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``
+                    ) ?? []
                 const contents = [
                     {
                         value: [`# ${operation.name}`, ...operands].join('\n\n')
@@ -392,7 +373,6 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                 if (documentation.description) {
                     contents.push({ value: documentation.description })
                 }
-                if (parsed.kind === 'instruction') contents.push({ value: `${flagsTable}` })
                 if (documentation.example) {
                     contents.push({ value: documentation.example })
                 }
