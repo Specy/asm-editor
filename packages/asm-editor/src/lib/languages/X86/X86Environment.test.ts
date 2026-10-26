@@ -288,6 +288,83 @@ describe('x86 selected environment and native transport', () => {
         }
     })
 
+    it('advances the virtual clock by a CLOCK_REALTIME sleep, as glibc sleep() makes it', async () => {
+        //the deadline is on the calendar, which a Testcase starts at 2000-01-01, so measuring it
+        //against elapsed time moved both clocks on by thirty years
+        const input = sources(
+            program(
+                [
+                    ...sys(230, 0, 0, 'delay', 0),
+                    ...sys(228, 1, 'buf'),
+                    'mov r12, [buf]',
+                    'mov r13, [buf+8]',
+                    ...sys(228, 0, 'buf'),
+                    'mov r14, [buf]',
+                    'mov r15, [buf+8]',
+                    ...exit
+                ],
+                ['delay: dq 0, 5000000']
+            )
+        )
+        const emulator = await X86Emulator(input, { automaticChecking: false })
+        try {
+            const expected = { r12: 0n, r13: 5_000_000n, r14: 946_684_800n, r15: 5_000_000n }
+            const [result] = await emulator.test(input, [testcase(expected)], 1000)
+            expect(result.errors).toEqual([])
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('waits out a CLOCK_REALTIME sleep for its own length in an interactive run', async () => {
+        const clock = new ProgramClock()
+        const wait = vi.spyOn(clock, 'wait')
+        const input = sources(
+            program([...sys(230, 0, 0, 'delay', 0), ...exit], ['delay: dq 0, 1000000'])
+        )
+        const emulator = await X86Emulator(input, {
+            automaticChecking: false,
+            peripherals: { clock }
+        })
+        try {
+            await emulator.compile(20, input)
+            const run = emulator.run(100)
+            await pauseUntil(() => wait.mock.calls.length > 0)
+            expect(wait.mock.calls[0][0]).toBeLessThanOrEqual(1)
+            await run
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 0 })
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('holds a sleep on CPU time until something else ends it, as waiting adds none', async () => {
+        const clock = new ProgramClock()
+        const wait = vi.spyOn(clock, 'wait')
+        const input = sources(
+            program([...sys(230, 2, 0, 'delay', 0), ...exit], ['delay: dq 0, 1000000'])
+        )
+        const emulator = await X86Emulator(input, {
+            automaticChecking: false,
+            peripherals: { clock }
+        })
+        try {
+            await emulator.compile(20, input)
+            const run = emulator.run(100)
+            await pauseUntil(() => native(emulator).getWaitRequest()?.clock === 2)
+            await new Promise((resolve) => setTimeout(resolve, 20))
+            //a wait for the time it asked would leave the CPU clock where it was, and ask again
+            expect(wait).not.toHaveBeenCalled()
+            emulator.clear()
+            await run
+            const [result] = await emulator.test(input, [testcase()], 1000)
+            expect(result.errors[0]).toMatchObject({ type: 'runtime-error' })
+            expect(emulator.errors.join(' ')).toContain('no external wake source')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
     it('fails clearly when a nanosecond wait cannot advance a large virtual time', async () => {
         const clock = new ProgramClock({ mode: 'virtual' })
         const input = sources(program(exit))
@@ -299,14 +376,21 @@ describe('x86 selected environment and native transport', () => {
             await clock.wait(1e12) // Construction clears the selected clock.
             const adapter = emulator as unknown as {
                 waitForClock: (
-                    request: { deadlineNanoseconds: bigint; acceptsInput: boolean },
+                    request: {
+                        clock: number
+                        deadlineNanoseconds: bigint
+                        remainingMilliseconds: number
+                        acceptsInput: boolean
+                    },
                     signal: AbortSignal
                 ) => Promise<void>
             }
             await expect(
                 adapter.waitForClock(
                     {
+                        clock: 1,
                         deadlineNanoseconds: 1000000000000000001n,
+                        remainingMilliseconds: 0.000001,
                         acceptsInput: false
                     },
                     new AbortController().signal

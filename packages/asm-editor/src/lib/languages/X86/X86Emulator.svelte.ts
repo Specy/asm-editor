@@ -183,6 +183,13 @@ const SIGILL = 4
 /** The longest an x86 instruction can be, prefixes included. */
 const MAX_INSTRUCTION_LENGTH = 15n
 
+/**
+ * The clock ids that read the Time Source's calendar, and those that read CPU time; the others
+ * read elapsed time ([ADR 0040](../../../../../../docs/adr/0040-programs-see-calendar-elapsed-and-cpu-clocks.md)).
+ */
+const CALENDAR_CLOCKS = new Set([0, 5, 11])
+const CPU_CLOCKS = new Set([2, 3])
+
 /** Instructions whose only purpose is to raise SIGILL, which a real processor raises too. */
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
 
@@ -415,8 +422,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         core.setEnvironment({
             now: (id) => {
                 const clock = this._peripherals.clock
-                if (id === 0 || id === 5 || id === 11) return clock.calendarNow()
-                if (id === 2 || id === 3) return clock.cpuNow(core.getInstructionsExecuted())
+                if (CALENDAR_CLOCKS.has(id)) return clock.calendarNow()
+                if (CPU_CLOCKS.has(id)) return clock.cpuNow(core.getInstructionsExecuted())
                 return clock.now()
             },
             random: (length) => {
@@ -1700,9 +1707,19 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.state.interrupt = undefined
     }
 
+    /**
+     * Waits out a program's wait for the time the Core says is left of it. The Core measures that
+     * on the clock the deadline is on, which `now` above reads: the calendar for glibc's `sleep`
+     * (`clock_nanosleep` on CLOCK_REALTIME) and a `FUTEX_CLOCK_REALTIME` wait, elapsed time for
+     * `nanosleep`. Waiting moves both of them by the same amount, and CPU time not at all
+     * (ADR 0040), so a deadline on a CPU clock is one no wait reaches: only input or a signal ends
+     * it, as for a wait with no deadline.
+     */
     private async waitForClock(request: X86WaitRequest, signal: AbortSignal): Promise<void> {
-        if (request.deadlineNanoseconds === null) {
-            if (this._peripherals.clock.isVirtual && !request.acceptsInput)
+        const clock = this._peripherals.clock
+        const milliseconds = CPU_CLOCKS.has(request.clock) ? null : request.remainingMilliseconds
+        if (milliseconds === null) {
+            if (clock.isVirtual && !request.acceptsInput)
                 throw new Error('An indefinite x86 wait has no external wake source in a Testcase')
             await new Promise<void>((_resolve, reject) => {
                 const abort = () => reject(signal.reason ?? new Error('Wait aborted'))
@@ -1711,17 +1728,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             })
             return
         }
-        const now = this._peripherals.clock.now()
-        const nanoseconds = request.deadlineNanoseconds - BigInt(Math.floor(now * 1e6))
-        const milliseconds = nanoseconds <= 0n ? 0 : Number(nanoseconds) / 1e6
         if (!Number.isFinite(milliseconds) || milliseconds > Number.MAX_SAFE_INTEGER)
             throw new Error('x86 wait deadline exceeds the Time Source range')
-        if (this._peripherals.clock.isVirtual && milliseconds > 0 && now + milliseconds === now)
+        const now = clock.now()
+        if (clock.isVirtual && milliseconds > 0 && now + milliseconds === now)
             throw new Error('x86 wait is smaller than virtual clock precision at the current time')
-        await this._peripherals.clock.wait(
-            this._peripherals.clock.isVirtual
-                ? milliseconds
-                : Math.min(2147483647, Math.ceil(milliseconds)),
+        await clock.wait(
+            clock.isVirtual ? milliseconds : Math.min(2147483647, Math.ceil(milliseconds)),
             signal
         )
     }
