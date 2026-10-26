@@ -5,6 +5,7 @@ import { documentationFor, entriesOf } from './documentation'
 import { documentationProblems, type DocumentationEntry, type EntryView } from './entries'
 import { documentPatterns, patternText } from './instructions/document'
 import { mipsFormTags, riscvFormTags, z80FormTags } from './instructions/formTags'
+import { DOCUMENTATION_SITES } from './site'
 
 /** The route file a documentation href is served by. */
 function routeExists(href: string): boolean {
@@ -37,6 +38,17 @@ describe.each(DOCUMENTATION_LANGUAGES)('the %s Documentation', { timeout: 60_000
                     entry.id
                 ).toBe(true)
             }
+        }
+    })
+
+    it('has every Chapter in its sidebar and hub, then the complete documentation', async () => {
+        const chapters = await documentationFor(language)
+        expect(DOCUMENTATION_SITES[language].pages).toEqual([
+            ...chapters.map(({ id, title, href }) => ({ id, title, href })),
+            { id: 'all', title: 'Complete documentation', href: `/documentation/${language}/all` }
+        ])
+        for (const page of DOCUMENTATION_SITES[language].pages) {
+            expect(routeExists(page.href), page.href).toBe(true)
         }
     })
 

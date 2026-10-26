@@ -1,77 +1,19 @@
 <script lang="ts">
-    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
-    import { breadcrumbLd } from '#lib/seo.ts'
     import { resolve } from '$app/paths'
-    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
-    import Page from '#cmp/shared/layout/Page.svelte'
-
-    let jsonLd = $derived([
-        breadcrumbLd([
-            { name: 'Documentation', pathname: '/documentation' },
-            { name: 'MIPS', pathname: '/documentation/mips' }
-        ])
-    ])
+    import DocumentationHome from '#cmp/documentation/site/DocumentationHome.svelte'
 </script>
 
-<PageMeta
+<DocumentationHome
+    language="mips"
     title="MIPS assembly reference - instructions, registers and syscalls | Asm Editor"
     description="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
-    type="website"
-    {jsonLd}
-/>
-<Page cropped contentStyle="padding: 1rem; gap: 1rem">
-    <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">MIPS Documentation</h1>
-    <SearchLauncher size="full" placeholder="Search the MIPS docs and courses" />
-    <p>
-        This reference covers the MIPS simulator’s instructions, assembler directives, registers,
-        and services. For a service call, put its number in <code>$v0</code> and use the listed
-        registers for its arguments and result; see
-        <a href={resolve('/documentation/mips/syscall')}>Syscalls</a>.
-    </p>
-    <div class="links">
-        <NavigationLinkButton href={resolve('/documentation/mips/directive')}>
-            <div>Directives</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/instruction')}>
-            <div>Instructions</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/syscall')}>
-            <div>Syscalls</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/registers')}>
-            <div>Registers</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/screen')}>
-            <div>Screen and I/O</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/using-c')}>
-            <div>Using C and C++</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/runtime-library')}>
-            <div>Runtime library</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/mips/all')}>
-            <div>Complete Documentation</div>
-        </NavigationLinkButton>
-    </div>
-</Page>
-
-<style lang="scss">
-    .links {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        max-width: 60rem;
-        gap: 0.8rem;
-    }
-    @media (max-width: 900px) {
-        .links {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    @media (max-width: 400px) {
-        .links {
-            grid-template-columns: repeat(1, 1fr);
-        }
-    }
-</style>
+>
+    {#snippet intro()}
+        <p>
+            This reference covers the MIPS simulator’s instructions, assembler directives,
+            registers, and services. For a service call, put its number in <code>$v0</code> and use
+            the listed registers for its arguments and result; see
+            <a href={resolve('/documentation/mips/syscall')}>Syscalls</a>.
+        </p>
+    {/snippet}
+</DocumentationHome>
