@@ -261,13 +261,25 @@ function eachRegexMatch(
     singleLine: boolean,
     found: (start: number, end: number) => void
 ) {
-    if (singleLine) {
-        const starts = text.lineStarts
-        for (let line = 0; line < starts.length; line++)
-            eachLineMatch(text, pattern, wholeWord, line, starts[line], text.lineEnd(line), found)
-        return
+    if (!singleLine) return eachIn(text.text, 0, pattern, wholeWord, found)
+    const starts = text.lineStarts
+    for (let line = 0; line < starts.length; line++) {
+        const start = starts[line]
+        eachIn(text.text.slice(start, text.lineEnd(line)), start, pattern, wholeWord, found)
     }
-    const subject = text.text
+}
+
+/**
+ * The matches in `subject`, which starts at `offset` in the text, searched as if it were the
+ * whole text: a line, or the text itself.
+ */
+function eachIn(
+    subject: string,
+    offset: number,
+    pattern: RegExp,
+    wholeWord: boolean,
+    found: (start: number, end: number) => void
+) {
     const unicode = pattern.unicode
     let from = 0
     while (from <= subject.length) {
@@ -280,37 +292,8 @@ function eachRegexMatch(
             from = advance(subject, start, unicode)
             continue
         }
-        found(start, end)
+        found(offset + start, offset + end)
         from = end > start ? end : advance(subject, end, unicode)
-    }
-}
-
-/** The matches from `from` to the end of one line, searched as if the line were the whole text. */
-function eachLineMatch(
-    text: SearchText,
-    pattern: RegExp,
-    wholeWord: boolean,
-    line: number,
-    from: number,
-    lineEnd: number,
-    found: (start: number, end: number) => void
-) {
-    const lineStart = text.lineStarts[line]
-    const subject = text.text.slice(lineStart, lineEnd)
-    const unicode = pattern.unicode
-    let at = from - lineStart
-    while (at <= subject.length) {
-        pattern.lastIndex = at
-        const match = pattern.exec(subject)
-        if (!match) return
-        const start = match.index
-        const end = start + match[0].length
-        if (wholeWord && !isWholeWord(subject, start, end)) {
-            at = advance(subject, start, unicode)
-            continue
-        }
-        found(lineStart + start, lineStart + end)
-        at = end > start ? end : advance(subject, end, unicode)
     }
 }
 
