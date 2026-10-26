@@ -2370,6 +2370,26 @@ target:
         ])
     })
 
+    it('reads a store at or above 0x80000000 as the address it is', async () => {
+        const emulator = await run(
+            DATA +
+                `        li      s0, ${MARS_TRANSMITTER_DATA | 0}
+        li      t1, 0x41
+        sw      t1, 0(s0)
+` +
+                EXIT
+        )
+        const stores = emulator.latestSteps
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'WriteMemory')
+        expect(stores).toEqual([
+            {
+                type: 'WriteMemory',
+                value: { address: 0xffff000cn, size: RegisterSize.Long, old: 0n, new: 0x41n }
+            }
+        ])
+    })
+
     it('reads a poked value whole on the 64 bit target', async () => {
         const code = `        .text\nmain:\n        li      t0, 3\n` + EXIT
         const emulator = RISCVEmulator(code, { language: 'RISC-V-64' })

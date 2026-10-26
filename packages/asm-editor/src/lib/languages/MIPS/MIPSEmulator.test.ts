@@ -2213,6 +2213,46 @@ target:
         ])
     })
 
+    it('reads a store at or above 0x80000000 as the address it is', async () => {
+        const emulator = await run(
+            DATA +
+                `        li      $s0, ${MARS_TRANSMITTER_DATA | 0}
+        li      $t1, 0x41
+        sw      $t1, 0($s0)
+` +
+                EXIT
+        )
+        const stores = emulator.latestSteps
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'WriteMemory')
+        expect(stores).toEqual([
+            {
+                type: 'WriteMemory',
+                value: { address: 0xffff000cn, size: RegisterSize.Long, old: 0n, new: 0x41n }
+            }
+        ])
+    })
+
+    it('shows what sbrk wrote, not the heap break the Core keeps of its layout', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        li      $a0, 16
+        li      $v0, 9
+        syscall
+` + EXIT
+        )
+        for (let step = 0; step < 3; step++) await emulator.step()
+        const [sbrk] = emulator.latestSteps
+        //the block sbrk hands out first is MARS's heap base, in the register that held the service
+        expect(sbrk.mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: '$v0', old: 9n, new: 0x10040000n, size: RegisterSize.Long }
+            }
+        ])
+    })
+
     it('repaints the bitmap display on a Poke into it and on its Undo', async () => {
         const emulator = await build(DATA + EXIT)
         expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
