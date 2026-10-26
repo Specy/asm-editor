@@ -175,7 +175,15 @@
                     onBrowse={pickAndImport}
                 />
             </div>
-            {#if ProjectStore.projects.length === 0}
+            {#if ProjectStore.loadFailed}
+                <div class="empty">
+                    <div class="empty-title">Your projects could not be read</div>
+                    <div class="empty-hint">
+                        The browser did not let this page open its storage. Reload the page, or
+                        check that the browser allows this site to store data.
+                    </div>
+                </div>
+            {:else if ProjectStore.projects.length === 0}
                 <div class="empty">
                     <div class="empty-title">No projects yet</div>
                     <div class="empty-hint">

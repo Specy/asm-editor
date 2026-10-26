@@ -66,52 +66,63 @@
 
     async function loadProject() {
         const id = page.params.project ?? ''
-        if (id === 'exam') {
-            const code = page.url.searchParams.get('project')
-            if (!code) {
-                toast.error('Invalid legacy exam link', 10000)
-                status = 'error'
+        try {
+            if (id === 'exam') {
+                const code = page.url.searchParams.get('project')
+                if (!code) {
+                    toast.error('Invalid legacy exam link', 10000)
+                    status = 'error'
+                    return
+                }
+
+                const migratedExam = parseLegacyProjectExamPayload(code)
+                if (!migratedExam) {
+                    toast.error('Could not migrate legacy exam link', 10000)
+                    status = 'error'
+                    return
+                }
+
+                await goto(resolve(examSessionPath(migratedExam)), { replace: true })
                 return
             }
 
-            const migratedExam = parseLegacyProjectExamPayload(code)
-            if (!migratedExam) {
-                toast.error('Could not migrate legacy exam link', 10000)
-                status = 'error'
-                return
-            }
+            if (id === 'share') {
+                const code = page.url.searchParams.get('project')
+                if (!code) {
+                    toast.error('Invalid shared project link', 10000)
+                    status = 'error'
+                    return
+                }
+                const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
+                if (!parsedCode) {
+                    toast.error('Invalid shared project link', 10000)
+                    status = 'error'
+                    return
+                }
 
-            await goto(resolve(examSessionPath(migratedExam)), { replace: true })
-            return
+                //any shape a link was ever made from: the normalizer inside set reads them all
+                const parsed = serializer.parse<StoredProject>(parsedCode)
+                project.set({ ...parsed, id: SHARE_ID })
+            } else {
+                const loadedProject = await ProjectStore.getProject(id)
+                if (!loadedProject) {
+                    toast.error('Project not found', 10000)
+                    status = 'error'
+                    return
+                }
+                project.set(loadedProject)
+            }
+            status = 'loaded'
+        } catch (e) {
+            //a link mangled on its way here, or storage the browser blocked: an error screen, never
+            //a load that does not end
+            console.error(e)
+            toast.error(
+                id === 'share' ? 'Invalid shared project link' : 'Could not load this project',
+                10000
+            )
+            status = 'error'
         }
-
-        if (id === 'share') {
-            const code = page.url.searchParams.get('project')
-            if (!code) {
-                toast.error('Invalid shared project link', 10000)
-                status = 'error'
-                return
-            }
-            const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
-            if (!parsedCode) {
-                toast.error('Invalid shared project link', 10000)
-                status = 'error'
-                return
-            }
-
-            //any shape a link was ever made from: the normalizer inside set reads them all
-            const parsed = serializer.parse<StoredProject>(parsedCode)
-            project.set({ ...parsed, id: SHARE_ID })
-        } else {
-            const loadedProject = await ProjectStore.getProject(id)
-            if (!loadedProject) {
-                toast.error('Project not found', 10000)
-                status = 'error'
-                return
-            }
-            project.set(loadedProject)
-        }
-        status = 'loaded'
     }
 
     onMount(() => {
@@ -142,7 +153,9 @@
             project.set({ id: undefined })
             const newProject = await ProjectStore.addProject(project)
             project.set({ id: newProject.id })
-            goto(resolve('/projects/[project]', { project: project.id }))
+            //in place of the link in the history: the page is not loaded again for the link's
+            //address, so Back to it would go on showing the saved Project under that address
+            goto(resolve('/projects/[project]', { project: project.id }), { replace: true })
         } else {
             const result = await ProjectStore.save(project, journals)
             if (result.local === 'failed') {

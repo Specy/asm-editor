@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { createSharePayload } from '#lib/utils.ts'
+import lzstring from 'lz-string'
 import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -52,13 +53,19 @@ afterEach(async () => {
     document.body.replaceChildren()
 })
 
-/** The project page over a Project, once the Workbench is in place of its loading screen. */
-async function open(id: string, search = '') {
+/** The project page at `/projects/<id><search>`, as it is first drawn. */
+async function mountPage(id: string, search = '') {
     page.params.project = id
     page.url = new URL(`https://asm-editor.specy.app/projects/${id}${search}`)
     const target = document.createElement('div')
     document.body.append(target)
     const component = mount((await import('./+page.svelte')).default, { target })
+    return { target, dispose: () => unmount(component) }
+}
+
+/** The project page over a Project, once the Workbench is in place of its loading screen. */
+async function open(id: string, search = '') {
+    const { target, dispose } = await mountPage(id, search)
     const button = (label: string) =>
         [...target.querySelectorAll('button')].find(
             (button) => button.textContent?.trim() === label
@@ -79,7 +86,20 @@ async function open(id: string, search = '') {
             for (const guard of navigationGuards) guard(navigation)
             return !cancelled
         },
-        dispose: () => unmount(component)
+        dispose
+    }
+}
+
+/** The page's error screen in place of the Workbench, once a load failed. */
+async function failedToOpen(id: string, search = '') {
+    const { target, dispose } = await mountPage(id, search)
+    try {
+        await vi.waitFor(() =>
+            expect(target.querySelector('h1.error')?.textContent).toBe('Error loading project!')
+        )
+        expect(target.querySelector('button')).toBeNull()
+    } finally {
+        await dispose()
     }
 }
 
@@ -182,6 +202,43 @@ it('stays on the page when the save its Back asked for was not stored', async ()
         expect(toast.logPill).not.toHaveBeenCalledWith('Project saved')
         expect(goto).not.toHaveBeenCalled()
         expect(project.asks()).toBe(true)
+    } finally {
+        project.dispose()
+    }
+})
+
+it('shows the error screen for a share link that does not read as a Project', async () => {
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const mangled = lzstring.compressToEncodedURIComponent('{"files":{"main.s"')
+    await failedToOpen('share', `?project=${mangled}`)
+    expect(error).toHaveBeenCalledWith('Invalid shared project link', 10000)
+})
+
+it('shows the error screen when the browser does not let it read the stored projects', async () => {
+    const stored = await ProjectStore.addProject(makeProject({ name: 'blocked' }))
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const read = vi.spyOn(db, 'getProjects').mockRejectedValue(new Error('SecurityError'))
+    await ProjectStore.load()
+    try {
+        await failedToOpen(stored.id)
+        expect(error).toHaveBeenCalledWith('Could not load this project', 10000)
+    } finally {
+        read.mockRestore()
+        await ProjectStore.load()
+    }
+})
+
+it('puts a saved shared Project in place of its link in the history', async () => {
+    vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+    const shared = createSharePayload(makeProject({ name: 'kept' }))
+    const project = await open('share', `?project=${shared}`)
+    try {
+        project.button('Save').click()
+        await vi.waitFor(() => expect(goto).toHaveBeenCalledOnce())
+        const saved = ProjectStore.projects.find((project) => project.name === 'kept')!
+        expect(goto).toHaveBeenCalledWith(`/projects/${saved.id}`, { replace: true })
     } finally {
         project.dispose()
     }

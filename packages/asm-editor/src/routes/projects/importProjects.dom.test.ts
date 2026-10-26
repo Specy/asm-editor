@@ -236,3 +236,22 @@ it('reports an import the browser did not store as failed, whether it replaced a
     expect(pill).not.toHaveBeenCalled()
     expect(ProjectStore.projects.map((project) => project.name)).toEqual(['stored'])
 })
+
+it('says the stored projects could not be read rather than that there are none', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const read = vi.spyOn(db, 'getProjects').mockRejectedValue(new Error('SecurityError'))
+    const { target, dispose } = await page()
+    try {
+        await vi.waitFor(() =>
+            expect(target.querySelector('.empty-title')?.textContent).toBe(
+                'Your projects could not be read'
+            )
+        )
+        read.mockRestore()
+        await ProjectStore.load()
+        flushSync()
+        expect(target.querySelector('.empty-title')?.textContent).toBe('No projects yet')
+    } finally {
+        await dispose()
+    }
+})

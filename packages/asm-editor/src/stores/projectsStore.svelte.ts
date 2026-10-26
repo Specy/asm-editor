@@ -15,6 +15,11 @@ export const SHARE_ID = '__share__'
 
 function createProjectStore() {
     let inited = $state(false)
+    /**
+     * Whether the last read of the stored projects failed, as it does when the browser blocks the
+     * site's storage or cannot open it: the list is then unknown rather than empty.
+     */
+    let loadFailed = $state(false)
     let projects = $state<Project[]>([])
     type LinkedFile = { handle: FileSystemFileHandle; format: 'legacy' | 'archive' }
     type SaveResult = {
@@ -31,10 +36,17 @@ function createProjectStore() {
         load()
     }
 
+    /** Reads the stored projects again; a read that fails keeps the list and sets `loadFailed`. */
     async function load() {
-        const p = await db.getProjects()
-        p.sort((a, b) => b.updatedAt - a.updatedAt)
-        projects = p
+        try {
+            const p = await db.getProjects()
+            p.sort((a, b) => b.updatedAt - a.updatedAt)
+            projects = p
+            loadFailed = false
+        } catch (error) {
+            console.error(error)
+            loadFailed = true
+        }
         inited = true
         return projects
     }
@@ -131,8 +143,13 @@ function createProjectStore() {
         writableFiles.set(id, { handle, format })
     }
 
+    /**
+     * The stored project with the id `id`, or undefined when there is none; rejects when the
+     * stored projects cannot be read, which is no answer about this one.
+     */
     async function getProject(id: string) {
-        if (!inited) await load()
+        if (!inited || loadFailed) await load()
+        if (loadFailed) throw new Error('The stored projects could not be read')
         return projects.find((project) => project.id === id)
     }
 
@@ -152,6 +169,9 @@ function createProjectStore() {
     return {
         get inited() {
             return inited
+        },
+        get loadFailed() {
+            return loadFailed
         },
         get projects() {
             return projects
