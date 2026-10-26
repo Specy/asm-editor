@@ -1,14 +1,6 @@
 import { argvArgumentsArea, memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
-import { makeMipsCore, type MipsLink } from './MIPS-core'
-import {
-    coreLibrary,
-    loadedRuntimeFunctions,
-    loadedRuntimeLibrary,
-    loadRuntimeFunctions,
-    loadRuntimeLibrary,
-    runtimeLibraryHint
-} from '#lib/sourceRuntime/runtimeLibrary.ts'
-import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
+import { makeMipsCore } from './MIPS-core'
+import { loadedRuntimeLibrary } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
     BackStepAction,
     isRuntimeError,
@@ -19,9 +11,7 @@ import {
     type JsPokeWrite,
     type JsProgramStatement,
     MIPS,
-    type MIPSAssembleError,
     MIPS_COPROCESSOR0_REGISTER_NUMBERS,
-    type MipsTokenizedLine,
     registerHandlers,
     type RegisterName,
     StopReason
@@ -66,29 +56,12 @@ import {
     type ProjectDisplay
 } from '#lib/languages/mars/marsDisplay.ts'
 import {
-    applyScreenDirective,
-    assembledCore,
-    ignoredIncludedScreenDiagnostics,
-    readScreenLabelProbe,
-    resolveScreenLabel,
-    SCREEN_LABEL_PROBE_ADDRESS,
-    screenLabelProbeSource
-} from '#lib/languages/mars/screenDirective.ts'
-import {
-    makeTokenSpanIndex,
-    tokenSpanEnd,
-    type TokenSpanIndex
-} from '#lib/languages/mars/tokenSpans.ts'
-import {
-    buildAssemblerProfile,
-    ProjectFormatError,
-    sourceText,
-    textAssemblyFiles,
-    updateEntryText,
-    type BuildInput,
-    type BuildSources,
-    type ProjectFiles
-} from '#lib/projectFiles.ts'
+    checkMarsProgram,
+    marsRuntimeLink,
+    prepareMarsRuntime
+} from '#lib/languages/mars/marsCheck.ts'
+import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosticBridge.ts'
+import { type BuildInput, type BuildSources, type ProjectFiles } from '#lib/projectFiles.ts'
 import {
     MIPSCoprocessor0RegisterNames,
     MIPSCoprocessor1RegisterNames,
@@ -338,125 +311,69 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     /**
      * Loads the Runtime library a Build links, and the list of library functions that explains an
-     * undefined `printf` in a Build that does not link it, before any Core is created.
+     * undefined `printf` in a Build that does not link it, before any Core is created. An ABI this
+     * editor does not ship stops the Build here, before its Arguments are read.
      */
     async _prepareBuild(sources: BuildSources): Promise<void> {
-        if (sources.runtimeAbi === undefined) {
-            await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
-            return
-        }
-        //only a Compilation record's requirement starts at the library's _start (resolveRuntimeLink)
-        const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
-        if (problem) throw new ProjectFormatError(problem)
-        await loadRuntimeLibrary(sources.runtimeAbi, 'MIPS')
+        await prepareMarsRuntime(sources, 'MIPS')
+        marsRuntimeLink(sources, 'MIPS')
     }
 
-    /** The library and entry symbol `_prepareBuild` loaded for these sources. */
-    private runtimeLink(sources: BuildSources): MipsLink {
-        if (sources.runtimeAbi === undefined) return {}
-        const library = loadedRuntimeLibrary(sources.runtimeAbi, 'MIPS')
-        if (!library)
-            throw new ProjectFormatError(`The Runtime library ${sources.runtimeAbi} is not loaded`)
-        return {
-            library: coreLibrary(library),
-            ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {})
-        }
-    }
-
-    /** An undefined library function in a Build without the library says how to turn it on. */
-    private withRuntimeHints(sources: BuildSources, diagnostics: Diagnostic[]): Diagnostic[] {
-        if (sources.runtimeAbi !== undefined) return diagnostics
-        const functions = loadedRuntimeFunctions(CURRENT_RUNTIME_ABI)
-        return diagnostics.map((diagnostic) => {
-            if (diagnostic.severity !== 'error' || diagnostic.hint) return diagnostic
-            const hint = runtimeLibraryHint(diagnostic.message, functions)
-            return hint ? { ...diagnostic, hint } : diagnostic
-        })
-    }
-
+    /**
+     * What a Build would report, so the squiggle on a `@screen` line is there while it is being
+     * typed and does not vanish half a second after a Build replaces this list.
+     */
     _checkCode(sources: BuildSources): Diagnostic[] {
-        const files = textAssemblyFiles(sources)
-        const mips = makeMipsCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        const result = mips.assemble()
-        const lines = tokenizedLines(mips)
-        const spans = makeTokenSpanIndex(lines)
-        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
-        //is being typed and does not vanish half a second after a Build replaces this list; read
-        //last, since a name only a probe resolves assembles another Core over this one
-        const directive = this.readScreenDirective(sources, assembledCore(mips, result)).diagnostics
-        return this.withRuntimeHints(sources, [
-            ...directive,
-            ...includedScreenDiagnostics(files, sources.entry, lines),
-            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
-        ])
+        return this.checkProgram(sources).diagnostics
     }
 
     _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.mips = null
-        const files = textAssemblyFiles(sources)
-        let { mips, result } = this.assembleProgram(sources, files, undoSize)
-        //before the first instruction, so it and a Testcase alike run on the display the source
-        //asked for, its base label read from this assembly. A name only the probe resolves
-        //assembles a throwaway Core over the state every Core shares, so the program is assembled
-        //again after it
-        let probed = false
-        const configured = this.readScreenDirective(sources, assembledCore(mips, result), () => {
-            probed = true
+        //the display is read before the first instruction, so it and a Testcase alike run on the
+        //display the source asked for
+        const { core, report, screen, diagnostics } = this.checkProgram(sources, (mips) => {
+            //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize`
+            //stored, so the size has to be set *before* assembling: setting it afterwards would
+            //only size the next compile's buffer (legacy ordering was setUndoSize -> assemble ->
+            //setUndoEnabled). Never 0: a zero length buffer makes the Core throw on the first
+            //instruction, and no history at all is `setUndoEnabled(false)` in `_initialize`
+            mips.setUndoSize(Math.max(1, undoSize))
+            //stored by every `initialize`, a Testcase's included, before its starting registers
+            mips.setProgramArguments(this.programArgv)
         })
-        if (probed) ({ mips, result } = this.assembleProgram(sources, files, undoSize))
-        this.display = configured.display
-        this.displayOrigin = configured.origin
-        this.displayBaseLabel = configured.baseLabel
+        this.display = screen.display
+        this.displayOrigin = screen.origin
+        this.displayBaseLabel = screen.baseLabel
         //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
         //a re-sync here would repaint the Screen `clear()` has just blanked with the program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        const lines = tokenizedLines(mips)
-        const spans = makeTokenSpanIndex(lines)
-        const diagnostics = this.withRuntimeHints(sources, [
-            ...configured.diagnostics,
-            ...includedScreenDiagnostics(files, sources.entry, lines),
-            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
-        ])
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
         //so a warnings-only program would be rejected despite having assembled fine
         if (diagnostics.some((d) => d.severity === 'error')) {
-            return {
-                ok: false,
-                diagnostics,
-                report: result.report
-            }
+            return { ok: false, diagnostics, report }
         }
-        this.mips = mips
-        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, mips) }
+        this.mips = core
+        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, core) }
     }
 
-    /** A Core for the program, assembled for a Build. */
-    private assembleProgram(
-        sources: BuildSources,
-        files: Record<string, string>,
-        undoSize: number
-    ) {
-        const mips = makeMipsCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
-        //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled). Never 0:
-        //a zero length buffer makes the Core throw on the first instruction, and no history at all
-        //is `setUndoEnabled(false)` in `_initialize`
-        mips.setUndoSize(Math.max(1, undoSize))
-        //stored by every `initialize`, a Testcase's included, before its starting registers
-        mips.setProgramArguments(this.programArgv)
-        return { mips, result: mips.assemble() }
+    /**
+     * The program checked as the analysis Worker checks it (`marsCheck.ts`), on top of the display
+     * the Screen has now; `prepare` readies a Build's Core to run. `normalizeMarsDisplay` there also
+     * covers the semantic check the base constructor starts before this subclass's fields exist.
+     */
+    private checkProgram(sources: BuildSources, prepare?: (mips: JsMips) => void) {
+        const check = checkMarsProgram(sources, 'MIPS', {
+            makeCore: makeMipsCore,
+            display: this.display,
+            prepare
+        })
+        return {
+            ...check,
+            diagnostics: check.diagnostics.map((diagnostic) =>
+                languageDiagnosticToDiagnostic(diagnostic, sources)
+            )
+        }
     }
 
     /**
@@ -523,63 +440,6 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     clear(): void {
         super.clear()
         this.devices?.resetScreen(this.display)
-    }
-
-    /**
-     * What the program's `@screen` comment asks for, on top of the display the Screen has now, its
-     * base label read from `assembled`, the program's Core when it assembled; `onProbe` is told
-     * when that took a probe, which assembles a Core of its own.
-     *
-     * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
-     * subclass's fields exist, when there is no current display to layer onto yet.
-     */
-    private readScreenDirective(
-        sources: BuildSources,
-        assembled: JsMips | null,
-        onProbe?: () => void
-    ) {
-        const code = sourceText(sources)
-        const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            resolveScreenLabel(assembled, label, () => {
-                //GNU assembly cannot place a probe word at a fixed address, and its symbol table
-                //is all a probe would read
-                if (sources.assemblerProfile === 'gnu-compiler-v1') return null
-                onProbe?.()
-                return this.probeLabelAddress(sources, label)
-            })
-        )
-        return {
-            ...configured,
-            diagnostics: configured.diagnostics.map((diagnostic) => ({
-                ...diagnostic,
-                file: sources.entry
-            }))
-        }
-    }
-
-    /**
-     * The address of a `@screen base=` name the program's symbol table does not hold, such as an
-     * `.eqv` name: the program is assembled once more with one extra `.word <name>` at a fixed
-     * address and that word is read back, since the assembler itself resolves the name in it.
-     */
-    private probeLabelAddress(sources: BuildSources, label: string): number | null {
-        try {
-            const probeSources = updateEntryText(
-                sources,
-                screenLabelProbeSource(sourceText(sources), label)
-            )
-            const probe = makeMipsCore(
-                textAssemblyFiles(probeSources),
-                probeSources.entry,
-                buildAssemblerProfile(probeSources),
-                this.runtimeLink(probeSources)
-            )
-            const result = probe.assemble()
-            if (result.errors.some((error) => !error.isWarning)) return null
-            return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
-        } catch {
-            return null
-        }
     }
 
     /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */
@@ -1033,27 +893,6 @@ function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): nu
     })
 }
 
-/** The tokenized source of a build, or nothing when the Core will not give it up. */
-function tokenizedLines(mips: JsMips): MipsTokenizedLine[] {
-    try {
-        return mips.getTokenizedLines()
-    } catch {
-        return []
-    }
-}
-
-function includedScreenDiagnostics(
-    files: Readonly<Record<string, string>>,
-    entry: string,
-    lines: readonly MipsTokenizedLine[]
-): Diagnostic[] {
-    return ignoredIncludedScreenDiagnostics(
-        files,
-        entry,
-        lines.map((line) => line.sourcePath)
-    )
-}
-
 function toInstruction(statement: JsProgramStatement | null | undefined): Instruction | null {
     if (!statement) return null
     return {
@@ -1061,22 +900,6 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
         lineNumber: statement.sourceLine - 1,
         file: statement.sourcePath,
         code: statement.source
-    }
-}
-
-function assembleErrorToDiagnostic(error: MIPSAssembleError, spans: TokenSpanIndex): Diagnostic {
-    return {
-        severity: error.isWarning ? 'warning' : 'error',
-        file: error.sourcePath,
-        lineIndex: error.sourceLine - 1,
-        column: error.sourceColumn,
-        endColumn: tokenSpanEnd(spans, error.sourcePath, error.sourceLine, error.sourceColumn),
-        line: {
-            line: '',
-            line_index: error.sourceLine
-        },
-        message: error.message,
-        formatted: error.message
     }
 }
 
