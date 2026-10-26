@@ -258,8 +258,10 @@ export class MarsDevices {
 
     /**
      * Runs the Core's `undo`, whose restoring stores reach the observers as ordinary writes: the
-     * Synth must not take them for the program's, an upload's start register least of all. Undo
-     * re-reads the Synth's block afterwards instead, with `readSynthBlock`.
+     * Synth must not take them for the program's, an upload's start register least of all, and the
+     * transmitter must not print them, a form feed least of all, which would clear the output. Undo
+     * re-reads the Synth's block afterwards instead, with `readSynthBlock`, and rewinds the Terminal
+     * through its own history ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md)).
      */
     rewind(undo: () => void): void {
         this.rewinding = true
@@ -447,6 +449,8 @@ export class MarsDevices {
         value: number,
         device: 'receiver' | 'transmitter'
     ): void {
+        //a restore puts back what the register held, which the device had stated itself
+        if (this.rewinding) return
         if ((value & MARS_INTERRUPT_ENABLE_BIT) !== 0) {
             throw new Error(
                 `Interrupt-driven I/O is not supported: the program set the interrupt-enable bit ` +
@@ -461,6 +465,7 @@ export class MarsDevices {
     }
 
     private onTransmitterDataWrite(value: number): void {
+        if (this.rewinding) return
         const character = value & 0xff
         if (character === FORM_FEED) {
             //MARS clears its display window: the output, not a read in progress or what is left of

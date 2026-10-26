@@ -167,6 +167,19 @@ describe('the MARS transmitter register', () => {
         expect(new TextDecoder().decode(rest)).toBe('bc\n')
     })
 
+    it('prints none of the restoring stores an Undo makes', () => {
+        //the Core's undo puts the register's old byte back through an observed store, while the
+        //Terminal rewinds through its own history (ADR 0057): a restored form feed must not clear
+        //the output, nor a restored character print
+        const { devices, terminal, transmit } = makeDevices()
+        transmit(0x41)
+        devices.rewind(() => transmit(12))
+        devices.rewind(() => transmit(0x5a))
+        expect(terminal.output).toBe('A')
+        transmit(0x42)
+        expect(terminal.output).toBe('AB')
+    })
+
     it('leaves a read in progress waiting through a form feed', async () => {
         const { terminal, execution, transmit } = makeDevices()
         terminal.attachConsole()

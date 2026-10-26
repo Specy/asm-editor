@@ -464,6 +464,38 @@ describe('RISC-V memory-mapped keyboard and display', () => {
         expect(emulator.stdOut).toBe('B')
     })
 
+    it('leaves the transcript to its own Undo when a store to the data register is undone', async () => {
+        //Undo puts the register's old byte back through a store the device observes, but the
+        //transcript rewinds through its own history: the form feed that store restores must not
+        //clear what was printed since
+        const emulator = await run(
+            DATA +
+                `        li      s0, ${MARS_TRANSMITTER_DATA | 0}
+        li      t1, 12
+        sw      t1, 0(s0)
+        li      a0, 0x58
+        li      a7, 11
+        ecall
+        li      t1, 0x59
+        sw      t1, 0(s0)
+` +
+                EXIT
+        )
+        expect(emulator.stdOut).toBe('XY')
+        //the exit's two instructions, then the store of the Y
+        expect(emulator.undo(3)).toBe(3)
+        expect(emulator.stdOut).toBe('X')
+    })
+
+    it('prints nothing when a Poke of the data register is undone', async () => {
+        const emulator = await build(DATA + EXIT)
+        const register = BigInt(MARS_TRANSMITTER_DATA >>> 0)
+        expect(emulator.pokeMemory(register, new Uint8Array([0x5a, 0, 0, 0]))).toBe(true)
+        expect(emulator.stdOut).toBe('Z')
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.stdOut).toBe('Z')
+    })
+
     it('stops with an error naming the feature when a program enables interrupts', async () => {
         const emulator = await run(
             DATA +
