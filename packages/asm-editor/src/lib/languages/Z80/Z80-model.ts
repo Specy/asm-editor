@@ -338,104 +338,91 @@ export const Z80_SCREEN_COMMANDS = {
 
 export type Z80ScreenCommandName = keyof typeof Z80_SCREEN_COMMANDS
 
-/** One row per command for the documentation page and the coding agent's prompt. */
-export const Z80_SCREEN_COMMAND_DOCS: {
-    name: Z80ScreenCommandName
-    command: number
-    description: string
-}[] = [
+//each row takes its number from Z80_SCREEN_COMMANDS by its name, so the two cannot disagree
+const SCREEN_COMMAND_ROWS: { name: Z80ScreenCommandName; description: string }[] = [
     {
         name: 'PIXEL',
-        command: Z80_SCREEN_COMMANDS.PIXEL,
         description: 'One pixel at (X, Y) in the pen color. The pen width does not apply.'
     },
     {
         name: 'LINE',
-        command: Z80_SCREEN_COMMANDS.LINE,
         description:
             'A line from (X, Y) to (X2, Y2) in the pen color, leaving the drawing position at (X2, Y2).'
     },
     {
         name: 'LINE_TO',
-        command: Z80_SCREEN_COMMANDS.LINE_TO,
         description:
             'A line from the drawing position to (X, Y), which becomes the new position: a polyline costs one command per point.'
     },
     {
         name: 'MOVE_TO',
-        command: Z80_SCREEN_COMMANDS.MOVE_TO,
         description: 'Moves the drawing position to (X, Y) without drawing.'
     },
     {
         name: 'RECTANGLE',
-        command: Z80_SCREEN_COMMANDS.RECTANGLE,
         description:
             'A rectangle from (X, Y) to (X2, Y2), filled with the fill color and outlined with the pen. The right and bottom edges are excluded, as they are in EASy68K.'
     },
     {
         name: 'RECTANGLE_OUTLINE',
-        command: Z80_SCREEN_COMMANDS.RECTANGLE_OUTLINE,
         description: 'The same rectangle, outline only.'
     },
     {
         name: 'ELLIPSE',
-        command: Z80_SCREEN_COMMANDS.ELLIPSE,
         description: 'The ellipse inscribed in that rectangle, filled and outlined like it.'
     },
     {
         name: 'ELLIPSE_OUTLINE',
-        command: Z80_SCREEN_COMMANDS.ELLIPSE_OUTLINE,
         description: 'The same ellipse, outline only.'
     },
     {
         name: 'FLOOD_FILL',
-        command: Z80_SCREEN_COMMANDS.FLOOD_FILL,
         description:
             'Spreads the fill color from (X, Y) over every pixel of the color that was there, four ways.'
     },
     {
         name: 'CLEAR',
-        command: Z80_SCREEN_COMMANDS.CLEAR,
         description:
             'Fills the whole Screen with the fill color, homes the text cursor, and adopts that color as the background, so scrolled text rows and a later resize match what is on screen.'
     },
     {
         name: 'RESIZE',
-        command: Z80_SCREEN_COMMANDS.RESIZE,
         description:
             'Resizes the Screen to X by Y pixels and clears it; a coordinate of 0 means 256, the largest size a byte cannot hold.'
     },
     {
         name: 'BUFFERING_ON',
-        command: Z80_SCREEN_COMMANDS.BUFFERING_ON,
         description:
             'Double buffering on: drawing goes to an off-screen copy of the visible image until PRESENT, so an animation never shows a half-drawn frame.'
     },
     {
         name: 'BUFFERING_OFF',
-        command: Z80_SCREEN_COMMANDS.BUFFERING_OFF,
         description:
             'Double buffering off: drawing appears immediately. The off-screen image is dropped without being shown.'
     },
     {
         name: 'PRESENT',
-        command: Z80_SCREEN_COMMANDS.PRESENT,
         description:
             'Shows the off-screen image. With double buffering off it only asks for a repaint.'
     },
     {
         name: 'MODE_CELLS',
-        command: Z80_SCREEN_COMMANDS.MODE_CELLS,
         description:
             'Switches to the [TRS-80 display](/documentation/z80/io#the-trs-80-display). Draw by storing bytes in video memory; see that section for the memory map, character encoding and keyboard matrix.'
     },
     {
         name: 'MODE_DRAWING',
-        command: Z80_SCREEN_COMMANDS.MODE_DRAWING,
         description:
             'Back to the drawing commands above. The image stays as it is until something draws on it, and memory at 0x3C00 becomes ordinary RAM again.'
     }
 ]
+
+/** One row per command for the documentation page and the coding agent's prompt. */
+export const Z80_SCREEN_COMMAND_DOCS: {
+    name: Z80ScreenCommandName
+    command: number
+    description: string
+}[] = SCREEN_COMMAND_ROWS.map((row) => ({ ...row, command: Z80_SCREEN_COMMANDS[row.name] }))
 
 /**
  * Which snapshot a mouse read answers with, in B. The numbers are EASy68K's task 61 modes, so a
@@ -510,10 +497,10 @@ export type Z80PortDoc = {
     exampleShows?: string
 }
 
-export const Z80_PORT_DOCS: Z80PortDoc[] = [
+//each row takes its port from Z80_PORTS by its name, so the two cannot disagree
+const PORT_ROWS: Omit<Z80PortDoc, 'port'>[] = [
     {
         name: 'CHAR',
-        port: Z80_PORTS.CHAR,
         group: 'console',
         title: 'Character',
         write: 'Prints the byte as a Latin-1 character to the Terminal and, in drawing mode, at the Screen’s text cursor. 0x0A prints a newline. At the bottom, text scrolls the whole Screen up one cell row, graphics included. In TRS-80 mode output goes only to the Terminal.',
@@ -532,7 +519,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'NUMBER',
-        port: Z80_PORTS.NUMBER,
         group: 'console',
         title: 'Unsigned number',
         write: 'Prints the byte as an unsigned decimal number, 0 to 255.',
@@ -547,7 +533,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SIGNED',
-        port: Z80_PORTS.SIGNED,
         group: 'console',
         title: 'Signed number',
         write: 'Prints the byte as a signed decimal number, -128 to 127.',
@@ -561,7 +546,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'HEX',
-        port: Z80_PORTS.HEX,
         group: 'console',
         title: 'Hexadecimal',
         write: 'Prints the byte as two upper case hexadecimal digits.',
@@ -574,7 +558,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'WORD',
-        port: Z80_PORTS.WORD,
         group: 'console',
         title: '16 bit number',
         write: 'Prints the 16 bit number made of the high byte of the port address (register B when using `out (c),r`) and the byte written, as an unsigned decimal number.',
@@ -589,7 +572,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_PEN_COLOR',
-        port: Z80_PORTS.SCREEN_PEN_COLOR,
         group: 'screen',
         title: 'Pen color',
         write: 'Sets the color of pixels, lines, outlines and text, as one 3-3-2 byte (`RRRGGGBB`).',
@@ -608,7 +590,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_FILL_COLOR',
-        port: Z80_PORTS.SCREEN_FILL_COLOR,
         group: 'screen',
         title: 'Fill color',
         write: 'Sets the color the inside of a filled shape, a flood fill and a clear use, as one 3-3-2 byte.',
@@ -631,7 +612,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_PEN_WIDTH',
-        port: Z80_PORTS.SCREEN_PEN_WIDTH,
         group: 'screen',
         title: 'Pen width',
         write: 'Sets how many pixels wide lines and outlines are, at least 1. A width of 0 is read as 1.',
@@ -653,7 +633,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_X',
-        port: Z80_PORTS.SCREEN_X,
         group: 'screen',
         title: 'X',
         write: 'The first X coordinate: the pixel, the start of a line, the left edge of a shape, the width of a resize.',
@@ -676,7 +655,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_Y',
-        port: Z80_PORTS.SCREEN_Y,
         group: 'screen',
         title: 'Y',
         write: 'The first Y coordinate, the companion of the X port, and the height of a resize.',
@@ -684,7 +662,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_X2',
-        port: Z80_PORTS.SCREEN_X2,
         group: 'screen',
         title: 'X2',
         write: 'The second X coordinate: the end of a line, the right edge of a shape. Unused by the one-point commands.',
@@ -692,7 +669,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_Y2',
-        port: Z80_PORTS.SCREEN_Y2,
         group: 'screen',
         title: 'Y2',
         write: 'The second Y coordinate, the companion of the X2 port.',
@@ -700,7 +676,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_COMMAND',
-        port: Z80_PORTS.SCREEN_COMMAND,
         group: 'screen',
         title: 'Command',
         write: 'Runs one drawing operation on the coordinates, colors and pen width already set. The commands are listed above.',
@@ -727,7 +702,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_PIXEL',
-        port: Z80_PORTS.SCREEN_PIXEL,
         group: 'screen',
         title: 'Pixel color',
         write: 'Ignored: the pixel is drawn with command 0, in the pen color.',
@@ -747,7 +721,6 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
     },
     {
         name: 'SCREEN_CURSOR_COLUMN',
-        port: Z80_PORTS.SCREEN_CURSOR_COLUMN,
         group: 'screen',
         title: 'Text cursor column',
         write: 'Moves the text cursor to a column, in 8 by 8 character cells: 0 to 31 on the default Screen. Out of range values are clamped.',
@@ -771,7 +744,6 @@ msg:    .asciz "HELLO"`,
     },
     {
         name: 'SCREEN_CURSOR_ROW',
-        port: Z80_PORTS.SCREEN_CURSOR_ROW,
         group: 'screen',
         title: 'Text cursor row',
         write: 'Moves the text cursor to a row, in 8 by 8 character cells: 0 to 23 on the default Screen. Out of range values are clamped.',
@@ -779,7 +751,6 @@ msg:    .asciz "HELLO"`,
     },
     {
         name: 'KEY_AVAILABLE',
-        port: Z80_PORTS.KEY_AVAILABLE,
         group: 'keyboard',
         title: 'Typed input available',
         write: 'Ignored.',
@@ -797,7 +768,6 @@ wait:   in a, (0x30)    ; anything typed?
     },
     {
         name: 'KEY_STATE',
-        port: Z80_PORTS.KEY_STATE,
         group: 'keyboard',
         title: 'Key state',
         write: 'Ignored.',
@@ -815,7 +785,6 @@ wait:   in a, (c)
     },
     {
         name: 'KEY_LAST_DOWN',
-        port: Z80_PORTS.KEY_LAST_DOWN,
         group: 'keyboard',
         title: 'Last key pressed',
         write: 'Ignored.',
@@ -830,7 +799,6 @@ loop:   in a, (0x32)    ; the last key pressed
     },
     {
         name: 'KEY_LAST_UP',
-        port: Z80_PORTS.KEY_LAST_UP,
         group: 'keyboard',
         title: 'Last key released',
         write: 'Ignored.',
@@ -838,7 +806,6 @@ loop:   in a, (0x32)    ; the last key pressed
     },
     {
         name: 'MOUSE_X',
-        port: Z80_PORTS.MOUSE_X,
         group: 'mouse',
         title: 'Mouse X',
         write: 'Ignored.',
@@ -863,7 +830,6 @@ wait:   in a, (c)
     },
     {
         name: 'MOUSE_Y',
-        port: Z80_PORTS.MOUSE_Y,
         group: 'mouse',
         title: 'Mouse Y',
         write: 'Ignored.',
@@ -871,7 +837,6 @@ wait:   in a, (c)
     },
     {
         name: 'MOUSE_BUTTONS',
-        port: Z80_PORTS.MOUSE_BUTTONS,
         group: 'mouse',
         title: 'Mouse buttons',
         write: 'Ignored.',
@@ -879,7 +844,6 @@ wait:   in a, (c)
     },
     {
         name: 'MOUSE_EVENTS',
-        port: Z80_PORTS.MOUSE_EVENTS,
         group: 'mouse',
         title: 'Mouse event count',
         write: 'Ignored.',
@@ -887,7 +851,6 @@ wait:   in a, (c)
     },
     {
         name: 'TIME_WAIT',
-        port: Z80_PORTS.TIME_WAIT,
         group: 'time',
         title: 'Wait',
         write: 'Ignored.',
@@ -903,7 +866,6 @@ wait:   in a, (c)
     },
     {
         name: 'TIME_FRAME',
-        port: Z80_PORTS.TIME_FRAME,
         group: 'time',
         title: 'Frame sync',
         write: 'Ignored.',
@@ -921,7 +883,6 @@ loop:   push bc
     },
     {
         name: 'TIME_NOW',
-        port: Z80_PORTS.TIME_NOW,
         group: 'time',
         title: 'Elapsed time',
         write: 'Ignored.',
@@ -939,7 +900,6 @@ loop:   push bc
     },
     {
         name: 'NOTE_PLAY',
-        port: Z80_PORTS.NOTE_PLAY,
         group: 'audio',
         title: 'Play a note',
         write: 'Writing a pitch starts a note and continues immediately, so notes can overlap. Pitch runs from 0 to 127: 60 is middle C, 62 is D, 64 is E, and each step is one semitone. The note uses the instrument, volume, and duration last set through the other audio ports. A pitch of 128 or more becomes 60, as in MARS service 31. The first note or MIDI-file request after opening or reloading the editor page waits while the browser loads the sound bank, the collection of instrument sounds; later runs share it.',
@@ -957,7 +917,6 @@ loop:   push bc
     },
     {
         name: 'NOTE_PLAY_WAIT',
-        port: Z80_PORTS.NOTE_PLAY_WAIT,
         group: 'audio',
         title: 'Play a note and wait',
         write: 'Ignored.',
@@ -981,7 +940,6 @@ loop:   push bc
     },
     {
         name: 'NOTE_INSTRUMENT',
-        port: Z80_PORTS.NOTE_INSTRUMENT,
         group: 'audio',
         title: 'Instrument',
         write: 'Selects the instrument sound for later notes from the General MIDI list, numbered from 0 to 127: 0 is acoustic grand piano, 40 violin, 56 trumpet, and 73 flute. Values of 128 or more select 0 (piano), as in MARS. Every run starts at 0 (piano).',
@@ -996,7 +954,6 @@ loop:   push bc
     },
     {
         name: 'NOTE_VOLUME',
-        port: Z80_PORTS.NOTE_VOLUME,
         group: 'audio',
         title: 'Volume',
         write: 'Sets the volume for later notes, from 0 (silent) to 127 (loudest). Values of 128 or more become 100, the MARS default. Every run starts at 100.',
@@ -1011,7 +968,6 @@ loop:   push bc
     },
     {
         name: 'NOTE_DURATION',
-        port: Z80_PORTS.NOTE_DURATION,
         group: 'audio',
         title: 'Duration',
         write: 'Sets the duration for later notes in milliseconds. Use `out (c),r` with C = 0x64: B supplies the high byte and the written register supplies the low byte, giving a duration up to 65,535 milliseconds. Every run starts at 1000 milliseconds, the MARS default.',
@@ -1028,7 +984,6 @@ loop:   push bc
     },
     {
         name: 'SOUND_CHIP_SELECT',
-        port: Z80_PORTS.SOUND_CHIP_SELECT,
         group: 'sound-chip',
         title: 'Select a Sound chip register',
         write: 'Selects the register, 0 to 15, that the next writes to SOUND_CHIP_WRITE (0xA1) and reads from SOUND_CHIP_READ (0xA2) reach; it stays selected until the next write here. Registers 14 and 15 are the chip’s two I/O ports, which the MSX wires to its joysticks: nothing is attached here, so they read 0xFF and writes to them are ignored. A number of 16 or more selects nothing, as on the chip.',
@@ -1059,7 +1014,6 @@ loop:   push bc
     },
     {
         name: 'SOUND_CHIP_WRITE',
-        port: Z80_PORTS.SOUND_CHIP_WRITE,
         group: 'sound-chip',
         title: 'Write a Sound chip register',
         write: 'Writes the selected register. Each keeps only its own bits: four of a tone period’s high register, five of the noise period and of a volume, four of the envelope shape. Writing the envelope shape, register 13, restarts the envelope, even with the shape it already has; this retriggers all channels following the shared envelope.',
@@ -1088,7 +1042,6 @@ chord:  .byte 0, 0xac, 1, 1     ; A: period 428, middle C
     },
     {
         name: 'SOUND_CHIP_READ',
-        port: Z80_PORTS.SOUND_CHIP_READ,
         group: 'sound-chip',
         title: 'Read a Sound chip register',
         write: 'Ignored.',
@@ -1104,6 +1057,11 @@ chord:  .byte 0, 0xac, 1, 1     ; A: period 428, middle C
         exampleOutput: '15'
     }
 ]
+
+export const Z80_PORT_DOCS: Z80PortDoc[] = PORT_ROWS.map((row) => ({
+    ...row,
+    port: Z80_PORTS[row.name]
+}))
 
 const PORT_GROUP_BY_NAME = new Map<Z80PortName, Z80PortGroup>(
     Z80_PORT_DOCS.map((doc) => [doc.name, doc.group])

@@ -5,8 +5,10 @@ import { analyzeZ80Project } from '#lib/languages/service/adapters/z80Adapter.ts
 import { registerLanguageSession } from '#lib/languages/service/sessionRegistry.ts'
 import { projectSourceUri } from '#lib/languages/service/uri.ts'
 import {
+    createZ80DocumentHighlightProvider,
     createZ80ProjectDocumentSymbolProvider,
     createZ80ProjectDefinitionProvider,
+    createZ80ProjectHoverProvider,
     createZ80ReferenceProvider,
     createZ80RenameProvider
 } from './Z80-project-language'
@@ -123,5 +125,47 @@ describe('Z80 authoritative Project providers', () => {
             {} as never
         )
         expect(rejected).toEqual(expect.objectContaining({ rejectReason: expect.any(String) }))
+    })
+
+    it('highlights, hovers and offers to rename the symbol under the cursor only', async () => {
+        const highlights = createZ80DocumentHighlightProvider(monacoStub)
+        const highlight = (path: string, column: number) =>
+            highlights.provideDocumentHighlights(
+                model(path) as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+        //the File's own occurrences, the definition written and a use read
+        expect(await highlight('main.asm', 12)).toEqual([
+            { range: new Range(1, 11, 1, 17), kind: 1 }
+        ])
+        expect(await highlight('lib.asm', 1)).toEqual([{ range: new Range(1, 1, 1, 7), kind: 2 }])
+        expect(await highlight('main.asm', 8)).toBeNull()
+
+        const hover = (column: number) =>
+            createZ80ProjectHoverProvider(monacoStub).provideHover(
+                model('main.asm') as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+        expect(await hover(12)).toEqual({
+            range: new Range(1, 11, 1, 17),
+            contents: [
+                { value: '**label:** `target`\n\nValue: **3** (`$3`)\n\nDefined in `lib.asm:1`' }
+            ]
+        })
+        expect(await hover(8)).toBeNull()
+
+        const rename = createZ80RenameProvider(monacoStub)
+        const location = (column: number) =>
+            rename.resolveRenameLocation!(
+                model('main.asm') as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+        expect(await location(12)).toEqual({ text: 'target', range: new Range(1, 11, 1, 17) })
+        expect(await location(8)).toEqual(
+            expect.objectContaining({ rejectReason: 'This symbol cannot be renamed safely' })
+        )
     })
 })

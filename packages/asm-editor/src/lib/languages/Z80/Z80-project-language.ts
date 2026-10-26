@@ -1,11 +1,11 @@
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
-import { analysisForModel, languageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { analysisForModel, modelSources } from '#lib/languages/service/sessionRegistry.ts'
 import {
     createProjectDefinitionProvider,
     createProjectDocumentSymbolProvider
 } from '#lib/languages/service/projectAssemblyLanguage.ts'
-import { parseProjectSourceUri, projectSourceUri } from '#lib/languages/service/uri.ts'
+import { projectSourceUri, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
 import type { SourceLocation, SymbolOccurrence } from '#lib/languages/service/sourceModel.ts'
 import {
@@ -31,15 +31,10 @@ const fallbackOptions = {
 }
 
 function contextForModel(model: monaco.editor.ITextModel) {
-    const identity = parseProjectSourceUri(model.uri)
-    if (!identity) return null
-    const session = languageSession(identity.sessionId)
-    const sources = session?.sourcesFor(
-        identity.sourceKind,
-        identity.sourceKind === 'build' ? identity.buildGeneration : undefined
-    )
-    const snapshot = sources && analysisForModel(session, identity, sources)
-    return session && snapshot?.target === 'Z80' ? { identity, snapshot } : null
+    const context = modelSources(model)
+    if (!context) return null
+    const snapshot = analysisForModel(context.session, context.identity, context.sources)
+    return snapshot?.target === 'Z80' ? { identity: context.identity, snapshot } : null
 }
 
 function range(monaco: MonacoType, location: SourceLocation): monaco.Range {
@@ -51,34 +46,51 @@ function range(monaco: MonacoType, location: SourceLocation): monaco.Range {
     )
 }
 
+/** Where a symbol's occurrence is, as a location in its own File. */
+function sourceLocation(
+    monaco: MonacoType,
+    identity: ProjectModelIdentity,
+    location: SourceLocation
+): monaco.languages.Location {
+    return {
+        uri: projectSourceUri(monaco, { ...identity, path: location.path }),
+        range: range(monaco, location)
+    }
+}
+
+/**
+ * The symbol under the cursor and the occurrences there. None where no symbol is, and none where
+ * occurrences of two symbols meet.
+ */
+function symbolAtCursor(model: monaco.editor.ITextModel, position: monaco.Position) {
+    const context = contextForModel(model)
+    if (!context) return null
+    const line = position.lineNumber - 1
+    const column = position.column - 1
+    const matches = context.snapshot.occurrences.filter(
+        ({ location }) =>
+            location.path === context.identity.path &&
+            location.range.start.line === line &&
+            location.range.start.column <= column &&
+            location.range.end.column >= column
+    )
+    const ids = new Set(matches.flatMap((occurrence) => occurrence.symbolId ?? []))
+    return ids.size === 1 ? { ...context, matches, id: [...ids][0]! } : null
+}
+
 function locationKey(location: SourceLocation): string {
     return `${location.path}:${location.range.start.line}:${location.range.start.column}:${location.range.end.line}:${location.range.end.column}`
 }
 
-function occurrencesAt(
+/** A symbol's occurrences, or only those in one role, once per place. */
+function uniqueOccurrences(
     occurrences: SymbolOccurrence[],
-    path: string,
-    line: number,
-    column: number
+    symbolId: string,
+    role?: SymbolOccurrence['role']
 ): SymbolOccurrence[] {
-    return occurrences.filter(
-        (occurrence) =>
-            occurrence.location.path === path &&
-            occurrence.location.range.start.line === line &&
-            occurrence.location.range.start.column <= column &&
-            occurrence.location.range.end.column >= column
-    )
-}
-
-function oneSymbolId(occurrences: SymbolOccurrence[]): string | null {
-    const ids = new Set(occurrences.flatMap((occurrence) => occurrence.symbolId ?? []))
-    return ids.size === 1 ? [...ids][0]! : null
-}
-
-function definitionsFor(occurrences: SymbolOccurrence[], symbolId: string): SymbolOccurrence[] {
     const unique = new Map<string, SymbolOccurrence>()
     for (const occurrence of occurrences) {
-        if (occurrence.symbolId !== symbolId || occurrence.role !== 'definition') continue
+        if (occurrence.symbolId !== symbolId || (role && occurrence.role !== role)) continue
         unique.set(locationKey(occurrence.location), occurrence)
     }
     return [...unique.values()]
@@ -96,27 +108,11 @@ export function createZ80ProjectDefinitionProvider(
     const fallback = createProjectDefinitionProvider(monaco, fallbackOptions)
     return {
         async provideDefinition(model, position, token) {
-            const context = contextForModel(model)
-            if (context) {
-                const id = oneSymbolId(
-                    occurrencesAt(
-                        context.snapshot.occurrences,
-                        context.identity.path,
-                        position.lineNumber - 1,
-                        position.column - 1
-                    )
-                )
-                if (id) {
-                    return definitionsFor(context.snapshot.occurrences, id).map((definition) => ({
-                        uri: projectSourceUri(monaco, {
-                            ...context.identity,
-                            path: definition.location.path
-                        }),
-                        range: range(monaco, definition.location)
-                    }))
-                }
-            }
-            return fallback.provideDefinition(model, position, token)
+            const at = symbolAtCursor(model, position)
+            if (!at) return fallback.provideDefinition(model, position, token)
+            return uniqueOccurrences(at.snapshot.occurrences, at.id, 'definition').map(
+                (definition) => sourceLocation(monaco, at.identity, definition.location)
+            )
         }
     }
 }
@@ -169,30 +165,15 @@ export function createZ80ProjectDocumentSymbolProvider(
 export function createZ80ReferenceProvider(monaco: MonacoType): monaco.languages.ReferenceProvider {
     return {
         provideReferences(model, position, referenceContext) {
-            const context = contextForModel(model)
-            if (!context) return null
-            const id = oneSymbolId(
-                occurrencesAt(
-                    context.snapshot.occurrences,
-                    context.identity.path,
-                    position.lineNumber - 1,
-                    position.column - 1
-                )
-            )
-            if (!id) return null
-            return context.snapshot.occurrences
+            const at = symbolAtCursor(model, position)
+            if (!at) return null
+            return at.snapshot.occurrences
                 .filter(
                     (occurrence) =>
-                        occurrence.symbolId === id &&
+                        occurrence.symbolId === at.id &&
                         (referenceContext.includeDeclaration || occurrence.role === 'reference')
                 )
-                .map((occurrence) => ({
-                    uri: projectSourceUri(monaco, {
-                        ...context.identity,
-                        path: occurrence.location.path
-                    }),
-                    range: range(monaco, occurrence.location)
-                }))
+                .map((occurrence) => sourceLocation(monaco, at.identity, occurrence.location))
         }
     }
 }
@@ -202,22 +183,13 @@ export function createZ80DocumentHighlightProvider(
 ): monaco.languages.DocumentHighlightProvider {
     return {
         provideDocumentHighlights(model, position) {
-            const context = contextForModel(model)
-            if (!context) return null
-            const id = oneSymbolId(
-                occurrencesAt(
-                    context.snapshot.occurrences,
-                    context.identity.path,
-                    position.lineNumber - 1,
-                    position.column - 1
-                )
-            )
-            if (!id) return null
-            return context.snapshot.occurrences
+            const at = symbolAtCursor(model, position)
+            if (!at) return null
+            return at.snapshot.occurrences
                 .filter(
                     (occurrence) =>
-                        occurrence.symbolId === id &&
-                        occurrence.location.path === context.identity.path
+                        occurrence.symbolId === at.id &&
+                        occurrence.location.path === at.identity.path
                 )
                 .map((occurrence) => ({
                     range: range(monaco, occurrence.location),
@@ -233,21 +205,12 @@ export function createZ80DocumentHighlightProvider(
 export function createZ80ProjectHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover(model, position) {
-            const context = contextForModel(model)
-            if (!context) return null
-            const matched = occurrencesAt(
-                context.snapshot.occurrences,
-                context.identity.path,
-                position.lineNumber - 1,
-                position.column - 1
-            )
-            const id = oneSymbolId(matched)
-            if (!id) return null
-            const symbol = context.snapshot.symbols.find((candidate) => candidate.id === id)
-            const occurrence = matched[0]
-            if (!symbol || !occurrence) return null
+            const at = symbolAtCursor(model, position)
+            if (!at) return null
+            const symbol = at.snapshot.symbols.find((candidate) => candidate.id === at.id)
+            if (!symbol) return null
             return {
-                range: range(monaco, occurrence.location),
+                range: range(monaco, at.matches[0]!.location),
                 contents: [
                     {
                         value: `**${symbol.kind}:** \`${symbol.name}\`\n\nValue: **${symbol.value ?? 'unresolved'}**${
@@ -287,20 +250,12 @@ function renameEditRejection(
 
 export function createZ80RenameProvider(monaco: MonacoType): monaco.languages.RenameProvider {
     function renameContext(model: monaco.editor.ITextModel, position: monaco.Position) {
-        const context = contextForModel(model)
-        if (!context) return null
-        const matches = occurrencesAt(
-            context.snapshot.occurrences,
-            context.identity.path,
-            position.lineNumber - 1,
-            position.column - 1
-        )
-        const id = oneSymbolId(matches)
-        if (!id) return null
-        const symbols = context.snapshot.symbols.filter((symbol) => symbol.id === id)
+        const at = symbolAtCursor(model, position)
+        if (!at) return null
+        const symbols = at.snapshot.symbols.filter((symbol) => symbol.id === at.id)
         if (symbols.length === 0 || symbols.some((symbol) => symbol.renameable === false))
             return null
-        return { ...context, id, symbol: symbols[0]!, occurrence: matches[0]! }
+        return { ...at, symbol: symbols[0]!, occurrence: at.matches[0]! }
     }
 
     return {
@@ -334,24 +289,20 @@ export function createZ80RenameProvider(monaco: MonacoType): monaco.languages.Re
                     symbol.id !== context.id && symbol.name.toLowerCase() === newName.toLowerCase()
             )
             if (collision) return renameEditRejection(`A symbol named ${newName} already exists`)
-            const unique = new Map<string, SymbolOccurrence>()
-            for (const occurrence of context.snapshot.occurrences) {
-                if (occurrence.symbolId === context.id) {
-                    unique.set(locationKey(occurrence.location), occurrence)
-                }
-            }
             return {
-                edits: [...unique.values()].map((occurrence) => ({
-                    resource: projectSourceUri(monaco, {
-                        ...context.identity,
-                        path: occurrence.location.path
-                    }),
-                    textEdit: {
-                        range: range(monaco, occurrence.location),
-                        text: newName
-                    },
-                    versionId: undefined
-                }))
+                edits: uniqueOccurrences(context.snapshot.occurrences, context.id).map(
+                    (occurrence) => ({
+                        resource: projectSourceUri(monaco, {
+                            ...context.identity,
+                            path: occurrence.location.path
+                        }),
+                        textEdit: {
+                            range: range(monaco, occurrence.location),
+                            text: newName
+                        },
+                        versionId: undefined
+                    })
+                )
             }
         }
     }
