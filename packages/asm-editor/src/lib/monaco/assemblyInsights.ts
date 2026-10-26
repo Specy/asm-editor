@@ -156,6 +156,10 @@ function parseNumericLiteral(
     if (/^0x/i.test(unsignedText)) {
         radix = 16
         digits = unsignedText.slice(2)
+    } else if (/h$/i.test(unsignedText)) {
+        //before the 0b prefix: x86 and Z80 assemblers read 0B800h and 0Bh as hexadecimal
+        radix = 16
+        digits = unsignedText.slice(0, -1)
     } else if (/^0b/i.test(unsignedText)) {
         radix = 2
         digits = unsignedText.slice(2)
@@ -171,9 +175,6 @@ function parseNumericLiteral(
     } else if (unsignedText.startsWith('@')) {
         radix = 8
         digits = unsignedText.slice(1)
-    } else if (/h$/i.test(unsignedText)) {
-        radix = 16
-        digits = unsignedText.slice(0, -1)
     } else if (/b$/i.test(unsignedText)) {
         radix = 2
         digits = unsignedText.slice(0, -1)
