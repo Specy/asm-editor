@@ -93,24 +93,21 @@ export type DefaultCodingAgentToolContext = {
      */
     newProgram?: NewProgram
 
-    // Multi-file support
-    getFiles?: () => Record<string, string> | ProjectFiles
-    getFile?: (path: string) => string | null
-    setFile?: (path: string, code: string) => void
-    deleteFile?: (path: string) => void
+    /** The host's Files: a Project's, or the one file of a host with none, with any the agent wrote. */
+    getFiles: () => Record<string, string> | ProjectFiles
+    /** A File's text, or null where there is none or the File is binary, not UTF-8 text. */
+    getFile: (path: string) => string | null
+    setFile: (path: string, code: string) => void
+    deleteFile: (path: string) => void
     /**
      * The Entry the tools build: a Project's Selected program's, undefined while that Project has
      * no Program ([programs.md](../../../../../../../docs/design/programs.md), decision 7).
      */
-    getEntryPath?: () => string | undefined
+    getEntryPath: () => string | undefined
     getActivePath?: () => string | undefined
     setActivePath?: (path: string) => void
     /** What the tools say while the Project has no Program, `DEFAULT_NO_PROGRAM_MESSAGE` if absent. */
     noProgramMessage?: string
-
-    // Single-file legacy fallbacks
-    getEditorCode?: () => string
-    setEditorCode?: (code: string) => void
 
     /**
      * Searches the Documentation and the Lectures in the Search scope of the place the agent runs

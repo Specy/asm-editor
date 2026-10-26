@@ -6,7 +6,6 @@
         DEFAULT_TAKE_LINES,
         MAX_TAKE_LINES
     } from './defaultCodingAgent/types'
-    export { AssemblyCodingHarness } from './defaultCodingAgent/harness'
     export type {
         AgentToolAllowList,
         AgentWorkflow,
@@ -22,8 +21,6 @@
     import AiAgent from '#cmp/shared/agent/AiAgent.svelte'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
-    import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
-    import { fileText, type ProjectFiles } from '#lib/projectFiles.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
     import type { NewProgram } from '#lib/sourceCompilation/compileProjectSource.ts'
@@ -75,11 +72,11 @@
          */
         newProgram?: NewProgram
         onOpenFile?: (path: string) => void
+        /**
+         * The one file of a host with no `project`, as a lecture's or an Exam's editor holds it;
+         * with one, the text the agent last wrote to its Entry file.
+         */
         editorCode?: string
-        files?: ProjectFiles
-        /** The single file's path in a host with no `project`, whose Selected program's it is. */
-        entry?: string
-        fileSystem?: FileSystem
         activePath?: string
         emulatorInstance: Emulator | null
         style?: string
@@ -105,9 +102,6 @@
         newProgram = 'create',
         onOpenFile,
         editorCode = $bindable(''),
-        files = $bindable(undefined),
-        entry = $bindable(undefined),
-        fileSystem,
         activePath = $bindable(undefined),
         emulatorInstance,
         style,
@@ -123,24 +117,21 @@
     let accent = $derived(ThemeStore.get('accent').color)
 
     //a Project's Entry is its Selected program's, and there is none while it has no Program
-    //(programs.md, decision 7): the tools say so rather than make up a `main.<ext>`
+    //(programs.md, decision 7): the tools say so rather than make up a `main.<ext>`. A host with no
+    //Project holds one file, which goes by the language's default name
     const effectiveEntry = $derived(
         project
             ? project.selectedProgram
-            : (entry ?? (editorLanguage ? defaultEntryPath(editorLanguage) : 'main.s'))
+            : editorLanguage
+              ? defaultEntryPath(editorLanguage)
+              : 'main.s'
     )
 
-    const effectiveFileSystem = $derived(project?.fileSystem ?? fileSystem)
-
+    //with no Project, the files the agent wrote beside the host's one, which follows `editorCode`
     let internalFiles = $state<Record<string, string>>({})
 
     $effect(() => {
-        if (
-            !effectiveFileSystem &&
-            !files &&
-            editorCode !== undefined &&
-            effectiveEntry !== undefined
-        ) {
+        if (!project && editorCode !== undefined && effectiveEntry !== undefined) {
             const current = internalFiles[effectiveEntry]
             if (current !== editorCode) {
                 internalFiles[effectiveEntry] = editorCode
@@ -181,67 +172,48 @@
             searchDocumentation: (query, language, limit) =>
                 searchForAgent(searchPlace, query, language, editorLanguage, limit),
 
+            //a Project's Files are its FileSystem's, which every write and deletion goes through
+            //before the host's bookkeeping: a change it refuses, as it refuses every change while a
+            //Debug session holds the Files, throws, and the tool reports it
             getFiles: () => {
-                if (effectiveFileSystem) return effectiveFileSystem.files
-                if (files) return files
+                if (project) return project.fileSystem.files
                 if (Object.keys(internalFiles).length > 0) return internalFiles
                 return effectiveEntry === undefined ? {} : { [effectiveEntry]: editorCode ?? '' }
             },
             getFile: (path) => {
-                const target = path || activePath || effectiveEntry
-                if (!target) return null
-                if (effectiveFileSystem) {
+                if (project) {
+                    //null for no File, and for a binary one, which is not UTF-8 text
                     try {
-                        return effectiveFileSystem.readText(target)
+                        return project.fileSystem.readText(path)
                     } catch {
                         return null
                     }
                 }
-                if (files && target in files) {
-                    return fileText(files[target])
-                }
-                if (target in internalFiles) {
-                    return internalFiles[target]
-                }
-                if (target === effectiveEntry) {
-                    return editorCode ?? ''
-                }
-                return null
+                if (path in internalFiles) return internalFiles[path]
+                return path === effectiveEntry ? (editorCode ?? '') : null
             },
-            //with a FileSystem, the Project's, the write goes through it alone, so the host's
-            //bookkeeping happens once, after it: `files` is then the same Files
             setFile: (path, nextCode) => {
-                const target = path || activePath || effectiveEntry
-                if (!target) return
-                if (effectiveFileSystem) {
-                    const before = effectiveFileSystem.files
-                    effectiveFileSystem.writeText(target, nextCode)
-                    const added = Object.keys(effectiveFileSystem.files).filter(
+                if (project) {
+                    const before = project.fileSystem.files
+                    project.fileSystem.writeText(path, nextCode)
+                    const added = Object.keys(project.fileSystem.files).filter(
                         (file) => !Object.hasOwn(before, file)
                     )
                     if (added.length) filesAdded(added)
-                } else if (files) {
-                    files = { ...files, [target]: { encoding: 'plain', content: nextCode } }
+                } else {
+                    internalFiles[path] = nextCode
                 }
-                internalFiles[target] = nextCode
-                if (target === effectiveEntry || (!files && !effectiveFileSystem)) {
-                    editorCode = nextCode
-                }
+                //without a Project, the host's one file is what the agent wrote last, whatever its
+                //path; with one, the Entry file's text
+                if (path === effectiveEntry || !project) editorCode = nextCode
             },
             deleteFile: (path) => {
-                if (effectiveFileSystem) {
-                    try {
-                        effectiveFileSystem.remove(path)
-                    } catch {
-                        return
-                    }
+                if (project) {
+                    project.fileSystem.remove(path)
                     fileDeleted(path)
-                } else if (files) {
-                    const next = { ...files }
-                    delete next[path]
-                    files = next
+                } else {
+                    delete internalFiles[path]
                 }
-                delete internalFiles[path]
                 if (activePath === path) {
                     activePath = effectiveEntry
                 }
@@ -251,31 +223,6 @@
             setActivePath: (path) => {
                 activePath = path
                 onOpenFile?.(path)
-            },
-
-            getEditorCode: () => {
-                if (effectiveEntry === undefined) return ''
-                if (effectiveFileSystem) {
-                    try {
-                        return effectiveFileSystem.readText(effectiveEntry)
-                    } catch {
-                        // ignore
-                    }
-                }
-                if (files && effectiveEntry in files) {
-                    return fileText(files[effectiveEntry])
-                }
-                return internalFiles[effectiveEntry] ?? editorCode ?? ''
-            },
-            setEditorCode: (code) => {
-                if (effectiveEntry === undefined) return
-                if (effectiveFileSystem) {
-                    effectiveFileSystem.writeText(effectiveEntry, code)
-                } else if (files) {
-                    files = { ...files, [effectiveEntry]: { encoding: 'plain', content: code } }
-                }
-                internalFiles[effectiveEntry] = code
-                editorCode = code
             }
         })
     })

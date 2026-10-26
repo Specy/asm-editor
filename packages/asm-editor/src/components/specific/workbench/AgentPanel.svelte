@@ -29,11 +29,7 @@
         noProgramMessage={NO_PROGRAM_MESSAGE}
         onOpenFile={(path) => session.selectFile(path)}
         editorLanguage={project.language}
-        editorCode={project.code}
-        files={project.files}
-        entry={project.selectedProgram}
         activePath={session.displayedPath}
-        fileSystem={project.fileSystem}
         emulatorInstance={session.emulator}
         canUpdateLanguage={false}
         additionalInstructions={projectAgentInstructions(project.language)}

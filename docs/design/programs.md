@@ -24,7 +24,7 @@ A rework of the Entry concept. Today a Project has one Entry path, every other a
 
 ## What follows without a decision
 
-- **Coding agent.** Its effective Entry (`getEffectiveEntry` in `defaultCodingAgent/tools.ts`) is the Selected program's; its deletions and creations are host actions, under 7 and 8.
+- **Coding agent.** Its effective Entry (`effectiveEntry` in `DefaultCodingAgent.svelte`, read by the tools through `getEntryPath`) is the Selected program's; its deletions and creations are host actions, under 7 and 8.
 - **Exams.** A v2 exam's coding section is one `starterCode` string and its Testcases (`exam.ts`), so an exam's Project has exactly one Program and nothing changes for it.
 - **Earlier records.** [ADR 0013](../adr/0013-project-is-a-record.md) lists Settings, Testcases and Display configuration as parts of the Project record; they are now parts of its Programs, still structured fields and still never Files. [ADR 0014](../adr/0014-settings-split-by-effect.md)'s Settings move from the Project to the Program unchanged otherwise. [ADR 0033](../adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)'s "two programs can share a Project with the Entry choosing which runs" becomes two Programs, with no change to linking.
 - **Build beside a document.** [workbench.md](./workbench.md)'s "No Build beside a document" (`offersBuild`) is subsumed: an Entry is assembly or an Executable, so a pane showing a document is never an Entry's pane and has no Build either way.
