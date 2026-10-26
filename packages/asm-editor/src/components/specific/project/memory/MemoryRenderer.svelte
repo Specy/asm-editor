@@ -677,6 +677,7 @@
         x={contextMenu.x}
         y={contextMenu.y}
         items={contextMenu.items}
+        arrow
         label="Memory"
         onClose={() => (contextMenu = null)}
     />

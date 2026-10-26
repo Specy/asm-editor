@@ -1,8 +1,10 @@
 <script lang="ts">
+    import type { HTMLButtonAttributes } from 'svelte/elements'
     import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
     import { DEFAULT_BUTTON_VARIANT, isSurfaceButton, type ButtonVariant } from './buttonVariant.ts'
 
-    interface Props {
+    /** The rest goes to the button, an attachment such as a Tooltip among them. */
+    interface Props extends Omit<HTMLButtonAttributes, 'color' | 'style' | 'disabled'> {
         disabled?: boolean
         color?: string
         style?: string
@@ -14,7 +16,6 @@
         variant?: ButtonVariant
         /** Whether the `workbench` look draws a card's edge around it. */
         bordered?: boolean
-        title?: string
         children?: import('svelte').Snippet
         onClick?: (e: MouseEvent) => void
     }
@@ -29,9 +30,9 @@
         active = false,
         variant = DEFAULT_BUTTON_VARIANT,
         bordered = false,
-        title = '',
         onClick,
-        children
+        children,
+        ...rest
     }: Props = $props()
 
     const surface = $derived(isSurfaceButton(cssVar, bg))
@@ -39,11 +40,11 @@
 
 <button
     type="button"
+    {...rest}
     class="btn {variant}"
     class:surface
     class:bordered
     class:hasIcon
-    {title}
     style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
     {disabled}
     onclick={onClick}

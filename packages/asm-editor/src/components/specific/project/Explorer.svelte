@@ -657,7 +657,13 @@
 
     /** The File row the menu was opened on, kept lit while it is open. */
     let menuPath = $state<string | null>(null)
-    let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    let contextMenu = $state<{
+        x: number
+        y: number
+        items: ContextMenuEntry[]
+        /** Whether it is about one row, which its arrow points at. */
+        arrow: boolean
+    } | null>(null)
 
     function folderItems(folder: string): ContextMenuEntry[] {
         return [
@@ -743,7 +749,7 @@
         ]
     }
 
-    function openContextMenu(event: MouseEvent, items: ContextMenuEntry[]) {
+    function openContextMenu(event: MouseEvent, items: ContextMenuEntry[], arrow = true) {
         //a name being typed keeps the browser's own menu, for pasting into it
         if ((event.target as Element | null)?.closest?.('input')) return
         event.preventDefault()
@@ -751,8 +757,8 @@
         //one opened from the keyboard has no pointer, and opens under the focused row instead
         if (event.button === -1 || (event.clientX === 0 && event.clientY === 0)) {
             const rect = (event.target as Element).getBoundingClientRect()
-            contextMenu = { x: rect.left + 16, y: rect.bottom, items }
-        } else contextMenu = { x: event.clientX, y: event.clientY, items }
+            contextMenu = { x: rect.left + 16, y: rect.bottom, items, arrow }
+        } else contextMenu = { x: event.clientX, y: event.clientY, items, arrow }
     }
 
     function downloadFile(targetPath = selectedPath) {
@@ -823,7 +829,7 @@
             ondrop={onTreeDrop}
             oncontextmenu={(event) => {
                 menuPath = null
-                openContextMenu(event, folderItems(''))
+                openContextMenu(event, folderItems(''), false)
             }}
         >
             {#if rows.length === 0 && !editing}
@@ -860,10 +866,11 @@
                     <div
                         class="tree-row directory"
                         class:drop-target={dropFolder === row.path}
+                        class:menu-open={contextMenu !== null && menuPath === row.path}
                         title={row.path}
                         data-folder={row.path}
                         oncontextmenu={(event) => {
-                            menuPath = null
+                            menuPath = row.path
                             openContextMenu(event, folderItems(row.path))
                         }}
                     >
@@ -1115,6 +1122,7 @@
             x={contextMenu.x}
             y={contextMenu.y}
             items={contextMenu.items}
+            arrow={contextMenu.arrow}
             label="File actions"
             onClose={() => {
                 contextMenu = null

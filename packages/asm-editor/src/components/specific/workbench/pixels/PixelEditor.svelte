@@ -38,6 +38,7 @@
     import { CELL_GRID_MAX } from '#lib/Project.svelte.ts'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import { ScopedTheme, ThemeStore, themeCssVariables } from '#stores/themeStore.svelte.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
     import FaPencilAlt from '~icons/fa-solid/pencil-alt'
     import FaSlash from '~icons/fa-solid/slash'
@@ -1354,15 +1355,19 @@
         <div class="facts" aria-label="Status">
             {#if doc}
                 <span class="fact">{doc.width} × {doc.height} px</span>
-                <span class="fact" title="Pixel format and row order in the BMP file"
+                <span class="fact" {@attach tooltip('Pixel format and row order in the BMP file')}
                     >{describeLayout(doc.layout)}</span
                 >
                 <!-- the numbers that change as the pointer moves and the zoom slides keep their room,
                      up to four digits, so nothing after them moves -->
-                <span class="fact number zoom" title="Zoom level">{zoomPercent(zoom)}</span>
+                <span class="fact number zoom" {@attach tooltip('Zoom level')}
+                    >{zoomPercent(zoom)}</span
+                >
                 <span
                     class="fact position"
-                    title="Pixel coordinates, starting at (0, 0) in the top-left corner"
+                    {@attach tooltip(
+                        'Pixel coordinates, starting at (0, 0) in the top-left corner'
+                    )}
                 >
                     <span class="axis">X</span>
                     <span class="number coordinate">{pointed?.[0] ?? ''}</span>
@@ -1374,7 +1379,7 @@
                 {/if}
             {/if}
             {#if readOnly}
-                <span class="fact badge read-only" title={readOnly}>read-only</span>
+                <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
             {/if}
         </div>
     </div>
@@ -1386,7 +1391,7 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Undo (Ctrl+Z)"
+                    {@attach tooltip('Undo', { shortcut: 'Mod+KeyZ' })}
                     aria-label="Undo"
                     disabled={locked || !canUndo}
                     onclick={() => undo()}><FaUndo /></button
@@ -1394,7 +1399,7 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Redo (Ctrl+Shift+Z)"
+                    {@attach tooltip('Redo', { shortcut: 'Mod+Shift+KeyZ' })}
                     aria-label="Redo"
                     disabled={locked || !canRedo}
                     onclick={() => undo(true)}><FaRedo /></button
@@ -1421,7 +1426,10 @@
                                         <button
                                             type="button"
                                             class="tool"
-                                            title={`${entry.label} (${entry.key}): ${entry.description}.${tool === entry.tool ? ' Click again for settings.' : ''}`}
+                                            {@attach tooltip(
+                                                `${entry.label}: ${entry.description}.${tool === entry.tool ? ' Click again for settings.' : ''}`,
+                                                { shortcut: entry.key }
+                                            )}
                                             aria-label={entry.label}
                                             aria-pressed={tool === entry.tool}
                                             disabled={locked && drawing}
@@ -1432,7 +1440,7 @@
                                         <button
                                             type="button"
                                             class="caret"
-                                            title="{entry.label} settings"
+                                            {@attach tooltip(`${entry.label} settings`)}
                                             aria-label="{entry.label} settings"
                                             aria-haspopup="dialog"
                                             aria-expanded={dropdown === entry.tool}
@@ -1446,7 +1454,9 @@
                                     <button
                                         type="button"
                                         class="tool"
-                                        title="{entry.label} ({entry.key}): {entry.description}."
+                                        {@attach tooltip(`${entry.label}: ${entry.description}.`, {
+                                            shortcut: entry.key
+                                        })}
                                         aria-label={entry.label}
                                         aria-pressed={tool === entry.tool}
                                         disabled={locked && drawing}
@@ -1474,15 +1484,15 @@
                                 aria-label="Drawing colour: palette entry {entry}, {hex(
                                     palette[entry]
                                 )}"
-                                title="Change palette entry {entry} ({hex(
-                                    palette[entry]
-                                )}) and every pixel that uses it"
+                                {@attach tooltip(
+                                    `Change palette entry ${entry} (${hex(palette[entry])}) and every pixel that uses it`
+                                )}
                                 style:--swatch={cssColour(palette[entry])}
                                 disabled={locked}
                                 onclick={() => startRecolour(entry)}
                             ></button>
                         {:else}
-                            <label class="current" title="Choose the drawing colour">
+                            <label class="current" {@attach tooltip('Choose the drawing colour')}>
                                 <input
                                     type="color"
                                     aria-label="Drawing colour"
@@ -1533,9 +1543,11 @@
                                         aria-selected={'index' in currentInk &&
                                             currentInk.index === index}
                                         aria-label="Palette entry {index}, {hex(colour)}"
-                                        title="Select palette entry {index} ({hex(
-                                            colour
-                                        )}). Double-click or long-press to change it for every pixel that uses it."
+                                        {@attach tooltip(
+                                            `Select palette entry ${index} (${hex(colour)}). Double-click or long-press to change it for every pixel that uses it.`,
+                                            //a long press recolours the entry
+                                            { touch: false }
+                                        )}
                                         style:--swatch={cssColour(colour)}
                                         onclick={() => (ink = { index })}
                                         ondblclick={() => startRecolour(index)}
@@ -1554,7 +1566,9 @@
                                         type="button"
                                         class="swatch empty"
                                         aria-label="Add a colour"
-                                        title="Choose a colour, add it to the swatches and use it for drawing"
+                                        {@attach tooltip(
+                                            'Choose a colour, add it to the swatches and use it for drawing'
+                                        )}
                                         onclick={startAdding}
                                     ></button>
                                 {:else}
@@ -1564,9 +1578,11 @@
                                         aria-label="Use {hex(colour)}{(colour & 0xff) === 0
                                             ? ', transparent'
                                             : ''}"
-                                        title={(colour & 0xff) === 0
-                                            ? 'Draw transparent pixels'
-                                            : `Draw with ${hex(colour)}`}
+                                        {@attach tooltip(
+                                            (colour & 0xff) === 0
+                                                ? 'Draw transparent pixels'
+                                                : `Draw with ${hex(colour)}`
+                                        )}
                                         aria-pressed={picked(colour)}
                                         style:--swatch={cssColour(colour)}
                                         onclick={() =>
@@ -1585,21 +1601,21 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Zoom out (-)"
+                    {@attach tooltip('Zoom out', { shortcut: '-' })}
                     aria-label="Zoom out"
                     onclick={() => zoomStep(true)}><FaSearchMinus /></button
                 >
                 <button
                     type="button"
                     class="tool"
-                    title="Zoom in (+)"
+                    {@attach tooltip('Zoom in', { shortcut: '+' })}
                     aria-label="Zoom in"
                     onclick={() => zoomStep()}><FaSearchPlus /></button
                 >
                 <button
                     type="button"
                     class="tool"
-                    title="Fit the whole image in the editor (0)"
+                    {@attach tooltip('Fit the whole image in the editor', { shortcut: '0' })}
                     aria-label="Fit image"
                     onclick={() => fit(true)}><FaCompress /></button
                 >
@@ -1607,7 +1623,7 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Configure the grid for sprite frames or tiles"
+                    {@attach tooltip('Configure the grid for sprite frames or tiles')}
                     aria-label="Cell grid"
                     aria-pressed={!!grid}
                     aria-haspopup="dialog"
@@ -1618,7 +1634,9 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Crop or expand the canvas, keeping existing pixels at the top left"
+                    {@attach tooltip(
+                        'Crop or expand the canvas, keeping existing pixels at the top left'
+                    )}
                     aria-label="Canvas size"
                     aria-haspopup="dialog"
                     aria-expanded={dropdown === 'canvas'}

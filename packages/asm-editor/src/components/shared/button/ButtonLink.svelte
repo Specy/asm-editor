@@ -1,7 +1,8 @@
 <script>
     import { DEFAULT_BUTTON_VARIANT, isSurfaceButton } from './buttonVariant.ts'
 
-    /** @type {{ target?: string, href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, disabled?: boolean, variant?: import('./buttonVariant.ts').ButtonVariant, bordered?: boolean, children?: import('svelte').Snippet}} */
+    /** The rest goes to the link, an attachment such as a Tooltip among them. */
+    /** @type {{ target?: string, href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, cssVar?: string, disabled?: boolean, variant?: import('./buttonVariant.ts').ButtonVariant, bordered?: boolean, children?: import('svelte').Snippet} & Omit<import('svelte/elements').HTMLAnchorAttributes, 'color' | 'style' | 'href' | 'target'>} */
     let {
         href,
         disabled = false,
@@ -10,12 +11,12 @@
         style = '',
         bg = 'var(--accent)',
         hasIcon = false,
-        title = '',
         cssVar = 'unset',
         variant = DEFAULT_BUTTON_VARIANT,
         bordered = false,
         onClick,
-        children
+        children,
+        ...rest
     } = $props()
 
     const surface = $derived(isSurfaceButton(cssVar, bg))
@@ -23,13 +24,13 @@
 
 <a
     type="button"
+    {...rest}
     class="btn {variant}"
     class:surface
     class:bordered
     class:disabled
     class:hasIcon
     {href}
-    {title}
     {target}
     style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
     onclick={(e) => {

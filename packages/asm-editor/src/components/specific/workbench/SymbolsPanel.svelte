@@ -471,6 +471,7 @@
             x={menu.x}
             y={menu.y}
             items={menu.items}
+            arrow
             label="Function actions"
             onClose={() => {
                 menu = null
