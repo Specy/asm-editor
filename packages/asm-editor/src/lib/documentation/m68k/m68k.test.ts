@@ -33,7 +33,7 @@ function markdownOf(entry: DocumentationEntry): string[] {
         case 'swatches':
             return [view.markdown ?? '']
         case 'instruction': {
-            const document = view.document()
+            const document = view.document
             return [
                 document.description ?? '',
                 ...document.operands.map((operand) => operand.meaning),

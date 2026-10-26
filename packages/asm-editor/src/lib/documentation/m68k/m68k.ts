@@ -103,7 +103,7 @@ function instructions(): Chapter {
                 anchor: instruction.name,
                 view: {
                     type: 'instruction',
-                    document: () => document,
+                    document,
                     example: instruction.interactiveExample?.code
                 },
                 searchText: [document.longName, instruction.description].join('\n'),

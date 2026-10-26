@@ -54,11 +54,11 @@ export type EntryView =
     /**
      * Every language's instruction, drawn by the shared instruction view
      * ([ADR 0052](../../../../../docs/adr/0052-instruction-documents-are-built-in-the-editor-from-core-facts.md)).
-     * Built the first time a row is expanded, not when the Chapters load.
+     * Built with the entry, whose signature and summary read it.
      */
     | {
           type: 'instruction'
-          document: () => InstructionDocument
+          document: InstructionDocument
           /** The language's own example program, where it has no authored Instruction example. */
           example?: string
       }

@@ -1,4 +1,9 @@
-export function runtimeFunctionDocumentation(name: string, documentation: string): string {
+import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
+import type { DocumentationLanguage } from '#lib/search/scope.ts'
+import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { names, proseEntries, summaryOf, type Chapter, type DocumentationEntry } from './entries'
+
+function runtimeFunctionDocumentation(name: string, documentation: string): string {
     switch (name) {
         case 'malloc':
             return `${documentation} Returned memory meets the compiler's \`max_align_t\` alignment.`
@@ -15,4 +20,58 @@ export function runtimeFunctionDocumentation(name: string, documentation: string
         default:
             return documentation
     }
+}
+
+/**
+ * The C library a Build links when the Project or its Compilation asks for it, the same functions
+ * in every language that has one: its introduction, then each function with where its arguments go
+ * and the instruction that calls it.
+ */
+export function runtimeLibraryChapter(options: {
+    language: DocumentationLanguage
+    base: string
+    intro: string
+    convention: (prototype: string) => string
+    /** The mnemonic of a call from assembly: `jal` or `call`. */
+    call: string
+    description: string
+}): Chapter {
+    const { language, base, intro, convention, call, description } = options
+    const href = `${base}/runtime-library`
+    const entries: DocumentationEntry[] = [
+        ...proseEntries({
+            language,
+            chapter: 'runtime-library',
+            chapterHref: href,
+            markdown: intro
+        }),
+        ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
+            const placement = convention(entry.prototype)
+            const doc = runtimeFunctionDocumentation(entry.name, entry.doc)
+            return {
+                id: `${language}/runtime-library/${entry.name}`,
+                language,
+                chapter: 'runtime-library',
+                kind: 'function',
+                title: entry.name,
+                names: names(entry.name),
+                signature: `<${entry.header}>`,
+                summary: summaryOf(doc),
+                href: `${href}#${entry.name}`,
+                anchor: entry.name,
+                view: {
+                    type: 'fields',
+                    markdown: doc,
+                    fields: [
+                        { label: 'Declaration', value: `\`${entry.prototype}\`` },
+                        { label: 'Header', value: `\`<${entry.header}>\`` },
+                        ...(placement ? [{ label: 'From assembly', value: placement }] : [])
+                    ],
+                    example: `${call} ${entry.name}`
+                },
+                searchText: `${entry.prototype}. ${doc}`
+            }
+        })
+    ]
+    return { id: 'runtime-library', language, title: 'Runtime library', href, description, entries }
 }

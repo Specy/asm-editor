@@ -1,4 +1,5 @@
 import { RISCV } from '@specy/risc-v'
+import { groupMarsForms, marsVariantOperands } from '#lib/documentation/mars/forms.ts'
 
 /**
  * The RV64 list, which holds every RV32 form too, each marked by whether RV32 accepts it. A form
@@ -45,12 +46,6 @@ export type RISCVInstruction = {
     expansion: string[]
 }
 
-type RISCVInstructionVariants = [RISCVInstruction, ...RISCVInstruction[]]
-
-function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
-    return Object.prototype.hasOwnProperty.call(value, key)
-}
-
 export const riscvInstructionsWithDuplicates = riscvIse.map((ins) => {
     return {
         name: ins.name,
@@ -70,67 +65,15 @@ export const riscvInstructionsWithDuplicates = riscvIse.map((ins) => {
     } satisfies RISCVInstruction
 })
 
-export const riscvInstructionMap = new Map<string, RISCVInstructionVariants>()
-for (const ins of riscvInstructionsWithDuplicates) {
-    const variants = riscvInstructionMap.get(ins.name)
-    if (variants) {
-        variants.push(ins)
-    } else {
-        riscvInstructionMap.set(ins.name, [ins])
-    }
-}
-
-export const riscvInstructionsVariants = [...riscvInstructionMap.values()]
-
-export const riscvInstructionEntries = [...riscvInstructionMap.entries()].sort(([a], [b]) =>
-    a.localeCompare(b)
-)
-
-export const riscvInstructionNames = riscvInstructionEntries.map(([name]) => name)
+export const {
+    map: riscvInstructionMap,
+    variants: riscvInstructionsVariants,
+    entries: riscvInstructionEntries,
+    names: riscvInstructionNames
+} = groupMarsForms<RISCVInstruction>(riscvInstructionsWithDuplicates)
 
 export function riscvVariantOperands(variant: RISCVInstruction): string[] {
-    const isReg = (s: string) => s === 'reg' || s === 'freg' || s === 'regnum'
-
-    function getLabel(type: string): string {
-        if (type.startsWith('INTEGER')) return 'imm'
-        return hasOwnKey(RISCVAddressingModes, type) ? RISCVAddressingModes[type].label : type
-    }
-
-    const tokens = variant.args.map((a) => a[0])
-    if (tokens.length === 0) return []
-
-    const operands: string[] = []
-    let parts: string[] = []
-
-    for (let i = 0; i < tokens.length; i++) {
-        const t = tokens[i]
-        const label = getLabel(t.type)
-
-        if (t.type === 'LEFT_PAREN') {
-            const last = parts[parts.length - 1]
-            if (parts.length > 0 && !isReg(last)) {
-                parts.push('(')
-            } else {
-                if (parts.length > 0) operands.push(parts.join(''))
-                parts = ['(']
-            }
-        } else if (t.type === 'RIGHT_PAREN') {
-            parts.push(')')
-            operands.push(parts.join(''))
-            parts = []
-        } else if (t.type === 'PLUS') {
-            parts.push('+')
-        } else {
-            const prevType = i > 0 ? tokens[i - 1].type : null
-            if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
-                operands.push(parts.join(''))
-                parts = []
-            }
-            parts.push(label)
-        }
-    }
-    if (parts.length > 0) operands.push(parts.join(''))
-    return operands
+    return marsVariantOperands(variant, RISCVAddressingModes)
 }
 
 export const RISCVAddressingModes = {

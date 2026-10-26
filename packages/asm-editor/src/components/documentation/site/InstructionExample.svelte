@@ -6,42 +6,38 @@
 
     interface Props {
         instructionKey: string
-        example?: InstructionExample
+        example: InstructionExample
     }
 
     let { instructionKey, example }: Props = $props()
-    let code = $derived(example?.code ?? '')
-    let showMemory = $derived(example?.presentation?.showMemory ?? false)
+    let code = $derived(example.code)
+    let showMemory = $derived(example.presentation?.showMemory ?? false)
     let Component: typeof import('./ClientOnly.svelte').default | undefined = $state.raw()
     onMount(async () => {
         Component = (await import('./ClientOnly.svelte')).default
     })
 </script>
 
-{#if example}
-    {#if example.target === 'RISC-V-64'}
-        <p class="target">This example runs on RV64.</p>
-    {/if}
-    <div class="instruction-example playground">
-        {#if Component}
-            <Component
-                bind:code
-                {instructionKey}
-                language={example.target}
-                {...example.presentation}
-                {showMemory}
-            />
-        {:else}
-            <InstructionPreview
-                {code}
-                language={example.target}
-                showConsole={example.presentation?.showConsole}
-            />
-        {/if}
-    </div>
-{:else}
-    <p>No runnable example is available for this instruction yet.</p>
+{#if example.target === 'RISC-V-64'}
+    <p class="target">This example runs on RV64.</p>
 {/if}
+<div class="instruction-example playground">
+    {#if Component}
+        <Component
+            bind:code
+            {instructionKey}
+            language={example.target}
+            {...example.presentation}
+            {showMemory}
+        />
+    {:else}
+        <InstructionPreview
+            {code}
+            language={example.target}
+            showConsole={example.presentation?.showConsole}
+        />
+    {/if}
+</div>
 
 <style>
     .target {
