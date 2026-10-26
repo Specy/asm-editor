@@ -28,7 +28,7 @@
     import { writeUploads } from '#lib/workbench/fileUploads.ts'
     import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
-    import { fileBytes, type ProjectFiles } from '#lib/projectFiles.ts'
+    import { fileBytes, resolveFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
     import { bytesDownloader } from '#lib/utils.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
@@ -322,14 +322,29 @@
         editing = null
     }
 
-    /** Applies the typed name; a failure keeps the input open so the name can be fixed. */
+    /**
+     * Applies the typed name; a failure keeps the input open so the name can be fixed. The host
+     * is handed the path as the FileSystem stores it, `x.s` for `./x.s` or `sub/../x.s`, which
+     * is where the File is.
+     */
     function commitEdit(input?: HTMLInputElement) {
         const current = editing
         if (!current) return
         const typed = draftName.trim()
+        if (!typed) return cancelEdit()
+        const refuse = (error: unknown) => {
+            reportFailure(error)
+            input?.focus()
+        }
+        let path: string
+        try {
+            path = resolveFilePath(
+                joinPath(current.mode === 'create' ? current.parent : dirname(current.path), typed)
+            )
+        } catch (error) {
+            return refuse(error)
+        }
         if (current.mode === 'create') {
-            if (!typed) return cancelEdit()
-            const path = joinPath(current.parent, typed)
             try {
                 if (files[path]) throw new Error(`${path} already exists`)
                 const fileLanguage = sourceLanguage(path)
@@ -343,13 +358,11 @@
                 expandParents(path)
                 onSelect(path)
             } catch (error) {
-                reportFailure(error)
-                input?.focus()
+                refuse(error)
             }
         } else {
             const previousPath = current.path
-            const path = joinPath(dirname(previousPath), typed)
-            if (!typed || path === previousPath) return cancelEdit()
+            if (path === previousPath) return cancelEdit()
             const lost = replacedProgramLoss(previousPath, path)
             if (lost) {
                 //the question takes the focus, so the input closes first; No keeps the old name
@@ -374,8 +387,7 @@
                 onRenamed?.(previousPath, path)
                 onSelect(path)
             } catch (error) {
-                reportFailure(error)
-                input?.focus()
+                refuse(error)
             }
         }
     }
