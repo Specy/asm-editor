@@ -1,5 +1,6 @@
 import type { Diagnostic as S68kDiagnostic, Location } from '@specy/s68k'
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosticBridge.ts'
 import type { LanguageDiagnostic, SourceLocation } from '#lib/languages/service/sourceModel.ts'
 import { fileText, type BuildSources } from '#lib/projectFiles.ts'
 
@@ -58,25 +59,8 @@ export function s68kDiagnosticToDiagnostic(
     error: S68kDiagnostic,
     sources: BuildSources
 ): Diagnostic {
-    const diagnostic = s68kDiagnosticToLanguageDiagnostic(error, sources)
-    return {
-        severity: diagnostic.severity,
-        source: diagnostic.source,
-        code: diagnostic.code,
-        file: diagnostic.location.path,
-        line: { line: sourceLine(sources, error.location), line_index: error.location.line },
-        column: diagnostic.location.range.start.column + 1,
-        endColumn: diagnostic.location.range.end.column + 1,
-        lineIndex: error.location.line,
-        message: diagnostic.message,
-        hint: diagnostic.hint,
-        related: diagnostic.related?.map((related) => ({
-            file: related.location.path,
-            lineIndex: related.location.range.start.line,
-            column: related.location.range.start.column + 1,
-            endColumn: related.location.range.end.column + 1,
-            message: related.message
-        })),
-        formatted: error.hint ? `${error.message}\n${error.hint}` : error.message
-    }
+    return languageDiagnosticToDiagnostic(
+        s68kDiagnosticToLanguageDiagnostic(error, sources),
+        sources
+    )
 }
