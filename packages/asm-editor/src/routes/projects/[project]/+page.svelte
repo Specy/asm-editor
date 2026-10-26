@@ -127,7 +127,8 @@
 
     onMount(() => {
         loadProject()
-        Monaco.load()
+        //started early; an editor that asks for Monaco loads it again if this fails
+        Monaco.load().catch(() => undefined)
         return () => {
             Monaco.dispose()
         }

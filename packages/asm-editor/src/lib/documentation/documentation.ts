@@ -1,29 +1,27 @@
 import type { DocumentationLanguage } from '#lib/search/scope.ts'
+import { lazyLoad } from '#lib/lazyLoad.ts'
 import type { Chapter, DocumentationEntry } from './entries'
 
 /**
  * A language's Chapters, loaded on demand: each language's adapter imports its data modules, and
  * the MIPS, RISC-V and Z80 ones import their Core for the instruction text, so nothing loads them
- * until a page or the Documentation panel asks.
+ * until a page or the Documentation panel asks. A load that failed is made again at the next ask.
  */
 
-const loaders: Record<DocumentationLanguage, () => Promise<{ chapters: () => Chapter[] }>> = {
-    m68k: () => import('./m68k/m68k'),
-    mips: () => import('./mips/mips'),
-    'risc-v': () => import('./riscv/riscv'),
-    x86: () => import('./x86/x86'),
-    z80: () => import('./z80/z80')
+function chaptersOf(load: () => Promise<{ chapters: () => Chapter[] }>) {
+    return lazyLoad(() => load().then((module) => module.chapters()))
 }
 
-const loaded = new Map<DocumentationLanguage, Promise<Chapter[]>>()
+const loaders: Record<DocumentationLanguage, () => Promise<Chapter[]>> = {
+    m68k: chaptersOf(() => import('./m68k/m68k')),
+    mips: chaptersOf(() => import('./mips/mips')),
+    'risc-v': chaptersOf(() => import('./riscv/riscv')),
+    x86: chaptersOf(() => import('./x86/x86')),
+    z80: chaptersOf(() => import('./z80/z80'))
+}
 
 export function documentationFor(language: DocumentationLanguage): Promise<Chapter[]> {
-    let chapters = loaded.get(language)
-    if (!chapters) {
-        chapters = loaders[language]().then((module) => module.chapters())
-        loaded.set(language, chapters)
-    }
-    return chapters
+    return loaders[language]()
 }
 
 /** Every entry of a language, Chapter by Chapter. */

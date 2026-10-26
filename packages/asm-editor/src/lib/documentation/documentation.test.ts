@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { DOCUMENTATION_LANGUAGES, type DocumentationLanguage } from '#lib/search/scope.ts'
 import { documentationFor, entriesOf } from './documentation'
 import { documentationProblems, type DocumentationEntry, type EntryView } from './entries'
@@ -210,5 +210,24 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect(documentationProblems([{ ...chapter, entries: [uncategorised] }])).toEqual([
             'mips/instructions/add has no category'
         ])
+    })
+})
+
+describe('a language whose Documentation failed to load', () => {
+    it('loads it again at the next ask, as once the network is back', async () => {
+        vi.resetModules()
+        let attempts = 0
+        vi.doMock('./z80/z80', () => {
+            attempts += 1
+            if (attempts === 1) throw new Error('Failed to fetch dynamically imported module')
+            return { chapters: () => [] }
+        })
+        onTestFinished(() => {
+            vi.doUnmock('./z80/z80')
+        })
+        const fresh = (await import('./documentation')).documentationFor
+        await expect(fresh('z80')).rejects.toThrow()
+        await expect(fresh('z80')).resolves.toEqual([])
+        expect(attempts).toBe(2)
     })
 })
