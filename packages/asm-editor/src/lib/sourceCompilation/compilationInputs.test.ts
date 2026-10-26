@@ -89,6 +89,36 @@ describe('compilation freshness after include resolution changes', () => {
             compilationStatus(compiled, { ...original, 'other.c': text('') }, 'RISC-V').stale
         ).toBe(false)
     })
+    it('follows includes after a /* that a line comment or a literal holds', () => {
+        for (const source of [
+            '#include <stdio.h>\n// Reads every src/*.txt it is given\n#include "config.h"\n/* helpers */',
+            'const char *pattern = "/*";\n#include "config.h"\n/* x */',
+            'char star = \'/\', *rest = "*";\n#include "config.h"\n/* x */'
+        ])
+            expect(
+                Object.keys(
+                    compilationInputs('src/main.c', { ...files, 'src/main.c': text(source) })
+                )
+            ).toEqual(['src/main.c', 'config.h'])
+        //a real block comment still hides a directive, as a line comment continued onto it does
+        expect(
+            Object.keys(
+                compilationInputs('src/main.c', {
+                    ...files,
+                    'src/main.c': text('/* #include "config.h" */\n// a \\\n#include "config.h"')
+                })
+            )
+        ).toEqual(['src/main.c'])
+    })
+    it('follows an include with no space before its quoted name', () =>
+        expect(
+            Object.keys(
+                compilationInputs('src/main.c', {
+                    ...files,
+                    'src/main.c': text('#include"config.h"\nint main(void) { return VALUE; }')
+                })
+            )
+        ).toEqual(['src/main.c', 'config.h']))
     it('respects the source directory search path inside nested headers', () => {
         const original = {
             ...files,

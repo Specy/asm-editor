@@ -101,35 +101,18 @@ export function cleanCompilationRecords(raw: unknown): CompilationRecord[] | und
     const fingerprint = (value: unknown): value is string =>
         typeof value === 'string' && /^[a-f0-9]{32}$/.test(value)
     const records = raw.map((value): CompilationRecord => {
-        if (
-            value &&
-            typeof value === 'object' &&
-            Object.prototype.hasOwnProperty.call(value, 'assemblerProfile') &&
-            !isAssemblerProfile(value.assemblerProfile)
-        ) {
+        if (!value || typeof value !== 'object')
+            throw new ProjectFormatError('Invalid Compilation record')
+        const has = (key: string) => Object.hasOwn(value, key)
+        if (has('assemblerProfile') && !isAssemblerProfile(value.assemblerProfile))
             throw new ProjectFormatError('Unsupported assembler profile in Compilation record')
-        }
         //x86 Generated assembly is NASM, which no GNU assembler profile reads
-        if (
-            value &&
-            typeof value === 'object' &&
-            value.target === 'X86' &&
-            Object.prototype.hasOwnProperty.call(value, 'assemblerProfile')
-        ) {
+        if (value.target === 'X86' && has('assemblerProfile'))
             throw new ProjectFormatError('Unsupported assembler profile in Compilation record')
-        }
         //an ABI this editor does not ship is kept, and blocks the Build with a Recompile action
-        if (
-            value &&
-            typeof value === 'object' &&
-            Object.prototype.hasOwnProperty.call(value, 'runtimeAbi') &&
-            !isRuntimeAbiName(value.runtimeAbi)
-        ) {
+        if (has('runtimeAbi') && !isRuntimeAbiName(value.runtimeAbi))
             throw new ProjectFormatError('Invalid Runtime ABI in Compilation record')
-        }
         if (
-            !value ||
-            typeof value !== 'object' ||
             !isValidFilePath(value.sourcePath) ||
             !isValidFilePath(value.outputPath) ||
             value.sourcePath === value.outputPath ||
@@ -156,12 +139,8 @@ export function cleanCompilationRecords(raw: unknown): CompilationRecord[] | und
         }
         outputs.add(value.outputPath)
         return {
-            ...(Object.prototype.hasOwnProperty.call(value, 'assemblerProfile')
-                ? { assemblerProfile: value.assemblerProfile }
-                : {}),
-            ...(Object.prototype.hasOwnProperty.call(value, 'runtimeAbi')
-                ? { runtimeAbi: value.runtimeAbi }
-                : {}),
+            ...(has('assemblerProfile') ? { assemblerProfile: value.assemblerProfile } : {}),
+            ...(has('runtimeAbi') ? { runtimeAbi: value.runtimeAbi } : {}),
             sourcePath: value.sourcePath,
             outputPath: value.outputPath,
             target: value.target,

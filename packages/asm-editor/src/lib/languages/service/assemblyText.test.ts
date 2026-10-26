@@ -38,6 +38,15 @@ describe('shared tolerant assembly text model', () => {
         expect(formatAssemblySource(formatted, X86_TEXT_OPTIONS)).toBe(formatted)
     })
 
+    it("keeps a ';' or ',' in a NASM backquoted string out of comments and operands", () => {
+        const source = 'fmt:   db `x=%d; y=%d\\n`,0 ; printf\nq: db `\\`;`, `a,b`\n'
+        expect(formatAssemblySource(source, X86_TEXT_OPTIONS)).toBe(
+            'fmt: db `x=%d; y=%d\\n`, 0  ; printf\nq: db `\\`;`, `a,b`\n'
+        )
+        //only a dialect that has the backquoted string reads one
+        expect(parseAssemblyLine('li $t0, `a # b`', MIPS_TEXT_OPTIONS).comment?.text).toBe('# b`')
+    })
+
     it('expands range formatting to complete selected lines', async () => {
         class Range {
             constructor(

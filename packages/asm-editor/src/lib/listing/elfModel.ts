@@ -210,18 +210,6 @@ export function readElfModel(
     let regions = sectionRegions(analysis, bytes)
     const fromSegments = !regions.some((region) => region.code)
     if (fromSegments) regions = segmentRegions(analysis, bytes, hex)
-    const regionOf = (address: number) => {
-        let low = 0
-        let high = regions.length - 1
-        while (low <= high) {
-            const middle = (low + high) >> 1
-            const region = regions[middle]
-            if (region.address > address) high = middle - 1
-            else if (region.address + region.size <= address) low = middle + 1
-            else return region
-        }
-        return undefined
-    }
     //a symbol at a region's end, or in the gap alignment leaves before the next region, names the
     //end of what the region holds; after the last region only its very end does
     const afterRegion = (address: number) => {
@@ -239,7 +227,7 @@ export function readElfModel(
         // Undefined, absolute and common symbols name no address of the file.
         if (symbol.sectionIndex === 0 || symbol.sectionIndex >= 0xff00) return
         const address = toNumber(symbol.value)
-        if (!regionOf(address) && !afterRegion(address)) return
+        if (!findRegion(regions, address) && !afterRegion(address)) return
         const name = printableSymbolName(versionedName(symbol))
         const names = symbolNames.get(address) ?? []
         if (names.some((existing) => existing.name === name)) return

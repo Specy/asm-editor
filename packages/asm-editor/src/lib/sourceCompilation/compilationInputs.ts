@@ -1,4 +1,5 @@
 import { resolveFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
+import { scanSource } from '#lib/sourceLanguageHelp/scan.ts'
 import { fileFingerprint } from './fingerprints'
 
 /**
@@ -30,10 +31,18 @@ export function compilationInputs(
         if (seen.has(path)) return
         seen.add(path)
         const content = files[path]?.content ?? ''
-        // Comments cannot introduce an include dependency. Preserve newlines for the directive scan.
-        const text = content
-            .replace(/\/\*[\s\S]*?\*\//g, (s) => s.replace(/[^\n]/g, ' '))
-            .replace(/\/\/[^\n]*/g, '')
+        // Comments cannot introduce an include dependency: blank them, keeping newlines for the
+        // directive scan. The lexer skips literals and line comments whole, so a "/*" inside a
+        // string or after a // starts no comment that would hide the directives below it.
+        let text = ''
+        let copied = 0
+        for (const span of scanSource(content).ignored) {
+            if (span.kind !== 'comment') continue
+            text += content.slice(copied, span.start)
+            text += content.slice(span.start, span.end).replace(/[^\n]/g, ' ')
+            copied = span.end
+        }
+        text += content.slice(copied)
         const directory = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
         const reach = (name: string) => {
             for (const candidate of [directory + name, sourceDirectory + name, name]) {
@@ -48,7 +57,8 @@ export function compilationInputs(
                 }
             }
         }
-        for (const match of text.matchAll(/^\s*#\s*include(?:_next)?\s+([^\n]+)/gm)) {
+        // C needs no space before the name (`#include"util.h"`), only something that ends the word
+        for (const match of text.matchAll(/^\s*#\s*include(?:_next)?(?=[\s<"])\s*([^\n]+)/gm)) {
             if (match[1].startsWith('<')) continue
             const include = /^"([^"]+)"/.exec(match[1])
             if (include) reach(include[1])

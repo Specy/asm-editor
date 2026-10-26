@@ -145,6 +145,31 @@ describe('assembly numeric hovers', () => {
             )
         ).toMatchObject({ range: expect.objectContaining({ startColumn: 16 }) })
     })
+
+    it.each([
+        ['x86' as const, 'mov ax, 0B800h', '0B800h', '0xb800'],
+        ['x86' as const, 'mov al, 0Bh', '0Bh', '0xb'],
+        ['z80' as const, 'ld a, 0BFh', '0BFh', '0xbf'],
+        ['x86' as const, 'mov al, 0b101', '0b101', '0x5']
+    ])(
+        'reads a %s literal starting 0B by its h suffix where it has one: %s',
+        async (dialect, line, text, hex) => {
+            const provider = createNumericHoverProvider(monacoStub, {
+                bits: 16,
+                comment: ';',
+                dialect
+            })
+            expect(
+                markdown(
+                    await provider.provideHover?.(
+                        model(line) as never,
+                        position(line, text) as never,
+                        {} as never
+                    )
+                )
+            ).toContain(`Hexadecimal: \`${hex}\``)
+        }
+    )
 })
 
 describe('a number read as text', () => {

@@ -338,12 +338,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     // `main`: the address `_start` passes to `__libc_start_main` in `rdi` (`programStart.ts`,
     // which a Build reads it by too).
     let main: number | undefined = mainSymbol(model)
-    if (main === undefined && entry && isStart(entry)) {
+    if (main === undefined && entry && isStart(entry))
         main = mainFromStart(instructionsFrom(entry, START_INSTRUCTIONS), (instruction) =>
             calledNames(model, stubs, instruction)
         )
-        if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
-    }
+    // Outside code, `main` is no function: a symbol of data (`const char main[] = {…}` in
+    // `.rodata`) or an address `_start` passes that holds none.
+    if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
     if (main !== undefined && !isStart(main)) {
         // Linear decoding ran across `main`'s first byte: decode its region again from there.
         anchors.add(main)
