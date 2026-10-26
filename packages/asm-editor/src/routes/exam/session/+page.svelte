@@ -34,7 +34,7 @@
         type OpenQuestionSection
     } from '#lib/exam.ts'
 
-    import { makeHash, textDownloader } from '#lib/utils.ts'
+    import { copyText, makeHash, textDownloader } from '#lib/utils.ts'
     import { createDebouncer } from '#lib/debounce.ts'
     import { serializer } from '#lib/json.ts'
     import { toast } from '#stores/toastStore.ts'
@@ -764,12 +764,7 @@
                     />
                     <Button onClick={unlockExam}>Unlock</Button>
                 </Row>
-                <Button
-                    onClick={async () => {
-                        await navigator.clipboard.writeText(submissionUrl)
-                        toast.logPill('Submission link copied to clipboard')
-                    }}
-                >
+                <Button onClick={() => copyText(submissionUrl, 'Submission link')}>
                     Copy submission link again
                 </Button>
                 <Button

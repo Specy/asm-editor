@@ -24,7 +24,7 @@
     import { BASE_CODE, LANGUAGE_THEMES } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
-    import { createShareLink } from '#lib/utils.ts'
+    import { copyText, createShareLink } from '#lib/utils.ts'
     import { toast } from '#stores/toastStore.ts'
     import FaExternal from '~icons/fa-solid/external-link-alt'
     import Button from '#cmp/shared/button/Button.svelte'
@@ -156,16 +156,6 @@
                 entry: source ?? entry,
                 language
             })
-        }
-    }
-
-    async function copyToClipboard(value: string, label: string) {
-        try {
-            await navigator.clipboard.writeText(value)
-            toast.logPill(`${label} copied`)
-        } catch (error) {
-            console.error(error)
-            toast.error(`Could not copy ${label.toLowerCase()}`)
         }
     }
 
@@ -496,7 +486,7 @@
                                     hasIcon
                                     style="padding: 0.35rem 0.65rem; font-size: 0.78rem;"
                                     disabled={!generatedCode}
-                                    onClick={() => void copyToClipboard(generatedCode, 'Embed URL')}
+                                    onClick={() => void copyText(generatedCode, 'Embed URL')}
                                 >
                                     Copy
                                 </Button>
@@ -515,7 +505,7 @@
                                     style="padding: 0.35rem 0.65rem; font-size: 0.78rem;"
                                     disabled={!generatedCode}
                                     onClick={() =>
-                                        void copyToClipboard(generatedIframeCode, 'Iframe code')}
+                                        void copyText(generatedIframeCode, 'Iframe code')}
                                 >
                                     Copy
                                 </Button>
