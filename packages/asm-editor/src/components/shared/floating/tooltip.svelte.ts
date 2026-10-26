@@ -40,6 +40,14 @@ const PRESS_SLOP = 10
 let nextId = 0
 let current: Tooltip | null = null
 let warmUntil = 0
+/** When a pointer last pressed anywhere, which the focus that follows a press comes from. */
+let lastPress = -Infinity
+/** How long after a press focus still counts as the press's own. */
+const PRESS_FOCUS = 300
+
+function notePress() {
+    lastPress = performance.now()
+}
 
 const instances = new WeakMap<HTMLElement, Tooltip>()
 /** One container for the cards of each theme subtree, so a card wears its trigger's colours. */
@@ -90,6 +98,8 @@ export class Tooltip {
 
     constructor(trigger: HTMLElement, content: string | Snippet, options: TooltipOptions) {
         this.trigger = trigger
+        //once is enough: adding the same listener again does nothing
+        addEventListener('pointerdown', notePress, true)
         this.update(content, options)
         this.#card = mount(TooltipCard, { target: layerFor(trigger), props: { tooltip: this } })
         const described = trigger.getAttribute('aria-describedby')
@@ -203,9 +213,11 @@ export class Tooltip {
     }
 
     #onFocus = (event: FocusEvent) => {
-        //the focus a click or a tap gives is not a request for an explanation; the target, since a
-        //label with a Tooltip is focused through the input inside it
+        //the focus a click or a tap gives is not a request for an explanation. Chrome counts a click
+        //into a text field as keyboard focus, so a press just before rules it out too. The target,
+        //since a label with a Tooltip is focused through the input inside it
         if (!(event.target as Element).matches(':focus-visible')) return
+        if (performance.now() - lastPress < PRESS_FOCUS) return
         this.#dismissed = false
         this.show()
     }
@@ -324,9 +336,14 @@ function onKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') current?.dismiss()
 }
 
-/** The page scrolling under the card closes it; it does not chase its element. */
-function onScroll() {
-    current?.hide()
+/**
+ * The page scrolling under the card closes it; it does not chase its element. Only a scroll that
+ * moves the element counts: a Terminal scrolling its output beside it is no reason to close.
+ */
+function onScroll(event: Event) {
+    const scrolled = event.target
+    if (!current || !(scrolled instanceof Node)) return
+    if (scrolled === document || scrolled.contains(current.trigger)) current.hide()
 }
 
 /**

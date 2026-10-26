@@ -12,6 +12,7 @@
     import WhenLabel from './WhenLabel.svelte'
     import FaTimes from '~icons/fa-solid/times'
     import FaCaretDown from '~icons/fa-solid/caret-down'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     type Side = 'startingRegisters' | 'expectedRegisters'
 
@@ -170,7 +171,7 @@
                             <select
                                 value={row.name}
                                 aria-label="Register"
-                                title="Pick another register"
+                                {@attach tooltip('Pick another register')}
                                 onchange={(e) => rename(row.name, e.currentTarget.value)}
                             >
                                 {#each [row.name, ...free] as option (option)}
@@ -234,7 +235,7 @@
                         <td class="remove">
                             <button
                                 aria-label="Remove {row.name}"
-                                title="Remove {row.name}"
+                                {@attach tooltip(`Remove ${row.name}`)}
                                 onclick={() => remove(row.name)}
                             >
                                 <FaTimes />

@@ -1,8 +1,10 @@
 <script lang="ts">
     import type { ResolvedPathname } from '$app/types'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     interface Props {
         href: ResolvedPathname
-        title: string
+        /** What the link leads to, where its one word does not say. */
+        title?: string
         icon?: import('svelte').Snippet
         description?: import('svelte').Snippet
     }
@@ -10,7 +12,7 @@
     let { href, title, icon, description }: Props = $props()
 </script>
 
-<a class="link-element" {href} {title}>
+<a class="link-element" {href} {@attach tooltip(title)}>
     <div class="link-icon">
         {@render icon?.()}
     </div>

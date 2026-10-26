@@ -26,6 +26,7 @@
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { jsonLdScriptTag, softwareApplicationLd } from '#lib/seo.ts'
 
     interface BeforeInstallPromptEvent extends Event {
@@ -91,7 +92,8 @@
                             style={`${shadow}; padding: 0.5rem 0.7rem`}
                             cssVar="tertiary"
                             href="https://github.com/Specy/asm-editor"
-                            title="Open the project on github"
+                            {@attach tooltip('Open the project on github')}
+                            aria-label="GitHub"
                         >
                             <Icon>
                                 <FaGithub />
@@ -101,7 +103,8 @@
                             style={`${shadow}; padding: 0.5rem 0.7rem`}
                             cssVar="tertiary"
                             href="/donate"
-                            title="Donate to the project"
+                            {@attach tooltip('Donate to the project')}
+                            aria-label="Donate"
                         >
                             <Icon>
                                 <FaDonate />
@@ -110,7 +113,7 @@
                         <ButtonLink
                             href={shouldGoToCurrentProjects ? '/projects' : '/projects/create'}
                             style={`${shadow} gap: 0.5rem; min-width: 12.5rem`}
-                            title="Open the editor"
+                            {@attach tooltip('Open the editor')}
                         >
                             {#if shouldGoToCurrentProjects}
                                 Go to your projects
@@ -158,7 +161,7 @@
         <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
         <div class="links-row-wrapper">
             <div class="links-row">
-                <MainPageLinkPreview href={resolve('/documentation')} title="Documentation page">
+                <MainPageLinkPreview href={resolve('/documentation')}>
                     {#snippet icon()}
                         <div>
                             <FaBook />
@@ -168,10 +171,7 @@
                         Documentation
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview
-                    href={resolve('/#codeCompletion')}
-                    title="Code completion section"
-                >
+                <MainPageLinkPreview href={resolve('/#codeCompletion')}>
                     {#snippet icon()}
                         <div>
                             <FaSearch />
@@ -181,7 +181,7 @@
                         Code completion
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/#tools')} title="Tools section">
+                <MainPageLinkPreview href={resolve('/#tools')}>
                     {#snippet icon()}
                         <div>
                             <FaTools />
@@ -211,7 +211,7 @@
                         Exam
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/chat')} title="AI Chat">
+                <MainPageLinkPreview href={resolve('/chat')}>
                     {#snippet icon()}
                         <div>
                             <SparklesIcon style="font-size: 1.8rem" />

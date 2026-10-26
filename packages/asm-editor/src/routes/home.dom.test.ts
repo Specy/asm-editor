@@ -25,7 +25,12 @@ afterEach(async () => {
 function editorLink() {
     const app = mount(HomePage, { target: document.body })
     flushSync()
-    const link = document.querySelector<HTMLAnchorElement>('a[title="Open the editor"]')!
+    //the link its Tooltip describes as opening the editor
+    const link = [...document.querySelectorAll<HTMLAnchorElement>('a[aria-describedby]')].find(
+        (a) =>
+            document.getElementById(a.getAttribute('aria-describedby')!)?.textContent ===
+            'Open the editor'
+    )!
     const found = { href: link.getAttribute('href'), text: link.textContent?.trim() }
     unmount(app)
     return found

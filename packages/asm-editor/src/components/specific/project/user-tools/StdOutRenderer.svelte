@@ -7,6 +7,7 @@
     import { fly } from 'svelte/transition'
     import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'
     import ProblemsList from './ProblemsList.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
     import {
         type Diagnostic,
@@ -53,7 +54,8 @@
             out:fly|global={{ duration: 200 }}
             class:warningOnly={!hasErrors}
             class:diagnosticsShown={areDiagnosticsShown}
-            title={hasErrors ? 'Show compiler errors' : 'Show compiler warnings'}
+            {@attach tooltip(hasErrors ? 'Show compiler errors' : 'Show compiler warnings')}
+            aria-label={hasErrors ? 'Compiler errors' : 'Compiler warnings'}
             onclick={() => (areDiagnosticsShown = !areDiagnosticsShown)}
         >
             <FaExclamationTriangle />

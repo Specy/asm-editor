@@ -2,6 +2,7 @@
     import { tick, untrack } from 'svelte'
     import Select from '#cmp/shared/input/Select.svelte'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { isValidFilePath } from '#lib/projectFiles.ts'
     import { makeBmp, type PictureFormat } from '#lib/pixels/bmp.ts'
@@ -112,7 +113,7 @@
             }))}
             value={format}
             ariaLabel="Pixel format"
-            title="How each pixel's colour is stored in the BMP file"
+            {@attach tooltip("How each pixel's colour is stored in the BMP file")}
             wrapperStyle="min-width: 0; flex: 1"
             onChange={(value) => (format = value)}
         />

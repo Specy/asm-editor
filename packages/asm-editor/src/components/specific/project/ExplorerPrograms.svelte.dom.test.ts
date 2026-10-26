@@ -145,23 +145,25 @@ describe('the Entry marks', () => {
         //iOS Safari opens no context menu on a long press, so a touch screen reaches them here
         const confirm = vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
         const view = explorer()
-        const titles = (path: string) =>
+        const labels = (path: string) =>
             [...view.row(path).querySelectorAll('.row-actions button')].map((button) =>
-                button.getAttribute('title')
+                button.getAttribute('aria-label')
             )
         for (const path of ['main.s', 'sort.s'])
-            expect(titles(path), path).toEqual(['Remove program', 'Download', 'Rename', 'Delete'])
+            expect(labels(path), path).toEqual(['Remove program', 'Download', 'Rename', 'Delete'])
         for (const path of ['macros.inc', 'lib', 'src/main.s'])
-            expect(titles(path), path).toEqual([
+            expect(labels(path), path).toEqual([
                 'New program from this file',
                 'Download',
                 'Rename',
                 'Delete'
             ])
         for (const path of ['notes.txt', 'add.c', 'chall'])
-            expect(titles(path), path).toEqual(['Download', 'Rename', 'Delete'])
-        const press = async (path: string, title: string) => {
-            view.row(path).querySelector<HTMLButtonElement>(`button[title="${title}"]`)!.click()
+            expect(labels(path), path).toEqual(['Download', 'Rename', 'Delete'])
+        const press = async (path: string, label: string) => {
+            view.row(path)
+                .querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
+                .click()
             flushSync()
             await new Promise((resolve) => setTimeout(resolve, 0))
         }
@@ -174,12 +176,13 @@ describe('the Entry marks', () => {
         expect(
             view
                 .row('lib')
-                .querySelector<HTMLButtonElement>('button[title="New program from this file"]')
+                .querySelector<HTMLButtonElement>('button[aria-label="New program from this file"]')
                 ?.disabled
         ).toBe(true)
         expect(
-            view.row('main.s').querySelector<HTMLButtonElement>('button[title="Remove program"]')
-                ?.disabled
+            view
+                .row('main.s')
+                .querySelector<HTMLButtonElement>('button[aria-label="Remove program"]')?.disabled
         ).toBe(true)
     })
 
@@ -432,7 +435,7 @@ describe('Files the Explorer adds', () => {
         view.props.programs = []
         view.props.selectedProgram = undefined
         flushSync()
-        view.target.querySelector<HTMLButtonElement>('[title="New text file"]')!.click()
+        view.target.querySelector<HTMLButtonElement>('[aria-label="New text file"]')!.click()
         flushSync()
         const input = view.target.querySelector<HTMLInputElement>('.name-input')!
         input.value = 'bubble.s'

@@ -7,6 +7,7 @@
     import Button from '#cmp/shared/button/Button.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { scale } from 'svelte/transition'
     import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
     import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
@@ -147,7 +148,7 @@
                     <ButtonLink
                         href={resolve('/projects/create')}
                         style="gap: 0.5rem"
-                        title="Create a new project"
+                        {@attach tooltip('Create a new project')}
                     >
                         <Icon size={0.85}>
                             <FaPlus />

@@ -13,6 +13,7 @@
     import type { FileJournal } from '#lib/editJournal.ts'
     import FaUndo from '~icons/fa-solid/undo'
     import FaRedo from '~icons/fa-solid/redo'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { useWorkbench } from './workbenchContext'
     import CollapsibleSection from './CollapsibleSection.svelte'
 
@@ -132,7 +133,7 @@
                 <button
                     type="button"
                     class="action"
-                    title="Undo the last edit to {path}"
+                    {@attach tooltip(`Undo the last edit to ${path}`)}
                     aria-label="Undo"
                     disabled={!!readOnly || current === 0}
                     onclick={() => session.undoFileEdit(path)}><FaUndo /></button
@@ -140,7 +141,7 @@
                 <button
                     type="button"
                     class="action"
-                    title="Redo the next edit to {path}"
+                    {@attach tooltip(`Redo the next edit to ${path}`)}
                     aria-label="Redo"
                     disabled={!!readOnly || !journal.redo.length}
                     onclick={() => session.undoFileEdit(path, true)}><FaRedo /></button

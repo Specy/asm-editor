@@ -14,6 +14,7 @@ import { ListingDocuments, type ListingDocument } from '#lib/listing/listingDocu
 import type { ListingOrder } from '#lib/listing/listingClient.ts'
 import { PIE_LOAD_BASE } from '#lib/listing/listingPaths.ts'
 import ListingNotice from '#cmp/specific/workbench/ListingNotice.svelte'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
@@ -395,7 +396,7 @@ describe('the Listing notice', () => {
         const program = mount(ListingNotice, { target: host, props: { document: listing } })
         flushSync()
         expect(host.textContent?.trim()).toBe('read-only')
-        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
+        expect(tooltipText(host.querySelector('[role="status"] [aria-describedby]'))).toBe(
             'Generated Listing of crackme: read-only.'
         )
         unmount(program)
@@ -405,7 +406,7 @@ describe('the Listing notice', () => {
         })
         flushSync()
         expect(host.textContent?.trim()).toBe('read-only')
-        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
+        expect(tooltipText(host.querySelector('[role="status"] [aria-describedby]'))).toBe(
             'Generated Listing of crackme, a library the program loaded: read-only.'
         )
         unmount(library)

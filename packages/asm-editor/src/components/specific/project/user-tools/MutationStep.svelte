@@ -11,6 +11,7 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { sizeName } from '#lib/languages/sizeNames.ts'
     import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         step: ExecutionStep
@@ -183,9 +184,12 @@
 <div class="column step" class:docked>
     <div class="step-header column">
         <button
-            title={canUndoToHere && step.undoable !== false
-                ? 'Undo to here'
-                : 'Undo stops before effects that are not recorded'}
+            {@attach tooltip(
+                canUndoToHere && step.undoable !== false
+                    ? 'Undo to here'
+                    : 'Undo stops before effects that are not recorded'
+            )}
+            aria-label="Undo to here"
             disabled={!canUndoToHere || step.undoable === false}
             class="undo-to-here"
             onclick={() => {
@@ -226,7 +230,7 @@
                 <span class="pc">
                     <span style="opacity: 0.6"> 0x </span>{step.pc.toString(16).toUpperCase()}
                     <button
-                        title="Go to line"
+                        {@attach tooltip('Go to line')}
                         class="go-to-line"
                         onclick={() => {
                             dispatcher('highlight', step)
@@ -283,7 +287,9 @@
                     <button
                         class="mutation"
                         class:expanded={expanded.includes(i)}
-                        title={expanded.includes(i) ? 'Hide the values' : 'Show the values'}
+                        {@attach tooltip(
+                            expanded.includes(i) ? 'Hide the values' : 'Show the values'
+                        )}
                         onclick={() => toggle(i)}
                     >
                         {expanded.includes(i) ? writeDetail(mutation) : writeLabel(mutation)}

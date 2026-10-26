@@ -16,6 +16,7 @@
      * decision 18), in a prompt over the panel.
      */
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import { functionAtLine } from '#lib/listing/listing.ts'
     import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
@@ -353,7 +354,7 @@
                     <button
                         type="button"
                         class="clear"
-                        title="Clear the filter"
+                        {@attach tooltip('Clear the filter')}
                         aria-label="Clear the filter"
                         onclick={() => {
                             filter = ''

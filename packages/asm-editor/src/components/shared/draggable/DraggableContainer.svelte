@@ -6,6 +6,7 @@
     import FaEye from '~icons/fa-solid/eye'
     import FaEyeSlash from '~icons/fa-solid/eye-slash'
     import FaWindowRestore from '~icons/fa-solid/window-restore'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     interface Props {
         hidden?: boolean
         title?: string
@@ -32,6 +33,8 @@
          */
         onClose?: () => void
         closeTitle?: string
+        /** The key that closes it too, shown in the close button's Tooltip. */
+        closeShortcut?: string
         children?: import('svelte').Snippet
     }
 
@@ -45,6 +48,7 @@
         headerActions,
         onClose,
         closeTitle = 'Close',
+        closeShortcut,
         children
     }: Props = $props()
 
@@ -97,7 +101,8 @@
     <Button
         style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
         cssVar="secondary"
-        title={onClose ? closeTitle : ''}
+        {@attach tooltip(onClose ? closeTitle : '', { shortcut: closeShortcut })}
+        aria-label={onClose ? 'Close' : undefined}
         onClick={(e) => {
             e.stopPropagation()
             if (onClose) return onClose()

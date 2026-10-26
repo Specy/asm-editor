@@ -55,6 +55,7 @@
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import SourceFileIcon from './SourceFileIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     type TreeNode = {
         path: string
@@ -788,7 +789,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="New text file"
+                {@attach tooltip('New text file')}
+                aria-label="New text file"
                 onclick={() => startCreate()}
             >
                 <FaPlus />
@@ -796,7 +798,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="Create a BMP image and open it in the pixel editor"
+                {@attach tooltip('Create a BMP image and open it in the pixel editor')}
+                aria-label="New picture"
                 onclick={() => startNewPicture()}
             >
                 <FaFileImage />
@@ -804,7 +807,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="Upload files"
+                {@attach tooltip('Upload files')}
+                aria-label="Upload files"
                 onclick={() => pickUploads()}
             >
                 <FaUpload />
@@ -892,10 +896,13 @@
                             </span>
                             <span class="ellipsis">{row.name}</span>
                         </button>
+                        <!-- a long press on the row opens its menu, so its buttons' Tooltips
+                             leave touch alone -->
                         <div class="row-actions">
                             <button
                                 disabled={locked}
-                                title="New text file in this folder"
+                                {@attach tooltip('New text file in this folder', { touch: false })}
+                                aria-label="New text file"
                                 onclick={() => startCreate(row.path)}
                             >
                                 <FaPlus />
@@ -998,12 +1005,15 @@
                                 >
                             {/if}
                         </button>
+                        <!-- a long press on the row opens its menu, so its buttons' Tooltips
+                             leave touch alone -->
                         <div class="row-actions">
                             {#if entries.has(row.path)}
                                 {#if onRemoveProgram}
                                     <button
                                         disabled={locked}
-                                        title="Remove program"
+                                        {@attach tooltip('Remove program', { touch: false })}
+                                        aria-label="Remove program"
                                         onclick={() => void removeProgram(row.path)}
                                     >
                                         <FaRegFlag />
@@ -1013,7 +1023,10 @@
                                 {@const create = onNewProgram}
                                 <button
                                     disabled={locked}
-                                    title="New program from this file"
+                                    {@attach tooltip('New program from this file', {
+                                        touch: false
+                                    })}
+                                    aria-label="New program from this file"
                                     onclick={() => {
                                         if (!locked) create(row.path)
                                     }}
@@ -1021,19 +1034,25 @@
                                     <FaFlag />
                                 </button>
                             {/if}
-                            <button title="Download" onclick={() => downloadFile(row.path)}>
+                            <button
+                                {@attach tooltip('Download', { touch: false })}
+                                aria-label="Download"
+                                onclick={() => downloadFile(row.path)}
+                            >
                                 <FaDownload />
                             </button>
                             <button
                                 disabled={locked}
-                                title="Rename"
+                                {@attach tooltip('Rename', { touch: false })}
+                                aria-label="Rename"
                                 onclick={() => startRename(row.path)}
                             >
                                 <FaPen />
                             </button>
                             <button
                                 disabled={locked}
-                                title="Delete"
+                                {@attach tooltip('Delete', { touch: false })}
+                                aria-label="Delete"
                                 onclick={() => deleteFile(row.path)}
                             >
                                 <FaTrash />
@@ -1079,7 +1098,7 @@
                 <span class="hints-title">Hints</span>
                 <button
                     class="hints-close"
-                    title="Hide the hints until the next reload"
+                    {@attach tooltip('Hide the hints until the next reload')}
                     aria-label="Hide the hints"
                     onclick={() => (hintsDismissed.value = true)}
                 >

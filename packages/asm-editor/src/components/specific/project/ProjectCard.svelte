@@ -22,6 +22,7 @@
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         project: Project
@@ -85,7 +86,7 @@
         <div class="card-actions">
             <button
                 class="card-action"
-                title="Share this project"
+                {@attach tooltip('Share this project')}
                 aria-label="Share this project"
                 onclick={() => dispatcher('share', project)}
             >
@@ -93,9 +94,11 @@
             </button>
             <button
                 class="card-action"
-                title={singleSource
-                    ? 'Download this project as a source file'
-                    : 'Download this project as an archive'}
+                {@attach tooltip(
+                    singleSource
+                        ? 'Download this project as a source file'
+                        : 'Download this project as an archive'
+                )}
                 aria-label="Download this project"
                 onclick={() => dispatcher('download', project)}
             >
@@ -103,7 +106,7 @@
             </button>
             <button
                 class="card-action delete"
-                title="Delete this project"
+                {@attach tooltip('Delete this project')}
                 aria-label="Delete this project"
                 onclick={deleteProject}
             >

@@ -47,6 +47,7 @@
     import ExamReviewAgent from '#cmp/specific/exam/ExamReviewAgent.svelte'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { preloadAllEmulators } from '#lib/languages/Emulator.ts'
 
     const EXAM_SESSION_SNAPSHOT_VERSION = 1
@@ -812,7 +813,8 @@
                                         teacherAgentOpen = !teacherAgentOpen
                                     }
                                 }}
-                                title="Ask AI to review this result"
+                                {@attach tooltip('Ask AI to review this result')}
+                                aria-label="Ask AI"
                                 style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 0.4rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
                             >
                                 <Icon>
@@ -830,7 +832,8 @@
                             hasIcon
                             disabled={!canGoToPreviousSection}
                             onClick={goToPreviousSection}
-                            title="Previous section"
+                            {@attach tooltip('Previous section')}
+                            aria-label="Previous section"
                             style="padding:0.3rem; width:2.2rem; height:2.2rem"
                         >
                             <Icon>
@@ -843,7 +846,8 @@
                             hasIcon
                             disabled={!canGoToNextSection}
                             onClick={goToNextSection}
-                            title="Next section"
+                            {@attach tooltip('Next section')}
+                            aria-label="Next section"
                             style="padding:0.3rem; width:2.2rem; height:2.2rem"
                         >
                             <Icon>

@@ -17,6 +17,7 @@
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 
     interface Props {
@@ -121,7 +122,7 @@
             <ButtonLink
                 style="width: 100%;"
                 href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
-                title="Open the editor"
+                {@attach tooltip('Open the editor')}
             >
                 {#if ProjectStore.projects.length > 0}
                     Go to your projects

@@ -15,6 +15,7 @@
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
@@ -116,7 +117,12 @@
 <Page cropped="40rem" style="padding-top: 3rem">
     <div class="create-project">
         <div class="row top-title">
-            <a href={resolve('/projects')} class="go-back" title="Go to the projects page">
+            <a
+                href={resolve('/projects')}
+                class="go-back"
+                {@attach tooltip('Go to the projects page')}
+                aria-label="Back"
+            >
                 <Button hasIcon cssVar="primary" style="padding: 0.4rem">
                     <Icon size={2}>
                         <FaAngleLeft />
@@ -172,7 +178,7 @@
         <div
             style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
         >
-            <ButtonLink href="/projects" cssVar="primary" title="Cancel new project"
+            <ButtonLink href="/projects" cssVar="primary" {@attach tooltip('Cancel new project')}
                 >Cancel
             </ButtonLink>
             <Button onClick={create}>Create</Button>

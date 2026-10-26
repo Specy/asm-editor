@@ -6,6 +6,7 @@
      * since the run counts as not run.
      */
     import Button from '#cmp/shared/button/Button.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
     import { matchResults } from '#lib/testcases.ts'
 
@@ -43,7 +44,7 @@
             cssVar="tertiary"
             style="padding: 0.25rem 0.65rem; font-size: 0.8rem; border-radius: 0.3rem"
             disabled={results.length === 0}
-            title="Clear the results of the last test run"
+            {@attach tooltip('Clear the results of the last test run')}
             onClick={onClear}
         >
             Clear
@@ -54,7 +55,7 @@
             cssVar="accent2"
             style="padding: 0.25rem 0.65rem; font-size: 0.8rem; border-radius: 0.3rem"
             disabled={disabled || testcases.length === 0}
-            title="Run every Testcase"
+            {@attach tooltip('Run every Testcase')}
             onClick={onRun}
         >
             Run all

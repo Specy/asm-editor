@@ -6,6 +6,7 @@
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaSave from '~icons/fa-solid/save'
     import FaBars from '~icons/fa-solid/bars'
     import { useWorkbench } from './workbenchContext'
@@ -17,7 +18,7 @@
 <header class="top-bar">
     <button
         class="icon-button rail-width"
-        title="Open the menu"
+        {@attach tooltip('Open the menu')}
         aria-label="Open the menu"
         aria-expanded={ui.drawerOpen}
         onclick={() => (ui.drawerOpen = !ui.drawerOpen)}
@@ -32,7 +33,7 @@
             cssVar="accent2"
             hasIcon
             style="padding: 0 0.7rem; height: 1.9rem; gap: 0.4rem; flex: none; font-size: 0.9rem;"
-            title="Save the Project"
+            {@attach tooltip('Save the Project')}
             onClick={() => session.save()}
         >
             <Icon size={0.85}>

@@ -20,6 +20,7 @@
     import Column from '#cmp/shared/layout/Column.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
     import Switch from '#cmp/shared/input/Switch.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { viewStore } from '#stores/view.ts'
     import { BASE_CODE, LANGUAGE_THEMES } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
@@ -453,7 +454,10 @@
                                     <span>Hide panels until built</span>
                                     <Switch
                                         bind:checked={settings.hideUntilBuilt}
-                                        title="Show the memory, registers and screen only once the code is built"
+                                        {@attach tooltip(
+                                            'Show the memory, registers and screen only once the code is built'
+                                        )}
+                                        aria-label="Hide panels until built"
                                     />
                                 </div>
                                 <div class="share-settings">
