@@ -121,9 +121,11 @@
 </div>
 
 <style lang="scss">
+    @use '../../shared/button/tray.scss';
+
     /* drawn as the Workbench's prompt tray, over the top of the editor or panel it was opened in */
     .prompt-tray {
-        --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+        @include tray.surface(88%);
         position: absolute;
         z-index: 6;
         top: 0.6rem;
@@ -135,13 +137,6 @@
         width: min(32rem, calc(100% - 1.2rem));
         box-sizing: border-box;
         padding: 0.6rem;
-        color: var(--primary-text);
-        border: 1px solid var(--tray-line);
-        border-radius: 0.6rem;
-        background-color: color-mix(in srgb, var(--primary) 88%, transparent);
-        backdrop-filter: blur(4px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
-        font-family: Rubik;
         font-size: 0.9rem;
     }
 
@@ -157,28 +152,7 @@
     }
 
     .tool {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        padding: 0 0.9rem;
-        border: none;
-        border-radius: 0.4rem;
-        background-color: transparent;
-        color: var(--primary-text);
-        font-family: Rubik;
-        font-size: 0.9rem;
-        font-weight: 500;
-        cursor: pointer;
-    }
-
-    .tool:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-    }
-
-    .tool:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
+        @include tray.tool;
     }
 
     /* apart from Cancel and the button that goes on, at the row's start */
@@ -188,17 +162,11 @@
     }
 
     .primary {
-        min-width: 4.5rem;
-        background-color: var(--accent);
-        color: var(--accent-text);
-    }
+        @include tray.primary;
 
-    .primary:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--accent) 85%, white);
-    }
-
-    .primary:disabled {
-        opacity: 0.5;
-        cursor: default;
+        &:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
     }
 </style>
