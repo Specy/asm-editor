@@ -1,5 +1,10 @@
 import { assemble, SymbolType, type AssemblyResult, type SymbolAppearance } from '@specy/z80'
-import { assemblyFiles, fileText, resolveFilePath, type BuildSources } from '#lib/projectFiles.ts'
+import {
+    assemblyFiles,
+    resolveFilePath,
+    sourceLineText,
+    type BuildSources
+} from '#lib/projectFiles.ts'
 import type {
     LanguageSymbol,
     ProjectAnalysisSnapshot,
@@ -14,16 +19,6 @@ function normalizedPath(path: string, sources: BuildSources): string {
         return sources.files[normalized] ? normalized : path
     } catch {
         return path
-    }
-}
-
-function lineText(sources: BuildSources, path: string, line: number): string {
-    const file = sources.files[path]
-    if (!file) return ''
-    try {
-        return fileText(file).split(/\r?\n/)[line] ?? ''
-    } catch {
-        return ''
     }
 }
 
@@ -73,7 +68,7 @@ function expansionLocation(
         for (let source = line.expandedFrom; source; source = source.expandedFrom) {
             if (source.lineNumber === undefined) continue
             const path = normalizedPath(source.fileInfo.pathname, sources)
-            const text = lineText(sources, path, source.lineNumber)
+            const text = sourceLineText(sources, path, source.lineNumber)
             return {
                 path,
                 range: {
@@ -115,7 +110,7 @@ export function analyzeZ80Project(
                       path,
                       range: {
                           start: { line, column: 0 },
-                          end: { line, column: lineText(sources, path, line).length }
+                          end: { line, column: sourceLineText(sources, path, line).length }
                       }
                   }
         return {
@@ -126,7 +121,7 @@ export function analyzeZ80Project(
                     path,
                     range: {
                         start: { line: 0, column: 0 },
-                        end: { line: 0, column: lineText(sources, path, 0).length }
+                        end: { line: 0, column: sourceLineText(sources, path, 0).length }
                     }
                 },
             message: diagnostic.message

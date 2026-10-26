@@ -91,7 +91,12 @@ import {
 } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { x86DiagnosticHint } from './X86-diagnostics'
-import { ProjectFormatError, type BuildInput, type BuildSources } from '#lib/projectFiles.ts'
+import {
+    ProjectFormatError,
+    sourceLineText,
+    type BuildInput,
+    type BuildSources
+} from '#lib/projectFiles.ts'
 import {
     linksX86StartUnit,
     prepareX86Runtime,
@@ -1966,11 +1971,6 @@ function fromDoubleBits(bits: bigint): number {
     return doubleBits.getFloat64(0, true)
 }
 
-function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
-    const file = sources.files[source.path]
-    return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
-}
-
 function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
     const hint = x86DiagnosticHint(error.code)
     return {
@@ -1994,7 +1994,7 @@ function coreDiagnosticToDiagnostic(
         path: diagnostic.file || sources.entry,
         line: Math.max(0, diagnostic.line - 1)
     }
-    const line = sourceLine(sources, source)
+    const line = sourceLineText(sources, source.path, source.line)
     const hint =
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)

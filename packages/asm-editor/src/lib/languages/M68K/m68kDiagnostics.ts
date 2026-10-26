@@ -2,7 +2,7 @@ import type { Diagnostic as S68kDiagnostic, Location } from '@specy/s68k'
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosticBridge.ts'
 import type { LanguageDiagnostic, SourceLocation } from '#lib/languages/service/sourceModel.ts'
-import { fileText, type BuildSources } from '#lib/projectFiles.ts'
+import { sourceLineText, type BuildSources } from '#lib/projectFiles.ts'
 
 /** Converts S68K's Unicode-scalar column to Monaco's UTF-16 code-unit column. */
 export function s68kColumnToUtf16(line: string, column: number): number {
@@ -10,18 +10,8 @@ export function s68kColumnToUtf16(line: string, column: number): number {
     return [...line].slice(0, column).join('').length
 }
 
-function sourceLine(sources: BuildSources, location: Location): string {
-    const file = sources.files[location.file]
-    if (!file) return ''
-    try {
-        return fileText(file).split(/\r?\n/)[location.line] ?? ''
-    } catch {
-        return ''
-    }
-}
-
-function sourceLocation(location: Location, sources: BuildSources): SourceLocation {
-    const line = sourceLine(sources, location)
+export function sourceLocation(location: Location, sources: BuildSources): SourceLocation {
+    const line = sourceLineText(sources, location.file, location.line)
     return {
         path: location.file,
         range: {

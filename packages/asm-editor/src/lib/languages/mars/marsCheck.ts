@@ -5,8 +5,8 @@ import type {
 } from '#lib/languages/service/sourceModel.ts'
 import {
     buildAssemblerProfile,
-    fileText,
     ProjectFormatError,
+    sourceLineText,
     sourceText,
     textAssemblyFiles,
     type BuildSources
@@ -232,16 +232,6 @@ function probeScreenLabel(
     }
 }
 
-function lineText(sources: BuildSources, path: string, line: number): string {
-    const file = sources.files[path]
-    if (!file) return ''
-    try {
-        return fileText(file).split(/\r?\n/)[line] ?? ''
-    } catch {
-        return ''
-    }
-}
-
 function coreDiagnostic(
     error: MarsAssembleError,
     sources: BuildSources,
@@ -268,7 +258,7 @@ function coreDiagnostic(
                 path: location.sourcePath,
                 range: {
                     start: { line, column: 0 },
-                    end: { line, column: lineText(sources, location.sourcePath, line).length }
+                    end: { line, column: sourceLineText(sources, location.sourcePath, line).length }
                 }
             }
         }
