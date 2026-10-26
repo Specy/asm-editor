@@ -52,7 +52,10 @@
                     </div>
                     {#if t.editable}
                         <Button
-                            onClick={async () => {
+                            onClick={async (event) => {
+                                //the button sits inside the preset's, which would select the
+                                //theme it is about to delete
+                                event.stopPropagation()
                                 const confirmed = await Prompt.confirm(
                                     'Are you sure you want to delete this theme?'
                                 )
