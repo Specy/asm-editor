@@ -812,9 +812,11 @@ export abstract class GenericEmulator<T, R extends string>
      */
     /**
      * Shows the read the program now waits on, after sending what it played: the person may take a
-     * while to answer, and a beep before a prompt has to be heard before the answer, not after.
+     * while to answer, and a beep before a prompt has to be heard before the answer, not after. A
+     * read for a run Stop ended, by a Core that could not be halted, fails instead, showing nothing.
      */
-    private waitOnInput(interrupt: EmulatorInterrupt): void {
+    private waitOnInput(interrupt: EmulatorInterrupt, execution: ExecutionGeneration): void {
+        this.executionController.ensureCurrent(execution)
         this._peripherals.audio.flush()
         this.state.interrupt = interrupt
     }
@@ -824,7 +826,7 @@ export abstract class GenericEmulator<T, R extends string>
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
+        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readAsync(question, execution, options)
         } finally {
@@ -842,7 +844,7 @@ export abstract class GenericEmulator<T, R extends string>
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
+        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readCharAsync(question, execution, options)
         } finally {
@@ -859,7 +861,7 @@ export abstract class GenericEmulator<T, R extends string>
         question: string,
         execution: ExecutionGeneration
     ) {
-        this.waitOnInput({ type: 'StandardInput', message: question })
+        this.waitOnInput({ type: 'StandardInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readStandardInput(length, question, execution)
         } finally {
@@ -872,7 +874,7 @@ export abstract class GenericEmulator<T, R extends string>
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
     protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
+        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readByte(question, execution)
         } finally {

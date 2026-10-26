@@ -86,6 +86,17 @@ describe('the MARS and RARS handlers', () => {
         ])
     })
 
+    it('fails a read for a run that was superseded without putting up its interrupt or read', async () => {
+        const { map, terminal, interrupts, executionController } = setup()
+        terminal.useInteractiveInput()
+        //a Core that Stop could not halt, reading on the stopped run's behalf
+        executionController.invalidate()
+        const read = map.readInt()
+        expect(terminal.pendingRead).toBeNull()
+        await expect(read).rejects.toThrow('Execution superseded')
+        expect(interrupts).toEqual([])
+    })
+
     it('runs every handler in a FileSystem frame keyed by the active instruction serial', () => {
         const { map, session, terminal } = setup()
         const frames = vi.spyOn(session!, 'performInstruction')

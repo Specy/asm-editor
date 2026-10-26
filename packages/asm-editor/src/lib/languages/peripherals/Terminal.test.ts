@@ -580,6 +580,19 @@ describe('reads with no console on the page', () => {
         expect(terminal.pendingRead).toBeNull()
     })
 
+    it('fail a read for an execution Stop already ended, showing nothing and taking nothing typed', async () => {
+        const { terminal, executionController, execution } = makeTerminal()
+        terminal.insertText('typed\n')
+        executionController.invalidate()
+        const line = terminal.readAsync('q', execution)
+        const character = terminal.readCharAsync('q', execution)
+        expect(terminal.pendingRead).toBeNull()
+        await expect(line).rejects.toThrow('Execution superseded')
+        await expect(character).rejects.toThrow('Execution superseded')
+        //what was typed is still there for the run under way
+        expect(await terminal.readAsync('q', executionController.capture())).toBe('typed')
+    })
+
     it('promise no pending input, because nothing has been typed', () => {
         const { terminal } = makeTerminal()
         expect(terminal.hasPendingInput()).toBe(false)

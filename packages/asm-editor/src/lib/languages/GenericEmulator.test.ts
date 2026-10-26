@@ -946,10 +946,16 @@ describe('stop', () => {
         const emulator = new FakeEmulator({ automaticChecking: false })
         let release!: () => void
         let read: Promise<string> | undefined
+        let shown: unknown
         emulator._runTestcase = async () => {
             const readLine = emulator.lineReader()
             await new Promise<void>((resolve) => (release = resolve))
             read = readLine()
+            //what the read put up before it failed, which the view would show
+            shown = {
+                read: emulator.peripherals.terminal.pendingRead,
+                interrupt: emulator.interrupt
+            }
             await read
         }
         const done = emulator.test('', [emptyTestcase, emptyTestcase], 100)
@@ -958,6 +964,7 @@ describe('stop', () => {
         release()
         await expect(done).rejects.toThrow('Execution superseded')
         await expect(read).rejects.toThrow('Execution superseded')
+        expect(shown).toEqual({ read: null, interrupt: undefined })
         expect(emulator.peripherals.terminal.pendingRead).toBeNull()
     })
 })
