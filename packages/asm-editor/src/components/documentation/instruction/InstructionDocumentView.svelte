@@ -31,9 +31,8 @@
     import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import InstructionTagBadge from '#cmp/documentation/entries/InstructionTagBadge.svelte'
-    import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
+    import { codeBlockStyle } from '#lib/content/codeBlockStyle.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
-    import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
     import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
     import { plainText } from '#lib/documentation/entries.ts'
     import {
@@ -41,7 +40,6 @@
         type FormPattern,
         type InstructionDocument
     } from '#lib/documentation/instructions/document.ts'
-    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
     import FlagStrip from './FlagStrip.svelte'
     import FormPatternRow from './FormPatternRow.svelte'
     import InstructionLessons from './InstructionLessons.svelte'
@@ -71,14 +69,8 @@
         lessons = []
     }: Props = $props()
 
-    // the editor's colours for the highlighted forms, as code samples take them
-    const palette = $derived(
-        assemblyPaletteStyle(
-            ThemeStore.isColorDark(
-                ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
-            )
-        )
-    )
+    // the editor's colours and font for the highlighted forms, as code samples take them
+    const codeStyle = $derived(codeBlockStyle())
 
     let panel = $derived(density === 'panel')
     // a long name that only spells the mnemonic says nothing the name does not
@@ -162,14 +154,7 @@
     no Lecture list or section left expanded
 -->
 {#key document.name}
-    <article
-        class="instruction-document"
-        class:panel
-        style={palette}
-        style:--example-font-family={EDITOR_FONT.fontFamily}
-        style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
-        style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
-    >
+    <article class="instruction-document" class:panel style={codeStyle}>
         <header class="header">
             <div class="title-line">
                 {#if !panel}

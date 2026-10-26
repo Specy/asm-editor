@@ -10,7 +10,7 @@
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import FaGraduationCap from '~icons/fa-solid/graduation-cap'
     import MainPageSection from '#cmp/specific/landing/HeroSection.svelte'
-    import AnimatedRgbLine from '#cmp/shared/misc/AnimatedRgbLine.svelte'
+    import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
     import GoLinkExternal from '~icons/octicon/link-external-16'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
     import { onMount } from 'svelte'
@@ -158,7 +158,7 @@
                 </Column>
             </div>
         </div>
-        <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
+        <RgbLine animated height="0.5rem" style="border-radius: 0;" />
         <div class="links-row-wrapper">
             <div class="links-row">
                 <MainPageLinkPreview href={resolve('/documentation')}>

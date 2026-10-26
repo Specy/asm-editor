@@ -19,9 +19,7 @@
     import InstructionsMenu from './InstructionsMenu.svelte'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
-    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import OpenEditorButton from '#cmp/shared/button/OpenEditorButton.svelte'
     import { DOCUMENTATION_SITES } from '#lib/documentation/site.ts'
     import { resolveHref } from '#lib/hrefs.ts'
 
@@ -95,17 +93,7 @@
         </MaskedScroll>
 
         <Column style="margin-top: auto;" padding="0.5rem">
-            <ButtonLink
-                style="width: 100%;"
-                href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
-                {@attach tooltip('Open the editor')}
-            >
-                {#if ProjectStore.projects.length > 0}
-                    Go to your projects
-                {:else}
-                    Create your first project
-                {/if}
-            </ButtonLink>
+            <OpenEditorButton />
         </Column>
 
         {#snippet content()}

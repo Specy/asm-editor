@@ -14,7 +14,6 @@
         type Testcase
     } from '#lib/Project.svelte.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
-    import lzstring from 'lz-string'
     import { page } from '$app/state'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
@@ -29,34 +28,21 @@
     import { toast } from '#stores/toastStore.ts'
     import FaExternal from '~icons/fa-solid/external-link-alt'
     import Button from '#cmp/shared/button/Button.svelte'
-    import { serializer } from '#lib/json.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import {
         decodePlaygroundProgram,
-        encodePlaygroundProgram,
         playgroundBuildSources
     } from '#lib/content/playgroundProgram.ts'
-    import { parsePlaygroundLanguage } from '#lib/content/playgrounds.ts'
+    import {
+        embedQuery,
+        readEmbedCode,
+        readEmbedSettings,
+        readEmbedTestcases,
+        type EmbedSettings
+    } from '#lib/content/embedUrl.ts'
 
     import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
-
-    type Settings = {
-        showMemory: boolean
-        language: AvailableLanguages
-        showConsole: boolean
-        showTests: boolean
-        showPc: boolean
-        showRegisters: boolean
-        showFlags: boolean
-        showScreen: boolean
-        openScreen: boolean
-        /** Whether the memory, registers, flags, PC and Screen wait for the program to be built. */
-        hideUntilBuilt: boolean
-        openButton: boolean
-        /** The Register file the panel opens on, from a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag. */
-        registerFile?: string
-    }
 
     const languageOptions: Array<{ key: string; value: AvailableLanguages }> = [
         { key: 'M68K', value: 'M68K' },
@@ -66,28 +52,37 @@
         { key: languageLabel('X86'), value: 'X86' },
         { key: 'Z80', value: 'Z80' }
     ]
-    const defaultLanguage: AvailableLanguages = 'M68K'
+    /** The builder's switches, each a setting of the URL it writes. */
+    const switches: {
+        key: Exclude<keyof EmbedSettings, 'language' | 'registerFile'>
+        label: string
+        description?: string
+    }[] = [
+        { key: 'showMemory', label: 'Show memory' },
+        { key: 'showConsole', label: 'Show console' },
+        { key: 'showTests', label: 'Show tests' },
+        { key: 'showPc', label: 'Show PC' },
+        { key: 'showRegisters', label: 'Show registers' },
+        { key: 'showFlags', label: 'Show flags' },
+        { key: 'showScreen', label: 'Show screen' },
+        { key: 'openScreen', label: 'Screen open' },
+        {
+            key: 'hideUntilBuilt',
+            label: 'Hide panels until built',
+            description: 'Show the memory, registers and screen only once the code is built'
+        },
+        { key: 'openButton', label: 'Open in editor button' }
+    ]
 
-    let settings: Settings = $state({
-        showMemory: true,
-        language: defaultLanguage,
-        showConsole: false,
-        showTests: true,
-        showPc: false,
-        showRegisters: true,
-        showFlags: false,
-        showScreen: false,
-        openScreen: false,
-        hideUntilBuilt: false,
-        openButton: false,
-        registerFile: undefined
-    })
+    //what a URL without parameters asks for, until the page reads its own once mounted
+    const blank = readEmbedSettings(new URLSearchParams())
+    let settings: EmbedSettings = $state(blank)
     let inIframe = $state(true)
     //framed by one of our own pages (a lecture, the documentation), whose sections already sit
     //apart by the Workbench's gap: the frame's own padding is that gap, so its cards line up with
     //the page's. A frame on someone else's site keeps the roomier padding
     let framedByUs = $state(false)
-    let code = $state(BASE_CODE[defaultLanguage])
+    let code = $state(BASE_CODE[blank.language])
     let project = $state<Project>()
     let loadedEmulator = $state<Emulator | null>(null)
     let ready = $state(false)
@@ -100,10 +95,11 @@
     onMount(() => {
         inIframe = window.self !== window.top
         framedByUs = inIframe && framedBySameOrigin()
-        settings = getSettings()
-        code = getCodeFromUrl() ?? BASE_CODE[settings.language]
-        testcases = cleanTestcases(getTestsFromUrl())
-        const encoded = page.url.searchParams.get('program')
+        const params = page.url.searchParams
+        settings = readEmbedSettings(params)
+        code = readEmbedCode(params) ?? BASE_CODE[settings.language]
+        testcases = cleanTestcases(readEmbedTestcases(params))
+        const encoded = params.get('program')
         if (encoded) {
             try {
                 project = makeProject({
@@ -160,30 +156,6 @@
         }
     }
 
-    function getCodeFromUrl() {
-        const searchParams = page.url.searchParams
-        const code = searchParams.get('code')
-        if (!code) return undefined
-        try {
-            return lzstring.decompressFromEncodedURIComponent(code)
-        } catch (e) {
-            console.error(e)
-            return undefined
-        }
-    }
-
-    function getTestsFromUrl() {
-        const searchParams = page.url.searchParams
-        const tests = searchParams.get('testcases')
-        if (!tests) return []
-        try {
-            return serializer.parse<Testcase[]>(lzstring.decompressFromEncodedURIComponent(tests))
-        } catch (e) {
-            console.error(e)
-            return []
-        }
-    }
-
     function framedBySameOrigin() {
         try {
             return window.parent.location.origin === window.location.origin
@@ -193,89 +165,25 @@
         }
     }
 
-    function getSettings() {
-        const searchParams = page.url.searchParams
-        const showMemory = searchParams.get('showMemory') === 'true'
-        //a link written by hand may spell the language as a fence does, `riscv` or `x86`, and one
-        //the editor has not got opens the default rather than an emulator that never loads
-        const language =
-            parsePlaygroundLanguage(searchParams.get('language') ?? undefined) ?? defaultLanguage
-        const showConsole = searchParams.get('showConsole') === 'true'
-        const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
-        const showPc = searchParams.get('showPc') === 'true'
-        const showRegisters = searchParams.get('showRegisters') !== 'false'
-        const showFlags = searchParams.get('showFlags') === 'true'
-        const openScreen = searchParams.get('openScreen') === 'true'
-        //asking for the Screen open is asking for one, so a link needs only the one parameter
-        const showScreen = openScreen || searchParams.get('showScreen') === 'true'
-        const hideUntilBuilt = searchParams.get('hideUntilBuilt') === 'true'
-        const openButton = searchParams.get('openButton') === 'true'
-        //the panel itself decides what to do with a file this language has not got, which is to
-        //open on the CPU one
-        const registerFile = searchParams.get('registerFile')?.trim().toLowerCase() || undefined
-
-        return {
-            showMemory,
-            language,
-            showConsole,
-            showTests,
-            showPc,
-            showRegisters,
-            showFlags,
-            showScreen,
-            openScreen,
-            hideUntilBuilt,
-            openButton,
-            registerFile
-        } satisfies Settings
-    }
-
-    function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
-        const showMemory = settings.showMemory ? 'showMemory=true&' : ''
-        const showConsole = settings.showConsole ? 'showConsole=true&' : ''
-        const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
-        const showPc = settings.showPc ? 'showPc=true&' : ''
-        const showRegisters = settings.showRegisters
-            ? 'showRegisters=true&'
-            : 'showRegisters=false&'
-        const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
-        const showScreen = settings.showScreen ? 'showScreen=true&' : ''
-        const openScreen = settings.openScreen ? 'openScreen=true&' : ''
-        const hideUntilBuilt = settings.hideUntilBuilt ? 'hideUntilBuilt=true&' : ''
-        const openButton = settings.openButton ? 'openButton=true&' : ''
-        const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
-        const props = [
-            showMemory,
-            showConsole,
-            showTests,
-            showPc,
-            showRegisters,
-            showFlags,
-            showScreen,
-            openScreen,
-            hideUntilBuilt,
-            openButton,
-            registerFile
-        ].join('')
-        const lang = `language=${settings.language}&`
-        const compressed = lzstring.compressToEncodedURIComponent(code)
-        const tests =
-            testcases.length > 0
-                ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify($state.snapshot(testcases)))}&`
-                : ''
+    function createCodeUrl(code: string, settings: EmbedSettings, testcases: Testcase[]) {
         const entry = project?.selectedProgram
         const program =
             project && entry !== undefined
-                ? encodePlaygroundProgram({
+                ? {
                       files: $state.snapshot(project.files),
                       entry,
                       compilations: project.compilations
-                  })
+                  }
                 : undefined
-        return `${window.location.origin}/embed?${lang}${props}${tests}${program ? `program=${program}` : `code=${compressed}`}`
+        const query = embedQuery(settings, {
+            code,
+            program,
+            testcases: $state.snapshot(testcases)
+        })
+        return `${window.location.origin}/embed?${query}`
     }
 
-    function generateCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
+    function generateCodeUrl(code: string, settings: EmbedSettings, testcases: Testcase[]) {
         clearTimeout(timeoutId)
         viewStore(settings)
         timeoutId = setTimeout(() => {
@@ -403,70 +311,19 @@
                                 <p>Choose which tools appear in the embedded editor.</p>
                             </div>
                             <div class="settings-grid">
-                                <div class="share-settings">
-                                    <span>Show memory</span>
-                                    <Switch
-                                        bind:checked={settings.showMemory}
-                                        title="Show memory"
-                                    />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Show console</span>
-                                    <Switch
-                                        bind:checked={settings.showConsole}
-                                        title="Show console"
-                                    />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Show tests</span>
-                                    <Switch bind:checked={settings.showTests} title="Show tests" />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Show PC</span>
-                                    <Switch bind:checked={settings.showPc} title="Show PC" />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Show registers</span>
-                                    <Switch
-                                        bind:checked={settings.showRegisters}
-                                        title="Show registers"
-                                    />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Show flags</span>
-                                    <Switch bind:checked={settings.showFlags} title="Show flags" />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Show screen</span>
-                                    <Switch
-                                        bind:checked={settings.showScreen}
-                                        title="Show screen"
-                                    />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Screen open</span>
-                                    <Switch
-                                        bind:checked={settings.openScreen}
-                                        title="Screen open"
-                                    />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Hide panels until built</span>
-                                    <Switch
-                                        bind:checked={settings.hideUntilBuilt}
-                                        {@attach tooltip(
-                                            'Show the memory, registers and screen only once the code is built'
-                                        )}
-                                        aria-label="Hide panels until built"
-                                    />
-                                </div>
-                                <div class="share-settings">
-                                    <span>Open in editor button</span>
-                                    <Switch
-                                        bind:checked={settings.openButton}
-                                        title="Open in editor button"
-                                    />
-                                </div>
+                                {#each switches as { key, label, description } (key)}
+                                    <div class="share-settings">
+                                        <span>{label}</span>
+                                        <!-- a switch with a Tooltip is named by aria-label in place
+                                             of the title that repeats its label (ADR 0064) -->
+                                        <Switch
+                                            bind:checked={settings[key]}
+                                            aria-label={description ? label : undefined}
+                                            title={description ? undefined : label}
+                                            {@attach tooltip(description)}
+                                        />
+                                    </div>
+                                {/each}
                                 <div class="share-settings">
                                     <span>Instruction Set</span>
                                     <Select

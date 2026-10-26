@@ -32,7 +32,7 @@
     import { bytesDownloader } from '#lib/utils.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
-    import { untrack } from 'svelte'
+    import { untrack, type Component } from 'svelte'
     import { SvelteSet } from 'svelte/reactivity'
     import {
         isCompilationTarget,
@@ -64,6 +64,8 @@
         children: TreeNode[]
     }
     type TreeRow = Omit<TreeNode, 'children'> & { depth: number; expanded: boolean }
+    /** A menu item that touch screens also show as a button on the File's row, by its icon. */
+    type RowAction = Extract<ContextMenuEntry, { label: string }> & { icon: Component }
 
     interface Props {
         name?: string
@@ -712,7 +714,7 @@
         return editorFileKind(path, file) === 'assembly'
     }
 
-    function programItems(path: string): ContextMenuEntry[] {
+    function programItems(path: string): RowAction[] {
         if (entries.has(path)) {
             if (!onRemoveProgram) return []
             return [
@@ -738,12 +740,15 @@
         ]
     }
 
-    function fileItems(path: string): ContextMenuEntry[] {
+    /**
+     * A File's own actions, which its menu lists and touch screens also show as its row's buttons
+     * (decision 11), so both offer the same Program action. Rename and Delete come last, and the
+     * menu sets them apart.
+     */
+    function rowActions(path: string): RowAction[] {
         return [
-            { label: 'Open', icon: FaFileAlt, onSelect: () => onSelect(path) },
             ...programItems(path),
             { label: 'Download', icon: FaDownload, onSelect: () => downloadFile(path) },
-            { separator: true },
             {
                 label: 'Rename',
                 icon: FaPen,
@@ -756,7 +761,17 @@
                 danger: true,
                 disabled: locked,
                 onSelect: () => deleteFile(path)
-            },
+            }
+        ]
+    }
+
+    function fileItems(path: string): ContextMenuEntry[] {
+        const actions = rowActions(path)
+        return [
+            { label: 'Open', icon: FaFileAlt, onSelect: () => onSelect(path) },
+            ...actions.slice(0, -2),
+            { separator: true },
+            ...actions.slice(-2),
             { separator: true },
             ...folderItems(dirname(path))
         ]
@@ -1020,55 +1035,16 @@
                         <!-- a long press on the row opens its menu, so its buttons' Tooltips
                              leave touch alone -->
                         <div class="row-actions">
-                            {#if entries.has(row.path)}
-                                {#if onRemoveProgram}
-                                    <button
-                                        disabled={locked}
-                                        {@attach tooltip('Remove program', { touch: false })}
-                                        aria-label="Remove program"
-                                        onclick={() => void removeProgram(row.path)}
-                                    >
-                                        <FaRegFlag />
-                                    </button>
-                                {/if}
-                            {:else if onNewProgram && offersProgram(row.path)}
-                                {@const create = onNewProgram}
+                            {#each rowActions(row.path) as action (action.label)}
                                 <button
-                                    disabled={locked}
-                                    {@attach tooltip('New program from this file', {
-                                        touch: false
-                                    })}
-                                    aria-label="New program from this file"
-                                    onclick={() => {
-                                        if (!locked) create(row.path)
-                                    }}
+                                    disabled={action.disabled}
+                                    {@attach tooltip(action.label, { touch: false })}
+                                    aria-label={action.label}
+                                    onclick={action.onSelect}
                                 >
-                                    <FaFlag />
+                                    <action.icon />
                                 </button>
-                            {/if}
-                            <button
-                                {@attach tooltip('Download', { touch: false })}
-                                aria-label="Download"
-                                onclick={() => downloadFile(row.path)}
-                            >
-                                <FaDownload />
-                            </button>
-                            <button
-                                disabled={locked}
-                                {@attach tooltip('Rename', { touch: false })}
-                                aria-label="Rename"
-                                onclick={() => startRename(row.path)}
-                            >
-                                <FaPen />
-                            </button>
-                            <button
-                                disabled={locked}
-                                {@attach tooltip('Delete', { touch: false })}
-                                aria-label="Delete"
-                                onclick={() => deleteFile(row.path)}
-                            >
-                                <FaTrash />
-                            </button>
+                            {/each}
                         </div>
                     </div>
                 {/if}
