@@ -449,8 +449,6 @@ export class MarsDevices {
         value: number,
         device: 'receiver' | 'transmitter'
     ): void {
-        //a restore puts back what the register held, which the device had stated itself
-        if (this.rewinding) return
         if ((value & MARS_INTERRUPT_ENABLE_BIT) !== 0) {
             throw new Error(
                 `Interrupt-driven I/O is not supported: the program set the interrupt-enable bit ` +
@@ -458,7 +456,9 @@ export class MarsDevices {
                     `Poll the Ready bit (bit 0) instead.`
             )
         }
-        //a program is not the device: whatever it stored, the Ready bit is the device's to state
+        //a program is not the device: whatever it stored, the Ready bit is the device's to state.
+        //An Undo's restore is no different: the word it puts back was stated before the keystrokes
+        //typed since, and Ready has to answer for the ones waiting now
         const ready =
             register === MARS_TRANSMITTER_CONTROL || this.receiverArmed ? MARS_READY_BIT : 0
         this.core?.setPeripheralWord(register | 0, ready)
