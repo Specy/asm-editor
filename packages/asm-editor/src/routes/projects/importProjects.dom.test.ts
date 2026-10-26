@@ -255,3 +255,29 @@ it('says the stored projects could not be read rather than that there are none',
         await dispose()
     }
 })
+
+it('opens the Project a single file launched with the app became', async () => {
+    vi.spyOn(toast, 'success').mockImplementation(() => undefined)
+    vi.mocked(goto).mockClear()
+    type Consumer = (params: { files: FileSystemFileHandle[] }) => Promise<void>
+    let consume: Consumer | undefined
+    ;(window as { launchQueue?: unknown }).launchQueue = {
+        setConsumer: (consumer: Consumer) => (consume = consumer)
+    }
+    const elf = {
+        getFile: async () => file(crackme(), 'chall'),
+        createWritable: vi.fn()
+    } as unknown as FileSystemFileHandle
+    const { dispose } = await page()
+    try {
+        await vi.waitFor(() => expect(consume).toBeDefined())
+        await consume!({ files: [elf] })
+        const project = await projectNamed('chall')
+        expect(goto).toHaveBeenCalledWith(`/projects/${project.id}`)
+        //an Executable's Project is never linked to the ELF it came from
+        expect(ProjectStore.writableFiles.has(project.id)).toBe(false)
+    } finally {
+        await dispose()
+        delete (window as { launchQueue?: unknown }).launchQueue
+    }
+})

@@ -18,6 +18,7 @@
     import { resolve } from '$app/paths'
     import { projectDownload } from '#lib/projectArchive.ts'
     import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
+    import type { Project } from '#lib/Project.svelte.ts'
     import '#cmp/specific/workbench/workbench.css'
 
     let hasFileHandleSupport = false
@@ -36,31 +37,41 @@
         } catch {
             return //cancelled
         }
-        try {
-            await importFromFileHandle(files)
-        } catch (e) {
-            console.error(e)
-            toast.error('Failed to import project!')
-        }
+        await importFromFileHandle(files)
     }
 
+    /**
+     * Imports each file, linking the Project it became to it where it can be written back: the
+     * Projects, in order. A file that fails is reported and skipped.
+     */
     async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
+        const projects: Project[] = []
         for (const fileHandle of fileHandles) {
-            const blob = await fileHandle.getFile()
-            // @ts-ignore -- File omits the nonstandard handle retained by the importer
-            blob.handle = fileHandle
-            const data = await blob.arrayBuffer()
-            const result = await importFromData(data, blob.name)
-            if (!result) continue
-            const importedProject = result.project
-            const id = importedProject.id
-            //an Executable's Project is never saved over the ELF it came from
-            if (result.read.executable) continue
-            ProjectStore.setFileHandle(id, fileHandle, result.read.archive ? 'archive' : 'legacy')
-            //The imported instance, not a re-read by id: the store's array may not have reloaded
-            //yet, and writing back a stale row reverted the import it had just applied.
-            await ProjectStore.save(importedProject) //saves the new metadata to the file
+            try {
+                const blob = await fileHandle.getFile()
+                // @ts-ignore -- File omits the nonstandard handle retained by the importer
+                blob.handle = fileHandle
+                const data = await blob.arrayBuffer()
+                const result = await importFromData(data, blob.name)
+                if (!result) continue
+                const importedProject = result.project
+                projects.push(importedProject)
+                //an Executable's Project is never saved over the ELF it came from
+                if (result.read.executable) continue
+                ProjectStore.setFileHandle(
+                    importedProject.id,
+                    fileHandle,
+                    result.read.archive ? 'archive' : 'legacy'
+                )
+                //The imported instance, not a re-read by id: the store's array may not have
+                //reloaded yet, and writing back a stale row reverted the import it had just applied.
+                await ProjectStore.save(importedProject) //saves the new metadata to the file
+            } catch (e) {
+                console.error(e)
+                toast.error('Failed to import project!')
+            }
         }
+        return projects
     }
 
     //opening a project from this list is the next step for most visits
@@ -74,32 +85,10 @@
                 if ('launchQueue' in window) {
                     //@ts-expect-error setConsumer is not in the types
                     window.launchQueue.setConsumer(async (launchParams) => {
-                        let lastId = ''
-                        for (const file of launchParams.files) {
-                            try {
-                                const blob = await file.getFile()
-                                blob.handle = file
-                                const data = await blob.arrayBuffer()
-                                const result = await importFromData(data, blob.name)
-                                if (!result) continue
-                                lastId = result.project.id
-                                if (result.read.executable) continue
-                                ProjectStore.setFileHandle(
-                                    lastId,
-                                    file,
-                                    result.read.archive ? 'archive' : 'legacy'
-                                )
-                                const proj = await ProjectStore.getProject(lastId)
-                                if (!proj) continue
-                                ProjectStore.save(proj) //saves the new metadata to the file
-                            } catch (e) {
-                                console.error(e)
-                                toast.error('Failed to import project!')
-                            }
-                        }
-                        const project = await ProjectStore.getProject(lastId)
-                        if (project && launchParams.files.length === 1) {
-                            goto(resolve('/projects/[project]', { project: project.id }))
+                        const projects = await importFromFileHandle(launchParams.files)
+                        //a single file opened with the app from the system opens as its Project
+                        if (projects.length === 1 && launchParams.files.length === 1) {
+                            await goto(resolve('/projects/[project]', { project: projects[0].id }))
                         }
                     })
                 } else {
