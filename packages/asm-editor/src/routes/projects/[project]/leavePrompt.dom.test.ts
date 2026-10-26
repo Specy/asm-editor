@@ -1,7 +1,8 @@
 /**
  * The project page asks before the browser leaves it only while leaving would lose changes
  * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md), decision
- * 17): a shared Project, nobody's until saved, or changes that autosave is not keeping.
+ * 17): a shared Project, nobody's until saved, or changes that autosave is not keeping, as when
+ * the browser refused to store them.
  */
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
@@ -10,7 +11,10 @@ import { makeProject } from '#lib/Project.svelte.ts'
 import { createSharePayload } from '#lib/utils.ts'
 import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
+import { db } from '#lib/storage/db.ts'
+import { goto } from '$app/navigation'
 
 const page = vi.hoisted(() => ({
     params: { project: '' },
@@ -38,6 +42,7 @@ Element.prototype.getAnimations ??= () => []
 beforeEach(() => {
     preferencesStore.values.autoSave.value = true
     vi.spyOn(toast, 'logPill').mockImplementation(() => undefined)
+    vi.mocked(goto).mockClear()
 })
 afterEach(async () => {
     navigationGuards.length = 0
@@ -129,6 +134,54 @@ it('asks before going to another page of the site while changes wait for Save', 
         expect(project.navigates('goto')).toBe(true)
         expect(project.navigates('link', true)).toBe(true)
         expect(confirm).not.toHaveBeenCalled()
+    } finally {
+        project.dispose()
+    }
+})
+
+/** The browser refusing every write of a Project, as a full quota or a blocked database does. */
+function refuseWrites() {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(db, 'updateProject').mockRejectedValue(new DOMException('Full', 'QuotaExceededError'))
+    return vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+}
+
+it('keeps changes the browser did not store unsaved, and says no save happened', async () => {
+    const stored = await ProjectStore.addProject(makeProject({ name: 'full' }))
+    const project = await open(stored.id)
+    const error = refuseWrites()
+    try {
+        project.button('Change').click()
+        project.button('Autosave').click()
+        await vi.waitFor(() => expect(error).toHaveBeenCalledOnce())
+        expect(project.asks()).toBe(true)
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+        expect(project.navigates('popstate')).toBe(false)
+        expect(confirm).toHaveBeenCalledOnce()
+        project.button('Save').click()
+        await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(2))
+        expect(toast.logPill).not.toHaveBeenCalledWith('Project saved')
+        expect(project.asks()).toBe(true)
+    } finally {
+        project.dispose()
+    }
+})
+
+it('stays on the page when the save its Back asked for was not stored', async () => {
+    const stored = await ProjectStore.addProject(makeProject({ name: 'stay' }))
+    const project = await open(stored.id)
+    preferencesStore.values.autoSave.value = false
+    const error = refuseWrites()
+    const confirm = vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+    try {
+        project.button('Change').click()
+        flushSync()
+        project.button('Go back to your projects').click()
+        await vi.waitFor(() => expect(error).toHaveBeenCalledOnce())
+        expect(confirm).toHaveBeenCalledWith('You have unsaved changes. Do you want to save them?')
+        expect(toast.logPill).not.toHaveBeenCalledWith('Project saved')
+        expect(goto).not.toHaveBeenCalled()
+        expect(project.asks()).toBe(true)
     } finally {
         project.dispose()
     }

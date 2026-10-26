@@ -127,7 +127,8 @@
      * save (autosave while typing, the display a Build read from the source) is dropped for a
      * shared project rather than asked about: it would put the question up as soon as the program
      * is run, and whether a shared project becomes one of the user's own is theirs to decide, with
-     * the Save button or when they leave the page.
+     * the Save button or when they leave the page. False when nothing was stored, which a browser
+     * that refused the write is too.
      */
     async function save(project: Project, silent: boolean): Promise<boolean> {
         if (status !== 'loaded') return false
@@ -150,6 +151,7 @@
                     'Could not save this project in the browser — your changes are not stored.',
                     10000
                 )
+                return false
             }
             if (result.linked === 'failed') {
                 toast.error(
@@ -170,6 +172,17 @@
             }
         }
         return true
+    }
+
+    /**
+     * Saves for the Workbench or before leaving, and keeps what it means for `unsaved`: changes a
+     * save did not store stay unsaved, so Save stays and leaving asks.
+     */
+    async function saveChanges(silent: boolean): Promise<boolean> {
+        const saved = await save(project, silent)
+        lastSaveFailed = !saved
+        if (saved) dirty = false
+        return saved
     }
 
     async function offerArchiveSave(project: Project) {
@@ -252,7 +265,8 @@
             )
             if (wantsToSave === null) return
             if (wantsToSave) {
-                await save(project, false)
+                //a save that stored nothing keeps the page, with its changes, open
+                if (!(await saveChanges(false))) return
                 toast.logPill('Project saved')
             }
             goto(page)
@@ -303,11 +317,8 @@
                         {unsaved}
                         editJournals={journals}
                         onSave={async ({ silent }) => {
-                            const saved = await save(project, silent)
-                            lastSaveFailed = !saved
-                            if (!saved) return
-                            dirty = false
-                            if (!silent) toast.logPill('Project saved')
+                            const saved = await saveChanges(silent)
+                            if (saved && !silent) toast.logPill('Project saved')
                         }}
                         onChange={() => (dirty = true)}
                     >
