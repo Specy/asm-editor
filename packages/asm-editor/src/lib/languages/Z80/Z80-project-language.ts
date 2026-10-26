@@ -1,11 +1,11 @@
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
-import { analysisForModel, languageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { analysisForModel, modelSources } from '#lib/languages/service/sessionRegistry.ts'
 import {
     createProjectDefinitionProvider,
     createProjectDocumentSymbolProvider
 } from '#lib/languages/service/projectAssemblyLanguage.ts'
-import { parseProjectSourceUri, projectSourceUri } from '#lib/languages/service/uri.ts'
+import { projectSourceUri } from '#lib/languages/service/uri.ts'
 import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
 import type { SourceLocation, SymbolOccurrence } from '#lib/languages/service/sourceModel.ts'
 import {
@@ -31,15 +31,10 @@ const fallbackOptions = {
 }
 
 function contextForModel(model: monaco.editor.ITextModel) {
-    const identity = parseProjectSourceUri(model.uri)
-    if (!identity) return null
-    const session = languageSession(identity.sessionId)
-    const sources = session?.sourcesFor(
-        identity.sourceKind,
-        identity.sourceKind === 'build' ? identity.buildGeneration : undefined
-    )
-    const snapshot = sources && analysisForModel(session, identity, sources)
-    return session && snapshot?.target === 'Z80' ? { identity, snapshot } : null
+    const context = modelSources(model)
+    if (!context) return null
+    const snapshot = analysisForModel(context.session, context.identity, context.sources)
+    return snapshot?.target === 'Z80' ? { identity: context.identity, snapshot } : null
 }
 
 function range(monaco: MonacoType, location: SourceLocation): monaco.Range {

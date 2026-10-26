@@ -8,8 +8,7 @@ import {
     riscvVariantOperands
 } from './RISC-V-documentation'
 import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
-import { languageSession } from '#lib/languages/service/sessionRegistry.ts'
-import { parseProjectSourceUri } from '#lib/languages/service/uri.ts'
+import { modelSources } from '#lib/languages/service/sessionRegistry.ts'
 import type { AssemblyTextOptions } from '#lib/languages/service/assemblyText.ts'
 import { riscvInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
 import {
@@ -29,14 +28,7 @@ export const RISCV_TEXT_OPTIONS = {
 } satisfies AssemblyTextOptions
 
 function directivesForModel(model: monaco.editor.ITextModel) {
-    const identity = model.uri ? parseProjectSourceUri(model.uri) : null
-    const profile = identity
-        ? languageSession(identity.sessionId)?.sourcesFor(
-              identity.sourceKind,
-              identity.sourceKind === 'build' ? identity.buildGeneration : undefined
-          )?.assemblerProfile
-        : undefined
-    return riscvDirectivesForProfile(profile ?? 'rars')
+    return riscvDirectivesForProfile(modelSources(model)?.sources.assemblerProfile ?? 'rars')
 }
 
 /**

@@ -1,6 +1,9 @@
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
+import { registerLanguageSession } from '#lib/languages/service/sessionRegistry.ts'
+import { projectSourceUri } from '#lib/languages/service/uri.ts'
 import { RISCVLanguageConfiguration } from './RISC-V-grammar'
 import { createRISCVCompletion, createRISCVHoverProvider } from './RISC-V-language'
 
@@ -15,6 +18,7 @@ class Range {
 
 const monacoStub = {
     Range,
+    Uri: { from: (parts: { scheme: string; authority: string; path: string }) => parts },
     languages: {
         CompletionItemKind: { Keyword: 17, Function: 1, Snippet: 27, Variable: 4, Constant: 14 },
         CompletionItemInsertTextRule: { InsertAsSnippet: 4 }
@@ -121,5 +125,35 @@ describe('RISC-V completion', () => {
         )
         const faddS = result?.suggestions.find((item) => item.label === 'fadd.s')
         expect(faddS?.range).toEqual(new Range(1, 1, 1, 6))
+    })
+
+    it("offers the directives of the assembler the model's Build uses", async () => {
+        const sessionId = 'riscv-directives-test'
+        const gnu = { assemblerProfile: 'gnu-compiler-v1' } as BuildSources
+        onTestFinished(
+            registerLanguageSession({
+                sessionId,
+                sources: gnu,
+                snapshot: undefined,
+                sourcesFor: () => gnu
+            })
+        )
+        const directives = async (uri: unknown) => {
+            const line = '    .e'
+            const result = await createRISCVCompletion(monacoStub).provideCompletionItems(
+                { ...model(line), uri } as monaco.editor.ITextModel,
+                { lineNumber: 1, column: line.length + 1 } as monaco.Position,
+                {} as monaco.languages.CompletionContext,
+                {} as monaco.CancellationToken
+            )
+            return result?.suggestions.map((item) => item.label)
+        }
+        // A model outside any session gets the RARS directives.
+        expect(await directives(undefined)).toEqual(['extern', 'eqv', 'end_macro'])
+        expect(
+            await directives(
+                projectSourceUri(monacoStub, { sessionId, sourceKind: 'live', path: 'main.s' })
+            )
+        ).toEqual(['equ'])
     })
 })

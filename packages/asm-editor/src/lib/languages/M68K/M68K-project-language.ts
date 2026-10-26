@@ -4,40 +4,20 @@ import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { m68kIncludedSourceFiles, m68kWrittenPath, resolveM68kFile } from './m68kAssemblyFiles'
 import {
     analysisForModel,
-    languageSession,
-    type LanguageSessionView
+    modelSources,
+    type ModelSources
 } from '#lib/languages/service/sessionRegistry.ts'
-import {
-    parseProjectSourceUri,
-    projectSourceUri,
-    type ProjectModelIdentity
-} from '#lib/languages/service/uri.ts'
+import { projectSourceUri, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
-import type { BuildSources } from '#lib/projectFiles.ts'
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
 
-function sessionForModel(model: monaco.editor.ITextModel): {
-    identity: ProjectModelIdentity
-    session: LanguageSessionView
-    sources: BuildSources
-} | null {
-    const identity = parseProjectSourceUri(model.uri)
-    if (!identity) return null
-    const session = languageSession(identity.sessionId)
-    const sources = session?.sourcesFor(
-        identity.sourceKind,
-        identity.sourceKind === 'build' ? identity.buildGeneration : undefined
-    )
-    return session && sources ? { identity, session, sources } : null
-}
-
 /** The symbols that describe this model, which a Build snapshot has for its unchanged Files too. */
-function liveSymbols(context: ReturnType<typeof sessionForModel>): LanguageSymbol[] {
+function liveSymbols(context: ModelSources | null): LanguageSymbol[] {
     if (!context) return []
     return analysisForModel(context.session, context.identity, context.sources)?.symbols ?? []
 }
 
-function completionSymbols(context: NonNullable<ReturnType<typeof sessionForModel>>) {
+function completionSymbols(context: ModelSources) {
     const entryUnit = m68kIncludedSourceFiles(context.sources)
     const root = entryUnit.has(context.identity.path)
         ? context.sources.entry
@@ -113,7 +93,7 @@ export function createM68kProjectCompletionProvider(
     return {
         triggerCharacters: ['/', '"', "'"],
         provideCompletionItems(model, position) {
-            const context = sessionForModel(model)
+            const context = modelSources(model)
             if (!context) return { suggestions: [] }
             const prefix = model.getValueInRange({
                 startLineNumber: position.lineNumber,
@@ -183,7 +163,7 @@ export function createM68kDocumentSymbolProvider(
 ): monaco.languages.DocumentSymbolProvider {
     return {
         provideDocumentSymbols(model) {
-            const context = sessionForModel(model)
+            const context = modelSources(model)
             if (!context) return []
             return liveSymbols(context)
                 .filter((symbol) => symbol.location.path === context.identity.path)
@@ -210,7 +190,7 @@ export function createM68kDefinitionProvider(
 ): monaco.languages.DefinitionProvider {
     return {
         provideDefinition(model, position) {
-            const context = sessionForModel(model)
+            const context = modelSources(model)
             if (!context) return null
             const token = tokenAt(model.getLineContent(position.lineNumber), position.column)
             if (!token) return null
@@ -234,7 +214,7 @@ export function createM68kDefinitionProvider(
 export function createM68kProjectHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover(model, position) {
-            const context = sessionForModel(model)
+            const context = modelSources(model)
             if (!context) return null
             const token = tokenAt(model.getLineContent(position.lineNumber), position.column)
             if (!token) return null
@@ -265,7 +245,7 @@ export function createM68kProjectHoverProvider(monaco: MonacoType): monaco.langu
 export function createM68kDocumentLinkProvider(monaco: MonacoType): monaco.languages.LinkProvider {
     return {
         provideLinks(model) {
-            const context = sessionForModel(model)
+            const context = modelSources(model)
             if (!context) return { links: [] }
             const links: monaco.languages.ILink[] = []
             for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
