@@ -723,18 +723,38 @@ export function fileText(file: ProjectFile): string {
     }
 }
 
-export function cleanFiles(raw: unknown): ProjectFiles {
+/**
+ * Files as they are saved, each checked and frozen in a frozen map with no prototype, or a
+ * `ProjectFormatError`. A record of `checked`, Files this already returned, is kept as it is at
+ * whatever path it now has, its bytes and Annotations counted from their stored lengths: a change
+ * to one File of a Project leaves the record of every other, which caches keyed by the record keep
+ * finding, and decodes none of them again.
+ */
+export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
         throw new ProjectFormatError('Files must be a path-to-file map')
     const entries = Object.entries(raw)
     if (entries.length > FILE_COUNT_LIMIT)
         throw new ProjectFormatError('Project exceeds the 4,096-file limit')
     const files: Record<string, ProjectFile> = Object.create(null)
+    const kept = new Set<unknown>(checked ? Object.values(checked) : [])
     let size = 0
     let annotated = 0
     const work: EditWork = { inserted: 0, copied: 0 }
     for (const [path, value] of entries) {
         if (!isValidFilePath(path)) throw new ProjectFormatError(`Invalid file path: ${path}`)
+        if (kept.has(value)) {
+            size += fileByteLength(value)
+            if (size > FILE_BYTE_LIMIT)
+                throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+            annotated += annotationsSize(value.annotations)
+            if (annotated > ANNOTATIONS_BYTE_LIMIT)
+                throw new ProjectFormatError(
+                    "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
+                )
+            files[path] = value
+            continue
+        }
         if (
             !value ||
             typeof value !== 'object' ||

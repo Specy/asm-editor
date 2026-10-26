@@ -121,8 +121,8 @@
      */
     let ownFile: ProjectFile | undefined
     /**
-     * Whether two records of the File hold the same bytes: a change to any other File rebuilds
-     * every record, which must not make the picture be read and drawn again.
+     * Whether two records of the File hold the same bytes: a comment, or a write of the bytes it
+     * already holds, makes a new record, which must not make the picture be read and drawn again.
      */
     function sameBytes(left: ProjectFile, right: ProjectFile | undefined) {
         return !!right && left.encoding === right.encoding && left.content === right.content

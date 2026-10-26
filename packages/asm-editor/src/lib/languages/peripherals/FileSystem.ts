@@ -383,8 +383,13 @@ export class FileSystem {
         delete files[from]
         this.commit(files)
     }
+    /**
+     * Stores `files` once `cleanFiles` checked them. Every record it already holds is kept as it
+     * is, wherever it now is, as `changeBytes` and `annotate` keep them: only the Files a change
+     * made are checked, and every other one stays the record caches keyed by it know.
+     */
     private commit(files: ProjectFiles) {
-        this.store.write(cleanFiles(files))
+        this.store.write(cleanFiles(files, this.files))
         this.notify(true)
     }
     /**
