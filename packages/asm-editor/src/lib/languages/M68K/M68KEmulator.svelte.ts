@@ -64,7 +64,7 @@ import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 
-export const registerName = [
+const registerName = [
     'D0',
     'D1',
     'D2',
@@ -83,7 +83,7 @@ export const registerName = [
     'A7'
 ] as const
 
-export type M68KRegisterName = (typeof registerName)[number]
+type M68KRegisterName = (typeof registerName)[number]
 
 const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
 

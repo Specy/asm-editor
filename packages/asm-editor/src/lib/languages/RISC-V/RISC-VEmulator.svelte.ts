@@ -99,12 +99,6 @@ import {
     type RISCVRegisterName
 } from './RISC-V-registers'
 
-export {
-    ALTERNATIVE_RISCVRegister_NAMES,
-    RISCVRegisterNames,
-    type RISCVRegisterName
-} from './RISC-V-registers'
-
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
  * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
