@@ -1,13 +1,5 @@
 <script lang="ts" generics="ViewZoneProps extends Record<string, unknown> = Record<string, never>">
-    import {
-        type Component,
-        createEventDispatcher,
-        mount,
-        onDestroy,
-        onMount,
-        unmount,
-        untrack
-    } from 'svelte'
+    import { type Component, mount, onDestroy, onMount, unmount, untrack } from 'svelte'
     import type monaco from 'monaco-editor'
     import type {
         AvailableLanguages,
@@ -129,6 +121,21 @@
          * back to where the last one left the Listing. This editor's own by default.
          */
         viewStates?: Map<string, monaco.editor.ICodeEditorViewState | null>
+        /** The shown model's text after each edit the person makes in it. */
+        onChange?: (value: string) => void
+        /** A change to any Project File's model, including one the editor is not showing. */
+        onFileChange?: (path: string, value: string) => void
+        /** A press on a line's glyph margin, 1-based, where a Breakpoint can go. */
+        onBreakpointPress?: (line: number) => void
+        /** The cursor's zero-based line, whoever moved it: the person, the debugger, a model switch. */
+        onCursorMove?: (line: number) => void
+        /** Zero-based lines covered by the user's selections, a click's single line included. */
+        onLinesSelect?: (lines: number[]) => void
+        /**
+         * Go to Symbol or Go to Line moved the cursor: the zero-based line it left, sent before
+         * the cursor's move.
+         */
+        onJump?: (line: number) => void
     }
 
     let {
@@ -159,7 +166,13 @@
         lineNote,
         lineActions,
         navigation,
-        viewStates
+        viewStates,
+        onChange,
+        onFileChange,
+        onBreakpointPress,
+        onCursorMove,
+        onLinesSelect,
+        onJump
     }: Props = $props()
     /**
      * Which model to show and what it should hold, as one value. A multi-File host supplies both
@@ -234,21 +247,6 @@
         () => viewStates ?? new Map()
     )
     const toDispose: (monaco.IDisposable | (() => void))[] = []
-    const dispatcher = createEventDispatcher<{
-        change: string
-        /** A change to any Project File's model, including one the editor is not showing. */
-        fileChange: { path: string; value: string }
-        breakpointPress: number
-        /** The cursor's zero-based line, whoever moved it: the person, the debugger, a model switch. */
-        cursorMove: number
-        /** Zero-based lines covered by the user's selections, a click's single line included. */
-        linesSelect: number[]
-        /**
-         * Go to Symbol or Go to Line moved the cursor: the zero-based line it left, sent before
-         * the cursor's move.
-         */
-        jump: number
-    }>()
     let el: HTMLDivElement | null = $state(null)
 
     $effect(() => {
@@ -340,17 +338,17 @@
                 //menu in the same event, and the menu reads the keys as they are then
                 updateLineActionKeys(cursorLine, cursorColumn)
                 //Monaco's own jumps, Go to Symbol's and Go to Line's
-                if (event.source === 'code.jump') dispatcher('jump', left)
-                dispatcher('cursorMove', cursorLine)
+                if (event.source === 'code.jump') onJump?.(left)
+                onCursorMove?.(cursorLine)
             }),
             mountedEditor.onDidChangeCursorSelection((event) => {
                 //Model switches and debugger navigation are not a new user source selection.
                 if (applyingExternalValue || event.source === 'api') return
-                dispatcher('linesSelect', selectedLines(mountedEditor.getSelections() ?? []))
+                onLinesSelect?.(selectedLines(mountedEditor.getSelections() ?? []))
             }),
             mountedEditor.onMouseDown((e) => {
                 const line = breakableGlyphLine(e)
-                if (line !== null) dispatcher('breakpointPress', line)
+                if (line !== null) onBreakpointPress?.(line)
             }),
             mountedEditor.onMouseLeave(() => {
                 hoveredGliphen = null
@@ -383,7 +381,7 @@
                 //`code` there would make this component a second writer of a prop the host is also
                 //deriving, and whichever wrote last in a tick would win.
                 if (!source) code = value
-                dispatcher('change', value)
+                onChange?.(value)
             })
         )
         //after the listeners, so the host hears where the cursor went
@@ -452,7 +450,7 @@
             if (disabled || applyingExternalValue) return
             const changed = parseProjectSourceUri(model.uri)
             if (changed?.sourceKind === 'live' && !changed.view) {
-                dispatcher('fileChange', { path: changed.path, value: model.getValue() })
+                onFileChange?.(changed.path, model.getValue())
             }
         })
         toDispose.push(() => listener.dispose())

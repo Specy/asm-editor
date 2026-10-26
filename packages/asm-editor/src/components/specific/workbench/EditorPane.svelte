@@ -453,11 +453,11 @@
                               }
                           })
                     : []}
-                on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1, group)}
+                onBreakpointPress={(line) => session.toggleBreakpoint(line - 1, group)}
                 listing={listingModel}
                 pseudocode={pseudocodeModel}
-                on:cursorMove={(event) => session.cursorMoved(group, event.detail)}
-                on:jump={(event) => session.recordJump(group, event.detail)}
+                onCursorMove={(line) => session.cursorMoved(group, line)}
+                onJump={(line) => session.recordJump(group, line)}
                 navigation={navigable ? navigation : undefined}
                 canBreakAt={breakable}
                 {patchedLines}
@@ -480,7 +480,7 @@
                 highlightedLine={group.highlightedLine}
                 lineColoring={group.lineColoring}
                 activeLineColors={group.activeLineColors}
-                on:linesSelect={(event) => session.selectMappedLines(group, event.detail)}
+                onLinesSelect={(lines) => session.selectMappedLines(group, lines)}
                 disabled={group.editorDisabled}
                 hasError={emulator.errors.length > 0}
             />

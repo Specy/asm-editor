@@ -591,11 +591,9 @@
         {/if}
         <div class="playground-code">
             <Editor
-                on:change={handleEditorChange}
-                on:breakpointPress={(d) => {
-                    emulator.toggleBreakpoint(d.detail - 1, selectedFile)
-                }}
-                on:fileChange={(event) => session?.edit(event.detail.path, event.detail.value)}
+                onChange={handleEditorChange}
+                onBreakpointPress={(line) => emulator.toggleBreakpoint(line - 1, selectedFile)}
+                onFileChange={(path, value) => session?.edit(path, value)}
                 bind:editor
                 bind:code
                 source={fileSource}
