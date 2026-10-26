@@ -2,7 +2,7 @@ import { runtimeDefinition } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
-import { resolveFilePath, type BuildSources } from '#lib/projectFiles.ts'
+import { resolveProjectInclude, type BuildSources } from '#lib/projectFiles.ts'
 import { languageSession } from './sessionRegistry'
 import { parseProjectSourceUri, projectSourceUri, type ProjectModelIdentity } from './uri'
 import { splitAssemblyComment } from './assemblyText'
@@ -159,30 +159,6 @@ function includeOnLine(
     // the final occurrence inside this anchored directive match rather than the first one.
     const startColumn = quoted.lastIndexOf(match[2])
     return { path: match[2], startColumn, endColumn: startColumn + match[2].length }
-}
-
-function containingDirectory(path: string): string {
-    const parts = path.split('/')
-    parts.pop()
-    return parts.join('/')
-}
-
-function resolveProjectInclude(
-    containingPath: string,
-    writtenPath: string,
-    sources: BuildSources
-): string | null {
-    const directory = containingDirectory(containingPath)
-    const candidates = [directory ? `${directory}/${writtenPath}` : writtenPath, writtenPath]
-    for (const candidate of candidates) {
-        try {
-            const normalized = resolveFilePath(candidate)
-            if (sources.files[normalized]) return normalized
-        } catch {
-            // A path which escapes the Project root intentionally has no link or completion target.
-        }
-    }
-    return null
 }
 
 function sourceIncludeOnLine(line: string, options: ProjectAssemblyLanguageOptions): string | null {
