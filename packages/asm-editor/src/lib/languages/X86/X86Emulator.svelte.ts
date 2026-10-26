@@ -1316,7 +1316,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     ): bigint {
         return this.requireCore().getRegisterValue(
             normalizeRegisterName(register),
-            toCoreRegisterSize(size)
+            CORE_REGISTER_SIZE[size]
         )
     }
 
@@ -1575,7 +1575,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.requireCore().setRegisterValue(
             normalizeRegisterName(register),
             value,
-            toCoreRegisterSize(size)
+            CORE_REGISTER_SIZE[size]
         )
     }
 
@@ -1879,44 +1879,30 @@ function isX86RegisterName(register: string): register is X86RegisterName {
     return X86_REGISTER_NAMES.some((candidate) => candidate === register)
 }
 
-function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {
-    switch (size) {
-        case RegisterSize.Byte:
-            return CoreRegisterSize.Byte
-        case RegisterSize.Word:
-            return CoreRegisterSize.Word
-        case RegisterSize.Long:
-            return CoreRegisterSize.Long
-        case RegisterSize.Quad:
-            return CoreRegisterSize.Quad
-        case RegisterSize.Oct:
-            return CoreRegisterSize.Oct
-        case RegisterSize.Double:
-        default:
-            return CoreRegisterSize.Double
-    }
-}
+/**
+ * Register widths across the Core boundary. The two enums have the same values, so these are
+ * identities; the tables let the type checker say that every width of each enum has one.
+ */
+const CORE_REGISTER_SIZE = {
+    [RegisterSize.Byte]: CoreRegisterSize.Byte,
+    [RegisterSize.Word]: CoreRegisterSize.Word,
+    [RegisterSize.Long]: CoreRegisterSize.Long,
+    [RegisterSize.Double]: CoreRegisterSize.Double,
+    [RegisterSize.Quad]: CoreRegisterSize.Quad,
+    [RegisterSize.Oct]: CoreRegisterSize.Oct
+} as const satisfies Record<RegisterSize, CoreRegisterSize>
 
-function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
-    switch (size) {
-        case CoreRegisterSize.Byte:
-            return RegisterSize.Byte
-        case CoreRegisterSize.Word:
-            return RegisterSize.Word
-        case CoreRegisterSize.Long:
-            return RegisterSize.Long
-        //an SSE register write: the undo history names it `xmm<n>` and the panel shows it 16 bytes
-        //wide, so the width has to survive the crossing
-        case CoreRegisterSize.Quad:
-            return RegisterSize.Quad
-        //an AVX register write: the undo history names it `ymm<n>` and the panel shows it 32 bytes wide
-        case CoreRegisterSize.Oct:
-            return RegisterSize.Oct
-        case CoreRegisterSize.Double:
-        default:
-            return RegisterSize.Double
-    }
-}
+const LOCAL_REGISTER_SIZE = {
+    [CoreRegisterSize.Byte]: RegisterSize.Byte,
+    [CoreRegisterSize.Word]: RegisterSize.Word,
+    [CoreRegisterSize.Long]: RegisterSize.Long,
+    [CoreRegisterSize.Double]: RegisterSize.Double,
+    //an SSE register write: the undo history names it `xmm<n>` and the panel shows it 16 bytes
+    //wide, so the width has to survive the crossing
+    [CoreRegisterSize.Quad]: RegisterSize.Quad,
+    //an AVX register write: the undo history names it `ymm<n>` and the panel shows it 32 bytes wide
+    [CoreRegisterSize.Oct]: RegisterSize.Oct
+} as const satisfies Record<CoreRegisterSize, RegisterSize>
 
 /**
  * How far back `_getLastInstruction` looks for the instruction under a run of Pokes. Deep enough for
@@ -2125,7 +2111,7 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
             type: operation.type,
             value: {
                 ...operation.value,
-                size: toLocalRegisterSize(operation.value.size)
+                size: LOCAL_REGISTER_SIZE[operation.value.size]
             }
         }
     }
@@ -2134,7 +2120,7 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
             type: operation.type,
             value: {
                 ...operation.value,
-                size: toLocalRegisterSize(operation.value.size)
+                size: LOCAL_REGISTER_SIZE[operation.value.size]
             }
         }
     }
