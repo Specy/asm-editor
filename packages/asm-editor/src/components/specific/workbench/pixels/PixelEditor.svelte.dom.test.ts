@@ -485,6 +485,22 @@ describe('a picture with a palette', () => {
         pixels.pointer('pointerup', 1, 1)
         expect(pixels.raw(1, 1)).toBe(9)
     })
+
+    it('recolours the entry drawn with, through the colour picker', () => {
+        const pixels = setup({
+            bytes: makeBmp({ width: 4, height: 2, format: 'indexed4', palette: PALETTE_16 })
+        })
+        pixels.target.querySelector<HTMLButtonElement>('.current-swatch')!.click()
+        const picker = pixels.target.querySelector<HTMLInputElement>(
+            '.current-colour input.hidden-picker'
+        )!
+        expect(picker.value).toBe('#ffffff')
+        picker.value = '#ff00aa'
+        picker.dispatchEvent(new Event('change', { bubbles: true }))
+        flushSync()
+        expect(pixels.labels).toEqual(['Recolour palette entry 15'])
+        expect(pixels.button('Drawing colour: palette entry 15, #ff00aa')).not.toBeNull()
+    })
 })
 
 describe('Canvas size and the cell grid', () => {
