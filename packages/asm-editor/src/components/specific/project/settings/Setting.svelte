@@ -2,17 +2,15 @@
     import type { PreferenceValue } from '#stores/preferencesStore.svelte.ts'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
-    import { createEventDispatcher } from 'svelte'
 
     interface Props {
         entry: PreferenceValue<unknown>
+        /** The value the person picked, for the caller to store. */
+        onChange: (value: unknown) => void
     }
 
-    let { entry }: Props = $props()
+    let { entry, onChange }: Props = $props()
     let value = $derived(entry.value)
-    const dispatcher = createEventDispatcher<{
-        changeValue: unknown
-    }>()
 </script>
 
 <div class="row settings-value">
@@ -21,13 +19,7 @@
     </div>
     <div>
         {#if entry.type === 'boolean'}
-            <Switch
-                bind:checked={value as boolean}
-                title={entry.name}
-                onChange={(checked) => {
-                    dispatcher('changeValue', checked)
-                }}
-            />
+            <Switch bind:checked={value as boolean} title={entry.name} {onChange} />
         {/if}
         {#if entry.type === 'choice' && entry.options}
             <Select
@@ -37,7 +29,7 @@
                 }))}
                 {value}
                 ariaLabel={entry.name}
-                onChange={(value) => dispatcher('changeValue', value)}
+                {onChange}
                 style="padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)"
                 wrapperStyle="min-width: 9rem; max-width: 12rem"
             />
@@ -51,19 +43,10 @@
                 step={entry.range.step}
                 aria-label={entry.name}
                 bind:value
-                oninput={() => {
-                    dispatcher('changeValue', Number(value))
-                }}
+                oninput={() => onChange(Number(value))}
             />
         {:else if entry.type === 'number'}
-            <input
-                class="number"
-                type="number"
-                bind:value
-                onchange={() => {
-                    dispatcher('changeValue', value)
-                }}
-            />
+            <input class="number" type="number" bind:value onchange={() => onChange(value)} />
         {/if}
     </div>
 </div>
