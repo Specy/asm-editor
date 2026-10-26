@@ -1,3 +1,4 @@
+import { partitionPoint } from '#lib/sorted.ts'
 import { quotedString } from './listingText'
 
 /**
@@ -31,16 +32,7 @@ export function holderRanges(ranges: Iterable<readonly [start: number, size: num
 
 /** The index of the pair holding an address: the last start at or below it, if it ends after it. */
 function pairAt(pairs: Float64Array, address: number): number {
-    let low = 0
-    let high = pairs.length / 2 - 1
-    let found = -1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        if (pairs[2 * middle] <= address) {
-            found = middle
-            low = middle + 1
-        } else high = middle - 1
-    }
+    const found = partitionPoint(pairs.length / 2, (i) => pairs[2 * i] <= address) - 1
     return found >= 0 && address < pairs[2 * found + 1] ? found : -1
 }
 

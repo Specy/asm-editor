@@ -1,10 +1,10 @@
 import type { DecodedInstruction } from './decoder'
 import {
     functionAtLine,
+    functionContaining,
     LINE_KIND,
     lineOfAddress,
     type Listing,
-    type ListingFunction,
     type ListingLabel
 } from './listing'
 import { ListingIndex } from './listingNavigation'
@@ -65,21 +65,6 @@ function labelsAt(listing: Listing, address: number): readonly ListingLabel[] {
     return index.get(address) ?? []
 }
 
-/** The function whose range holds a link-time address, if any. */
-function functionAt(listing: Listing, address: number): ListingFunction | undefined {
-    const { functions } = listing
-    let low = 0
-    let high = functions.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        const candidate = functions[middle]
-        if (candidate.address > address) high = middle - 1
-        else if (candidate.end <= address) low = middle + 1
-        else return candidate
-    }
-    return undefined
-}
-
 const hex = (value: bigint) => `0x${value.toString(16)}`
 
 /** How a Listing names addresses, for {@link nameAddress}, from a 0-based line. */
@@ -106,7 +91,7 @@ function listingNaming(listing: Listing, hints: NameHints): AddressNaming<number
                 : undefined
         },
         holder: (address) => holderAt(listing.holders ?? NO_HOLDERS, address),
-        owner: (address) => functionAt(listing, address)?.address
+        owner: (address) => functionContaining(listing, address)?.address
     }
 }
 

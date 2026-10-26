@@ -1,3 +1,4 @@
+import { partitionPoint } from '#lib/sorted.ts'
 import { isWholeWord, type Matcher } from './query.ts'
 
 /**
@@ -92,15 +93,9 @@ export class SearchText {
     /** The 0-based line holding `offset`; `from`, a line at or before it when known, saves a search. */
     lineAt(offset: number, from = 0): number {
         const starts = this.lineStarts
-        let low = from < starts.length && starts[from] <= offset ? from : 0
+        const low = from < starts.length && starts[from] <= offset ? from : 0
         if (low + 1 >= starts.length || offset < starts[low + 1]) return low
-        let high = starts.length - 1
-        while (low < high) {
-            const middle = (low + high + 1) >> 1
-            if (starts[middle] <= offset) low = middle
-            else high = middle - 1
-        }
-        return low
+        return partitionPoint(starts.length, (line) => starts[line] <= offset) - 1
     }
 
     /** Where a 0-based line's text ends: at its line break, or at the text's end. */

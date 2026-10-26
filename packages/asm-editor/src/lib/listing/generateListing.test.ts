@@ -20,6 +20,8 @@ import { findProgramStart } from './programStart'
 import { pseudocodeMap } from '#lib/pseudocode/pseudocodeMap.ts'
 import {
     functionAtLine,
+    functionContaining,
+    functionStartingAt,
     instructionAddressAt,
     LINE_KIND,
     lineOfAddress,
@@ -245,9 +247,13 @@ function expectConsistent(listing: Listing, bytes: Uint8Array) {
     )
     for (let i = 1; i < byAddress.length; ++i) {
         const [previous, line] = [byAddress[i - 1], byAddress[i]]
+        const end = addresses[previous] + sizes[previous]
+        check(addresses[line] >= end, () => `line ${line} overlaps`)
+        // The byte before a line is the line before's, or in a gap no line covers.
         check(
-            addresses[line] >= addresses[previous] + sizes[previous],
-            () => `line ${line} overlaps`
+            lineOfAddress(listing, addresses[line] - 1) ===
+                (addresses[line] === end ? previous : -1),
+            () => `the byte before line ${line}`
         )
     }
     for (const line of byAddress) {
@@ -303,6 +309,16 @@ function expectConsistent(listing: Listing, bytes: Uint8Array) {
         )
         check(current.endLine > current.line, () => `function ${current.name} is empty`)
         check(functionAtLine(listing, current.line) === current, () => `${current.name} not found`)
+        check(
+            functionAtLine(listing, current.endLine - 1) === current &&
+                functionAtLine(listing, current.endLine) !== current &&
+                functionContaining(listing, current.address) === current &&
+                functionContaining(listing, current.end - 1) === current &&
+                functionContaining(listing, current.end) !== current &&
+                functionStartingAt(listing, current.address) === current &&
+                functionStartingAt(listing, current.address + 1) !== current,
+            () => `function ${current.name}'s ends`
+        )
         check(
             !i || current.address > listing.functions[i - 1].address,
             () => `function ${current.name} is out of order`

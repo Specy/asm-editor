@@ -72,6 +72,7 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     functionAtLine,
+    functionStartingAt,
     instructionAddressAt,
     lineOfFileOffset,
     lineOfPlace,
@@ -86,7 +87,6 @@ import {
 } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
 import {
     defaultPseudocodeFunction,
-    functionAt,
     pseudocodeBreakpointAddresses,
     pseudocodeBreakpointsOn,
     pseudocodeCommentPlace,
@@ -3296,7 +3296,7 @@ export class WorkbenchSession {
      */
     pseudocodeFunctionFor(group: EditorGroup, listing: Listing): ListingFunction | undefined {
         const followed = group.pseudocodeFunctions[group.displayedPath]
-        const chosen = followed === undefined ? undefined : functionAt(listing, followed)
+        const chosen = followed === undefined ? undefined : functionStartingAt(listing, followed)
         if (chosen) return chosen
         const pane = this.listingPaneOf(group)
         const atCursor =
@@ -3791,7 +3791,7 @@ export class WorkbenchSession {
         await tick()
         const listing = group.pseudocodeListing
         await listing?.ready.catch(() => undefined)
-        const fn = listing?.listing && functionAt(listing.listing, place.functionAddress)
+        const fn = listing?.listing && functionStartingAt(listing.listing, place.functionAddress)
         if (pane && fn)
             await this.revealWhenShown(pane, fn.line, {
                 focus: false,

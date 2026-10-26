@@ -1,5 +1,6 @@
 import type { DecompiledLine, DecompiledToken } from '@specy/decompiler'
 import {
+    functionStartingAt,
     instructionAddressAt,
     lineOfAddress,
     type Listing,
@@ -211,29 +212,14 @@ export function colorPseudocodeMap(map: PseudocodeMap, path: string): SourceMapC
     }
 }
 
-/** The function starting at a link-time address, found in the Listing's functions by address. */
-export function functionAt(listing: Listing, address: number): ListingFunction | undefined {
-    const { functions } = listing
-    let low = 0
-    let high = functions.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        const candidate = functions[middle]
-        if (candidate.address > address) high = middle - 1
-        else if (candidate.address < address) low = middle + 1
-        else return candidate
-    }
-    return undefined
-}
-
 /**
  * The function a Pseudocode shows when nothing chose one: `main`, else the entry point's, else
  * the Listing's first.
  */
 export function defaultPseudocodeFunction(listing: Listing): ListingFunction | undefined {
     return (
-        (listing.main === undefined ? undefined : functionAt(listing, listing.main)) ??
-        functionAt(listing, listing.entry) ??
+        (listing.main === undefined ? undefined : functionStartingAt(listing, listing.main)) ??
+        functionStartingAt(listing, listing.entry) ??
         listing.functions[0]
     )
 }
@@ -359,7 +345,7 @@ export function pseudocodeTokenAt(
  * the address (the last there, after its aliases), else the line holding it; -1 for none.
  */
 export function listingLineOfTarget(listing: Listing, target: number): number {
-    const fn = functionAt(listing, target)
+    const fn = functionStartingAt(listing, target)
     if (fn) return fn.line
     let labelLine = -1
     for (const label of listing.labels)
@@ -373,7 +359,7 @@ export function listingLineOfTarget(listing: Listing, target: number): number {
  * the forms of a C++ name.
  */
 export function listingLabelOfTarget(listing: Listing, target: number): ListingLabel | undefined {
-    const fn = functionAt(listing, target)
+    const fn = functionStartingAt(listing, target)
     if (fn) return ListingIndex.of(listing).label(fn.name, fn.line)
     let found: ListingLabel | undefined
     for (const label of listing.labels)

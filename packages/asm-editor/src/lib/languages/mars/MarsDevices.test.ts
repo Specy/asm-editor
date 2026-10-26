@@ -209,7 +209,8 @@ const FOUR_BLOCKS = {
 const BLOCK = 256
 const BASE = DEFAULT_PROJECT_DISPLAY.baseAddress
 
-function makeFramebuffer(display = FOUR_BLOCKS) {
+/** `segmentWords`: how many words from the grid's start the Core reads before its segment ends. */
+function makeFramebuffer(display = FOUR_BLOCKS, segmentWords = Infinity) {
     type WriteObserver = (address: number, length: number, value: number) => void
     let onWrite: WriteObserver | null = null
     /** Every `readMemoryBytes` a flush made, as word ranges. */
@@ -220,6 +221,7 @@ function makeFramebuffer(display = FOUR_BLOCKS) {
     const core: MarsCore = {
         readMemoryBytes: (address, length) => {
             const from = ((address >>> 0) - BASE) >>> 2
+            if (from + length / 4 > segmentWords) throw new Error('Address out of range')
             reads.push({ from, length: length / 4 })
             const bytes: number[] = []
             for (let index = 0; index < length / 4; index++) {
@@ -301,6 +303,14 @@ describe('the MARS bitmap display flush', () => {
         for (let index = 0; index < 4 * BLOCK; index += 7) store(index, index)
         devices.flush()
         expect(reads).toEqual([{ from: 0, length: 4 * BLOCK }])
+    })
+
+    it('reads a grid running past the end of its segment up to that end', () => {
+        for (const segmentWords of [0, 1, 3 * BLOCK + 5]) {
+            const { reads, devices } = makeFramebuffer(FOUR_BLOCKS, segmentWords)
+            devices.resync()
+            expect(reads).toEqual(segmentWords ? [{ from: 0, length: segmentWords }] : [])
+        }
     })
 
     it('flushes nothing when nothing was written', () => {

@@ -3,6 +3,7 @@ import {
     type CtorDtorVariant,
     type DemangledName
 } from '#lib/languages/demangle/demangledNames.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 import {
     functionAtLine,
     LINE_KIND,
@@ -255,14 +256,7 @@ export class ListingIndex {
 
     private lineOfOffset(offset: number): number {
         const starts = this.starts()
-        let low = 0
-        let high = starts.length - 1
-        while (low < high) {
-            const middle = (low + high + 1) >> 1
-            if (starts[middle] <= offset) low = middle
-            else high = middle - 1
-        }
-        return low
+        return partitionPoint(starts.length, (line) => starts[line] <= offset) - 1
     }
 }
 

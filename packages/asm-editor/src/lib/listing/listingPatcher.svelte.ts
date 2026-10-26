@@ -1,3 +1,4 @@
+import { partitionPoint } from '#lib/sorted.ts'
 import type { ListingDecoder } from './decoder'
 import { LINE_KIND, lineOfAddress, type Listing } from './listing'
 import type { ListingDocument } from './listingDocuments.svelte'
@@ -228,15 +229,11 @@ export class ListingPatcher {
         const start = Number(address) - listing.base
         const end = start + length
         //the first line ending after the start, then each line starting before the end
-        let low = 0
-        let high = byAddress.length
-        while (low < high) {
-            const middle = (low + high) >> 1
-            const line = byAddress[middle]
-            if (addresses[line] + sizes[line] <= start) low = middle + 1
-            else high = middle
-        }
-        for (let k = low; k < byAddress.length && addresses[byAddress[k]] < end; k++) {
+        const first = partitionPoint(
+            byAddress.length,
+            (k) => addresses[byAddress[k]] + sizes[byAddress[k]] <= start
+        )
+        for (let k = first; k < byAddress.length && addresses[byAddress[k]] < end; k++) {
             const line = byAddress[k]
             if (kinds[line] === LINE_KIND.instruction && !this.written.has(addresses[line]))
                 this.written.set(addresses[line], NO_NAMES)
