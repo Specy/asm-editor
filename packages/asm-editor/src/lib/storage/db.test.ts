@@ -108,7 +108,7 @@ describe('the version 2 upgrade', () => {
             expect(loaded.openTabs).toEqual(['lib.mips', 'main.mips'])
             expect(loaded.activeTab).toBe('lib.mips')
             loaded.setOpenTabs([], '')
-            await db.updateProject(loaded)
+            await db.updateProject(loaded.toObject())
             const empty = await db.getProject(project.id)
             expect(empty.openTabs).toEqual([])
             expect(empty.activeTab).toBeUndefined()
@@ -149,7 +149,7 @@ describe('the version 2 upgrade', () => {
             const store = db.journalStore(project.id)
             store.changed('chall', () => journal.saved('chall'))
             expect((await store.load()).size).toBe(0)
-            await db.updateProject(loaded, store.take().writes)
+            await db.updateProject(loaded.toObject(), store.take().writes)
             const again = await db.getProject(project.id)
             //the File is its bytes, the journal no part of it
             expect(again.files.chall).toEqual({
@@ -170,12 +170,12 @@ describe('the version 2 upgrade', () => {
             failed.putBack()
             expect([...store.take().writes]).toEqual([['chall', undefined]])
             //a journal forgotten in a save, and every journal of a Project deleted with it
-            await db.updateProject(again, new Map([['chall', undefined]]))
+            await db.updateProject(again.toObject(), new Map([['chall', undefined]]))
             expect((await store.load()).size).toBe(0)
-            await db.updateProject(again, new Map([['chall', journal.saved('chall')]]))
+            await db.updateProject(again.toObject(), new Map([['chall', journal.saved('chall')]]))
             const other = makeProject({ language: 'X86', entry: 'chall', files: { chall: edited } })
             await db.addProject(other)
-            await db.updateProject(other, new Map([['chall', journal.saved('chall')]]))
+            await db.updateProject(other.toObject(), new Map([['chall', journal.saved('chall')]]))
             await db.deleteProject(again)
             expect((await store.load()).size).toBe(0)
             expect((await db.journalStore(other.id).load()).size).toBe(1)
@@ -202,7 +202,7 @@ describe('the version 2 upgrade', () => {
             expect(loaded.fileViews).toEqual({ 'image.png': 'hex' })
             expect(loaded.openTabs).toEqual(['image.png', 'main.mips'])
             loaded.setFileView('image.png', undefined)
-            await db.updateProject(loaded)
+            await db.updateProject(loaded.toObject())
             expect((await db.getProject(project.id)).fileViews).toBeUndefined()
         } finally {
             db.close()
@@ -226,7 +226,7 @@ describe('the version 2 upgrade', () => {
             expect(project.programs['main.m68k']?.settings).toEqual({ undoEnabled: false })
             expect(project.selected?.testcases).toHaveLength(1)
             project.createProgram('second.m68k')
-            await db.updateProject(project)
+            await db.updateProject(project.toObject())
             const row = (await db.projects.get('before1')) as unknown as Record<string, unknown>
             for (const field of ['entry', 'settings', 'testcases', 'display'])
                 expect(row, field).not.toHaveProperty(field)

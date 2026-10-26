@@ -137,9 +137,8 @@ export class Db extends Dexie {
     journalStore(project: string): ProjectJournals {
         return new ProjectJournals(this, project)
     }
-    /** Saves a Project, and with it in one transaction the Edit journals that changed. */
-    async updateProject(project: Project, journals?: JournalWrites): Promise<void> {
-        const row = project.toObject()
+    /** Saves a Project's row, and with it in one transaction the Edit journals that changed. */
+    async updateProject(row: ProjectData, journals?: JournalWrites): Promise<void> {
         if (!journals?.size) {
             await this.projects.put(row)
             return

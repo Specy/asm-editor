@@ -5,7 +5,8 @@ import {
     type ExternalImport,
     makeProject,
     makeProjectFromExternal,
-    type Project
+    type Project,
+    type ProjectData
 } from '#lib/Project.svelte.ts'
 
 import { isLegacyLinkedFileCompatible, projectToArchive } from '#lib/projectArchive.ts'
@@ -25,7 +26,7 @@ function createProjectStore() {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative async/event workflows use this registry; it has no tracked consumer.
     const writableFiles = new Map<string, LinkedFile>()
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Promise serialization is internal and has no tracked consumer.
-    const saveTails = new Map<string, Promise<void>>()
+    const saveTails = new Map<string, Promise<SaveResult>>()
     if (browser) {
         load()
     }
@@ -47,22 +48,13 @@ function createProjectStore() {
     }
 
     /**
-     * Saves a Project, and with it the Edit journals of `journals` that changed, read as its
-     * snapshot is taken so that each fits the File the snapshot holds (ADR 0063).
+     * Writes a save's snapshot to the Project's linked file, if it has one, and to the browser's
+     * copy, with the journals it took. Never rejects: what failed is in the result.
      */
-    async function save(project: Project, journals?: ProjectJournals): Promise<SaveResult> {
-        if (project.id === SHARE_ID) throw new Error('Cannot save shared project')
-        project.updatedAt = new Date().getTime()
-        const snapshot = project.toObject()
-        const taken = journals?.take()
-        const previous = saveTails.get(project.id) ?? Promise.resolve()
-        let finish!: () => void
-        const tail = new Promise<void>((resolve) => {
-            finish = resolve
-        })
-        const queued = previous.catch(() => {}).then(() => tail)
-        saveTails.set(project.id, queued)
-        await previous.catch(() => {})
+    async function write(
+        snapshot: ProjectData,
+        taken: ReturnType<ProjectJournals['take']> | undefined
+    ): Promise<SaveResult> {
         let result: SaveResult = { linked: 'none', local: 'saved' }
         try {
             const linked = writableFiles.get(snapshot.id)
@@ -87,9 +79,7 @@ function createProjectStore() {
             result = { linked: 'failed', local: 'saved', error }
         }
         try {
-            //The linked write and IndexedDB both use the same immutable save snapshot. Queuing the
-            //whole operation prevents a slow old disk write from landing after a newer one.
-            await db.updateProject(makeProject(snapshot), taken?.writes)
+            await db.updateProject(snapshot, taken?.writes)
         } catch (error) {
             taken?.putBack()
             //A quota or a blocked database means the work is not stored anywhere. Reported rather
@@ -97,10 +87,27 @@ function createProjectStore() {
             //unhandled rejection that leaves them believing the project is saved.
             console.error(error)
             result = { ...result, local: 'failed', error }
-        } finally {
-            finish()
-            if (saveTails.get(snapshot.id) === queued) saveTails.delete(snapshot.id)
         }
+        return result
+    }
+
+    /**
+     * Saves a Project, and with it the Edit journals of `journals` that changed, read as its
+     * snapshot is taken so that each fits the File the snapshot holds (ADR 0063).
+     */
+    async function save(project: Project, journals?: ProjectJournals): Promise<SaveResult> {
+        if (project.id === SHARE_ID) throw new Error('Cannot save shared project')
+        project.updatedAt = new Date().getTime()
+        const snapshot = project.toObject()
+        const taken = journals?.take()
+        //The linked write and IndexedDB both use the same immutable save snapshot. Queuing the
+        //whole operation prevents a slow old disk write from landing after a newer one.
+        const saving = (saveTails.get(snapshot.id) ?? Promise.resolve())
+            .catch(() => {})
+            .then(() => write(snapshot, taken))
+        saveTails.set(snapshot.id, saving)
+        const result = await saving
+        if (saveTails.get(snapshot.id) === saving) saveTails.delete(snapshot.id)
         await load()
         return result
     }
