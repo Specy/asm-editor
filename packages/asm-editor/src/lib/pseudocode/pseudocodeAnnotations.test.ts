@@ -4,7 +4,6 @@
  * to 17).
  */
 import { describe, expect, it } from 'vite-plus/test'
-import { forFunction } from '#lib/annotations/annotations.ts'
 import type { Annotations } from '#lib/projectFiles.ts'
 import {
     annotationOptions,
@@ -29,16 +28,7 @@ const annotations: Annotations = {
 }
 
 describe("a function's Annotations", () => {
-    it('are forFunction’s, comments found by address once per record', () => {
-        for (const [start, end] of [
-            [0x11e9, 0x12b0],
-            [0x1100, 0x1130],
-            [0x1130, 0x1160],
-            [0, 0x10000]
-        ])
-            expect(functionAnnotations(annotations, start, end)).toEqual(
-                forFunction(annotations, start, end)
-            )
+    it('are its locals, the comments in its range and its function comment', () => {
         expect(functionAnnotations(annotations, 0x11e9, 0x12b0)).toEqual({
             locals: [
                 { id: 'register:0x0:4@+0x8e', name: 'result' },
@@ -50,9 +40,23 @@ describe("a function's Annotations", () => {
             ],
             functionComment: 'Reads the password'
         })
-        expect(functionAnnotations(undefined, 0x11e9, 0x12b0)).toEqual(
-            forFunction(undefined, 0x11e9, 0x12b0)
-        )
+        expect(functionAnnotations(annotations, 0x1100, 0x1130)).toEqual({
+            locals: [{ id: 'register:0x10:8@-0x1', name: 'finish' }],
+            comments: [{ address: 0x1100, text: 'in _start' }],
+            functionComment: 'The entry point'
+        })
+        expect(functionAnnotations(annotations, 0x1130, 0x1160)).toEqual({
+            locals: [],
+            comments: []
+        })
+        //every comment, in address order, from the record's comments sorted once
+        expect(functionAnnotations(annotations, 0, 0x10000).comments).toEqual([
+            { address: 0x1100, text: 'in _start' },
+            { address: 0x11e9, text: 'at the entry' },
+            { address: 0x1271, text: 'before strcmp' },
+            { address: 0x12b0, text: 'past the end' }
+        ])
+        expect(functionAnnotations(undefined, 0x11e9, 0x12b0)).toEqual({ locals: [], comments: [] })
     })
 
     it('key a function by what it has, and leave one without any as it was keyed', () => {

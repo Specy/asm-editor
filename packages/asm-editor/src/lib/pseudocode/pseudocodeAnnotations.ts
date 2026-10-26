@@ -44,9 +44,10 @@ function lowerBound(values: readonly number[], value: number): number {
 }
 
 /**
- * `forFunction` (`#lib/annotations/annotations.ts`), the same result, with a record's comments
- * sorted once rather than for each function: the function from `start` to `end`, exclusive, at
- * link-time addresses.
+ * {@link FunctionAnnotations} of the function from `start` to `end`, exclusive, at link-time
+ * addresses, as a `ListingFunction` gives them, with a record's comments sorted once rather than
+ * for each function. Its keys are stable, so `JSON.stringify` of the result keys a decompilation
+ * by them.
  */
 export function functionAnnotations(
     annotations: Annotations | undefined,

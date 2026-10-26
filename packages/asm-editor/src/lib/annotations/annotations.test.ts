@@ -9,7 +9,6 @@ import {
     addressOf,
     commentAt,
     fileAddress,
-    forFunction,
     functionCommentAt,
     localName,
     localsOf,
@@ -22,6 +21,7 @@ import {
     setFunctionComment
 } from './annotations'
 import { commentProblem, normalizeComment } from './comments'
+import { functionAnnotations } from '#lib/pseudocode/pseudocodeAnnotations.ts'
 import { cleanAnnotations, isFileAddress, type Annotations } from '#lib/projectFiles.ts'
 
 describe('file addresses', () => {
@@ -182,7 +182,7 @@ describe('reading and writing Annotations', () => {
         annotations = renameLocal(annotations, 0x1139, 'stack:-0x98', 'password')
         annotations = renameLocal(annotations, 0x1139, 'hash:0x3f27@+0x6c', 'copy')
         annotations = renameLocal(annotations, 0x1200, 'stack:-0x8', 'other')
-        expect(forFunction(annotations, 0x1139, 0x1200)).toEqual({
+        expect(functionAnnotations(annotations, 0x1139, 0x1200)).toEqual({
             locals: [
                 { id: 'hash:0x3f27@+0x6c', name: 'copy' },
                 { id: 'stack:-0x98', name: 'password' }
@@ -193,7 +193,7 @@ describe('reading and writing Annotations', () => {
             ],
             functionComment: 'Checks the flag.'
         })
-        expect(forFunction(undefined, 0x1139, 0x1200)).toEqual({ locals: [], comments: [] })
+        expect(functionAnnotations(undefined, 0x1139, 0x1200)).toEqual({ locals: [], comments: [] })
     })
 
     it('makes records a saved Project keeps as they are', () => {
