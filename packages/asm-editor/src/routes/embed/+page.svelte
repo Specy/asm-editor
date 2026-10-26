@@ -36,6 +36,7 @@
         encodePlaygroundProgram,
         playgroundBuildSources
     } from '#lib/content/playgroundProgram.ts'
+    import { parsePlaygroundLanguage } from '#lib/content/playgrounds.ts'
 
     import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
 
@@ -204,7 +205,10 @@
     function getSettings() {
         const searchParams = page.url.searchParams
         const showMemory = searchParams.get('showMemory') === 'true'
-        const language = (searchParams.get('language') ?? defaultLanguage) as AvailableLanguages
+        //a link written by hand may spell the language as a fence does, `riscv` or `x86`, and one
+        //the editor has not got opens the default rather than an emulator that never loads
+        const language =
+            parsePlaygroundLanguage(searchParams.get('language') ?? undefined) ?? defaultLanguage
         const showConsole = searchParams.get('showConsole') === 'true'
         const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
         const showPc = searchParams.get('showPc') === 'true'
