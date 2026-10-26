@@ -1521,15 +1521,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { kind: 'end' }
     }
 
+    /**
+     * Throws when any byte of the range is not mapped, as the Core does, so that the memory view
+     * can tell the bytes it reads from the ones it cannot.
+     */
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
-        try {
-            return this.requireCore().readMemoryBytes(address, length)
-        } catch (e) {
-            if (String(e).includes('virtual address is not mapped')) {
-                return new Uint8Array(Number(length)).fill(0)
-            }
-            throw e
-        }
+        return this.requireCore().readMemoryBytes(address, length)
     }
 
     /** Completed guest-instruction deltas exclude tool execution and work with history disabled. */
