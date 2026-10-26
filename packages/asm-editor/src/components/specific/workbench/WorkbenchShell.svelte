@@ -235,12 +235,6 @@
         get searchScope() {
             return searchScope
         },
-        get hostPanels() {
-            return hostPanels
-        },
-        get hostLinks() {
-            return hostLinks
-        },
         get onBack() {
             return onBack
         },
