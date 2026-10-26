@@ -251,12 +251,39 @@ function noProgram(
     )
 }
 
-export function getAllProjectFiles(context: DefaultCodingAgentToolContext): Record<string, string> {
-    const result: Record<string, string> = {}
+/**
+ * The project's Files as the tools read them: each one's text, or null for a binary File, one whose
+ * bytes are not UTF-8 text, such as an x86 Build's `main` or a BMP. The tools list a binary File
+ * and never read it, as a Build never gives one to the assembler as text.
+ */
+export function getAllProjectFiles(
+    context: DefaultCodingAgentToolContext
+): Record<string, string | null> {
+    const result: Record<string, string | null> = {}
     for (const [path, fileOrContent] of Object.entries(context.getFiles())) {
-        result[path] = typeof fileOrContent === 'string' ? fileOrContent : fileText(fileOrContent)
+        if (typeof fileOrContent === 'string') {
+            result[path] = fileOrContent
+            continue
+        }
+        try {
+            result[path] = fileText(fileOrContent)
+        } catch {
+            result[path] = null
+        }
     }
     return result
+}
+
+/** Why a File the tools were asked to read cannot be: it is binary, which is never read as text. */
+function binaryFileError(path: string) {
+    return `File "${path}" is binary, not text, so it cannot be read or edited as text.`
+}
+
+function binaryFile(toolRun: ToolRunContext, path: string) {
+    return toolRun.failure('invalid_input', binaryFileError(path), {
+        retryable: false,
+        nextAction: 'Call list_files to see which files are text.'
+    })
 }
 
 /**
@@ -332,7 +359,7 @@ export function syncEmulator(context: DefaultCodingAgentToolContext, emulator: E
     const all = getAllProjectFiles(context)
     const projectFiles: Record<string, ProjectFile> = {}
     for (const [p, c] of Object.entries(all)) {
-        projectFiles[p] = { encoding: 'plain', content: c }
+        if (c !== null) projectFiles[p] = { encoding: 'plain', content: c }
     }
     emulator.setSources({
         files: projectFiles,
@@ -705,6 +732,7 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
 
                 const fileEntry = getFile(context, targetPath)
                 if (!fileEntry) {
+                    if (allFiles[targetPath] === null) return binaryFile(toolRun, targetPath)
                     return toolRun.failure(
                         'invalid_input',
                         `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`,
@@ -772,6 +800,7 @@ function createReplaceFileContentTool(context: DefaultCodingAgentToolContext) {
                 const existing = getFile(context, targetPath)
                 if (!existing) {
                     const allFiles = getAllProjectFiles(context)
+                    if (allFiles[targetPath] === null) return binaryFile(toolRun, targetPath)
                     return toolRun.failure(
                         'invalid_input',
                         `File "${targetPath}" does not exist. Use write_to_file to create new files. Available files: ${Object.keys(allFiles).join(', ')}`,
@@ -1060,7 +1089,10 @@ function resolveBreakpointLocation(
     if (!fileObj) {
         return {
             success: false,
-            error: `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`
+            error:
+                allFiles[targetPath] === null
+                    ? binaryFileError(targetPath)
+                    : `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`
         }
     }
 
@@ -1421,18 +1453,22 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
         list_files: tool({
             name: 'list_files',
             description:
-                'Lists all source, header, assembly and data files in the current project with their line counts, sizes, and which file is the entry file.',
+                'Lists all source, header, assembly and data files in the current project with their line counts, sizes, and which file is the entry file. A binary file, such as an executable or an image, is marked binary and has neither, as it cannot be read as text.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const allFiles = getAllProjectFiles(context)
                     const entry = context.getEntryPath()
-                    const files = Object.entries(allFiles).map(([p, text]) => ({
-                        path: p,
-                        lineCount: text.length === 0 ? 1 : text.split('\n').length,
-                        size: text.length,
-                        isEntry: p === entry
-                    }))
+                    const files = Object.entries(allFiles).map(([p, text]) =>
+                        text === null
+                            ? { path: p, binary: true, isEntry: p === entry }
+                            : {
+                                  path: p,
+                                  lineCount: text.length === 0 ? 1 : text.split('\n').length,
+                                  size: text.length,
+                                  isEntry: p === entry
+                              }
+                    )
 
                     return toolRun.success({
                         files,
@@ -1736,7 +1772,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         const all = getAllProjectFiles(context)
                         const projectFiles: Record<string, ProjectFile> = {}
                         for (const [p, c] of Object.entries(all)) {
-                            projectFiles[p] = { encoding: 'plain', content: c }
+                            if (c !== null) projectFiles[p] = { encoding: 'plain', content: c }
                         }
                         if (sourceLanguage(entry)) {
                             return toolRun.failure(

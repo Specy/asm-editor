@@ -95,7 +95,7 @@ export type DefaultCodingAgentToolContext = {
 
     /** The host's Files: a Project's, or the one file of a host with none, with any the agent wrote. */
     getFiles: () => Record<string, string> | ProjectFiles
-    /** A File's text, or null where there is none. */
+    /** A File's text, or null where there is none or the File is binary, not UTF-8 text. */
     getFile: (path: string) => string | null
     setFile: (path: string, code: string) => void
     deleteFile: (path: string) => void

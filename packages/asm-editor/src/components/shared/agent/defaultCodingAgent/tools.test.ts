@@ -1649,7 +1649,14 @@ function projectContext(project: Project) {
     context.getProject = () => project
     context.getEditorLanguage = () => project.language
     context.getFiles = () => project.files
-    context.getFile = (path) => (path in project.files ? project.fileSystem.readText(path) : null)
+    //null for no File and for a binary one, as the hook says
+    context.getFile = (path) => {
+        try {
+            return project.fileSystem.readText(path)
+        } catch {
+            return null
+        }
+    }
     context.setFile = (path, code) => {
         const added = !(path in project.files)
         project.fileSystem.writeText(path, code)
@@ -1739,6 +1746,80 @@ describe('Programs', () => {
         await tools.write_to_file.execute({ path: 'sort.riscv', code: 'li a0, 1' })
         expect(project.selectedProgram).toBe('sort.riscv')
         expect(await tools.list_files.execute({})).toMatchObject({ entry: 'sort.riscv' })
+    })
+})
+
+describe('binary files', () => {
+    /** A RISC-V Project beside an x86 Build's kind of output: an ELF stored as bytes, not UTF-8. */
+    function withBinary() {
+        const context = projectContext(makeProject({ language: 'RISC-V', code: 'li a0, 1' }))
+        context.project.fileSystem.writeBytes(
+            'main',
+            new Uint8Array([0x7f, 0x45, 0x4c, 0x46, 0xff, 0xfe, 0x00]),
+            true,
+            'base64'
+        )
+        return context
+    }
+    const binary = 'File "main" is binary, not text, so it cannot be read or edited as text.'
+
+    it('lists a binary file as binary and still reads the text ones', async () => {
+        const { tools } = withBinary()
+        expect(await tools.list_files.execute({})).toMatchObject({
+            success: true,
+            files: [
+                { path: 'main.riscv', lineCount: 1, isEntry: true },
+                { path: 'main', binary: true, isEntry: false }
+            ]
+        })
+        expect(await tools.view_file.execute({})).toMatchObject({
+            success: true,
+            path: 'main.riscv',
+            code: 'li a0, 1',
+            files: ['main.riscv', 'main']
+        })
+    })
+
+    it('says a binary file cannot be read or edited as text', async () => {
+        const { tools } = withBinary()
+        expect(await tools.view_file.execute({ path: 'main' })).toMatchObject({
+            success: false,
+            errorKind: 'invalid_input',
+            error: binary
+        })
+        expect(
+            await tools.replace_file_content.execute({
+                path: 'main',
+                target_content: 'ELF',
+                replacement_content: 'elf'
+            })
+        ).toMatchObject({ success: false, error: binary })
+        expect(await tools.set_breakpoint.execute({ path: 'main', line: 1 })).toMatchObject({
+            success: false,
+            error: binary
+        })
+    })
+
+    it('writes, builds and deletes beside a binary file', async () => {
+        const { project, emulator, tools } = withBinary()
+        expect(
+            await tools.write_to_file.execute({ path: 'main.riscv', code: 'li a0, 2' })
+        ).toMatchObject({ success: true, files: ['main.riscv', 'main'] })
+        expect(await tools.compile.execute({})).toMatchObject({
+            success: true,
+            entry: 'main.riscv'
+        })
+        //the Build is given the Files as they are stored, the binary one as bytes
+        expect(emulator.compile).toHaveBeenCalledWith(
+            expect.any(Number),
+            expect.objectContaining({
+                files: expect.objectContaining({ main: project.files.main })
+            })
+        )
+        expect(await tools.delete_file.execute({ path: 'main' })).toMatchObject({
+            success: true,
+            remainingFiles: ['main.riscv']
+        })
     })
 })
 

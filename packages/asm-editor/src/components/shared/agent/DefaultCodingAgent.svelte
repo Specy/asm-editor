@@ -182,6 +182,7 @@
             },
             getFile: (path) => {
                 if (project) {
+                    //null for no File, and for a binary one, which is not UTF-8 text
                     try {
                         return project.fileSystem.readText(path)
                     } catch {

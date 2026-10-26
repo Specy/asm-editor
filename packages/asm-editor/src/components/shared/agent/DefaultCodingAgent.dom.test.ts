@@ -48,6 +48,21 @@ async function agentOver(project: Project) {
 }
 
 describe('DefaultCodingAgent', () => {
+    it('lists a binary File as binary and reads the text ones beside it', async () => {
+        const project = makeProject({ language: 'RISC-V', code: 'li a0, 1' })
+        project.fileSystem.writeBytes('main', new Uint8Array([0x7f, 0x45, 0xff]), true, 'base64')
+        const run = await agentOver(project)
+        expect(await run('list_files')).toMatchObject({
+            success: true,
+            files: [{ path: 'main.riscv' }, { path: 'main', binary: true }]
+        })
+        expect(await run('view_file')).toMatchObject({ success: true, code: 'li a0, 1' })
+        expect(await run('view_file', { path: 'main' })).toMatchObject({
+            success: false,
+            error: 'File "main" is binary, not text, so it cannot be read or edited as text.'
+        })
+    })
+
     it('reports a deletion the FileSystem refused while a Debug session holds the Files', async () => {
         const project = makeProject({ language: 'RISC-V', code: 'li a0, 1' })
         project.fileSystem.writeText('helper.riscv', 'nop')
