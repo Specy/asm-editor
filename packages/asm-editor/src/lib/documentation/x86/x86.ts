@@ -51,9 +51,7 @@ import usingCProse from './using-c.md?raw'
 import executablesProse from './executables.md?raw'
 import vectorProse from './vector-instructions.md?raw'
 import runtimeProse from './runtime-library.md?raw'
-import runtimeFunctions from '@asm-editor/runtime/generated/v1/functions.json'
-import { runtimeFunctionDocumentation } from '../runtimeFunctions'
-import type { RuntimeFunctionList } from '#lib/sourceRuntime/runtimeLibrary.ts'
+import { runtimeLibraryChapter } from '../runtimeFunctions'
 import { x86CallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
     x86SimBinding,
@@ -111,7 +109,7 @@ function instructions(): Chapter {
                 summary: document.summary,
                 href: `${BASE}/instruction/${instruction.name}`,
                 anchor: instruction.name,
-                view: { type: 'instruction', document: () => document },
+                view: { type: 'instruction', document },
                 // The section too: the rows are alphabetical, so NASM's heading is only found here.
                 searchText: [
                     ...new Set([
@@ -688,55 +686,6 @@ function executables(): Chapter {
     }
 }
 
-/** The C library a Build links when the Project or its Compilation asks for it. */
-function runtimeLibrary(): Chapter {
-    const href = `${BASE}/runtime-library`
-    const entries: DocumentationEntry[] = [
-        ...proseEntries({
-            language: 'x86',
-            chapter: 'runtime-library',
-            chapterHref: href,
-            markdown: runtimeProse
-        }),
-        ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
-            const convention = x86CallingConvention(entry.prototype)
-            const doc = runtimeFunctionDocumentation(entry.name, entry.doc)
-            return {
-                id: `x86/runtime-library/${entry.name}`,
-                language: 'x86',
-                chapter: 'runtime-library',
-                kind: 'function',
-                title: entry.name,
-                names: names(entry.name),
-                signature: `<${entry.header}>`,
-                summary: summaryOf(doc),
-                href: `${href}#${entry.name}`,
-                anchor: entry.name,
-                view: {
-                    type: 'fields',
-                    markdown: doc,
-                    fields: [
-                        { label: 'Declaration', value: `\`${entry.prototype}\`` },
-                        { label: 'Header', value: `\`<${entry.header}>\`` },
-                        ...(convention ? [{ label: 'From assembly', value: convention }] : [])
-                    ],
-                    example: `call ${entry.name}`
-                },
-                searchText: `${entry.prototype}. ${doc}`
-            }
-        })
-    ]
-    return {
-        id: 'runtime-library',
-        language: 'x86',
-        title: 'Runtime library',
-        href,
-        description:
-            'The editor Runtime functions for compiled C/C++ and assembly programs that link Runtime ABI v1.',
-        entries
-    }
-}
-
 let cached: Chapter[] | null = null
 
 /** The x86 Documentation's Chapters, in the order the complete documentation page has them. */
@@ -749,7 +698,15 @@ export function chapters(): Chapter[] {
         vectorInstructions(),
         syscalls(),
         usingC(),
-        runtimeLibrary(),
+        runtimeLibraryChapter({
+            language: 'x86',
+            base: BASE,
+            intro: runtimeProse,
+            convention: x86CallingConvention,
+            call: 'call',
+            description:
+                'The editor Runtime functions for compiled C/C++ and assembly programs that link Runtime ABI v1.'
+        }),
         executables()
     ]
     return cached
