@@ -2,8 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { RISCV } from '@specy/risc-v'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import {
     generateSimHeader,
     generateX86SimHeader,
@@ -449,18 +448,15 @@ long pointer_calls(void) {
 })
 
 describe('the static-data cap', () => {
-    afterEach(() => RISCV.setIs64Bit(false))
-
     /** A GNU-profile program whose `.bss` holds `bytes`, as a compiled grid would. */
     const program = (bytes: number, riscv: boolean) =>
         `        .text\n        .globl  main\nmain:\n        ${riscv ? 'ret' : 'jr $31'}\n        .bss\n        .globl  grid\n        .p2align 2\ngrid:\n        .space  ${bytes}\n`
     const errors = (target: SimHeaderTargetName, bytes: number) => {
         const files = { 'main.s': program(bytes, target !== 'mips') }
-        RISCV.setIs64Bit(target === 'riscv64')
         const core =
             target === 'mips'
                 ? makeMipsCore(files, 'main.s', 'gnu-compiler-v1')
-                : makeRiscVCore(files, 'main.s', 'gnu-compiler-v1')
+                : makeRiscVCore(files, 'main.s', 'gnu-compiler-v1', target === 'riscv64')
         return core
             .assemble()
             .errors.filter((error) => !error.isWarning)
@@ -470,11 +466,10 @@ describe('the static-data cap', () => {
     it.each(TARGETS)('moves the %s heap after a 512 KiB grid', (target) => {
         const bytes = 512 * 256 * 4
         const files = { 'main.s': program(bytes, target !== 'mips') }
-        RISCV.setIs64Bit(target === 'riscv64')
         const core =
             target === 'mips'
                 ? makeMipsCore(files, 'main.s', 'gnu-compiler-v1')
-                : makeRiscVCore(files, 'main.s', 'gnu-compiler-v1')
+                : makeRiscVCore(files, 'main.s', 'gnu-compiler-v1', target === 'riscv64')
         expect(core.assemble().errors.filter((error) => !error.isWarning)).toEqual([])
         expect(core.getHeapStart()).toBeGreaterThanOrEqual(address('static data') + bytes)
         expect(core.getHeapStart() % 4096).toBe(0)

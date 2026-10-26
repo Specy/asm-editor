@@ -1,5 +1,5 @@
 import { type MIPSAssembleError } from '@specy/mips'
-import { RISCV, type RISCVAssembleError } from '@specy/risc-v'
+import type { RISCVAssembleError } from '@specy/risc-v'
 import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
 import { makeRiscVCore, type RiscVLink } from '#lib/languages/RISC-V/RISC-V-core.ts'
 import {
@@ -54,8 +54,7 @@ function makeCore(
     link: RiscVLink = {}
 ) {
     if (target === 'MIPS') return makeMipsCore(files, entry, assemblerProfile, link)
-    RISCV.setIs64Bit(target === 'RISC-V-64')
-    return makeRiscVCore(files, entry, assemblerProfile, link)
+    return makeRiscVCore(files, entry, assemblerProfile, target === 'RISC-V-64', link)
 }
 
 /**

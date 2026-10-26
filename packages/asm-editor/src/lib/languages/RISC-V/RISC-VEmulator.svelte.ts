@@ -252,10 +252,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
-     * 32 vs 64 bit is a *module global* of the core (`RISCV.setIs64Bit`), not a per instance flag,
-     * so it has to be pinned right before every core creation (see `_compile`/`_checkCode`).
-     * This is a getter and not a field because the base constructor already runs `_checkCode`
-     * (through `semanticCheck()`), which happens before subclass field initializers would run.
+     * Whether this Emulator's Cores are RV64, which each one is made with (`makeRiscVCore`). A
+     * getter and not a field because the base constructor already runs `_checkCode` (through
+     * `semanticCheck()`), which happens before subclass field initializers would run.
      */
     private get is64Bit(): boolean {
         return this._emulatorOptions.language === 'RISC-V-64'
@@ -331,9 +330,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * Arguments after it, which the Core stores above the stack at every start, with argc in `a0`
      * and argv in `a1`, pointers as wide as the Target's
      * ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
-     * Checked here at this Emulator's width, which needs no switch of the Core's global one, so the
-     * Core's refusal (too many, too long) stops the Build as an Arguments problem; the Core
-     * `_compile` creates gets them.
+     * Checked here at this Emulator's width, so the Core's refusal (too many, too long) stops the
+     * Build as an Arguments problem; the Core `_compile` creates gets them.
      */
     _setProgramArguments(sources: BuildSources, args: string[]): void {
         const argv = [programArgv0(sources.entry, false, sources.entrySource), ...args]
@@ -382,14 +380,12 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
-        //the bitness decides which instructions assemble (`ld` is RV64 only), so pin the module
-        //global before creating the throwaway instance, exactly like `_compile` does
-        RISCV.setIs64Bit(this.is64Bit)
         const files = textAssemblyFiles(sources)
         const riscv = makeRiscVCore(
             files,
             sources.entry,
             buildAssemblerProfile(sources),
+            this.is64Bit,
             this.runtimeLink(sources)
         )
         const result = riscv.assemble()
@@ -455,13 +451,11 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         files: Record<string, string>,
         undoSize: number
     ) {
-        //creation + assembly is synchronous, so pinning the module global here cannot be
-        //interleaved with another instance's creation
-        RISCV.setIs64Bit(this.is64Bit)
         const riscv = makeRiscVCore(
             files,
             sources.entry,
             buildAssemblerProfile(sources),
+            this.is64Bit,
             this.runtimeLink(sources)
         )
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
@@ -578,7 +572,6 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      */
     private probeLabelAddress(sources: BuildSources, label: string): number | null {
         try {
-            RISCV.setIs64Bit(this.is64Bit)
             const probeSources = updateEntryText(
                 sources,
                 screenLabelProbeSource(sourceText(sources), label)
@@ -587,6 +580,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 textAssemblyFiles(probeSources),
                 probeSources.entry,
                 buildAssemblerProfile(probeSources),
+                this.is64Bit,
                 this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
