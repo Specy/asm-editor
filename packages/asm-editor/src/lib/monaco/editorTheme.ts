@@ -14,8 +14,9 @@ import {
 } from './assemblyTokenColors'
 
 /**
- * The store's own `getColor`/`getText`/`layer`, over whichever theme is being asked about: those
- * only ever answer for the app's theme, and the editor is not always wearing it.
+ * A theme's colours, the text that sits on each and a shade a layer away, over whichever theme is
+ * being asked about: the store's own `getColor` only ever answers for the app's theme, and the
+ * editor is not always wearing it.
  */
 function readerOf(theme: Record<ThemeKeys, ThemeProp<ThemeKeys>>) {
     const color = (key: ThemeKeys) => new TinyColor(theme[key].color)
