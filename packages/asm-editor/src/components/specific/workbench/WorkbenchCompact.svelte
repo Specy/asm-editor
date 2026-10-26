@@ -124,7 +124,10 @@
                     />
                 </div>
             {/if}
-            <BottomPanel style="height: var(--compact-bottom-height); flex: none;" />
+            <!-- Lines rules it off from the editor and the controls above it, where Cards has the gap -->
+            <BottomPanel
+                style="height: var(--compact-bottom-height); flex: none; border-top: var(--wb-section-rule, none);"
+            />
             {#if debugSectionsBuilt}
                 <div class="debug-sections" class:hidden={!session.debugSession}>
                     <CollapsibleSection id="compact:registers" title="Registers & memory">
@@ -329,12 +332,13 @@
     /* registers beside memory when both fit, memory under them when not. Beside it the registers
        fill the height of its page and scroll inside; above it they are as tall as their list, up
        to a page. Beside each other memory takes the width left, and alone on its line each fills
-       it; the row scrolls sideways only when one of them is wider than the screen */
+       it; the row scrolls sideways only when one of them is wider than the screen. A margin rather
+       than padding, so the row clips at the edges of what it holds: memory's rules, below */
     .registers-memory {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem var(--wb-gap);
-        padding: 0.3rem;
+        margin: 0.3rem;
         overflow-x: auto;
     }
 
@@ -352,8 +356,34 @@
 
     /* never stretched to the registers' height, which is measured from this one */
     .memory {
+        position: relative;
         flex: 1000 1 auto;
         align-self: flex-start;
+
+        /* the rule from the registers, in either style: memory draws one in the gap on its left
+           and one in the gap above it, and the row clips whichever falls outside it, the left one
+           when memory has wrapped under the registers and the top one when it sits beside them */
+        &::before,
+        &::after {
+            content: '';
+            position: absolute;
+            background-color: var(--wb-line);
+            pointer-events: none;
+        }
+
+        &::before {
+            top: 0;
+            bottom: 0;
+            left: calc(-1px - var(--wb-gap) / 2);
+            width: 1px;
+        }
+
+        &::after {
+            top: calc(-0.25rem - 0.5px);
+            left: 0;
+            right: 0;
+            height: 1px;
+        }
     }
 
     /* each section is as tall as what it holds, not as the tallest in its row */
