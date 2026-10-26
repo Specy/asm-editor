@@ -497,12 +497,9 @@ export abstract class GenericEmulator<T, R extends string>
         const sp = this._getSp()
         if (!stackTab) return
         const newAddress = sp - (sp % BigInt(stackTab.pageSize))
-        if (stackTab.address !== newAddress) {
-            stackTab.address = newAddress
-            this.updateMemory()
-            //reset the prevState as we don't know what the previous state was
-            stackTab.data.prevState = stackTab.data.current
-        }
+        //only the Stack tab is read again: re-reading every view would make what they hold now
+        //their previous state too, and the bytes this step changed would lose their highlight
+        if (stackTab.address !== newAddress) this.showMemoryPage(stackTab, newAddress)
     }
 
     /**
@@ -789,8 +786,14 @@ export abstract class GenericEmulator<T, R extends string>
         )
     }
 
-    /** A view moved to an address the user chose: what it held before is not a previous state. */
+    /** A view moved to an address the user chose. */
     private placeMemoryView(view: MemoryTab, address: bigint): void {
+        this.showMemoryPage(view, address)
+        view.userPlaced = true
+    }
+
+    /** A view moved to another page: what it held before is not a previous state. */
+    private showMemoryPage(view: MemoryTab, address: bigint): void {
         const page: MemoryPage = this.getInstance()
             ? this.readMemoryPage(address, view.pageSize)
             : {
@@ -800,7 +803,6 @@ export abstract class GenericEmulator<T, R extends string>
                   unreadable: null
               }
         view.address = address
-        view.userPlaced = true
         view.data.current = page.bytes
         view.data.prevState = page.bytes
         view.data.unreadable = page.unreadable

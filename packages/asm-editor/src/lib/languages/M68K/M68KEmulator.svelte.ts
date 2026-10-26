@@ -208,8 +208,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //legacy parity: the Stack tab shows the page *below* SP, which is the region the stack
         //actually grows into. The M68K SP starts page-aligned (0x2000, tab page size 32), so
         //running scrollStackTab() here would snap the tab back onto SP and show unwritten memory
-        //above the stack instead. It would also run an extra updateMemory(), collapsing the
-        //post-compile memory diff highlighting.
+        //above the stack instead.
         const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
         if (stackTab && !stackTab.userPlaced) {
             stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
