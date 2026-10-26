@@ -53,7 +53,6 @@
                 bind:value
                 bind:el={inputEl}
                 placeholder={Prompt.placeholder}
-                hideStatus
                 style="border: 1px solid var(--tray-line);"
             />
         {/if}
