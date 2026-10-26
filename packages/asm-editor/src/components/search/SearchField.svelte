@@ -11,6 +11,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { HTMLInputAttributes } from 'svelte/elements'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props extends Omit<HTMLInputAttributes, 'value'> {
         value: string
@@ -64,7 +65,7 @@
         <button
             type="button"
             class="clear"
-            title="Clear the search"
+            {@attach tooltip('Clear the search')}
             aria-label="Clear the search"
             onclick={() => {
                 value = ''

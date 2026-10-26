@@ -20,6 +20,7 @@
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import { DOCUMENTATION_SITES } from '#lib/documentation/site.ts'
     import { resolveHref } from '#lib/hrefs.ts'
@@ -97,7 +98,7 @@
             <ButtonLink
                 style="width: 100%;"
                 href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
-                title="Open the editor"
+                {@attach tooltip('Open the editor')}
             >
                 {#if ProjectStore.projects.length > 0}
                     Go to your projects

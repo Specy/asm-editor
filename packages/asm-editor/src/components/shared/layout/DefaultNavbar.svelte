@@ -8,6 +8,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import SparklesIcon from '../agent/SparklesIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { resolve } from '$app/paths'
 
     interface Props {
@@ -39,7 +40,11 @@
          stay for screen readers -->
     <div class="actions" class:with-embed={includeEmbed} class:with-menu={hasMenu}>
         <div class="pill donate">
-            <ButtonLink cssVar="secondary" href={resolve('/donate')} title="Donate to the project">
+            <ButtonLink
+                cssVar="secondary"
+                href={resolve('/donate')}
+                {@attach tooltip('Donate to the project')}
+            >
                 <Icon>
                     <FaHeart />
                 </Icon>
@@ -51,7 +56,7 @@
                 cssVar="secondary"
                 href="https://github.com/Specy/asm-editor"
                 target="_blank"
-                title="Star the project on github"
+                {@attach tooltip('Star the project on github')}
             >
                 <Icon>
                     <FaStar />
@@ -61,7 +66,12 @@
         </div>
         {@render children?.()}
         {#if aiToggle}
-            <button type="button" class="icon ai" onclick={aiToggle.onclick} title={aiToggle.title}>
+            <button
+                type="button"
+                class="icon ai"
+                onclick={aiToggle.onclick}
+                {@attach tooltip(aiToggle.title)}
+            >
                 {#if aiToggle.open}
                     <!-- an unplugin icon fills its parent, so it needs the sized box `Icon` gives
                          it; `SparklesIcon` carries its own 1em size. -->
@@ -74,7 +84,7 @@
                 <span class="label">{aiToggle.label}</span>
             </button>
         {:else if !exclude?.includes('ai-chat')}
-            <a class="icon ai" href={resolve('/chat')} title="AI Chat">
+            <a class="icon ai" href={resolve('/chat')} {@attach tooltip('AI Chat')}>
                 <SparklesIcon />
                 <span class="label">AI Chat</span>
             </a>

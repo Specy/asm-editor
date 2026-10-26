@@ -7,6 +7,7 @@
     import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
     import FaDonate from '~icons/fa-solid/heart'
     import { resolve } from '$app/paths'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     interface Props {
         pages?: RegExp[]
     }
@@ -19,7 +20,11 @@
         <div class="footer-inner">
             <RgbLine animated />
             <div class="footer-justify">
-                <a class="logo-wrapper" href="https://specy.app" title="View my other websites">
+                <a
+                    class="logo-wrapper"
+                    href="https://specy.app"
+                    {@attach tooltip('View my other websites')}
+                >
                     <div class="logo-content">
                         <img src="/images/logo.png" alt="logo" class="logo" />
                         <div>Specy</div>
@@ -27,7 +32,12 @@
                 </a>
                 <a href={resolve('/changelog')}> Changelog </a>
                 <div class="icon-wrapper">
-                    <a class="icon" href={resolve('/donate')} title="Donate and support me">
+                    <a
+                        class="icon"
+                        href={resolve('/donate')}
+                        {@attach tooltip('Donate and support me')}
+                        aria-label="Donate"
+                    >
                         <Icon size={1.6}>
                             <FaDonate />
                         </Icon>
@@ -51,7 +61,8 @@
                         href="https://github.com/Specy/asm-editor"
                         target="_blank"
                         rel="noreferrer"
-                        title="Visit on github"
+                        {@attach tooltip('Visit on github')}
+                        aria-label="GitHub"
                     >
                         <Icon size={1.6}>
                             <FaGithub />

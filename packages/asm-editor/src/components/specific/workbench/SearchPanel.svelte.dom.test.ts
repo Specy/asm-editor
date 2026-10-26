@@ -553,13 +553,17 @@ describe('searching', () => {
     it('switches the toggles with ⌥⌘ on a Mac, where Option alone types a character', async () => {
         vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
         const view = searchPanel()
-        const titles = ['Match case', 'Match whole word', 'Use regular expression'].map((label) =>
-            view.target.querySelector(`button[aria-label="${label}"]`)!.getAttribute('title')
+        const descriptions = ['Match case', 'Match whole word', 'Use regular expression'].map(
+            (label) => {
+                const button = view.target.querySelector(`button[aria-label="${label}"]`)!
+                const described = button.getAttribute('aria-describedby')!
+                return document.getElementById(described)?.textContent?.replace(/\s+/g, ' ').trim()
+            }
         )
-        expect(titles).toEqual([
-            'Match case (⌥⌘C)',
-            'Match whole word (⌥⌘W)',
-            'Use regular expression (⌥⌘R)'
+        expect(descriptions).toEqual([
+            'Match case, ⌥⌘C',
+            'Match whole word, ⌥⌘W',
+            'Use regular expression, ⌥⌘R'
         ])
         const key = (code: string, init: KeyboardEventInit) => {
             const event = new KeyboardEvent('keydown', {

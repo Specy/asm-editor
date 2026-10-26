@@ -14,6 +14,7 @@
     import FaExclamationCircle from '~icons/fa-solid/exclamation-circle'
     import type { Component } from 'svelte'
     import ProblemsList from '#cmp/specific/project/user-tools/ProblemsList.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { BottomTab } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import TerminalView from './TerminalView.svelte'
     import LogView from './LogView.svelte'
@@ -60,7 +61,7 @@
                 role="tab"
                 aria-selected={session.bottomTab === tab.id}
                 aria-label={iconTabs ? tab.label : undefined}
-                title={iconTabs ? tab.label : undefined}
+                {@attach tooltip(iconTabs ? tab.label : undefined)}
                 onclick={() => (session.bottomTab = tab.id)}
             >
                 <span class="tab-icon"><tab.icon /></span>

@@ -7,6 +7,7 @@
     import { tick } from 'svelte'
     import type { Testcase } from '#lib/Project.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         testcase: Testcase
@@ -59,7 +60,7 @@
                 <button
                     class="remove"
                     aria-label="Remove answer {i + 1}"
-                    title="Remove this answer"
+                    {@attach tooltip('Remove this answer')}
                     onclick={() => remove(i, false)}
                 >
                     <FaTimes />

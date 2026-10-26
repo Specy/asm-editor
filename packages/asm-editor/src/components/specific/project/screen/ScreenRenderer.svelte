@@ -8,6 +8,7 @@
     import FaLayerGroup from '~icons/fa-solid/layer-group'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import ToggleableDraggable from '#cmp/shared/draggable/DraggableContainer.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { screenZoom, screenZoomLabel } from './screenZoom'
     import { screenWindowGeometry } from './screenWindow'
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
@@ -382,9 +383,11 @@
         <button
             class="screen-action"
             class:active={showingDrawingBuffer}
-            title={showingDrawingBuffer
-                ? 'Show the visible buffer again'
-                : 'Show the drawing buffer, the frame the program is composing'}
+            {@attach tooltip(
+                showingDrawingBuffer
+                    ? 'Show the visible buffer again'
+                    : 'Show the drawing buffer, the frame the program is composing'
+            )}
             onclick={() => preferencesStore.setValue('showDrawingBuffer', !showingDrawingBuffer)}
         >
             <Icon size={0.8}>
@@ -395,7 +398,7 @@
     {/if}
     <button
         class="screen-action"
-        title={fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel'}
+        {@attach tooltip(fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel')}
         onclick={() => (fitToPanel = !fitToPanel)}
     >
         <Icon size={0.8}>
@@ -424,7 +427,8 @@
     {@render actions()}
     <button
         class="screen-action"
-        title="Open the screen in a floating window"
+        {@attach tooltip('Open the screen in a floating window')}
+        aria-label="Open in a window"
         onclick={toggleWindow}
     >
         <Icon size={0.8}>
@@ -485,7 +489,8 @@
             hiddenOnMobile={false}
             headerInfo={windowInfo}
             headerActions={windowActions}
-            closeTitle="Put the screen back in the page (Esc)"
+            closeTitle="Put the screen back in the page"
+            closeShortcut="Escape"
             onClose={toggleWindow}
             bind:left={windowLeft}
             bind:top={windowTop}

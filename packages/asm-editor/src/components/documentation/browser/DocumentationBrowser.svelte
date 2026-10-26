@@ -28,6 +28,7 @@
     import EntryRow from './EntryRow.svelte'
     import { fromIndex } from './fromIndex'
     import LectureSectionCard from './LectureSectionCard.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         language: DocumentationLanguage
@@ -331,7 +332,13 @@
     {#if variant === 'panel'}
         <div class="search">
             {#if back.length > 0}
-                <button type="button" class="back" title="Back" aria-label="Back" onclick={goBack}>
+                <button
+                    type="button"
+                    class="back"
+                    {@attach tooltip('Back')}
+                    aria-label="Back"
+                    onclick={goBack}
+                >
                     <FaArrowLeft />
                 </button>
             {/if}

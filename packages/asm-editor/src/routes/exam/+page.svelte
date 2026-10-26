@@ -19,6 +19,7 @@
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import {
         createDefaultExamSection,
@@ -282,7 +283,8 @@
                             </div>
 
                             <Button
-                                title="Move section up"
+                                {@attach tooltip('Move section up')}
+                                aria-label="Move section up"
                                 cssVar="secondary"
                                 hasIcon
                                 style="padding: 0.6rem;"
@@ -294,7 +296,8 @@
                                 </Icon>
                             </Button>
                             <Button
-                                title="Move section down"
+                                {@attach tooltip('Move section down')}
+                                aria-label="Move section down"
                                 cssVar="secondary"
                                 hasIcon
                                 style="padding: 0.6rem;"
@@ -306,7 +309,8 @@
                                 </Icon>
                             </Button>
                             <Button
-                                title="Delete section"
+                                {@attach tooltip('Delete section')}
+                                aria-label="Delete section"
                                 cssVar="secondary"
                                 hasIcon
                                 style="padding: 0.6rem;"

@@ -31,6 +31,7 @@
     import FaEllipsisH from '~icons/fa-solid/ellipsis-h'
     import FaSearch from '~icons/fa-solid/search'
     import SourceFileIcon from '#cmp/specific/project/SourceFileIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { useWorkbench } from './workbenchContext'
 
@@ -374,6 +375,8 @@
         }
     }
 
+    //as the keys read rather than in the shortcut store's form, which has no ⌥: shortcutLabel
+    //leaves them as they are
     const toggleKey = (letter: string) => (mac ? `⌥⌘${letter}` : `Alt+${letter}`)
     const TOGGLES = [
         { key: 'matchCase', label: 'Match case', glyph: 'Aa', shortcut: toggleKey('C') },
@@ -420,7 +423,7 @@
                         class="toggle {option.key}"
                         aria-pressed={search[option.key]}
                         aria-label={option.label}
-                        title={`${option.label} (${option.shortcut})`}
+                        {@attach tooltip(option.label, { shortcut: option.shortcut })}
                         onclick={() => (search[option.key] = !search[option.key])}
                         >{option.glyph}</button
                     >
@@ -431,7 +434,7 @@
                 class="details"
                 aria-expanded={search.details}
                 aria-label="Files to include and exclude"
-                title="Files to include and exclude"
+                {@attach tooltip('Files to include and exclude')}
                 onclick={() => (search.details = !search.details)}
             >
                 <FaEllipsisH />
@@ -466,7 +469,7 @@
             <fieldset class="look-in">
                 <legend>Look in</legend>
                 {#each LOOK_IN as place (place.key)}
-                    <label title={place.title}>
+                    <label {@attach tooltip(place.title)}>
                         <input
                             type="checkbox"
                             checked={lookIn[place.key]}

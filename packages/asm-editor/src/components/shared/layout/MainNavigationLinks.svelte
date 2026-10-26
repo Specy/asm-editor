@@ -1,11 +1,12 @@
 <script lang="ts">
     import { resolve } from '$app/paths'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     let { includeEmbed = false }: { includeEmbed?: boolean } = $props()
 </script>
 
 <nav class="main-links" aria-label="Main navigation">
-    <a class="link logo" href={resolve('/')} title="Go to the home">
+    <a class="link logo" href={resolve('/')} {@attach tooltip('Go to the home')}>
         <img src="/favicon.png" alt="ASM Editor home" />
     </a>
     <a class="link" href={resolve('/projects')} title="Go to your projects">Projects</a>

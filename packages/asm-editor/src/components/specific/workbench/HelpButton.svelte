@@ -4,10 +4,12 @@
      * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
      * decision 9). Its question is its accessible name and its tooltip.
      */
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+
     let { label, onclick }: { label: string; onclick?: () => void } = $props()
 </script>
 
-<button type="button" class="help" aria-label={label} title={label} {onclick}>?</button>
+<button type="button" class="help" aria-label={label} {@attach tooltip(label)} {onclick}>?</button>
 
 <style lang="scss">
     .help {

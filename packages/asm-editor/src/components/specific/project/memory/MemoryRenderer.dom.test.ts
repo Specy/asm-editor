@@ -119,7 +119,7 @@ function render(
         },
         menu: () => document.querySelector<HTMLElement>('[role="menu"]'),
         showAsCharacters: () => {
-            target.querySelector<HTMLElement>('button[title="Show as character"]')!.click()
+            target.querySelector<HTMLElement>('button[aria-label="Show as character"]')!.click()
             flushSync()
         },
         close: () => {

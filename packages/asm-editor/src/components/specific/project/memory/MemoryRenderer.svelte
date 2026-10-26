@@ -12,6 +12,7 @@
         ReadOnlyMemory
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import Button from '#cmp/shared/button/Button.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
     import MdTextFields from '~icons/ic/baseline-text-fields'
@@ -469,7 +470,8 @@
             style="height:2rem; min-width: var(--address-header-width); padding-bottom: 0; padding-right: 0.25rem;"
         >
             <Button
-                title={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
+                {@attach tooltip(type === DisplayType.Hex ? 'Show as character' : 'Show as hex')}
+                aria-label={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
                 style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                 onClick={() =>
                     (type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex)}
@@ -661,6 +663,7 @@
         x={contextMenu.x}
         y={contextMenu.y}
         items={contextMenu.items}
+        arrow
         label="Memory"
         onClose={() => (contextMenu = null)}
     />

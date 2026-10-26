@@ -9,9 +9,10 @@
      * tab running into the panel under it.
      */
     import type { Component, Snippet } from 'svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     /**
-     * `title` is the button's tooltip, for a label too short to read on its own; `icon` is drawn
+     * `title` is the button's Tooltip, for a label too short to read on its own; `icon` is drawn
      * before the label, in the colour the option gives it.
      */
     interface Option {
@@ -106,7 +107,7 @@
             class:segmented-control-button-selected={selected === option.id}
             aria-pressed={selected === option.id}
             aria-label={option.label}
-            title={option.title ?? ''}
+            {@attach tooltip(option.title)}
         >
             {#if face}
                 {@render face(option)}

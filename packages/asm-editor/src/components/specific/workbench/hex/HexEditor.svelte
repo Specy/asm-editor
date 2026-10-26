@@ -1051,6 +1051,7 @@
             x={contextMenu.x}
             y={contextMenu.y}
             items={menuItems}
+            arrow
             label="Bytes"
             onClose={() => (contextMenu = null)}
         />

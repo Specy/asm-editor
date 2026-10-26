@@ -11,6 +11,7 @@ import { BuildDownloadError } from '#lib/languages/BaseEmulator.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import { ShortcutAction } from '#stores/shortcutsStore.ts'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 
 const disposers: (() => void)[] = []
@@ -82,7 +83,7 @@ describe('a Build in progress', () => {
         emulator.buildPhase = 'Downloading libstdc++.so.6…'
         flushSync()
         expect(busy.textContent?.trim()).toBe('Downloading libstdc++.so.6…')
-        expect(busy.title).toBe('Downloading libstdc++.so.6…')
+        expect(tooltipText(busy)).toBe('Downloading libstdc++.so.6…')
 
         //the Build's download never ends, and Cancel still does
         press('Cancel the Build')

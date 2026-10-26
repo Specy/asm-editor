@@ -3,6 +3,7 @@
     import { ScopedTheme } from '#stores/themeStore.svelte.ts'
     import { fly } from 'svelte/transition'
     import FaTimes from '~icons/fa-solid/times'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -25,7 +26,13 @@
                 <div class="title-text">
                     {$toast.title}
                 </div>
-                <button type="button" class="close" title="Close" onclick={toast.closeToast}>
+                <button
+                    type="button"
+                    class="close"
+                    {@attach tooltip('Close')}
+                    aria-label="Close"
+                    onclick={toast.closeToast}
+                >
                     <FaTimes />
                 </button>
             </div>

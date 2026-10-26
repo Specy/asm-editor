@@ -11,6 +11,7 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import AsmCode from './AsmCode.svelte'
     import FlagStrip from './FlagStrip.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         pattern: FormPattern
@@ -77,7 +78,7 @@
             >{#each pattern.parts as part, index (index)}{#if part.symbol}<button
                         type="button"
                         class="symbol"
-                        title={meaningOf(part.text)}
+                        {@attach tooltip(meaningOf(part.text))}
                         onclick={() => onsymbol(part.text)}>{part.text}</button
                     >{:else}{part.text}{/if}{/each}</code
         >

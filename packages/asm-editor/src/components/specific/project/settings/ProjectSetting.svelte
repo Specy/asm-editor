@@ -9,6 +9,7 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     /**
      * One Setting of the open Project: a switch, a number, a choice or a line of text, the value the
@@ -57,7 +58,12 @@
     {/if}
     <div class="row value" style="gap: 0.4rem; align-items: center">
         {#if decided}
-            <button class="reset" title="Back to the default" onclick={onReset}>
+            <button
+                class="reset"
+                {@attach tooltip('Back to the default')}
+                aria-label="Reset"
+                onclick={onReset}
+            >
                 <Icon size={0.9}>
                     <FaUndo />
                 </Icon>

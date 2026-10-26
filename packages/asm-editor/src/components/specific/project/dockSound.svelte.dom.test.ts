@@ -102,6 +102,9 @@ describe('the dock', () => {
         cleanup = () => unmount(app)
         return target.querySelector<HTMLButtonElement>('button.sound')
     }
+    /** The button's Tooltip, its description. */
+    const description = (button: HTMLElement) =>
+        document.getElementById(button.getAttribute('aria-describedby')!)?.textContent
 
     it('has no speaker button until the host passes one', () => {
         expect(dock(undefined)).toBeNull()
@@ -110,7 +113,7 @@ describe('the dock', () => {
     it('says what a press does, and shows the bank loading', () => {
         const onToggle = vi.fn()
         const on = dock({ muted: false, playing: true, loading: false, onToggle })!
-        expect(on.title).toBe('Turn sound off')
+        expect(description(on)).toBe('Turn sound off')
         //a toggle named Sound is pressed while sound is on
         expect(on.getAttribute('aria-pressed')).toBe('true')
         expect(on.classList.contains('playing')).toBe(true)
@@ -118,11 +121,11 @@ describe('the dock', () => {
         expect(onToggle).toHaveBeenCalledOnce()
         cleanup()
         const off = dock({ muted: true, playing: true, loading: false, onToggle })!
-        expect(off.title).toBe('Turn sound on')
+        expect(description(off)).toBe('Turn sound on')
         expect(off.getAttribute('aria-pressed')).toBe('false')
         expect(off.classList.contains('playing')).toBe(false)
         cleanup()
-        expect(dock({ muted: false, playing: false, loading: true, onToggle })!.title).toBe(
+        expect(description(dock({ muted: false, playing: false, loading: true, onToggle })!)).toBe(
             'Loading sounds…'
         )
     })

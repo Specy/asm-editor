@@ -11,6 +11,7 @@
     import type { MemoryRegion, DataLabel } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
     import Button from '#cmp/shared/button/Button.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaSearch from '~icons/fa-solid/search'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaAngleRight from '~icons/fa-solid/angle-right'
@@ -320,7 +321,8 @@
                     cssVar="unset"
                     bg="transparent"
                     color="var(--secondary-text)"
-                    title="Search address"
+                    {@attach tooltip('Search address')}
+                    aria-label="Search address"
                     active={searchChangesView}
                 >
                     <Icon size={1}>
@@ -334,7 +336,8 @@
                 hasIcon
                 style="padding: 0; width:1.8rem; min-height: 1.8rem;"
                 cssVar={buttonVar}
-                title="Previous page"
+                {@attach tooltip('Previous page')}
+                aria-label="Previous page"
             >
                 <Icon size={1.2}>
                     <FaAngleLeft />
@@ -346,7 +349,8 @@
                 hasIcon
                 style="padding: 0; width:1.8rem; min-height: 1.8rem;"
                 cssVar={buttonVar}
-                title="Next page"
+                {@attach tooltip('Next page')}
+                aria-label="Next page"
             >
                 <Icon size={1.2}>
                     <FaAngleRight />
@@ -354,16 +358,19 @@
             </Button>
 
             {#if showRegions}
+                <!-- the title completes the region's name, which the trigger cuts short; the
+                     Tooltip says why the picker is disabled -->
                 <div
                     class="region-picker"
-                    title={emulator?.buildSources
-                        ? currentRegion || 'Memory regions'
-                        : 'Build to see memory regions'}
+                    title={emulator?.buildSources ? currentRegion || 'Memory regions' : undefined}
                 >
                     <Select
                         options={destinations}
                         bind:value={chosen}
                         disabled={!emulator?.buildSources}
+                        {@attach tooltip(
+                            emulator?.buildSources ? undefined : 'Build to see memory regions'
+                        )}
                         ariaLabel="Memory regions"
                         popupWidth={360}
                         wrapperStyle="height: 100%;"

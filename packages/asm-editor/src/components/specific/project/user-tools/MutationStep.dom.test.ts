@@ -3,6 +3,7 @@ import { flushSync, mount, unmount } from 'svelte'
 import MutationStep from './MutationStep.svelte'
 import MutationsRenderer from './MutationsRenderer.svelte'
 import { historyRowProps } from './MutationStep.fixture.svelte'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 import {
     type ExecutionStep,
     type MutationOperation,
@@ -309,8 +310,8 @@ describe('Undo to here', () => {
         try {
             const buttons = [...target.querySelectorAll<HTMLButtonElement>('.undo-to-here')]
             expect(buttons.map((button) => button.disabled)).toEqual([true, false, true, true])
-            expect(buttons[0].title).toBe('The program is already here')
-            expect(buttons[2].title).toBe('Undo stops before effects that are not recorded')
+            expect(tooltipText(buttons[0])).toBe('The program is already here')
+            expect(tooltipText(buttons[2])).toBe('Undo stops before effects that are not recorded')
             //one Undo, of the newest row, which leaves the call's own effects alone
             buttons[1].click()
             expect(undos).toEqual([1])
