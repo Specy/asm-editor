@@ -70,10 +70,15 @@
 
         const currentToolNames = new Set(tools.map((t) => t.name))
 
+        //an ask the chatbot does not answer rejects after the SDK's timeout, which leaves nothing to
+        //do but say so: the SDK keeps a tool it was asked to register and registers it again when
+        //the chatbot next says it is ready
         // Unregister removed tools
         for (const name of registeredToolNames) {
             if (!currentToolNames.has(name)) {
-                protocol.unregisterTool(name)
+                protocol
+                    .unregisterTool(name)
+                    .catch((error) => console.error(`Could not unregister tool "${name}"`, error))
                 registeredToolNames.delete(name)
             }
         }
@@ -81,7 +86,9 @@
         // Register new tools
         for (const t of tools) {
             if (!registeredToolNames.has(t.name)) {
-                protocol.registerTool(t)
+                protocol
+                    .registerTool(t)
+                    .catch((error) => console.error(`Could not register tool "${t.name}"`, error))
                 registeredToolNames.add(t.name)
             }
         }
