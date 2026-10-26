@@ -58,6 +58,9 @@
         })
 
         return () => {
+            //an unmount before the chatbot first answers cannot stop the SDK's connection poll, a
+            //ping every 500 ms with its message listener, which runs on until an answer that a
+            //removed iframe never gives: connectToDiscernsChatbot takes no abort signal to pass yet
             disposed = true
             disposeProtocol?.()
             protocol = undefined
@@ -71,8 +74,10 @@
         const currentToolNames = new Set(tools.map((t) => t.name))
 
         //an ask the chatbot does not answer rejects after the SDK's timeout, which leaves nothing to
-        //do but say so: the SDK keeps a tool it was asked to register and registers it again when
-        //the chatbot next says it is ready
+        //do but say so. The SDK keeps the tool either way and registers it again when the chatbot
+        //next says it is ready: a register gets its retry, while an unregister leaves the tool with
+        //the chatbot although it is no longer counted here, which the hosts' fixed tool lists
+        //never meet
         // Unregister removed tools
         for (const name of registeredToolNames) {
             if (!currentToolNames.has(name)) {
