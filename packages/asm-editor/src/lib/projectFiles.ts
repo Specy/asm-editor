@@ -743,48 +743,43 @@ export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
     const work: EditWork = { inserted: 0, copied: 0 }
     for (const [path, value] of entries) {
         if (!isValidFilePath(path)) throw new ProjectFormatError(`Invalid file path: ${path}`)
+        let file: ProjectFile
         if (kept.has(value)) {
-            size += fileByteLength(value)
-            if (size > FILE_BYTE_LIMIT)
+            file = value
+            size += fileByteLength(file)
+        } else {
+            if (
+                !value ||
+                typeof value !== 'object' ||
+                typeof value.content !== 'string' ||
+                !FILE_ENCODINGS.includes(value.encoding)
+            ) {
+                throw new ProjectFormatError(`Invalid contents or encoding for ${path}`)
+            }
+            if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
                 throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-            annotated += annotationsSize(value.annotations)
-            if (annotated > ANNOTATIONS_BYTE_LIMIT)
-                throw new ProjectFormatError(
-                    "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
-                )
-            files[path] = value
-            continue
+            let bytes = fileBytes(value)
+            //a Project saved before ADR 0063 may keep Byte edits beside the original: the File is
+            //the bytes they leave, and keeps none
+            const edits = cleanByteEdits(path, value, bytes.length, work)
+            if (edits) bytes = applyByteEdits(bytes, edits)
+            size += bytes.length
+            const annotations = cleanAnnotations(path, value.annotations)
+            file = Object.freeze({
+                encoding: value.encoding,
+                content: edits ? encodeBase64(bytes) : value.content,
+                ...(annotations ? { annotations } : {})
+            })
         }
-        if (
-            !value ||
-            typeof value !== 'object' ||
-            typeof value.content !== 'string' ||
-            !FILE_ENCODINGS.includes(value.encoding)
-        ) {
-            throw new ProjectFormatError(`Invalid contents or encoding for ${path}`)
-        }
-        if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
-            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        let bytes = fileBytes(value)
-        //a Project saved before ADR 0063 may keep Byte edits beside the original: the File is the
-        //bytes they leave, and keeps none
-        const edits = cleanByteEdits(path, value, bytes.length, work)
-        if (edits) bytes = applyByteEdits(bytes, edits)
-        size += bytes.length
         if (size > FILE_BYTE_LIMIT)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        const annotations = cleanAnnotations(path, value.annotations)
-        annotated += annotationsSize(annotations)
+        annotated += annotationsSize(file.annotations)
         //met when a Project is opened or imported: saving is refused earlier, by the FileSystem
         if (annotated > ANNOTATIONS_BYTE_LIMIT)
             throw new ProjectFormatError(
                 "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
             )
-        files[path] = Object.freeze({
-            encoding: value.encoding,
-            content: edits ? encodeBase64(bytes) : value.content,
-            ...(annotations ? { annotations } : {})
-        })
+        files[path] = file
     }
     for (const path of Object.keys(files)) {
         const parts = path.split('/')
