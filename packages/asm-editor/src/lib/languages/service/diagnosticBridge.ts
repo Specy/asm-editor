@@ -1,21 +1,8 @@
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { fileText, type BuildSources } from '#lib/projectFiles.ts'
 import type { LanguageDiagnostic } from './sourceModel'
 
 /** Converts the neutral Worker diagnostic into the Emulator/UI diagnostic contract. */
-export function languageDiagnosticToDiagnostic(
-    diagnostic: LanguageDiagnostic,
-    sources: BuildSources
-): Diagnostic {
-    const file = sources.files[diagnostic.location.path]
-    let line = ''
-    if (file) {
-        try {
-            line = fileText(file).split(/\r?\n/)[diagnostic.location.range.start.line] ?? ''
-        } catch {
-            // Binary Files do not have source lines.
-        }
-    }
+export function languageDiagnosticToDiagnostic(diagnostic: LanguageDiagnostic): Diagnostic {
     return {
         severity: diagnostic.severity,
         source: diagnostic.source,
@@ -24,7 +11,6 @@ export function languageDiagnosticToDiagnostic(
         lineIndex: diagnostic.location.range.start.line,
         column: diagnostic.location.range.start.column + 1,
         endColumn: diagnostic.location.range.end.column + 1,
-        line: { line, line_index: diagnostic.location.range.start.line },
         message: diagnostic.message,
         hint: diagnostic.hint,
         formatted: diagnostic.hint

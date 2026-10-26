@@ -218,7 +218,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //`check()` would do, but the macro attribution below needs the assembled lines, and the
         //assembler does the same work either way
         const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
-        return [...toDiagnostics(result, sourceLinesOf(sources)), ...this.screenDirective(sources)]
+        return [...toDiagnostics(result), ...this.screenDirective(sources)]
     }
 
     _compile(sources: BuildSources): CompileResult {
@@ -230,7 +230,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.sourceLines = sourceLinesOf(sources)
         const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
         const directive = this.screenDirective(sources)
-        const diagnostics = [...toDiagnostics(result, this.sourceLines), ...directive]
+        const diagnostics = [...toDiagnostics(result), ...directive]
         //the assembler has no warning concept: every diagnostic it produces is an error
         if (result.hasErrors()) {
             return {
@@ -1071,10 +1071,7 @@ function normalizedCorePath(path: string): string {
     }
 }
 
-function toDiagnostics(
-    result: AssemblyResult,
-    sourceLines: Record<string, string[]>
-): Diagnostic[] {
+function toDiagnostics(result: AssemblyResult): Diagnostic[] {
     return result.diagnostics.map((diagnostic) => {
         const lineIndex = diagnostic.lineNumber ?? expansionLineOf(result, diagnostic.message) ?? 0
         return {
@@ -1083,10 +1080,6 @@ function toDiagnostics(
             lineIndex,
             //the assembler reports the offending line, not a column inside it
             column: 0,
-            line: {
-                line: sourceLines[diagnostic.pathname]?.[lineIndex] ?? '',
-                line_index: lineIndex
-            },
             message: diagnostic.message,
             formatted: diagnostic.message
         }

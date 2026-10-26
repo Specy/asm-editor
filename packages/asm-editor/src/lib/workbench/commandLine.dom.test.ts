@@ -208,7 +208,6 @@ describe('the Command line', () => {
             source: 'Arguments',
             lineIndex: 0,
             column: 0,
-            line: { line: '', line_index: 0 },
             message: 'Arguments: The double quote (") at column 1 is never closed',
             formatted: 'Arguments: The double quote (") at column 1 is never closed'
         }

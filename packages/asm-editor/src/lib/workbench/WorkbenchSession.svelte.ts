@@ -1274,7 +1274,6 @@ export class WorkbenchSession {
             // A pending revision deliberately retains the previous snapshot, so diagnostics and
             // their Monaco ranges remain stable until their replacements are ready.
             if (snapshot && !pending) {
-                const current = untrack(() => this.sourceInput)
                 this.languageAnalysis = snapshot
                 this.liveLanguageDiagnostics = snapshot.diagnostics
                     .filter(
@@ -1282,7 +1281,7 @@ export class WorkbenchSession {
                             editorFileLanguage(diagnostic.location.path, this.project.language) ===
                             this.project.language
                     )
-                    .map((diagnostic) => languageDiagnosticToDiagnostic(diagnostic, current))
+                    .map(languageDiagnosticToDiagnostic)
             }
             this.languageAnalysisPending = pending
         })

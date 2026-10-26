@@ -784,7 +784,6 @@ describe('failed Build diagnostics', () => {
             file,
             lineIndex,
             column: 1,
-            line: { line: '', line_index: lineIndex },
             message,
             formatted: message
         }

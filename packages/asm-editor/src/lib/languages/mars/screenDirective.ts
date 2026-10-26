@@ -39,8 +39,6 @@ export type ScreenDirective = {
     lineIndex: number
     /** 1 based, monaco's column of the `@`. */
     column: number
-    /** The whole source line, for the `Diagnostic`'s `line` field. */
-    lineText: string
     unitWidth?: number
     unitHeight?: number
     width?: number
@@ -96,7 +94,6 @@ export function ignoredIncludedScreenDiagnostics(
                 ...makeWarning(
                     lineIndex,
                     column,
-                    lineText,
                     `This @screen directive is ignored; only the Entry file ${entry} configures the display.`
                 ),
                 file: path
@@ -124,13 +121,12 @@ export function parseScreenDirective(code: string): ScreenDirectiveParse {
                 makeWarning(
                     lineIndex,
                     column,
-                    lineText,
                     `A program has one @screen directive; this one is ignored, the one on line ${directive.lineIndex + 1} is used.`
                 )
             )
             continue
         }
-        directive = { lineIndex, column, lineText }
+        directive = { lineIndex, column }
         readEntries(directive, lineText.slice(match.index + match[0].length), diagnostics)
     }
     return { directive, diagnostics }
@@ -357,7 +353,7 @@ function hex(address: number): string {
 }
 
 function warnOn(directive: ScreenDirective, message: string): Diagnostic {
-    return makeWarning(directive.lineIndex, directive.column, directive.lineText, message)
+    return makeWarning(directive.lineIndex, directive.column, message)
 }
 
 /**
@@ -365,20 +361,11 @@ function warnOn(directive: ScreenDirective, message: string): Diagnostic {
  * must not stop a program from assembling here when it assembles in MARS and RARS. What could not
  * be understood is left at the configuration the Screen already had.
  */
-function makeWarning(
-    lineIndex: number,
-    column: number,
-    lineText: string,
-    message: string
-): Diagnostic {
+function makeWarning(lineIndex: number, column: number, message: string): Diagnostic {
     return {
         severity: 'warning',
         lineIndex,
         column,
-        line: {
-            line: lineText,
-            line_index: lineIndex + 1
-        },
         message,
         formatted: message
     }

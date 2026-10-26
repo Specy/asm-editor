@@ -435,9 +435,7 @@ export abstract class MarsEmulator<
         })
         return {
             ...check,
-            diagnostics: check.diagnostics.map((diagnostic) =>
-                languageDiagnosticToDiagnostic(diagnostic, sources)
-            )
+            diagnostics: check.diagnostics.map(languageDiagnosticToDiagnostic)
         }
     }
 

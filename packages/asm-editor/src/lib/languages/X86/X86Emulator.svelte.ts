@@ -1972,17 +1972,14 @@ function sourceLine(sources: BuildSources, source: { path: string; line: number 
 }
 
 function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
-    const source = { path: error.file || sources.entry, line: error.lineIndex }
-    const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
         severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
-        file: source.path,
-        lineIndex: source.line,
+        file: error.file || sources.entry,
+        lineIndex: error.lineIndex,
         column: Math.max(1, error.column),
         ...(error.endColumn === undefined ? {} : { endColumn: error.endColumn }),
         ...(error.code ? { code: error.code } : {}),
-        line: { line, line_index: source.line },
         message: error.message,
         ...(hint ? { hint } : {}),
         formatted: hint ? `${error.formatted}\n${hint}` : error.formatted
@@ -2008,10 +2005,6 @@ function coreDiagnosticToDiagnostic(
         column: span.column,
         ...(span.endColumn === undefined ? {} : { endColumn: span.endColumn }),
         ...(diagnostic.warningClass ? { code: diagnostic.warningClass } : {}),
-        line: {
-            line,
-            line_index: source.line
-        },
         message: diagnostic.error,
         ...(hint ? { hint } : {}),
         formatted: hint ? `${diagnostic.error}\n${hint}` : diagnostic.error
@@ -2120,7 +2113,6 @@ function executableDiagnostic(
         file,
         lineIndex: 0,
         column: 1,
-        line: { line: '', line_index: 0 },
         message,
         formatted: message
     }

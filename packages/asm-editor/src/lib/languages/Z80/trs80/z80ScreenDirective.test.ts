@@ -51,6 +51,6 @@ describe('the Z80 @screen directive', () => {
     it('points at the @, which is where the editor draws the warning', () => {
         const parse = parseZ80ScreenDirective('    ; @screen nonsense')
         expect(parse.diagnostics[0].column).toBe(7)
-        expect(parse.diagnostics[0].line.line_index).toBe(1)
+        expect(parse.diagnostics[0].lineIndex).toBe(0)
     })
 })

@@ -59,8 +59,5 @@ export function s68kDiagnosticToDiagnostic(
     error: S68kDiagnostic,
     sources: BuildSources
 ): Diagnostic {
-    return languageDiagnosticToDiagnostic(
-        s68kDiagnosticToLanguageDiagnostic(error, sources),
-        sources
-    )
+    return languageDiagnosticToDiagnostic(s68kDiagnosticToLanguageDiagnostic(error, sources))
 }

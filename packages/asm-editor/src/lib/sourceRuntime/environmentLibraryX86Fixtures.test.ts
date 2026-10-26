@@ -130,7 +130,7 @@ describe('a call the x86 Core does not implement', () => {
         expect(failure.file).toBe(f.sourcePath)
         expect(failure.lineIndex).toBe(3)
         expect(failure.column).toBe(18)
-        expect(failure.line.line).toBe('    long child = sim_fork();')
+        expect(f.source.split(/\r?\n/)[3]).toBe('    long child = sim_fork();')
         expect(failure.message).toMatch(
             f.sourcePath.endsWith('.cpp')
                 ? /^'sim_fork' was not declared in this scope/
