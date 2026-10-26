@@ -38,8 +38,8 @@ describe('placeCard', () => {
         const target = { left: 0, top: 300, width: 20, height: 20 }
         const placed = placeCard(target, card, tooltip)
         expect(placed.left).toBe(4)
-        //the target's middle is at 10, 6 into the card, which the corner pushes out to 12
-        expect(placed.arrow).toBe(12)
+        //the target's middle is at 10, 6 into the card, which the corner pushes out to 14
+        expect(placed.arrow).toBe(14)
     })
 
     it('places beside the target on the left and right sides', () => {
@@ -60,7 +60,7 @@ describe('placeCard', () => {
         const menu = { ...tooltip, side: 'bottom' as const, gap: 0, align: 'start' as const }
         const point = { left: 200, top: 100, width: 0, height: 0 }
         const placed = placeCard(point, { width: 180, height: 120 }, menu)
-        expect(placed).toEqual({ left: 200 - 12, top: 106, side: 'bottom', arrow: 12 })
+        expect(placed).toEqual({ left: 200 - 14, top: 106, side: 'bottom', arrow: 14 })
     })
 
     it('opens a menu above a point near the bottom, and slides it left near the right edge', () => {
@@ -91,25 +91,22 @@ describe('outlinePath', () => {
         )
     })
 
-    it("puts the arrow on the edge facing the target, its tip outside the card's box", () => {
+    it("puts the arrow on the edge facing the target, its tip outside the card's box and each bend rounded", () => {
         //a card above its target points down from its bottom edge
         expect(
             outlinePath(100, 30, { radius: 6, side: 'top', at: 40, arrow: 6, offset: 6 })
-        ).toContain('L52,36 L46,42 L40,36')
+        ).toContain(
+            'L54,36 Q52,36 50.59,37.41 L47.06,40.94 Q46,42 44.94,40.94 L41.41,37.41 Q40,36 38,36'
+        )
         //a card below its target points up from its top edge
         expect(outlinePath(100, 30, { radius: 6, side: 'bottom', at: 40, arrow: 6 })).toContain(
-            'L34,0 L40,-6 L46,0'
+            'L32,0 Q34,0 35.41,-1.41 L38.94,-4.94 Q40,-6 41.06,-4.94 L44.59,-1.41 Q46,0 48,0'
         )
     })
 
     it('keeps the arrow clear of the corners', () => {
         expect(outlinePath(100, 30, { radius: 6, side: 'bottom', at: 0, arrow: 6 })).toContain(
-            'L6,0 L12,-6 L18,0'
+            'L6,0 Q8,0 9.41,-1.41 L12.94,-4.94 Q14,-6 15.06,-4.94 L18.59,-1.41 Q20,0 22,0'
         )
-    })
-
-    it('draws a stroke path inside the box, as a CSS border is', () => {
-        const path = outlinePath(100, 30, { radius: 6, side: 'top', at: 50, arrow: 0, inset: 0.5 })
-        expect(path.startsWith('M6,0.5 L94,0.5 A5.5,5.5 0 0 1 99.5,6')).toBe(true)
     })
 })

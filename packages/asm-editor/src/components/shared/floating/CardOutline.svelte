@@ -42,7 +42,6 @@
     const size = $derived(at === undefined ? 0 : arrow)
     const shape = $derived({ radius, side, at: at ?? 0, arrow: size, offset: size })
     const path = $derived(outlinePath(width, height, shape))
-    const border = $derived(outlinePath(width, height, { ...shape, inset: 0.5 }))
     //the shadow's room past the outline on every side, so neither the mask nor the filter cuts it off
     const reach = $derived(shadow.y + shadow.blur * 3)
     const region = $derived({
@@ -74,12 +73,23 @@
                     <rect {...region} fill="#fff" />
                     <path d={path} fill="#000" />
                 </mask>
+                <clipPath id="{id}-inside">
+                    <path d={path} />
+                </clipPath>
             </defs>
             <g mask="url(#{id}-outside)">
                 <path d={path} fill="#000" filter="url(#{id}-shadow)" />
             </g>
             <path d={path} style:fill />
-            <path d={border} style:stroke stroke-width="1" fill="none" />
+            <!-- the border on the fill's own path, twice as wide and cut to the inside: its outer
+                 edge is the fill's, curves and the arrow's tip included, as a CSS border's is -->
+            <path
+                d={path}
+                style:stroke
+                stroke-width="2"
+                fill="none"
+                clip-path="url(#{id}-inside)"
+            />
         </svg>
     </div>
 {/if}

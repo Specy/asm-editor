@@ -1135,10 +1135,26 @@
         color: var(--accent-text) !important;
     }
 
+    /* the context menus' surface: a translucent tint of the widget's colour that blurs what is
+       beneath, edged with their hairline (menu.border) and lifted by their shadow. The standalone
+       editor defines no --vscode-widget-border or --vscode-shadow-lg, so Monaco's own were none */
     :global(.find-widget) {
-        border-radius: 0.3rem !important;
+        border: 1px solid var(--vscode-menu-border) !important;
+        border-radius: 0.4rem !important;
+        background-color: color-mix(
+            in srgb,
+            var(--vscode-editorWidget-background) 85%,
+            transparent
+        ) !important;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35) !important;
         top: 1rem !important;
         right: 2.4rem !important;
+    }
+    /* its resize edge drew a square grey strip across the rounded corner; it still lights up on
+       hover, where it can be dragged */
+    :global(.monaco-editor .find-widget .monaco-sash) {
+        background-color: transparent !important;
     }
     :global(.monaco-editor .find-widget > .button.codicon-widget-close) {
         top: 7px !important;
@@ -1245,8 +1261,9 @@
         border-bottom: unset;
     }
 
+    /* far enough above the editor that its shadow does not show while it is closed */
     :global(.find-widget) {
-        transform: translateY(calc(-100% - 1.2rem)) !important;
+        transform: translateY(calc(-100% - 3.5rem)) !important;
     }
 
     :global(.find-widget.visible) {
