@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it } from 'vite-plus/test'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Db } from './db'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { EditJournal } from '#lib/editJournal.ts'
@@ -192,6 +192,24 @@ describe('the version 2 upgrade', () => {
             await db.deleteProject(project)
             expect(await db.getProject(project.id)).toBeUndefined()
             expect(await db.getProject('missing')).toBeUndefined()
+        } finally {
+            db.close()
+        }
+    })
+
+    it('leaves a Project the id it had when the browser refuses to add it', async () => {
+        const db = new Db()
+        try {
+            //a shared link's Project, which keeps its link's id until it is stored
+            const project = makeProject({ id: '__share__', name: 'refused' })
+            vi.spyOn(db.projects, 'add').mockRejectedValueOnce(
+                new DOMException('Full', 'QuotaExceededError')
+            )
+            await expect(db.addProject(project)).rejects.toThrow('Full')
+            expect(project.id).toBe('__share__')
+            await db.addProject(project)
+            expect(project.id).not.toBe('__share__')
+            expect((await db.getProject(project.id))?.name).toBe('refused')
         } finally {
             db.close()
         }

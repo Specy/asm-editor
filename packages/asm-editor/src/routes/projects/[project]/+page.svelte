@@ -150,9 +150,17 @@
             )
             if (confirmed === null) return false
             if (!confirmed) return false
-            project.set({ id: undefined })
-            const newProject = await ProjectStore.addProject(project)
-            project.set({ id: newProject.id })
+            try {
+                //gives the Project its own id once it is stored, and leaves it the link's otherwise
+                await ProjectStore.addProject(project)
+            } catch (error) {
+                console.error(error)
+                toast.error(
+                    'Could not save this project in the browser — your changes are not stored.',
+                    10000
+                )
+                return false
+            }
             //in place of the link in the history: the page is not loaded again for the link's
             //address, so Back to it would go on showing the saved Project under that address
             goto(resolve('/projects/[project]', { project: project.id }), { replace: true })

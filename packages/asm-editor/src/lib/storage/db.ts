@@ -123,9 +123,14 @@ export class Db extends Dexie {
         const project = await this.projects.get(id)
         return project && makeProject(project)
     }
+    /**
+     * Stores `project` as a new row, under a new id it takes only once the row is stored: an add
+     * the browser refused leaves it the id it had, a shared link's among them.
+     */
     async addProject(project: Project): Promise<Project> {
-        project.id = id()
-        await this.projects.add(project.toObject())
+        const row = { ...project.toObject(), id: id() }
+        await this.projects.add(row)
+        project.id = row.id
         return project
     }
     async deleteProject(project: Project): Promise<void> {

@@ -243,3 +243,28 @@ it('puts a saved shared Project in place of its link in the history', async () =
         project.dispose()
     }
 })
+
+it('keeps a shared Project unsaved when the browser does not store it', async () => {
+    vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+    vi.spyOn(db.projects, 'add').mockRejectedValue(new DOMException('Full', 'QuotaExceededError'))
+    const shared = createSharePayload(makeProject({ name: 'refused' }))
+    const project = await open('share', `?project=${shared}`)
+    try {
+        project.button('Save').click()
+        await vi.waitFor(() =>
+            expect(error).toHaveBeenCalledWith(
+                'Could not save this project in the browser — your changes are not stored.',
+                10000
+            )
+        )
+        expect(goto).not.toHaveBeenCalled()
+        expect(toast.logPill).not.toHaveBeenCalledWith('Project saved')
+        expect(project.asks()).toBe(true)
+        vi.spyOn(window, 'confirm').mockReturnValue(false)
+        expect(project.navigates('popstate')).toBe(false)
+    } finally {
+        project.dispose()
+    }
+})
