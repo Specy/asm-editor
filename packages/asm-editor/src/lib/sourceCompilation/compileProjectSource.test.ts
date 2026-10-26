@@ -226,6 +226,20 @@ describe('Source compilation lifecycle', () => {
         expect(p.selectedProgram).toBe(OUTPUT)
         expect(p.sourceMaps[OUTPUT]).toBeDefined()
     })
+    it('keeps every Source map through the rename of a File no record names', async () => {
+        const p = await initial()
+        p.fileSystem.writeText('notes.txt', 'notes')
+        expect(p.sourceMaps[OUTPUT]).toBeDefined()
+        //the Explorer's rename: the File, then what followed it
+        p.fileSystem.rename('notes.txt', 'notes.md')
+        p.renameCompilationFile('notes.txt', 'notes.md')
+        expect(p.sourceMaps[OUTPUT]).toBeDefined()
+        //a renamed input makes its record stale, which takes its map
+        p.fileSystem.rename('src/value.h', 'src/values.h')
+        p.renameCompilationFile('src/value.h', 'src/values.h')
+        expect(p.compilations[0].renamedInput).toBe(true)
+        expect(p.sourceMaps[OUTPUT]).toBeUndefined()
+    })
     it('rejects invalid saved provenance and leaves older Projects compatible', async () => {
         expect(normalizeProjectData({ code: 'nop' })).not.toHaveProperty('compilations')
         const p = await initial()

@@ -1021,7 +1021,9 @@ export function makeProject(data?: StoredProject) {
                     ...(input ? { renamedInput: true as const } : {})
                 }
             })
-            sourceMaps = {}
+            //only the maps of the records a renamed input makes stale go: a rename of a File no
+            //record names leaves every Source map, and with them the C Breakpoints
+            reconcileSourceMaps()
         },
 
         set code(v: string) {
