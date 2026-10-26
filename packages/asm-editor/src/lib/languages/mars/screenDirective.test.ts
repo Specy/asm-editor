@@ -72,7 +72,6 @@ describe('parsing the directive', () => {
         //monaco columns are 1 based, and the line index is 0 based like every other Diagnostic
         expect(directive?.lineIndex).toBe(1)
         expect(directive?.column).toBe(15)
-        expect(directive?.lineText).toBe('    nop     # @screen unit=2')
     })
 
     it('finds nothing in a program that has no directive', () => {
@@ -188,7 +187,6 @@ describe('applying the directive', () => {
     it('every diagnostic sits on the directive’s own line', () => {
         const applied = apply('.data\n\n    # @screen depth=8\n')
         expect(applied.diagnostics[0]?.lineIndex).toBe(2)
-        expect(applied.diagnostics[0]?.line.line_index).toBe(3)
     })
 })
 

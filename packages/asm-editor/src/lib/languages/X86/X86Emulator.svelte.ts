@@ -91,7 +91,12 @@ import {
 } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { x86DiagnosticHint } from './X86-diagnostics'
-import { ProjectFormatError, type BuildInput, type BuildSources } from '#lib/projectFiles.ts'
+import {
+    ProjectFormatError,
+    sourceLineText,
+    type BuildInput,
+    type BuildSources
+} from '#lib/projectFiles.ts'
 import {
     linksX86StartUnit,
     prepareX86Runtime,
@@ -1719,13 +1724,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /**
      * An Executable starts only in the Build's run to `main`, after `_beginExecutionSession` placed
      * the memory view at its stack pointer, which was still 0: place it again at the stack page, as
-     * an assembled program's is.
+     * an assembled program's is. The Stack tab then snaps onto the page that holds SP.
      */
     protected override positionStackTabOnCompile(): void {
         const global = this.state.memory.global
         if (this.executable && !global.userPlaced)
             global.address = alignDown(this._getSp(), BigInt(global.pageSize))
         super.positionStackTabOnCompile()
+        this.scrollStackTab()
     }
 
     private updateMemoryAddresses(): void {
@@ -1966,23 +1972,15 @@ function fromDoubleBits(bits: bigint): number {
     return doubleBits.getFloat64(0, true)
 }
 
-function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
-    const file = sources.files[source.path]
-    return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
-}
-
 function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
-    const source = { path: error.file || sources.entry, line: error.lineIndex }
-    const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
         severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
-        file: source.path,
-        lineIndex: source.line,
+        file: error.file || sources.entry,
+        lineIndex: error.lineIndex,
         column: Math.max(1, error.column),
         ...(error.endColumn === undefined ? {} : { endColumn: error.endColumn }),
         ...(error.code ? { code: error.code } : {}),
-        line: { line, line_index: source.line },
         message: error.message,
         ...(hint ? { hint } : {}),
         formatted: hint ? `${error.formatted}\n${hint}` : error.formatted
@@ -1997,7 +1995,7 @@ function coreDiagnosticToDiagnostic(
         path: diagnostic.file || sources.entry,
         line: Math.max(0, diagnostic.line - 1)
     }
-    const line = sourceLine(sources, source)
+    const line = sourceLineText(sources, source.path, source.line)
     const hint =
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
@@ -2008,10 +2006,6 @@ function coreDiagnosticToDiagnostic(
         column: span.column,
         ...(span.endColumn === undefined ? {} : { endColumn: span.endColumn }),
         ...(diagnostic.warningClass ? { code: diagnostic.warningClass } : {}),
-        line: {
-            line,
-            line_index: source.line
-        },
         message: diagnostic.error,
         ...(hint ? { hint } : {}),
         formatted: hint ? `${diagnostic.error}\n${hint}` : diagnostic.error
@@ -2120,7 +2114,6 @@ function executableDiagnostic(
         file,
         lineIndex: 0,
         column: 1,
-        line: { line: '', line_index: 0 },
         message,
         formatted: message
     }

@@ -119,8 +119,7 @@ function diagnostic(
         lineIndex: line,
         column,
         file: path,
-        source: 'Compiler Explorer',
-        line: { line: '', line_index: line }
+        source: 'Compiler Explorer'
     }
 }
 
@@ -235,9 +234,7 @@ function compilerDiagnostics(
                 { file: path, lineIndex: line, column, endColumn: column + 1, message }
             ]
         } else {
-            const entry = diagnostic(message, path, line, column, severity)
-            entry.line.line = mappedText(path, request.files, readOnly).split(/\r?\n/)[line] ?? ''
-            diagnostics.push(entry)
+            diagnostics.push(diagnostic(message, path, line, column, severity))
         }
     }
     // Keep service/driver failures without structured locations, but don't inflate a real error
@@ -550,7 +547,7 @@ export function prepareX86Assembly(
     }
     const diagnostics: Diagnostic[] = []
     for (const item of translation.diagnostics) {
-        const entry = translationDiagnostic(item, request, locate(item.location), readOnly)
+        const entry = translationDiagnostic(item, request, locate(item.location))
         //an inline function or an unrolled loop repeats its source line's construct in the output
         if (
             !diagnostics.some(
@@ -586,8 +583,7 @@ export function prepareX86Assembly(
 function translationDiagnostic(
     item: TranslationDiagnostic,
     request: CompilationRequest,
-    location: SourceLocation | null,
-    readOnly: ReadOnlySources
+    location: SourceLocation | null
 ): Diagnostic {
     const inline = item.code === 'inline-assembly'
     const entry = diagnostic(
@@ -598,8 +594,6 @@ function translationDiagnostic(
         item.severity
     )
     entry.code = item.code
-    entry.line.line =
-        mappedText(entry.file!, request.files, readOnly).split(/\r?\n/)[entry.lineIndex] ?? ''
     if (inline) {
         entry.hint =
             'Write the instructions as a global function in a .asm File of the Project, and call that function instead.'

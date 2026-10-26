@@ -2094,6 +2094,54 @@ describe('C/C++ agent workflow', () => {
         }
     })
 
+    it('gives each compiler diagnostic the text of the line it points at', async () => {
+        const compiler = vi.spyOn(compilerExplorerDriver, 'compile').mockRejectedValue(
+            new SourceCompilationError('bad C source', [
+                {
+                    severity: 'error',
+                    message: 'expected ;',
+                    formatted: 'main.c:2:10: error: expected ;',
+                    file: 'main.c',
+                    lineIndex: 1,
+                    column: 9,
+                    source: 'Compiler Explorer'
+                },
+                {
+                    severity: 'warning',
+                    message: 'in a header the Project does not hold',
+                    formatted: '@lib/sim.h:1:1: warning: in a header the Project does not hold',
+                    file: '@lib/sim.h',
+                    lineIndex: 0,
+                    column: 0,
+                    source: 'Compiler Explorer'
+                }
+            ])
+        )
+        try {
+            const { tools } = sourceContext()
+            await tools.write_to_file.execute({
+                path: 'main.c',
+                code: 'int main() {\n    int x\n}'
+            })
+            const result = await tools.compile_source.execute({ path: 'main.c' })
+            expect(result).toMatchObject({
+                success: false,
+                errorKind: 'compile_error',
+                details: {
+                    diagnostics: [
+                        { message: 'expected ;', sourceLine: '    int x' },
+                        { message: 'in a header the Project does not hold' }
+                    ]
+                }
+            })
+            expect(
+                (result as { details: { diagnostics: object[] } }).details.diagnostics[1]
+            ).not.toHaveProperty('sourceLine')
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
     it('preserves manually edited generated assembly when replacement is declined', async () => {
         const compiler = mockSourceCompiler()
         try {

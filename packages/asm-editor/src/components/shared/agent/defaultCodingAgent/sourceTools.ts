@@ -2,6 +2,8 @@ import { tool } from '@discerns/sdk'
 import { z } from 'zod'
 import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
 import { SourceCompilationError } from '#lib/sourceCompilation/compilerExplorer.ts'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { fileText, type ProjectFiles } from '#lib/projectFiles.ts'
 import {
     isCompilationTarget,
     OPTIMIZATIONS,
@@ -115,7 +117,7 @@ export function createCompileSourceTool(context: DefaultCodingAgentToolContext) 
                         program: result.program,
                         language: project.language,
                         sourceLanguage: result.record.language,
-                        diagnostics: result.diagnostics,
+                        diagnostics: withSourceLines(result.diagnostics, project.files),
                         canExecute: false,
                         ...(result.program === 'none'
                             ? {
@@ -132,10 +134,27 @@ export function createCompileSourceTool(context: DefaultCodingAgentToolContext) 
                 } catch (error) {
                     if (!(error instanceof SourceCompilationError)) throw error
                     return toolRun.failure('compile_error', error, {
-                        details: { sourcePath, diagnostics: error.diagnostics },
+                        details: {
+                            sourcePath,
+                            diagnostics: withSourceLines(error.diagnostics, project.files)
+                        },
                         nextAction: 'Fix the C/C++ source or headers, then retry compile_source.'
                     })
                 }
             })
+    })
+}
+
+/**
+ * The compiler's Diagnostics with the text of the line each points at, so the agent sees the code a
+ * message is about without reading the File again. A line in a File outside the Project, such as a
+ * read-only library header, has none.
+ */
+function withSourceLines(diagnostics: readonly Diagnostic[], files: ProjectFiles) {
+    return diagnostics.map((diagnostic) => {
+        const file = diagnostic.file === undefined ? undefined : files[diagnostic.file]
+        if (!file || file.encoding !== 'plain') return diagnostic
+        const line = fileText(file).split(/\r?\n/)[diagnostic.lineIndex]
+        return line === undefined ? diagnostic : { ...diagnostic, sourceLine: line }
     })
 }

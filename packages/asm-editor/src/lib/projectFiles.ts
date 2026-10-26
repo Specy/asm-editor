@@ -970,6 +970,17 @@ export function sourceText(sources: BuildSources): string {
     return fileText(file)
 }
 
+/** Line `line`, 0 based, of the File at `path`: '' when there is no such File, line or text. */
+export function sourceLineText(sources: BuildSources, path: string, line: number): string {
+    const file = sources.files[path]
+    if (!file) return ''
+    try {
+        return fileText(file).split(/\r?\n/)[line] ?? ''
+    } catch {
+        return ''
+    }
+}
+
 export function assemblyFiles(sources: BuildSources): Record<string, string | Uint8Array> {
     return Object.fromEntries(
         Object.entries(sources.files).map(([path, file]) => {

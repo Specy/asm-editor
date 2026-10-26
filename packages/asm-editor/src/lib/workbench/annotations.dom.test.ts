@@ -540,7 +540,7 @@ describe('Undo and Redo of renames and comments', () => {
             comments: { [address]: 'the password' }
         })
         expect(session.canUndoAnnotation('crackme')).toBe(true)
-        expect(session.canRedoAnnotation('crackme')).toBe(false)
+        expect(session.canUndoAnnotation('crackme', true)).toBe(false)
         expect(session.undoAnnotation('crackme')).toBe(true)
         expect(session.project.files.crackme.annotations).toEqual({
             names: { '0x11e9': 'check_password' }

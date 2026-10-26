@@ -35,7 +35,6 @@ const warning: Diagnostic = {
     severity: 'warning',
     lineIndex: 0,
     column: 1,
-    line: { line: 'start: nop', line_index: 0 },
     message: 'unused label',
     formatted: 'unused label'
 }

@@ -22,6 +22,7 @@ import {
     type ProjectFile,
     type ProjectFiles
 } from '#lib/projectFiles.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 
 const hasOwn = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key)
 const strictDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
@@ -624,17 +625,11 @@ export class FileSystemSession {
      */
     canUndoSerialRange(oldest: bigint, newest: bigint): boolean {
         if (this.stopped || this.frame || oldest > newest) return false
-        const lowerBound = (serial: bigint, inclusive: boolean) => {
-            let low = 0
-            let high = this.history.length
-            while (low < high) {
-                const middle = Math.floor((low + high) / 2)
-                const id = BigInt(this.history[middle].id)
-                if (id < serial || (!inclusive && id === serial)) low = middle + 1
-                else high = middle
-            }
-            return low
-        }
+        const lowerBound = (serial: bigint, inclusive: boolean) =>
+            partitionPoint(this.history.length, (index) => {
+                const id = BigInt(this.history[index].id)
+                return id < serial || (!inclusive && id === serial)
+            })
         const start = lowerBound(oldest, true)
         const end = lowerBound(newest, false)
         for (let index = start; index < end; index++)

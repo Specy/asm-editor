@@ -1,3 +1,4 @@
+import { partitionPoint } from '#lib/sorted.ts'
 import { isWholeWord, type Matcher } from './query.ts'
 
 /**
@@ -92,15 +93,9 @@ export class SearchText {
     /** The 0-based line holding `offset`; `from`, a line at or before it when known, saves a search. */
     lineAt(offset: number, from = 0): number {
         const starts = this.lineStarts
-        let low = from < starts.length && starts[from] <= offset ? from : 0
+        const low = from < starts.length && starts[from] <= offset ? from : 0
         if (low + 1 >= starts.length || offset < starts[low + 1]) return low
-        let high = starts.length - 1
-        while (low < high) {
-            const middle = (low + high + 1) >> 1
-            if (starts[middle] <= offset) low = middle
-            else high = middle - 1
-        }
-        return low
+        return partitionPoint(starts.length, (line) => starts[line] <= offset) - 1
     }
 
     /** Where a 0-based line's text ends: at its line break, or at the text's end. */
@@ -266,13 +261,25 @@ function eachRegexMatch(
     singleLine: boolean,
     found: (start: number, end: number) => void
 ) {
-    if (singleLine) {
-        const starts = text.lineStarts
-        for (let line = 0; line < starts.length; line++)
-            eachLineMatch(text, pattern, wholeWord, line, starts[line], text.lineEnd(line), found)
-        return
+    if (!singleLine) return eachIn(text.text, 0, pattern, wholeWord, found)
+    const starts = text.lineStarts
+    for (let line = 0; line < starts.length; line++) {
+        const start = starts[line]
+        eachIn(text.text.slice(start, text.lineEnd(line)), start, pattern, wholeWord, found)
     }
-    const subject = text.text
+}
+
+/**
+ * The matches in `subject`, which starts at `offset` in the text, searched as if it were the
+ * whole text: a line, or the text itself.
+ */
+function eachIn(
+    subject: string,
+    offset: number,
+    pattern: RegExp,
+    wholeWord: boolean,
+    found: (start: number, end: number) => void
+) {
     const unicode = pattern.unicode
     let from = 0
     while (from <= subject.length) {
@@ -285,37 +292,8 @@ function eachRegexMatch(
             from = advance(subject, start, unicode)
             continue
         }
-        found(start, end)
+        found(offset + start, offset + end)
         from = end > start ? end : advance(subject, end, unicode)
-    }
-}
-
-/** The matches from `from` to the end of one line, searched as if the line were the whole text. */
-function eachLineMatch(
-    text: SearchText,
-    pattern: RegExp,
-    wholeWord: boolean,
-    line: number,
-    from: number,
-    lineEnd: number,
-    found: (start: number, end: number) => void
-) {
-    const lineStart = text.lineStarts[line]
-    const subject = text.text.slice(lineStart, lineEnd)
-    const unicode = pattern.unicode
-    let at = from - lineStart
-    while (at <= subject.length) {
-        pattern.lastIndex = at
-        const match = pattern.exec(subject)
-        if (!match) return
-        const start = match.index
-        const end = start + match[0].length
-        if (wholeWord && !isWholeWord(subject, start, end)) {
-            at = advance(subject, start, unicode)
-            continue
-        }
-        found(lineStart + start, lineStart + end)
-        at = end > start ? end : advance(subject, end, unicode)
     }
 }
 

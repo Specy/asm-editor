@@ -49,10 +49,6 @@ type DiagnosticBase = {
         endColumn: number
         message: string
     }[]
-    line: {
-        line: string
-        line_index: number
-    }
     message: string
     /** Actionable help supplied by the Core, shown directly after the message when present. */
     hint?: string
@@ -143,10 +139,6 @@ export function makeGenericDiagnostic(error: string): Diagnostic {
         severity: 'error',
         lineIndex: 0,
         column: 0,
-        line: {
-            line: '',
-            line_index: 0
-        },
         message: error,
         formatted: error
     }
