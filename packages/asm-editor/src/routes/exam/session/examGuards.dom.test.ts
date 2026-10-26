@@ -23,7 +23,9 @@ const page = vi.hoisted(() => ({ url: new URL('https://asm-editor.specy.app/exam
 vi.mock('$app/state', () => ({ page }))
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }))
 //Monaco does not run in jsdom, and the exam here has no code to write
-vi.mock('#lib/monaco/Monaco.ts', () => ({ Monaco: { load: () => {}, dispose: () => {} } }))
+vi.mock('#lib/monaco/Monaco.ts', () => ({
+    Monaco: { load: () => Promise.resolve(), dispose: () => {} }
+}))
 vi.mock('#lib/languages/Emulator.ts', async (original) => ({
     ...(await original<typeof import('#lib/languages/Emulator.ts')>()),
     preloadAllEmulators: () => {}
