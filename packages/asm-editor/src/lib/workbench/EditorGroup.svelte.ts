@@ -510,7 +510,8 @@ export class EditorGroup {
      * compiling it again restores; the notice for it is itself the button that does.
      */
     get sourceMappingLost() {
-        if (this.unsupportedRuntimeAbi || this.compilationMap) return false
+        if (!this.displayedCompilation || this.unsupportedRuntimeAbi || this.compilationMap)
+            return false
         const status = this.displayedCompilationStatus
         return status !== undefined && !status.stale && !status.edited
     }
