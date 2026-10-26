@@ -567,16 +567,19 @@ function pokeBlocker(emulator: Emulator): ExecutionBlocker | null {
 }
 
 /**
- * The Emulator's state as the tools report it: the project's files resolve through the context, and
- * the editor's Target comes along so that a reported width is named the way that architecture names
- * it rather than the way the 68000 does.
+ * The Emulator's state as the tools report it: its lines read as the breakpoint tools read them, a
+ * File's text or, for an Executable or a library, the running program's Listing, and the editor's
+ * Target comes along so that a reported width is named the way that architecture names it rather
+ * than the way the 68000 does.
  */
 function emulatorState(
     context: DefaultCodingAgentToolContext,
     emulator: Emulator,
     options: FormatEmulatorStateOptions = {}
 ) {
-    return formatEmulatorState((file) => getFile(context, file)?.content ?? '', emulator, {
+    const text = (file?: string) =>
+        (file === undefined ? getFile(context) : fileOf(context, emulator, file))?.content ?? ''
+    return formatEmulatorState(text, emulator, {
         language: context.getEditorLanguage(),
         ...options
     })
@@ -1795,7 +1798,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     const errors = collectEmulatorErrors(emulator)
                     const diagnostics = collectEmulatorDiagnostics(emulator)
                     const currentFile = emulator.currentFile ?? entry
-                    const currentFileContent = getFile(context, currentFile)?.content ?? ''
+                    const currentFileContent = fileOf(context, emulator, currentFile)?.content ?? ''
 
                     if (errors.length > 0) {
                         return toolRun.failure('compile_error', errors[0], {

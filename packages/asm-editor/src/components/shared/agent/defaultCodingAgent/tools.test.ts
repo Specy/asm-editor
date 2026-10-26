@@ -1454,6 +1454,53 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
         })
     })
 
+    describe('Executables', () => {
+        /**
+         * An emulator stopped in an imported Executable, `main`, on the second line of its Listing,
+         * which is what the editor shows for it: `main` itself is bytes, no text File.
+         */
+        function inExecutable() {
+            const emulator = createMockEmulator()
+            const listing = '  401000:  mov eax, 1\n  401005:  ret'
+            Object.assign(emulator, {
+                currentFile: 'main',
+                line: 1,
+                listings: {
+                    session: new Map([['main', { listing: { text: listing } }]]),
+                    isLibrary: () => false
+                },
+                latestSteps: [
+                    {
+                        kind: 'instruction',
+                        file: 'main',
+                        mutations: [],
+                        pc: 0x401000,
+                        line: 0,
+                        old_ccr: { bits: 0 },
+                        new_ccr: { bits: 0 }
+                    }
+                ]
+            })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            return createDefaultCodingAgentTools(context)
+        }
+
+        it('reports the current line and the latest steps from the Listing', async () => {
+            const result = (await inExecutable().step.execute({})) as unknown as ToolExecutionResult
+            expect(result.currentLine).toBe('main:2 |   401005:  ret')
+            expect((result.latestSteps as FormattedStep[])[0].line).toBe(
+                'main:1 |   401000:  mov eax, 1'
+            )
+        })
+
+        it('reports the current line from the Listing after a compile', async () => {
+            expect(await inExecutable().compile.execute({})).toMatchObject({
+                success: true,
+                currentLine: 'main:2 |   401005:  ret'
+            })
+        })
+    })
+
     describe('emulator state', () => {
         it('says the emulator is not loaded yet, and what to do then', async () => {
             const { context } = createTestContext({ 'main.s': 'nop' })
