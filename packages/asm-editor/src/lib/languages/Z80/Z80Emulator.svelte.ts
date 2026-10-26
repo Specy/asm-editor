@@ -799,7 +799,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             if (expanded.length === 0) continue
             decorations.push({
                 type: 'below-line',
-                file: line.fileInfo.pathname,
+                file: normalizedCorePath(line.fileInfo.pathname),
                 note: 'Expanded macro',
                 belowLine: line.lineNumber,
                 md: `\`\`\`z80\n${expanded.join('\n')}\n\`\`\``
