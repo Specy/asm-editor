@@ -44,8 +44,9 @@
     })
     let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
 
+    //a read that failed knows nothing of the projects, and their page says why
     let shouldGoToCurrentProjects = $derived(
-        ProjectStore.projects.length > 0 || !ProjectStore.inited
+        ProjectStore.projects.length > 0 || !ProjectStore.inited || ProjectStore.loadFailed
     )
 </script>
 

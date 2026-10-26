@@ -6,6 +6,10 @@ import { zipSync } from 'fflate'
 import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import { fileBytes } from '#lib/projectFiles.ts'
+import { makeProject } from '#lib/Project.svelte.ts'
+import { importProject } from '#lib/projectImport.ts'
+import { db } from '#lib/storage/db.ts'
+import { Prompt } from '#stores/promptStore.svelte.ts'
 import { goto } from '$app/navigation'
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }))
@@ -213,5 +217,67 @@ it('opens the Project a file dropped on Create project became', async () => {
         await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/projects/${project.id}`))
     } finally {
         await dispose()
+    }
+})
+
+it('reports an import the browser did not store as failed, whether it replaced a Project or not', async () => {
+    const existing = await ProjectStore.addProject(makeProject({ name: 'stored' }))
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+    const pill = vi.spyOn(toast, 'logPill').mockImplementation(() => undefined)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+    vi.spyOn(db, 'updateProject').mockRejectedValue(new DOMException('Full', 'QuotaExceededError'))
+    const replacing = makeProject({ ...existing.toObject(), name: 'imported' })
+    expect(await importProject({ project: replacing })).toBeUndefined()
+    expect(Prompt.confirm).toHaveBeenCalledOnce()
+    const same = makeProject(existing.toObject())
+    expect(await importProject({ project: same })).toBeUndefined()
+    expect(error).toHaveBeenCalledTimes(2)
+    expect(pill).not.toHaveBeenCalled()
+    expect(ProjectStore.projects.map((project) => project.name)).toEqual(['stored'])
+})
+
+it('says the stored projects could not be read rather than that there are none', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const read = vi.spyOn(db, 'getProjects').mockRejectedValue(new Error('SecurityError'))
+    const { target, dispose } = await page()
+    try {
+        await vi.waitFor(() =>
+            expect(target.querySelector('.empty-title')?.textContent).toBe(
+                'Your projects could not be read'
+            )
+        )
+        read.mockRestore()
+        await ProjectStore.load()
+        flushSync()
+        expect(target.querySelector('.empty-title')?.textContent).toBe('No projects yet')
+    } finally {
+        await dispose()
+    }
+})
+
+it('opens the Project a single file launched with the app became', async () => {
+    vi.spyOn(toast, 'success').mockImplementation(() => undefined)
+    vi.mocked(goto).mockClear()
+    type Consumer = (params: { files: FileSystemFileHandle[] }) => Promise<void>
+    let consume: Consumer | undefined
+    ;(window as { launchQueue?: unknown }).launchQueue = {
+        setConsumer: (consumer: Consumer) => (consume = consumer)
+    }
+    const elf = {
+        getFile: async () => file(crackme(), 'chall'),
+        createWritable: vi.fn()
+    } as unknown as FileSystemFileHandle
+    const { dispose } = await page()
+    try {
+        await vi.waitFor(() => expect(consume).toBeDefined())
+        await consume!({ files: [elf] })
+        const project = await projectNamed('chall')
+        expect(goto).toHaveBeenCalledWith(`/projects/${project.id}`)
+        //an Executable's Project is never linked to the ELF it came from
+        expect(ProjectStore.writableFiles.has(project.id)).toBe(false)
+    } finally {
+        await dispose()
+        delete (window as { launchQueue?: unknown }).launchQueue
     }
 })

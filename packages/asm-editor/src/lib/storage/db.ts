@@ -118,13 +118,19 @@ export class Db extends Dexie {
         }
         return readable
     }
-    async getProject(id: string): Promise<Project> {
+    /** The stored project with the id `id`, or undefined when there is none, deleted elsewhere. */
+    async getProject(id: string): Promise<Project | undefined> {
         const project = await this.projects.get(id)
-        return makeProject(project)
+        return project && makeProject(project)
     }
+    /**
+     * Stores `project` as a new row, under a new id it takes only once the row is stored: an add
+     * the browser refused leaves it the id it had, a shared link's among them.
+     */
     async addProject(project: Project): Promise<Project> {
-        project.id = id()
-        await this.projects.add(project.toObject())
+        const row = { ...project.toObject(), id: id() }
+        await this.projects.add(row)
+        project.id = row.id
         return project
     }
     async deleteProject(project: Project): Promise<void> {
@@ -137,9 +143,8 @@ export class Db extends Dexie {
     journalStore(project: string): ProjectJournals {
         return new ProjectJournals(this, project)
     }
-    /** Saves a Project, and with it in one transaction the Edit journals that changed. */
-    async updateProject(project: Project, journals?: JournalWrites): Promise<void> {
-        const row = project.toObject()
+    /** Saves a Project's row, and with it in one transaction the Edit journals that changed. */
+    async updateProject(row: ProjectData, journals?: JournalWrites): Promise<void> {
         if (!journals?.size) {
             await this.projects.put(row)
             return
