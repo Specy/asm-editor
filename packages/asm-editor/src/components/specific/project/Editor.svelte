@@ -173,6 +173,10 @@
     const activeSource = $derived<EditorSource>(
         source ?? { key: modelKey, value: codeOverride || code, identity: modelIdentity }
     )
+    /** Monaco's id for the language: C shares the C++ tokenizer. */
+    const monacoLanguageId = $derived(language === 'c' ? 'cpp' : language.toLowerCase())
+    /** Which of the two a C or C++ model holds, which its tokenizer cannot tell the source help. */
+    const helpLanguage = $derived(language === 'c' || language === 'cpp' ? language : undefined)
     let mockEditor: HTMLDivElement | null = $state(null)
     let monacoInstance: MonacoType | null = $state.raw(null)
     /**
@@ -259,30 +263,11 @@
         monacoInstance = loadedMonaco
         const editorElement = el
         if (!editorElement) return console.log('Wrapper element not valid', editorElement)
-        const editorLanguage = language
-        await Monaco.registerLanguage(editorLanguage)
+        await Monaco.registerLanguage(language)
         if (destroyed) return
         const mounted = activeSource
-        const initialModel = sharedModels
-            ? sharedModels.resolve(
-                  loadedMonaco,
-                  mounted,
-                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase()
-              )
-            : createModel(
-                  loadedMonaco,
-                  mounted.value,
-                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase(),
-                  mounted.identity
-              )
-        if (!sharedModels) {
-            initialModel.setEOL(0)
-            models.set(mounted.key, initialModel)
-        }
-        setSourceHelpLanguage(
-            initialModel,
-            editorLanguage === 'c' || editorLanguage === 'cpp' ? editorLanguage : undefined
-        )
+        const initialModel = resolveModel(loadedMonaco, mounted)
+        setSourceHelpLanguage(initialModel, helpLanguage)
         viewStateKey = mounted.key
         activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
@@ -339,6 +324,13 @@
         }
 
         followDecorations = mountedEditor.createDecorationsCollection()
+        /** The 1-based line of the glyph margin under the mouse, if a Breakpoint can go there. */
+        const breakableGlyphLine = (e: monaco.editor.IEditorMouseEvent): number | null =>
+            breakpointsEditable &&
+            e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+            (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
+                ? e.target.position.lineNumber
+                : null
         toDispose.push(
             mountedEditor.onDidChangeCursorPosition((event) => {
                 const left = cursorLine
@@ -357,27 +349,14 @@
                 dispatcher('linesSelect', selectedLines(mountedEditor.getSelections() ?? []))
             }),
             mountedEditor.onMouseDown((e) => {
-                if (
-                    breakpointsEditable &&
-                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
-                    (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
-                ) {
-                    dispatcher('breakpointPress', e.target.position.lineNumber)
-                }
+                const line = breakableGlyphLine(e)
+                if (line !== null) dispatcher('breakpointPress', line)
             }),
             mountedEditor.onMouseLeave(() => {
                 hoveredGliphen = null
             }),
             mountedEditor.onMouseMove((e) => {
-                if (
-                    breakpointsEditable &&
-                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
-                    (canBreakAt?.(e.target.position.lineNumber - 1) ?? true)
-                ) {
-                    hoveredGliphen = e.target.position.lineNumber
-                } else {
-                    hoveredGliphen = null
-                }
+                hoveredGliphen = breakableGlyphLine(e)
             })
         )
         toDispose.push(() => observer.disconnect())
@@ -490,7 +469,7 @@
                 const model = createModel(
                     currentMonaco,
                     source.value,
-                    language === 'c' ? 'cpp' : language.toLowerCase(),
+                    monacoLanguageId,
                     source.identity
                 )
                 model.setEOL(0)
@@ -498,6 +477,13 @@
             },
             setValue: setModelValue
         }
+    }
+
+    /** The model for `next`, from the models the session shares or from this editor's own. */
+    function resolveModel(currentMonaco: MonacoType, next: EditorSource) {
+        return sharedModels
+            ? sharedModels.resolve(currentMonaco, next, monacoLanguageId)
+            : resolveEditorModel(modelStore(currentMonaco), next)
     }
 
     /** `next`, not `source`: shadowing the prop here is how the two could quietly diverge again. */
@@ -515,15 +501,8 @@
         //and the keyboard: Monaco drops it with the view of a model it lets go, which a Listing
         //made again after a rename typed there would take from the person
         const typing = currentEditor.hasTextFocus()
-        const model = sharedModels
-            ? sharedModels.resolve(
-                  currentMonaco,
-                  next,
-                  language === 'c' ? 'cpp' : language.toLowerCase()
-              )
-            : resolveEditorModel(modelStore(currentMonaco), next)
-        if (!sharedModels) models.set(next.key, model)
-        setSourceHelpLanguage(model, language === 'c' || language === 'cpp' ? language : undefined)
+        const model = resolveModel(currentMonaco, next)
+        setSourceHelpLanguage(model, helpLanguage)
         //the language mounted with is registered in onMount, but a group that opened on a C file
         //and then shows its Generated assembly reaches here with one nothing has registered yet.
         //Registration is memoized; a model made before it lands reads as plain text and takes the
