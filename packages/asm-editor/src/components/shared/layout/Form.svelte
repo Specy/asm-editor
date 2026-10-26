@@ -1,16 +1,15 @@
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte'
-
     interface Props {
         style?: string
+        /** The form was submitted, by Enter in a field or a submit button; the page stays put. */
+        onSubmit?: () => void
         children?: import('svelte').Snippet
     }
 
-    let { style = '', children }: Props = $props()
-    const dispatch = createEventDispatcher()
+    let { style = '', onSubmit, children }: Props = $props()
     function submit(e: SubmitEvent) {
         e.preventDefault()
-        dispatch('submit', e)
+        onSubmit?.()
     }
 </script>
 

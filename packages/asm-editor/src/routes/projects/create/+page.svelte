@@ -141,7 +141,7 @@
         {/if}
         <Form
             style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; margin:0.5rem 0"
-            on:submit={create}
+            onSubmit={create}
         >
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
