@@ -27,7 +27,7 @@
      * and 8). The page shows it whole; the Workbench's panel (`density="panel"`) leaves the name to
      * its row, puts each fact line under its syntax and cuts a long section by count (decision 9).
      */
-    import type { Snippet } from 'svelte'
+    import { tick, type Snippet } from 'svelte'
     import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import InstructionTagBadge from '#cmp/documentation/entries/InstructionTagBadge.svelte'
@@ -86,14 +86,22 @@
     let idPrefix = $derived(`operands-${document.name.replace(/[^a-z0-9]/gi, '_')}`)
     let marked = $state<string | undefined>()
     let showAll = $state<Record<number, boolean>>({})
+    let legendOpen = $state(false)
 
     let meanings = $derived(
         new Map(document.operands.map((operand) => [operand.symbol, plainText(operand.meaning)]))
     )
     let flagOrder = $derived(document.flags?.order ?? [])
 
-    function onsymbol(symbol: string) {
+    /**
+     * A symbol tapped in a row marks its line in the legend and opens a collapsed legend to show
+     * it, every tap, though the reader closed it since. The line is scrolled to once the legend is
+     * drawn open: closed, it has no box to scroll to.
+     */
+    async function onsymbol(symbol: string) {
         marked = symbol
+        legendOpen = true
+        await tick()
         const line = globalThis.document?.getElementById(`${idPrefix}-${symbolSlug(symbol)}`)
         line?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
@@ -260,6 +268,7 @@
         <OperandLegend
             operands={document.operands}
             {marked}
+            bind:open={legendOpen}
             {idPrefix}
             {disableLinks}
             compact={panel}
