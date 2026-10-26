@@ -12,6 +12,7 @@ import { generateListing } from '#lib/listing/generateListing.ts'
 import { LINE_KIND, lineOfAddress, type Listing } from '#lib/listing/listing.ts'
 import {
     commentTarget,
+    labelToRename,
     namedLocals,
     renameProblem,
     renameTarget,
@@ -69,6 +70,22 @@ describe('Comment… on a label line', () => {
             kind: 'comment',
             address: string.address
         })
+    })
+})
+
+describe('Rename… on a label line', () => {
+    it("renames the name operands use, also on an alias's line", () => {
+        const listing = crackme()
+        const lines = listing.text.split('\n')
+        //`__data_start` is an alias of `data_start`, and `_edata` one of `stdin@GLIBC_2.2.5`
+        for (const [line, used] of [
+            ['__data_start:', 'data_start'],
+            ['data_start:', 'data_start'],
+            ['_edata:', 'stdin@GLIBC_2.2.5']
+        ]) {
+            const at = lines.findIndex((text) => text.startsWith(line))
+            expect(labelToRename(listing, at, 0)?.name, line).toBe(used)
+        }
     })
 })
 

@@ -1438,6 +1438,8 @@ describe('memory views', () => {
         emulator._getSp = () => sp
         await emulator.compile(0, undefined)
         emulator.setGlobalMemoryAddress(0x2000n)
+        //on the page that holds SP, so that the push below scrolls it
+        emulator.setTabMemoryAddress(0x1000n, emulator.memory.tabs[0].id)
         const pageSize = BigInt(emulator.memory.tabs[0].pageSize)
         //a push that crosses into the page below and writes where the global view looks
         let pushed = 0
@@ -1455,7 +1457,7 @@ describe('memory views', () => {
         expect(emulator.memory.global.data.current[0]).toBe(1)
         expect(emulator.memory.global.data.prevState[0]).toBe(0)
 
-        //a running refresh scrolls it last, after the views were read
+        //and so does a running refresh
         push()
         emulator.refreshPanels(true)
         expect(emulator.memory.tabs[0].address).toBe(0x1000n - 2n * pageSize)

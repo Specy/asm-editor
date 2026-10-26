@@ -1678,7 +1678,7 @@ describe('renames and comments in the Pseudocode', () => {
         expect(session.undoAnnotation('crackme')).toBe(true)
         shown = await shownWith(pane, 'strcmp(acStack_98,')
         expect(shown.text).toBe(document.text)
-        expect(session.canRedoAnnotation('crackme')).toBe(true)
+        expect(session.canUndoAnnotation('crackme', true)).toBe(true)
         expect(session.redoAnnotation('crackme')).toBe(true)
         await shownWith(pane, 'strcmp(password,')
     })

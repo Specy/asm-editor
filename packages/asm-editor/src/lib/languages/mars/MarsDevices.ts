@@ -3,6 +3,7 @@ import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 import {
     marsDisplayGeometry,
     marsWordAddress,
@@ -502,14 +503,7 @@ export class MarsDevices {
             }
         }
         if (readable(geometry.words - 1)) return geometry.words
-        let low = 0
-        let high = geometry.words - 1
-        while (low < high) {
-            const middle = low + Math.ceil((high - low) / 2)
-            if (readable(middle)) low = middle
-            else high = middle - 1
-        }
-        return readable(0) ? low + 1 : 0
+        return partitionPoint(geometry.words - 1, readable)
     }
 }
 

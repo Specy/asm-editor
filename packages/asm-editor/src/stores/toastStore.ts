@@ -55,9 +55,6 @@ function Toast() {
     function warn(text: string, timeout = 3000) {
         execute(text, timeout, Colors.Orange, 'Warning')
     }
-    function log(text: string, timeout = 4000) {
-        execute(text, timeout, Colors.Hint, 'Warning')
-    }
     function logPill(text: string, timeout = 2000) {
         execute(text, timeout, Colors.Hint, '', ToastType.Pill)
     }
@@ -75,7 +72,6 @@ function Toast() {
         success,
         custom,
         closeToast: close,
-        log,
         warn,
         subscribe,
         logPill

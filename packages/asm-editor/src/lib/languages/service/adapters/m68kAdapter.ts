@@ -1,44 +1,18 @@
-import { S68k, type Location, type ProgramSymbol } from '@specy/s68k'
+import { S68k, type ProgramSymbol } from '@specy/s68k'
 import { m68kAssemblyFiles, m68kReachableFiles } from '#lib/languages/M68K/m68kAssemblyFiles.ts'
 import {
     s68kColumnToUtf16,
-    s68kDiagnosticToLanguageDiagnostic
+    s68kDiagnosticToLanguageDiagnostic,
+    sourceLocation
 } from '#lib/languages/M68K/m68kDiagnostics.ts'
-import { fileText, type BuildSources } from '#lib/projectFiles.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 import type {
     LanguageSymbol,
     ProjectAnalysisSnapshot,
     ProjectFileAnalysisStatus
 } from '../protocol'
-import type { SourceLocation, SymbolKind } from '../sourceModel'
+import type { SymbolKind } from '../sourceModel'
 import { unresolvedSnapshot, unresolvedSources } from './unresolved'
-
-function lineAt(sources: BuildSources, path: string, line: number): string {
-    const file = sources.files[path]
-    if (!file) return ''
-    try {
-        return fileText(file).split(/\r?\n/)[line] ?? ''
-    } catch {
-        return ''
-    }
-}
-
-function sourceLocation(sources: BuildSources, location: Location): SourceLocation {
-    const line = lineAt(sources, location.file, location.line)
-    return {
-        path: location.file,
-        range: {
-            start: {
-                line: location.line,
-                column: s68kColumnToUtf16(line, location.column)
-            },
-            end: {
-                line: location.line,
-                column: s68kColumnToUtf16(line, location.endColumn)
-            }
-        }
-    }
-}
 
 function tolerantSymbols(sources: BuildSources): LanguageSymbol[] {
     const symbols: LanguageSymbol[] = []
@@ -111,7 +85,7 @@ export function analyzeM68kProject(
                   name: symbol.name,
                   kind: coreSymbolKind(symbol.kind),
                   value: symbol.value,
-                  location: sourceLocation(sources, symbol.location)
+                  location: sourceLocation(symbol.location, sources)
               }))
             : []
         const locationKey = (symbol: LanguageSymbol) =>

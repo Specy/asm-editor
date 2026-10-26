@@ -1,11 +1,10 @@
 import type { DecodedInstruction } from './decoder'
 import {
     functionAtLine,
+    functionContaining,
     LINE_KIND,
     lineOfAddress,
-    type Listing,
-    type ListingFunction,
-    type ListingLabel
+    type Listing
 } from './listing'
 import { ListingIndex } from './listingNavigation'
 import {
@@ -48,50 +47,16 @@ export function mergeNames(first: NameHints, second?: NameHints): NameHints {
 /** One `nop`, the byte a shorter encoding is padded with. */
 export const NOP = 0x90
 
-const labelsByAddress = new WeakMap<Listing, Map<number, ListingLabel[]>>()
-
-/** The labels at a link-time address, in line order: aliases first, the name operands use last. */
-function labelsAt(listing: Listing, address: number): readonly ListingLabel[] {
-    let index = labelsByAddress.get(listing)
-    if (!index) {
-        index = new Map()
-        for (const label of listing.labels) {
-            const list = index.get(label.address)
-            if (list) list.push(label)
-            else index.set(label.address, [label])
-        }
-        labelsByAddress.set(listing, index)
-    }
-    return index.get(address) ?? []
-}
-
-/** The function whose range holds a link-time address, if any. */
-function functionAt(listing: Listing, address: number): ListingFunction | undefined {
-    const { functions } = listing
-    let low = 0
-    let high = functions.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        const candidate = functions[middle]
-        if (candidate.address > address) high = middle - 1
-        else if (candidate.end <= address) low = middle + 1
-        else return candidate
-    }
-    return undefined
-}
-
 const hex = (value: bigint) => `0x${value.toString(16)}`
 
 /** How a Listing names addresses, for {@link nameAddress}, from a 0-based line. */
 function listingNaming(listing: Listing, hints: NameHints): AddressNaming<number> {
     const base = BigInt(listing.base)
+    const index = ListingIndex.of(listing)
     return {
-        label: (address) => {
-            const named = labelsAt(listing, address).filter((label) => label.kind !== 'block')
-            return named.length ? named[named.length - 1].fullName : undefined
-        },
+        label: (address) => index.operandLabel(address)?.fullName,
         block: (address, line) => {
-            const block = labelsAt(listing, address).find((label) => label.kind === 'block')
+            const block = index.labelsAt(address).find((label) => label.kind === 'block')
             if (!block) return undefined
             const owner = functionAtLine(listing, line)
             return owner && owner === functionAtLine(listing, block.line)
@@ -106,7 +71,7 @@ function listingNaming(listing: Listing, hints: NameHints): AddressNaming<number
                 : undefined
         },
         holder: (address) => holderAt(listing.holders ?? NO_HOLDERS, address),
-        owner: (address) => functionAt(listing, address)?.address
+        owner: (address) => functionContaining(listing, address)?.address
     }
 }
 

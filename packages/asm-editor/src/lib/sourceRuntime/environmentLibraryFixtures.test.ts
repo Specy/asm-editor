@@ -315,7 +315,7 @@ describe('SIM_SCREEN', () => {
         //on the line that wrote SIM_SCREEN, saying why
         expect(failure?.file).toBe(fixture.sourcePath)
         expect(failure?.lineIndex).toBe(2)
-        expect(failure?.line.line).toBe('SIM_SCREEN(screen, 1024, 1024, 1);')
+        expect(fixture.source.split(/\r?\n/)[2]).toBe('SIM_SCREEN(screen, 1024, 1024, 1);')
         expect(failure?.message).toContain('4128768 bytes of static data')
         expect(failure?.message).toContain('other global variables and constants share')
         if (fixture.compiler === 'clang')
@@ -339,8 +339,7 @@ describe('a diagnostic located in <sim.h>', () => {
         expect(redefinition.file).toBe(ENVIRONMENT_HEADER_PATH)
         expect(redefinition.message).toBe("redefinition of 'sim_print_int'")
         const lines = header(fixture.target).split('\n')
-        expect(redefinition.line.line).toBe(lines[redefinition.lineIndex])
-        expect(redefinition.line.line).toBe('static inline void sim_print_int(int value) {')
+        expect(lines[redefinition.lineIndex]).toBe('static inline void sim_print_int(int value) {')
         //and the note names the program's definition, on its own File
         expect(redefinition.related).toEqual([
             expect.objectContaining({ file: fixture.sourcePath, lineIndex: 0, column: 13 })

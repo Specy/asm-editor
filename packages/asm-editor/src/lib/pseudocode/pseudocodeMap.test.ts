@@ -14,13 +14,18 @@ import glibc from '@specy/decompiler/prototypes/glibc'
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { loadDecoder } from '../listing/decoder'
 import { generateListing } from '../listing/generateListing'
-import { LINE_KIND, lineOfAddress, type Listing, type ListingFunction } from '../listing/listing'
+import {
+    functionStartingAt,
+    LINE_KIND,
+    lineOfAddress,
+    type Listing,
+    type ListingFunction
+} from '../listing/listing'
 import { plannedLoadBase } from '../listing/listingPaths'
 import { programImage } from './programImage'
 import {
     colorPseudocodeMap,
     defaultPseudocodeFunction,
-    functionAt,
     listingLineOfTarget,
     listingLinesOfLocations,
     listingLabelOfTarget,
@@ -268,8 +273,8 @@ describe('the names in a Pseudocode', () => {
 
     it('opens main when nothing chose a function', () => {
         expect(defaultPseudocodeFunction(listing)).toBe(main)
-        expect(functionAt(listing, main.address)).toBe(main)
-        expect(functionAt(listing, main.address + 1)).toBeUndefined()
+        expect(functionStartingAt(listing, main.address)).toBe(main)
+        expect(functionStartingAt(listing, main.address + 1)).toBeUndefined()
     })
 })
 

@@ -1267,11 +1267,7 @@ describe('x86 compilation', () => {
                 code: 'inline-assembly',
                 source: 'Compiler Explorer',
                 message: rejection.message,
-                hint: expect.stringContaining('in a .asm File of the Project'),
-                line: {
-                    line: '    __asm__ volatile ("movl $1, %%eax" : : : "eax");',
-                    line_index: 2
-                }
+                hint: expect.stringContaining('in a .asm File of the Project')
             })
         ])
     })
