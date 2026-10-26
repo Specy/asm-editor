@@ -7,7 +7,13 @@
      * `lo`) can only be expected.
      */
     import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
-    import { canonicalRegister, formatHex, hexPrefix, sortRegisters } from '#lib/testcases.ts'
+    import {
+        canonicalRegister,
+        formatHex,
+        hexPrefix,
+        sortRegisters,
+        type TestcaseRegisters
+    } from '#lib/testcases.ts'
     import NumberCell from './NumberCell.svelte'
     import WhenLabel from './WhenLabel.svelte'
     import FaTimes from '~icons/fa-solid/times'
@@ -19,10 +25,7 @@
         testcase: Testcase
         result: TestcaseResult | undefined
         editable: boolean
-        registerNames: string[]
-        startingRegisterNames: string[]
-        hiddenRegistersNames: string[]
-        registerSizes: Record<string, number> | undefined
+        registers: TestcaseRegisters
         systemSize: number
         language: AvailableLanguages
     }
@@ -31,10 +34,7 @@
         testcase = $bindable(),
         result,
         editable,
-        registerNames,
-        startingRegisterNames,
-        hiddenRegistersNames,
-        registerSizes,
+        registers,
         systemSize,
         language
     }: Props = $props()
@@ -66,25 +66,25 @@
             ...Object.keys(testcase.expectedRegisters),
             ...pending
         ]) {
-            const canonical = canonicalRegister(name, registerNames)
+            const canonical = canonicalRegister(name, registers.names)
             if (!names.some((known) => same(known, canonical))) names.push(canonical)
         }
-        return sortRegisters(names, registerNames).map((name) => ({
+        return sortRegisters(names, registers.names).map((name) => ({
             name,
             start: valueIn(testcase.startingRegisters, name),
             expected: valueIn(testcase.expectedRegisters, name)
         }))
     })
 
-    const offered = $derived(registerNames.filter((name) => !hiddenRegistersNames.includes(name)))
+    const offered = $derived(registers.names.filter((name) => !registers.hidden.includes(name)))
     const free = $derived(offered.filter((name) => !rows.some((row) => same(row.name, name))))
 
     function widthOf(name: string) {
-        return registerSizes?.[name] ?? systemSize
+        return registers.sizes[name] ?? systemSize
     }
 
     function seedable(name: string) {
-        return startingRegisterNames.some((candidate) => same(candidate, name))
+        return registers.starting.some((candidate) => same(candidate, name))
     }
 
     function setValue(side: Side, name: string, value: bigint | undefined) {

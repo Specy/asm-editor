@@ -11,7 +11,8 @@
         checkCount,
         describeCharacter,
         firstTextDifference,
-        testcaseLabel
+        testcaseLabel,
+        type TestcaseRegisters
     } from '#lib/testcases.ts'
     import { languageTakesArguments, parseCommandLine } from '#lib/commandLine.ts'
     import FaCaretRight from '~icons/fa-solid/caret-right'
@@ -30,10 +31,7 @@
         initiallyOpen: boolean
         /** Puts the cursor in the name, for a Testcase just created. */
         focusName?: boolean
-        registerNames: string[]
-        startingRegisterNames: string[]
-        hiddenRegistersNames: string[]
-        registerSizes: Record<string, number> | undefined
+        registers: TestcaseRegisters
         systemSize: number
         language: AvailableLanguages
         onDelete: () => void
@@ -47,10 +45,7 @@
         editable,
         initiallyOpen,
         focusName = false,
-        registerNames,
-        startingRegisterNames,
-        hiddenRegistersNames,
-        registerSizes,
+        registers,
         systemSize,
         language,
         onDelete,
@@ -196,10 +191,7 @@
                                 bind:testcase
                                 {result}
                                 {editable}
-                                {registerNames}
-                                {startingRegisterNames}
-                                {hiddenRegistersNames}
-                                {registerSizes}
+                                {registers}
                                 {systemSize}
                                 {language}
                             />

@@ -52,6 +52,7 @@
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import StdOutRenderer from '#cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '#cmp/specific/project/testcases/TestcasesEditor.svelte'
+    import { testcaseRegisters } from '#lib/testcases.ts'
     import type monaco from 'monaco-editor'
     import Card from '#cmp/shared/layout/Card.svelte'
     import {
@@ -804,12 +805,7 @@
             systemSize={emulator.systemSize}
             {language}
             editable={!embedded}
-            registerNames={emulator.registers.map((r) => r.name)}
-            registerSizes={Object.fromEntries(
-                emulator.registers.map((r) => [r.name, Number(r.size)])
-            )}
-            startingRegisterNames={emulator.startingRegisterNames}
-            hiddenRegistersNames={emulator.hiddenRegisters}
+            registers={testcaseRegisters(emulator)}
             bind:visible={testcasesVisible}
             {testcasesResult}
             bind:testcases

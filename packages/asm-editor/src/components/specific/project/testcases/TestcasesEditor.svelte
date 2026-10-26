@@ -5,16 +5,14 @@
     import type { Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
     import type { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import type { TestcaseRegisters } from '#lib/testcases.ts'
 
     /** The Interactive editor's Testcases: `TestcasesList` in a floating window. */
     interface Props {
         visible: boolean
         testcases: Testcase[]
         testcasesResult: TestcaseResult[]
-        registerNames: string[]
-        startingRegisterNames: string[]
-        hiddenRegistersNames?: string[]
-        registerSizes?: Record<string, number>
+        registers: TestcaseRegisters
         editable?: boolean
         systemSize: RegisterSize
         /** The Target, which decides how its numbers are written. */
