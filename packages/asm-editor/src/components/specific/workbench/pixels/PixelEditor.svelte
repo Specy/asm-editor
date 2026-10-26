@@ -40,6 +40,7 @@
     import { ScopedTheme, ThemeStore, themeCssVariables } from '#stores/themeStore.svelte.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
+    import FileStatusLine from '../FileStatusLine.svelte'
     import FaPencilAlt from '~icons/fa-solid/pencil-alt'
     import FaSlash from '~icons/fa-solid/slash'
     import FaVectorSquare from '~icons/fa-solid/vector-square'
@@ -1352,8 +1353,8 @@
     bind:this={root}
     {onkeydown}
 >
-    <div class="pixel-status">
-        <div class="facts" aria-label="Status">
+    <FileStatusLine class="pixel-status">
+        {#snippet facts()}
             {#if doc}
                 <span class="fact">{doc.width} × {doc.height} px</span>
                 <span class="fact" {@attach tooltip('Pixel format and row order in the BMP file')}
@@ -1382,8 +1383,8 @@
             {#if readOnly}
                 <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
             {/if}
-        </div>
-    </div>
+        {/snippet}
+    </FileStatusLine>
     <!-- Undo and Redo at the left, the tools and colours in the middle, the view at the right,
      as a drawing program's toolbar has them -->
     <div class="pixel-toolbar" role="toolbar" aria-label="Pixel tools">
@@ -1857,27 +1858,6 @@
     .dock-inset {
         --dock-room: calc(var(--wb-control-height, 2.6rem) + 0.75rem);
     }
-    .pixel-status {
-        display: flex;
-        align-items: center;
-        min-height: 2rem;
-        padding: 0.2rem 0.6rem;
-        border-bottom: 1px solid var(--pixel-line);
-        background: var(--wb-section-header, var(--secondary));
-        font-size: 0.8rem;
-    }
-    .facts {
-        display: flex;
-        flex: 1;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 0.8rem;
-        min-width: 0;
-    }
-    .fact {
-        white-space: nowrap;
-        opacity: 0.85;
-    }
     /* numbers that change under the pointer, in figures of one width, each with its room */
     .number {
         font-family: 'Fira Code', monospace;
@@ -1898,12 +1878,6 @@
     .coordinate {
         display: inline-block;
         min-width: 4ch;
-    }
-    .badge {
-        padding: 0.05rem 0.4rem;
-        border-radius: 0.6rem;
-        background: color-mix(in srgb, var(--accent) 18%, transparent);
-        opacity: 1;
     }
     /* at the far end, so the facts before it moving never move it */
     .read-only {
