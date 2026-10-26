@@ -1437,6 +1437,43 @@ describe('memory views', () => {
         expect(emulator.errors).toEqual([])
     })
 
+    it('keeps the changed-byte highlight of a step that scrolls the Stack tab', async () => {
+        const autoScroll = preferencesStore.values.autoScrollStackTab
+        const previous = autoScroll.value
+        autoScroll.value = true
+        onTestFinished(() => {
+            autoScroll.value = previous
+        })
+        const emulator = new FakeEmulator()
+        let sp = 0x1000n
+        emulator._getSp = () => sp
+        await emulator.compile(0, undefined)
+        emulator.setGlobalMemoryAddress(0x2000n)
+        const pageSize = BigInt(emulator.memory.tabs[0].pageSize)
+        //a push that crosses into the page below and writes where the global view looks
+        let pushed = 0
+        const push = () => {
+            sp -= pageSize
+            emulator.memoryBytes.set(0x2000n, ++pushed)
+        }
+        emulator._step = async () => {
+            push()
+            return { terminated: false }
+        }
+
+        await emulator.step()
+        expect(emulator.memory.tabs[0].address).toBe(0x1000n - pageSize)
+        expect(emulator.memory.global.data.current[0]).toBe(1)
+        expect(emulator.memory.global.data.prevState[0]).toBe(0)
+
+        //a running refresh scrolls it last, after the views were read
+        push()
+        emulator.refreshPanels(true)
+        expect(emulator.memory.tabs[0].address).toBe(0x1000n - 2n * pageSize)
+        expect(emulator.memory.global.data.current[0]).toBe(2)
+        expect(emulator.memory.global.data.prevState[0]).toBe(1)
+    })
+
     it('reads it whole again once it points somewhere readable', async () => {
         const emulator = new FakeEmulator()
         await emulator.compile(0, undefined)

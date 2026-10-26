@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import MutationStep from './MutationStep.svelte'
+import MutationsRenderer from './MutationsRenderer.svelte'
 import { historyRowProps } from './MutationStep.fixture.svelte'
 import {
     type ExecutionStep,
@@ -273,7 +274,46 @@ describe('irreversible History rows', () => {
         try {
             expect(target.textContent).toContain('Called read: 8 instructions')
             expect(target.textContent).toContain('Undo stops here: effects are not recorded.')
-            expect(target.querySelector<HTMLButtonElement>('.undo-to-here')?.disabled).toBe(true)
+        } finally {
+            await unmount(app)
+            target.remove()
+        }
+    })
+})
+
+describe('Undo to here', () => {
+    it('undoes the rows above, so it is off on the newest row and below one Undo cannot take back', async () => {
+        const row = (pc: number, undoable?: boolean): ExecutionStep => ({
+            kind: 'instruction',
+            ...(undoable === undefined ? {} : { undoable }),
+            mutations: [],
+            pc,
+            line: pc,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 }
+        })
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const undos: number[] = []
+        const app = mount(MutationsRenderer, {
+            target,
+            props: {
+                //newest first: the library call at row 1 recorded nothing Undo can restore
+                steps: [row(3), row(2, false), row(1), row(0)],
+                statusRegisterNames: [],
+                language: 'X86' as const
+            },
+            events: { undo: (event: CustomEvent<number>) => undos.push(event.detail) }
+        })
+        flushSync()
+        try {
+            const buttons = [...target.querySelectorAll<HTMLButtonElement>('.undo-to-here')]
+            expect(buttons.map((button) => button.disabled)).toEqual([true, false, true, true])
+            expect(buttons[0].title).toBe('The program is already here')
+            expect(buttons[2].title).toBe('Undo stops before effects that are not recorded')
+            //one Undo, of the newest row, which leaves the call's own effects alone
+            buttons[1].click()
+            expect(undos).toEqual([1])
         } finally {
             await unmount(app)
             target.remove()

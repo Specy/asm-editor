@@ -24,10 +24,12 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
         case AddressingMode.AddressRegister:
             return 'An'
 
-        case AddressingMode.PostIndirect:
-        case AddressingMode.PreIndirect:
         case AddressingMode.Indirect:
             return '(An)'
+        case AddressingMode.PostIndirect:
+            return '(An)+'
+        case AddressingMode.PreIndirect:
+            return '-(An)'
         case AddressingMode.IndirectWithDisplacement:
             return 'd(An)'
         case AddressingMode.Immediate:

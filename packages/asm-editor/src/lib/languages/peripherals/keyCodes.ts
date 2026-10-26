@@ -103,6 +103,11 @@ export type KeyboardEventLike = {
     altKey?: boolean
     metaKey?: boolean
     shiftKey?: boolean
+    /**
+     * `KeyboardEvent.getModifierState`, read for `AltGraph`: Windows reports AltGr as Ctrl+Alt, and
+     * only this tells it apart from a Ctrl shortcut.
+     */
+    getModifierState?(key: string): boolean
 }
 
 /** Physical keys whose code does not follow from a pattern. Numpad keys are handled separately. */
@@ -234,8 +239,10 @@ function keyCodeFromKeyName(name: string): KeyCode | undefined {
 /** The character the event typed, for the Keyboard's typed queue, or undefined when it typed none. */
 export function typedCharacterFromEvent(event: KeyboardEventLike): string | undefined {
     //Ctrl and Meta combinations are host shortcuts rather than text, the same ones the upstream
-    //TRS-80 keyboard leaves to the browser
-    if (event.ctrlKey || event.metaKey) return undefined
+    //TRS-80 keyboard leaves to the browser. AltGr is not one, though on Windows it arrives with
+    //ctrlKey and altKey both set: AltGr+Q is how a German layout types '@'
+    const altGraph = event.getModifierState?.('AltGraph') ?? false
+    if (!altGraph && (event.ctrlKey || event.metaKey)) return undefined
     const named = CHARACTER_BY_KEY_NAME[event.key]
     if (named !== undefined) return named
     //`key` is the character itself for every printable key, already shifted and localized; anything

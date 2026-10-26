@@ -227,6 +227,21 @@ describe('drawing', () => {
         expect(pixels.button('Line')!.getAttribute('aria-pressed')).toBe('true')
     })
 
+    it('leaves a tool key with Shift to the Workbench, whose Shift+B builds', () => {
+        const pixels = setup()
+        pixels.key('l')
+        const reached: KeyboardEvent[] = []
+        const listener = (event: KeyboardEvent) => reached.push(event)
+        window.addEventListener('keydown', listener)
+        try {
+            pixels.key('B', { shiftKey: true })
+        } finally {
+            window.removeEventListener('keydown', listener)
+        }
+        expect(pixels.button('Line')!.getAttribute('aria-pressed')).toBe('true')
+        expect(reached.map((event) => [event.key, event.defaultPrevented])).toEqual([['B', false]])
+    })
+
     it('draws with the Pencil where the Erase it kept has no alpha channel to erase to', () => {
         const pixels = setup({ view: { tool: 'erase', filled: false } })
         expect(pixels.button('Pencil')!.getAttribute('aria-pressed')).toBe('true')

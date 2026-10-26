@@ -14,7 +14,8 @@
 
     interface Props {
         step: ExecutionStep
-        canUndoToHere?: boolean
+        /** Why "Undo to here" cannot take the program back to this row; undefined when it can. */
+        undoBlocked?: string
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
@@ -22,7 +23,7 @@
         docked?: boolean
     }
 
-    let { step, flags, language, canUndoToHere = true, docked = false }: Props = $props()
+    let { step, flags, language, undoBlocked, docked = false }: Props = $props()
     //each Core records its own status register, so the bits are read with the Target's own layout
     let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
@@ -183,10 +184,8 @@
 <div class="column step" class:docked>
     <div class="step-header column">
         <button
-            title={canUndoToHere && step.undoable !== false
-                ? 'Undo to here'
-                : 'Undo stops before effects that are not recorded'}
-            disabled={!canUndoToHere || step.undoable === false}
+            title={undoBlocked ?? 'Undo to here'}
+            disabled={undoBlocked !== undefined}
             class="undo-to-here"
             onclick={() => {
                 dispatcher('undo')

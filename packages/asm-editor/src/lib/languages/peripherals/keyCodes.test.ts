@@ -118,4 +118,14 @@ describe('the character an event types', () => {
         //Alt is an ordinary modifier for a program, and AltGr types on several layouts
         expect(typedCharacterFromEvent(event('Digit5', '[', { altKey: true }))).toBe('[')
     })
+
+    it('types what AltGr produced, though Windows reports it as Ctrl+Alt', () => {
+        const altGraph = (key: string) => key === 'AltGraph'
+        const windowsAltGr = { ctrlKey: true, altKey: true, getModifierState: altGraph }
+        expect(typedCharacterFromEvent(event('KeyQ', '@', windowsAltGr))).toBe('@')
+        expect(typedCharacterFromEvent(event('Minus', '\\', windowsAltGr))).toBe('\\')
+        //Ctrl+Alt without AltGr is still a shortcut
+        const shortcut = { ctrlKey: true, altKey: true, getModifierState: () => false }
+        expect(typedCharacterFromEvent(event('KeyC', 'c', shortcut))).toBeUndefined()
+    })
 })

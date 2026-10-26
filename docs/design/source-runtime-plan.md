@@ -115,7 +115,7 @@ No Core-native grouping: Undo returns to the previous stop by popping the instru
 
 - MARS and RARS: make the backstep stack allocate its slots on first use instead of all at once when assembling, and raise the editor's history limit behind the unchanged on/off _Undo_ Setting until a long `printf("%f")` and a moderate `qsort` fit. Measure entries per call, memory per entry and Build time, and pick the limit from those numbers; small programs pay nothing up front.
 - [GenericEmulator](../../packages/asm-editor/src/lib/languages/GenericEmulator.svelte.ts): when Step lands in library code, run under the existing scheduler until the program counter is back in user code, stopping for breakpoints, input Interrupts, exit and errors. Each Step records how many instructions it ran (1 normally), and Undo pops that many. If the history no longer holds all of them, Undo is unavailable for that Step, as it is past the oldest kept entry today; it never lands partway through library code. Run keeps today's per-instruction Undo.
-- History panel: in the default mode a library stretch shows as one row (for example `printf: 1,234 instructions`) whose _Undo to here_ returns to before the call.
+- History panel: in the default mode a library stretch shows as one row (for example `printf: 1,234 instructions`) that one Undo takes back whole, so _Undo to here_ on the row below it returns to before the call.
 - The Workbench toggle _Step into Runtime library_ restores ordinary stepping and per-instruction Undo and allows breakpoints in members.
 
 ### 6. MIPS

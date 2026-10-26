@@ -314,6 +314,22 @@ describe('M68K v2 language tooling', () => {
         result?.dispose()
     })
 
+    it('names the postincrement and predecrement operands in signature help', async () => {
+        const provider = createM68kSignatureHelpProvider(monacoStub)
+        const label = async (line: string) => {
+            const result = await provider.provideSignatureHelp(
+                { getValueInRange: () => line } as never,
+                { lineNumber: 1, column: line.length + 1 } as never,
+                {} as never,
+                {} as never
+            )
+            result?.dispose()
+            return result?.value.signatures[0].label
+        }
+        expect(await label('cmpm ')).toBe('cmpm (An)+, (An)+')
+        expect(await label('addx ')).toBe('addx Dn/-(An), Dn/-(An)')
+    })
+
     it('does not show signature help while the cursor is in a comment', async () => {
         const provider = createM68kSignatureHelpProvider(monacoStub)
         const line = 'move.w #1,d0 ; operand, comment'

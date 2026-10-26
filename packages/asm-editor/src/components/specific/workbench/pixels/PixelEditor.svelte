@@ -1187,7 +1187,8 @@
             return
         }
         const handled = (() => {
-            if (key in TOOL_KEYS) {
+            //a tool is its plain key: Shift with it is the Workbench's, as Shift+B builds
+            if (!event.shiftKey && key in TOOL_KEYS) {
                 setTool(TOOL_KEYS[key])
                 return true
             }
