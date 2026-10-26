@@ -5,7 +5,6 @@ import {
     mipsRegisters,
     mipsSyscall
 } from '#lib/languages/MIPS/MIPS-documentation.ts'
-import { capitalize } from '#lib/utils.ts'
 import {
     names,
     proseEntries,
@@ -14,134 +13,19 @@ import {
     type Chapter,
     type DocumentationEntry
 } from '../entries'
-import { screenEntries } from '../mars/screen'
-import { synthEntries } from '../synth'
-import { documented, syscallFields, syscallSummary } from '../mars/syscalls'
+import { marsChapters } from '../mars/chapters'
 import directivesIntro from './directives.md?raw'
 import registersIntro from './registers.md?raw'
 import runtimeIntro from './runtime-library.md?raw'
 import usingCIntro from './using-c.md?raw'
-import { runtimeLibraryChapter } from '../runtimeFunctions'
 import { mipsCallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import syscallsIntro from './syscalls.md?raw'
 import { mipsInstructionContent } from './instructionContent'
 import { mipsInstructionCategories } from './categories'
 import { mipsFormTags } from '../instructions/formTags'
-import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
-import { documentSignature } from '../instructions/document'
 import { mipsInstructionDocument } from '../mars/instructionDocument'
 
 const BASE = '/documentation/mips'
-
-function instructions(): Chapter {
-    const entries = mipsInstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
-        const descriptions = [...new Set(variants.map((variant) => variant.description))]
-        const document = mipsInstructionDocument(
-            mnemonic,
-            variants,
-            mipsInstructionContent[mnemonic]
-        )
-        const entry = withInstructionContent(
-            {
-                id: `mips/instructions/${mnemonic}`,
-                language: 'mips',
-                chapter: 'instructions',
-                kind: 'instruction',
-                title: mnemonic,
-                names: names(mnemonic),
-                signature: documentSignature(document),
-                summary: document.summary,
-                href: `${BASE}/instruction/${mnemonic}`,
-                anchor: mnemonic,
-                view: { type: 'instruction', document },
-                searchText: [document.longName, ...descriptions].join('\n'),
-                code: [...new Set(variants.map((variant) => variant.example))].join('\n')
-            },
-            mipsInstructionContent[mnemonic]
-        )
-        return withInstructionCategory(
-            entry,
-            mipsInstructionCategories[mnemonic],
-            variants.map(mipsFormTags)
-        )
-    })
-    return {
-        id: 'instructions',
-        language: 'mips',
-        title: 'Instructions',
-        href: `${BASE}/instruction`,
-        description: 'Every instruction and pseudo-instruction the assembler accepts.',
-        entries
-    }
-}
-
-function directives(): Chapter {
-    const href = `${BASE}/directive`
-    const entries: DocumentationEntry[] = [
-        ...proseEntries({
-            language: 'mips',
-            chapter: 'directives',
-            chapterHref: href,
-            markdown: directivesIntro
-        }),
-        ...Object.values(mipsDirectivesMap).map((directive): DocumentationEntry => ({
-            id: `mips/directives/${directive.name}`,
-            language: 'mips',
-            chapter: 'directives',
-            kind: 'directive',
-            title: `.${directive.name}`,
-            names: names(`.${directive.name}`),
-            summary: summaryOf(directive.description),
-            href: `${href}#${directive.name}`,
-            anchor: directive.name,
-            view: { type: 'markdown', markdown: directive.description },
-            searchText: directive.description
-        }))
-    ]
-    return {
-        id: 'directives',
-        language: 'mips',
-        title: 'Directives',
-        href,
-        description: 'What the assembler does with the lines that start with a dot.',
-        entries
-    }
-}
-
-function syscalls(): Chapter {
-    const href = `${BASE}/syscall`
-    const entries: DocumentationEntry[] = [
-        ...proseEntries({
-            language: 'mips',
-            chapter: 'syscalls',
-            chapterHref: href,
-            markdown: syscallsIntro
-        }),
-        ...documented(mipsSyscall).map((syscall): DocumentationEntry => ({
-            id: `mips/syscalls/${syscall.code}`,
-            language: 'mips',
-            chapter: 'syscalls',
-            kind: 'syscall',
-            title: capitalize(syscall.name),
-            names: names(syscall.name, `syscall ${syscall.code}`, `service ${syscall.code}`),
-            signature: `$v0 = ${syscall.code}`,
-            summary: syscallSummary(syscall),
-            href: `${href}#service-${syscall.code}`,
-            anchor: `service-${syscall.code}`,
-            view: { type: 'fields', fields: syscallFields(syscall) },
-            searchText: `Service ${syscall.code}. ${syscallSummary(syscall)} ${syscall.result.other ?? ''}`
-        }))
-    ]
-    return {
-        id: 'syscalls',
-        language: 'mips',
-        title: 'Syscalls',
-        href,
-        description:
-            'MARS simulator services selected by the number in `$v0`, with arguments and results in the registers listed for each service.',
-        entries
-    }
-}
 
 /** `$8 - $15` → `register-8-15`: an id for a register or a run of them. */
 function registerAnchor(text: string): string {
@@ -216,70 +100,37 @@ function registers(): Chapter {
     }
 }
 
-function screen(): Chapter {
-    const href = `${BASE}/screen`
-    return {
-        id: 'screen',
-        language: 'mips',
-        title: 'Screen',
-        href,
-        description: 'The bitmap display, the keyboard and console registers, and program time.',
-        entries: screenEntries('MIPS', 'mips', href)
-    }
-}
-
-function synth(): Chapter {
-    const href = `${BASE}/synth`
-    return {
-        id: 'synth',
-        language: 'mips',
-        title: 'Synth',
-        href,
-        description:
-            'Control eight sound channels through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
-        entries: synthEntries('MIPS', 'mips', href)
-    }
-}
-
-function usingC(): Chapter {
-    const href = `${BASE}/using-c`
-    return {
-        id: 'using-c',
-        language: 'mips',
-        title: 'Using C and C++',
-        href,
-        description:
-            'Compile C or C++, call simulator services through <sim.h>, and debug the generated MIPS assembly.',
-        entries: proseEntries({
-            language: 'mips',
-            chapter: 'using-c',
-            chapterHref: href,
-            markdown: usingCIntro,
-            openingTitle: 'Using C and C++'
-        })
-    }
-}
-
 let cached: Chapter[] | null = null
 
 export function chapters(): Chapter[] {
-    cached ??= [
-        instructions(),
-        directives(),
-        syscalls(),
-        registers(),
-        screen(),
-        synth(),
-        runtimeLibraryChapter({
-            language: 'mips',
-            base: BASE,
-            intro: runtimeIntro,
-            convention: mipsCallingConvention,
-            call: 'jal',
-            description:
-                'The C standard library compiled programs use, which hand-written assembly can call too.'
-        }),
-        usingC()
-    ]
+    cached ??= marsChapters({
+        language: 'mips',
+        variant: 'MIPS',
+        base: BASE,
+        instructionEntries: mipsInstructionEntries,
+        instructionDocument: mipsInstructionDocument,
+        instructionContent: mipsInstructionContent,
+        categories: mipsInstructionCategories,
+        formTags: mipsFormTags,
+        directives: mipsDirectivesMap,
+        syscalls: mipsSyscall,
+        serviceRegister: '$v0',
+        serviceWord: 'service',
+        registers: registers(),
+        convention: mipsCallingConvention,
+        call: 'jal',
+        markdown: {
+            directives: directivesIntro,
+            syscalls: syscallsIntro,
+            runtime: runtimeIntro,
+            usingC: usingCIntro
+        },
+        descriptions: {
+            instructions: 'Every instruction and pseudo-instruction the assembler accepts.',
+            syscalls:
+                'MARS simulator services selected by the number in `$v0`, with arguments and results in the registers listed for each service.',
+            usingC: 'Compile C or C++, call simulator services through <sim.h>, and debug the generated MIPS assembly.'
+        }
+    })
     return cached
 }

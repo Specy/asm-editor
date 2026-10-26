@@ -36,6 +36,7 @@ Relevant sources:
 - `packages/asm-editor/src/lib/documentation/entries.ts`
 - `packages/asm-editor/src/lib/documentation/mips/mips.ts`
 - `packages/asm-editor/src/lib/documentation/riscv/riscv.ts`
+- `packages/asm-editor/src/lib/documentation/mars/chapters.ts`
 - `packages/asm-editor/src/routes/documentation/{mips,risc-v}/instruction/[instructionName]/+page.svelte`
 - `packages/asm-editor/src/components/documentation/site/ClientOnly.svelte`
 - [ADR 0025](../adr/0025-documentation-is-a-list-of-entries.md)
