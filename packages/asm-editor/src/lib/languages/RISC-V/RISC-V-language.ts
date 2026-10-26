@@ -16,11 +16,11 @@ import {
 } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import { parseProjectSourceUri } from '#lib/languages/service/uri.ts'
 import {
-    assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { operandSignatureHelp } from '#lib/languages/service/operandSignatureHelp.ts'
 import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
 import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
 import { riscvInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
@@ -445,46 +445,17 @@ export function createRISCVSignatureHelpProvider(
     _monaco: MonacoType,
     is64 = false
 ): monaco.languages.SignatureHelpProvider {
-    return {
-        signatureHelpTriggerCharacters: [' ', ',', '('],
-        signatureHelpRetriggerCharacters: [','],
-        provideSignatureHelp(model, position) {
-            const prefix = model.getValueInRange({
-                startLineNumber: position.lineNumber,
-                startColumn: 1,
-                endLineNumber: position.lineNumber,
-                endColumn: position.column
-            })
-            const context = assemblyOperandContext(prefix, RISCV_TEXT_OPTIONS)
-            const allVariants = context ? riscvInstructionMap.get(context.operation) : undefined
-            const variants = allVariants ? variantsForTarget(allVariants, is64) : []
-            if (!context || variants.length === 0) return null
-            const signatures = variants.map((variant) => {
-                const operands = riscvVariantOperands(variant)
-                return {
-                    label: `${variant.name}${operands.length ? ` ${operands.join(', ')}` : ''}`,
-                    documentation: variant.description,
-                    parameters: operands.map((label) => ({ label }))
-                }
-            })
-            const found = variants.findIndex(
-                (variant) => riscvVariantOperands(variant).length > context.activeOperand
-            )
-            const activeSignature = found < 0 ? 0 : found
-            const parameters = signatures[activeSignature]?.parameters ?? []
+    return operandSignatureHelp(RISCV_TEXT_OPTIONS, [' ', ',', '('], (operation) => {
+        const variants = riscvInstructionMap.get(operation)
+        return (variants ? variantsForTarget(variants, is64) : []).map((variant) => {
+            const operands = riscvVariantOperands(variant)
             return {
-                value: {
-                    signatures,
-                    activeSignature,
-                    activeParameter: Math.min(
-                        context.activeOperand,
-                        Math.max(0, parameters.length - 1)
-                    )
-                },
-                dispose() {}
+                label: `${variant.name}${operands.length ? ` ${operands.join(', ')}` : ''}`,
+                documentation: variant.description,
+                parameters: operands
             }
-        }
-    }
+        })
+    })
 }
 
 const RISCVRegistersMap: Partial<Record<string, RegisterMetadata>> = Object.fromEntries(

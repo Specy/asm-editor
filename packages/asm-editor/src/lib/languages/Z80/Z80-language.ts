@@ -13,11 +13,11 @@ import {
     type Z80InstructionVariant
 } from './Z80-documentation'
 import {
-    assemblyOperandContext,
     instructionSnippet,
     splitAssemblyComment,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { operandSignatureHelp } from '#lib/languages/service/operandSignatureHelp.ts'
 import type { InstructionTag } from '#lib/documentation/instructions/categories.ts'
 import { z80FormTags } from '#lib/documentation/instructions/formTags.ts'
 import { documentHover, formHoverLine } from '#lib/documentation/instructions/hoverLine.ts'
@@ -451,43 +451,16 @@ export function createZ80Completion(monaco: MonacoType): monaco.languages.Comple
 export function createZ80SignatureHelpProvider(
     _monaco: MonacoType
 ): monaco.languages.SignatureHelpProvider {
-    return {
-        signatureHelpTriggerCharacters: [' ', ',', '(', '['],
-        signatureHelpRetriggerCharacters: [','],
-        provideSignatureHelp(model, position) {
-            const prefix = model.getValueInRange({
-                startLineNumber: position.lineNumber,
-                startColumn: 1,
-                endLineNumber: position.lineNumber,
-                endColumn: position.column
-            })
-            const context = assemblyOperandContext(prefix, Z80_TEXT_OPTIONS)
-            if (!context) return null
-            const variants = z80InstructionMap.get(context.operation)
-            if (!variants?.length) return null
-            const signatures = variants.slice(0, 64).map((variant) => ({
+    return operandSignatureHelp(Z80_TEXT_OPTIONS, [' ', ',', '(', '['], (operation) =>
+        z80InstructionMap
+            .get(operation)
+            ?.slice(0, 64)
+            .map((variant) => ({
                 label: variant.instruction,
                 documentation: variant.description,
-                parameters: variant.params.map((label) => ({ label }))
+                parameters: variant.params
             }))
-            const found = signatures.findIndex(
-                (signature) => signature.parameters.length > context.activeOperand
-            )
-            const activeSignature = found < 0 ? 0 : found
-            const parameters = signatures[activeSignature]?.parameters ?? []
-            return {
-                value: {
-                    signatures,
-                    activeSignature,
-                    activeParameter: Math.min(
-                        context.activeOperand,
-                        Math.max(0, parameters.length - 1)
-                    )
-                },
-                dispose() {}
-            }
-        }
-    }
+    )
 }
 
 /**

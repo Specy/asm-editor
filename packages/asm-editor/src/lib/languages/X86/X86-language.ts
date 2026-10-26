@@ -1,12 +1,12 @@
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
-    assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
     splitAssemblyComment,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { operandSignatureHelp } from '#lib/languages/service/operandSignatureHelp.ts'
 import { x86FormFails, x86IsUnsupported, x86SupportNote } from './x86Support'
 import { X86Directives, X86Instructions, X86Registers, X86SizeSpecifiers } from './X86-grammar'
 import {
@@ -335,39 +335,13 @@ export function createX86CompletionProvider(
 export function createX86SignatureHelpProvider(
     _monaco: MonacoType
 ): monaco.languages.SignatureHelpProvider {
-    return {
-        signatureHelpTriggerCharacters: [' ', ',', '['],
-        signatureHelpRetriggerCharacters: [','],
-        provideSignatureHelp(model, position) {
-            const prefix = model.getValueInRange({
-                startLineNumber: position.lineNumber,
-                startColumn: 1,
-                endLineNumber: position.lineNumber,
-                endColumn: position.column
-            })
-            const context = assemblyOperandContext(prefix, X86_TEXT_OPTIONS)
-            const forms = context ? X86_SIGNATURES.get(context.operation) : undefined
-            if (!context || !forms?.length) return null
-            const signatures = forms.map((form) => ({
-                label: `${context.operation}${form.operands.length ? ` ${form.operands.join(', ')}` : ''}`,
-                documentation: form.description,
-                parameters: form.operands.map((label) => ({ label }))
-            }))
-            const found = forms.findIndex((form) => form.operands.length > context.activeOperand)
-            const activeSignature = found < 0 ? 0 : found
-            return {
-                value: {
-                    signatures,
-                    activeSignature,
-                    activeParameter: Math.min(
-                        context.activeOperand,
-                        Math.max(0, forms[activeSignature]!.operands.length - 1)
-                    )
-                },
-                dispose() {}
-            }
-        }
-    }
+    return operandSignatureHelp(X86_TEXT_OPTIONS, [' ', ',', '['], (operation) =>
+        X86_SIGNATURES.get(operation)?.map((form) => ({
+            label: formatX86Form(operation, form),
+            documentation: form.description,
+            parameters: form.operands
+        }))
+    )
 }
 
 const hoverDocuments = new Map<string, InstructionDocument>()
@@ -401,12 +375,7 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
                 }
             } else if (instruction) {
                 const forms = X86_SIGNATURES.get(word) ?? []
-                const shapes = forms
-                    .map(
-                        (form) =>
-                            `\`${word}${form.operands.length ? ` ${form.operands.join(', ')}` : ''}\``
-                    )
-                    .join('  \n')
+                const shapes = forms.map((form) => `\`${formatX86Form(word, form)}\``).join('  \n')
                 const heading = instruction.summary
                     ? `**${original}** ${instruction.summary}`
                     : `**${original}**`

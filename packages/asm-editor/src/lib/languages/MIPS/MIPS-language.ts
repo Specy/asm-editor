@@ -14,11 +14,11 @@ import {
     runtimeFunctionsForModel
 } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
-    assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
     type AssemblyTextOptions
 } from '#lib/languages/service/assemblyText.ts'
+import { operandSignatureHelp } from '#lib/languages/service/operandSignatureHelp.ts'
 import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
 import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
 import { mipsInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
@@ -405,45 +405,16 @@ export function createMIPSHoverProvider(monaco: MonacoType): monaco.languages.Ho
 export function createMIPSSignatureHelpProvider(
     _monaco: MonacoType
 ): monaco.languages.SignatureHelpProvider {
-    return {
-        signatureHelpTriggerCharacters: [' ', ',', '('],
-        signatureHelpRetriggerCharacters: [','],
-        provideSignatureHelp(model, position) {
-            const prefix = model.getValueInRange({
-                startLineNumber: position.lineNumber,
-                startColumn: 1,
-                endLineNumber: position.lineNumber,
-                endColumn: position.column
-            })
-            const context = assemblyOperandContext(prefix, MIPS_TEXT_OPTIONS)
-            const variants = context ? mipsInstructionMap.get(context.operation) : undefined
-            if (!context || !variants?.length) return null
-            const signatures = variants.map((variant) => {
-                const operands = mipsVariantOperands(variant)
-                return {
-                    label: `${variant.name}${operands.length ? ` ${operands.join(', ')}` : ''}`,
-                    documentation: variant.description,
-                    parameters: operands.map((label) => ({ label }))
-                }
-            })
-            const found = variants.findIndex(
-                (variant) => mipsVariantOperands(variant).length > context.activeOperand
-            )
-            const activeSignature = found < 0 ? 0 : found
-            const parameters = signatures[activeSignature]?.parameters ?? []
+    return operandSignatureHelp(MIPS_TEXT_OPTIONS, [' ', ',', '('], (operation) =>
+        mipsInstructionMap.get(operation)?.map((variant) => {
+            const operands = mipsVariantOperands(variant)
             return {
-                value: {
-                    signatures,
-                    activeSignature,
-                    activeParameter: Math.min(
-                        context.activeOperand,
-                        Math.max(0, parameters.length - 1)
-                    )
-                },
-                dispose() {}
+                label: `${variant.name}${operands.length ? ` ${operands.join(', ')}` : ''}`,
+                documentation: variant.description,
+                parameters: operands
             }
-        }
-    }
+        })
+    )
 }
 
 const MIPSRegistersMap: Partial<Record<string, RegisterMetadata>> = Object.fromEntries(
