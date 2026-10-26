@@ -9,8 +9,8 @@ import type { RegisteredTool } from '@discerns/sdk'
 import AiAgent from './AiAgent.svelte'
 
 const protocol = vi.hoisted(() => ({
-    registerTool: vi.fn(async () => ({ success: true })),
-    unregisterTool: vi.fn(async () => ({ success: true })),
+    registerTool: vi.fn(async (_tool: RegisteredTool) => ({ success: true })),
+    unregisterTool: vi.fn(async (_name: string) => ({ success: true })),
     setAvatarContext: vi.fn(),
     dispose: vi.fn()
 }))
