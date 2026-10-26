@@ -70,19 +70,21 @@ function expectSnapshot(file: string, text: string) {
 type HandBuiltSymbol = { name: string; info: number; value: number; size: number }
 
 /**
- * A static executable at 0x400000 of one `.text` section at 0x400080, its entry point, with the
- * given symbols in `.symtab` (info is `st_info`: 0x12 a global function, 0x02 a local one, 0x01
- * a local object).
+ * A static executable at 0x400000 of one `.text` section at 0x400080, its entry point, and the
+ * `.rodata` given right after it, with the given symbols in `.symtab` (info is `st_info`: 0x12 a
+ * global function, 0x02 a local one, 0x11 a global object, 0x01 a local one).
  */
-function buildElf(text: number[], symbols: HandBuiltSymbol[]): Uint8Array {
+function buildElf(text: number[], symbols: HandBuiltSymbol[], rodata: number[] = []): Uint8Array {
     const align = (value: number) => (value + 7) & ~7
-    const shstrtab = '\0.text\0.symtab\0.strtab\0.shstrtab\0'
+    const shstrtab = `\0.text\0.symtab\0.strtab\0.shstrtab\0${rodata.length ? '.rodata\0' : ''}`
     const strtab = `\0${symbols.map((symbol) => `${symbol.name}\0`).join('')}`
-    const symtabAt = align(0x80 + text.length)
+    const loaded = 0x80 + text.length + rodata.length
+    const symtabAt = align(loaded)
     const strtabAt = symtabAt + 24 * (symbols.length + 1)
     const shstrtabAt = strtabAt + strtab.length
     const sectionsAt = align(shstrtabAt + shstrtab.length)
-    const bytes = new Uint8Array(sectionsAt + 5 * 64)
+    const sections = rodata.length ? 6 : 5
+    const bytes = new Uint8Array(sectionsAt + sections * 64)
     const view = new DataView(bytes.buffer)
     bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
     view.setUint16(16, 2, true) // ET_EXEC
@@ -95,17 +97,18 @@ function buildElf(text: number[], symbols: HandBuiltSymbol[]): Uint8Array {
     view.setUint16(54, 56, true)
     view.setUint16(56, 1, true)
     view.setUint16(58, 64, true)
-    view.setUint16(60, 5, true)
+    view.setUint16(60, sections, true)
     view.setUint16(62, 4, true)
-    // PT_LOAD r-x over the headers and .text
+    // PT_LOAD r-x over the headers, .text and .rodata
     view.setUint32(0x40, 1, true)
     view.setUint32(0x44, 5, true)
     view.setBigUint64(0x50, 0x400000n, true)
     view.setBigUint64(0x58, 0x400000n, true)
-    view.setBigUint64(0x60, BigInt(0x80 + text.length), true)
-    view.setBigUint64(0x68, BigInt(0x80 + text.length), true)
+    view.setBigUint64(0x60, BigInt(loaded), true)
+    view.setBigUint64(0x68, BigInt(loaded), true)
     view.setBigUint64(0x70, 0x1000n, true)
     bytes.set(text, 0x80)
+    bytes.set(rodata, 0x80 + text.length)
     let name = 1
     symbols.forEach((symbol, i) => {
         const at = symtabAt + 24 * (i + 1)
@@ -143,6 +146,9 @@ function buildElf(text: number[], symbols: HandBuiltSymbol[]): Uint8Array {
     section(2, [7, 2, 0, 0, symtabAt, 24 * (symbols.length + 1), 3, locals + 1, 8, 24])
     section(3, [15, 3, 0, 0, strtabAt, strtab.length, 0, 0, 1, 0])
     section(4, [23, 3, 0, 0, shstrtabAt, shstrtab.length, 0, 0, 1, 0])
+    const rodataAt = 0x80 + text.length
+    if (rodata.length)
+        section(5, [33, 1, 2, 0x400000 + rodataAt, rodataAt, rodata.length, 0, 0, 1, 0])
     return bytes
 }
 
@@ -502,6 +508,25 @@ describe('Listings of unusual files', () => {
         expect(listing.main).toBe(0x400090)
         expect(functionText(listing, '_start')).toMatch(/^_start:\n {4}mov edi, 0x400090 +; main\n/)
         expect(functionText(listing, 'main')).toBe('main:\n    xor eax, eax\n    ret')
+    })
+
+    it('names no main where the symbol main is data, as `const char main[]` makes it', () => {
+        //a data object, and a bare label in the data, as an assembler leaves `main:` there
+        for (const info of [0x11, 0x10]) {
+            const bytes = buildElf(
+                [0x31, 0xc0, 0xc3],
+                [
+                    { name: '_start', info: 0x12, value: 0x400080, size: 3 },
+                    { name: 'main', info, value: 0x400083, size: 3 }
+                ],
+                [0x31, 0xc0, 0xc3]
+            )
+            const listing = listingOf(bytes, 'data-main')
+            expectConsistent(listing, bytes)
+            expect(listing.main).toBeUndefined()
+            expect(listing.text).toContain('\nsection .rodata\nmain: db 0x31, 0xc0, 0xc3\n')
+            expect(findProgramStart(decoder, bytes)).toEqual({ entry: 0x400080, main: undefined })
+        }
     })
 
     it('lists the load segments of a program without section headers', () => {

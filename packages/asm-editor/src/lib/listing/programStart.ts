@@ -152,8 +152,8 @@ export function findProgramStart(
                 stubs.set(Number(stub.address), printableSymbolName(stub.name))
             main = mainFromStart(start, (instruction) => calledNames(model, stubs, instruction))
         }
-        if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
     }
+    if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
     if (main !== undefined && insideCodeObject(model, main)) main = undefined
     return { entry, main }
 }
