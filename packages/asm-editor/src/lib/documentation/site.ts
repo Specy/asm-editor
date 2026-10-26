@@ -15,9 +15,10 @@ export type DocumentationSite = {
 
 /**
  * Each language's part of the documentation site, read by its layout and its hub page. Its pages
- * are its Chapters' ids, titles and hrefs, copied rather than read because a layout must not load
- * the Chapters, whose data modules bring in the Core for MIPS, RISC-V and Z80. The Chapters stay
- * the source ([ADR 0025](../../../../../docs/adr/0025-documentation-is-a-list-of-entries.md)), and
+ * are its Chapters' ids, titles and hrefs, copied rather than read because the Chapters carry the
+ * language's whole Documentation (its prose, tables and instruction content), which every
+ * documentation page would then load. The Chapters stay the source
+ * ([ADR 0025](../../../../../docs/adr/0025-documentation-is-a-list-of-entries.md)), and
  * `documentation.test.ts` checks that the two agree.
  */
 export const DOCUMENTATION_SITES: Record<DocumentationLanguage, DocumentationSite> = {
