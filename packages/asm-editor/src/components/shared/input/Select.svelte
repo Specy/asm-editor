@@ -188,12 +188,17 @@
         }
     }
 
-    function commit(index: number) {
-        //the list is still on screen while it animates away; a click landing then chooses nothing
-        if (!open || disabled) return
-        if (!selectable(index)) return
+    /** Makes an option the value, and says whether it could. */
+    function choose(index: number): boolean {
+        if (disabled || !selectable(index)) return false
         value = options[index].value
         onChange?.(options[index].value)
+        return true
+    }
+
+    function commit(index: number) {
+        //the list is still on screen while it animates away; a click landing then chooses nothing
+        if (!open || !choose(index)) return
         closeList()
         button?.focus()
     }
@@ -227,7 +232,8 @@
         )
         if (match === -1) return
         if (open) moveTo(match)
-        else commit(match)
+        //a closed list chooses at once, as a native select does, and changes nothing it already holds
+        else if (match !== selectedIndex) choose(match)
     }
 
     function onKeyDown(event: KeyboardEvent) {

@@ -26,6 +26,8 @@
         compact?: boolean
         /** Starts closed, behind its heading: a long legend in the narrow panel. */
         collapsible?: boolean
+        /** Whether the collapsible legend is open, which a symbol tapped in a row does. */
+        open?: boolean
     }
 
     let {
@@ -34,14 +36,9 @@
         idPrefix,
         disableLinks = false,
         compact = false,
-        collapsible = false
+        collapsible = false,
+        open = $bindable(false)
     }: Props = $props()
-    let open = $state(false)
-
-    // a symbol tapped in a row opens the legend to show its line
-    $effect(() => {
-        if (marked) open = true
-    })
 </script>
 
 {#snippet lines()}

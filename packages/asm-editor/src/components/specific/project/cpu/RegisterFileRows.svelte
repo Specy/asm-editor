@@ -380,7 +380,8 @@
                 {:else if usesHex}
                     {row.register.value}
                 {:else}
-                    {row.register.value.toString(16).padStart(8, '0')}
+                    <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
+                    {row.register.toHex()}
                 {/if}
             </div>
             {#if row.integer && onRegisterClick}
