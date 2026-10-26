@@ -9,7 +9,7 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount } from 'svelte'
+import { flushSync, mount, tick, unmount } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import type { EditorGroup } from './EditorGroup.svelte'
 import type { WorkbenchSession, WorkbenchSessionHost } from './WorkbenchSession.svelte'
@@ -744,6 +744,9 @@ describe('the prompt', () => {
         expect(target.textContent).toContain('Comment on main')
         const field = target.querySelector('textarea')!
         expect(field.getAttribute('aria-label')).toBe('Comment')
+        //the keyboard goes to the comment as the prompt opens
+        await tick()
+        expect(document.activeElement).toBe(field)
         field.value = 'a'.repeat(4001)
         field.dispatchEvent(new Event('input', { bubbles: true }))
         flushSync()
