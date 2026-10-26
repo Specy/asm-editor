@@ -23,7 +23,7 @@
     import lzstring from 'lz-string'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
-    import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
+    import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import { serializer } from '#lib/json.ts'
     import { examSessionPath, parseLegacyProjectExamPayload } from '#lib/exam.ts'
     import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
@@ -262,8 +262,7 @@
             )
             return
         }
-        await navigator.clipboard.writeText(url)
-        toast.logPill('Copied to clipboard')
+        await copyText(url, 'Share link')
     }
 
     async function changePage(page: ResolvedPathname) {

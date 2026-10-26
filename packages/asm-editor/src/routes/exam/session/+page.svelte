@@ -34,7 +34,7 @@
         type OpenQuestionSection
     } from '#lib/exam.ts'
 
-    import { makeHash, textDownloader } from '#lib/utils.ts'
+    import { copyText, makeHash, textDownloader } from '#lib/utils.ts'
     import { createDebouncer } from '#lib/debounce.ts'
     import { serializer } from '#lib/json.ts'
     import { toast } from '#stores/toastStore.ts'
@@ -377,6 +377,8 @@
             toast.error('Wrong unlock password')
             return
         }
+        //a finished exam had its guards taken off, and the student goes back to answering under them
+        attachExamListeners()
         await requestExamFullscreen()
         examDisabled = false
         examSubmission.submissionTimestamp = 0
@@ -405,6 +407,17 @@
             }
             examDisabled = true
         }
+    }
+
+    /**
+     * The guards an exam runs under. A listener added twice is added once, so unlocking an exam that
+     * was only paused, and kept them, changes nothing.
+     */
+    function attachExamListeners() {
+        document.addEventListener('visibilitychange', listenVisibilityChange)
+        document.addEventListener('fullscreenchange', listenFullscreenChange)
+        window.addEventListener('blur', listenVisibilityChange)
+        window.addEventListener('keydown', preventDefaultKeyPresses)
     }
 
     function detachExamListeners() {
@@ -459,10 +472,7 @@
     }
 
     async function startExam() {
-        document.addEventListener('visibilitychange', listenVisibilityChange)
-        document.addEventListener('fullscreenchange', listenFullscreenChange)
-        window.addEventListener('blur', listenVisibilityChange)
-        window.addEventListener('keydown', preventDefaultKeyPresses)
+        attachExamListeners()
         await requestExamFullscreen()
     }
 
@@ -754,12 +764,7 @@
                     />
                     <Button onClick={unlockExam}>Unlock</Button>
                 </Row>
-                <Button
-                    onClick={async () => {
-                        await navigator.clipboard.writeText(submissionUrl)
-                        toast.logPill('Submission link copied to clipboard')
-                    }}
-                >
+                <Button onClick={() => copyText(submissionUrl, 'Submission link')}>
                     Copy submission link again
                 </Button>
                 <Button

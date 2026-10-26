@@ -16,6 +16,16 @@ const RETIRED_PAGES: Record<string, string> = {
 }
 
 /**
+ * The slugs of every retired page, such as `['examples', 'm68k', 'fibonacci']`, for the course and
+ * lecture routes to hand the prerender as `entries`. The site is static, so a redirect exists only
+ * where the prerender wrote one out as a page, and nothing links to these pages any more for its
+ * crawl to find them: without the entries, an old link gets the site's 404 page.
+ */
+export function retiredPages(): string[][] {
+    return Object.keys(RETIRED_PAGES).map((path) => path.split('/'))
+}
+
+/**
  * Redirects a retired course page to whatever replaced it, permanently. Called by the course and
  * lecture loads before they look a slug up, because a retired slug is no longer in the content and
  * would otherwise be reported as missing.

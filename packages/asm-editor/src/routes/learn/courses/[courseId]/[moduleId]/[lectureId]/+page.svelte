@@ -114,10 +114,6 @@
     {jsonLd}
 />
 
-<svelte:head>
-    <meta property="og:image" content={data.course.image} />
-</svelte:head>
-
 {#snippet topicList(siblings: TopicSibling[])}
     {#each siblings as sibling, index (sibling.courseSlug + sibling.lectureSlug)}
         {index === 0 ? '' : ', '}<a

@@ -9,7 +9,7 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { scale } from 'svelte/transition'
     import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
-    import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
+    import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '#stores/toastStore.ts'
     import { goto } from '$app/navigation'
@@ -203,8 +203,7 @@
                                     )
                                     return
                                 }
-                                await navigator.clipboard.writeText(link)
-                                toast.logPill('Copied to clipboard')
+                                await copyText(link, 'Share link')
                             }}
                             on:download={(e) => {
                                 //Whichever form loses nothing: a single-File Project keeps its
