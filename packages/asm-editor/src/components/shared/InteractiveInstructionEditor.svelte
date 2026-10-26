@@ -225,19 +225,10 @@
         const mapped = session.project.sourceMaps[emulator.currentFile]?.lines[emulator.line]
         return mapped?.path === selectedFile ? mapped.line : -1
     })
-    function confirmReplacement(question: string, signal: AbortSignal) {
-        const pending = Prompt.confirm(question)
-        const id = Prompt.id
-        const cancel = () => {
-            if (Prompt.id === id && Prompt.promise) Prompt.cancel()
-        }
-        signal.addEventListener('abort', cancel, { once: true })
-        return pending.finally(() => signal.removeEventListener('abort', cancel))
-    }
     async function compileSourceFile() {
         if (!session || running || building) return
         try {
-            await session.compile(confirmReplacement)
+            await session.compile(Prompt.confirmUntilAborted)
             activePath = session.selected
         } catch (error) {
             toast.error(getM68kErrorMessage(error))
