@@ -163,20 +163,6 @@ function programStartLimitMessage(name: string, limit: number): string {
     return `The program did not reach ${name} within ${limit.toLocaleString('en-US')} instructions`
 }
 
-/** A Build stopped by its Arguments: they do not parse, or the Core refuses them. */
-function argumentsDiagnostic(problem: string): Diagnostic {
-    const message = `Arguments: ${problem}`
-    return {
-        severity: 'error',
-        source: ARGUMENTS_DIAGNOSTIC_SOURCE,
-        lineIndex: 0,
-        column: 0,
-        line: { line: '', line_index: 0 },
-        message,
-        formatted: message
-    }
-}
-
 /** The Arguments problem a failed Build reports, or undefined for any other failure. */
 function argumentsProblem(error: CompilationFailedError): string | undefined {
     const [diagnostic] = error.diagnostics
@@ -1083,7 +1069,10 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         if (problem === undefined) return
-        const diagnostic = argumentsDiagnostic(problem)
+        const diagnostic = {
+            ...makeGenericDiagnostic(`Arguments: ${problem}`),
+            source: ARGUMENTS_DIAGNOSTIC_SOURCE
+        }
         this.state.compilerDiagnostics = [diagnostic]
         this.state.canExecute = false
         throw new CompilationFailedError(diagnostic.message, [diagnostic])
@@ -1292,19 +1281,29 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.audio = this.interactiveAudio
     }
 
-    // ----- public api ----- //
-    clear(): void {
-        this.executionController.invalidate()
-        this.phase = undefined
+    /** Ends the program's FileSystem session, once the Core no longer runs inside it. */
+    private endExecutionSession(): void {
         this._clearExecution?.()
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
+    }
+
+    /** Forgets what describes the program built last: its sources, its library, its memory. */
+    private forgetBuild(): void {
         this._buildSources = undefined
+        this._buildLibraryFiles = undefined
         this.memoryLayout = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
         this.deviceRegions = []
-        this._buildLibraryFiles = undefined
+    }
+
+    // ----- public api ----- //
+    clear(): void {
+        this.executionController.invalidate()
+        this.phase = undefined
+        this.endExecutionSession()
+        this.forgetBuild()
         this.undoLedger = []
         this.noteList = []
         this.endNoted = false
@@ -2275,9 +2274,7 @@ export abstract class GenericEmulator<T, R extends string>
                 )
                 return await this.runTestcaseInternal(testcase, haltLimit)
             } finally {
-                this._clearExecution?.()
-                this.fileSystemSession?.stop()
-                this.fileSystemSession = null
+                this.endExecutionSession()
                 this.useInteractiveRun()
                 this.state.canExecute = false
                 this.state.canUndo = false
@@ -2444,36 +2441,22 @@ export abstract class GenericEmulator<T, R extends string>
                 console.error(e)
                 this.addError(this._stringifyError(e))
             } finally {
-                this._clearExecution?.()
-                this.fileSystemSession?.stop()
-                this.fileSystemSession = null
+                this.endExecutionSession()
                 this.useInteractiveRun()
             }
         }
         //what `clear()` left is the state the run ended in
         if (stopped) return results
-        const passedTests = results.filter((r) => r.passed)
+        const passed = results.filter((r) => r.passed).length
+        const failed = results.length - passed
         terminal.prepend('⏳ Running tests...\n\n')
-        if (passedTests.length !== results.length) {
-            terminal.write(
-                `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
-            )
-        }
-        if (passedTests.length > 0) {
-            if (!terminal.output.endsWith('testcases not passed')) {
-                terminal.write('\n')
-            }
-            terminal.write(`\n✅ ${passedTests.length} testcases passed \n`)
-        }
+        if (failed > 0) terminal.write(`\n❌ ${failed} testcases not passed\n`)
+        if (passed > 0) terminal.write(`\n\n✅ ${passed} testcases passed \n`)
         if (testcases.length > 0) {
             //The final Core remains readable for registers, memory, Screen and result reporting,
             //but its isolated FileSystem session has been released. It is therefore a Test result,
             //not an interactive Debug session that can be undone and resumed.
-            this._buildSources = undefined
-            this.memoryLayout = undefined
-            this.heapBounds = undefined
-            this.stackTop = undefined
-            this.deviceRegions = []
+            this.forgetBuild()
             this.state.canExecute = false
             this.state.canUndo = false
         }
