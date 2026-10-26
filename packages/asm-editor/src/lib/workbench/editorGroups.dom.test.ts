@@ -492,7 +492,7 @@ describe('independent editor groups', () => {
         session.selectMappedLines(first, [0, 1])
         expect(first.mappedLines).toEqual([0, 1])
         expect(second.mappedLines).toEqual([0, 1, 3])
-        const colors = session.mappingColors!.indices
+        const colors = session.linePairing!.coloring.indices
         expect(session.activeMappingColors).toEqual(
             new Set([colors.get('main.c')!.get(0), colors.get('main.c')!.get(1)])
         )

@@ -1,13 +1,7 @@
 import { browser } from '$app/env'
 import { db, type ProjectJournals } from '#lib/storage/db.ts'
 import { requestPersistentStorage } from '#lib/storage/persist.ts'
-import {
-    type ExternalImport,
-    makeProject,
-    makeProjectFromExternal,
-    type Project,
-    type ProjectData
-} from '#lib/Project.svelte.ts'
+import { makeProject, type Project, type ProjectData } from '#lib/Project.svelte.ts'
 
 import { isLegacyLinkedFileCompatible, projectToArchive } from '#lib/projectArchive.ts'
 
@@ -152,12 +146,6 @@ function createProjectStore() {
         await load()
     }
 
-    async function importFromExternal(code: string): Promise<ExternalImport> {
-        const imported = await makeProjectFromExternal(code)
-        await addProject(imported.project)
-        return imported
-    }
-
     function setFileHandle(
         id: string,
         handle: FileSystemFileHandle,
@@ -205,7 +193,6 @@ function createProjectStore() {
         save,
         saveDetails,
         deleteProject,
-        importFromExternal,
         setFileHandle,
         getProject,
         getProjectFromDb,

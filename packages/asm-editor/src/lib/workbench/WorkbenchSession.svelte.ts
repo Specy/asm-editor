@@ -151,10 +151,7 @@ import {
     isSourceBreakpoint,
     mappedBreakpoints
 } from '#lib/sourceCompilation/sourceBreakpoints.ts'
-import {
-    sourceMapColorIndices,
-    type SourceMapColoring
-} from '#lib/sourceCompilation/sourceColoring.ts'
+import { sourceMapColorIndices } from '#lib/sourceCompilation/sourceColoring.ts'
 import { sameLocations, type MappingSelection } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     editorFileLanguage,
@@ -783,7 +780,6 @@ export class WorkbenchSession {
             const pseudocode = this.pseudocodePair
             return pseudocode ? pseudocodePairing(pseudocode) : undefined
         })
-        this.mappingColors = $derived<SourceMapColoring | undefined>(this.linePairing?.coloring)
         this.retainedModelKeys = $derived.by(() => {
             //a File's text, and for a File of bytes its Listing, which an Executable has; a key
             //with no model behind it keeps nothing
@@ -836,14 +832,6 @@ export class WorkbenchSession {
                     editorFileLanguage(diagnostic.location.path, this.project.language) ===
                         this.project.language
             ) ?? false
-        )
-        this.languageErrorCount = $derived(
-            this.languageAnalysis?.diagnostics.filter(
-                (diagnostic) =>
-                    diagnostic.severity === 'error' &&
-                    editorFileLanguage(diagnostic.location.path, this.project.language) ===
-                        this.project.language
-            ).length ?? 0
         )
         this.diagnosticCounts = $derived.by(() => {
             const counts: Record<string, { errors: number; warnings: number }> = Object.create(null)
@@ -925,7 +913,7 @@ export class WorkbenchSession {
             return pair?.locationAt(pair.assembly.instructionLine)
         })
         this.activeMappingColors = $derived.by(() => {
-            const coloring = this.mappingColors
+            const coloring = this.linePairing?.coloring
             const execution = this.executionSourceLocation
             if (!coloring) return undefined
             const colors = sourceMapColorIndices(
@@ -1209,8 +1197,6 @@ export class WorkbenchSession {
      * for the others, and while the Project has no Program.
      */
     declare readonly commandLine: CommandLineState | undefined
-    /** The colours of the panes whose lines are linked, see `linePairing`. */
-    declare readonly mappingColors: SourceMapColoring | undefined
     /** A C File and its Generated assembly, shown side by side with a current Source map. */
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
     /** A function's Pseudocode and the Listing beside it, once it is decompiled. */
@@ -1233,7 +1219,6 @@ export class WorkbenchSession {
     declare readonly liveViewDiagnostics: Diagnostic[]
     declare readonly activeDiagnostics: Diagnostic[]
     declare readonly liveBuildHasErrors: boolean
-    declare readonly languageErrorCount: number
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
     declare readonly worstSeverity: Diagnostic['severity'] | undefined
@@ -1970,10 +1955,6 @@ export class WorkbenchSession {
 
     redoAnnotation(path: string): boolean {
         return this.undoAnnotation(path, true)
-    }
-
-    canRedoAnnotation(path: string): boolean {
-        return this.canUndoAnnotation(path, true)
     }
 
     /**
