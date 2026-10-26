@@ -118,9 +118,11 @@ that same content, retaining existing ids, routes and operand-form samples.
 - With no authored description, all current Core descriptions remain available. With authored
   prose later, it becomes the main explanation while operand-form descriptions remain attached
   to their forms; search, summaries and page metadata follow the same resolution rule.
-- Other architectures retain their current content and execution paths until they adopt the
-  authored layer. A missing MIPS or RISC-V program must not silently fall back to an incomplete
-  syntax sample presented as runnable content.
+- Other architectures retain their current content until they adopt the authored layer. Their
+  instruction pages wrap the program they already have (M68K's written one, the ones x86 and Z80
+  generate) in the same `InstructionExample` shape, so the shared page prerenders it the same way.
+  A missing MIPS or RISC-V program must not silently fall back to an incomplete syntax sample
+  presented as runnable content.
 
 ## Example conventions
 

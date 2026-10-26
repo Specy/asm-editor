@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { render } from 'svelte/server'
 import DOMPurify from 'isomorphic-dompurify'
 import EntryBody from '#cmp/documentation/entries/EntryBody.svelte'
@@ -22,6 +22,15 @@ import { riscvInstructionContent } from '../riscv/instructionContent'
 import { load as loadM68k } from '../../../routes/documentation/m68k/instruction/[instructionName]/+page.server'
 import { load as loadMips } from '../../../routes/documentation/mips/instruction/[instructionName]/+page.server'
 import { load as loadRiscv } from '../../../routes/documentation/risc-v/instruction/[instructionName]/+page.server'
+import { load as loadX86 } from '../../../routes/documentation/x86/instruction/[instructionName]/+page.server'
+import { load as loadZ80 } from '../../../routes/documentation/z80/instruction/[instructionName]/+page.server'
+import X86InstructionPage from '../../../routes/documentation/x86/instruction/[instructionName]/+page.svelte'
+import Z80InstructionPage from '../../../routes/documentation/z80/instruction/[instructionName]/+page.svelte'
+
+// An instruction page reads its own URL for its schema.org data, which only a request has.
+vi.mock('$app/state', () => ({
+    page: { url: new URL('https://asm-editor.specy.app/documentation/x86/instruction/add') }
+}))
 
 function instructionEntry(chapters: Chapter[], title: string) {
     return chapters
@@ -89,6 +98,22 @@ describe('instruction content integration', () => {
         }
     )
 
+    it.each([
+        ['x86', 'add', X86InstructionPage, loadX86],
+        ['Z80', 'ld', Z80InstructionPage, loadZ80]
+    ] as const)(
+        'prerenders the %s %s page with its generated example as code, not a loading box',
+        async (_language, name, Route, load) => {
+            const data = await load({ params: { instructionName: name } } as never)
+            const result = render(Route, { props: { data } as never })
+            const body = DOMPurify.sanitize(result.body, { RETURN_DOM: true }) as HTMLElement
+            expect(body.querySelector('.instruction-example pre code')?.textContent).toBe(
+                data.props.example!.code
+            )
+            expect(result.body).not.toContain('Loading...')
+        }
+    )
+
     it('renders the authored program in the Documentation panel without starting an Emulator', () => {
         const entry = mipsChapters()
             .find((chapter) => chapter.id === 'instructions')!
@@ -120,7 +145,7 @@ describe('instruction content integration', () => {
         const load = mips ? loadMips : loadRiscv
         const result = await load({ params: { instructionName: name } } as never)
         expect(entry.instructionContent).toBe(content)
-        expect(result.props.content).toBe(content)
+        expect(result.props.example).toBe(content.example)
         expect(entry.code).toContain(content.example!.code)
         expect(entry.href).toBe(`/documentation/${language}/instruction/${name}`)
         // the page and the panel draw the same document, and search reads its words
@@ -130,7 +155,7 @@ describe('instruction content integration', () => {
         const first = (mips ? mipsInstructionMap : riscvInstructionMap).get(name)![0]
         expect(entry.searchText).toContain(first.description)
         if (name === 'ld' || name === 'addw') {
-            expect(result.props.content?.example?.target).toBe('RISC-V-64')
+            expect(result.props.example?.target).toBe('RISC-V-64')
         }
     })
 
