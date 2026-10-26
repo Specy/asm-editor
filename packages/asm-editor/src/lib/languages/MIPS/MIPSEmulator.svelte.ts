@@ -51,16 +51,13 @@ import {
     memoryBackstepMutation,
     registerBackstepMutation
 } from '#lib/languages/mars/marsUndo.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
 import {
     exitStepText,
     MarsHandlers,
     marsRuntimeErrorMessage,
-    normalizeUndoSize,
-    randomStreamStepText,
-    toHaltLimit
+    randomStreamStepText
 } from '#lib/languages/mars/marsHandlers.ts'
 import {
     type MarsDisplayConfiguration,
@@ -459,8 +456,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         )
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled). Never 0:
+        //a zero length buffer makes the Core throw on the first instruction, and no history at all
+        //is `setUndoEnabled(false)` in `_initialize`
+        mips.setUndoSize(Math.max(1, undoSize))
         //stored by every `initialize`, a Testcase's included, before its starting registers
         mips.setProgramArguments(this.programArgv)
         return { mips, result: mips.assemble() }
@@ -494,7 +493,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const mips = this.requireMips()
         //the stack was already sized in `_compile`, `assemble()` engages the backstepper
         //unconditionally so this is what actually turns undo off when history is disabled
-        this.undoEnabled = normalizeUndoSize(undoSize) > 0
+        this.undoEnabled = undoSize > 0
         mips.setUndoEnabled(this.undoEnabled)
         //a new run: not exited, exit code 0, and the random generators forgotten
         mips.initialize(true)
@@ -509,10 +508,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             const serial = mips.getCurrentInstructionSerial()
             return serial === null ? null : BigInt(serial)
         }
-        this._peripherals.terminal.trackHistory(instruction, normalizeUndoSize(undoSize))
+        this._peripherals.terminal.trackHistory(instruction, undoSize)
         //and so are the Notes it plays
         //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
-        this._peripherals.audio.track(instruction, normalizeUndoSize(undoSize))
+        this._peripherals.audio.track(instruction, undoSize)
     }
 
     _dispose(): void {
@@ -976,12 +975,12 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(haltLimit: number): Promise<void> {
         const mips = this.requireMips()
         this.handlers.beginExecution()
         //the testcase input is served by the terminal's scripted source, swapped in by the caller;
         //how the run ended is read from the Core afterwards
-        await this.coreCall(() => mips.simulateWithLimit(toHaltLimit(haltLimit)))
+        await this.coreCall(() => mips.simulateWithLimit(haltLimit))
     }
 
     private statementAtAddress(address: number): JsProgramStatement | null {

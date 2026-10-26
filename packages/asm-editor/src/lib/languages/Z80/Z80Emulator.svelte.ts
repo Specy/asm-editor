@@ -36,7 +36,6 @@ import {
     sliceInstructionBudget
 } from '#lib/languages/ExecutionSlice.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import { Z80Device } from '#lib/languages/Z80/Z80Device.ts'
 import { Trs80Devices } from '#lib/languages/Z80/trs80/Trs80Devices.ts'
 import { parseZ80ScreenDirective } from '#lib/languages/Z80/trs80/z80ScreenDirective.ts'
@@ -261,7 +260,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
 
     _initialize(undoSize: number): void {
         this.sliceChunk = MIN_SLICE_CHUNK
-        this.historyCapacity = normalizeUndoSize(undoSize)
+        this.historyCapacity = undoSize
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
         const peripherals = this._peripherals
@@ -300,12 +299,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //use" means for a language whose console is just more ports
         //([ADR 0009](../../../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md))
         peripherals.terminal.useTerminalInput()
-        const screenInstructions = new ScreenInstructionHistory(
-            peripherals.screen,
-            normalizeUndoSize(undoSize)
-        )
+        const screenInstructions = new ScreenInstructionHistory(peripherals.screen, undoSize)
         const machine = new Z80Machine({
-            historySize: normalizeUndoSize(undoSize),
+            historySize: undoSize,
             initialSp: Z80_STACK_TOP,
             //a program written as a routine ends with a top level `ret`, which the machine can only
             //recognize as an ending when it knows where the stack started
@@ -349,17 +345,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         trs80.attach(machine.memory)
         //what an `in` or an `out` does to the Terminal is journaled by t-state, as its drawing is
         //([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
-        peripherals.terminal.trackHistory(
-            () => this.inputPosition ?? machine.tStateCount,
-            normalizeUndoSize(undoSize)
-        )
+        peripherals.terminal.trackHistory(() => this.inputPosition ?? machine.tStateCount, undoSize)
         //and so are the Notes it plays and the audio ports it sets
         //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
         this.audioHold = null
-        peripherals.audio.track(
-            () => this.inputPosition ?? machine.tStateCount,
-            normalizeUndoSize(undoSize)
-        )
+        peripherals.audio.track(() => this.inputPosition ?? machine.tStateCount, undoSize)
         //the mode the source asked for, in place before the program is even loaded: enabling blanks
         //video RAM the way the ROM's clear does, and a program is allowed to assemble an image
         //straight into those addresses, which the blank would otherwise wipe
@@ -552,13 +542,13 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(haltLimit: number): Promise<void> {
         const execution = this.executionController.capture()
         try {
             //the testcase input is served by the terminal's scripted source, swapped in by the
             //caller. No user breakpoints during a test, but the cliff ones still have to stop the
             //machine.
-            await this.runWithInput(execution, toInstructionLimit(haltLimit), [])
+            await this.runWithInput(execution, haltLimit, [])
         } finally {
             //A test run has no slice loop to flush the display's dirty range, and the Core the test
             //leaves behind is still read for the Screen, so without this a TRS-80 program's output
@@ -1079,20 +1069,6 @@ function normalizedCorePath(path: string): string {
     } catch {
         return path
     }
-}
-
-/**
- * The undo depth comes from a user setting, so it can be any number (or NaN). The machine treats 0
- * as "no history at all", which is also what it costs at run time.
- */
-function normalizeUndoSize(undoSize: number): number {
-    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
-}
-
-function toInstructionLimit(limit: number | undefined): number {
-    //`maxInstructions` has to stay a finite number: Infinity would make the machine's budget
-    //comparison meaningless the moment it is used in arithmetic
-    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
 }
 
 function toDiagnostics(

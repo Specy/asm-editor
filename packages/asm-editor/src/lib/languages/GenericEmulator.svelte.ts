@@ -158,6 +158,23 @@ export function isRuntimeLibraryFile(file: string | undefined): boolean {
     return !!file && file.startsWith(RUNTIME_NAMESPACE)
 }
 
+/**
+ * The undo depth the adapters are given. It comes from a user setting, so it can be any number (or
+ * NaN); `0` means "no history at all".
+ */
+export function normalizeUndoSize(undoSize: number): number {
+    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+}
+
+/**
+ * The instruction limit a Testcase runs with: no limit, or one that is not positive, is unbounded,
+ * which is still a finite number, because Infinity would make a Core's budget arithmetic
+ * meaningless.
+ */
+export function toHaltLimit(limit: number | undefined): number {
+    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
+}
+
 /** Why a Build or a Testcase stopped before the program's own code: it ran out of instructions. */
 function programStartLimitMessage(name: string, limit: number): string {
     return `The program did not reach ${name} within ${limit.toLocaleString('en-US')} instructions`
@@ -1428,6 +1445,7 @@ export abstract class GenericEmulator<T, R extends string>
         programArguments = this._emulatorOptions.programArguments
     ): Promise<ExecutionGeneration> {
         this.clear()
+        const undoSize = normalizeUndoSize(historySize)
         if (scriptedInput !== undefined) this.useScriptedRun(scriptedInput)
         //A Build supersedes live checking the same way a newer check supersedes an older one: the
         //debounced check is disarmed and any check already in flight fails its id comparison when
@@ -1452,7 +1470,7 @@ export abstract class GenericEmulator<T, R extends string>
                 await this.executionController.whileCurrent(execution, this._prepareBuild(sources))
             this.executionController.ensureCurrent(execution)
             this.passProgramArguments(sources, programArguments)
-            const result = await this._compile(sources, historySize)
+            const result = await this._compile(sources, undoSize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
                 this.state.compilerDiagnostics = result.diagnostics
@@ -1473,11 +1491,11 @@ export abstract class GenericEmulator<T, R extends string>
                 execution
             )
             this.executionController.ensureCurrent(execution)
-            this._initialize(historySize)
+            this._initialize(undoSize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
                 Number.isFinite(megabytes) && megabytes >= 0 ? megabytes * 1024 * 1024 : 0,
-                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
+                undoSize,
                 this.fileDescriptorOptions()
             )
             if (output?.saved) this.fileSystemSession.protectBuildOutput(output.path)
@@ -2360,7 +2378,7 @@ export abstract class GenericEmulator<T, R extends string>
                 this._writeMemoryBytes(value.address, encoded)
             }
         }
-        await this._runTestcase(testcase, haltLimit)
+        await this._runTestcase(toHaltLimit(haltLimit))
     }
 
     /**

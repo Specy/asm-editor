@@ -60,7 +60,6 @@ import type { MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
 import type { TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { echoToScreen } from '#lib/languages/peripherals/screen/textEcho.ts'
 import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
@@ -677,9 +676,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return { reason: 'terminated', instructions: ran() }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(limit: number): Promise<void> {
         const interpreter = this.requireInterpreter()
-        const limit = toHaltLimit(haltLimit)
         const execution = this.executionController.capture()
         const first = interpreter.getExecutedInstructions()
         while (!interpreter.hasTerminated()) {
@@ -1395,10 +1393,6 @@ function isExecutionLimitError(error: unknown): boolean {
         error !== null &&
         (error as { type?: unknown }).type === 'ExecutionLimit'
     )
-}
-
-function toHaltLimit(limit: number | undefined): number {
-    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
 }
 
 function toCoreSize(size: RegisterSize | undefined): Size {

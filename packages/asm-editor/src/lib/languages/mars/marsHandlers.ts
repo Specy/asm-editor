@@ -381,17 +381,3 @@ export function exitStepText(code: number | string): string {
 export function randomStreamStepText(generator: number): string {
     return `Random generator ${generator} advanced`
 }
-
-/**
- * The undo depth comes from a user setting, so it can be any number (or NaN). `0` means "no
- * history at all", which the core expresses as `setUndoEnabled(false)` rather than a zero sized
- * stack (a zero length backstep array makes the core throw on the first executed instruction).
- */
-export function normalizeUndoSize(undoSize: number): number {
-    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
-}
-
-/** The Core's halt limit for a Testcase run: no limit, or one that is not positive, is unbounded. */
-export function toHaltLimit(limit: number | undefined): number {
-    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
-}

@@ -55,7 +55,6 @@ import {
     sliceInstructionBudget
 } from '#lib/languages/ExecutionSlice.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import {
     END_OF_INPUT,
     assembleInstruction,
@@ -811,7 +810,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _initialize(undoSize: number): void {
         const core = this.requireCore()
-        this.undoSize = Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+        this.undoSize = undoSize
         core.initialize(this.undoSize)
         this.recordingRandom = true
         this.undoRecording = true
@@ -1528,10 +1527,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { reason: 'terminated', instructions }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(haltLimit: number): Promise<void> {
         this.loadedObjects = undefined
         this.mappingsMayChange()
-        await this.runWithInput(haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit, [])
+        await this.runWithInput(haltLimit, [])
     }
 
     /**

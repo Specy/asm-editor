@@ -11,7 +11,6 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { Termination } from '#lib/languages/termination.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
@@ -124,11 +123,13 @@ export abstract class BaseEmulator<R extends string> {
         return this._registerFiles
     }
 
+    /** `undoSize` is the Undo history's depth, a whole number, 0 for no history at all. */
     abstract _initialize(undoSize: number): void
 
     abstract _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string }
 
-    abstract _runTestcase(testcase: Testcase, haltLimit: number): MaybePromise<void>
+    /** Runs a Testcase's program within `haltLimit` instructions, finite and positive. */
+    abstract _runTestcase(haltLimit: number): MaybePromise<void>
 
     abstract _dispose(): void
 
@@ -142,8 +143,8 @@ export abstract class BaseEmulator<R extends string> {
     }
 
     /**
-     * `undoSize` is the requested undo-history depth for the program being assembled. It is passed
-     * here (and not only to `_initialize`) because some cores allocate their backstep buffer during
+     * `undoSize` is the undo-history depth for the program being assembled, as `_initialize` gets
+     * it. It is passed here (and not only to `_initialize`) because some cores allocate their backstep buffer during
      * assembly and therefore have to be told the depth *before* the code is assembled (MIPS).
      * Languages whose core does not care can ignore the parameter.
      */

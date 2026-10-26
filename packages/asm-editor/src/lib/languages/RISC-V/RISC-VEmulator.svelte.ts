@@ -53,16 +53,13 @@ import {
     memoryBackstepMutation,
     registerBackstepMutation
 } from '#lib/languages/mars/marsUndo.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
 import {
     exitStepText,
     MarsHandlers,
     marsRuntimeErrorMessage,
-    normalizeUndoSize,
-    randomStreamStepText,
-    toHaltLimit
+    randomStreamStepText
 } from '#lib/languages/mars/marsHandlers.ts'
 import {
     type MarsDisplayConfiguration,
@@ -456,8 +453,10 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         )
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        riscv.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
+        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled). Never 0:
+        //a zero length buffer makes the Core throw on the first instruction, and no history at all
+        //is `setUndoEnabled(false)` in `_initialize`
+        riscv.setUndoSize(Math.max(1, undoSize))
         //stored by every `initialize`, a Testcase's included, before its starting registers
         riscv.setProgramArguments(this.programArgv)
         return { riscv, result: riscv.assemble() }
@@ -492,7 +491,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const riscv = this.requireRiscV()
         //the stack was already sized in `_compile`, `assemble()` engages the backstepper
         //unconditionally so this is what actually turns undo off when history is disabled
-        this.undoEnabled = normalizeUndoSize(undoSize) > 0
+        this.undoEnabled = undoSize > 0
         riscv.setUndoEnabled(this.undoEnabled)
         //a new run: not exited, exit code 0, and the random generators forgotten
         riscv.initialize(true)
@@ -507,10 +506,10 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             const serial = riscv.getCurrentInstructionSerial()
             return serial === null ? null : BigInt(serial)
         }
-        this._peripherals.terminal.trackHistory(instruction, normalizeUndoSize(undoSize))
+        this._peripherals.terminal.trackHistory(instruction, undoSize)
         //and so are the Notes it plays
         //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
-        this._peripherals.audio.track(instruction, normalizeUndoSize(undoSize))
+        this._peripherals.audio.track(instruction, undoSize)
     }
 
     _dispose(): void {
@@ -1059,12 +1058,12 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(haltLimit: number): Promise<void> {
         const riscv = this.requireRiscV()
         this.handlers.beginExecution()
         //the testcase input is served by the terminal's scripted source, swapped in by the caller;
         //how the run ended is read from the Core afterwards
-        await this.coreCall(() => riscv.simulateWithLimit(toHaltLimit(haltLimit)))
+        await this.coreCall(() => riscv.simulateWithLimit(haltLimit))
     }
 
     /**

@@ -3,7 +3,9 @@ import {
     ANIMATING_PANEL_REFRESH_MS,
     CPU_REGISTER_FILE_ID,
     GenericEmulator,
-    RUNNING_PANEL_REFRESH_MS
+    normalizeUndoSize,
+    RUNNING_PANEL_REFRESH_MS,
+    toHaltLimit
 } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     BuildDownloadError,
@@ -1484,6 +1486,19 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
         expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+
+    it('reads an undo size and a halt limit the way every Core takes them', () => {
+        expect([200, 2.7, 0, -3, Number.NaN, Infinity].map(normalizeUndoSize)).toEqual([
+            200, 2, 0, 0, 0, 0
+        ])
+        const unbounded = Number.MAX_SAFE_INTEGER
+        expect([500, 0, -1, undefined].map(toHaltLimit)).toEqual([
+            500,
+            unbounded,
+            unbounded,
+            unbounded
+        ])
     })
 })
 
