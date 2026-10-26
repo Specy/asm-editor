@@ -157,7 +157,7 @@ export function createX86CompletionProvider(
             const mnemonicContext =
                 !parsed.operation || (afterOperation.trim().length === 0 && !/\s$/.test(prefix))
             const typed = word.word.toLowerCase()
-            const suggestions: monaco.languages.CompletionItem[] = []
+            const { CompletionItemKind } = monacoInstance.languages
             const item = (
                 label: string,
                 kind: monaco.languages.CompletionItemKind,
@@ -172,8 +172,19 @@ export function createX86CompletionProvider(
                 sortText,
                 range
             })
+            //the names of a list that start with what was typed
+            const offer = (
+                names: readonly string[],
+                kind: monaco.languages.CompletionItemKind,
+                detail: string,
+                sortPrefix: string
+            ) =>
+                names
+                    .filter((name) => name.toLowerCase().startsWith(typed))
+                    .map((name) => item(name, kind, detail, `${sortPrefix}${name}`))
 
             if (mnemonicContext) {
+                const suggestions: monaco.languages.CompletionItem[] = []
                 const directivesOnly = /^\s*%/.test(prefix)
                 if (!directivesOnly) {
                     for (const instruction of X86Instructions) {
@@ -181,7 +192,7 @@ export function createX86CompletionProvider(
                         suggestions.push(
                             item(
                                 instruction,
-                                monacoInstance.languages.CompletionItemKind.Function,
+                                CompletionItemKind.Function,
                                 completionDetail(x86InstructionMap.get(instruction)),
                                 `010${instruction}`
                             )
@@ -191,7 +202,7 @@ export function createX86CompletionProvider(
                             suggestions.push({
                                 ...item(
                                     instruction,
-                                    monacoInstance.languages.CompletionItemKind.Snippet,
+                                    CompletionItemKind.Snippet,
                                     'Instruction snippet',
                                     `011${instruction}`
                                 ),
@@ -210,18 +221,9 @@ export function createX86CompletionProvider(
                         }
                     }
                 }
-                for (const directive of X86Directives) {
-                    if (directive.toLowerCase().startsWith(typed)) {
-                        suggestions.push(
-                            item(
-                                directive,
-                                monacoInstance.languages.CompletionItemKind.Keyword,
-                                'NASM directive',
-                                `020${directive}`
-                            )
-                        )
-                    }
-                }
+                suggestions.push(
+                    ...offer(X86Directives, CompletionItemKind.Keyword, 'NASM directive', '020')
+                )
                 return { suggestions }
             }
 
@@ -237,7 +239,7 @@ export function createX86CompletionProvider(
                     )
                     .map((entry) => ({
                         label: entry.name,
-                        kind: monacoInstance.languages.CompletionItemKind.Function,
+                        kind: CompletionItemKind.Function,
                         insertText: entry.name,
                         detail: entry.prototype,
                         documentation: { value: runtimeFunctionDocumentation(entry, 'X86') },
@@ -245,89 +247,50 @@ export function createX86CompletionProvider(
                         range
                     }))
             if (operation === 'extern') return { suggestions: libraryFunctions() }
+            //every width and section, whatever was typed: Monaco filters them by the word
             if (operation === 'bits') {
-                for (const bits of ['16', '32', '64']) {
-                    suggestions.push(
-                        item(
-                            bits,
-                            monacoInstance.languages.CompletionItemKind.Value,
-                            `${bits}-bit mode`,
-                            `010${bits}`
-                        )
+                return {
+                    suggestions: ['16', '32', '64'].map((bits) =>
+                        item(bits, CompletionItemKind.Value, `${bits}-bit mode`, `010${bits}`)
                     )
                 }
-                return { suggestions }
             }
             if (operation === 'section' || operation === 'segment') {
-                for (const section of ['.text', '.data', '.bss', '.rodata']) {
-                    suggestions.push(
-                        item(
-                            section,
-                            monacoInstance.languages.CompletionItemKind.Module,
-                            'Section',
-                            `010${section}`
-                        )
+                return {
+                    suggestions: ['.text', '.data', '.bss', '.rodata'].map((section) =>
+                        item(section, CompletionItemKind.Module, 'Section', `010${section}`)
                     )
                 }
-                return { suggestions }
             }
             if (branchInstructions.has(operation)) {
-                for (const label of labels) {
-                    if (label.toLowerCase().startsWith(typed)) {
-                        suggestions.push(
-                            item(
-                                label,
-                                monacoInstance.languages.CompletionItemKind.Reference,
-                                'Jump target',
-                                `010${label}`
-                            )
-                        )
-                    }
+                return {
+                    suggestions: [
+                        ...offer(labels, CompletionItemKind.Reference, 'Jump target', '010'),
+                        ...libraryFunctions()
+                    ]
                 }
-                suggestions.push(...libraryFunctions())
-                return { suggestions }
             }
 
             const inAddress = prefix.lastIndexOf('[') > prefix.lastIndexOf(']')
-            for (const register of X86Registers) {
-                if (register.toLowerCase().startsWith(typed)) {
-                    suggestions.push(
-                        item(
-                            register,
-                            monacoInstance.languages.CompletionItemKind.Variable,
-                            inAddress ? 'Address register' : 'Register',
-                            `010${register}`
-                        )
-                    )
-                }
+            return {
+                suggestions: [
+                    ...offer(
+                        X86Registers,
+                        CompletionItemKind.Variable,
+                        inAddress ? 'Address register' : 'Register',
+                        '010'
+                    ),
+                    ...(inAddress
+                        ? []
+                        : offer(
+                              X86SizeSpecifiers,
+                              CompletionItemKind.TypeParameter,
+                              'Size specifier',
+                              '020'
+                          )),
+                    ...offer(labels, CompletionItemKind.Reference, 'Label', '030')
+                ]
             }
-            if (!inAddress) {
-                for (const size of X86SizeSpecifiers) {
-                    if (size.toLowerCase().startsWith(typed)) {
-                        suggestions.push(
-                            item(
-                                size,
-                                monacoInstance.languages.CompletionItemKind.TypeParameter,
-                                'Size specifier',
-                                `020${size}`
-                            )
-                        )
-                    }
-                }
-            }
-            for (const label of labels) {
-                if (label.toLowerCase().startsWith(typed)) {
-                    suggestions.push(
-                        item(
-                            label,
-                            monacoInstance.languages.CompletionItemKind.Reference,
-                            'Label',
-                            `030${label}`
-                        )
-                    )
-                }
-            }
-            return { suggestions }
         }
     }
 }
