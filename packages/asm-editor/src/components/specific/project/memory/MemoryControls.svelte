@@ -260,7 +260,7 @@
 </script>
 
 <div class="memory-controls-layout">
-    <Form style="width:100%; {style}" on:submit={searchAddress}>
+    <Form style="width:100%; {style}" onSubmit={searchAddress}>
         <div class="address-search" class:without-regions={!showRegions}>
             <!-- a click anywhere on the field puts the caret in its input, which the keyboard
                  reaches by Tab -->

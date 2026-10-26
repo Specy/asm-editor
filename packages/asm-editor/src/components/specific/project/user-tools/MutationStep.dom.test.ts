@@ -302,9 +302,9 @@ describe('Undo to here', () => {
                 //newest first: the library call at row 1 recorded nothing Undo can restore
                 steps: [row(3), row(2, false), row(1), row(0)],
                 statusRegisterNames: [],
-                language: 'X86' as const
-            },
-            events: { undo: (event: CustomEvent<number>) => undos.push(event.detail) }
+                language: 'X86' as const,
+                onUndo: (index: number) => undos.push(index)
+            }
         })
         flushSync()
         try {
@@ -315,6 +315,39 @@ describe('Undo to here', () => {
             //one Undo, of the newest row, which leaves the call's own effects alone
             buttons[1].click()
             expect(undos).toEqual([1])
+        } finally {
+            await unmount(app)
+            target.remove()
+        }
+    })
+})
+
+describe('Go to line', () => {
+    it('hands the host the row it was pressed on', async () => {
+        const row = (pc: number): ExecutionStep => ({
+            kind: 'instruction',
+            mutations: [],
+            pc,
+            line: pc,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 }
+        })
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const shown: number[] = []
+        const app = mount(MutationsRenderer, {
+            target,
+            props: {
+                steps: [row(2), row(1)],
+                statusRegisterNames: [],
+                language: 'X86' as const,
+                onHighlight: (step: ExecutionStep) => shown.push(step.pc)
+            }
+        })
+        flushSync()
+        try {
+            target.querySelectorAll<HTMLButtonElement>('.go-to-line')[1].click()
+            expect(shown).toEqual([1])
         } finally {
             await unmount(app)
             target.remove()

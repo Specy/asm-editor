@@ -39,9 +39,8 @@
         {docked}
         {language}
         statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
-        on:undo={(e) => session.undoSteps(e.detail)}
-        on:highlight={(e) => {
-            const step = e.detail
+        onUndo={(index) => session.undoSteps(index)}
+        onHighlight={(step) => {
             if (!step.file) return
             if (step.line < 0) void session.revealAddress(BigInt(step.pc))
             else void session.revealSourceLocation(step.file, step.line, 0)

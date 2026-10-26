@@ -12,7 +12,7 @@
     import Header from '#cmp/shared/layout/Header.svelte'
     import { page } from '$app/state'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import OpenEditorButton from '#cmp/shared/button/OpenEditorButton.svelte'
     import { resolve } from '$app/paths'
     import { courseTheme } from '#lib/languages/languageColors.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
@@ -121,17 +121,7 @@
                 </Icon>
                 Donate
             </ButtonLink>
-            <ButtonLink
-                style="width: 100%;"
-                href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
-                {@attach tooltip('Open the editor')}
-            >
-                {#if ProjectStore.projects.length > 0}
-                    Go to your projects
-                {:else}
-                    Create your first project
-                {/if}
-            </ButtonLink>
+            <OpenEditorButton />
         </Column>
 
         {#snippet content()}

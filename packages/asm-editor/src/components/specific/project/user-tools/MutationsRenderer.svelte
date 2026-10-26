@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte'
     import MutationStep from './MutationStep.svelte'
     import type { ExecutionStep } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -12,11 +11,20 @@
          * Fill a section on its surface, with contrasting entries and height left to the section.
          */
         docked?: boolean
+        /** "Undo to here" was pressed on row `index`: the `index` Undos of the rows above it. */
+        onUndo?: (index: number) => void
+        /** "Go to line" was pressed on a row. */
+        onHighlight?: (step: ExecutionStep) => void
     }
 
-    let { steps, statusRegisterNames, language, docked = false }: Props = $props()
-
-    const dispatch = createEventDispatcher<{ undo: number }>()
+    let {
+        steps,
+        statusRegisterNames,
+        language,
+        docked = false,
+        onUndo,
+        onHighlight
+    }: Props = $props()
 
     /**
      * "Undo to here" takes the program back to just after a row ran: on row i, the i Undos of the
@@ -43,10 +51,8 @@
             flags={statusRegisterNames}
             {step}
             undoBlocked={undoBlocked(i)}
-            on:undo={() => {
-                dispatch('undo', i)
-            }}
-            on:highlight
+            onUndo={() => onUndo?.(i)}
+            {onHighlight}
         />
     {/each}
 </div>

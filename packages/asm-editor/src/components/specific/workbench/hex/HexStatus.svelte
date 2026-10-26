@@ -3,15 +3,14 @@
     import FaMapMarkerAlt from '~icons/fa-solid/map-marker-alt'
     import FaMicroscope from '~icons/fa-solid/microscope'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import FileStatusLine, { byteCount } from '../FileStatusLine.svelte'
     import { offsetHex } from './hexGrid'
 
     /**
      * The Hex editor's status line ([file-views.md](../../../../../../../docs/design/file-views.md),
      * decision 9): the caret's offset, the selection's length, the File's size, whether it has Byte
-     * edits and why it is read-only, and the region of an Executable the caret is in. It sits above
-     * the bytes, where the execution dock floating over the pane's bottom edge does not cover it,
-     * with the buttons that open Find, Go to offset and the data inspector, which a phone has no
-     * keys for.
+     * edits and why it is read-only, and the region of an Executable the caret is in, with the
+     * buttons that open Find, Go to offset and the data inspector, which a phone has no keys for.
      */
     let {
         offset,
@@ -40,12 +39,10 @@
         onGoTo: () => void
         onToggleInspector: () => void
     } = $props()
-    const count = (bytes: number) =>
-        `${bytes.toLocaleString('en-US')} ${bytes === 1 ? 'byte' : 'bytes'}`
 </script>
 
-<div class="hex-status">
-    <div class="facts" aria-label="Status">
+<FileStatusLine class="hex-status">
+    {#snippet facts()}
         {#if offset !== undefined}
             <span
                 class="fact offset"
@@ -55,17 +52,17 @@
             >
         {/if}
         {#if selection > 0}
-            <span class="fact">{count(selection)} selected</span>
+            <span class="fact">{byteCount(selection)} selected</span>
         {/if}
-        <span class="fact">{count(size)}</span>
+        <span class="fact">{byteCount(size)}</span>
         {#if region}
             <span class="fact region">{region}</span>
         {/if}
         {#if readOnly}
             <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
         {/if}
-    </div>
-    <div class="tools">
+    {/snippet}
+    {#snippet tools()}
         <!-- named as their words, which a narrow pane drops -->
         <button
             type="button"
@@ -95,39 +92,14 @@
         >
             <FaMicroscope /><span>Inspector</span>
         </button>
-    </div>
-</div>
+    {/snippet}
+</FileStatusLine>
 
 <style lang="scss">
-    .hex-status {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        min-height: 2rem;
-        padding: 0.2rem 0.3rem 0.2rem 0.6rem;
-        border-bottom: 1px solid var(--wb-line, var(--tertiary));
-        background: var(--wb-section-header, var(--secondary));
-        color: var(--secondary-text);
-        font-size: 0.8rem;
-        container: hex-status / inline-size;
-    }
-    .facts {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 0.8rem;
-        min-width: 0;
-    }
-    .fact {
-        white-space: nowrap;
-        opacity: 0.85;
-
-        b {
-            font-family: monospace;
-            font-weight: normal;
-            opacity: 1;
-        }
+    .fact b {
+        font-family: monospace;
+        font-weight: normal;
+        opacity: 1;
     }
     .offset b {
         display: inline-block;
@@ -140,51 +112,11 @@
         text-overflow: ellipsis;
         max-width: 14rem;
     }
-    .badge {
-        padding: 0.05rem 0.4rem;
-        border-radius: 0.6rem;
-        background: color-mix(in srgb, var(--accent) 18%, transparent);
-        opacity: 1;
-    }
     .read-only {
         background: color-mix(in srgb, var(--secondary-text) 14%, transparent);
     }
-    .tools {
-        display: flex;
-        flex-shrink: 0;
-        gap: 0.15rem;
-    }
-    .tool {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        height: 1.6rem;
-        padding: 0 0.5rem;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-
-        :global(svg) {
-            width: 0.75rem;
-            height: 0.75rem;
-            opacity: 0.8;
-        }
-        &:hover {
-            background: color-mix(in srgb, var(--tertiary) 55%, transparent);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
-        &[aria-pressed='true'] {
-            background: var(--accent);
-            color: var(--accent-text);
-        }
-    }
     /* a narrow pane keeps the buttons' icons and drops their words */
-    @container hex-status (max-width: 30rem) {
+    @container file-status (max-width: 30rem) {
         .tool span {
             display: none;
         }
