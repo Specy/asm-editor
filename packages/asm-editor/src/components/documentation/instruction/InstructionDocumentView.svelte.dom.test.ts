@@ -61,14 +61,23 @@ function instruction(name: string): InstructionDocument {
     }
 }
 
-function render(props: { document: InstructionDocument; density?: 'page' | 'panel' }) {
+function render(initial: { document: InstructionDocument; density?: 'page' | 'panel' }) {
     const target = document.createElement('div')
     document.body.appendChild(target)
+    //a route hands the view the next instruction's document in place
+    const props = $state(initial)
     const view = mount(InstructionDocumentView, { target, props })
     mounted.push(() => unmount(view))
     flushSync()
     return {
+        props,
         legend: () => target.querySelector<HTMLDetailsElement>('details.legend')!,
+        expanded: () => [...target.querySelectorAll('.pattern-row.expanded')].length,
+        marked: () => [...target.querySelectorAll('.line.marked')].map((line) => line.id),
+        toggle: () => {
+            target.querySelector<HTMLButtonElement>('.pattern-row .toggle')!.click()
+            flushSync()
+        },
         tap: async (symbol: string) => {
             const button = [...target.querySelectorAll<HTMLButtonElement>('button.symbol')].find(
                 (candidate) => candidate.textContent === symbol
@@ -100,5 +109,22 @@ describe("a symbol tapped in the panel's rows", () => {
             { id: line, legendOpen: true },
             { id: line, legendOpen: true }
         ])
+    })
+})
+
+describe('the next instruction in the same view', () => {
+    it('starts with no row expanded, no symbol marked and the legend closed', async () => {
+        const view = render({ document: instruction('add'), density: 'panel' })
+        view.toggle()
+        await view.tap('Dn')
+        expect(view.expanded()).toBe(1)
+        expect(view.marked()).toEqual([`operands-add-${symbolSlug('Dn')}`])
+        expect(view.legend().open).toBe(true)
+
+        view.props.document = instruction('sub')
+        flushSync()
+        expect(view.expanded()).toBe(0)
+        expect(view.marked()).toEqual([])
+        expect(view.legend().open).toBe(false)
     })
 })

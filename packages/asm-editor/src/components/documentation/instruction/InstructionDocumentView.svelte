@@ -88,6 +88,15 @@
     let showAll = $state<Record<number, boolean>>({})
     let legendOpen = $state(false)
 
+    //what the reader did on one instruction is not done on the next, which a route shows in this
+    //same view: nothing marked, no section shown whole, the legend closed
+    $effect(() => {
+        void document.name
+        marked = undefined
+        showAll = {}
+        legendOpen = false
+    })
+
     let meanings = $derived(
         new Map(document.operands.map((operand) => [operand.symbol, plainText(operand.meaning)]))
     )
@@ -148,151 +157,161 @@
     }
 </script>
 
-<article
-    class="instruction-document"
-    class:panel
-    style={palette}
-    style:--example-font-family={EDITOR_FONT.fontFamily}
-    style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
-    style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
->
-    <header class="header">
-        <div class="title-line">
-            {#if !panel}
-                <h1 class="name">{document.name}</h1>
-            {/if}
-            {#if showLongName || document.tags.length > 0}
-                <p class="identity">
-                    {#if showLongName}<span class="long-name">{document.longName}</span>{/if}
-                    {#if document.tags.length > 0}
-                        <span class="instruction-tags">
-                            {#each document.tags as tag (tag)}
-                                <InstructionTagBadge {tag} />
-                            {/each}
-                        </span>
-                    {/if}
+<!--
+    a route shows the next instruction in this same view, which starts it afresh: no row left open,
+    no Lecture list or section left expanded
+-->
+{#key document.name}
+    <article
+        class="instruction-document"
+        class:panel
+        style={palette}
+        style:--example-font-family={EDITOR_FONT.fontFamily}
+        style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
+        style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
+    >
+        <header class="header">
+            <div class="title-line">
+                {#if !panel}
+                    <h1 class="name">{document.name}</h1>
+                {/if}
+                {#if showLongName || document.tags.length > 0}
+                    <p class="identity">
+                        {#if showLongName}<span class="long-name">{document.longName}</span>{/if}
+                        {#if document.tags.length > 0}
+                            <span class="instruction-tags">
+                                {#each document.tags as tag (tag)}
+                                    <InstructionTagBadge {tag} />
+                                {/each}
+                            </span>
+                        {/if}
+                    </p>
+                {/if}
+            </div>
+            <p class="summary">{document.summary}</p>
+            {#if document.headerFacts.length > 0}
+                <p class="header-facts">
+                    {#each document.headerFacts as fact, index (index)}
+                        {#if index > 0}<span aria-hidden="true"> · </span>{/if}<InlineMarkdown
+                            source={fact}
+                        />
+                    {/each}
                 </p>
             {/if}
-        </div>
-        <p class="summary">{document.summary}</p>
-        {#if document.headerFacts.length > 0}
-            <p class="header-facts">
-                {#each document.headerFacts as fact, index (index)}
-                    {#if index > 0}<span aria-hidden="true"> · </span>{/if}<InlineMarkdown
-                        source={fact}
+            {#if aliases.length > 0}
+                <p class="header-facts">
+                    <InlineMarkdown
+                        source={`Also written as: ${aliases.map((alias) => `\`${alias}\``).join(', ')}`}
                     />
-                {/each}
-            </p>
-        {/if}
-        {#if aliases.length > 0}
-            <p class="header-facts">
-                <InlineMarkdown
-                    source={`Also written as: ${aliases.map((alias) => `\`${alias}\``).join(', ')}`}
-                />
-            </p>
-        {/if}
-        {#if lessons.length > 0 && language}
-            <InstructionLessons {lessons} {language} />
-        {/if}
-    </header>
-
-    {#if document.flags?.marks}
-        <FlagStrip
-            order={document.flags.order}
-            marks={document.flags.marks}
-            reads={document.flags.reads}
-            notes={document.flags.notes}
-            note={document.flags.note}
-            varies={document.flags.varies}
-        />
-    {/if}
-
-    <div class="sections">
-        {#each document.sections as section, index (index)}
-            {@const rows = rowCount(section)}
-            {#snippet body()}
-                {#if section.explanation}
-                    <p class="explanation">{section.explanation}</p>
-                {/if}
-                {#each cards(visibleGroups(section, index)) as card, cardIndex (cardIndex)}
-                    <div class="group">
-                        {#if card.note}
-                            <p class="note">
-                                <span class="note-text"><InlineMarkdown source={card.note} /></span>
-                            </p>
-                        {/if}
-                        <ul class="rows">
-                            {#each card.rows as row, rowIndex (rowIndex)}
-                                <FormPatternRow
-                                    pattern={row.pattern}
-                                    note={row.note}
-                                    meaningOf={(symbol) => meanings.get(symbol)}
-                                    {onsymbol}
-                                    {flagOrder}
-                                    compact={panel}
-                                    {language}
-                                    aligned={card.rows.some((other) => patternOpens(other.pattern))}
-                                />
-                            {/each}
-                        </ul>
-                    </div>
-                {/each}
-                {#if panel && !showAll[index] && rows > PANEL_ROWS}
-                    <button
-                        type="button"
-                        class="show-all"
-                        onclick={() => (showAll = { ...showAll, [index]: true })}
-                    >
-                        Show all {rows}
-                    </button>
-                {/if}
-            {/snippet}
-            {#if section.collapsed}
-                <details class="section">
-                    <summary
-                        ><span class="heading">{sectionHeading(section.tags)}</span>
-                        <span class="count">{rows} {rows === 1 ? 'row' : 'rows'}</span></summary
-                    >
-                    {@render body()}
-                </details>
-            {:else}
-                <section class="section">
-                    <h2 class="heading">{sectionHeading(section.tags)}</h2>
-                    {@render body()}
-                </section>
+                </p>
             {/if}
-        {/each}
-    </div>
+            {#if lessons.length > 0 && language}
+                <InstructionLessons {lessons} {language} />
+            {/if}
+        </header>
 
-    {#if document.operands.length > 0}
-        <OperandLegend
-            operands={document.operands}
-            {marked}
-            bind:open={legendOpen}
-            {idPrefix}
-            {disableLinks}
-            compact={panel}
-            collapsible={panel && document.operands.length > PANEL_LEGEND_LINES}
-        />
-    {/if}
-
-    {#if document.description}
-        <div class="description" class:reading-copy={!panel}>
-            <MarkdownRenderer
-                source={document.description}
-                style="font-size: var(--instruction-prose-size)"
-                centered={false}
-                simpleCode={panel}
-                linksInNewTab={panel}
-                {disableLinks}
+        {#if document.flags?.marks}
+            <FlagStrip
+                order={document.flags.order}
+                marks={document.flags.marks}
+                reads={document.flags.reads}
+                notes={document.flags.notes}
+                note={document.flags.note}
+                varies={document.flags.varies}
             />
-        </div>
-    {/if}
+        {/if}
 
-    {#if example}
-        {@render example()}
-    {/if}
-</article>
+        <div class="sections">
+            {#each document.sections as section, index (index)}
+                {@const rows = rowCount(section)}
+                {#snippet body()}
+                    {#if section.explanation}
+                        <p class="explanation">{section.explanation}</p>
+                    {/if}
+                    {#each cards(visibleGroups(section, index)) as card, cardIndex (cardIndex)}
+                        <div class="group">
+                            {#if card.note}
+                                <p class="note">
+                                    <span class="note-text"
+                                        ><InlineMarkdown source={card.note} /></span
+                                    >
+                                </p>
+                            {/if}
+                            <ul class="rows">
+                                {#each card.rows as row, rowIndex (rowIndex)}
+                                    <FormPatternRow
+                                        pattern={row.pattern}
+                                        note={row.note}
+                                        meaningOf={(symbol) => meanings.get(symbol)}
+                                        {onsymbol}
+                                        {flagOrder}
+                                        compact={panel}
+                                        {language}
+                                        aligned={card.rows.some((other) =>
+                                            patternOpens(other.pattern)
+                                        )}
+                                    />
+                                {/each}
+                            </ul>
+                        </div>
+                    {/each}
+                    {#if panel && !showAll[index] && rows > PANEL_ROWS}
+                        <button
+                            type="button"
+                            class="show-all"
+                            onclick={() => (showAll = { ...showAll, [index]: true })}
+                        >
+                            Show all {rows}
+                        </button>
+                    {/if}
+                {/snippet}
+                {#if section.collapsed}
+                    <details class="section">
+                        <summary
+                            ><span class="heading">{sectionHeading(section.tags)}</span>
+                            <span class="count">{rows} {rows === 1 ? 'row' : 'rows'}</span></summary
+                        >
+                        {@render body()}
+                    </details>
+                {:else}
+                    <section class="section">
+                        <h2 class="heading">{sectionHeading(section.tags)}</h2>
+                        {@render body()}
+                    </section>
+                {/if}
+            {/each}
+        </div>
+
+        {#if document.operands.length > 0}
+            <OperandLegend
+                operands={document.operands}
+                {marked}
+                bind:open={legendOpen}
+                {idPrefix}
+                {disableLinks}
+                compact={panel}
+                collapsible={panel && document.operands.length > PANEL_LEGEND_LINES}
+            />
+        {/if}
+
+        {#if document.description}
+            <div class="description" class:reading-copy={!panel}>
+                <MarkdownRenderer
+                    source={document.description}
+                    style="font-size: var(--instruction-prose-size)"
+                    centered={false}
+                    simpleCode={panel}
+                    linksInNewTab={panel}
+                    {disableLinks}
+                />
+            </div>
+        {/if}
+
+        {#if example}
+            {@render example()}
+        {/if}
+    </article>
+{/key}
 
 <style>
     .instruction-document {
