@@ -140,7 +140,7 @@
     })
     let memoryGrid = $state<HTMLDivElement>()
     const addressDigits = $derived(memorySize ? memorySize.toString(16).length : 4)
-    let selectedAddressesIndexes = $state({
+    const selectedAddressesIndexes = $state({
         start: -1,
         len: 0
     })
@@ -158,11 +158,7 @@
             selectingAddresses = false
         }
         const selectFn = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                selectingAddresses = false
-                selectedAddressesIndexes.start = -1
-                selectedAddressesIndexes.len = 0
-            }
+            if (e.key === 'Escape') clearSelection()
         }
         window.addEventListener('blur', deselect)
         window.addEventListener('keydown', selectFn)
@@ -173,6 +169,23 @@
             window.removeEventListener('pointerup', deselect)
         }
     })
+
+    /** Ends the selection, and the drag that may be making one. */
+    function clearSelection() {
+        selectingAddresses = false
+        selectedAddressesIndexes.start = -1
+        selectedAddressesIndexes.len = 0
+    }
+
+    /**
+     * The index of the byte an event happened on: its cell, or what is inside it. The selection
+     * popup in a cell is beside the bytes and not on one, so it has none.
+     */
+    function cellIndexAt(target: EventTarget | null): number | undefined {
+        const el = findElInTree(target as HTMLElement, id)
+        const index = el ? parseInt(el.id.split('-')[1]) : NaN
+        return isNaN(index) ? undefined : index
+    }
 
     function getTextFromValue(
         value: bigint,
@@ -201,18 +214,14 @@
         //the other buttons open the menu, and leave the selection and its input as they are
         if (cellMenu && e.button > 0) return
         selectingAddresses = true
-        const el = findElInTree(e.target as HTMLElement, id)
-        if (!el) return
-        const index = parseInt(el.id.split('-')[1])
-        if (isNaN(index)) return
+        const index = cellIndexAt(e.target)
+        if (index === undefined) return
         //clicking away commits, and this is where the click is: the browser moves the selection
         //here and only blurs the input when the pointerdown's default action runs, by which time
         //the effect below has already put the popup back to the bytes
         commitPoke()
         if (selectedAddressesIndexes.start === index && selectedAddressesIndexes.len === 0) {
-            selectingAddresses = false
-            selectedAddressesIndexes.start = -1
-            selectedAddressesIndexes.len = 0
+            clearSelection()
             lastIdx = -1
             return
         }
@@ -224,10 +233,8 @@
 
     function handlePointerMove(e: PointerEvent) {
         if (!selectingAddresses) return
-        const el = findElInTree(e.target as HTMLElement, id)
-        if (!el) return
-        const index = parseInt(el.id.split('-')[1])
-        if (isNaN(index)) return
+        const index = cellIndexAt(e.target)
+        if (index === undefined) return
         if (lastIdx === index && selectedAddressesIndexes.start !== -1) return
         lastIdx = index
         //a drag moves the selection away from what was typed, which is a commit like any other
@@ -264,6 +271,19 @@
     )
     const selectionLength = $derived(
         selectedAddressesIndexes.start === -1 ? 0 : Math.abs(selectedAddressesIndexes.len) + 1
+    )
+    //the number the selection holds, and how far its popup has to move left to stay in its row;
+    //read only while there is a selection
+    const selectionValue = $derived(
+        getNumberInRange(
+            memory,
+            selectedAddressesIndexes.start,
+            selectedAddressesIndexes.len,
+            endianess
+        )
+    )
+    const overflowsBy = $derived(
+        goesNextLineBy(selectedAddressesIndexes.start, selectedAddressesIndexes.len, bytesPerRow)
     )
     /**
      * The bytes the Core could not read, which hold no value: each is drawn as `??`, the page says
@@ -317,8 +337,7 @@
     $effect(() => {
         void pageSize
         void bytesPerRow
-        selectingAddresses = false
-        selectedAddressesIndexes = { start: -1, len: 0 }
+        clearSelection()
         cancelPoke()
     })
 
@@ -402,9 +421,8 @@
         if (!cellMenu) return
         //the input being typed into keeps the browser's own menu, for pasting into it
         if ((e.target as Element | null)?.closest?.('input')) return
-        const el = findElInTree(e.target as HTMLElement, id)
-        const index = el ? parseInt(el.id.split('-')[1]) : NaN
-        if (isNaN(index)) return
+        const index = cellIndexAt(e.target)
+        if (index === undefined) return
         e.preventDefault()
         const inSelection =
             selectionLength > 0 &&
@@ -413,12 +431,7 @@
         const value = inSelection
             ? selectionUnreadable
                 ? undefined
-                : getNumberInRange(
-                      memory,
-                      selectedAddressesIndexes.start,
-                      selectedAddressesIndexes.len,
-                      endianess
-                  ).current
+                : selectionValue.current
             : unreadable?.mask[index]
               ? undefined
               : BigInt(memory.current[index])
@@ -433,19 +446,6 @@
                 bytes: inSelection ? selectionLength : 1
             })
         }
-    }
-
-    function getColorOfAddress(address: bigint) {
-        let last: { color?: string; address: bigint } = {
-            address: -1n
-        }
-        for (const frame of callStackAddresses) {
-            if (address >= frame.sp) {
-                last = frame
-                break
-            }
-        }
-        return last?.color
     }
 </script>
 
@@ -484,11 +484,7 @@
                 <Button
                     cssVar="green"
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
-                    onClick={() => {
-                        selectingAddresses = false
-                        selectedAddressesIndexes.start = -1
-                        selectedAddressesIndexes.len = 0
-                    }}
+                    onClick={clearSelection}
                 >
                     <Icon size={dense ? 0.8 : 1}>
                         <FaTimes />
@@ -514,17 +510,9 @@
         {#each memory.current as word, i (currentAddress + BigInt(i))}
             {@const unreadableByte = !!unreadable?.mask[i]}
             {@const signed = unsignedBigIntToSigned(BigInt(word), 1)}
-            {@const selectionValue = getNumberInRange(
-                memory,
-                selectedAddressesIndexes.start,
-                selectedAddressesIndexes.len,
-                endianess
-            )}
-            {@const overflowsBy = goesNextLineBy(
-                selectedAddressesIndexes.start,
-                selectedAddressesIndexes.len,
-                bytesPerRow
-            )}
+            {@const frameColor = callStackAddresses.find(
+                (frame) => currentAddress + BigInt(i) >= frame.sp
+            )?.color}
             <div
                 class="memory-number"
                 class:outlined={!!annotations[i].region}
@@ -624,11 +612,7 @@
                                                 ? 'background-color: var(--green); color: var(--green-text);'
                                                 : ''
                                         }
-                    ${
-                        getColorOfAddress(currentAddress + BigInt(i))
-                            ? `color: ${getColorOfAddress(currentAddress + BigInt(i))}`
-                            : ''
-                    }
+                    ${frameColor ? `color: ${frameColor}` : ''}
 								`}
                     monospaced
                 >
