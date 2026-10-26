@@ -4,6 +4,7 @@ import StdOutRenderer from './StdOutRenderer.svelte'
 import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 
 let app: ReturnType<typeof mount> | null = null
 
@@ -45,7 +46,7 @@ describe("the console's compiler mark", () => {
         const mark = document.querySelector<HTMLElement>('.floating-std-icon')!
         expect(mark.tagName).toBe('SPAN')
         expect(mark.getAttribute('role')).toBe('img')
-        expect(mark.title).toBe('Compiler warnings')
+        expect(tooltipText(mark)).toBe('Compiler warnings')
         expect(document.body.textContent).toContain('unused label')
         expect(document.querySelector('button.floating-std-icon')).toBeNull()
     })
