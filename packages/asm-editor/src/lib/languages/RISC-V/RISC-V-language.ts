@@ -280,7 +280,10 @@ export function createRISCVCompletion(
                                 insertText: entry.name,
                                 detail: entry.prototype,
                                 documentation: {
-                                    value: runtimeFunctionDocumentation(entry)
+                                    value: runtimeFunctionDocumentation(
+                                        entry,
+                                        is64 ? 'RISC-V-64' : 'RISC-V'
+                                    )
                                 },
                                 sortText: `${1000 - 4}${entry.name}`,
                                 range
@@ -428,7 +431,9 @@ export function createRISCVHoverProvider(
             }
             const library = runtimeFunctionsForModel(model).find((entry) => entry.name === word)
             if (library && !labels.includes(word)) {
-                contents.push({ value: runtimeFunctionDocumentation(library) })
+                contents.push({
+                    value: runtimeFunctionDocumentation(library, is64 ? 'RISC-V-64' : 'RISC-V')
+                })
             }
             const lowerWord = word.toLowerCase()
             const directives = directivesForModel(model)

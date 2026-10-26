@@ -72,6 +72,10 @@ function parameters(prototype: string): { returns: string; name: string; params:
 
 const isFloating = (type: string) => /\b(?:float|double)\b/.test(type) && !type.includes('*')
 
+/** Whether a type is a 64-bit integer, which the library's `time.h` makes `time_t` too. */
+const isWideInteger = (type: string) =>
+    /\b(?:long long|int64_t|uint64_t|intmax_t|uintmax_t|time_t)\b/.test(type) && !type.includes('*')
+
 /** What a parameter is called in the prototype, or its type when it has no name. */
 function parameterLabel(param: string): string {
     const name = /([A-Za-z_]\w*)\s*(?:\[\s*\])?$/.exec(param)?.[1]
@@ -94,11 +98,15 @@ function parameterLabel(param: string): string {
  * Where a RISC-V program puts a call's arguments and finds its result, read from the prototype
  * with the ILP32D/LP64D conventions the library is compiled for: integers and pointers in a0-a7,
  * floating point in fa0-fa7, variadic arguments in the next integer registers, the result in a0 or
- * fa0. A summary for completion and hover, not a full ABI: structs passed by value are not modelled.
+ * fa0. On RV32 a 64-bit integer takes the next two registers, low word first and with no even
+ * register to start at, its low word in a7 and its high word on the stack when a7 is the last, and
+ * comes back in a0:a1. A summary for completion and hover, not a full ABI: structs passed by value
+ * are not modelled.
  */
-export function riscvCallingConvention(prototype: string): string {
+export function riscvCallingConvention(prototype: string, xlen: 32 | 64 = 32): string {
     const parsed = parameters(prototype)
     if (!parsed) return ''
+    const pair = (type: string) => xlen === 32 && isWideInteger(type)
     let integer = 0,
         floating = 0
     const placed: string[] = []
@@ -107,25 +115,30 @@ export function riscvCallingConvention(prototype: string): string {
             placed.push(`the remaining arguments → a${integer}…a7, then the stack`)
             break
         }
-        if (isFloating(param) && floating < 8)
-            placed.push(`${parameterLabel(param)} → fa${floating++}`)
-        else if (integer < 8) placed.push(`${parameterLabel(param)} → a${integer++}`)
-        else placed.push(`${parameterLabel(param)} → stack`)
+        const label = parameterLabel(param)
+        if (isFloating(param) && floating < 8) placed.push(`${label} → fa${floating++}`)
+        else if (pair(param) && integer < 8) {
+            placed.push(
+                `${label} → ${integer < 7 ? `a${integer}:a${integer + 1}` : 'a7 and the stack'}`
+            )
+            integer += 2
+        } else if (integer < 8) placed.push(`${label} → a${integer++}`)
+        else placed.push(`${label} → stack`)
     }
     const result =
         parsed.returns === 'void' ||
         /\bvoid\s*$/.test(parsed.returns) ||
         parsed.returns.endsWith('_Noreturn')
             ? 'returns nothing'
-            : `returns ${parsed.returns} in ${isFloating(parsed.returns) ? 'fa0' : 'a0'}`
+            : `returns ${parsed.returns} in ${
+                  isFloating(parsed.returns) ? 'fa0' : pair(parsed.returns) ? 'a0:a1' : 'a0'
+              }`
     return [...placed, result].join('; ')
 }
 
 /** The size in 32-bit words of a parameter or result in the MIPS O32 ABI. */
 const o32Words = (type: string) =>
-    /\b(?:double|long long|int64_t|uint64_t|intmax_t|uintmax_t)\b/.test(type) && !type.includes('*')
-        ? 2
-        : 1
+    isWideInteger(type) || (/\bdouble\b/.test(type) && !type.includes('*')) ? 2 : 1
 
 /**
  * The same summary for MIPS's O32 convention: the first four argument words in $a0-$a3, a 64-bit
@@ -226,7 +239,7 @@ export function callingConvention(prototype: string, language: AvailableLanguage
         ? mipsCallingConvention(prototype)
         : language === 'X86'
           ? x86CallingConvention(prototype)
-          : riscvCallingConvention(prototype)
+          : riscvCallingConvention(prototype, language === 'RISC-V-64' ? 64 : 32)
 }
 
 /** The hover and completion documentation of one library function. */
