@@ -141,6 +141,7 @@ async function signature(
         {} as never
     ) as Promise<{
         value: {
+            activeSignature: number
             activeParameter: number
             signatures: { label: string }[]
         }
@@ -161,6 +162,32 @@ describe('assembly signature help', () => {
         expect(
             await signature(createRISCVSignatureHelpProvider(monacoStub, true), 'addiw t0, t1, 1')
         ).not.toBeNull()
+    })
+
+    it('makes the first form with an operand at the cursor active, and clamps past the last', async () => {
+        const mips = createMIPSSignatureHelpProvider(monacoStub)
+        const riscv = createRISCVSignatureHelpProvider(monacoStub)
+        const x86 = createX86SignatureHelpProvider(monacoStub)
+        const z80 = createZ80SignatureHelpProvider(monacoStub)
+        // [provider, line, active form, its label, active parameter]
+        const cases = [
+            [mips, 'bc1f 1, ', 1, 'bc1f imm, id', 1],
+            [mips, 'add $t0, $t1, $t2, ', 0, 'add $reg, $reg, $reg', 2],
+            [riscv, 'fld ft0, 4, ', 3, 'fld freg, imm, reg', 2],
+            [x86, 'imul eax, ', 1, 'imul reg64, r/m64', 1],
+            [x86, 'imul eax, ebx, ', 2, 'imul reg64, r/m64, imm8', 2],
+            [x86, 'mov rax, rbx, ', 0, 'mov r/m64, reg64', 1],
+            [z80, 'and a, ', 1, 'and b', 1],
+            [z80, 'ld a, b, c, ', 0, 'ld bc,nnnn', 1]
+        ] as const
+        for (const [provider, line, activeSignature, label, activeParameter] of cases) {
+            const help = await signature(provider, line)
+            expect(help?.value.activeSignature, line).toBe(activeSignature)
+            expect(help?.value.signatures[activeSignature]?.label, line).toBe(label)
+            expect(help?.value.activeParameter, line).toBe(activeParameter)
+        }
+        expect(await signature(x86, 'bogus rax, ')).toBeNull()
+        expect(await signature(z80, 'ld a, b ; ')).toBeNull()
     })
 
     it('provides Z80 and NASM forms at the active operand', async () => {
