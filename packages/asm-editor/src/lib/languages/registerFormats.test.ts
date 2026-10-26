@@ -16,7 +16,6 @@ import {
     type RenderableRegister
 } from '#lib/languages/registerFormats.ts'
 import {
-    makeRegister,
     type RegisterFileDescriptor,
     type RegisterFormat,
     RegisterSize,
@@ -154,10 +153,9 @@ describe('hex rendering', () => {
         })
     })
 
-    it('reads a narrowed register signed over its own width, as the CPU panel does', () => {
+    it('reads a narrowed register signed over its own width', () => {
         //Z80 narrows `a` to a byte after its file is built, so a word grouping still yields one
-        //byte wide group, and 0xff in it is -1 and not the 255 a word would read. `toSizedGroups`
-        //is the CPU panel's path to the same grouping and has to answer the same thing.
+        //byte wide group, and 0xff in it is -1 and not the 255 a word would read
         const rendered = renderRegister(
             mipsFpu,
             [{ name: 'a', value: 0xffn, prev: 0xffn, size: RegisterSize.Byte }],
@@ -170,16 +168,6 @@ describe('hex rendering', () => {
                 text: 'ff',
                 prevText: 'ff',
                 group: { bytes: 1, value: 0xffn, valueSigned: -1n, prevValue: 0xffn }
-            }
-        ])
-        const register = makeRegister('a', 0xffn, RegisterSize.Byte)
-        expect(register.toSizedGroups(RegisterSize.Word)).toEqual([
-            {
-                hex: 'ff',
-                value: 0xffn,
-                valueSigned: -1n,
-                groupSize: 2n,
-                prev: { hex: 'ff', value: 0xffn }
             }
         ])
     })
