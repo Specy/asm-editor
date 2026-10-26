@@ -268,3 +268,20 @@ it('keeps a shared Project unsaved when the browser does not store it', async ()
         project.dispose()
     }
 })
+
+it('offers to save again, on Back, a Project deleted in another tab', async () => {
+    const stored = await ProjectStore.addProject(makeProject({ name: 'deleted' }))
+    const project = await open(stored.id)
+    const confirm = vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+    try {
+        await db.deleteProject(stored)
+        project.button('Go back to your projects').click()
+        await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/projects'))
+        expect(confirm).toHaveBeenCalledWith(
+            'This project is not in your projects. Would you like to save it there?'
+        )
+        expect(ProjectStore.projects.map((saved) => saved.name)).toEqual(['deleted'])
+    } finally {
+        project.dispose()
+    }
+})

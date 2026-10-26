@@ -269,9 +269,10 @@
     async function changePage(page: ResolvedPathname) {
         try {
             const stored = await ProjectStore.getProjectFromDb(project.id)
+            //a shared link's Project, or one deleted in another tab since it was opened
             if (!stored) {
                 const save = await Prompt.confirm(
-                    'This project has not been saved. Would you like to create and save it?'
+                    'This project is not in your projects. Would you like to save it there?'
                 )
                 if (save === null) return
                 if (save) {
