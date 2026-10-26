@@ -805,10 +805,6 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             }))
     }
 
-    _stringifyError(error: unknown, _line?: number): string {
-        return error instanceof Error ? error.message : String(error)
-    }
-
     /**
      * Runs until the machine stops for a reason other than input, refilling the console device
      * whenever an `in` could not be served. Every await goes through `execution` so that a Stop or a

@@ -132,7 +132,14 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _dispose(): void
 
-    abstract _stringifyError(error: unknown, line?: number): string
+    /**
+     * What an error the Core or the adapter threw says to the person, the error's own message
+     * unless the adapter knows better. `line`, one-based, is where a failing program stopped, for
+     * a Core whose errors do not name it.
+     */
+    _stringifyError(error: unknown, _line?: number): string {
+        return error instanceof Error ? error.message : String(error)
+    }
 
     /**
      * `undoSize` is the requested undo-history depth for the program being assembled. It is passed

@@ -900,9 +900,9 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     /** A `RuntimeError` in MARS's words and at the line it names; anything else as it says. */
-    _stringifyError(error: unknown, _line?: number): string {
+    _stringifyError(error: unknown): string {
         if (isRuntimeError(error)) return marsRuntimeErrorMessage(error)
-        return error instanceof Error ? error.message : String(error)
+        return super._stringifyError(error)
     }
 
     _undo(): void {

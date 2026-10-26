@@ -1564,11 +1564,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { terminated: core.hasTerminated() }
     }
 
-    _stringifyError(error: unknown, _line?: number): string {
-        if (error instanceof Error) return error.message
-        return String(error)
-    }
-
     _undo(): void {
         const core = this.requireCore()
         this.mappingsMayChange()
