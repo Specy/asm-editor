@@ -314,11 +314,11 @@
                                 {#each switches as { key, label, description } (key)}
                                     <div class="share-settings">
                                         <span>{label}</span>
-                                        <!-- a switch with a Tooltip drops the title that repeats
-                                             its label (ADR 0064) -->
+                                        <!-- a switch with a Tooltip is named by aria-label in place
+                                             of the title that repeats its label (ADR 0064) -->
                                         <Switch
                                             bind:checked={settings[key]}
-                                            aria-label={label}
+                                            aria-label={description ? label : undefined}
                                             title={description ? undefined : label}
                                             {@attach tooltip(description)}
                                         />
