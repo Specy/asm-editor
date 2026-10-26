@@ -5,353 +5,25 @@ import { createDebouncer } from '#lib/debounce.ts'
 import { TinyColor } from '@ctrl/tinycolor'
 import structuredClone from '@ungap/structured-clone'
 
-//TODO redo this with a single writable object, it doesnt need to be this complicated
-export const DEFAULT_THEME = {
-    version: 1,
-    id: LANGUAGE_THEMES.M68K,
-    name: 'Default',
-    extends: LANGUAGE_THEMES.M68K,
-    editable: false,
-    theme: {
-        background: {
-            color: '#171A21',
-            name: 'background',
-            prop: 'background'
-        },
-        primary: {
-            color: '#171A21',
-            name: 'primary',
-            prop: 'primary'
-        },
-        secondary: {
-            color: '#1d212a',
-            name: 'secondary',
-            prop: 'secondary'
-        },
-        tertiary: {
-            color: '#2d3950',
-            name: 'tertiary',
-            prop: 'tertiary'
-        },
-        accent: {
-            color: '#F2A65A',
-            name: 'accent',
-            prop: 'accent'
-        },
-        accent2: {
-            color: '#3b5364',
-            name: 'accent2',
-            prop: 'accent2'
-        },
-        hint: {
-            color: '#939393',
-            name: 'hint',
-            prop: 'hint',
-            readonly: true
-        },
-        textDarker: {
-            color: '#c1c1c1',
-            name: 'text-layered',
-            prop: 'textDarker',
-            readonly: true
-        },
-        scrollbar: {
-            color: '#3b5364',
-            name: 'scrollbar',
-            prop: 'scrollbar'
-        },
-        red: {
-            color: '#ed4f4f',
-            name: 'red', //TODO rename to warn
-            prop: 'red',
-            readonly: true
-        },
-        green: {
-            color: '#356a59', //TODO rename to success
-            name: 'green',
-            prop: 'green',
-            readonly: true
-        }
-    }
+/**
+ * The colours a theme is made of, in the order the theme editor and the CSS variables list them,
+ * each with the name its custom properties take. The readonly ones are not offered for editing.
+ */
+const THEME_PROPS = {
+    background: { name: 'background' },
+    primary: { name: 'primary' },
+    secondary: { name: 'secondary' },
+    tertiary: { name: 'tertiary' },
+    accent: { name: 'accent' },
+    accent2: { name: 'accent2' },
+    hint: { name: 'hint', readonly: true },
+    textDarker: { name: 'text-layered', readonly: true },
+    scrollbar: { name: 'scrollbar' },
+    red: { name: 'red', readonly: true }, //TODO rename to warn
+    green: { name: 'green', readonly: true } //TODO rename to success
 } as const
 
-export const DEFAULT_MIPS_THEME = {
-    version: 1,
-    id: LANGUAGE_THEMES.MIPS,
-    extends: LANGUAGE_THEMES.MIPS,
-    name: 'Default mips',
-    editable: false,
-    theme: {
-        background: {
-            color: 'rgb(25 23 33)',
-            name: 'background',
-            prop: 'background'
-        },
-        primary: {
-            color: 'rgb(25 23 33)',
-            name: 'primary',
-            prop: 'primary'
-        },
-        secondary: {
-            color: '#201d29',
-            name: 'secondary',
-            prop: 'secondary'
-        },
-        tertiary: {
-            color: '#322d45',
-            name: 'tertiary',
-            prop: 'tertiary'
-        },
-        accent: {
-            color: '#9259c1',
-            name: 'accent',
-            prop: 'accent'
-        },
-        accent2: {
-            color: '#4e4456',
-            name: 'accent2',
-            prop: 'accent2'
-        },
-        hint: {
-            color: '#939393',
-            name: 'hint',
-            prop: 'hint',
-            readonly: true
-        },
-        textDarker: {
-            color: '#c1c1c1',
-            name: 'text-layered',
-            prop: 'textDarker',
-            readonly: true
-        },
-        scrollbar: {
-            color: '#433d6f',
-            name: 'scrollbar',
-            prop: 'scrollbar'
-        },
-        red: {
-            color: '#ed4f4f',
-            name: 'red', //TODO rename to warn
-            prop: 'red',
-            readonly: true
-        },
-        green: {
-            color: '#356a59', //TODO rename to success
-            name: 'green',
-            prop: 'green',
-            readonly: true
-        }
-    }
-} as const
-
-export const DEFAULT_RISCV_THEME = {
-    version: 1,
-    id: LANGUAGE_THEMES['RISC-V'],
-    extends: LANGUAGE_THEMES['RISC-V'],
-    name: 'Default risc-v',
-    editable: false,
-    theme: {
-        background: {
-            color: '#070915',
-            name: 'background',
-            prop: 'background'
-        },
-        primary: {
-            color: '#070915',
-            name: 'primary',
-            prop: 'primary'
-        },
-        secondary: {
-            color: '#121527',
-            name: 'secondary',
-            prop: 'secondary'
-        },
-        tertiary: {
-            color: '#1b1f39',
-            name: 'tertiary',
-            prop: 'tertiary'
-        },
-        accent: {
-            color: '#fdb515',
-            name: 'accent',
-            prop: 'accent'
-        },
-        accent2: {
-            color: '#283272',
-            name: 'accent2',
-            prop: 'accent2'
-        },
-        hint: {
-            color: '#939393',
-            name: 'hint',
-            prop: 'hint',
-            readonly: true
-        },
-        textDarker: {
-            color: '#c1c1c1',
-            name: 'text-layered',
-            prop: 'textDarker',
-            readonly: true
-        },
-        scrollbar: {
-            color: '#3d446f',
-            name: 'scrollbar',
-            prop: 'scrollbar'
-        },
-        red: {
-            color: '#ed4f4f',
-            name: 'red', //TODO rename to warn
-            prop: 'red',
-            readonly: true
-        },
-        green: {
-            color: '#356a59', //TODO rename to success
-            name: 'green',
-            prop: 'green',
-            readonly: true
-        }
-    }
-} as const
-
-export const DEFAULT_Z80_THEME = {
-    version: 1,
-    id: LANGUAGE_THEMES.Z80,
-    extends: LANGUAGE_THEMES.Z80,
-    name: 'Default z80',
-    editable: false,
-    theme: {
-        background: {
-            color: '#0b1210',
-            name: 'background',
-            prop: 'background'
-        },
-        primary: {
-            color: '#0b1210',
-            name: 'primary',
-            prop: 'primary'
-        },
-        secondary: {
-            color: '#131d1a',
-            name: 'secondary',
-            prop: 'secondary'
-        },
-        tertiary: {
-            color: '#1b2a26',
-            name: 'tertiary',
-            prop: 'tertiary'
-        },
-        accent: {
-            color: '#4fd1a5',
-            name: 'accent',
-            prop: 'accent'
-        },
-        accent2: {
-            color: '#23403a',
-            name: 'accent2',
-            prop: 'accent2'
-        },
-        hint: {
-            color: '#939393',
-            name: 'hint',
-            prop: 'hint',
-            readonly: true
-        },
-        textDarker: {
-            color: '#c1c1c1',
-            name: 'text-layered',
-            prop: 'textDarker',
-            readonly: true
-        },
-        scrollbar: {
-            color: '#2f4a43',
-            name: 'scrollbar',
-            prop: 'scrollbar'
-        },
-        red: {
-            color: '#ed4f4f',
-            name: 'red', //TODO rename to warn
-            prop: 'red',
-            readonly: true
-        },
-        green: {
-            color: '#356a59', //TODO rename to success
-            name: 'green',
-            prop: 'green',
-            readonly: true
-        }
-    }
-} as const
-
-export const DEFAULT_X86_THEME = {
-    version: 1,
-    id: LANGUAGE_THEMES.X86,
-    extends: LANGUAGE_THEMES.X86,
-    name: 'Default x86-64',
-    editable: false,
-    theme: {
-        background: {
-            color: '#0a121a',
-            name: 'background',
-            prop: 'background'
-        },
-        primary: {
-            color: '#0a121a',
-            name: 'primary',
-            prop: 'primary'
-        },
-        secondary: {
-            color: '#111c26',
-            name: 'secondary',
-            prop: 'secondary'
-        },
-        tertiary: {
-            color: '#1a2c3a',
-            name: 'tertiary',
-            prop: 'tertiary'
-        },
-        accent: {
-            color: '#0f86dd',
-            name: 'accent',
-            prop: 'accent'
-        },
-        accent2: {
-            color: '#1d4a6b',
-            name: 'accent2',
-            prop: 'accent2'
-        },
-        hint: {
-            color: '#939393',
-            name: 'hint',
-            prop: 'hint',
-            readonly: true
-        },
-        textDarker: {
-            color: '#c1c1c1',
-            name: 'text-layered',
-            prop: 'textDarker',
-            readonly: true
-        },
-        scrollbar: {
-            color: '#2a5c80',
-            name: 'scrollbar',
-            prop: 'scrollbar'
-        },
-        red: {
-            color: '#ed4f4f',
-            name: 'red', //TODO rename to warn
-            prop: 'red',
-            readonly: true
-        },
-        green: {
-            color: '#356a59', //TODO rename to success
-            name: 'green',
-            prop: 'green',
-            readonly: true
-        }
-    }
-} as const
-
-export type ThemeKeys = keyof (typeof DEFAULT_THEME)['theme']
+export type ThemeKeys = keyof typeof THEME_PROPS
 export type ThemeProp<T = ThemeKeys> = {
     name: string
     color: string
@@ -368,12 +40,74 @@ type StoredTheme<T extends string = string> = {
     theme: Record<T, ThemeProp<T>>
 }
 
+/** The colours every built-in theme shares, which are the readonly ones. */
+const SHARED_COLORS = { hint: '#939393', textDarker: '#c1c1c1', red: '#ed4f4f', green: '#356a59' }
+
+/** The colours a built-in theme picks for itself; its primary is its background. */
+type BuiltinColors = Record<Exclude<ThemeKeys, 'primary' | keyof typeof SHARED_COLORS>, string>
+
+function builtinTheme(
+    themeId: string,
+    name: string,
+    colors: BuiltinColors
+): StoredTheme<ThemeKeys> {
+    const all: Record<ThemeKeys, string> = {
+        ...SHARED_COLORS,
+        ...colors,
+        primary: colors.background
+    }
+    const theme = Object.fromEntries(
+        Object.entries(THEME_PROPS).map(([prop, { name: cssName, ...flags }]) => [
+            prop,
+            { color: all[prop as ThemeKeys], name: cssName, prop, ...flags }
+        ])
+    ) as StoredTheme<ThemeKeys>['theme']
+    return { version, id: themeId, name, extends: themeId, editable: false, theme }
+}
+
+export const DEFAULT_THEME = builtinTheme(LANGUAGE_THEMES.M68K, 'Default', {
+    background: '#171A21',
+    secondary: '#1d212a',
+    tertiary: '#2d3950',
+    accent: '#F2A65A',
+    accent2: '#3b5364',
+    scrollbar: '#3b5364'
+})
+
 export const BUILTIN_THEMES: StoredTheme<ThemeKeys>[] = [
     DEFAULT_THEME,
-    DEFAULT_MIPS_THEME,
-    DEFAULT_RISCV_THEME,
-    DEFAULT_Z80_THEME,
-    DEFAULT_X86_THEME
+    builtinTheme(LANGUAGE_THEMES.MIPS, 'Default mips', {
+        background: 'rgb(25 23 33)',
+        secondary: '#201d29',
+        tertiary: '#322d45',
+        accent: '#9259c1',
+        accent2: '#4e4456',
+        scrollbar: '#433d6f'
+    }),
+    builtinTheme(LANGUAGE_THEMES['RISC-V'], 'Default risc-v', {
+        background: '#070915',
+        secondary: '#121527',
+        tertiary: '#1b1f39',
+        accent: '#fdb515',
+        accent2: '#283272',
+        scrollbar: '#3d446f'
+    }),
+    builtinTheme(LANGUAGE_THEMES.Z80, 'Default z80', {
+        background: '#0b1210',
+        secondary: '#131d1a',
+        tertiary: '#1b2a26',
+        accent: '#4fd1a5',
+        accent2: '#23403a',
+        scrollbar: '#2f4a43'
+    }),
+    builtinTheme(LANGUAGE_THEMES.X86, 'Default x86-64', {
+        background: '#0a121a',
+        secondary: '#111c26',
+        tertiary: '#1a2c3a',
+        accent: '#0f86dd',
+        accent2: '#1d4a6b',
+        scrollbar: '#2a5c80'
+    })
 ]
 
 /** The text colours a theme dresses its colours with, which no theme chooses for itself. */
@@ -382,6 +116,15 @@ type ThemeTextColors = {
     textForLight: string
     textMutedForDark: string
     textMutedForLight: string
+}
+
+const TEXT_COLORS: ThemeTextColors = {
+    textForDark: '#dbdbdb',
+    textForLight: '#181818',
+    //the same text, dimmed: what long-form prose (a lecture, a documentation description) is
+    //written in, so it sits a step below titles and interface text without losing contrast
+    textMutedForDark: '#d4d4d4',
+    textMutedForLight: '#3a3a3a'
 }
 
 function toRgbChannels(color: string) {
@@ -424,12 +167,7 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
     let themes: StoredTheme<ThemeKeys>[] = $state(structuredClone(BUILTIN_THEMES))
     let meta = $state({
         name: _theme.name,
-        textForDark: '#dbdbdb',
-        textForLight: '#181818',
-        //the same text, dimmed: what long-form prose (a lecture, a documentation description) is
-        //written in, so it sits a step below titles and interface text without losing contrast
-        textMutedForDark: '#d4d4d4',
-        textMutedForLight: '#3a3a3a',
+        ...TEXT_COLORS,
         version: _theme.version,
         id: _theme.id,
         extends: _theme.extends,
@@ -439,22 +177,20 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
     const theme: Record<ThemeKeys, ThemeProp<ThemeKeys>> = $state(_theme.theme)
     const themeArray = $derived(Object.values(theme))
 
+    /** The built-in theme the current one was made from, whose colours are its defaults. */
+    function extendedTheme() {
+        return BUILTIN_THEMES.find((t) => t.id === meta.extends)
+    }
+
     function isDefault(key: ThemeKeys, color: string) {
-        const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
-        if (extended) {
-            return (
-                new TinyColor(extended.theme[key]?.color).toHex() === new TinyColor(color).toHex()
-            )
-        } else {
-            return false
-        }
+        const extended = extendedTheme()
+        if (!extended) return false
+        return new TinyColor(extended.theme[key]?.color).toHex() === new TinyColor(color).toHex()
     }
 
     function reset(key: ThemeKeys) {
-        const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
-        if (extended) {
-            set(key, extended.theme[key].color)
-        }
+        const extended = extendedTheme()
+        if (extended) set(key, extended.theme[key].color)
     }
 
     function set(key: ThemeKeys, color: string) {
@@ -469,17 +205,6 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
     function getChosenTheme() {
         if (!browser) return BUILTIN_THEMES[0].id
         return localStorage.getItem('selected_theme') || BUILTIN_THEMES[0].id
-    }
-
-    function getText(key: ThemeKeys) {
-        const color = getColor(key)
-        return color?.isDark() ? meta.textForDark : meta.textForLight
-    }
-
-    function layer(key: ThemeKeys, layer: number) {
-        const color = getColor(key)
-        const isDark = color.isDark()
-        return isDark ? color.lighten(layer) : color.darken(layer)
     }
 
     function getColor(key: ThemeKeys) {
@@ -527,10 +252,7 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
             }
         }
         meta = {
-            textForDark: '#dbdbdb',
-            textForLight: '#181818',
-            textMutedForDark: '#d4d4d4',
-            textMutedForLight: '#3a3a3a',
+            ...TEXT_COLORS,
             version: selected.version,
             id: selected.id,
             extends: selected.extends,
@@ -562,14 +284,8 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
             extends: meta.extends,
             theme: structuredClone($state.snapshot(theme))
         } satisfies StoredTheme<ThemeKeys>
-        for (const themeProp of Object.values(newTheme.theme)) {
-            set(themeProp.prop, themeProp.color)
-        }
         meta = {
-            textForDark: '#dbdbdb',
-            textForLight: '#181818',
-            textMutedForDark: '#d4d4d4',
-            textMutedForLight: '#3a3a3a',
+            ...TEXT_COLORS,
             name: newTheme.name,
             id: newTheme.id,
             version: newTheme.version,
@@ -609,15 +325,11 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
         isDefault,
         reset,
         get,
-        getText,
         set,
-        layer,
         getColor,
-        save,
         select,
         createNewAndSet,
         delete: deleteTheme,
-        getChosenTheme,
         textOfColor,
         isColorDark: (color: string) => new TinyColor(color).isDark()
     }

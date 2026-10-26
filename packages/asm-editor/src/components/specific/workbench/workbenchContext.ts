@@ -2,12 +2,7 @@ import { getContext, setContext, type Component, type Snippet } from 'svelte'
 import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
 import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
 import type { SearchScope } from '#lib/search/scope.ts'
-import type {
-    PanelAccess,
-    WorkbenchHostLink,
-    WorkbenchHostPanel,
-    WorkbenchPanelContext
-} from '#lib/workbench/hostApi.ts'
+import type { PanelAccess, WorkbenchPanelContext } from '#lib/workbench/hostApi.ts'
 
 /** One entry of the icon rail: a panel it opens, or an action it runs. */
 export type RailEntry = {
@@ -37,8 +32,6 @@ export type WorkbenchContext = {
     readonly documentationLinks: boolean
     /** The Search scope of the Documentation panel and of the AI assistant's search tool. */
     readonly searchScope: SearchScope
-    readonly hostPanels: WorkbenchHostPanel[]
-    readonly hostLinks: WorkbenchHostLink[]
     onBack?: () => void
     onSave?: (options: { silent: boolean }) => void
 }

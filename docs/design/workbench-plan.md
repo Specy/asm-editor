@@ -331,7 +331,7 @@ After the owner's third review:
 - **Registers:** the layout store lost `registersWidth` and its setter; a value stored before is ignored. `RegistersArea` binds the grouping picked in its header, and `DebugColumn` pins a tabbed file's column with `registerColumnWidth` at that grouping. A single file's card has `min-width: max-content`. The grid's two columns are separated by `column-gap: var(--wb-gap)`, and in Lines by memory's left rule.
 - **Column width:** `.debug-lower` has `contain: inline-size`, so the Screen and the Debug tools never widen the column.
 - **Tool sections:** `toolSectionStyle` in `debugTools.ts` gives every section `flex: 1 1 0`. The Stack pointer gets `min-width: min-content`, and History and Call stack `min-width: 10rem`.
-- **History and Call stack:** `CallStack` and `MutationsRenderer` take `docked`, which drops their 12rem width and max-height and rounds every corner 0.2rem. `DebugToolContent` passes it, and the floating windows keep their old look.
+- **History and Call stack:** `CallStack` and `MutationsRenderer` take `docked`, which drops their 12rem width and max-height and rounds every corner 0.2rem. `DebugToolContent` passes it, and the floating windows, which draw it too, pass `docked={false}` and keep their old look.
 - **Lines corners:** `MemoryRenderer`, `RegisterFilesPanel` and `ScreenRenderer` read `--panel-radius` with their old 0.5rem as the fallback, and Lines sets it to 0.
 
 The work is committed on `feat/workbench` as one commit. The brief and mockup the design record was made from are not kept in the repository.

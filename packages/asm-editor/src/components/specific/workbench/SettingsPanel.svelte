@@ -181,9 +181,9 @@
             {#each preferencesOf('preferences') as [key, entry] (key)}
                 <Setting
                     {entry}
-                    on:changeValue={(e) =>
+                    onChange={(value) =>
                         // @ts-expect-error -- the entries erase the key/value correlation
-                        preferencesStore.setValue(key, e.detail)}
+                        preferencesStore.setValue(key, value)}
                 />
             {/each}
         </div>
@@ -198,9 +198,9 @@
             {#each preferencesOf('layout') as [key, entry] (key)}
                 <Setting
                     {entry}
-                    on:changeValue={(e) =>
+                    onChange={(value) =>
                         // @ts-expect-error -- the entries erase the key/value correlation
-                        preferencesStore.setValue(key, e.detail)}
+                        preferencesStore.setValue(key, value)}
                 />
             {/each}
             {#if ui.compact}

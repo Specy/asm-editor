@@ -53,7 +53,6 @@
                 bind:value
                 bind:el={inputEl}
                 placeholder={Prompt.placeholder}
-                hideStatus
                 style="border: 1px solid var(--tray-line);"
             />
         {/if}
@@ -97,10 +96,12 @@
 {/if}
 
 <style lang="scss">
+    @use '../button/tray.scss';
+
     /* drawn as the Workbench's execution trays where they float over the code: a translucent tint
        that blurs what is beneath, a hairline edge, lifted by a shadow */
     .prompt-wrapper {
-        --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+        @include tray.surface;
         display: flex;
         position: fixed;
         top: 1rem;
@@ -109,15 +110,8 @@
         max-width: min(25rem, calc(100vw - 2rem));
         min-width: min(20rem, calc(100vw - 2rem));
         gap: 0.5rem;
-        color: var(--primary-text);
-        border: 1px solid var(--tray-line);
-        border-radius: 0.6rem;
-        background-color: color-mix(in srgb, var(--primary) 80%, transparent);
-        backdrop-filter: blur(4px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         z-index: 20;
         padding: 0.6rem;
-        font-family: Rubik;
         transition: transform 0.3s ease-out;
         flex-direction: column;
         animation: slideIn 0.25s ease-out;
@@ -153,46 +147,11 @@
     }
 
     .tool {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        padding: 0 0.9rem;
-        border: none;
-        border-radius: 0.4rem;
-        background-color: transparent;
-        color: var(--primary-text);
-        font-family: Rubik;
-        font-size: 0.9rem;
-        font-weight: 500;
-        white-space: nowrap;
-        cursor: pointer;
-        transition:
-            background-color 0.15s,
-            color 0.15s;
-    }
-
-    .tool:hover {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-    }
-
-    .tool:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
+        @include tray.tool;
     }
 
     .primary {
-        min-width: 4.5rem;
-        background-color: var(--accent);
-        color: var(--accent-text);
-    }
-
-    .primary:hover {
-        background-color: color-mix(in srgb, var(--accent) 85%, white);
-    }
-
-    .primary:focus-visible {
-        outline-color: var(--accent-text);
+        @include tray.primary;
     }
 
     @media print {

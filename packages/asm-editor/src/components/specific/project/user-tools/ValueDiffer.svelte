@@ -10,7 +10,6 @@
         hasSoftDiff?: boolean | undefined
         monospaced?: boolean
         hoverElementOffset?: string
-        oldValueStyle?: string
         id?: string | undefined
         hoverValue?: import('svelte').Snippet
         hoverBoundary?: HTMLElement
@@ -24,7 +23,6 @@
         value,
         hasSoftDiff = undefined,
         monospaced = false,
-        oldValueStyle,
         hoverElementOffset = '-1.1rem',
         id = undefined,
         hoverValue,
@@ -45,7 +43,7 @@
                 </div>
             {/if}
             {#if diff !== value}
-                <div class="old-value" class:monospaced style={oldValueStyle} role="tooltip">
+                <div class="old-value" class:monospaced role="tooltip">
                     {diff}
                 </div>
             {/if}

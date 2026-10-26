@@ -4,6 +4,7 @@ import type {
     Testcase,
     TestcaseResult
 } from '#lib/Project.svelte.ts'
+import type { BaseEmulatorState } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
  * What the Testcases panel needs beyond the **Testcase** record itself: reading the numbers a person
@@ -293,6 +294,32 @@ export function firstTextDifference(expected: string, got: string): number {
 export function describeCharacter(text: string, index: number): string {
     const char = text[index]
     return char === undefined ? 'the end' : `"${escapeText(char)}"`
+}
+
+/** The registers of the Target a Testcase can name, as its Core lists them. */
+export type TestcaseRegisters = {
+    /** Every register, in the Core's order. */
+    names: string[]
+    /** The ones a run can start with: MIPS's `pc`, `hi` and `lo` can only be expected. */
+    starting: string[]
+    /** The ones never offered for a new row. */
+    hidden: string[]
+    /** The width of each register in bytes, which can be narrower than the Core's (Z80's `a`). */
+    sizes: Record<string, number>
+}
+
+/** The registers a Testcase can name, read off the Emulator its Program runs on. */
+export function testcaseRegisters(
+    emulator: Pick<BaseEmulatorState, 'registers' | 'startingRegisterNames' | 'hiddenRegisters'>
+): TestcaseRegisters {
+    return {
+        names: emulator.registers.map((register) => register.name),
+        starting: emulator.startingRegisterNames,
+        hidden: emulator.hiddenRegisters,
+        sizes: Object.fromEntries(
+            emulator.registers.map((register) => [register.name, Number(register.size)])
+        )
+    }
 }
 
 /** The name a register has in the Target, whatever case the Testcase spelled it in. */

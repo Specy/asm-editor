@@ -1,17 +1,10 @@
 <script lang="ts">
-    import { onMount, untrack, type Snippet } from 'svelte'
-    import type { Project } from '#lib/Project.svelte.ts'
+    import { onMount, untrack } from 'svelte'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
-    import type { EditJournalStore } from '#lib/editJournal.ts'
     import { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
     import { watchViewport } from '#lib/workbench/viewport.svelte.ts'
-    import type {
-        BuiltinPanelId,
-        PanelAccess,
-        WorkbenchHostLink,
-        WorkbenchHostPanel
-    } from '#lib/workbench/hostApi.ts'
+    import type { BuiltinPanelId, PanelAccess, WorkbenchProps } from '#lib/workbench/hostApi.ts'
     import { setWorkbenchContext, type RailEntry } from './workbenchContext'
     import WorkbenchDesktop from './WorkbenchDesktop.svelte'
     import WorkbenchCompact from './WorkbenchCompact.svelte'
@@ -24,24 +17,7 @@
     import { carriesComputerFiles } from '#lib/fileDrops.ts'
     import './workbench.css'
 
-    interface Props {
-        project: Project
-        emulator: Emulator
-        readonly?: boolean
-        onBack?: () => void
-        onSave?: (options: { silent: boolean }) => void
-        onShare?: () => void
-        onChange?: () => void
-        unsaved?: boolean
-        editJournals?: EditJournalStore
-        access?: Partial<Record<BuiltinPanelId, PanelAccess>>
-        documentationLinks?: boolean
-        searchLectures?: boolean
-        hostPanels?: WorkbenchHostPanel[]
-        hostLinks?: WorkbenchHostLink[]
-        activePanel?: string | null
-        header?: Snippet<[WorkbenchUi]>
-    }
+    type Props = Omit<WorkbenchProps, 'loading'> & { emulator: Emulator }
 
     let {
         project,
@@ -234,12 +210,6 @@
         },
         get searchScope() {
             return searchScope
-        },
-        get hostPanels() {
-            return hostPanels
-        },
-        get hostLinks() {
-            return hostLinks
         },
         get onBack() {
             return onBack

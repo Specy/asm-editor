@@ -9,18 +9,19 @@
      */
     import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
     import type { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import { makeEmptyTestcase, matchResults, testcaseLabel } from '#lib/testcases.ts'
+    import {
+        makeEmptyTestcase,
+        matchResults,
+        testcaseLabel,
+        type TestcaseRegisters
+    } from '#lib/testcases.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import TestcaseItem from './TestcaseItem.svelte'
 
     interface Props {
         testcases: Testcase[]
         testcasesResult: TestcaseResult[]
-        registerNames: string[]
-        startingRegisterNames: string[]
-        hiddenRegistersNames?: string[]
-        /** The width of each register, for the ones narrower than `systemSize` (Z80's `a`). */
-        registerSizes?: Record<string, number>
+        registers: TestcaseRegisters
         editable?: boolean
         systemSize: RegisterSize
         /** The Target, which decides how its numbers are written. */
@@ -31,10 +32,7 @@
     let {
         testcases = $bindable(),
         testcasesResult,
-        registerNames,
-        startingRegisterNames,
-        hiddenRegistersNames = [],
-        registerSizes,
+        registers,
         editable = true,
         systemSize,
         language,
@@ -83,10 +81,7 @@
             {editable}
             initiallyOpen={i === 0 || testcase === created}
             focusName={testcase === created}
-            {registerNames}
-            {startingRegisterNames}
-            {hiddenRegistersNames}
-            {registerSizes}
+            {registers}
             {systemSize}
             {language}
             onDelete={() => remove(testcase, i)}
