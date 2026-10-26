@@ -1,4 +1,5 @@
 import { MIPS } from '@specy/mips'
+import { groupMarsForms, marsVariantOperands } from '#lib/documentation/mars/forms.ts'
 
 const mipsIse = MIPS.getInstructionSet()
 
@@ -16,12 +17,6 @@ export type MIPSInstruction = {
     isPseudo: boolean
     /** The instructions a pseudo-instruction becomes, as MARS's templates write them; empty otherwise. */
     expansion: string[]
-}
-
-type MIPSInstructionVariants = [MIPSInstruction, ...MIPSInstruction[]]
-
-function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
-    return Object.prototype.hasOwnProperty.call(value, key)
 }
 
 export const mipsInstructionsWithDuplicates = mipsIse.map((ins) => {
@@ -42,67 +37,15 @@ export const mipsInstructionsWithDuplicates = mipsIse.map((ins) => {
     } satisfies MIPSInstruction
 })
 
-export const mipsInstructionMap = new Map<string, MIPSInstructionVariants>()
-for (const ins of mipsInstructionsWithDuplicates) {
-    const variants = mipsInstructionMap.get(ins.name)
-    if (variants) {
-        variants.push(ins)
-    } else {
-        mipsInstructionMap.set(ins.name, [ins])
-    }
-}
-
-export const mipsInstructionsVariants = [...mipsInstructionMap.values()]
-
-export const mipsInstructionEntries = [...mipsInstructionMap.entries()].sort(([a], [b]) =>
-    a.localeCompare(b)
-)
-
-export const mipsInstructionNames = mipsInstructionEntries.map(([name]) => name)
+export const {
+    map: mipsInstructionMap,
+    variants: mipsInstructionsVariants,
+    entries: mipsInstructionEntries,
+    names: mipsInstructionNames
+} = groupMarsForms<MIPSInstruction>(mipsInstructionsWithDuplicates)
 
 export function mipsVariantOperands(variant: MIPSInstruction): string[] {
-    const isReg = (s: string) => s === '$reg' || s === '$freg' || s === 'regnum'
-
-    function getLabel(type: string): string {
-        if (type.startsWith('INTEGER')) return 'imm'
-        return hasOwnKey(MIPSAddressingModes, type) ? MIPSAddressingModes[type].label : type
-    }
-
-    const tokens = variant.args.map((a) => a[0])
-    if (tokens.length === 0) return []
-
-    const operands: string[] = []
-    let parts: string[] = []
-
-    for (let i = 0; i < tokens.length; i++) {
-        const t = tokens[i]
-        const label = getLabel(t.type)
-
-        if (t.type === 'LEFT_PAREN') {
-            const last = parts[parts.length - 1]
-            if (parts.length > 0 && !isReg(last)) {
-                parts.push('(')
-            } else {
-                if (parts.length > 0) operands.push(parts.join(''))
-                parts = ['(']
-            }
-        } else if (t.type === 'RIGHT_PAREN') {
-            parts.push(')')
-            operands.push(parts.join(''))
-            parts = []
-        } else if (t.type === 'PLUS') {
-            parts.push('+')
-        } else {
-            const prevType = i > 0 ? tokens[i - 1].type : null
-            if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
-                operands.push(parts.join(''))
-                parts = []
-            }
-            parts.push(label)
-        }
-    }
-    if (parts.length > 0) operands.push(parts.join(''))
-    return operands
+    return marsVariantOperands(variant, MIPSAddressingModes)
 }
 
 export const MIPSAddressingModes = {
