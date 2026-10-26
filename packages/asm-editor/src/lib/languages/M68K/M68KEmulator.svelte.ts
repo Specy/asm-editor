@@ -15,11 +15,7 @@ import {
     S68k,
     Size
 } from '@specy/s68k'
-import {
-    type CompileResult,
-    EmulatorStatus,
-    type Instruction
-} from '#lib/languages/BaseEmulator.svelte.ts'
+import { type CompileResult, type Instruction } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -64,12 +60,11 @@ import type { MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
 import type { TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { echoToScreen } from '#lib/languages/peripherals/screen/textEcho.ts'
 import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 
-export const registerName = [
+const registerName = [
     'D0',
     'D1',
     'D2',
@@ -88,7 +83,7 @@ export const registerName = [
     'A7'
 ] as const
 
-export type M68KRegisterName = (typeof registerName)[number]
+type M68KRegisterName = (typeof registerName)[number]
 
 const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
 
@@ -464,18 +459,6 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return BigInt(this.interpreter?.getSp() ?? 0)
     }
 
-    _getRegisterValue(
-        register: M68KRegisterName,
-        size: RegisterSize | undefined = RegisterSize.Long
-    ): bigint {
-        return BigInt(
-            this.requireInterpreter().getRegisterValue(
-                registerNameToType(register),
-                toCoreSize(size)
-            )
-        )
-    }
-
     _getRegisterValues(): bigint[] {
         const interpreter = this.interpreter
         if (!interpreter) return new Array(this._registerNames.length).fill(0n)
@@ -483,17 +466,6 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             .getCpuSnapshot()
             .getRegistersValues()
             .map((value) => BigInt(value))
-    }
-
-    _getRegisterValuesRecord(): Record<M68KRegisterName, bigint> {
-        const values = this._getRegisterValues()
-        return Object.fromEntries(
-            this._registerNames.map((name, i) => [name, values[i] ?? 0n])
-        ) as Record<M68KRegisterName, bigint>
-    }
-
-    _getStatus(): EmulatorStatus {
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
@@ -703,9 +675,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return { reason: 'terminated', instructions: ran() }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(limit: number): Promise<void> {
         const interpreter = this.requireInterpreter()
-        const limit = toHaltLimit(haltLimit)
         const execution = this.executionController.capture()
         const first = interpreter.getExecutedInstructions()
         while (!interpreter.hasTerminated()) {
@@ -1421,10 +1392,6 @@ function isExecutionLimitError(error: unknown): boolean {
         error !== null &&
         (error as { type?: unknown }).type === 'ExecutionLimit'
     )
-}
-
-function toHaltLimit(limit: number | undefined): number {
-    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
 }
 
 function toCoreSize(size: RegisterSize | undefined): Size {

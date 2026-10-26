@@ -20,8 +20,6 @@ import {
     type BuildArtifact,
     createMemoryTab,
     resetMemoryTab,
-    type Diagnostic,
-    type EmulatorInterrupt,
     type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
@@ -160,23 +158,26 @@ export function isRuntimeLibraryFile(file: string | undefined): boolean {
     return !!file && file.startsWith(RUNTIME_NAMESPACE)
 }
 
+/**
+ * The undo depth the adapters are given. It comes from a user setting, so it can be any number (or
+ * NaN); `0` means "no history at all".
+ */
+export function normalizeUndoSize(undoSize: number): number {
+    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+}
+
+/**
+ * The instruction limit a Testcase runs with: no limit, or one that is not positive, is unbounded,
+ * which is still a finite number, because Infinity would make a Core's budget arithmetic
+ * meaningless.
+ */
+export function toHaltLimit(limit: number | undefined): number {
+    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
+}
+
 /** Why a Build or a Testcase stopped before the program's own code: it ran out of instructions. */
 function programStartLimitMessage(name: string, limit: number): string {
     return `The program did not reach ${name} within ${limit.toLocaleString('en-US')} instructions`
-}
-
-/** A Build stopped by its Arguments: they do not parse, or the Core refuses them. */
-function argumentsDiagnostic(problem: string): Diagnostic {
-    const message = `Arguments: ${problem}`
-    return {
-        severity: 'error',
-        source: ARGUMENTS_DIAGNOSTIC_SOURCE,
-        lineIndex: 0,
-        column: 0,
-        line: { line: '', line_index: 0 },
-        message,
-        formatted: message
-    }
 }
 
 /** The Arguments problem a failed Build reports, or undefined for any other failure. */
@@ -809,31 +810,39 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
+     * Shows the read the program now waits on, after sending what it played, until `read` answers:
+     * the person may take a while to answer, and a beep before a prompt has to be heard before the
+     * answer, not after. A read for a run Stop ended, by a Core that could not be halted, fails
+     * instead, showing nothing.
+     */
+    private async awaitInput<V>(
+        type: string,
+        question: string,
+        execution: ExecutionGeneration,
+        read: () => Promise<V>
+    ) {
+        this.executionController.ensureCurrent(execution)
+        this._peripherals.audio.flush()
+        this.state.interrupt = { type, message: question }
+        try {
+            return await read()
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    /**
      * A line, through the Terminal's Line discipline. `options` are how the program set up its
      * reads to show what is typed, where its environment lets it (EASy68K's tasks 12 and 16).
      */
-    /**
-     * Shows the read the program now waits on, after sending what it played: the person may take a
-     * while to answer, and a beep before a prompt has to be heard before the answer, not after. A
-     * read for a run Stop ended, by a Core that could not be halted, fails instead, showing nothing.
-     */
-    private waitOnInput(interrupt: EmulatorInterrupt, execution: ExecutionGeneration): void {
-        this.executionController.ensureCurrent(execution)
-        this._peripherals.audio.flush()
-        this.state.interrupt = interrupt
-    }
-
-    protected async requestInput(
+    protected requestInput(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
-        try {
-            return await this._peripherals.terminal.readAsync(question, execution, options)
-        } finally {
-            this.state.interrupt = undefined
-        }
+        return this.awaitInput('ReadInput', question, execution, () =>
+            this._peripherals.terminal.readAsync(question, execution, options)
+        )
     }
 
     /**
@@ -841,47 +850,24 @@ export abstract class GenericEmulator<T, R extends string>
      * the Target's code: the Terminal's Line discipline
      * ([ADR 0036](../../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)).
      */
-    protected async requestCharacter(
+    protected requestCharacter(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
-        try {
-            return await this._peripherals.terminal.readCharAsync(question, execution, options)
-        } finally {
-            this.state.interrupt = undefined
-        }
-    }
-
-    /**
-     * A read of standard input, at most `length` bytes: what is left of the current line, or else a
-     * new one, or no bytes at End of input.
-     */
-    protected async requestStandardInput(
-        length: number,
-        question: string,
-        execution: ExecutionGeneration
-    ) {
-        this.waitOnInput({ type: 'StandardInput', message: question }, execution)
-        try {
-            return await this._peripherals.terminal.readStandardInput(length, question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
+        return this.awaitInput('ReadInput', question, execution, () =>
+            this._peripherals.terminal.readCharAsync(question, execution, options)
+        )
     }
 
     /**
      * One byte of input for a port that reads a byte at a time, the Z80's character port: the rest of
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
-    protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
-        try {
-            return await this._peripherals.terminal.readByte(question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
+    protected requestByte(question: string, execution: ExecutionGeneration) {
+        return this.awaitInput('ReadInput', question, execution, () =>
+            this._peripherals.terminal.readByte(question, execution)
+        )
     }
 
     protected getLastExecutedLine(fallback = -1): number {
@@ -1109,7 +1095,10 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         if (problem === undefined) return
-        const diagnostic = argumentsDiagnostic(problem)
+        const diagnostic = {
+            ...makeGenericDiagnostic(`Arguments: ${problem}`),
+            source: ARGUMENTS_DIAGNOSTIC_SOURCE
+        }
         this.state.compilerDiagnostics = [diagnostic]
         this.state.canExecute = false
         throw new CompilationFailedError(diagnostic.message, [diagnostic])
@@ -1318,18 +1307,32 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.audio = this.interactiveAudio
     }
 
-    // ----- public api ----- //
-    clear(): void {
-        this.executionController.invalidate()
-        this.phase = undefined
+    /** Ends the program's FileSystem session, once the Core no longer runs inside it. */
+    private endExecutionSession(): void {
         this._clearExecution?.()
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
+    }
+
+    /**
+     * Forgets the program built last as a Debug session: its sources and its memory. The library
+     * Files it linked are left to `clear()`, because a test run keeps them with the Core it leaves
+     * readable.
+     */
+    private forgetBuild(): void {
         this._buildSources = undefined
         this.memoryLayout = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
         this.deviceRegions = []
+    }
+
+    // ----- public api ----- //
+    clear(): void {
+        this.executionController.invalidate()
+        this.phase = undefined
+        this.endExecutionSession()
+        this.forgetBuild()
         this._buildLibraryFiles = undefined
         this.undoLedger = []
         this.noteList = []
@@ -1455,6 +1458,7 @@ export abstract class GenericEmulator<T, R extends string>
         programArguments = this._emulatorOptions.programArguments
     ): Promise<ExecutionGeneration> {
         this.clear()
+        const undoSize = normalizeUndoSize(historySize)
         if (scriptedInput !== undefined) this.useScriptedRun(scriptedInput)
         //A Build supersedes live checking the same way a newer check supersedes an older one: the
         //debounced check is disarmed and any check already in flight fails its id comparison when
@@ -1479,7 +1483,7 @@ export abstract class GenericEmulator<T, R extends string>
                 await this.executionController.whileCurrent(execution, this._prepareBuild(sources))
             this.executionController.ensureCurrent(execution)
             this.passProgramArguments(sources, programArguments)
-            const result = await this._compile(sources, historySize)
+            const result = await this._compile(sources, undoSize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
                 this.state.compilerDiagnostics = result.diagnostics
@@ -1500,11 +1504,11 @@ export abstract class GenericEmulator<T, R extends string>
                 execution
             )
             this.executionController.ensureCurrent(execution)
-            this._initialize(historySize)
+            this._initialize(undoSize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
                 Number.isFinite(megabytes) && megabytes >= 0 ? megabytes * 1024 * 1024 : 0,
-                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
+                undoSize,
                 this.fileDescriptorOptions()
             )
             if (output?.saved) this.fileSystemSession.protectBuildOutput(output.path)
@@ -2301,9 +2305,7 @@ export abstract class GenericEmulator<T, R extends string>
                 )
                 return await this.runTestcaseInternal(testcase, haltLimit)
             } finally {
-                this._clearExecution?.()
-                this.fileSystemSession?.stop()
-                this.fileSystemSession = null
+                this.endExecutionSession()
                 this.useInteractiveRun()
                 this.state.canExecute = false
                 this.state.canUndo = false
@@ -2389,7 +2391,7 @@ export abstract class GenericEmulator<T, R extends string>
                 this._writeMemoryBytes(value.address, encoded)
             }
         }
-        await this._runTestcase(testcase, haltLimit)
+        await this._runTestcase(toHaltLimit(haltLimit))
     }
 
     /**
@@ -2470,36 +2472,22 @@ export abstract class GenericEmulator<T, R extends string>
                 console.error(e)
                 this.addError(this._stringifyError(e))
             } finally {
-                this._clearExecution?.()
-                this.fileSystemSession?.stop()
-                this.fileSystemSession = null
+                this.endExecutionSession()
                 this.useInteractiveRun()
             }
         }
         //what `clear()` left is the state the run ended in, and the results so far are no run's
         if (stopped) throw new ExecutionSupersededError()
-        const passedTests = results.filter((r) => r.passed)
+        const passed = results.filter((r) => r.passed).length
+        const failed = results.length - passed
         terminal.prepend('⏳ Running tests...\n\n')
-        if (passedTests.length !== results.length) {
-            terminal.write(
-                `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
-            )
-        }
-        if (passedTests.length > 0) {
-            if (!terminal.output.endsWith('testcases not passed')) {
-                terminal.write('\n')
-            }
-            terminal.write(`\n✅ ${passedTests.length} testcases passed \n`)
-        }
+        if (failed > 0) terminal.write(`\n❌ ${failed} testcases not passed\n`)
+        if (passed > 0) terminal.write(`\n\n✅ ${passed} testcases passed \n`)
         if (testcases.length > 0) {
             //The final Core remains readable for registers, memory, Screen and result reporting,
             //but its isolated FileSystem session has been released. It is therefore a Test result,
             //not an interactive Debug session that can be undone and resumed.
-            this._buildSources = undefined
-            this.memoryLayout = undefined
-            this.heapBounds = undefined
-            this.stackTop = undefined
-            this.deviceRegions = []
+            this.forgetBuild()
             this.state.canExecute = false
             this.state.canUndo = false
         }

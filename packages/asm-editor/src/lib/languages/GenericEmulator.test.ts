@@ -3,11 +3,12 @@ import {
     ANIMATING_PANEL_REFRESH_MS,
     CPU_REGISTER_FILE_ID,
     GenericEmulator,
-    RUNNING_PANEL_REFRESH_MS
+    normalizeUndoSize,
+    RUNNING_PANEL_REFRESH_MS,
+    toHaltLimit
 } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     BuildDownloadError,
-    EmulatorStatus,
     type CompileResult,
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -144,10 +145,6 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return { terminated: this.hasEnded }
     }
 
-    _getStatus(): EmulatorStatus {
-        return this.hasEnded ? EmulatorStatus.Terminated : EmulatorStatus.Running
-    }
-
     _hasTerminated(): boolean {
         return this.hasEnded
     }
@@ -266,14 +263,6 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** Rebuilding the CPU registers out of the Core, which an adapter does after a Core write. */
     rebuildRegistersFromCore(): void {
         this.setRegisters()
-    }
-
-    _getRegisterValuesRecord(): Record<FakeRegister, bigint> {
-        return { R0: 0n }
-    }
-
-    _getRegisterValue(): bigint {
-        return 0n
     }
 
     _setRegisterValue(register: FakeRegister, value: bigint, size?: RegisterSize): void {
@@ -1541,6 +1530,19 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
         expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+
+    it('reads an undo size and a halt limit the way every Core takes them', () => {
+        expect([200, 2.7, 0, -3, Number.NaN, Infinity].map(normalizeUndoSize)).toEqual([
+            200, 2, 0, 0, 0, 0
+        ])
+        const unbounded = Number.MAX_SAFE_INTEGER
+        expect([500, 0, -1, undefined].map(toHaltLimit)).toEqual([
+            500,
+            unbounded,
+            unbounded,
+            unbounded
+        ])
     })
 })
 

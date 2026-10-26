@@ -15,7 +15,7 @@ type SpanToken = {
 }
 
 /** A tokenized line as both Cores shape it, narrowed to what the index keys and checks. */
-type SpanLine = {
+export type SpanLine = {
     readonly sourcePath: string
     /** One-based line in `sourcePath`. */
     readonly sourceLine: number

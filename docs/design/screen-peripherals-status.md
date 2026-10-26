@@ -591,7 +591,7 @@ The built app was served with `vite preview` and driven through the DevTools pro
 
 ### API notes for phase 8
 
-- `MarsDevices` is `attach(core, display)` / `detach()` / `dispose()`, `setDisplay(display)`, `resetScreen(display)`, `flush()` and `resync()`. `flush()` is the per-slice dirty-range re-read and `resync()` the whole-grid one; both are what phase 8 measures if the framebuffer turns out to cost more than the five percent ADR 0007 budgets.
+- `MarsDevices` is `attach(core, display)` / `dispose()`, `setDisplay(display)`, `resetScreen(display)`, `flush()` and `resync()`. `flush()` is the per-slice dirty-range re-read and `resync()` the whole-grid one; both are what phase 8 measures if the framebuffer turns out to cost more than the five percent ADR 0007 budgets.
 - The measurement that matters here: a full 512 by 256 re-read is about 15 ms under node (a 1024 by 1024 one about 135 ms), which is why only the dirty range is read per slice. A full re-read happens on a build, an undo and a display change.
 - `Emulator.setDisplay` is optional and present only on these two adapters; `emulator.setDisplay !== undefined` is how the GUI decides whether to show the popover at all.
 - `MIPS_INSTRUCTIONS_PER_MS` and `RISCV_INSTRUCTIONS_PER_MS` are still the Core agents' 1000, and are now the estimates with the most evidence behind them of the five.
