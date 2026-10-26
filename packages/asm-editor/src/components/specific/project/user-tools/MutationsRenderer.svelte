@@ -17,6 +17,17 @@
     let { steps, statusRegisterNames, language, docked = false }: Props = $props()
 
     const dispatch = createEventDispatcher<{ undo: number }>()
+
+    /**
+     * "Undo to here" takes the program back to just after a row ran: on row i, the i Undos of the
+     * rows above it. Why it cannot on a row, or undefined when it can: the newest row is where the
+     * program already is, and Undo stops at a row above whose effects are not recorded.
+     */
+    function undoBlocked(i: number): string | undefined {
+        if (i === 0) return 'The program is already here'
+        if (steps.slice(0, i).some((row) => row.undoable === false))
+            return 'Undo stops before effects that are not recorded'
+    }
 </script>
 
 <div class="column tab" class:docked>
@@ -31,7 +42,7 @@
             {language}
             flags={statusRegisterNames}
             {step}
-            canUndoToHere={steps.slice(0, i + 1).every((row) => row.undoable !== false)}
+            undoBlocked={undoBlocked(i)}
             on:undo={() => {
                 dispatch('undo', i)
             }}
