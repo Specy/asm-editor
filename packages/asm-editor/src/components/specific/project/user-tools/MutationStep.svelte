@@ -1,6 +1,5 @@
 <script lang="ts">
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import { createEventDispatcher } from 'svelte'
     import FaUndo from '~icons/fa-solid/undo'
     import {
         type ExecutionStep,
@@ -22,9 +21,21 @@
         language: AvailableLanguages
         /** Contrast with the section surface when shown in a docked History panel. */
         docked?: boolean
+        /** "Undo to here" was pressed. */
+        onUndo?: () => void
+        /** "Go to line" was pressed, to show the step's line in the code. */
+        onHighlight?: (step: ExecutionStep) => void
     }
 
-    let { step, flags, language, undoBlocked, docked = false }: Props = $props()
+    let {
+        step,
+        flags,
+        language,
+        undoBlocked,
+        docked = false,
+        onUndo,
+        onHighlight
+    }: Props = $props()
     //each Core records its own status register, so the bits are read with the Target's own layout
     let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
@@ -175,11 +186,6 @@
             ? expanded.filter((other) => other !== index)
             : [...expanded, index]
     }
-
-    const dispatcher = createEventDispatcher<{
-        undo: void
-        highlight: ExecutionStep
-    }>()
 </script>
 
 <div class="column step" class:docked>
@@ -189,9 +195,7 @@
             aria-label="Undo to here"
             disabled={undoBlocked !== undefined}
             class="undo-to-here"
-            onclick={() => {
-                dispatcher('undo')
-            }}
+            onclick={() => onUndo?.()}
         >
             <Icon size={0.75}>
                 <FaUndo />
@@ -229,9 +233,7 @@
                     <button
                         {@attach tooltip('Go to line')}
                         class="go-to-line"
-                        onclick={() => {
-                            dispatcher('highlight', step)
-                        }}
+                        onclick={() => onHighlight?.(step)}
                     >
                         go
                     </button>
