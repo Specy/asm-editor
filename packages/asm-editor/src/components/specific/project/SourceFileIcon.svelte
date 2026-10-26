@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { Component } from 'svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { languageAccent } from '#lib/languages/languageColors.ts'
     import type { ProjectFile } from '#lib/projectFiles.ts'
@@ -15,7 +16,7 @@
     import FaFileVideo from '~icons/fa-solid/file-video'
     import FaMicrochip from '~icons/fa-solid/microchip'
     import OctFileBinary from '~icons/octicon/file-binary-16'
-    import { assemblyLanguageOf, fileIconKind } from './fileIconKind'
+    import { assemblyLanguageOf, fileIconKind, type FileIconKind } from './fileIconKind'
 
     let {
         path,
@@ -32,26 +33,30 @@
     const assemblyLanguage = $derived(
         kind === 'assembly' ? assemblyLanguageOf(path, language) : undefined
     )
-    const label = $derived(
-        {
-            executable: 'ELF executable',
-            image: 'Image',
-            pdf: 'PDF document',
-            audio: 'Audio file',
-            video: 'Video file',
-            binary: 'Binary file',
-            c: 'C source file',
-            cpp: 'C++ source file',
-            header: /\.h$/i.test(path) ? 'C header file' : 'C++ header file',
-            assembly: `${assemblyLanguage} assembly file`,
-            markdown: 'Markdown file',
-            python: 'Python file',
-            table: 'Table file',
-            code: 'Code file',
-            text: 'Text file',
-            file: 'File'
-        }[kind]
-    )
+    /** Each kind's icon and title; C and C++ have a mark of their own, drawn below. */
+    const KINDS: Record<Exclude<FileIconKind, 'c' | 'cpp'>, { icon: Component; label: string }> = {
+        executable: { icon: FaLinux, label: 'ELF executable' },
+        image: { icon: FaFileImage, label: 'Image' },
+        pdf: { icon: FaFilePdf, label: 'PDF document' },
+        audio: { icon: FaFileAudio, label: 'Audio file' },
+        video: { icon: FaFileVideo, label: 'Video file' },
+        binary: { icon: OctFileBinary, label: 'Binary file' },
+        header: { icon: FaFileCode, label: 'C++ header file' },
+        assembly: { icon: FaMicrochip, label: 'Assembly file' },
+        markdown: { icon: FaMarkdown, label: 'Markdown file' },
+        python: { icon: FaPython, label: 'Python file' },
+        table: { icon: FaFileCsv, label: 'Table file' },
+        code: { icon: FaFileCode, label: 'Code file' },
+        text: { icon: FaFileAlt, label: 'Text file' },
+        file: { icon: FaFile, label: 'File' }
+    }
+    const label = $derived.by(() => {
+        if (kind === 'c') return 'C source file'
+        if (kind === 'cpp') return 'C++ source file'
+        if (kind === 'header' && /\.h$/i.test(path)) return 'C header file'
+        if (assemblyLanguage) return `${assemblyLanguage} assembly file`
+        return KINDS[kind].label
+    })
 </script>
 
 <span
@@ -72,32 +77,9 @@
                 />
             {/if}
         </svg>
-    {:else if kind === 'executable'}
-        <FaLinux />
-    {:else if kind === 'image'}
-        <FaFileImage />
-    {:else if kind === 'pdf'}
-        <FaFilePdf />
-    {:else if kind === 'audio'}
-        <FaFileAudio />
-    {:else if kind === 'video'}
-        <FaFileVideo />
-    {:else if kind === 'binary'}
-        <OctFileBinary />
-    {:else if kind === 'header' || kind === 'code'}
-        <FaFileCode />
-    {:else if kind === 'assembly'}
-        <FaMicrochip />
-    {:else if kind === 'markdown'}
-        <FaMarkdown />
-    {:else if kind === 'python'}
-        <FaPython />
-    {:else if kind === 'table'}
-        <FaFileCsv />
-    {:else if kind === 'text'}
-        <FaFileAlt />
     {:else}
-        <FaFile />
+        {@const Icon = KINDS[kind].icon}
+        <Icon />
     {/if}
 </span>
 
