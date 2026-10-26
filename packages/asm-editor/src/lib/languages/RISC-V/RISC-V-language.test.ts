@@ -84,6 +84,16 @@ describe('RISC-V hovers', () => {
         expect(await hover('    .text', 'text')).not.toBe('')
     })
 
+    it('takes no name an object inherits for a register', async () => {
+        const line = 'call constructor'
+        const result = await createRISCVHoverProvider(monacoStub).provideHover(
+            model(line),
+            { lineNumber: 1, column: line.indexOf('constructor') + 1 } as monaco.Position,
+            {} as monaco.CancellationToken
+        )
+        expect(result).toBeNull()
+    })
+
     it('names the category and the tags of the forms the Target accepts', async () => {
         const addw = await hover('addw a0, a1, a2', 'addw', 0, true)
         expect(addw).toMatch(/^\*\*addw\*\*/)

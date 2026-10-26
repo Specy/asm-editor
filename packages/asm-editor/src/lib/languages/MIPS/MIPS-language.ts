@@ -4,24 +4,18 @@ import {
     MIPSAddressingModes,
     mipsDirectivesMap,
     mipsInstructionMap,
-    mipsInstructionsVariants,
     mipsVariantOperands,
     type MIPSInstruction
 } from './MIPS-documentation'
 import { MIPSNumericRegisterNames } from './MIPS-registers'
-import {
-    runtimeFunctionDocumentation,
-    runtimeFunctionsForModel
-} from '#lib/sourceRuntime/runtimeLanguage.ts'
-import {
-    instructionSnippet,
-    parseAssemblyLine,
-    type AssemblyTextOptions
-} from '#lib/languages/service/assemblyText.ts'
-import { operandSignatureHelp } from '#lib/languages/service/operandSignatureHelp.ts'
-import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
-import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
+import type { AssemblyTextOptions } from '#lib/languages/service/assemblyText.ts'
 import { mipsInstructionDocument } from '#lib/documentation/mars/instructionDocument.ts'
+import {
+    createMarsCompletion,
+    createMarsHover,
+    createMarsSignatureHelp,
+    type MarsDialect
+} from '#lib/languages/mars/marsLanguage.ts'
 
 export const MIPS_TEXT_OPTIONS = {
     comment: '#',
@@ -32,406 +26,40 @@ export const MIPS_TEXT_OPTIONS = {
     ]
 } satisfies AssemblyTextOptions
 
-const MIPSCompletionRegisterNames = [
-    ...MIPSNumericRegisterNames,
-    ...Array.from({ length: 32 }, (_, index) => `$f${index}`)
-]
-
-type CompletionMetadata = {
-    detail?: string
-    documentation?: string
-    insertText?: string
-    label?: string
-    priority?: number
-}
-type RegisterMetadata = Required<
-    Pick<CompletionMetadata, 'detail' | 'documentation' | 'insertText' | 'label'>
->
-
-function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
-    return Object.prototype.hasOwnProperty.call(value, key)
-}
-
-function insertTextWithTypedCase(value: string, typed: string): string {
-    return typed && typed === typed.toUpperCase() && typed !== typed.toLowerCase()
-        ? value.toUpperCase()
-        : value
-}
-
-function splitAtChars(text: string, chars: string[]) {
-    const result = []
-    let current = ''
-    for (const char of text) {
-        if (chars.includes(char)) {
-            result.push(current)
-            current = ''
-        } else {
-            current += char
-        }
-    }
-    result.push(current)
-    return result.filter((r) => r.length > 0)
-}
-
-function parseArgs(args: string) {
-    return splitAtChars(args, [',', ' ', '\t']).map((arg) => arg.trim())
-}
-
-function getPossibleInstruction(args: string[]): { instruction: string; other: string[] } | null {
-    const clone = [...args]
-    if (clone.length === 0) return { instruction: '', other: [] }
-    //label
-    if (clone[0].endsWith(':')) {
-        if (!clone[1]) return { instruction: '', other: [] }
-        //macro
-        if (clone[1].startsWith('.')) return null
-        return { instruction: clone[1], other: clone.slice(2) }
-    } else if (clone[0].includes(':')) {
-        //label:instruction
-        const [, instruction = ''] = clone[0].split(':', 2)
-        if (!instruction) return null
-        if (instruction.startsWith('.')) return null
-        return { instruction, other: clone.slice(1) }
-    }
-    return { instruction: clone[0], other: clone.slice(1) }
+/**
+ * MIPS writes its registers with a `$`, which Monaco's word leaves out: completion offers registers
+ * once the `$` is typed and inserts the rest of the name, and a hover finds the register by the name
+ * after it.
+ */
+const MIPS_DIALECT: MarsDialect<MIPSInstruction> = {
+    textOptions: MIPS_TEXT_OPTIONS,
+    triggerCharacters: ['.', ',', ' ', '$'],
+    instructions: mipsInstructionMap,
+    operands: mipsVariantOperands,
+    directives: () => mipsDirectivesMap,
+    registers: [
+        ...MIPSNumericRegisterNames,
+        ...Array.from({ length: 32 }, (_, index) => `$f${index}`)
+    ],
+    registerPrefix: (lastArg) => (lastArg.startsWith('$') ? lastArg.toLowerCase() : undefined),
+    registerInsert: (register) => register.substring(1),
+    hoverRegister: (word) => `$${word.toLowerCase()}`,
+    addressingModes: MIPSAddressingModes,
+    runtimeLanguage: 'MIPS',
+    document: mipsInstructionDocument,
+    docsPath: 'mips'
 }
 
 export function createMIPSCompletion(monaco: MonacoType): monaco.languages.CompletionItemProvider {
-    return {
-        triggerCharacters: ['.', ',', ' ', '$'],
-        provideCompletionItems: (model, position) => {
-            const data: string = model.getValueInRange({
-                startLineNumber: position.lineNumber,
-                startColumn: 1,
-                endLineNumber: position.lineNumber,
-                endColumn: position.column
-            })
-            if (parseAssemblyLine(data, MIPS_TEXT_OPTIONS).comment) return { suggestions: [] }
-            const lines = model.getValue().split('\n')
-            const labels = lines
-                .map((l) => l.trim())
-                .filter((l) => l.endsWith(':'))
-                .map((l) => l.substring(0, l.length - 1))
-            const args = parseArgs(data)
-            const word = model.getWordUntilPosition(position)
-            const range = new monaco.Range(
-                position.lineNumber,
-                word.startColumn,
-                position.lineNumber,
-                word.endColumn
-            )
-            const suggestions: monaco.languages.CompletionItem[] = []
-            const ins = getPossibleInstruction(args)
-            const lastArg = args[args.length - 1]
-            const registerPrefix = lastArg?.startsWith('$') ? lastArg.toLowerCase() : undefined
-            if (registerPrefix) {
-                suggestions.push(
-                    ...MIPSCompletionRegisterNames.filter((register) =>
-                        register.toLowerCase().startsWith(registerPrefix)
-                    ).map((r) => {
-                        return {
-                            label: r,
-                            kind: monaco.languages.CompletionItemKind.Variable,
-                            insertText: r.substring(1),
-                            documentation: `Register ${r}`,
-                            detail: r,
-                            range
-                        }
-                    })
-                )
-            }
-
-            if (lastArg?.startsWith('.')) {
-                const directivePrefix = lastArg.slice(1).toLowerCase()
-                suggestions.push(
-                    ...Object.entries(mipsDirectivesMap)
-                        .filter(([key]) => key.startsWith(directivePrefix))
-                        .map(([key, value]) => {
-                            return {
-                                label: key,
-                                kind: monaco.languages.CompletionItemKind.Keyword,
-                                insertText: insertTextWithTypedCase(key, lastArg.slice(1)),
-                                documentation: value.description,
-                                detail: value.description,
-                                range
-                            }
-                        })
-                )
-            }
-            if (ins) {
-                const instructionPrefix = ins.instruction.toLowerCase()
-                const match = mipsInstructionMap.get(instructionPrefix)
-                if (match) {
-                    const labelsSuggestions = labels.map((l) => {
-                        return {
-                            label: l,
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: l,
-                            documentation: `Label ${l}`,
-                            detail: 'Label',
-                            sortText: `${1000 - 5}`,
-                            range
-                        }
-                    })
-
-                    if (ins.other.length === 0) {
-                        const prefixed = mipsInstructionsVariants.filter(
-                            (i) =>
-                                i[0].name.startsWith(instructionPrefix) &&
-                                i[0].name !== instructionPrefix
-                        )
-                        suggestions.push(
-                            ...[...prefixed, match].map((i) => {
-                                return {
-                                    label: i[0].name,
-                                    kind: monaco.languages.CompletionItemKind.Function,
-                                    insertText: insertTextWithTypedCase(i[0].name, ins.instruction),
-                                    documentation:
-                                        i[0].example + ' ' + i.map((i) => i.description).join('\n'),
-                                    detail: i.map((i) => i.description).join('\n'),
-                                    range
-                                }
-                            })
-                        )
-                        if (!/[ \t]$/.test(data)) {
-                            for (const variants of [...prefixed, match]) {
-                                const operands = mipsVariantOperands(variants[0])
-                                if (operands.length === 0) continue
-                                suggestions.push({
-                                    label: {
-                                        label: variants[0].name,
-                                        description: operands.join(', ')
-                                    },
-                                    kind: monaco.languages.CompletionItemKind.Snippet,
-                                    insertText: instructionSnippet(
-                                        insertTextWithTypedCase(variants[0].name, ins.instruction),
-                                        operands
-                                    ),
-                                    insertTextRules:
-                                        monaco.languages.CompletionItemInsertTextRule
-                                            ?.InsertAsSnippet,
-                                    detail: 'Instruction snippet',
-                                    documentation: variants[0].description,
-                                    sortText: `0999${variants[0].name}`,
-                                    range
-                                })
-                            }
-                        }
-                    }
-
-                    const possibleArgs = match.flatMap((m) => {
-                        const suggestedArg = m.args[ins.other.length]
-                        if (suggestedArg) {
-                            return suggestedArg.map((suggestedArg) => {
-                                const metadata = hasOwnKey(CompletionMap, suggestedArg.type)
-                                    ? CompletionMap[suggestedArg.type]
-                                    : undefined
-                                return {
-                                    label: metadata?.label ?? suggestedArg.value,
-                                    kind: monaco.languages.CompletionItemKind.Variable,
-                                    internal_type: suggestedArg.type,
-                                    insertText: metadata?.insertText ?? suggestedArg.value,
-                                    documentation: suggestedArg.value,
-                                    detail: suggestedArg.type,
-                                    sortText: `${1000 - (metadata?.priority ?? 0)}`,
-                                    range
-                                }
-                            })
-                        }
-                        return []
-                    })
-                    const dedupedArgs = possibleArgs.filter(
-                        (arg, index, self) => self.findIndex((a) => a.label === arg.label) === index
-                    )
-                    if (dedupedArgs.find((a) => a.internal_type === 'IDENTIFIER')) {
-                        suggestions.push(...labelsSuggestions)
-                        //the Runtime library's functions, when the Build links it
-                        suggestions.push(
-                            ...runtimeFunctionsForModel(model).map((entry) => ({
-                                label: entry.name,
-                                kind: monaco.languages.CompletionItemKind.Function,
-                                insertText: entry.name,
-                                detail: entry.prototype,
-                                documentation: {
-                                    value: runtimeFunctionDocumentation(entry, 'MIPS')
-                                },
-                                sortText: `${1000 - 4}${entry.name}`,
-                                range
-                            }))
-                        )
-                    }
-                    const onlyRegs = dedupedArgs.filter(
-                        (a) =>
-                            a.internal_type === 'REGISTER_NAME' ||
-                            a.internal_type === 'FP_REGISTER_NAME'
-                    )
-                    const rest = dedupedArgs.filter(
-                        (a) =>
-                            a.internal_type !== 'REGISTER_NAME' &&
-                            a.internal_type !== 'FP_REGISTER_NAME'
-                    )
-                    suggestions.push(...rest, ...onlyRegs)
-                } else {
-                    const prefixed = mipsInstructionsVariants.filter((i) =>
-                        i[0].name.startsWith(instructionPrefix)
-                    )
-                    suggestions.push(
-                        ...prefixed.map((i) => {
-                            return {
-                                label: i[0].name,
-                                kind: monaco.languages.CompletionItemKind.Function,
-                                insertText: insertTextWithTypedCase(i[0].name, ins.instruction),
-                                documentation:
-                                    i[0].example + ' ' + i.map((i) => i.description).join('\n'),
-                                detail: i.map((i) => i.description).join('\n'),
-                                range
-                            }
-                        })
-                    )
-                    for (const variants of prefixed) {
-                        const operands = mipsVariantOperands(variants[0])
-                        if (operands.length === 0) continue
-                        suggestions.push({
-                            label: {
-                                label: variants[0].name,
-                                description: operands.join(', ')
-                            },
-                            kind: monaco.languages.CompletionItemKind.Snippet,
-                            insertText: instructionSnippet(
-                                insertTextWithTypedCase(variants[0].name, ins.instruction),
-                                operands
-                            ),
-                            insertTextRules:
-                                monaco.languages.CompletionItemInsertTextRule?.InsertAsSnippet,
-                            detail: 'Instruction snippet',
-                            documentation: variants[0].description,
-                            sortText: `0999${variants[0].name}`,
-                            range
-                        })
-                    }
-                }
-            }
-            return {
-                suggestions
-            }
-        },
-        resolveCompletionItem(item) {
-            const label = typeof item.label === 'string' ? item.label : item.label.label
-            const metadata = hasOwnKey(CompletionMap, label) ? CompletionMap[label] : undefined
-            return {
-                ...metadata,
-                ...item
-            }
-        }
-    }
-}
-
-const hoverDocuments = new Map<string, InstructionDocument>()
-
-/**
- * An instruction's hover: the same header and first rows as its page and its panel row
- * ([the plan](../../../../../docs/design/instruction-layout-plan.md), decision 22), built once per
- * set of forms.
- */
-function formatInstructionHover(ins: MIPSInstruction[]) {
-    const name = ins[0].name
-    const key = `${name}\0${ins.length}`
-    let document = hoverDocuments.get(key)
-    if (!document) {
-        document = mipsInstructionDocument(name, ins)
-        hoverDocuments.set(key, document)
-    }
-    return documentHover(document, { href: `/documentation/mips/instruction/${name}` }).join('\n\n')
+    return createMarsCompletion(monaco, MIPS_DIALECT)
 }
 
 export function createMIPSHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
-    return {
-        provideHover: (model, position) => {
-            const line = model.getLineContent(position.lineNumber).trim()
-            const contents: monaco.IMarkdownString[] = []
-            const text = model.getValue()
-            const labels = text
-                .split('\n')
-                .map((l) => l.trim())
-                .filter((l) => l.endsWith(':'))
-                .map((l) => l.substring(0, l.length - 1))
-
-            const word = model.getWordAtPosition(position)?.word
-            if (!word) return null
-            const wordInfo = model.getWordAtPosition(position)
-            if (!wordInfo) return null
-            const range = new monaco.Range(
-                position.lineNumber,
-                wordInfo.startColumn,
-                position.lineNumber,
-                wordInfo.endColumn
-            )
-            if (word && line.startsWith(word) && line.includes(':')) {
-                contents.push({
-                    value: `Label **${word}**`
-                })
-            }
-            if (word && labels.includes(word) && !line.startsWith(word)) {
-                contents.push({
-                    value: `Label **${word}**`
-                })
-            }
-            const ins = mipsInstructionMap.get(word.toLowerCase())
-            if (ins) {
-                contents.push({
-                    value: formatInstructionHover(ins)
-                })
-            }
-            const register = MIPSRegistersMap[`$${word.toLowerCase()}`]
-            if (register) {
-                contents.push({
-                    value: register.documentation
-                })
-            }
-            const library = runtimeFunctionsForModel(model).find((entry) => entry.name === word)
-            if (library && !labels.includes(word)) {
-                contents.push({ value: runtimeFunctionDocumentation(library, 'MIPS') })
-            }
-            const lowerWord = word.toLowerCase()
-            if (hasOwnKey(mipsDirectivesMap, lowerWord)) {
-                contents.push({ value: mipsDirectivesMap[lowerWord].description })
-            }
-
-            return contents.length > 0 ? { range, contents } : null
-        }
-    }
+    return createMarsHover(monaco, MIPS_DIALECT)
 }
 
 export function createMIPSSignatureHelpProvider(
     _monaco: MonacoType
 ): monaco.languages.SignatureHelpProvider {
-    return operandSignatureHelp(MIPS_TEXT_OPTIONS, [' ', ',', '('], (operation) =>
-        mipsInstructionMap.get(operation)?.map((variant) => {
-            const operands = mipsVariantOperands(variant)
-            return {
-                label: `${variant.name}${operands.length ? ` ${operands.join(', ')}` : ''}`,
-                documentation: variant.description,
-                parameters: operands
-            }
-        })
-    )
-}
-
-const MIPSRegistersMap: Partial<Record<string, RegisterMetadata>> = Object.fromEntries(
-    MIPSCompletionRegisterNames.map((r) => {
-        return [
-            r,
-            {
-                detail: r,
-                label: r,
-                insertText: r,
-                documentation: `Register ${r}`
-            }
-        ]
-    })
-)
-
-const CompletionMap: Partial<Record<string, CompletionMetadata>> = {
-    ...MIPSRegistersMap,
-    ...MIPSAddressingModes
+    return createMarsSignatureHelp(MIPS_DIALECT)
 }

@@ -64,6 +64,10 @@ Implemented so far:
   addresses and machine bytes/words when the Core exposes them; S68K shows addresses only because
   it interprets structured instructions and does not encode opcodes. These details intentionally do
   not render inline, where they made assembly source noisy and caused vertical displacement.
+- The MIPS/RISC-V duplication Phase 7 names is gone: one completion, hover and signature help
+  provider serves both, given each language's dialect (`languages/mars/marsLanguage.ts`). x86, Z80,
+  MIPS and RISC-V build signature help from one operand factory
+  (`languages/service/operandSignatureHelp.ts`).
 
 Still planned:
 
