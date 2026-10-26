@@ -374,28 +374,10 @@
     }
 
     .remove button {
-        display: grid;
-        place-items: center;
+        @include remove-button;
         width: 100%;
         height: 2.1rem;
         padding: 0 0.6rem;
-        color: var(--hint);
-        background-color: transparent;
-        cursor: pointer;
-        opacity: 0.6;
-        transition:
-            color 0.15s,
-            opacity 0.15s;
-
-        :global(svg) {
-            width: 0.55rem;
-        }
-
-        &:hover,
-        &:focus-visible {
-            color: var(--tc-fail);
-            opacity: 1;
-        }
     }
 
     .add-cell {
@@ -404,14 +386,5 @@
 
     .add-row {
         @include add-row;
-    }
-
-    .visually-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
     }
 </style>
