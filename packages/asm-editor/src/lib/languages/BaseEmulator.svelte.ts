@@ -16,11 +16,6 @@ import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
-export type CompilationError = {
-    type: 'raw'
-    message: string
-}
-
 /**
  * A successful assembly may still carry warnings/suggestions, a failed one carries the whole list
  * (errors *and* warnings) so nothing the assembler said is lost.
@@ -91,11 +86,6 @@ export class BuildDownloadError extends Error {
     }
 }
 
-export enum EmulatorStatus {
-    Terminated = 0,
-    Running = 1
-}
-
 export type Instruction = {
     address: bigint
     lineNumber: number
@@ -132,18 +122,6 @@ export abstract class BaseEmulator<R extends string> {
     /** The declared Register files other than the CPU one, in the order the panel shows them. */
     getRegisterFileDescriptors(): RegisterFileDescriptor[] {
         return this._registerFiles
-    }
-
-    getSystemSize(): RegisterSize {
-        return this._systemSize
-    }
-
-    getEndianness(): 'little' | 'big' {
-        return this._endianness
-    }
-
-    getRegisterNames(): R[] {
-        return this._registerNames
     }
 
     abstract _initialize(undoSize: number): void
@@ -230,8 +208,6 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _step(): Promise<{ terminated: boolean }>
 
-    abstract _getStatus(): EmulatorStatus
-
     abstract _writeMemoryBytes(address: bigint, data: Uint8Array): void
 
     abstract _readMemoryBytes(address: bigint, length: bigint): Uint8Array
@@ -316,10 +292,6 @@ export abstract class BaseEmulator<R extends string> {
     abstract _getInstructionAt(address: bigint): Instruction | null
 
     abstract _getRegisterValues(): bigint[]
-
-    abstract _getRegisterValuesRecord(): Record<R, bigint>
-
-    abstract _getRegisterValue(register: R, size?: RegisterSize): bigint
 
     abstract _setRegisterValue(register: R, value: bigint, size?: RegisterSize): void
 

@@ -7,7 +7,6 @@ import {
 } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     BuildDownloadError,
-    EmulatorStatus,
     type CompileResult,
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -144,10 +143,6 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return { terminated: this.hasEnded }
     }
 
-    _getStatus(): EmulatorStatus {
-        return this.hasEnded ? EmulatorStatus.Terminated : EmulatorStatus.Running
-    }
-
     _hasTerminated(): boolean {
         return this.hasEnded
     }
@@ -266,14 +261,6 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** Rebuilding the CPU registers out of the Core, which an adapter does after a Core write. */
     rebuildRegistersFromCore(): void {
         this.setRegisters()
-    }
-
-    _getRegisterValuesRecord(): Record<FakeRegister, bigint> {
-        return { R0: 0n }
-    }
-
-    _getRegisterValue(): bigint {
-        return 0n
     }
 
     _setRegisterValue(register: FakeRegister, value: bigint, size?: RegisterSize): void {

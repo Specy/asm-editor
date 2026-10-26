@@ -15,11 +15,7 @@ import {
     S68k,
     Size
 } from '@specy/s68k'
-import {
-    type CompileResult,
-    EmulatorStatus,
-    type Instruction
-} from '#lib/languages/BaseEmulator.svelte.ts'
+import { type CompileResult, type Instruction } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -465,18 +461,6 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return BigInt(this.interpreter?.getSp() ?? 0)
     }
 
-    _getRegisterValue(
-        register: M68KRegisterName,
-        size: RegisterSize | undefined = RegisterSize.Long
-    ): bigint {
-        return BigInt(
-            this.requireInterpreter().getRegisterValue(
-                registerNameToType(register),
-                toCoreSize(size)
-            )
-        )
-    }
-
     _getRegisterValues(): bigint[] {
         const interpreter = this.interpreter
         if (!interpreter) return new Array(this._registerNames.length).fill(0n)
@@ -484,17 +468,6 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             .getCpuSnapshot()
             .getRegistersValues()
             .map((value) => BigInt(value))
-    }
-
-    _getRegisterValuesRecord(): Record<M68KRegisterName, bigint> {
-        const values = this._getRegisterValues()
-        return Object.fromEntries(
-            this._registerNames.map((name, i) => [name, values[i] ?? 0n])
-        ) as Record<M68KRegisterName, bigint>
-    }
-
-    _getStatus(): EmulatorStatus {
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {

@@ -28,7 +28,6 @@ import {
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     BuildDownloadError,
-    EmulatorStatus,
     type CompileResult,
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -1310,27 +1309,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return names.map((_, index) => this.x87Blanks[index] ?? false)
     }
 
-    _getRegisterValue(
-        register: X86RegisterName,
-        size: RegisterSize | undefined = RegisterSize.Double
-    ): bigint {
-        return this.requireCore().getRegisterValue(
-            normalizeRegisterName(register),
-            CORE_REGISTER_SIZE[size]
-        )
-    }
-
     _getRegisterValues(): bigint[] {
         return this.core?.getRegisterValues() ?? new Array(this._registerNames.length).fill(0n)
-    }
-
-    _getRegisterValuesRecord(): Record<X86RegisterName, bigint> {
-        if (!this.core) {
-            return Object.fromEntries(
-                this._registerNames.map((register) => [register, 0n])
-            ) as Record<X86RegisterName, bigint>
-        }
-        return this.core.getRegisterValuesRecord()
     }
 
     _getMemoryLayout() {
@@ -1462,10 +1442,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _getSp(): bigint {
         return this.core?.getSp() ?? 0n
-    }
-
-    _getStatus(): EmulatorStatus {
-        return toLocalStatus(this.core?.getStatus() ?? CoreEmulatorStatus.NotReady)
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
@@ -1994,11 +1970,6 @@ function toDoubleBits(value: number): bigint {
 function fromDoubleBits(bits: bigint): number {
     doubleBits.setBigUint64(0, bits & 0xffffffffffffffffn, true)
     return doubleBits.getFloat64(0, true)
-}
-
-function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
-    if (status === CoreEmulatorStatus.Terminated) return EmulatorStatus.Terminated
-    return EmulatorStatus.Running
 }
 
 function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {

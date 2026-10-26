@@ -28,11 +28,7 @@ import {
     type RiscvTokenizedLine,
     StopReason
 } from '@specy/risc-v'
-import {
-    type CompileResult,
-    EmulatorStatus,
-    type Instruction
-} from '#lib/languages/BaseEmulator.svelte.ts'
+import { type CompileResult, type Instruction } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -755,14 +751,6 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         return this.is64Bit ? BigInt(riscv.stackPointerLong) : BigInt(riscv.stackPointer)
     }
 
-    _getRegisterValue(register: RISCVRegisterName, _size?: RegisterSize): bigint {
-        const index = this._registerNames.indexOf(register)
-        if (index === -1) throw new Error(`Unsupported register: ${register}`)
-        //the core has no 64 bit safe single register getter (`getRegisterValueLong` returns the
-        //core's internal BigInteger object), so read the whole file and index into it
-        return this._getRegisterValues()[index] ?? 0n
-    }
-
     _getRegisterValues(): bigint[] {
         const riscv = this.riscv
         if (!riscv) return new Array(this._registerNames.length).fill(0n)
@@ -780,17 +768,6 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             ...Array.from(riscv.getRegistersValues(), (value) => BigInt(value)),
             BigInt(riscv.programCounter)
         ]
-    }
-
-    _getRegisterValuesRecord(): Record<RISCVRegisterName, bigint> {
-        const values = this._getRegisterValues()
-        return Object.fromEntries(
-            this._registerNames.map((name, i) => [name, values[i] ?? 0n])
-        ) as Record<RISCVRegisterName, bigint>
-    }
-
-    _getStatus(): EmulatorStatus {
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
     /**

@@ -11,11 +11,7 @@ import {
     StopReason,
     Z80Machine
 } from '@specy/z80'
-import {
-    type CompileResult,
-    EmulatorStatus,
-    type Instruction
-} from '#lib/languages/BaseEmulator.svelte.ts'
+import { type CompileResult, type Instruction } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -451,10 +447,6 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.trs80?.resync()
     }
 
-    _getStatus(): EmulatorStatus {
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
-    }
-
     _hasTerminated(): boolean {
         const machine = this.machine
         if (!machine) return false
@@ -659,18 +651,6 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const regs = this.machine?.z80.regs
         if (!regs) return new Array(this._registerNames.length).fill(0n)
         return this._registerNames.map((name) => BigInt(regs[CORE_REGISTER_BY_NAME[name]]))
-    }
-
-    _getRegisterValuesRecord(): Record<Z80RegisterName, bigint> {
-        const values = this._getRegisterValues()
-        return Object.fromEntries(
-            this._registerNames.map((name, i) => [name, values[i] ?? 0n])
-        ) as Record<Z80RegisterName, bigint>
-    }
-
-    _getRegisterValue(register: Z80RegisterName, _size?: RegisterSize): bigint {
-        const regs = this.requireMachine().z80.regs
-        return BigInt(regs[coreRegisterKey(register)])
     }
 
     _setRegisterValue(register: Z80RegisterName, value: bigint, _size?: RegisterSize): void {

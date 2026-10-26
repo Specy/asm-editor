@@ -26,11 +26,7 @@ import {
     type RegisterName,
     StopReason
 } from '@specy/mips'
-import {
-    type CompileResult,
-    EmulatorStatus,
-    type Instruction
-} from '#lib/languages/BaseEmulator.svelte.ts'
+import { type CompileResult, type Instruction } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
     type BuildArtifact,
     type Diagnostic,
@@ -751,11 +747,6 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         return BigInt(this.mips?.stackPointer ?? 0)
     }
 
-    _getRegisterValue(register: MIPSRegisterName, _size?: RegisterSize): bigint {
-        const name = toNumericRegisterName(register)
-        return BigInt(this.requireMips().getRegisterValue(name))
-    }
-
     _getRegisterValues(): bigint[] {
         const mips = this.mips
         if (!mips) return new Array(this._registerNames.length).fill(0n)
@@ -821,17 +812,6 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             return
         }
         throw new Error(`Unknown register file: ${id}`)
-    }
-
-    _getRegisterValuesRecord(): Record<MIPSRegisterName, bigint> {
-        const values = this._getRegisterValues()
-        return Object.fromEntries(
-            this._registerNames.map((name, i) => [name, values[i] ?? 0n])
-        ) as Record<MIPSRegisterName, bigint>
-    }
-
-    _getStatus(): EmulatorStatus {
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
     /**
