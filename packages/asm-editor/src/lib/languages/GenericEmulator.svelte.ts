@@ -20,7 +20,6 @@ import {
     type BuildArtifact,
     createMemoryTab,
     resetMemoryTab,
-    type Diagnostic,
     type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
