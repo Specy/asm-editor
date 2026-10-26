@@ -61,6 +61,7 @@ export function listingTokenAt(line: string, column: number): ListingToken | und
 /** Lookups on one Listing, built when first needed and kept with it. */
 export class ListingIndex {
     private labelsByName?: Map<string, ListingLabel>
+    private labelsByAddress?: Map<number, ListingLabel[]>
     private labelsByDemangledName?: Map<string, ListingLabel | null>
     private lineStarts?: Uint32Array
     private demangles?: boolean
@@ -89,6 +90,32 @@ export class ListingIndex {
             return owner ? this.labelsByName.get(owner.name + name) : undefined
         }
         return this.labelsByName.get(name)
+    }
+
+    /** The labels at a link-time address, in line order: aliases first, the name operands use last. */
+    labelsAt(address: number): readonly ListingLabel[] {
+        if (!this.labelsByAddress) {
+            const index = new Map<number, ListingLabel[]>()
+            for (const label of this.listing.labels) {
+                const list = index.get(label.address)
+                if (list) list.push(label)
+                else index.set(label.address, [label])
+            }
+            this.labelsByAddress = index
+        }
+        return this.labelsByAddress.get(address) ?? []
+    }
+
+    /**
+     * The label operands use for a link-time address: the last of its labels that is no jump
+     * target, after its aliases
+     * ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md), decision
+     * 6).
+     */
+    operandLabel(address: number): ListingLabel | undefined {
+        return this.labelsAt(address)
+            .filter((label) => label.kind !== 'block')
+            .at(-1)
     }
 
     /**

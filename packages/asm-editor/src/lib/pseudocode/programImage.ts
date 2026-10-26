@@ -9,6 +9,7 @@ import type { DemangledName } from '#lib/languages/demangle/demangledNames.ts'
 import type { ElfAnalysis } from '#lib/listing/decoder.ts'
 import { versionedName } from '#lib/listing/elfModel.ts'
 import type { Listing, ListingLabel } from '#lib/listing/listing.ts'
+import { ListingIndex } from '#lib/listing/listingNavigation.ts'
 import { printableSymbolName } from '#lib/listing/names.ts'
 
 /**
@@ -184,14 +185,12 @@ function loadRegions(
 }
 
 /**
- * The name operands use at each address the labels name: the last of its labels, since the
- * Listing writes the aliases first. Block labels are inside functions, which have names already.
+ * The label operands use at each address the labels name ({@link ListingIndex.operandLabel}).
+ * Block labels are inside functions, which have names already.
  */
-function primaryLabels(listing: Listing): Map<number, ListingLabel> {
-    const primary = new Map<number, ListingLabel>()
-    for (const label of listing.labels)
-        if (label.kind !== 'block') primary.set(label.address, label)
-    return primary
+function primaryLabels(listing: Listing): ListingLabel[] {
+    const index = ListingIndex.of(listing)
+    return listing.labels.filter((label) => index.operandLabel(label.address) === label)
 }
 
 /** `[start, end)` pairs as a map from start to length. */
@@ -232,7 +231,7 @@ function dataNames(
     const strings = pairLengths(listing.holders?.strings)
     const unversioned = unversionedObjects(listing, analysis)
     const data: ProgramData[] = []
-    for (const label of primaryLabels(listing).values()) {
+    for (const label of primaryLabels(listing)) {
         if (label.kind !== 'data' && label.kind !== 'string') continue
         const size =
             label.origin === 'got'
@@ -278,7 +277,7 @@ function functionSlots(
     for (const label of listing.labels)
         if (label.kind === 'function' && label.renamed) renamed.add(label.renamed.from)
     const pointers: ProgramPointer[] = []
-    for (const label of primaryLabels(listing).values()) {
+    for (const label of primaryLabels(listing)) {
         if (label.origin !== 'got') continue
         const relocation = relocations.get(label.address)
         if (!relocation?.symbol || objects.has(relocation.symbol)) continue

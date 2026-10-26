@@ -345,12 +345,11 @@ export function pseudocodeTokenAt(
  * the address (the last there, after its aliases), else the line holding it; -1 for none.
  */
 export function listingLineOfTarget(listing: Listing, target: number): number {
-    const fn = functionStartingAt(listing, target)
-    if (fn) return fn.line
-    let labelLine = -1
-    for (const label of listing.labels)
-        if (label.address === target && label.kind !== 'block') labelLine = label.line
-    return labelLine >= 0 ? labelLine : lineOfAddress(listing, target)
+    return (
+        functionStartingAt(listing, target)?.line ??
+        ListingIndex.of(listing).operandLabel(target)?.line ??
+        lineOfAddress(listing, target)
+    )
 }
 
 /**
@@ -360,9 +359,6 @@ export function listingLineOfTarget(listing: Listing, target: number): number {
  */
 export function listingLabelOfTarget(listing: Listing, target: number): ListingLabel | undefined {
     const fn = functionStartingAt(listing, target)
-    if (fn) return ListingIndex.of(listing).label(fn.name, fn.line)
-    let found: ListingLabel | undefined
-    for (const label of listing.labels)
-        if (label.address === target && label.kind !== 'block') found = label
-    return found
+    const index = ListingIndex.of(listing)
+    return fn ? index.label(fn.name, fn.line) : index.operandLabel(target)
 }
