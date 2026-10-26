@@ -124,6 +124,27 @@ function createProjectStore() {
         return result
     }
 
+    /**
+     * Gives a stored Project a new name and description, saving the rest of it as it is stored
+     * now: a list's copy may be older than what a Workbench in another tab saved since.
+     */
+    async function saveDetails(
+        id: string,
+        details: { name: string; description: string }
+    ): Promise<SaveResult> {
+        let stored: Project | undefined
+        try {
+            stored = await db.getProject(id)
+        } catch (error) {
+            console.error(error)
+            return { linked: 'none', local: 'failed', error }
+        }
+        if (!stored) return { linked: 'none', local: 'failed' }
+        stored.name = details.name
+        stored.description = details.description
+        return save(stored)
+    }
+
     async function deleteProject(project: Project): Promise<void> {
         await db.deleteProject(project)
         await load()
@@ -180,6 +201,7 @@ function createProjectStore() {
         load,
         addProject,
         save,
+        saveDetails,
         deleteProject,
         importFromExternal,
         setFileHandle,

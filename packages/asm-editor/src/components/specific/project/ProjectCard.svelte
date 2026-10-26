@@ -16,6 +16,7 @@
     import FaShareAlt from '~icons/fa-solid/share-alt'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import { Prompt } from '#stores/promptStore.svelte.ts'
+    import { toast } from '#stores/toastStore.ts'
     import { createEventDispatcher } from 'svelte'
     import { isSingleSourceProject } from '#lib/projectArchive.ts'
     import { resolve } from '$app/paths'
@@ -41,16 +42,25 @@
     const created = $derived(new Date(project.createdAt))
     const edited = $derived(new Date(project.updatedAt))
 
-    function save() {
-        project.name = textContent
-        project.description = descriptionContent
-        ProjectStore.save(project)
+    /** Saves the name and description when they changed, leaving the rest as it is stored. */
+    async function save() {
+        const name = textContent
+        const description = descriptionContent
+        if (name === (project.name || 'Unnamed') && description === (project.description || ''))
+            return
+        const result = await ProjectStore.saveDetails(project.id, { name, description })
+        if (result.local === 'failed') toast.error(`Could not save "${name}" in the browser`)
     }
     async function deleteProject() {
         const result = await Prompt.confirm(`Are you sure you want to delete "${project.name}"?`)
         if (result === null) return
         if (!result) return
-        ProjectStore.deleteProject(project)
+        try {
+            await ProjectStore.deleteProject(project)
+        } catch (error) {
+            console.error(error)
+            toast.error(`Could not delete "${project.name}"`)
+        }
     }
 </script>
 
