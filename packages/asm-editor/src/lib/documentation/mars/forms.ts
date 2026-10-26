@@ -25,10 +25,10 @@ export function groupMarsForms<F extends { name: string }>(forms: readonly F[]) 
 }
 
 /**
- * A form's operands as the hovers and completions write them, `$reg` or `int16($reg)`, each token
- * read as its label in the language's addressing modes. A parenthesis after a register's label
- * (`$reg`, `$freg` or `regnum` in MIPS, the same without `$` in RISC-V) opens an operand of its
- * own; after anything else it continues the operand.
+ * A form's operands as completions and signature help write them, `$reg` or `int16($reg)`, each
+ * token read as its label in the language's addressing modes. A parenthesis after a register's
+ * label (`$reg`, `$freg` or `regnum` in MIPS, the same without `$` in RISC-V) opens an operand of
+ * its own; after anything else it continues the operand.
  */
 export function marsVariantOperands(
     variant: Pick<MarsForm, 'args'>,
