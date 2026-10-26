@@ -166,6 +166,75 @@ describe('common Project language features', () => {
         )
     })
 
+    it.each([
+        {
+            dialect: 'mars' as const,
+            comment: '#' as const,
+            content: '.eqv e 5\n.macro ac\n.end_macro',
+            expected: [
+                ['e', 6],
+                ['ac', 8]
+            ]
+        },
+        {
+            dialect: 'x86' as const,
+            comment: ';' as const,
+            content: '%define e 1\n%macro ac 0\n%endmacro\nstruc s\nendstruc\nsection s',
+            expected: [
+                ['e', 9],
+                ['ac', 8],
+                ['s', 7],
+                ['s', 9]
+            ]
+        },
+        {
+            dialect: 'z80' as const,
+            comment: ';' as const,
+            content: 'macro a\nendm\nm macro\nendm',
+            expected: [
+                ['a', 7],
+                ['m', 1]
+            ]
+        }
+    ])(
+        'places a $dialect directive symbol at its name, not inside the keyword',
+        async (dialect) => {
+            const dialectSessionId = `${dialect.dialect}-symbol-range-test`
+            const dialectSources = normalizeBuildInput({
+                entry: 'main.asm',
+                files: { 'main.asm': { encoding: 'plain', content: dialect.content } }
+            })
+            const unregisterDialect = registerLanguageSession({
+                sessionId: dialectSessionId,
+                sources: dialectSources,
+                snapshot: undefined,
+                sourcesFor: () => dialectSources
+            })
+            try {
+                const symbols = await createProjectDocumentSymbolProvider(
+                    monaco,
+                    dialect
+                ).provideDocumentSymbols(
+                    {
+                        uri: projectSourceUri(monaco, {
+                            sessionId: dialectSessionId,
+                            sourceKind: 'live',
+                            path: 'main.asm'
+                        })
+                    } as never,
+                    {} as never
+                )
+                expect(
+                    symbols
+                        ?.filter((symbol) => symbol.detail !== 'label')
+                        .map((symbol) => [symbol.name, symbol.range.startColumn])
+                ).toEqual(dialect.expected)
+            } finally {
+                unregisterDialect()
+            }
+        }
+    )
+
     it('completes labels across one include unit without leaking unrelated Project Files', async () => {
         const complete = async (path: string, prefix: string) => {
             const word = /[A-Za-z_@$.?][\w@$.?]*$/.exec(prefix)?.[0] ?? ''
