@@ -7,6 +7,8 @@ import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount, type Component } from 'svelte'
 import { fileBytes } from '#lib/projectFiles.ts'
+import { liveSource } from '#lib/monaco/projectSourceSelection.ts'
+import { ENVIRONMENT_HEADER_PATH } from '#lib/sourceRuntime/environmentLibrary.ts'
 import { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
 import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.svelte.ts'
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
@@ -148,6 +150,21 @@ describe('the Edit history panel', () => {
         expect(panel.bytes()).toEqual([9, 2, 3, 4])
         expect(panel.button('Undo').disabled).toBe(true)
         run.stop()
+    })
+
+    it('takes changes while the focused pane shows a Runtime library member, read-only there alone', () => {
+        const panel = historyPanel()
+        panel.session.editFileBytes('blob.bin', 0, Uint8Array.of(9))
+        //`<sim.h>`, which go to definition opens read-only in the focused pane
+        const group = panel.session.groups[0]
+        group.sourceSelection = liveSource(ENVIRONMENT_HEADER_PATH)
+        flushSync()
+        expect(group.bytesReadOnly).toBe('A Runtime library member is read-only')
+        expect(panel.target.textContent).not.toContain('read-only')
+        expect(panel.button('Undo').disabled).toBe(false)
+        panel.button('Undo').click()
+        flushSync()
+        expect(panel.bytes()).toEqual([1, 2, 3, 4])
     })
 
     it('keeps listing the edited Files whatever the pane shows, a row bringing its File back', () => {
