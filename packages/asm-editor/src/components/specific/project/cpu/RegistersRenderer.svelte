@@ -5,24 +5,18 @@
         type RegisterFile,
         RegisterSize
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import { createEventDispatcher } from 'svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
 
-    const dispatcher = createEventDispatcher<{
-        registerClick: Register
-    }>()
-
     /**
      * A plain list of registers drawn as the CPU panel draws them, for the callers that have
-     * registers rather than a Register file: the PC row above the panel and the Testcase editor.
-     * It is the Register file panel with a single made-up hexadecimal file, so a row here and a row
-     * in the panel beside it are rendered by the same code.
+     * registers rather than a Register file: the PC row above the panel. It is the Register file
+     * panel with a single made-up hexadecimal file, so a row here and a row in the panel beside it
+     * are rendered by the same code. Its rows take no clicks: the PC's name is a plain label.
      */
     interface Props {
         registers: Register[]
         position?: 'top' | 'bottom'
-        hiddenRegistersNames?: string[]
         withoutHeader?: boolean
         size?: RegisterSize
         style?: string
@@ -38,11 +32,10 @@
     let {
         registers,
         withoutHeader = false,
-        size = $bindable(RegisterSize.Word),
+        size = RegisterSize.Word,
         style = '',
         gridStyle = '',
         align = 'spread',
-        hiddenRegistersNames = [],
         position = 'top',
         systemSize,
         language,
@@ -57,7 +50,6 @@
         size: systemSize,
         formats: ['hex'],
         layout: [],
-        hiddenRegisters: hiddenRegistersNames,
         registers,
         flags: [],
         blanks: []
@@ -73,7 +65,6 @@
     {style}
     {gridStyle}
     {align}
-    bind:size
-    onRegisterClick={(register) => dispatcher('registerClick', register)}
+    {size}
     {valueMenu}
 />
