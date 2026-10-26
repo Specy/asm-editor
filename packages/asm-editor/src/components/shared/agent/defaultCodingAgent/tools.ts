@@ -194,23 +194,11 @@ function pokeNote(changed: boolean, recorded: boolean): string | undefined {
 }
 
 /**
- * The Entry the tools build and default to: the host's, which for a Project is its Selected
- * program's and undefined while it has none, never a `main.<ext>` made up for it
- * ([programs.md](../../../../../../../docs/design/programs.md), decision 7). A host that names no
- * Entry at all holds one file, which goes by the language's default name.
- */
-export function getEffectiveEntry(context: DefaultCodingAgentToolContext): string | undefined {
-    if (context.getEntryPath) return context.getEntryPath()
-    const lang = context.getEditorLanguage()
-    return lang ? defaultEntryPath(lang) : 'main.s'
-}
-
-/**
  * The File a Breakpoint or a location that names none is in: the Entry, or with no Program the one
  * the Emulator was last given.
  */
 function emulatorEntry(context: DefaultCodingAgentToolContext, emulator: Emulator): string {
-    return getEffectiveEntry(context) ?? emulator.entry
+    return context.getEntryPath() ?? emulator.entry
 }
 
 /**
@@ -264,51 +252,29 @@ function noProgram(
 }
 
 export function getAllProjectFiles(context: DefaultCodingAgentToolContext): Record<string, string> {
-    if (context.getFiles) {
-        const raw = context.getFiles()
-        const result: Record<string, string> = {}
-        for (const [path, fileOrContent] of Object.entries(raw)) {
-            if (typeof fileOrContent === 'string') {
-                result[path] = fileOrContent
-            } else if (
-                fileOrContent &&
-                typeof fileOrContent === 'object' &&
-                'content' in fileOrContent
-            ) {
-                result[path] = fileText(fileOrContent as ProjectFile)
-            }
-        }
-        if (Object.keys(result).length > 0) {
-            return result
-        }
+    const result: Record<string, string> = {}
+    for (const [path, fileOrContent] of Object.entries(context.getFiles())) {
+        result[path] = typeof fileOrContent === 'string' ? fileOrContent : fileText(fileOrContent)
     }
-    const entry = getEffectiveEntry(context)
-    if (entry === undefined) return {}
-    const code = context.getEditorCode?.() ?? ''
-    return { [entry]: code }
+    return result
 }
 
+/**
+ * The File at `path`, or with none the active File: when that one is gone, as after the agent
+ * deleted it, the Entry file.
+ */
 export function getFile(
     context: DefaultCodingAgentToolContext,
     path?: string
 ): { path: string; content: string } | null {
-    const entry = getEffectiveEntry(context)
+    const entry = context.getEntryPath()
     const targetPath = path ?? context.getActivePath?.() ?? entry
     if (targetPath === undefined) return null
-    if (context.getFile) {
-        const content = context.getFile(targetPath)
-        if (content !== null && content !== undefined) {
-            return { path: targetPath, content }
-        }
-    }
-    const all = getAllProjectFiles(context)
-    if (targetPath in all) {
-        return { path: targetPath, content: all[targetPath] }
-    }
-    if (!path && entry !== undefined && context.getEditorCode) {
-        return { path: entry, content: context.getEditorCode() }
-    }
-    return null
+    const content = context.getFile(targetPath)
+    if (content !== null) return { path: targetPath, content }
+    if (path || entry === undefined || entry === targetPath) return null
+    const entryContent = context.getFile(entry)
+    return entryContent === null ? null : { path: entry, content: entryContent }
 }
 
 /**
@@ -356,28 +322,12 @@ function toggleBreakpoint(emulator: Emulator, breakpoint: SourceBreakpoint) {
     else emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
 }
 
-export function setFile(context: DefaultCodingAgentToolContext, path: string, content: string) {
-    if (context.setFile) {
-        context.setFile(path, content)
-    } else if (context.setEditorCode) {
-        context.setEditorCode(content)
-    }
-}
-
-export function deleteFile(context: DefaultCodingAgentToolContext, path: string): boolean {
-    if (context.deleteFile) {
-        context.deleteFile(path)
-        return true
-    }
-    return false
-}
-
 export function syncEmulator(context: DefaultCodingAgentToolContext, emulator: Emulator) {
     if (context.getBuildSources) {
         emulator.setSources(context.getBuildSources())
         return
     }
-    const entry = getEffectiveEntry(context)
+    const entry = context.getEntryPath()
     if (entry === undefined) return
     const all = getAllProjectFiles(context)
     const projectFiles: Record<string, ProjectFile> = {}
@@ -623,7 +573,7 @@ async function handleCodeWrite(
     toolRun: ToolRunContext,
     previousEmulator: Emulator | null = null
 ) {
-    setFile(context, targetPath, newContent)
+    context.setFile(targetPath, newContent)
     context.setActivePath?.(targetPath)
     // Source edits invalidate generated output, but must never be sent to the assembler.
     if (isSourceFile(targetPath)) {
@@ -758,7 +708,7 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, start_line, end_line }) =>
             runAgentTool(async (toolRun) => {
                 const allFiles = getAllProjectFiles(context)
-                const entryPath = getEffectiveEntry(context)
+                const entryPath = context.getEntryPath()
                 const targetPath = path ?? context.getActivePath?.() ?? entryPath
                 if (targetPath === undefined)
                     return noProgram(context, toolRun, 'Call view_file with a path.')
@@ -839,7 +789,7 @@ function createReplaceFileContentTool(context: DefaultCodingAgentToolContext) {
         }),
         execute: async ({ path, target_content, replacement_content, start_line, end_line }) =>
             runAgentTool(async (toolRun) => {
-                const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+                const targetPath = path ?? context.getActivePath?.() ?? context.getEntryPath()
                 if (targetPath === undefined)
                     return noProgram(context, toolRun, 'Call replace_file_content with a path.')
                 const existing = getFile(context, targetPath)
@@ -916,7 +866,7 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
                     (sourceLanguage(path ?? '') && !context.getEditorLanguage()
                         ? 'RISC-V'
                         : undefined)
-                const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+                const targetPath = path ?? context.getActivePath?.() ?? context.getEntryPath()
                 if (targetPath === undefined)
                     return noProgram(context, toolRun, 'Call write_to_file with a path.')
 
@@ -1505,7 +1455,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const allFiles = getAllProjectFiles(context)
-                    const entry = getEffectiveEntry(context)
+                    const entry = context.getEntryPath()
                     const files = Object.entries(allFiles).map(([p, text]) => ({
                         path: p,
                         lineCount: text.length === 0 ? 1 : text.split('\n').length,
@@ -1545,7 +1495,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
                     //asked, as nothing was asked before (programs-plan.md, decision 13)
                     const project = context.getProject?.()
                     const hadProgram = project?.program(path) !== undefined
-                    deleteFile(context, path)
+                    context.deleteFile(path)
                     const deletedProgram = hadProgram && project?.program(path) === undefined
                     const deleted = {
                         deleted: path,
@@ -1817,7 +1767,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
 
                     //the Selected program's Entry, which compile_source may have just made or
                     //selected
-                    const entry = getEffectiveEntry(context)
+                    const entry = context.getEntryPath()
                     if (entry === undefined) return noProgram(context, toolRun)
                     const project = context.getProject?.()
                     const generated = project?.compilations.find(
