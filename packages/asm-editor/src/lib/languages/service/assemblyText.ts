@@ -3,6 +3,8 @@ import type { MonacoType } from '#lib/monaco/Monaco.ts'
 
 export type AssemblyTextOptions = {
     comment: '#' | ';'
+    /** The characters that open and close a string, `"` and `'` unless the dialect has more. */
+    quotes?: string
     /** Operations that introduce a named source block. */
     blockPairs?: ReadonlyArray<{ start: RegExp; end: RegExp }>
     /** Section directives which bound label-owned folds. */
@@ -24,10 +26,13 @@ export type ParsedAssemblyLine = {
     operands: AssemblySpan[]
 }
 
+const QUOTES = `"'`
+
 /** Finds a comment delimiter without treating one inside a quoted string as a comment. */
 export function splitAssemblyComment(
     line: string,
-    delimiter: '#' | ';'
+    delimiter: '#' | ';',
+    quotes = QUOTES
 ): { code: string; comment?: AssemblySpan } {
     let quote = ''
     let escaped = false
@@ -41,7 +46,7 @@ export function splitAssemblyComment(
             escaped = true
             continue
         }
-        if (character === '"' || character === "'") {
+        if (quotes.includes(character)) {
             if (!quote) quote = character
             else if (quote === character) quote = ''
             continue
@@ -57,7 +62,11 @@ export function splitAssemblyComment(
 }
 
 /** Splits operands only at top-level commas; commas in strings and address expressions stay put. */
-export function splitAssemblyOperands(text: string, absoluteStart = 0): AssemblySpan[] {
+export function splitAssemblyOperands(
+    text: string,
+    absoluteStart = 0,
+    quotes = QUOTES
+): AssemblySpan[] {
     const result: AssemblySpan[] = []
     const stack: string[] = []
     let quote = ''
@@ -87,7 +96,7 @@ export function splitAssemblyOperands(text: string, absoluteStart = 0): Assembly
             escaped = true
             continue
         }
-        if (character === '"' || character === "'") {
+        if (quotes.includes(character)) {
             if (!quote) quote = character
             else if (quote === character) quote = ''
             continue
@@ -105,7 +114,7 @@ export function splitAssemblyOperands(text: string, absoluteStart = 0): Assembly
 }
 
 export function parseAssemblyLine(line: string, options: AssemblyTextOptions): ParsedAssemblyLine {
-    const split = splitAssemblyComment(line, options.comment)
+    const split = splitAssemblyComment(line, options.comment, options.quotes)
     const code = split.code
     let cursor = /^\s*/.exec(code)?.[0].length ?? 0
     let label: ParsedAssemblyLine['label']
@@ -137,7 +146,7 @@ export function parseAssemblyLine(line: string, options: AssemblyTextOptions): P
         end: cursor + operationMatch[0].length
     }
     cursor = operation.end
-    const operands = splitAssemblyOperands(code.slice(cursor), cursor)
+    const operands = splitAssemblyOperands(code.slice(cursor), cursor, options.quotes)
     return { code, comment: split.comment, label, operation, operands }
 }
 

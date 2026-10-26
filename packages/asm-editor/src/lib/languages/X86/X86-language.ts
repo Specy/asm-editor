@@ -35,6 +35,8 @@ const sizeSpecifierSet = new Set(X86SizeSpecifiers.map((size) => size.toLowerCas
 
 export const X86_TEXT_OPTIONS = {
     comment: ';',
+    //NASM's backquoted string, which reads C escapes, holds a ';' or ',' as its quoted ones do
+    quotes: '"\'`',
     knownOperations: new Set([...instructionSet, ...directiveSet]),
     sectionPattern: /^(?:section|segment)$/i,
     columnZeroPattern: /^%/,
@@ -119,7 +121,7 @@ function replacementAt(prefix: string): { word: string; startColumn: number; end
 function labelsIn(text: string): string[] {
     const labels: string[] = []
     for (const line of text.split(/\r?\n/)) {
-        const source = splitAssemblyComment(line, ';').code
+        const source = splitAssemblyComment(line, ';', X86_TEXT_OPTIONS.quotes).code
         const label = /^\s*([A-Za-z_@$.?][\w@$.?]*)\s*:/.exec(source)?.[1]
         if (label) labels.push(label)
     }
@@ -144,7 +146,8 @@ export function createX86CompletionProvider(
                 endLineNumber: position.lineNumber,
                 endColumn: position.column
             })
-            if (splitAssemblyComment(prefix, ';').comment) return { suggestions: [] }
+            if (splitAssemblyComment(prefix, ';', X86_TEXT_OPTIONS.quotes).comment)
+                return { suggestions: [] }
             const word = replacementAt(prefix)
             const range = new monacoInstance.Range(
                 position.lineNumber,
