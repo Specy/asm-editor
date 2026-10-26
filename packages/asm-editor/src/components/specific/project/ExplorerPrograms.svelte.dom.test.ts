@@ -13,6 +13,7 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import type { ProgramChoice } from '#lib/workbench/WorkbenchSession.svelte.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
+import { toast } from '#stores/toastStore.ts'
 
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
 
@@ -423,6 +424,54 @@ describe('a test run', () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(view.fileSystem.files['main.s']).toBeDefined()
         expect(view.calls).toEqual([])
+    })
+})
+
+describe('the path a typed name makes', () => {
+    /** Types `name` into the open inline input, and presses Enter. */
+    async function type(view: ReturnType<typeof explorer>, name: string) {
+        const input = view.target.querySelector<HTMLInputElement>('.name-input')!
+        input.value = name
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        flushSync()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        flushSync()
+    }
+
+    it('hands the host the path the File was renamed to, not the name as typed', async () => {
+        const view = explorer()
+        await view.choose('src/main.s', 'Rename')
+        await type(view, '../b.s')
+        expect(view.fileSystem.files['b.s']).toBeDefined()
+        expect(view.calls).toEqual(['renamed src/main.s b.s'])
+        expect(view.props.onSelect).toHaveBeenLastCalledWith('b.s')
+        //an Entry's, whose Program the host moves to that path
+        await view.choose('main.s', 'Rename')
+        await type(view, './first.s')
+        expect(view.calls).toEqual(['renamed src/main.s b.s', 'renamed main.s first.s'])
+    })
+
+    it('hands the host the path a new File was made at', async () => {
+        const view = explorer()
+        view.target.querySelector<HTMLButtonElement>('[title="New text file"]')!.click()
+        flushSync()
+        await type(view, './x.s')
+        expect(view.fileSystem.files['x.s']).toBeDefined()
+        expect(view.calls).toEqual(['added x.s'])
+        expect(view.props.onSelect).toHaveBeenLastCalledWith('x.s')
+    })
+
+    it('refuses a name above the root, keeping the input open to fix it', async () => {
+        const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+        vi.spyOn(console, 'error').mockImplementation(() => undefined)
+        const view = explorer()
+        await view.choose('notes.txt', 'Rename')
+        await type(view, '../notes.txt')
+        expect(error).toHaveBeenCalledWith('Path escapes the Project root')
+        expect(view.fileSystem.files['notes.txt']).toBeDefined()
+        expect(view.calls).toEqual([])
+        expect(view.target.querySelector('.name-input')).not.toBeNull()
     })
 })
 

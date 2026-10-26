@@ -723,48 +723,63 @@ export function fileText(file: ProjectFile): string {
     }
 }
 
-export function cleanFiles(raw: unknown): ProjectFiles {
+/**
+ * Files as they are saved, each checked and frozen in a frozen map with no prototype, or a
+ * `ProjectFormatError`. A record of `checked`, Files this already returned, is kept as it is at
+ * whatever path it now has, its bytes and Annotations counted from their stored lengths: a change
+ * to one File of a Project leaves the record of every other, which caches keyed by the record keep
+ * finding, and decodes none of them again.
+ */
+export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
         throw new ProjectFormatError('Files must be a path-to-file map')
     const entries = Object.entries(raw)
     if (entries.length > FILE_COUNT_LIMIT)
         throw new ProjectFormatError('Project exceeds the 4,096-file limit')
     const files: Record<string, ProjectFile> = Object.create(null)
+    const kept = new Set<unknown>(checked ? Object.values(checked) : [])
     let size = 0
     let annotated = 0
     const work: EditWork = { inserted: 0, copied: 0 }
     for (const [path, value] of entries) {
         if (!isValidFilePath(path)) throw new ProjectFormatError(`Invalid file path: ${path}`)
-        if (
-            !value ||
-            typeof value !== 'object' ||
-            typeof value.content !== 'string' ||
-            !FILE_ENCODINGS.includes(value.encoding)
-        ) {
-            throw new ProjectFormatError(`Invalid contents or encoding for ${path}`)
+        let file: ProjectFile
+        if (kept.has(value)) {
+            file = value
+            size += fileByteLength(file)
+        } else {
+            if (
+                !value ||
+                typeof value !== 'object' ||
+                typeof value.content !== 'string' ||
+                !FILE_ENCODINGS.includes(value.encoding)
+            ) {
+                throw new ProjectFormatError(`Invalid contents or encoding for ${path}`)
+            }
+            if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
+                throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+            let bytes = fileBytes(value)
+            //a Project saved before ADR 0063 may keep Byte edits beside the original: the File is
+            //the bytes they leave, and keeps none
+            const edits = cleanByteEdits(path, value, bytes.length, work)
+            if (edits) bytes = applyByteEdits(bytes, edits)
+            size += bytes.length
+            const annotations = cleanAnnotations(path, value.annotations)
+            file = Object.freeze({
+                encoding: value.encoding,
+                content: edits ? encodeBase64(bytes) : value.content,
+                ...(annotations ? { annotations } : {})
+            })
         }
-        if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
-            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        let bytes = fileBytes(value)
-        //a Project saved before ADR 0063 may keep Byte edits beside the original: the File is the
-        //bytes they leave, and keeps none
-        const edits = cleanByteEdits(path, value, bytes.length, work)
-        if (edits) bytes = applyByteEdits(bytes, edits)
-        size += bytes.length
         if (size > FILE_BYTE_LIMIT)
             throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
-        const annotations = cleanAnnotations(path, value.annotations)
-        annotated += annotationsSize(annotations)
+        annotated += annotationsSize(file.annotations)
         //met when a Project is opened or imported: saving is refused earlier, by the FileSystem
         if (annotated > ANNOTATIONS_BYTE_LIMIT)
             throw new ProjectFormatError(
                 "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
             )
-        files[path] = Object.freeze({
-            encoding: value.encoding,
-            content: edits ? encodeBase64(bytes) : value.content,
-            ...(annotations ? { annotations } : {})
-        })
+        files[path] = file
     }
     for (const path of Object.keys(files)) {
         const parts = path.split('/')

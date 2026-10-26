@@ -803,16 +803,17 @@ export class EditorGroup {
     }
     /**
      * Why the displayed File's bytes cannot be typed over now, or undefined when they can: whatever
-     * keeps a File's text read-only. A File stored as text has its text overwritten instead.
+     * keeps a File's text read-only, the session's reasons for every File (`byteEditRefusal`) and
+     * this pane's own. A File stored as text has its text overwritten instead.
      */
     get bytesReadOnly(): string | undefined {
         const s = this.session
-        if (s.host.readonly) return 'This Project is read-only'
+        //a read-only Workbench says so first, as no Stop would make its Files editable
+        if (s.host.readonly) return s.byteEditRefusal()
         if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
-        if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
+        if (this.sourceView === 'snapshot')
             return 'The Files are read-only during a Debug session: Stop to edit them'
-        if (s.running || s.building) return 'The Files are read-only while a Build runs'
-        return undefined
+        return s.byteEditRefusal()
     }
     /** Why a File the browser could not preview is shown in the Hex editor instead. */
     get bytesNotice(): string | undefined {

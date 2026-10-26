@@ -2427,6 +2427,19 @@ export class WorkbenchSession {
     }
 
     /**
+     * Why no File's bytes can be changed now, whatever pane shows it, or undefined when they can:
+     * never in a read-only Workbench, nor during a Debug session, a Run or a Build. A pane's own
+     * reasons, a Runtime library member or the Build's snapshot, are its `bytesReadOnly`.
+     */
+    byteEditRefusal(): string | undefined {
+        if (this.host.readonly) return 'This Project is read-only'
+        if (this.debugSession || this.fileSystemLocked)
+            return 'The Files are read-only during a Debug session: Stop to edit them'
+        if (this.running || this.building) return 'The Files are read-only while a Build runs'
+        return undefined
+    }
+
+    /**
      * Why files from the computer cannot be added to the Project now, or undefined when they can:
      * never in a read-only Workbench, nor while the Files are locked (`filesLocked`).
      */

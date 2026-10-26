@@ -35,7 +35,11 @@
             ? path
             : undefined
     })
-    const readOnly = $derived(group.bytesReadOnly)
+    /**
+     * Why no step can be gone back or forward to now: the session's reasons, which hold for every
+     * File, and not the focused pane's own, a Runtime library member it shows, say.
+     */
+    const readOnly = $derived(session.byteEditRefusal())
 
     /** The newest step's time, which orders the Files after the open one. */
     const latest = (journal: FileJournal) =>

@@ -61,6 +61,10 @@ type Lookup =
     | { kind: 'directory' }
     | { kind: 'missing' }
     | { kind: 'below-file' }
+/**
+ * Where the Files are kept. It starts with Files `cleanFiles` returned, as `makeProject`'s are:
+ * a change keeps every record it holds without checking it again.
+ */
 export type FileStore = { read: () => ProjectFiles; write: (files: ProjectFiles) => void }
 export type { ByteRun }
 /**
@@ -317,8 +321,8 @@ export class FileSystem {
             return inverse
         })
         if (file === before) return inverses
-        //nothing else changed, so instead of `cleanFiles` over the whole Project, which decodes
-        //every File, the size is read from the stored lengths: typing into a 16 MiB File costs what
+        //nothing else changed, so instead of `cleanFiles`, which would still decode the changed
+        //File whole, the size is read from the stored lengths: typing into a 16 MiB File costs what
         //the change does
         const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
         files[path] = file
@@ -383,8 +387,13 @@ export class FileSystem {
         delete files[from]
         this.commit(files)
     }
+    /**
+     * Stores `files` once `cleanFiles` checked them. Every record it already holds is kept as it
+     * is, wherever it now is, as `changeBytes` and `annotate` keep them: only the Files a change
+     * made are checked, and every other one stays the record caches keyed by it know.
+     */
     private commit(files: ProjectFiles) {
-        this.store.write(cleanFiles(files))
+        this.store.write(cleanFiles(files, this.files))
         this.notify(true)
     }
     /**
@@ -392,8 +401,8 @@ export class FileSystem {
      * refused File/directory collisions as it applied them and enforced the size and count limits
      * through `capacity`, and every File it publishes came from `bytesFile`, is a record it was
      * given, which `cleanFiles` checked, or is one `annotate` checked through `withAnnotations` and
-     * the Annotations' limit, so re-running `cleanFiles` here would decode and re-encode the whole
-     * Project on every Core step that touches a File.
+     * the Annotations' limit, so re-running `cleanFiles` here would decode each File the session
+     * wrote, whole, again on every Core step that touches one.
      */
     private publishSessionFiles(files: ProjectFiles) {
         this.store.write(files)
