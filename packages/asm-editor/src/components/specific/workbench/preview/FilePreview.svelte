@@ -36,13 +36,19 @@
     const pdf = typeof navigator === 'undefined' ? 'tab' : pdfDisplay(navigator)
 
     /**
-     * The File's bytes as a Blob URL, made again when the File, its bytes, its type or the pane's
-     * File change, the last one revoked: a Blob URL holds its bytes until it is.
+     * The File's bytes as a Blob URL, made again when its bytes, its type or the pane's File
+     * change, the last one revoked: a Blob URL holds its bytes until it is. It follows the content
+     * rather than the record, which the pane reads from the Project's map of Files, new at a change
+     * to any other File: that would reload a PDF at its first page and a video at its start.
      */
+    const content = $derived(file.content)
+    const encoding = $derived(file.encoding)
+    const mime = $derived(kind.mime)
     let source = $state.raw<{ url: string; blob: Blob }>()
     $effect(() => {
         void path
-        const blob = new Blob([fileBytes(file) as Uint8Array<ArrayBuffer>], { type: kind.mime })
+        const bytes = fileBytes({ encoding, content })
+        const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime })
         const url = URL.createObjectURL(blob)
         source = { url, blob }
         return () => URL.revokeObjectURL(url)

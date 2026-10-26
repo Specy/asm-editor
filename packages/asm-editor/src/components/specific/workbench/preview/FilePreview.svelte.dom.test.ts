@@ -8,7 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import FilePreview from './FilePreview.svelte'
 import { formatDuration, pdfDisplay, PREVIEW_UNAVAILABLE } from './previewSupport'
-import { encodeBase64, overwriteBytes, type ProjectFile } from '#lib/projectFiles.ts'
+import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
+import {
+    cleanFiles,
+    encodeBase64,
+    overwriteBytes,
+    type ProjectFile,
+    type ProjectFiles
+} from '#lib/projectFiles.ts'
 import type { FilePreview as PreviewKind } from '#lib/fileKinds.ts'
 
 //`#lib/utils.ts`, whose download the PDF notice uses, reaches the projects store and its
@@ -175,6 +182,48 @@ describe('the Preview', () => {
         expect(revoked).toEqual([made[0].url, made[1].url])
         dispose()
         expect(revoked).toEqual(made.map((entry) => entry.url))
+    })
+
+    it('keeps its URL while other Files change, or its own bytes are written again', () => {
+        //the Project's Files in a FileSystem, read through getters as the pane hands them over
+        let files = $state.raw<ProjectFiles>(
+            cleanFiles({ 'main.s': { encoding: 'plain', content: 'nop' }, 'manual.pdf': file(PDF) })
+        )
+        const fs = new FileSystem(
+            {},
+            {
+                read: () => files,
+                write: (next) => {
+                    files = next
+                }
+            }
+        )
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const preview = mount(FilePreview, {
+            target,
+            props: {
+                path: 'manual.pdf',
+                get file() {
+                    return files['manual.pdf']
+                },
+                //a kind worked out again from the File, as the pane does
+                get kind(): PreviewKind {
+                    return files['manual.pdf'] && { preview: 'pdf', mime: 'application/pdf' }
+                }
+            }
+        })
+        flushSync()
+        expect(made).toHaveLength(1)
+        //typing in another pane, and a rewrite of the same bytes, which is a new record
+        fs.writeText('main.s', 'nop\nnop')
+        flushSync()
+        fs.writeBytes('manual.pdf', PDF, true, 'base64')
+        flushSync()
+        expect(made).toHaveLength(1)
+        expect(revoked).toEqual([])
+        expect(target.querySelector('iframe')!.getAttribute('src')).toBe(made[0].url)
+        unmount(preview)
     })
 
     it('asks for the Hex editor where the browser cannot show the File, for its current bytes', () => {
