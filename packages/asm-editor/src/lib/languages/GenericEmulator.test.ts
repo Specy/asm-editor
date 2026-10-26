@@ -189,6 +189,15 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return this.requestCharacter('Enter a character', this.executionController.capture())
     }
 
+    /**
+     * Line reads as an adapter makes them, which `requestInput` is protected for: tied to the
+     * execution under way now, as an adapter ties the reads of the run it starts.
+     */
+    lineReader(): () => Promise<string> {
+        const execution = this.executionController.capture()
+        return () => this.requestInput('A number?', execution)
+    }
+
     _getNextInstruction(): Instruction | null {
         return null
     }
@@ -908,6 +917,48 @@ describe('stop', () => {
         expect(status).toBe(InterpreterStatus.Terminated)
         //the slice that was waiting is the last one that ever ran
         expect(emulator.requests).toHaveLength(1)
+    })
+
+    it('ends a test run: the Testcase it cut short is not checked and the rest do not run', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let runs = 0
+        let release!: () => void
+        emulator._runTestcase = async () => {
+            runs += 1
+            emulator.peripherals.terminal.write('hi')
+            if (runs === 1) await new Promise<void>((resolve) => (release = resolve))
+        }
+        const expectsHi: Testcase = { ...emptyTestcase, expectedOutput: 'hi' }
+        const done = emulator.test('', [expectsHi, expectsHi, expectsHi], 100)
+        await vi.waitFor(() => expect(runs).toBe(1))
+        //Stop: the same path the GUI takes
+        emulator.clear()
+        //the Core it could not halt finishes the Testcase unseen
+        release()
+        expect(await done).toEqual([])
+        expect(runs).toBe(1)
+        //nor does the run say anything in the Terminal Stop emptied
+        expect(emulator.peripherals.terminal.output).toBe('')
+        expect(emulator.canExecute).toBe(false)
+    })
+
+    it('fails a read that a stopped Testcase makes at once, rather than asking for input', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let release!: () => void
+        let read: Promise<string> | undefined
+        emulator._runTestcase = async () => {
+            const readLine = emulator.lineReader()
+            await new Promise<void>((resolve) => (release = resolve))
+            read = readLine()
+            await read
+        }
+        const done = emulator.test('', [emptyTestcase, emptyTestcase], 100)
+        await vi.waitFor(() => expect(release).toBeDefined())
+        emulator.clear()
+        release()
+        expect(await done).toEqual([])
+        await expect(read).rejects.toThrow('Execution superseded')
+        expect(emulator.peripherals.terminal.pendingRead).toBeNull()
     })
 })
 

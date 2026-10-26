@@ -5,7 +5,7 @@
  * plan M12).
  */
 import 'fake-indexeddb/auto'
-import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import type { EmulatorNote } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import LogView from '#cmp/specific/workbench/LogView.svelte'
@@ -73,6 +73,27 @@ describe('a Build that Stop ends part way', () => {
         expect(session.log).toEqual([])
         expect(session.bottomTab).toBe('log')
         expect(session.building).toBe(false)
+    })
+})
+
+describe('a test run that Stop ends part way', () => {
+    it('shows no results and logs nothing, whatever the Emulator answers once it is over', async () => {
+        const { session, emulator } = setup()
+        let release!: () => void
+        const finished = { errors: [], passed: true, testcase: {} }
+        ;(emulator as unknown as { test: () => Promise<unknown[]> }).test = () =>
+            new Promise((resolve) => (release = () => resolve([finished])))
+        session.bottomTab = 'terminal'
+        const run = session.test()
+        await vi.waitFor(() => expect(release).toBeDefined())
+        session.stop()
+        release()
+        await run
+        flushSync()
+        expect(session.testcasesResult).toEqual([])
+        expect(session.log).toEqual([])
+        expect(session.bottomTab).toBe('terminal')
+        expect(session.running).toBe(false)
     })
 })
 

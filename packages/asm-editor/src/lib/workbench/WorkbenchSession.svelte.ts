@@ -4349,23 +4349,30 @@ export class WorkbenchSession {
         this.followExecutionIn(group)
         this.flushTyping()
         this.running = true
+        const clears = this.executionClears
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))
         const started = performance.now()
         this.testing = true
         this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
-            this.testcasesResult = await this.emulator.test(
+            //Stop, in that frame or part way through the Testcases, ends the run, which then has
+            //no results to show and nothing to log, as a Build that Stop ends has not
+            if (clears !== this.executionClears) return
+            const results = await this.emulator.test(
                 this.sourceInput,
                 $state.snapshot(this.project.selected?.testcases ?? []),
                 TESTCASE_INSTRUCTION_LIMIT,
                 undoHistorySize(this.effectiveSettings)
             )
-            this.appendLog(testRunEntry(this.testcasesResult, performance.now() - started))
+            if (clears !== this.executionClears) return
+            this.testcasesResult = results
+            this.appendLog(testRunEntry(results, performance.now() - started))
             this.bottomTab = 'log'
         } catch (e) {
             console.error(e)
-            toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+            if (clears === this.executionClears)
+                toast.error('Error executing tests. ' + getM68kErrorMessage(e))
         } finally {
             this.running = false
             //the effects that saw the Testcases run flush before this is cleared
