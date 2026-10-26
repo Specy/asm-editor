@@ -377,6 +377,8 @@
             toast.error('Wrong unlock password')
             return
         }
+        //a finished exam had its guards taken off, and the student goes back to answering under them
+        attachExamListeners()
         await requestExamFullscreen()
         examDisabled = false
         examSubmission.submissionTimestamp = 0
@@ -405,6 +407,17 @@
             }
             examDisabled = true
         }
+    }
+
+    /**
+     * The guards an exam runs under. A listener added twice is added once, so unlocking an exam that
+     * was only paused, and kept them, changes nothing.
+     */
+    function attachExamListeners() {
+        document.addEventListener('visibilitychange', listenVisibilityChange)
+        document.addEventListener('fullscreenchange', listenFullscreenChange)
+        window.addEventListener('blur', listenVisibilityChange)
+        window.addEventListener('keydown', preventDefaultKeyPresses)
     }
 
     function detachExamListeners() {
@@ -459,10 +472,7 @@
     }
 
     async function startExam() {
-        document.addEventListener('visibilitychange', listenVisibilityChange)
-        document.addEventListener('fullscreenchange', listenFullscreenChange)
-        window.addEventListener('blur', listenVisibilityChange)
-        window.addEventListener('keydown', preventDefaultKeyPresses)
+        attachExamListeners()
         await requestExamFullscreen()
     }
 
