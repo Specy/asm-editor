@@ -7,20 +7,7 @@ import type {
 } from './commonLanguageFeatures.svelte'
 import type { EmulatorPeripherals } from './peripherals/peripheralSet'
 import type { BuildInput } from '#lib/projectFiles.ts'
-import type { M68KEmulator } from './M68K/M68KEmulator.svelte'
-import type { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
-import type { X86Emulator } from './X86/X86Emulator.svelte'
-import type { RISCVEmulator } from './RISC-V/RISC-VEmulator.svelte'
-import type { Z80Emulator } from './Z80/Z80Emulator.svelte'
-
-const instances = {
-    M68K: null as Promise<typeof M68KEmulator> | null,
-    MIPS: null as Promise<typeof MIPSEmulator> | null,
-    X86: null as Promise<typeof X86Emulator> | null, //X86Emulator2['create']
-    'RISC-V': null as Promise<typeof RISCVEmulator> | null,
-    'RISC-V-64': null as Promise<typeof RISCVEmulator> | null,
-    Z80: null as Promise<typeof Z80Emulator> | null
-}
+import { lazyLoad } from '#lib/lazyLoad.ts'
 
 /**
  * Whether the user turned the WebAssembly builds of the MIPS and RISC-V Cores off, which is the way
@@ -43,32 +30,32 @@ async function preferWebAssembly(useWebAssembly: () => Promise<string>): Promise
     if (webAssemblyCoresAllowed()) await useWebAssembly().catch(() => undefined)
 }
 
+const loadRiscv = lazyLoad(async () => {
+    await preferWebAssembly(() => import('@specy/risc-v').then((m) => m.useWebAssembly()))
+    return (await import('./RISC-V/RISC-VEmulator.svelte')).RISCVEmulator
+})
+
+type EmulatorFactory = (
+    source: BuildInput,
+    options?: EmulatorSettings
+) => Emulator | Promise<Emulator>
+
+/** Each language's adapter, imported with its Core when a Project of it is first opened. */
+const loaders: Record<AvailableLanguages, () => Promise<EmulatorFactory>> = {
+    M68K: lazyLoad(() => import('./M68K/M68KEmulator.svelte').then((i) => i.M68KEmulator)),
+    MIPS: lazyLoad(async () => {
+        await preferWebAssembly(() => import('@specy/mips').then((m) => m.useWebAssembly()))
+        return (await import('./MIPS/MIPSEmulator.svelte')).MIPSEmulator
+    }),
+    'RISC-V': loadRiscv,
+    'RISC-V-64': loadRiscv,
+    X86: lazyLoad(() => import('./X86/X86Emulator.svelte').then((i) => i.X86Emulator)),
+    Z80: lazyLoad(() => import('./Z80/Z80Emulator.svelte').then((i) => i.Z80Emulator))
+}
+
 function loadEmulator(type: AvailableLanguages) {
-    if (instances[type] === null) {
-        if (type === 'M68K') {
-            instances[type] = import('./M68K/M68KEmulator.svelte').then((i) => i.M68KEmulator)
-        } else if (type === 'MIPS') {
-            instances[type] = (async () => {
-                await preferWebAssembly(() => import('@specy/mips').then((m) => m.useWebAssembly()))
-                return (await import('./MIPS/MIPSEmulator.svelte')).MIPSEmulator
-            })()
-        } else if (type === 'RISC-V' || type === 'RISC-V-64') {
-            instances['RISC-V'] = (async () => {
-                await preferWebAssembly(() =>
-                    import('@specy/risc-v').then((m) => m.useWebAssembly())
-                )
-                return (await import('./RISC-V/RISC-VEmulator.svelte')).RISCVEmulator
-            })()
-            instances['RISC-V-64'] = instances['RISC-V']
-        } else if (type === 'X86') {
-            instances[type] = import('./X86/X86Emulator.svelte').then((i) => i.X86Emulator)
-        } else if (type === 'Z80') {
-            instances[type] = import('./Z80/Z80Emulator.svelte').then((i) => i.Z80Emulator)
-        } else {
-            throw new Error(`Unknown language ${type}`)
-        }
-    }
-    return instances[type]
+    if (!Object.hasOwn(loaders, type)) throw new Error(`Unknown language ${type}`)
+    return loaders[type]()
 }
 
 /**
@@ -91,7 +78,7 @@ export async function createEmulator<T extends AvailableLanguages>(
     options?: EmulatorSettings
 ): Promise<Emulator> {
     const emulator = await loadEmulator(type)
-    return emulator!(source, options)
+    return emulator(source, options)
 }
 
 export function preloadAllEmulators() {

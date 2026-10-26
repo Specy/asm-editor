@@ -1,4 +1,4 @@
-class ExecutionSupersededError extends Error {
+export class ExecutionSupersededError extends Error {
     constructor() {
         super('Execution superseded')
         this.name = 'ExecutionSupersededError'
@@ -40,7 +40,13 @@ export class ExecutionController {
         if (!this.isCurrent(execution)) throw new ExecutionSupersededError()
     }
 
+    /**
+     * Waits for `operation` on behalf of `execution`, and fails once it is over if `execution` was
+     * superseded meanwhile. One already superseded does not wait at all: a Core that Stop could not
+     * halt, finishing a Testcase unseen, must not ask the Terminal for input on its behalf.
+     */
     async waitFor<T>(execution: ExecutionGeneration, operation: () => PromiseLike<T>): Promise<T> {
+        this.ensureCurrent(execution)
         try {
             const result = await operation()
             this.ensureCurrent(execution)

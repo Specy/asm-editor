@@ -11,12 +11,12 @@ import type { AvailableLanguages, AvailableProgrammingLanguages } from '#lib/Pro
 import { isTextFileLanguage, type TextFileLanguage } from '#lib/textFileLanguages.ts'
 import { openDocumentationLink, openProjectResource } from '#lib/languages/service/navigation.ts'
 import { registerAssemblyLanguage } from './assemblyLanguageRegistry'
+import { lazyLoad } from '#lib/lazyLoad.ts'
 
 export type MonacoType = typeof monaco
 
 class MonacoLoader {
     private monaco: MonacoType | null = null
-    loading: Promise<MonacoType> | null = null
     private toDispose: monaco.IDisposable[] = []
     private declaredLanguageIds = new Set<AvailableLanguages>()
     private registeredLanguages = new Set<AvailableLanguages>()
@@ -27,7 +27,8 @@ class MonacoLoader {
     private sourceHelpGeneration = 0
 
     constructor() {
-        if (browser) this.load()
+        //a load that fails here is made again by the first editor that asks for Monaco
+        if (browser) this.load().catch(() => undefined)
     }
 
     dispose = () => {
@@ -42,21 +43,23 @@ class MonacoLoader {
         this.sourceHelpRegistration = undefined
     }
 
-    async load(): Promise<MonacoType> {
-        if (this.loading) return this.loading
+    /** Monaco, loaded once for every caller; a load that failed is made again at the next call. */
+    load(): Promise<MonacoType> {
+        return this.loadOnce()
+    }
+
+    private readonly loadOnce = lazyLoad(async () => {
         //Monaco measures the font once, when an editor is created, and does not measure it again
         //when a web font arrives later, so an editor made before Fira Code had loaded would place
         //its cursor and columns by the fallback's widths. The font is a fraction of Monaco's size
         //and loads alongside it; a font that fails to load leaves the fallback, as before. Tests load
         //Monaco where there is no document, or one without a font set
-        const loading = Promise.all([
+        const [monacoInstance] = await Promise.all([
             import('monaco-editor'),
             globalThis.document?.fonts
                 ?.load(`${EDITOR_FONT.fontSize}px ${EDITOR_FONT.fontFamily}`)
                 .catch(() => undefined)
-        ]).then(([monacoInstance]) => monacoInstance)
-        this.loading = loading
-        const monacoInstance = await loading
+        ])
         monacoInstance.editor.defineTheme('custom-theme', generateTheme())
         this.monaco = monacoInstance
         self.MonacoEnvironment = {
@@ -72,7 +75,7 @@ class MonacoLoader {
             }
         }
         return monacoInstance
-    }
+    })
 
     async registerLanguage(
         lang: AvailableLanguages | AvailableProgrammingLanguages | TextFileLanguage

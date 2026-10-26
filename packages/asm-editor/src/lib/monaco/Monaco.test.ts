@@ -2,25 +2,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from './Monaco'
 
-const { install, openerDisposed, declareLanguage, registerOpener, registerLinkOpener } = vi.hoisted(
-    () => {
-        const openerDisposed = vi.fn()
-        return {
-            install: vi.fn<(...args: unknown[]) => Promise<monaco.IDisposable[]>>(),
-            openerDisposed,
-            declareLanguage: vi.fn(),
-            registerOpener: vi.fn(() => ({ dispose: openerDisposed })),
-            registerLinkOpener: vi.fn(() => ({ dispose() {} }))
-        }
+const {
+    install,
+    openerDisposed,
+    declareLanguage,
+    registerOpener,
+    registerLinkOpener,
+    monacoModule
+} = vi.hoisted(() => {
+    const openerDisposed = vi.fn()
+    const declareLanguage = vi.fn()
+    const registerOpener = vi.fn(() => ({ dispose: openerDisposed }))
+    const registerLinkOpener = vi.fn(() => ({ dispose() {} }))
+    return {
+        install: vi.fn<(...args: unknown[]) => Promise<monaco.IDisposable[]>>(),
+        openerDisposed,
+        declareLanguage,
+        registerOpener,
+        registerLinkOpener,
+        /** What the tests have of `monaco-editor`. */
+        monacoModule: () => ({
+            editor: {
+                defineTheme() {},
+                registerEditorOpener: registerOpener,
+                registerLinkOpener
+            },
+            languages: { register: declareLanguage }
+        })
     }
-)
+})
 vi.mock('$app/env', () => ({ browser: false }))
 vi.mock('#lib/monaco/editorTheme.ts', () => ({ generateTheme: () => ({}) }))
 vi.mock('monaco-editor/editor/editor.worker?worker', () => ({ default: class {} }))
-vi.mock('monaco-editor', () => ({
-    editor: { defineTheme() {}, registerEditorOpener: registerOpener, registerLinkOpener },
-    languages: { register: declareLanguage }
-}))
+vi.mock('monaco-editor', () => monacoModule())
 vi.mock('./assemblyLanguageRegistry', () => ({ registerAssemblyLanguage: install }))
 vi.mock('#lib/languages/languageDetector.ts', () => ({ preloadLanguageDetector: vi.fn() }))
 
@@ -195,4 +209,22 @@ describe('assembly registration lifecycle', () => {
             cancel()
         }
     )
+})
+
+describe('loading', () => {
+    it('loads Monaco again after a load that failed, as once the network is back', async () => {
+        let attempts = 0
+        vi.doMock('monaco-editor', () => {
+            attempts += 1
+            if (attempts === 1) throw new Error('Failed to fetch dynamically imported module')
+            return monacoModule()
+        })
+        vi.resetModules()
+        const fresh = (await import('./Monaco')).Monaco
+        await expect(fresh.get()).rejects.toThrow()
+        await expect(fresh.registerLanguage('MIPS')).resolves.toBeUndefined()
+        await expect(fresh.get()).resolves.toHaveProperty('editor')
+        expect(attempts).toBe(2)
+        fresh.dispose()
+    })
 })

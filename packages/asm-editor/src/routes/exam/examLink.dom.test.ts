@@ -18,7 +18,7 @@ vi.hoisted(() => {
 })
 //Monaco does not run in jsdom, so the editors wait for it forever; no Core loads in it either
 vi.mock('#lib/monaco/Monaco.ts', () => ({
-    Monaco: { load: () => {}, dispose: () => {}, get: () => new Promise(() => {}) }
+    Monaco: { load: () => Promise.resolve(), dispose: () => {}, get: () => new Promise(() => {}) }
 }))
 vi.mock('#cmp/shared/providers/EmulatorLoader.svelte', async () => ({
     default: (await import('#cmp/shared/providers/__fixtures__/EmulatorLoaderStub.svelte')).default

@@ -4,7 +4,14 @@ import X86Worker from './workers/x86.worker?worker'
 import Z80Worker from './workers/z80.worker?worker'
 import type { ProjectAnalysisTarget, ProjectWorkerRequest, ProjectWorkerResponse } from './protocol'
 
-type Listener = (response: ProjectWorkerResponse) => void
+/**
+ * What a session hears: its Worker's answers, and, from the manager, that the Worker died (it failed
+ * to load, threw, or sent what cannot be read), after which nothing more comes from it and the
+ * session acquires a new one.
+ */
+export type LanguageWorkerMessage = ProjectWorkerResponse | { type: 'worker-died'; message: string }
+
+type Listener = (message: LanguageWorkerMessage) => void
 type WorkerConstructor = new () => Worker
 type WorkerState = {
     worker: Worker
@@ -29,8 +36,6 @@ const WORKER_BY_TARGET = {
 
 class LanguageWorkerManager {
     private states = new Map<ProjectAnalysisTarget, WorkerState>()
-    /** Kept past a Worker's death so its sessions can still be told that it died. */
-    private failureListeners = new Map<string, Listener>()
 
     acquire(target: ProjectAnalysisTarget, sessionId: string, listener: Listener) {
         if (typeof Worker === 'undefined') return undefined
@@ -44,7 +49,6 @@ class LanguageWorkerManager {
             state.idleTimer = undefined
         }
         state.listeners.set(sessionId, listener)
-        this.failureListeners.set(sessionId, listener)
         const current = state
         return {
             post: (request: ProjectWorkerRequest) => {
@@ -54,7 +58,7 @@ class LanguageWorkerManager {
                 if (current.ready) current.worker.postMessage(request)
                 else current.queued.push(request)
             },
-            dispose: () => this.release(target, sessionId)
+            dispose: () => this.release(target, current, sessionId)
         }
     }
 
@@ -79,46 +83,38 @@ class LanguageWorkerManager {
          * A Worker that fails to load, or dies part way through an analysis, answers nothing at all:
          * without this every session waiting on it stays pending forever, showing a spinner, no
          * diagnostics and no reason why. Tell every session attached to it, then drop the state so
-         * the next session to ask for this Target builds a fresh Worker.
+         * the next session to ask for this Target, such as one of these at its next change, builds
+         * a fresh Worker.
          */
         const fail = (message: string) => {
-            const waiting = [...state.listeners.keys()]
+            const waiting = [...state.listeners.values()]
             if (this.states.get(target) === state) this.states.delete(target)
             state.listeners.clear()
             state.queued = []
             if (state.idleTimer !== undefined) clearTimeout(state.idleTimer)
             state.worker.terminate()
-            for (const sessionId of waiting) {
-                //revision 0 is older than any live revision, so a session takes it whatever it is
-                //waiting for rather than matching it against the request it never got an answer to.
-                this.notify(sessionId, { type: 'failure', sessionId, revision: 0, message })
-            }
+            for (const listener of waiting) listener({ type: 'worker-died', message })
         }
         worker.addEventListener('error', (event) =>
             fail(
-                `${target} analysis stopped: ${event.message || 'the worker failed to start'}. Reload the page to restart it.`
+                `${target} analysis stopped: ${event.message || 'the worker failed to start'}. It starts again at the next edit.`
             )
         )
         worker.addEventListener('messageerror', () =>
             fail(
-                `${target} analysis stopped: unreadable worker message. Reload the page to restart it.`
+                `${target} analysis stopped: unreadable worker message. It starts again at the next edit.`
             )
         )
         return state
     }
 
-    private notify(sessionId: string, response: ProjectWorkerResponse) {
-        this.failureListeners.get(sessionId)?.(response)
-    }
-
-    private release(target: ProjectAnalysisTarget, sessionId: string) {
-        const state = this.states.get(target)
-        if (!state) return
+    /** A session leaves the Worker it acquired, which, once it has died, has nobody to tell. */
+    private release(target: ProjectAnalysisTarget, state: WorkerState, sessionId: string) {
+        if (this.states.get(target) !== state) return
         const dispose = { type: 'dispose', sessionId } satisfies ProjectWorkerRequest
         if (state.ready) state.worker.postMessage(dispose)
         else state.queued.push(dispose)
         state.listeners.delete(sessionId)
-        this.failureListeners.delete(sessionId)
         if (state.listeners.size > 0) return
         state.idleTimer = setTimeout(() => {
             if (state.listeners.size > 0) return

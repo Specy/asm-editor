@@ -65,6 +65,16 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         flushTimer = setTimeout(() => void flushAnalyses(), 40)
     }
 
+    /** Tells a session that its revision could not be analyzed, and why. */
+    function postFailure(sessionId: string, revision: number, error: unknown) {
+        workerScope.postMessage({
+            type: 'failure',
+            sessionId,
+            revision,
+            message: error instanceof Error ? error.message : String(error)
+        } satisfies ProjectWorkerResponse)
+    }
+
     /** Analyzes a revision again later, if it is still the session's latest by then. */
     function retryAnalysis(sessionId: string, revision: number) {
         setTimeout(() => {
@@ -105,12 +115,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                             if (error.retry) retryAnalysis(sessionId, revision)
                             continue
                         }
-                        workerScope.postMessage({
-                            type: 'failure',
-                            sessionId,
-                            revision,
-                            message: error instanceof Error ? error.message : String(error)
-                        } satisfies ProjectWorkerResponse)
+                        postFailure(sessionId, revision, error)
                     }
                 }
             }
@@ -129,12 +134,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
             try {
                 validateAssemblerProfile(request.assemblerProfile)
             } catch (error) {
-                workerScope.postMessage({
-                    type: 'failure',
-                    sessionId: request.sessionId,
-                    revision: request.revision,
-                    message: error instanceof Error ? error.message : String(error)
-                } satisfies ProjectWorkerResponse)
+                postFailure(request.sessionId, request.revision, error)
                 return
             }
         }

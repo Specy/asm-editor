@@ -29,7 +29,9 @@ vi.mock('$app/navigation', () => ({
     beforeNavigate: (guard: (navigation: object) => void) => navigationGuards.push(guard)
 }))
 //Monaco does not run in jsdom, and the Workbench is not what these are about
-vi.mock('#lib/monaco/Monaco.ts', () => ({ Monaco: { load: () => {}, dispose: () => {} } }))
+vi.mock('#lib/monaco/Monaco.ts', () => ({
+    Monaco: { load: () => Promise.resolve(), dispose: () => {} }
+}))
 vi.mock('#cmp/specific/workbench/Workbench.svelte', async () => ({
     default: (await import('#cmp/specific/workbench/__fixtures__/WorkbenchHostStub.svelte')).default
 }))

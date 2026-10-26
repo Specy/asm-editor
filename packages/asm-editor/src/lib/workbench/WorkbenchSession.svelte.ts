@@ -59,6 +59,7 @@ import {
 } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { BuildDownloadError, CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
+import { ExecutionSupersededError } from '#lib/languages/ExecutionController.ts'
 import {
     isLineBreakpoint,
     makeRegister,
@@ -4349,23 +4350,32 @@ export class WorkbenchSession {
         this.followExecutionIn(group)
         this.flushTyping()
         this.running = true
+        const clears = this.executionClears
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))
         const started = performance.now()
         this.testing = true
         this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
-            this.testcasesResult = await this.emulator.test(
+            //Stop in that frame ends the run before it starts, which then has no results to show
+            //and nothing to log, as a Build that Stop ends has not
+            if (clears !== this.executionClears) return
+            const results = await this.emulator.test(
                 this.sourceInput,
                 $state.snapshot(this.project.selected?.testcases ?? []),
                 TESTCASE_INSTRUCTION_LIMIT,
                 undoHistorySize(this.effectiveSettings)
             )
-            this.appendLog(testRunEntry(this.testcasesResult, performance.now() - started))
+            this.testcasesResult = results
+            this.appendLog(testRunEntry(results, performance.now() - started))
             this.bottomTab = 'log'
         } catch (e) {
+            //and so does a `clear()` part way through the Testcases, whoever made it: Stop, or the
+            //coding agent's Build or change to the source
+            if (e instanceof ExecutionSupersededError) return
             console.error(e)
-            toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+            if (clears === this.executionClears)
+                toast.error('Error executing tests. ' + getM68kErrorMessage(e))
         } finally {
             this.running = false
             //the effects that saw the Testcases run flush before this is cleared

@@ -717,6 +717,8 @@ export class Terminal {
         execution: ExecutionGeneration,
         options: TerminalReadOptions = {}
     ): Promise<{ text: string; newline: boolean } | null> {
+        //a read for a run that Stop ended, by a Core that could not be halted, shows nothing
+        this.executionController.ensureCurrent(execution)
         const read = this.beginRead(kind, question, options)
         try {
             for (;;) {
@@ -759,6 +761,7 @@ export class Terminal {
         execution: ExecutionGeneration,
         options: TerminalReadOptions = {}
     ): Promise<string> {
+        this.executionController.ensureCurrent(execution)
         const read = this.beginRead('character', question, options)
         try {
             for (;;) {

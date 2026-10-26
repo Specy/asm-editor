@@ -21,7 +21,8 @@ export function unresolvedSources(sources: BuildSources): string | undefined {
 /**
  * The sources' resolution failure as the one error, on the Entry's first line, and nothing checked:
  * a Core never sees sources it would only report a missing Entry for, nor a failure the worker logs.
- * With `severity` a warning, why nothing could be checked without anything wrong with the sources.
+ * A session answers the same for a revision its Worker failed on, or died before answering. With
+ * `severity` a warning, why nothing could be checked without anything wrong with the sources.
  */
 export function unresolvedSnapshot(
     sources: BuildSources,

@@ -324,6 +324,8 @@ export class MarsHandlers {
         answer: (execution: ExecutionGeneration) => Promise<T>
     ): Promise<T> {
         const execution = this.execution
+        //a read for a run that Stop ended, by a Core that could not be halted, shows nothing
+        this.host.executionController.ensureCurrent(execution)
         this.host.devices.flush()
         //and a Note played before the prompt is heard while it waits, not once it is answered
         this.host.peripherals.audio.flush()

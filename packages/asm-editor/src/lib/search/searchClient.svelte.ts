@@ -1,6 +1,7 @@
 import { browser } from '$app/env'
 import { resolve } from '$app/paths'
 import modelUrls from 'virtual:search-model'
+import { lazyLoad } from '#lib/lazyLoad.ts'
 import type { SearchResult } from './engine'
 import type { SearchModelUrls } from './model'
 import { shardsOf, type SearchScope, type ShardId } from './scope'
@@ -20,6 +21,11 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * to save data; there is no switch for it, and a failed download is not retried. While it loads
  * (`model === 'loading'`), the search box says so and search matches words only; a query typed
  * after it is ready uses both.
+ *
+ * A worker that fails to load or dies fails the requests waiting on it, and the next request starts
+ * a fresh worker, which loads the shards it is asked for again. A model the dead one had, or was
+ * loading, is not asked for again, any more than one whose download failed: search goes on with
+ * words.
  */
 export type ModelStatus =
     /** Not asked for yet. */
@@ -44,9 +50,21 @@ function shardUrl(shard: ShardId): string {
     return new URL(resolve(`search/${shard}.json`), location.href).href
 }
 
+/** Imported on first use, so that a server render never meets the worker's wrapper. */
+const loadSearchWorker = lazyLoad(() =>
+    import('./searchWorker?worker').then((module) => module.default)
+)
+
+type WorkerState = {
+    worker: Worker
+    /** Whether it has announced its listener; until then requests are held, in order. */
+    ready: boolean
+    held: WorkerRequest[]
+}
+
 class SearchClient {
     model = $state<ModelStatus>('idle')
-    private worker: Promise<Worker> | null = null
+    private state: WorkerState | undefined
     private next = 0
 
     private readonly pending = new Map<
@@ -60,33 +78,64 @@ class SearchClient {
     private readonly shards = new Map<ShardId, Promise<void>>()
     private modelLoad: Promise<void> | null = null
 
-    /** Imported on first use, so that a server render never meets the worker's wrapper. */
-    private ensureWorker(): Promise<Worker> {
-        this.worker ??= import('./searchWorker?worker').then(({ default: SearchWorker }) => {
-            const worker = new SearchWorker()
-            worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-                const response = event.data
-                const waiting = this.pending.get(response.id)
-                if (!waiting) return
-                this.pending.delete(response.id)
-                if (response.ok) waiting.resolve(response.value)
-                else waiting.reject(new Error(response.error))
-            }
-            return worker
-        })
-        return this.worker
-    }
-
     private async request<T>(message: Unnumbered<WorkerRequest>): Promise<T> {
-        const worker = await this.ensureWorker()
-        const id = this.next++
+        const SearchWorker = await loadSearchWorker()
+        const state = (this.state ??= this.start(SearchWorker))
+        const request = { ...message, id: this.next++ } as WorkerRequest
         return new Promise<T>((resolve, reject) => {
-            this.pending.set(id, {
+            this.pending.set(request.id, {
                 resolve: resolve as (value: unknown) => void,
                 reject
             })
-            worker.postMessage({ ...message, id } as WorkerRequest)
+            if (state.ready) state.worker.postMessage(request)
+            else state.held.push(request)
         })
+    }
+
+    private start(SearchWorker: new () => Worker): WorkerState {
+        const worker = new SearchWorker()
+        const state: WorkerState = { worker, ready: false, held: [] }
+        worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
+            if (this.state !== state) return
+            const response = event.data
+            if ('type' in response) {
+                state.ready = true
+                for (const request of state.held.splice(0)) worker.postMessage(request)
+                return
+            }
+            const waiting = this.pending.get(response.id)
+            if (!waiting) return
+            this.pending.delete(response.id)
+            if (response.ok) waiting.resolve(response.value)
+            else waiting.reject(new Error(response.error))
+        })
+        // A worker that fails to load or dies answers nothing: fail what waits on it, and let the
+        // next request start a fresh one.
+        worker.addEventListener('error', (event) =>
+            this.fail(
+                state,
+                `Search stopped: ${event.message || 'its worker failed to start'}. Search again to retry.`
+            )
+        )
+        worker.addEventListener('messageerror', () =>
+            this.fail(
+                state,
+                'Search stopped: its worker sent an unreadable message. Search again to retry.'
+            )
+        )
+        return state
+    }
+
+    /** Fails every request waiting on a worker that died and ends it, and what it had loaded. */
+    private fail(state: WorkerState, message: string) {
+        if (this.state !== state) return
+        state.worker.terminate()
+        this.state = undefined
+        this.shards.clear()
+        if (this.model === 'ready') this.model = 'failed'
+        const waiting = [...this.pending.values()]
+        this.pending.clear()
+        for (const pending of waiting) pending.reject(new Error(message))
     }
 
     /** Loads the shards a scope reads; each shard once, whichever scope asked first. */
@@ -99,7 +148,9 @@ class SearchClient {
             })
             for (const shard of missing) {
                 this.shards.set(shard, loading)
-                loading.catch(() => this.shards.delete(shard))
+                loading.catch(() => {
+                    if (this.shards.get(shard) === loading) this.shards.delete(shard)
+                })
             }
         }
         return Promise.all(shardsOf(scope).map((shard) => this.shards.get(shard))).then(() => {})

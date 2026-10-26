@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
-import type { ProjectWorkerRequest, ProjectWorkerResponse } from './protocol'
+import type { ProjectWorkerRequest } from './protocol'
+import type { LanguageWorkerMessage } from './LanguageWorkerManager'
 
 const worker = vi.hoisted(() => ({
-    receive: undefined as ((response: ProjectWorkerResponse) => void) | undefined,
+    receive: undefined as ((message: LanguageWorkerMessage) => void) | undefined,
     requests: [] as ProjectWorkerRequest[]
 }))
 
@@ -13,7 +14,7 @@ vi.mock('./LanguageWorkerManager', () => ({
             (
                 _target: string,
                 _sessionId: string,
-                receive: (response: ProjectWorkerResponse) => void
+                receive: (message: LanguageWorkerMessage) => void
             ) => {
                 worker.receive = receive
                 return {
@@ -26,6 +27,7 @@ vi.mock('./LanguageWorkerManager', () => ({
 }))
 
 import { ProjectLanguageSession } from './ProjectLanguageSession'
+import { languageWorkerManager } from './LanguageWorkerManager'
 
 function snapshot(revision: number) {
     return {
@@ -117,6 +119,42 @@ describe('ProjectLanguageSession', () => {
         expect(worker.requests.map((request) => request.type)).toEqual(['open', 'update'])
 
         unsubscribe()
+        session.dispose()
+    })
+
+    it('fails the revision its Worker died on, and opens every File on a new one at the next change', () => {
+        worker.requests = []
+        const initial = normalizeBuildInput({
+            entry: 'main.s',
+            files: { 'main.s': { encoding: 'plain', content: 'nop' } }
+        })
+        const session = new ProjectLanguageSession('dying-session', initial)
+        const acquired = vi.mocked(languageWorkerManager.acquire).mock.calls.length
+        session.update(
+            normalizeBuildInput({
+                entry: 'main.s',
+                files: { 'main.s': { encoding: 'plain', content: 'nop\nnop' } }
+            })
+        )
+        const message = 'M68K analysis stopped: the worker failed to start.'
+        worker.receive?.({ type: 'worker-died', message })
+        expect(session.pending).toBe(false)
+        expect(session.snapshot).toMatchObject({
+            revision: 2,
+            diagnostics: [{ severity: 'error', message, location: { path: 'main.s' } }],
+            symbols: [],
+            //nothing was checked, so no File can be said to be out of the program
+            fileStatus: { 'main.s': 'unknown' }
+        })
+        const files = {
+            'main.s': { encoding: 'plain' as const, content: 'nop\nnop\nnop' },
+            'more.s': { encoding: 'plain' as const, content: 'nop' }
+        }
+        session.update(normalizeBuildInput({ entry: 'main.s', files }))
+        expect(vi.mocked(languageWorkerManager.acquire).mock.calls.length).toBe(acquired + 1)
+        expect(worker.requests.map((request) => request.type)).toEqual(['open', 'update', 'open'])
+        expect(worker.requests[2]).toMatchObject({ type: 'open', revision: 3, files })
+        expect(session.pending).toBe(true)
         session.dispose()
     })
 })

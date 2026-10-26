@@ -78,6 +78,7 @@ import {
 } from '#cmp/specific/project/memory/memoryTabUtils.ts'
 import {
     ExecutionController,
+    ExecutionSupersededError,
     type ExecutionGeneration
 } from '#lib/languages/ExecutionController.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -811,9 +812,11 @@ export abstract class GenericEmulator<T, R extends string>
      */
     /**
      * Shows the read the program now waits on, after sending what it played: the person may take a
-     * while to answer, and a beep before a prompt has to be heard before the answer, not after.
+     * while to answer, and a beep before a prompt has to be heard before the answer, not after. A
+     * read for a run Stop ended, by a Core that could not be halted, fails instead, showing nothing.
      */
-    private waitOnInput(interrupt: EmulatorInterrupt): void {
+    private waitOnInput(interrupt: EmulatorInterrupt, execution: ExecutionGeneration): void {
+        this.executionController.ensureCurrent(execution)
         this._peripherals.audio.flush()
         this.state.interrupt = interrupt
     }
@@ -823,7 +826,7 @@ export abstract class GenericEmulator<T, R extends string>
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
+        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readAsync(question, execution, options)
         } finally {
@@ -841,7 +844,7 @@ export abstract class GenericEmulator<T, R extends string>
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
+        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readCharAsync(question, execution, options)
         } finally {
@@ -858,7 +861,7 @@ export abstract class GenericEmulator<T, R extends string>
         question: string,
         execution: ExecutionGeneration
     ) {
-        this.waitOnInput({ type: 'StandardInput', message: question })
+        this.waitOnInput({ type: 'StandardInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readStandardInput(length, question, execution)
         } finally {
@@ -871,7 +874,7 @@ export abstract class GenericEmulator<T, R extends string>
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
     protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
+        this.waitOnInput({ type: 'ReadInput', message: question }, execution)
         try {
             return await this._peripherals.terminal.readByte(question, execution)
         } finally {
@@ -1437,6 +1440,9 @@ export abstract class GenericEmulator<T, R extends string>
      * `stopInUserCode` is the Build a Debug session starts from, which stops where a Step from the
      * program's start would (`runStartCode`). A Testcase starts at the first instruction instead:
      * its starting registers and instruction limit apply from there, as they always have.
+     *
+     * Resolves to the execution the Build began, which `clear()` supersedes: a Build that Stop or
+     * Cancel ended resolves too, with nothing built, and a test run tells it apart by that.
      */
     private async compileInternal(
         historySize: number,
@@ -1445,7 +1451,7 @@ export abstract class GenericEmulator<T, R extends string>
         stopInUserCode = false,
         scriptedInput?: string[],
         programArguments = this._emulatorOptions.programArguments
-    ): Promise<void> {
+    ): Promise<ExecutionGeneration> {
         this.clear()
         if (scriptedInput !== undefined) this.useScriptedRun(scriptedInput)
         //A Build supersedes live checking the same way a newer check supersedes an older one: the
@@ -1540,7 +1546,7 @@ export abstract class GenericEmulator<T, R extends string>
                     if (!this.executionController.isCurrent(execution)) throw e
                     //the program was built, and failed before its own code as a Step would show
                     this.reportRuntimeFailure(e)
-                    return
+                    return execution
                 }
             }
             this.state.currentFile = sources.entry
@@ -1557,8 +1563,9 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
+            return execution
         } catch (e) {
-            if (!this.executionController.isCurrent(execution)) return
+            if (!this.executionController.isCurrent(execution)) return execution
             //assembler errors already live in state.compilerDiagnostics and are rendered from there,
             //pushing them into state.errors too would render the whole list twice
             if (e instanceof CompilationFailedError) throw e
@@ -2330,6 +2337,8 @@ export abstract class GenericEmulator<T, R extends string>
                     )
             }
             if (!this._hasTerminated()) await this.runTestcaseFromStart(testcase, haltLimit)
+            //a run Stop ended part way, which a Core that cannot be stopped finishes unseen
+            this.executionController.ensureCurrent(execution)
             //the run is over whether or not the program ended, and its output is what is compared
             this._peripherals.terminal.flushOutput()
             const ins = this._getNextInstruction()
@@ -2390,6 +2399,12 @@ export abstract class GenericEmulator<T, R extends string>
         return own !== undefined && own.trim() !== '' ? own : this._emulatorOptions.programArguments
     }
 
+    /**
+     * Runs the Testcases one after another, each from its own Build. `clear()`, which Stop and a
+     * Build call, ends the whole run, which then fails with `ExecutionSupersededError`, whoever
+     * cleared: the Testcase it cut short is not checked, the ones after it do not run, and nothing
+     * is said in the Terminal that it emptied.
+     */
     async test(sources: BuildInput, testcases: Testcase[], haltLimit: number, historySize = 0) {
         //held across the whole loop: `validateTestcase` reads registers and memory back out of the
         //core between two runs, which a semantic check must not be able to slip into either
@@ -2407,13 +2422,17 @@ export abstract class GenericEmulator<T, R extends string>
         const terminal = this._peripherals.terminal
         const results: TestcaseResult[] = []
         const snapshot = normalizeBuildInput(sources)
+        //Each Testcase's Build begins an execution of its own, which a `clear()` while it builds
+        //or runs supersedes; between two Testcases there is no wait for one to come in.
+        let stopped = false
         for (const original of testcases) {
             const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
                 //The whole testcase loop already owns the Core operation lock.
                 const isolatedFileSystem = new FileSystem(snapshot.files)
+                let execution: ExecutionGeneration
                 try {
-                    await this.compileInternal(
+                    execution = await this.compileInternal(
                         historySize,
                         snapshot,
                         isolatedFileSystem,
@@ -2434,7 +2453,11 @@ export abstract class GenericEmulator<T, R extends string>
                     })
                     continue
                 }
+                stopped = !this.executionController.isCurrent(execution)
+                if (stopped) break
                 await this.runTestcaseInternal(testcase, haltLimit)
+                stopped = !this.executionController.isCurrent(execution)
+                if (stopped) break
                 const errors = await this.validateTestcase(testcase)
                 results.push({
                     errors,
@@ -2451,6 +2474,8 @@ export abstract class GenericEmulator<T, R extends string>
                 this.useInteractiveRun()
             }
         }
+        //what `clear()` left is the state the run ended in, and the results so far are no run's
+        if (stopped) throw new ExecutionSupersededError()
         const passedTests = results.filter((r) => r.passed)
         terminal.prepend('⏳ Running tests...\n\n')
         if (passedTests.length !== results.length) {

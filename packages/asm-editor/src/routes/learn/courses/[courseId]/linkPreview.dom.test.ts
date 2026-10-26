@@ -17,7 +17,9 @@ vi.mock('#lib/content/getters.ts', async (original) => ({
     getCourse: vi.fn()
 }))
 //Monaco does not run in jsdom, and no lecture here opens an editor
-vi.mock('#lib/monaco/Monaco.ts', () => ({ Monaco: { load: () => {}, dispose: () => {} } }))
+vi.mock('#lib/monaco/Monaco.ts', () => ({
+    Monaco: { load: () => Promise.resolve(), dispose: () => {} }
+}))
 
 // jsdom has no Web Animations API, which the pages' transitions use.
 Element.prototype.animate ??= function () {

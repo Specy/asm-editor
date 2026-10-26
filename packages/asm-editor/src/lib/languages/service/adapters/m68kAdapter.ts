@@ -5,7 +5,11 @@ import {
     s68kDiagnosticToLanguageDiagnostic
 } from '#lib/languages/M68K/m68kDiagnostics.ts'
 import { fileText, type BuildSources } from '#lib/projectFiles.ts'
-import type { LanguageSymbol, M68kAnalysisSnapshot, M68kFileAnalysisStatus } from '../protocol'
+import type {
+    LanguageSymbol,
+    ProjectAnalysisSnapshot,
+    ProjectFileAnalysisStatus
+} from '../protocol'
 import type { SourceLocation, SymbolKind } from '../sourceModel'
 import { unresolvedSnapshot, unresolvedSources } from './unresolved'
 
@@ -82,13 +86,13 @@ export function analyzeM68kProject(
     sources: BuildSources,
     sessionId: string,
     revision: number
-): M68kAnalysisSnapshot {
+): ProjectAnalysisSnapshot {
     //sources the Build refuses are not checked either: why they cannot be built is the one error
     const unresolved = unresolvedSources(sources)
     if (unresolved)
         return unresolvedSnapshot(sources, unresolved, sessionId, revision, 'M68K', 's68k')
     const reachable = m68kReachableFiles(sources)
-    const fileStatus: Record<string, M68kFileAnalysisStatus> = Object.create(null)
+    const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {
         fileStatus[path] =
             file.encoding !== 'plain'
