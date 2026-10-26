@@ -11,8 +11,8 @@ import type { MarsDevices } from './MarsDevices'
 /**
  * The syscall handlers of the MARS and RARS derived Cores (MIPS and RISC-V): the program's reads,
  * prints, dialogs, Files, time and random seeds, served from the Emulator's peripherals. RARS's
- * services are ports of MARS's and both Cores take the same handlers, so both adapters register the
- * map made here, and a change to the handlers' shapes is made once.
+ * services are ports of MARS's and both Cores take the same handlers, so `MarsEmulator` registers
+ * the map made here on either, and a change to the handlers' shapes is made once.
  *
  * Pure transport ([ADR 0035](../../../../../../docs/adr/0035-environments-match-their-reference.md)):
  * the Cores format what they print and parse what they read, with their Reference environment's
@@ -43,8 +43,9 @@ type MarsConfirmResult = (typeof CONFIRM_RESULT)[keyof typeof CONFIRM_RESULT]
 /**
  * The handlers both Cores take, with the results the ones made here give. `@specy/mips` and
  * `@specy/risc-v` declare the same map (`HandlerMapFns`), each with its own enums, so it is declared
- * here, as `MarsCore` is, rather than taken from either package: each adapter's `registerHandlers`
- * call checks it against its own Core, so a Core release that changes a handler fails there.
+ * here, as `MarsCore` is, rather than taken from either package: the `registerHandlers` each
+ * adapter hands `MarsEmulator` is checked against it, so a Core release that changes a handler
+ * fails there.
  *
  * Reads answer with the text typed, which the service parses (an empty answer to read char is the
  * service's own error); an input dialog answers null for Cancel, which the program receives as
