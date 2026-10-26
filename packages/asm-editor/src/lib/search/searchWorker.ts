@@ -23,6 +23,11 @@ export type WorkerRequest =
 export type SearchAnswer = { results: SearchResult[]; mode: 'text' | 'hybrid' }
 
 export type WorkerResponse =
+    /**
+     * The worker's first message, once its listener exists: a request posted before it has
+     * nothing listening for it yet, so the client holds requests until it arrives.
+     */
+    | { type: 'ready' }
     | { id: number; ok: true; value: unknown }
     | { id: number; ok: false; error: string }
 
@@ -115,3 +120,5 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
             } satisfies WorkerResponse)
     )
 }
+
+self.postMessage({ type: 'ready' } satisfies WorkerResponse)
