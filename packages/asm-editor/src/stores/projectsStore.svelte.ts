@@ -127,12 +127,12 @@ function createProjectStore() {
     }
 
     /**
-     * Gives a stored Project a new name and description, saving the rest of it as it is stored
-     * now: a list's copy may be older than what a Workbench in another tab saved since.
+     * Gives a stored Project the name or description in `details`, saving the rest of it as it is
+     * stored now: a list's copy may be older than what a Workbench in another tab saved since.
      */
     async function saveDetails(
         id: string,
-        details: { name: string; description: string }
+        details: Partial<{ name: string; description: string }>
     ): Promise<SaveResult> {
         let stored: Project | undefined
         try {
@@ -142,8 +142,8 @@ function createProjectStore() {
             return { linked: 'none', local: 'failed', error }
         }
         if (!stored) return { linked: 'none', local: 'failed' }
-        stored.name = details.name
-        stored.description = details.description
+        if (details.name !== undefined) stored.name = details.name
+        if (details.description !== undefined) stored.description = details.description
         return save(stored)
     }
 

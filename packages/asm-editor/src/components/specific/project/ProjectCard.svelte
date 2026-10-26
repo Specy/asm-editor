@@ -42,13 +42,18 @@
     const created = $derived(new Date(project.createdAt))
     const edited = $derived(new Date(project.updatedAt))
 
-    /** Saves the name and description when they changed, leaving the rest as it is stored. */
+    /**
+     * Saves the name or description that changed, and only that: the other may be one this list's
+     * copy is behind on, changed in another tab since, and stays as it is stored.
+     */
     async function save() {
         const name = textContent
         const description = descriptionContent
-        if (name === (project.name || 'Unnamed') && description === (project.description || ''))
-            return
-        const result = await ProjectStore.saveDetails(project.id, { name, description })
+        const details: { name?: string; description?: string } = {}
+        if (name !== (project.name || 'Unnamed')) details.name = name
+        if (description !== (project.description || '')) details.description = description
+        if (details.name === undefined && details.description === undefined) return
+        const result = await ProjectStore.saveDetails(project.id, details)
         if (result.local === 'failed') toast.error(`Could not save "${name}" in the browser`)
     }
     async function deleteProject() {

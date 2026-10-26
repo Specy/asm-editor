@@ -92,6 +92,23 @@ it('renames the Project as it is stored, keeping what another tab saved since', 
     }
 })
 
+it('saves only the field that changed, keeping a name another tab gave since', async () => {
+    const project = await stored('old')
+    //a Workbench in another tab renames the Project, which the list's copy has not read
+    const elsewhere = (await db.getProject(project.id))!
+    await db.updateProject({ ...elsewhere.toObject(), name: 'renamed elsewhere' })
+    const { description, dispose } = card(project)
+    try {
+        type(description, 'described')
+        await vi.waitFor(async () =>
+            expect((await db.getProject(project.id))?.description).toBe('described')
+        )
+        expect((await db.getProject(project.id))?.name).toBe('renamed elsewhere')
+    } finally {
+        await dispose()
+    }
+})
+
 it('says when the browser did not store a rename or a delete', async () => {
     const project = await stored('refused')
     const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
