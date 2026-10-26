@@ -142,7 +142,7 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect(forms).toContainEqual([])
         expect(forms).toContainEqual(['pseudo'])
         // and the page says the tag once, on the section of the forms that have it
-        const sections = viewOf(lw, 'instruction').document().sections
+        const sections = viewOf(lw, 'instruction').document.sections
         expect(sections.map((section) => section.tags)).toEqual([[], ['pseudo']])
         expect((await instruction('mips', 'add')).category).toBe('arithmetic')
     })
@@ -171,7 +171,7 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         const mov = await instruction('x86', 'mov')
         expect(mov.category).toBe('data-movement')
         expect(mov.tags).toBeUndefined()
-        const sections = viewOf(mov, 'instruction').document().sections
+        const sections = viewOf(mov, 'instruction').document.sections
         expect(sections.map((section) => section.tags)).toEqual([[], ['privileged']])
     })
 
@@ -194,12 +194,12 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect(move.category).toBe('data-movement')
         expect(move.tags).toBeUndefined()
         const sectionsOf = async (name: string) =>
-            viewOf(await instruction('m68k', name), 'instruction')
-                .document()
-                .sections.map((section) => [
+            viewOf(await instruction('m68k', name), 'instruction').document.sections.map(
+                (section) => [
                     section.tags,
                     section.groups.flatMap((group) => group.patterns.map(patternText))
-                ])
+                ]
+            )
         expect((await sectionsOf('move')).at(-1)).toEqual([['privileged'], ['move <ea>, sr']])
         expect(await sectionsOf('andi')).toEqual([
             [[], ['andi #imm, <ea>', 'andi #imm, ccr']],
@@ -209,7 +209,7 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect(await sectionsOf('bcc')).toEqual([[[], ['bcc label']]])
         const entries = entriesOf(await documentationFor('m68k'))
         for (const entry of entries.filter((entry) => entry.kind === 'instruction')) {
-            const patterns = documentPatterns(viewOf(entry, 'instruction').document())
+            const patterns = documentPatterns(viewOf(entry, 'instruction').document)
             expect(patterns.length, entry.id).toBeGreaterThan(0)
             expect(entry.tags, entry.id).toBeUndefined()
         }

@@ -170,12 +170,6 @@ export function descriptionAfterSummary(
     return rest || undefined
 }
 
-/** A document built once, the first time it is asked for. */
-export function lazyDocument(build: () => InstructionDocument): () => InstructionDocument {
-    let built: InstructionDocument | undefined
-    return () => (built ??= build())
-}
-
 /** How many Form patterns a row's signature names before it trails off. */
 const SIGNATURE_PATTERNS = 3
 

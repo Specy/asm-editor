@@ -150,7 +150,7 @@ describe('instruction content integration', () => {
         expect(entry.href).toBe(`/documentation/${language}/instruction/${name}`)
         // the page and the panel draw the same document, and search reads its words
         if (entry.view.type !== 'instruction') throw new Error(`${entry.id} has no document`)
-        expect(result.props.document).toEqual(entry.view.document())
+        expect(result.props.document).toEqual(entry.view.document)
         expect(entry.summary).toBe(result.props.document.summary)
         const first = (mips ? mipsInstructionMap : riscvInstructionMap).get(name)![0]
         expect(entry.searchText).toContain(first.description)
@@ -182,7 +182,7 @@ describe('instruction content integration', () => {
         const entry = instructionEntry(mipsChapters(), 'add')
         if (entry.view.type !== 'instruction') throw new Error('add has no document')
         expect(body.querySelector('.header .long-name')?.textContent).toBe(
-            entry.view.document().longName
+            entry.view.document.longName
         )
         // the sidebar and the Chapter's headings group by category; the header leaves it out
         expect(body.querySelector('.header')?.textContent).not.toContain('Arithmetic')

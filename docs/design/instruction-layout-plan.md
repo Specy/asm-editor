@@ -97,7 +97,7 @@ type OperandSymbol = { symbol: string; meaning: string; href?: string }
 
 **M6. Wiring** (me).
 
-- `EntryView` gets one `{ type: 'instruction'; document: () => InstructionDocument }`, built lazily and cached; `EntryBody` draws it with the panel density; the four per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell` and `DocsOperand` (if unused elsewhere) go.
+- `EntryView` gets one `{ type: 'instruction'; document: () => InstructionDocument }`, built lazily and cached (since 2026-10-26 `document: InstructionDocument`: every adapter built it with the entry anyway, whose signature and summary read it); `EntryBody` draws it with the panel density; the four per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell` and `DocsOperand` (if unused elsewhere) go.
 - The five instruction routes build the document in `+page.server.ts` and draw `InstructionDocumentView` with their example in a snippet; the page's title, meta and JSON-LD use the long name and summary.
 - Entries' `summary` (search rows) and the hovers use the new long name and summary.
 

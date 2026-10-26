@@ -55,7 +55,7 @@ function instructions(): Chapter {
                 summary: document.summary,
                 href: `${BASE}/instruction/${mnemonic}`,
                 anchor: mnemonic,
-                view: { type: 'instruction', document: () => document },
+                view: { type: 'instruction', document },
                 searchText: [document.longName, ...descriptions].join('\n'),
                 code: [...new Set(variants.map((variant) => variant.example))].join('\n')
             },

@@ -35,7 +35,7 @@
 <div class="entry-body">
     {#if view.type === 'instruction'}
         <InstructionDocumentView
-            document={view.document()}
+            document={view.document}
             density="panel"
             {disableLinks}
             language={EXAMPLE_LANGUAGES[entry.language]}

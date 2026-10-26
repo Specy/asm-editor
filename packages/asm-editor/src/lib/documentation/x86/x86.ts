@@ -111,7 +111,7 @@ function instructions(): Chapter {
                 summary: document.summary,
                 href: `${BASE}/instruction/${instruction.name}`,
                 anchor: instruction.name,
-                view: { type: 'instruction', document: () => document },
+                view: { type: 'instruction', document },
                 // The section too: the rows are alphabetical, so NASM's heading is only found here.
                 searchText: [
                     ...new Set([
