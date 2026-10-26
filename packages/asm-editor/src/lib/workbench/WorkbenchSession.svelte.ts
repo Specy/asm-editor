@@ -59,6 +59,7 @@ import {
 } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { BuildDownloadError, CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
+import { ExecutionSupersededError } from '#lib/languages/ExecutionController.ts'
 import {
     isLineBreakpoint,
     makeRegister,
@@ -4356,8 +4357,8 @@ export class WorkbenchSession {
         this.testing = true
         this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
-            //Stop, in that frame or part way through the Testcases, ends the run, which then has
-            //no results to show and nothing to log, as a Build that Stop ends has not
+            //Stop in that frame ends the run before it starts, which then has no results to show
+            //and nothing to log, as a Build that Stop ends has not
             if (clears !== this.executionClears) return
             const results = await this.emulator.test(
                 this.sourceInput,
@@ -4365,11 +4366,13 @@ export class WorkbenchSession {
                 TESTCASE_INSTRUCTION_LIMIT,
                 undoHistorySize(this.effectiveSettings)
             )
-            if (clears !== this.executionClears) return
             this.testcasesResult = results
             this.appendLog(testRunEntry(results, performance.now() - started))
             this.bottomTab = 'log'
         } catch (e) {
+            //and so does a `clear()` part way through the Testcases, whoever made it: Stop, or the
+            //coding agent's Build or change to the source
+            if (e instanceof ExecutionSupersededError) return
             console.error(e)
             if (clears === this.executionClears)
                 toast.error('Error executing tests. ' + getM68kErrorMessage(e))

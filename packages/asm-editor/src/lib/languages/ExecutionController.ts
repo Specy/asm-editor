@@ -1,4 +1,4 @@
-class ExecutionSupersededError extends Error {
+export class ExecutionSupersededError extends Error {
     constructor() {
         super('Execution superseded')
         this.name = 'ExecutionSupersededError'

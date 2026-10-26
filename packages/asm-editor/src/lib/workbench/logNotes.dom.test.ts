@@ -8,6 +8,9 @@ import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import type { EmulatorNote } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { TestcaseResult } from '#lib/Project.svelte.ts'
+import { ExecutionSupersededError } from '#lib/languages/ExecutionController.ts'
+import { toast } from '#stores/toastStore.ts'
 import LogView from '#cmp/specific/workbench/LogView.svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import { appendLog, noteEntry } from './workbenchLog'
@@ -76,21 +79,53 @@ describe('a Build that Stop ends part way', () => {
     })
 })
 
-describe('a test run that Stop ends part way', () => {
-    it('shows no results and logs nothing, whatever the Emulator answers once it is over', async () => {
-        const { session, emulator } = setup()
-        let release!: () => void
-        const finished = { errors: [], passed: true, testcase: {} }
+describe('a test run that a clear ends part way', () => {
+    /**
+     * A test run as the Emulator's ends at a `clear()`, whoever made it: failing with
+     * `ExecutionSupersededError` once the Testcase it cut short is over, which a Core that cannot
+     * be halted finishes unseen.
+     */
+    function endedByClear(emulator: ReturnType<typeof setup>['emulator']) {
+        let release: (() => void) | undefined
         ;(emulator as unknown as { test: () => Promise<unknown[]> }).test = () =>
-            new Promise((resolve) => (release = () => resolve([finished])))
+            new Promise((_, reject) => (release = () => reject(new ExecutionSupersededError())))
+        return {
+            started: () => release !== undefined,
+            release: () => release?.()
+        }
+    }
+
+    it('shows no results and logs nothing when Stop ended it', async () => {
+        const { session, emulator } = setup()
+        const run = endedByClear(emulator)
         session.bottomTab = 'terminal'
-        const run = session.test()
-        await vi.waitFor(() => expect(release).toBeDefined())
+        const testing = session.test()
+        await vi.waitFor(() => expect(run.started()).toBe(true))
         session.stop()
-        release()
-        await run
+        run.release()
+        await testing
         flushSync()
         expect(session.testcasesResult).toEqual([])
+        expect(session.log).toEqual([])
+        expect(session.bottomTab).toBe('terminal')
+        expect(session.running).toBe(false)
+    })
+
+    it('drops the run without an error when the clear was not its Stop, such as the agent Building', async () => {
+        const { session, emulator } = setup()
+        const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
+        const run = endedByClear(emulator)
+        //the results of the run before, which this one never replaced
+        const earlier = [{ errors: [], passed: true, testcase: {} }] as unknown as TestcaseResult[]
+        session.testcasesResult = earlier
+        session.bottomTab = 'terminal'
+        const testing = session.test()
+        await vi.waitFor(() => expect(run.started()).toBe(true))
+        run.release()
+        await testing
+        flushSync()
+        expect(error).not.toHaveBeenCalled()
+        expect(session.testcasesResult).toEqual(earlier)
         expect(session.log).toEqual([])
         expect(session.bottomTab).toBe('terminal')
         expect(session.running).toBe(false)

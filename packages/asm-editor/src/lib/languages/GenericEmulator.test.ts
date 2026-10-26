@@ -933,9 +933,9 @@ describe('stop', () => {
         await vi.waitFor(() => expect(runs).toBe(1))
         //Stop: the same path the GUI takes
         emulator.clear()
-        //the Core it could not halt finishes the Testcase unseen
+        //the Core it could not halt finishes the Testcase unseen, and the run has no results
         release()
-        expect(await done).toEqual([])
+        await expect(done).rejects.toThrow('Execution superseded')
         expect(runs).toBe(1)
         //nor does the run say anything in the Terminal Stop emptied
         expect(emulator.peripherals.terminal.output).toBe('')
@@ -956,7 +956,7 @@ describe('stop', () => {
         await vi.waitFor(() => expect(release).toBeDefined())
         emulator.clear()
         release()
-        expect(await done).toEqual([])
+        await expect(done).rejects.toThrow('Execution superseded')
         await expect(read).rejects.toThrow('Execution superseded')
         expect(emulator.peripherals.terminal.pendingRead).toBeNull()
     })

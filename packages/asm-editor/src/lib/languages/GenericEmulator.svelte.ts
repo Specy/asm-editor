@@ -78,6 +78,7 @@ import {
 } from '#cmp/specific/project/memory/memoryTabUtils.ts'
 import {
     ExecutionController,
+    ExecutionSupersededError,
     type ExecutionGeneration
 } from '#lib/languages/ExecutionController.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -2398,9 +2399,9 @@ export abstract class GenericEmulator<T, R extends string>
 
     /**
      * Runs the Testcases one after another, each from its own Build. `clear()`, which Stop and a
-     * Build call, ends the whole run: the Testcase it cut short is not checked, the ones after it
-     * do not run, and the results are those of the Testcases that finished before it, with nothing
-     * said in the Terminal that it emptied.
+     * Build call, ends the whole run, which then fails with `ExecutionSupersededError`, whoever
+     * cleared: the Testcase it cut short is not checked, the ones after it do not run, and nothing
+     * is said in the Terminal that it emptied.
      */
     async test(sources: BuildInput, testcases: Testcase[], haltLimit: number, historySize = 0) {
         //held across the whole loop: `validateTestcase` reads registers and memory back out of the
@@ -2471,8 +2472,8 @@ export abstract class GenericEmulator<T, R extends string>
                 this.useInteractiveRun()
             }
         }
-        //what `clear()` left is the state the run ended in
-        if (stopped) return results
+        //what `clear()` left is the state the run ended in, and the results so far are no run's
+        if (stopped) throw new ExecutionSupersededError()
         const passedTests = results.filter((r) => r.passed)
         terminal.prepend('⏳ Running tests...\n\n')
         if (passedTests.length !== results.length) {
