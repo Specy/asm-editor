@@ -177,11 +177,6 @@ export class MarsDevices {
         return regions
     }
 
-    /** The grid the Screen currently mirrors, for the GUI and the tests. */
-    get displayGeometry(): MarsDisplayGeometry | null {
-        return this.geometry
-    }
-
     /**
      * Points the devices at a freshly assembled and initialized Core. Registrations live on the
      * Core's memory singleton and survive `assemble()`/`initialize()`, so the previous ones are
@@ -192,11 +187,6 @@ export class MarsDevices {
         this.core = core
         this.observeRegisters()
         this.configureDisplay(display)
-    }
-
-    /** Drops every registration. The input subscriptions outlive it, see `dispose`. */
-    detach(): void {
-        this.detachCore()
     }
 
     /** The Emulator is going away: no keystroke may reach a Core that no longer exists. */

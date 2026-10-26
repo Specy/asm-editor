@@ -28,7 +28,6 @@ import {
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     BuildDownloadError,
-    EmulatorStatus,
     type CompileResult,
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -56,7 +55,6 @@ import {
     sliceInstructionBudget
 } from '#lib/languages/ExecutionSlice.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import {
     END_OF_INPUT,
     assembleInstruction,
@@ -812,7 +810,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _initialize(undoSize: number): void {
         const core = this.requireCore()
-        this.undoSize = Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+        this.undoSize = undoSize
         core.initialize(this.undoSize)
         this.recordingRandom = true
         this.undoRecording = true
@@ -1310,27 +1308,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return names.map((_, index) => this.x87Blanks[index] ?? false)
     }
 
-    _getRegisterValue(
-        register: X86RegisterName,
-        size: RegisterSize | undefined = RegisterSize.Double
-    ): bigint {
-        return this.requireCore().getRegisterValue(
-            normalizeRegisterName(register),
-            CORE_REGISTER_SIZE[size]
-        )
-    }
-
     _getRegisterValues(): bigint[] {
         return this.core?.getRegisterValues() ?? new Array(this._registerNames.length).fill(0n)
-    }
-
-    _getRegisterValuesRecord(): Record<X86RegisterName, bigint> {
-        if (!this.core) {
-            return Object.fromEntries(
-                this._registerNames.map((register) => [register, 0n])
-            ) as Record<X86RegisterName, bigint>
-        }
-        return this.core.getRegisterValuesRecord()
     }
 
     _getMemoryLayout() {
@@ -1464,10 +1443,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.getSp() ?? 0n
     }
 
-    _getStatus(): EmulatorStatus {
-        return toLocalStatus(this.core?.getStatus() ?? CoreEmulatorStatus.NotReady)
-    }
-
     _getUndoHistory(max: number): ExecutionStep[] {
         return this._getUndoHistoryRange(0, max)
     }
@@ -1552,10 +1527,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { reason: 'terminated', instructions }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(haltLimit: number): Promise<void> {
         this.loadedObjects = undefined
         this.mappingsMayChange()
-        await this.runWithInput(haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit, [])
+        await this.runWithInput(haltLimit, [])
     }
 
     /**
@@ -1586,11 +1561,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         await this.executionController.waitFor(execution, () => core.step())
         await this.finishBlockedInstruction(execution)
         return { terminated: core.hasTerminated() }
-    }
-
-    _stringifyError(error: unknown, _line?: number): string {
-        if (error instanceof Error) return error.message
-        return String(error)
     }
 
     _undo(): void {
@@ -1994,11 +1964,6 @@ function toDoubleBits(value: number): bigint {
 function fromDoubleBits(bits: bigint): number {
     doubleBits.setBigUint64(0, bits & 0xffffffffffffffffn, true)
     return doubleBits.getFloat64(0, true)
-}
-
-function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
-    if (status === CoreEmulatorStatus.Terminated) return EmulatorStatus.Terminated
-    return EmulatorStatus.Running
 }
 
 function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {

@@ -154,11 +154,9 @@ function kindOf(file: RegisterFileRendering, index: number): 'integer' | 'float'
 }
 
 /**
- * The hex grouping of one register, which is `Register.toSizedGroups` in
- * commonLanguageFeatures.svelte.ts for a plain bit pattern rather than for a `$state` Register. The
- * two have to agree, because the CPU panel and a Register file panel sit next to each other: a
- * group is never wider than the register it was cut from, and its signed reading is taken over that
- * clamped width.
+ * The hex grouping of one register, as every Register file panel shows it, the CPU one included: a
+ * group is never wider than the register it was cut from, and its signed reading is taken over
+ * that clamped width, so Z80's byte wide `a` holding 0xff is -1 and not the 255 a word would read.
  */
 function hexChunks(
     value: bigint,

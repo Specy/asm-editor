@@ -3,7 +3,6 @@ import type { MarsDisplayConfiguration, ProjectDisplay } from '#lib/languages/ma
 import type { InjectedPeripheralOptions } from '#lib/languages/peripherals/peripheralSet.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
-import { unsignedBigIntToSigned } from '#lib/utils.ts'
 import type { Annotations, BuildInput, BuildSources } from '#lib/projectFiles.ts'
 
 export type StatusRegister = {
@@ -120,8 +119,6 @@ export type UnreadableBytes = {
     reason: string
 }
 
-export type RegisterHex = [hi: string, lo: string]
-
 export enum RegisterSize {
     Byte = 1,
     Word = 2,
@@ -131,17 +128,6 @@ export enum RegisterSize {
     Quad = 16,
     /** 256 bits, the width of an x86 AVX register. */
     Oct = 32
-}
-
-export type RegisterChunk = {
-    hex: string
-    value: bigint
-    valueSigned: bigint
-    groupSize: bigint
-    prev: {
-        hex: string
-        value: bigint
-    }
 }
 
 export function numbersOfSizeToSlice(
@@ -211,35 +197,6 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
         size = BigInt(newSize)
     }
 
-    function toSizedGroups(groupSize: RegisterSize): RegisterChunk[] {
-        //a register narrower than the grouping is one group of its own width, so the signed reading
-        //has to be taken over the width the group really has: Z80's byte wide `a` holding 0xff is
-        //-1 and not the 255 a word would read. `hexChunks` in registerFormats.ts is the same
-        //grouping for a Register file's rows and clamps the same way; the two have to agree,
-        //because the panels show them side by side.
-        const groupBytes = Math.max(1, Math.min(Number(groupSize), Number(size)))
-        const groupLength = BigInt(groupBytes) * 2n
-        const hex = toHex()
-        const prevHex = toHexString(prev, size)
-        const chunks: RegisterChunk[] = []
-        for (let i = 0n; i < hex.length; i += groupLength) {
-            const index = Number(i)
-            const offset = Number(i + groupLength)
-            const groupValue = BigInt(`0x${hex.slice(index, offset)}`)
-            chunks.push({
-                hex: hex.slice(index, offset),
-                value: groupValue,
-                valueSigned: unsignedBigIntToSigned(groupValue, groupBytes),
-                groupSize: groupLength,
-                prev: {
-                    hex: prevHex.slice(index, offset),
-                    value: BigInt(`0x${prevHex.slice(index, offset)}`)
-                }
-            })
-        }
-        return chunks
-    }
-
     return {
         name,
         get value() {
@@ -255,8 +212,7 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
         },
         setSize,
         setValue,
-        toHex,
-        toSizedGroups
+        toHex
     }
 }
 

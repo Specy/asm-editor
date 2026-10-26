@@ -1,110 +1,29 @@
-import { argvArgumentsArea, memoryLayoutFromItems, textSegmentsReadOnly } from '../memoryRegions'
-import { makeMipsCore, type MipsLink } from './MIPS-core'
-import {
-    coreLibrary,
-    loadedRuntimeFunctions,
-    loadedRuntimeLibrary,
-    loadRuntimeFunctions,
-    loadRuntimeLibrary,
-    runtimeLibraryHint
-} from '#lib/sourceRuntime/runtimeLibrary.ts'
-import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
+import { makeMipsCore } from './MIPS-core'
 import {
     BackStepAction,
     isRuntimeError,
     type JsBackStep,
-    type JsInstructionUndoGroup,
     type JsMips,
-    type JsPokeUndoGroup,
-    type JsPokeWrite,
-    type JsProgramStatement,
     MIPS,
-    type MIPSAssembleError,
     MIPS_COPROCESSOR0_REGISTER_NUMBERS,
-    type MipsTokenizedLine,
     registerHandlers,
     type RegisterName,
     StopReason
 } from '@specy/mips'
 import {
-    type CompileResult,
-    EmulatorStatus,
-    type Instruction
-} from '#lib/languages/BaseEmulator.svelte.ts'
-import {
-    type BuildArtifact,
-    type Diagnostic,
-    type EmulatorDecoration,
     type EmulatorSettings,
-    type ExecutionStep,
-    isLineBreakpoint,
-    makeLabelColor,
     type MutationOperation,
-    type PokeWrite,
     type RegisterFileDescriptor,
-    type SourceBreakpoint,
-    RegisterSize,
-    type StackFrame
+    RegisterSize
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
-import type { Termination } from '#lib/languages/termination.ts'
-import { type ExecutionSlice, type ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
-import { MarsSlicePacer } from '#lib/languages/mars/marsSlice.ts'
-import {
-    canUndoMarsHistoryRange,
-    memoryBackstepMutation,
-    registerBackstepMutation
-} from '#lib/languages/mars/marsUndo.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
-import { programArgv0 } from '#lib/commandLine.ts'
-import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
-import {
-    exitStepText,
-    MarsHandlers,
-    marsRuntimeErrorMessage,
-    normalizeUndoSize,
-    randomStreamStepText,
-    toHaltLimit
-} from '#lib/languages/mars/marsHandlers.ts'
-import {
-    type MarsDisplayConfiguration,
-    type MarsDisplayOrigin,
-    normalizeMarsDisplay,
-    type ProjectDisplay
-} from '#lib/languages/mars/marsDisplay.ts'
-import {
-    applyScreenDirective,
-    assembledCore,
-    ignoredIncludedScreenDiagnostics,
-    readScreenLabelProbe,
-    resolveScreenLabel,
-    SCREEN_LABEL_PROBE_ADDRESS,
-    screenLabelProbeSource
-} from '#lib/languages/mars/screenDirective.ts'
-import {
-    makeTokenSpanIndex,
-    tokenSpanEnd,
-    type TokenSpanIndex
-} from '#lib/languages/mars/tokenSpans.ts'
-import {
-    buildAssemblerProfile,
-    ProjectFormatError,
-    sourceText,
-    textAssemblyFiles,
-    updateEntryText,
-    type BuildInput,
-    type BuildSources,
-    type ProjectFiles
-} from '#lib/projectFiles.ts'
+import type { MarsTarget } from '#lib/languages/mars/marsCheck.ts'
+import { MarsEmulator } from '#lib/languages/mars/MarsEmulator.svelte.ts'
+import { memoryBackstepMutation, registerBackstepMutation } from '#lib/languages/mars/marsUndo.ts'
+import { exitStepText, randomStreamStepText } from '#lib/languages/mars/marsHandlers.ts'
+import type { BuildInput } from '#lib/projectFiles.ts'
 import {
     MIPSCoprocessor0RegisterNames,
     MIPSCoprocessor1RegisterNames,
-    MIPSNumericRegisterNames,
-    MIPSRegisterNames,
-    type MIPSRegisterName
-} from './MIPS-registers'
-
-export {
     MIPSNumericRegisterNames,
     MIPSRegisterNames,
     type MIPSRegisterName
@@ -169,40 +88,8 @@ export function MIPSEmulator(source: BuildInput, options: EmulatorSettings = {})
     return new AsmEditorMIPSEmulator(source, options)
 }
 
-class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
-    private mips: JsMips | null = null
-    /**
-     * The bitmap display and the keyboard-and-display registers, the two MARS tools this editor
-     * offers as devices the Core memory is observed through. Built once and pointed at each freshly
-     * assembled Core, because the peripherals it drives live as long as the Emulator does.
-     */
-    private readonly devices: MarsDevices
-    /**
-     * The syscall handlers, which RISC-V shares (`marsHandlers.ts`). Built once like the devices and
-     * registered on each freshly assembled Core.
-     */
-    private readonly handlers: MarsHandlers
-    /** The chunking of a slice, which is what keeps it near its deadline (`marsSlice.ts`). */
-    private readonly pacer = new MarsSlicePacer(MIPS_CHUNK_TARGET_MS)
-    /** MARS's five display parameters, from the project and changed from the Screen panel. */
-    private display: ProjectDisplay
-    /** Whether the last Build read them out of a `@screen` comment instead. */
-    private displayOrigin: MarsDisplayOrigin = 'user'
-    /** The label such a directive named for its base address, for the Screen panel to show. */
-    private displayBaseLabel: string | undefined
-    /**
-     * Where the last Core call failed, from its `RuntimeError`: the Core has moved its program
-     * counter past the instruction by then, so neither the next statement nor the history names
-     * it. Null while the program has not failed since the last call, Undo or Build.
-     */
-    private failedAt: number | null = null
-    /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
-    private undoEnabled = false
-    /** Whether a slice is running the Core, which is when a sleep ends the call (`pauseAtSleep`). */
-    private slicing = false
-    /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
-    private programArgv: string[] = []
-
+/** MARS's Emulator (`MarsEmulator`), with the HI/LO registers and its FPU and CP0 files. */
+class AsmEditorMIPSEmulator extends MarsEmulator<JsMips, JsBackStep, MIPSRegisterName> {
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
             source,
@@ -210,554 +97,39 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 systemSize: RegisterSize.Long,
                 registerNames: [...MIPSRegisterNames],
                 hiddenRegisters: ['$zero'],
-                endianness: 'little',
                 registerFiles: MIPS_REGISTER_FILES
             },
+            { ...options, language: options.language ?? 'MIPS' },
             {
-                ...options,
-                language: options.language ?? 'MIPS',
-                baseAddress: options.baseAddress ?? 0x10010000n,
-                stackAddress: options.stackAddress ?? 0x7ffffffcn,
-                initialMemoryValue: options.initialMemoryValue ?? 0x0
+                instructionsPerMs: MIPS_INSTRUCTIONS_PER_MS,
+                chunkTargetMs: MIPS_CHUNK_TARGET_MS,
+                makeCore: makeMipsCore,
+                checkProgramArguments: (argv) => MIPS.checkProgramArguments(argv),
+                registerHandlers,
+                isRuntimeError,
+                stopReasons: StopReason,
+                formatStatement
             }
         )
         //`pc`, `hi` and `lo` are readable in testcase expectations but the core has no setter for
         //them, so they must not be offered as starting registers (see `_setRegisterValue`)
         this.state.startingRegisterNames = [...MIPSNumericRegisterNames]
-        this.display = normalizeMarsDisplay(options.display)
-        this.devices = new MarsDevices({
-            screen: this._peripherals.screen,
-            keyboard: this._peripherals.keyboard,
-            terminal: this._peripherals.terminal,
-            audio: () => this._peripherals.audio
-        })
-        this.devices.setDisplay(this.display)
-        this.handlers = new MarsHandlers({
-            peripherals: this._peripherals,
-            executionController: this.executionController,
-            devices: this.devices,
-            //`clear()` replaces `state`, so each call looks it up instead of capturing it
-            setInterrupt: (interrupt) => {
-                this.state.interrupt = interrupt
-                //MARS advances PC before invoking the syscall's asynchronous handler.
-                if (interrupt) this.refreshInputState(this._getInstructionAt(this._getPc() - 4n))
-            },
-            pauseAtSleep: () => {
-                if (this.slicing) this.mips?.pause()
-            },
-            fileSystem: () => this.fileSystemSession,
-            instructionSerial: () => this.requireMips().getCurrentInstructionSerial()
-        })
     }
 
-    /**
-     * The Screen panel's configuration popover, applied at once and with a re-sync from memory, as
-     * MARS does. The caller stores the same value in the project so it comes back with it.
-     */
-    setDisplay(display: ProjectDisplay): void {
-        this.display = normalizeMarsDisplay(display)
-        //a hand edit wins until the next Build reads the directive again
-        this.displayOrigin = 'user'
-        this.displayBaseLabel = undefined
-        this.devices.setDisplay(this.display)
-    }
-
-    /** What the Screen is configured with, and whether the program's source asked for it. */
-    getDisplay(): MarsDisplayConfiguration {
-        return {
-            display: this.display,
-            origin: this.displayOrigin,
-            baseLabel: this.displayBaseLabel
-        }
-    }
-
-    protected getInstance(): JsMips | null {
-        return this.mips ?? null
-    }
-
-    protected positionStackTabOnCompile(): void {
-        //legacy parity: the Stack tab shows the page *below* SP, which is the region the stack
-        //actually grows into. Running scrollStackTab() here would snap the tab onto the page
-        //containing SP (0x7ffffffc is not page aligned) and show unwritten memory above the stack.
-        const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-        if (stackTab && !stackTab.userPlaced) {
-            stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
-        }
-    }
-
-    _canUndo(): boolean {
-        const mips = this.mips
-        if (!mips?.canUndo) return false
-        const group = mips.getUndoGroupsUpTo(1)[0]
-        //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by an
-        //instruction serial, has nothing to say about undoing one
-        //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
-        if (!group || group.kind === 'poke') return true
-        return this.fileSystemSession?.canUndoAfter(group.serial) ?? true
-    }
-
-    /** The Core groups its history by instruction or Poke, so the group count is the depth. */
-    _undoDepth(): number {
-        return this.mips?.getUndoDepth() ?? 0
-    }
-
-    /**
-     * The Core's count of every instruction it has executed, one Undo entry each, the one a failed
-     * Step or slice stopped on included: what lets `GenericEmulator` record a call that threw, where
-     * the pacer's per-chunk counts are lost with the rejection.
-     */
-    _getInstructionsExecuted(): bigint {
-        return BigInt(this.mips?.getInstructionsExecuted() ?? 0)
-    }
-
-    _canUndoSteps(count: number): boolean {
-        return this._canUndoHistoryRange(0, count)
-    }
-
-    _canUndoHistoryRange(skip: number, count: number): boolean {
-        return canUndoMarsHistoryRange(this.mips, this.fileSystemSession, skip, count)
-    }
-
-    _setUndoRecording(recording: boolean): void {
-        this.mips?.setUndoEnabled(recording && this.undoEnabled)
-    }
-
-    /**
-     * Opens the Core's Poke transaction: `setRegisterValue`, `setCoprocessor1Value`,
-     * `setCoprocessor0Value` and `setMemoryBytes` journal into it instead of writing straight
-     * through, and `endPoke` records the lot as one entry of the undo history
-     * ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)).
-     */
-    _beginPoke(): void {
-        this.requireMips().beginPoke()
-    }
-
-    _endPoke(): boolean {
-        return this.requireMips().endPoke()
-    }
-
-    /**
-     * `argv[0]` as a shell would start the program, `./main` for `main.asm` or `main.c`, and the
-     * Arguments after it, which the Core stores above the stack at every start, with argc in `$a0`
-     * and argv in `$a1` ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
-     * Checked here, so the Core's refusal (too many, too long) stops the Build as an Arguments
-     * problem; the Core `_compile` creates gets them.
-     */
-    _setProgramArguments(sources: BuildSources, args: string[]): void {
-        const argv = [programArgv0(sources.entry, false, sources.entrySource), ...args]
-        MIPS.checkProgramArguments(argv)
-        this.programArgv = argv
-    }
-
-    /**
-     * Loads the Runtime library a Build links, and the list of library functions that explains an
-     * undefined `printf` in a Build that does not link it, before any Core is created.
-     */
-    async _prepareBuild(sources: BuildSources): Promise<void> {
-        if (sources.runtimeAbi === undefined) {
-            await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
-            return
-        }
-        //only a Compilation record's requirement starts at the library's _start (resolveRuntimeLink)
-        const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
-        if (problem) throw new ProjectFormatError(problem)
-        await loadRuntimeLibrary(sources.runtimeAbi, 'MIPS')
-    }
-
-    /** The library and entry symbol `_prepareBuild` loaded for these sources. */
-    private runtimeLink(sources: BuildSources): MipsLink {
-        if (sources.runtimeAbi === undefined) return {}
-        const library = loadedRuntimeLibrary(sources.runtimeAbi, 'MIPS')
-        if (!library)
-            throw new ProjectFormatError(`The Runtime library ${sources.runtimeAbi} is not loaded`)
-        return {
-            library: coreLibrary(library),
-            ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {})
-        }
-    }
-
-    /** An undefined library function in a Build without the library says how to turn it on. */
-    private withRuntimeHints(sources: BuildSources, diagnostics: Diagnostic[]): Diagnostic[] {
-        if (sources.runtimeAbi !== undefined) return diagnostics
-        const functions = loadedRuntimeFunctions(CURRENT_RUNTIME_ABI)
-        return diagnostics.map((diagnostic) => {
-            if (diagnostic.severity !== 'error' || diagnostic.hint) return diagnostic
-            const hint = runtimeLibraryHint(diagnostic.message, functions)
-            return hint ? { ...diagnostic, hint } : diagnostic
-        })
-    }
-
-    _checkCode(sources: BuildSources): Diagnostic[] {
-        const files = textAssemblyFiles(sources)
-        const mips = makeMipsCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        const result = mips.assemble()
-        const lines = tokenizedLines(mips)
-        const spans = makeTokenSpanIndex(lines)
-        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
-        //is being typed and does not vanish half a second after a Build replaces this list; read
-        //last, since a name only a probe resolves assembles another Core over this one
-        const directive = this.readScreenDirective(sources, assembledCore(mips, result)).diagnostics
-        return this.withRuntimeHints(sources, [
-            ...directive,
-            ...includedScreenDiagnostics(files, sources.entry, lines),
-            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
-        ])
-    }
-
-    _compile(sources: BuildSources, undoSize: number): CompileResult {
-        this.mips = null
-        const files = textAssemblyFiles(sources)
-        let { mips, result } = this.assembleProgram(sources, files, undoSize)
-        //before the first instruction, so it and a Testcase alike run on the display the source
-        //asked for, its base label read from this assembly. A name only the probe resolves
-        //assembles a throwaway Core over the state every Core shares, so the program is assembled
-        //again after it
-        let probed = false
-        const configured = this.readScreenDirective(sources, assembledCore(mips, result), () => {
-            probed = true
-        })
-        if (probed) ({ mips, result } = this.assembleProgram(sources, files, undoSize))
-        this.display = configured.display
-        this.displayOrigin = configured.origin
-        this.displayBaseLabel = configured.baseLabel
-        //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
-        //a re-sync here would repaint the Screen `clear()` has just blanked with the program's
-        //memory — and a build that then fails never reaches `_initialize` to put it right again
-        this.devices.resetScreen(this.display)
-        const lines = tokenizedLines(mips)
-        const spans = makeTokenSpanIndex(lines)
-        const diagnostics = this.withRuntimeHints(sources, [
-            ...configured.diagnostics,
-            ...includedScreenDiagnostics(files, sources.entry, lines),
-            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
-        ])
-        //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
-        //so a warnings-only program would be rejected despite having assembled fine
-        if (diagnostics.some((d) => d.severity === 'error')) {
-            return {
-                ok: false,
-                diagnostics,
-                report: result.report
-            }
-        }
-        this.mips = mips
-        return { ok: true, diagnostics, libraryFiles: this.libraryFiles(sources, mips) }
-    }
-
-    /** A Core for the program, assembled for a Build. */
-    private assembleProgram(
-        sources: BuildSources,
-        files: Record<string, string>,
-        undoSize: number
-    ) {
-        const mips = makeMipsCore(
-            files,
-            sources.entry,
-            buildAssemblerProfile(sources),
-            this.runtimeLink(sources)
-        )
-        //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
-        //the size has to be set *before* assembling: setting it afterwards would only size the next
-        //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
-        mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
-        //stored by every `initialize`, a Testcase's included, before its starting registers
-        mips.setProgramArguments(this.programArgv)
-        return { mips, result: mips.assemble() }
-    }
-
-    /**
-     * The members of the library the Build linked, in the order the Core placed them: read-only
-     * Files the debugger and the Explorer show. The rest of the library stays reachable through go
-     * to definition.
-     */
-    private libraryFiles(sources: BuildSources, mips: JsMips): ProjectFiles | undefined {
-        if (sources.runtimeAbi === undefined) return undefined
-        const library = loadedRuntimeLibrary(sources.runtimeAbi, 'MIPS')
-        if (!library) return undefined
-        //a member's every statement names it, and a key keeps the place of its first entry
-        return Object.freeze(
-            Object.fromEntries(
-                mips
-                    .getCompiledStatements()
-                    .map((statement) => statement.sourcePath)
-                    .filter((path) => Object.prototype.hasOwnProperty.call(library.members, path))
-                    .map((path) => [
-                        path,
-                        { encoding: 'plain' as const, content: library.members[path] }
-                    ])
-            )
-        )
-    }
-
-    _initialize(undoSize: number): void {
-        const mips = this.requireMips()
-        //the stack was already sized in `_compile`, `assemble()` engages the backstepper
-        //unconditionally so this is what actually turns undo off when history is disabled
-        this.undoEnabled = normalizeUndoSize(undoSize) > 0
-        mips.setUndoEnabled(this.undoEnabled)
-        //a new run: not exited, exit code 0, and the random generators forgotten
-        mips.initialize(true)
-        this.failedAt = null
-        this.pacer.reset()
-        registerHandlers(mips, this.handlers.makeHandlerMap())
-        //after `initialize`, so the observers see the program's writes and not the loading of `.data`
-        this.devices.attach(mips, this.display)
-        //what an instruction does to the Terminal, a handler's or a device's, is journaled under the
-        //serial its Undo group carries ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md))
-        const instruction = () => {
-            const serial = mips.getCurrentInstructionSerial()
-            return serial === null ? null : BigInt(serial)
-        }
-        this._peripherals.terminal.trackHistory(instruction, normalizeUndoSize(undoSize))
-        //and so are the Notes it plays
-        //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
-        this._peripherals.audio.track(instruction, normalizeUndoSize(undoSize))
-    }
-
-    _dispose(): void {
-        this.devices.dispose()
-        this.mips = null
-    }
-
-    /**
-     * Build, Stop and dispose reset the Screen to the language default, but the bitmap display's
-     * geometry belongs to the user rather than to a program, so it comes straight back — blank,
-     * because the picture is memory that the next build clears.
-     *
-     * Guarded: the base constructor clears before this subclass's fields exist.
-     */
-    clear(): void {
-        super.clear()
-        this.devices?.resetScreen(this.display)
-    }
-
-    /**
-     * What the program's `@screen` comment asks for, on top of the display the Screen has now, its
-     * base label read from `assembled`, the program's Core when it assembled; `onProbe` is told
-     * when that took a probe, which assembles a Core of its own.
-     *
-     * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
-     * subclass's fields exist, when there is no current display to layer onto yet.
-     */
-    private readScreenDirective(
-        sources: BuildSources,
-        assembled: JsMips | null,
-        onProbe?: () => void
-    ) {
-        const code = sourceText(sources)
-        const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            resolveScreenLabel(assembled, label, () => {
-                //GNU assembly cannot place a probe word at a fixed address, and its symbol table
-                //is all a probe would read
-                if (sources.assemblerProfile === 'gnu-compiler-v1') return null
-                onProbe?.()
-                return this.probeLabelAddress(sources, label)
-            })
-        )
-        return {
-            ...configured,
-            diagnostics: configured.diagnostics.map((diagnostic) => ({
-                ...diagnostic,
-                file: sources.entry
-            }))
-        }
-    }
-
-    /**
-     * The address of a `@screen base=` name the program's symbol table does not hold, such as an
-     * `.eqv` name: the program is assembled once more with one extra `.word <name>` at a fixed
-     * address and that word is read back, since the assembler itself resolves the name in it.
-     */
-    private probeLabelAddress(sources: BuildSources, label: string): number | null {
-        try {
-            const probeSources = updateEntryText(
-                sources,
-                screenLabelProbeSource(sourceText(sources), label)
-            )
-            const probe = makeMipsCore(
-                textAssemblyFiles(probeSources),
-                probeSources.entry,
-                buildAssemblerProfile(probeSources),
-                this.runtimeLink(probeSources)
-            )
-            const result = probe.assemble()
-            if (result.errors.some((error) => !error.isWarning)) return null
-            return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
-        } catch {
-            return null
-        }
-    }
-
-    /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */
-    _resyncScreenFromMemory(): void {
-        this.devices.resync()
-    }
-
-    _getCallStack(): StackFrame[] {
-        const mips = this.mips
-        if (!mips) return []
-        return mips.getCallStack().map((frame, i) => {
-            const address = frame.toAddress
-            return {
-                address: BigInt(address),
-                destination: BigInt(frame.pc),
-                sp: BigInt(frame.sp),
-                name:
-                    mips.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
-                line: (this.statementAtAddress(address)?.sourceLine ?? 0) - 1,
-                file: this.statementAtAddress(address)?.sourcePath,
-                color: makeLabelColor(i, frame.sp)
-            }
-        })
-    }
-
-    _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
-        const mips = this.mips
-        if (!mips) return { decorations: [], code: '' }
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Scratch map is populated and read locally with no tracked consumer.
-        const joined = new Map<string, JsProgramStatement[]>()
-        for (const statement of mips.getCompiledStatements()) {
-            const key = `${statement.sourcePath}:${statement.sourceLine}`
-            const arr = joined.get(key)
-            if (arr) {
-                arr.push(statement)
-            } else {
-                joined.set(key, [statement])
-            }
-        }
-        const decorations: EmulatorDecoration[] = []
-        for (const statements of joined.values()) {
-            //a single assembled statement is the source line itself, only expansions are worth showing
-            if (statements.length <= 1) continue
-            const original = statements[0]
-            if (!original) continue
-            const indent = original.source.length - original.source.trimStart().length
-            const lines = statements.map(
-                (statement) =>
-                    `${' '.repeat(indent)}${formatStatement(statement.assemblyStatement)}`
-            )
-            decorations.push({
-                type: 'below-line',
-                file: original.sourcePath,
-                note: 'Assembled instructions',
-                belowLine: original.sourceLine,
-                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``,
-                //the same indented text the Markdown form uses, so an expansion lines up with the
-                //source instruction it came from rather than starting at the Editor's left edge
-                instructions: statements.map((statement, index) => ({
-                    address: BigInt(statement.address),
-                    code: lines[index] ?? formatStatement(statement.assemblyStatement)
-                }))
-            })
-        }
-        //MIPS has no generated code panel, only the per-line expansion decorations
-        return { decorations, code: '' }
-    }
-
-    protected _getBuildArtifacts(): BuildArtifact[] {
-        return (this.mips?.getCompiledStatements() ?? []).map((statement) => ({
-            file: statement.sourcePath,
-            line: statement.sourceLine - 1,
-            address: BigInt(statement.address >>> 0),
-            opcode: (statement.binaryStatement >>> 0).toString(16).padStart(8, '0')
-        }))
-    }
-
-    _getFlags(): { name: string; value: number; prev?: number }[] {
-        //MIPS has no status flags, the UI hides the whole section when this is empty
-        return []
-    }
-
-    _getInstructionAt(address: bigint): Instruction | null {
-        return toInstruction(this.statementAtAddress(Number(address)))
-    }
-
-    /** None once the program has ended, even where an exit left it on a statement. */
-    _getNextInstruction(): Instruction | null {
-        return toInstruction(this.mips?.getNextStatement())
-    }
-
-    /**
-     * The instruction a failed Core call stopped on, which its `RuntimeError` named. Otherwise none,
-     * and the newest entry of the history is the last instruction that ran.
-     */
-    _getLastInstruction(): Instruction | null {
-        return this.failedAt === null ? null : toInstruction(this.statementAtAddress(this.failedAt))
+    protected get target(): MarsTarget {
+        return 'MIPS'
     }
 
     _getPc(): bigint {
-        return BigInt(this.mips?.programCounter ?? 0)
-    }
-
-    _getMemoryLayout() {
-        const core = this.mips!
-        const names = core.getSectionNames()
-        const values = core.getLayoutItems()
-        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
-        for (let i = 0; i < values.length; i += 5)
-            items.push({
-                start: BigInt(values[i] >>> 0),
-                length: BigInt(values[i + 1] >>> 0),
-                kind: (['code', 'data', 'reserved'] as const)[values[i + 2]],
-                section: names[values[i + 3]],
-                alignment: BigInt(values[i + 4] >>> 0)
-            })
-        const symbols = core.getSymbolValues()
-        const files = core.getSymbolFiles()
-        const labels = core.getSymbolNames().flatMap((name, i) =>
-            symbols[i * 3 + 1]
-                ? [
-                      {
-                          name,
-                          address: BigInt(symbols[i * 3] >>> 0),
-                          fromLibrary: !!symbols[i * 3 + 2],
-                          file: files[i]
-                      }
-                  ]
-                : []
-        )
-        return {
-            ...memoryLayoutFromItems(items, labels),
-            readOnly: textSegmentsReadOnly(core.getTextSegments())
-        }
-    }
-    _getHeapBounds() {
-        const core = this.mips
-        return core
-            ? { start: BigInt(core.getHeapStart() >>> 0), end: BigInt(core.getHeapBreak() >>> 0) }
-            : undefined
-    }
-    _getStackTop() {
-        return BigInt((this.mips?.getStackTop() ?? 0) >>> 0)
-    }
-    /** The argv the Core stored above the stack at its last initialize ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)). */
-    _getArgumentsArea() {
-        return argvArgumentsArea(this.mips?.getProgramArgumentsLayout())
-    }
-    _getDeviceRegions() {
-        return this.devices.regions()
-    }
-    _resolveMemoryLabel(name: string) {
-        const address = this.mips?.getAddressOfLabel(name)
-        return address === undefined || address === -1 ? undefined : BigInt(address >>> 0)
+        return BigInt(this.core?.programCounter ?? 0)
     }
 
     _getSp(): bigint {
-        return BigInt(this.mips?.stackPointer ?? 0)
-    }
-
-    _getRegisterValue(register: MIPSRegisterName, _size?: RegisterSize): bigint {
-        const name = toNumericRegisterName(register)
-        return BigInt(this.requireMips().getRegisterValue(name))
+        return BigInt(this.core?.stackPointer ?? 0)
     }
 
     _getRegisterValues(): bigint[] {
-        const mips = this.mips
+        const mips = this.core
         if (!mips) return new Array(this._registerNames.length).fill(0n)
         return [...mips.getRegistersValues(), mips.programCounter, mips.getHi(), mips.getLo()].map(
             (value) => BigInt(value)
@@ -772,7 +144,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * registers do before a Build.
      */
     _getRegisterFileValues(id: string): bigint[] {
-        const mips = this.mips
+        const mips = this.core
         if (id === 'fpu') {
             if (!mips) return new Array(MIPSCoprocessor1RegisterNames.length).fill(0n)
             return Array.from(mips.getCoprocessor1Values(), (value) => BigInt(value >>> 0))
@@ -792,7 +164,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     _getRegisterFileFlags(id: string): { name: string; value: number; prev?: number }[] {
         if (id === 'cp0') return []
         if (id !== 'fpu') throw new Error(`Unknown register file: ${id}`)
-        const flags = this.mips?.getConditionFlags() ?? []
+        const flags = this.core?.getConditionFlags() ?? []
         return MIPS_CONDITION_FLAG_NAMES.map((name, index) => ({
             name,
             value: flags[index] ?? 0
@@ -804,7 +176,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * backstepper, so such a write never becomes an entry the simulation can step back over.
      */
     _setRegisterFileValue(id: string, register: string, value: bigint): void {
-        const mips = this.requireMips()
+        const mips = this.requireCore()
         const word = Number(BigInt.asUintN(32, value))
         if (id === 'fpu') {
             const index = MIPSCoprocessor1RegisterNames.indexOf(register)
@@ -823,208 +195,71 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         throw new Error(`Unknown register file: ${id}`)
     }
 
-    _getRegisterValuesRecord(): Record<MIPSRegisterName, bigint> {
-        const values = this._getRegisterValues()
-        return Object.fromEntries(
-            this._registerNames.map((name, i) => [name, values[i] ?? 0n])
-        ) as Record<MIPSRegisterName, bigint>
-    }
-
-    _getStatus(): EmulatorStatus {
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
-    }
-
-    /**
-     * The history as `undo()` pops it: one entry per executed instruction or Poke, rather than the
-     * one row per back step the panel used to show, where a `jal` was two rows and "Undo to here"
-     * on row N undid N instructions ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)).
-     */
-    _getUndoHistory(max: number): ExecutionStep[] {
-        return this._getUndoHistoryRange(0, max)
-    }
-
-    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
-        const mips = this.mips
-        if (!mips) return []
-        return mips
-            .getUndoGroupsRange(skip, max)
-            .map((group) =>
-                group.kind === 'poke' ? pokeGroupToStep(group) : this.instructionGroupToStep(group)
-            )
-    }
-
-    /** One executed instruction, with every value it overwrote as a mutation of the same row. */
-    private instructionGroupToStep(group: JsInstructionUndoGroup): ExecutionStep {
-        const statement = this.statementAtAddress(group.pc)
-        return {
-            kind: 'instruction',
-            pc: group.pc,
-            //MIPS has no condition code register, the UI reads these only for M68K
-            old_ccr: { bits: 0 },
-            new_ccr: { bits: 0 },
-            line: (statement?.sourceLine ?? 0) - 1,
-            file: statement?.sourcePath,
-            //the Core reports the back steps newest first, which is the order they are undone in;
-            //a row reads as what the instruction did, so it lists them in the order they happened
-            mutations: [...group.steps]
-                .reverse()
-                .map(backstepToMutation)
-                .filter((mutation) => mutation !== null)
-        }
-    }
-
-    /**
-     * Whether an exit service has run or the program has run off the end of its code, which the
-     * Core reads from the program's state, so that it is right after Undo too. A runtime failure
-     * does not end the program here: `GenericEmulator` keeps that from the rejection.
-     */
-    _hasTerminated(): boolean {
-        return this.mips?.terminated ?? false
-    }
-
-    /**
-     * How the program ended: exit (10) with code 0 or exit2 (17) with `$a0`, which the Log shows
-     * although MARS's GUI ignores it, or running off the end of the code. Both leave `terminated`
-     * set, and the stop reason of the call that ended the program tells them apart.
-     */
-    _getTermination(): Termination | undefined {
-        const mips = this.mips
-        if (!mips?.terminated) return undefined
-        return mips.getStopReason() === StopReason.NORMAL_TERMINATION
-            ? { kind: 'exit', code: mips.exitCode }
-            : { kind: 'end' }
-    }
-
-    _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
-        return new Uint8Array(this.requireMips().readMemoryBytes(Number(address), Number(length)))
-    }
-
-    _writeMemoryBytes(address: bigint, data: Uint8Array): void {
-        this.requireMips().setMemoryBytes(Number(address), Array.from(data))
-    }
-
     _setRegisterValue(register: MIPSRegisterName, value: bigint, _size?: RegisterSize): void {
         const name = toNumericRegisterName(register)
-        this.requireMips().setRegisterValue(name, Number(value))
+        this.requireCore().setRegisterValue(name, Number(value))
+    }
+
+    /** Every MIPS register is a word wide, in all three files. */
+    protected pokeRegisterSize(): RegisterSize {
+        return RegisterSize.Long
     }
 
     /**
-     * One instruction. The step that runs an exit, or the program's last instruction, says so in its
-     * stop reason, and an exited program runs nothing more until Undo.
+     * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
+     * Every action has a case, so a new one is a type error here rather than a row nobody chose.
      */
-    async _step(): Promise<{ terminated: boolean }> {
-        const mips = this.requireMips()
-        this.handlers.beginExecution()
-        const stop = await this.coreCall(() => mips.step())
-        return { terminated: endsProgram(stop) }
-    }
-
-    /** A `RuntimeError` in MARS's words and at the line it names; anything else as it says. */
-    _stringifyError(error: unknown, _line?: number): string {
-        if (isRuntimeError(error)) return marsRuntimeErrorMessage(error)
-        return error instanceof Error ? error.message : String(error)
-    }
-
-    _undo(): void {
-        const mips = this.requireMips()
-        const group = mips.getUndoGroupsUpTo(1)[0]
-        //the FileSystem session and the Terminal key their records by the instruction serial, and a
-        //Poke has no instruction identity to undo their changes by, so it is rolled back by the Core
-        //alone ([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md))
-        const serial = group?.kind === 'instruction' ? group.serial : undefined
-        if (serial !== undefined && !(this.fileSystemSession?.canUndoAfter(serial) ?? true)) {
-            throw new Error('FileSystem Undo history exhausted')
-        }
-        //an exit and a failure were the newest things the program did, so they are the first
-        //undone: the Core puts the exit back itself
-        this.devices.rewind(() => mips.undo())
-        this.failedAt = null
-        const readSynth = () => this.devices.readSynthBlock()
-        if (serial === undefined) return this._peripherals.audio.resyncSynth(readSynth)
-        this.fileSystemSession?.undoAfter(serial)
-        this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
-        this._peripherals.audio.undoAfter(BigInt(serial) - 1n, readSynth)
-    }
-
-    /**
-     * Core calls that run the program, a step, a slice or a Testcase, which bring the bitmap
-     * display up to date however they end and remember where a failure stopped them.
-     */
-    private async coreCall<T>(run: () => Promise<T>): Promise<T> {
-        this.failedAt = null
-        try {
-            return await run()
-        } catch (error) {
-            if (isRuntimeError(error)) this.failedAt = error.address
-            throw error
-        } finally {
-            this.devices.flush()
-        }
-    }
-
-    /**
-     * The Core stops for input by leaving the pending `simulate*` promise unsettled, and serves a
-     * `sleep` the same way. A read is served inside the slice; a sleep ends it, through the handler's
-     * `pauseAtSleep`, so the slice ends where the program's frame does and the next one starts on a
-     * fresh frame. The budget is spent in chunks by the pacer, which keeps a slice near its deadline
-     * (`marsSlice.ts`), and every chunk is charged what the Core says it executed.
-     *
-     * The bitmap display catches up once per slice rather than once per stored word, which is what
-     * keeps the observer cheap; a program that sleeps or waits for input flushes from the handler
-     * too.
-     */
-    async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
-        const mips = this.requireMips()
-        //an exited program runs nothing more, which the Core would only say again
-        if (mips.terminated) return { reason: 'terminated', instructions: 0 }
-        const breakpoints = calculateBreakpoints(mips, request.breakpoints)
-        this.handlers.beginExecution()
-        this.slicing = true
-        try {
-            return await this.coreCall(() =>
-                this.pacer.run(request, MIPS_INSTRUCTIONS_PER_MS, async (limit) => {
-                    const stop = await mips.simulateWithBreakpointsAndLimit(breakpoints, limit)
-                    const instructions = mips.getLastRunInstructionCount()
-                    if (endsProgram(stop)) return { outcome: 'terminated', instructions }
-                    if (stop === StopReason.BREAKPOINT)
-                        return { outcome: 'breakpoint', instructions }
-                    return { outcome: stop === StopReason.PAUSE ? 'paused' : 'ran', instructions }
-                })
-            )
-        } finally {
-            this.slicing = false
+    protected backstepToMutation(step: JsBackStep): MutationOperation | null {
+        switch (step.action) {
+            case BackStepAction.REGISTER_RESTORE:
+                return registerBackstepMutation(
+                    step,
+                    getRegisterFileName(step.param1),
+                    RegisterSize.Long
+                )
+            case BackStepAction.COPROC0_REGISTER_RESTORE:
+                return registerBackstepMutation(
+                    step,
+                    getCP0RegisterName(step.param1),
+                    RegisterSize.Long
+                )
+            case BackStepAction.COPROC1_REGISTER_RESTORE:
+                return registerBackstepMutation(
+                    step,
+                    getCP1RegisterName(step.param1),
+                    RegisterSize.Long
+                )
+            //the address the restore puts back, and the one the instruction set
+            case BackStepAction.PC_RESTORE:
+                return registerBackstepMutation(step, '$pc', RegisterSize.Long)
+            case BackStepAction.MEMORY_RESTORE_BYTE:
+                return memoryBackstepMutation(step, RegisterSize.Byte)
+            case BackStepAction.MEMORY_RESTORE_HALF:
+                return memoryBackstepMutation(step, RegisterSize.Word)
+            case BackStepAction.MEMORY_RESTORE_WORD:
+            case BackStepAction.MEMORY_RESTORE_RAW_WORD:
+                return memoryBackstepMutation(step, RegisterSize.Long)
+            case BackStepAction.COPROC1_CONDITION_CLEAR:
+                return { type: 'Other', value: `CP1 condition flag ${step.param1} restore: clear` }
+            case BackStepAction.COPROC1_CONDITION_SET:
+                return { type: 'Other', value: `CP1 condition flag ${step.param1} restore: set` }
+            case BackStepAction.DO_NOTHING:
+                return { type: 'Other', value: 'Do nothing' }
+            //`newValue` is the code the exit set: 0 for exit, `$a0` for exit2
+            case BackStepAction.EXIT_RESTORE:
+                return { type: 'Other', value: exitStepText(step.newValue) }
+            case BackStepAction.RANDOM_STREAM_RESTORE:
+                return { type: 'Other', value: randomStreamStepText(step.param1) }
+            //a Poke group is rendered from its `writes`
+            //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)), so its step never
+            //reaches this list; the heap break and stack top restores are the Core's bookkeeping of
+            //its memory layout, which the program did not write
+            case BackStepAction.POKE:
+            case BackStepAction.HEAP_RESTORE:
+            case BackStepAction.STACK_TOP_RESTORE:
+                return null
         }
     }
-
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
-        const mips = this.requireMips()
-        this.handlers.beginExecution()
-        //the testcase input is served by the terminal's scripted source, swapped in by the caller;
-        //how the run ended is read from the Core afterwards
-        await this.coreCall(() => mips.simulateWithLimit(toHaltLimit(haltLimit)))
-    }
-
-    private statementAtAddress(address: number): JsProgramStatement | null {
-        try {
-            return this.mips?.getStatementAtAddress(address) ?? null
-        } catch {
-            return null
-        }
-    }
-
-    private requireMips(): JsMips {
-        if (!this.mips) throw new Error('Interpreter not initialized')
-        return this.mips
-    }
-}
-
-/**
- * Whether a run call's stop reason ends the program: an exit service ran, or the call ran the
- * program's last instruction. A breakpoint, the instruction limit and a single step leave it
- * runnable, and a runtime failure rejects the call instead.
- */
-function endsProgram(stop: StopReason): boolean {
-    return stop === StopReason.NORMAL_TERMINATION || stop === StopReason.CLIFF_TERMINATION
 }
 
 function isMIPSNumericRegisterName(register: string): register is RegisterName {
@@ -1042,71 +277,6 @@ function toNumericRegisterName(register: MIPSRegisterName): RegisterName {
     return register
 }
 
-/**
- * One source line can assemble to several machine statements — a pseudo-instruction like `la`, or a
- * macro invocation — and every one of them reports that line. Breaking on all of them stopped the
- * run once per generated instruction, so a single visible breakpoint took several Runs to clear.
- * Only the first address of the expansion is a breakpoint: it is where the line is entered.
- */
-function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): number[] {
-    return breakpoints.filter(isLineBreakpoint).flatMap((breakpoint) => {
-        const statements = mips.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
-        const entry = statements.reduce<number | undefined>(
-            (lowest, statement) =>
-                lowest === undefined || statement.address < lowest ? statement.address : lowest,
-            undefined
-        )
-        return entry === undefined ? [] : [entry]
-    })
-}
-
-/** The tokenized source of a build, or nothing when the Core will not give it up. */
-function tokenizedLines(mips: JsMips): MipsTokenizedLine[] {
-    try {
-        return mips.getTokenizedLines()
-    } catch {
-        return []
-    }
-}
-
-function includedScreenDiagnostics(
-    files: Readonly<Record<string, string>>,
-    entry: string,
-    lines: readonly MipsTokenizedLine[]
-): Diagnostic[] {
-    return ignoredIncludedScreenDiagnostics(
-        files,
-        entry,
-        lines.map((line) => line.sourcePath)
-    )
-}
-
-function toInstruction(statement: JsProgramStatement | null | undefined): Instruction | null {
-    if (!statement) return null
-    return {
-        address: BigInt(statement.address),
-        lineNumber: statement.sourceLine - 1,
-        file: statement.sourcePath,
-        code: statement.source
-    }
-}
-
-function assembleErrorToDiagnostic(error: MIPSAssembleError, spans: TokenSpanIndex): Diagnostic {
-    return {
-        severity: error.isWarning ? 'warning' : 'error',
-        file: error.sourcePath,
-        lineIndex: error.sourceLine - 1,
-        column: error.sourceColumn,
-        endColumn: tokenSpanEnd(spans, error.sourcePath, error.sourceLine, error.sourceColumn),
-        line: {
-            line: '',
-            line_index: error.sourceLine
-        },
-        message: error.message,
-        formatted: error.message
-    }
-}
-
 function formatStatement(statement: string) {
     statement = statement.replace(/,/g, ', ')
     for (let index = MIPSNumericRegisterNames.length - 1; index >= 0; index--) {
@@ -1117,118 +287,6 @@ function formatStatement(statement: string) {
     //replaces all empty hex like 0x0000ffff with 0xffff
     statement = statement.replace(/0x0*(?=[0-9a-fA-F])/g, '0x')
     return statement
-}
-
-/**
- * One Poke: everything a single `beginPoke`/`endPoke` transaction wrote, as one row of the History
- * panel ([the design record](../../../../../../docs/design/pokes.md)). No instruction ran, so it carries
- * no PC and no source line, and its mutations are the values it overwrote, which is what the panel
- * diffs a poked cell against.
- */
-function pokeGroupToStep(group: JsPokeUndoGroup): ExecutionStep {
-    const writes = group.writes.map(pokeWrite)
-    return {
-        kind: 'poke',
-        pc: -1,
-        old_ccr: { bits: 0 },
-        new_ccr: { bits: 0 },
-        line: -1,
-        file: undefined,
-        writes,
-        mutations: writes.map(pokeWriteToMutation)
-    }
-}
-
-/**
- * One value a Poke wrote, in the panels' reading: unsigned bit patterns, and the Core's own
- * register spellings, which are the ones the Register files list (`$t0`, `$f2`, `$13 (cause)`).
- */
-function pokeWrite(write: JsPokeWrite): PokeWrite {
-    if (write.type === 'memory') {
-        return {
-            type: 'memory',
-            address: BigInt(write.address >>> 0),
-            old: [...write.old],
-            new: [...write.new]
-        }
-    }
-    //every register the Core reports is a signed 32 bit int, the FPU and CP0 ones included
-    return {
-        type: 'register',
-        name: write.name,
-        old: BigInt(write.old >>> 0),
-        new: BigInt(write.new >>> 0)
-    }
-}
-
-function pokeWriteToMutation(write: PokeWrite): MutationOperation {
-    if (write.type === 'memory') {
-        return {
-            type: 'WriteMemoryBytes',
-            value: { address: write.address, old: write.old, new: write.new }
-        }
-    }
-    return {
-        type: 'WriteRegister',
-        //every MIPS register is a word wide, in all three files
-        value: { register: write.name, old: write.old, new: write.new, size: RegisterSize.Long }
-    }
-}
-
-/**
- * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
- * Every action has a case, so a new one is a type error here rather than a row nobody chose.
- */
-function backstepToMutation(step: JsBackStep): MutationOperation | null {
-    switch (step.action) {
-        case BackStepAction.REGISTER_RESTORE:
-            return registerBackstepMutation(
-                step,
-                getRegisterFileName(step.param1),
-                RegisterSize.Long
-            )
-        case BackStepAction.COPROC0_REGISTER_RESTORE:
-            return registerBackstepMutation(
-                step,
-                getCP0RegisterName(step.param1),
-                RegisterSize.Long
-            )
-        case BackStepAction.COPROC1_REGISTER_RESTORE:
-            return registerBackstepMutation(
-                step,
-                getCP1RegisterName(step.param1),
-                RegisterSize.Long
-            )
-        //the address the restore puts back, and the one the instruction set
-        case BackStepAction.PC_RESTORE:
-            return registerBackstepMutation(step, '$pc', RegisterSize.Long)
-        case BackStepAction.MEMORY_RESTORE_BYTE:
-            return memoryBackstepMutation(step, RegisterSize.Byte)
-        case BackStepAction.MEMORY_RESTORE_HALF:
-            return memoryBackstepMutation(step, RegisterSize.Word)
-        case BackStepAction.MEMORY_RESTORE_WORD:
-        case BackStepAction.MEMORY_RESTORE_RAW_WORD:
-            return memoryBackstepMutation(step, RegisterSize.Long)
-        case BackStepAction.COPROC1_CONDITION_CLEAR:
-            return { type: 'Other', value: `CP1 condition flag ${step.param1} restore: clear` }
-        case BackStepAction.COPROC1_CONDITION_SET:
-            return { type: 'Other', value: `CP1 condition flag ${step.param1} restore: set` }
-        case BackStepAction.DO_NOTHING:
-            return { type: 'Other', value: 'Do nothing' }
-        //`newValue` is the code the exit set: 0 for exit, `$a0` for exit2
-        case BackStepAction.EXIT_RESTORE:
-            return { type: 'Other', value: exitStepText(step.newValue) }
-        case BackStepAction.RANDOM_STREAM_RESTORE:
-            return { type: 'Other', value: randomStreamStepText(step.param1) }
-        //a Poke group is rendered from its `writes`
-        //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)), so its step never
-        //reaches this list; the heap break and stack top restores are the Core's bookkeeping of
-        //its memory layout, which the program did not write
-        case BackStepAction.POKE:
-        case BackStepAction.HEAP_RESTORE:
-        case BackStepAction.STACK_TOP_RESTORE:
-            return null
-    }
 }
 
 function getRegisterFileName(index: number) {
