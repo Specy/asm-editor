@@ -104,6 +104,31 @@ export function resolveFilePath(path: string): string {
 }
 
 /**
+ * The File an include in `containingPath` names: the written path beside that File, else from the
+ * Project root. Null when neither is a File of `sources`.
+ */
+export function resolveProjectInclude(
+    containingPath: string,
+    writtenPath: string,
+    sources: BuildSources
+): string | null {
+    const parts = containingPath.split('/')
+    parts.pop()
+    const directory = parts.join('/')
+    const candidates = [directory ? `${directory}/${writtenPath}` : writtenPath, writtenPath]
+    for (const candidate of candidates) {
+        try {
+            const normalized = resolveFilePath(candidate)
+            if (sources.files[normalized]) return normalized
+        } catch {
+            // A path that escapes the Project root, or is malformed, names no File: the assembler
+            // reports it in its own diagnostics.
+        }
+    }
+    return null
+}
+
+/**
  * Decodes canonical base64, the form every byte File is stored in. Decoding is the validation. A
  * structural regex over the whole string is not an option here:
  * `(?:[A-Za-z0-9+/]{4})*` overflows V8's backtrack arena above roughly 4.5 million characters, so

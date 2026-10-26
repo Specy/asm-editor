@@ -1,5 +1,5 @@
 import type { X86Project } from '@specy/x86'
-import { fileBytes, fileText, resolveFilePath, type BuildSources } from '#lib/projectFiles.ts'
+import { fileBytes, fileText, resolveProjectInclude, type BuildSources } from '#lib/projectFiles.ts'
 import { splitAssemblyComment } from '#lib/languages/service/assemblyText.ts'
 
 /** Converts persisted Project Files into the x86 Core's virtual-Project representation. */
@@ -40,26 +40,6 @@ function x86TranslationUnits(sources: BuildSources): string[] {
     return [sources.entry, ...others]
 }
 
-function resolveInclude(
-    containingPath: string,
-    writtenPath: string,
-    sources: BuildSources
-): string | null {
-    const parts = containingPath.split('/')
-    parts.pop()
-    const directory = parts.join('/')
-    const candidates = [directory ? `${directory}/${writtenPath}` : writtenPath, writtenPath]
-    for (const candidate of candidates) {
-        try {
-            const path = resolveFilePath(candidate)
-            if (sources.files[path]) return path
-        } catch {
-            // NASM reports escaping and malformed paths in its own diagnostics.
-        }
-    }
-    return null
-}
-
 /**
  * Files assembled as translation units or read by literal `%include`/`incbin` directives.
  * NASM owns compilation and diagnostics; this walk only supplies editor file-status hints.
@@ -82,7 +62,7 @@ export function x86ReachableFiles(sources: BuildSources): Set<string> | undefine
             const include = binary ? null : /^\s*%include\s+(["'])(.*?)\1/i.exec(source)
             const directive = binary ?? include
             if (!directive) continue
-            const target = resolveInclude(path, directive[2] ?? '', sources)
+            const target = resolveProjectInclude(path, directive[2] ?? '', sources)
             if (!target) complete = false
             else if (binary) reached.add(target)
             else if (!walk(target, stack)) complete = false
