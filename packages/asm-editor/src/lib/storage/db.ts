@@ -118,9 +118,10 @@ export class Db extends Dexie {
         }
         return readable
     }
-    async getProject(id: string): Promise<Project> {
+    /** The stored project with the id `id`, or undefined when there is none, deleted elsewhere. */
+    async getProject(id: string): Promise<Project | undefined> {
         const project = await this.projects.get(id)
-        return makeProject(project)
+        return project && makeProject(project)
     }
     async addProject(project: Project): Promise<Project> {
         project.id = id()
