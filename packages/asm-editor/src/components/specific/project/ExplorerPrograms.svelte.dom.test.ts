@@ -457,7 +457,7 @@ describe('the path a typed name makes', () => {
 
     it('hands the host the path a new File was made at', async () => {
         const view = explorer()
-        view.target.querySelector<HTMLButtonElement>('[title="New text file"]')!.click()
+        view.target.querySelector<HTMLButtonElement>('[aria-label="New text file"]')!.click()
         flushSync()
         await type(view, './x.s')
         expect(view.fileSystem.files['x.s']).toBeDefined()
