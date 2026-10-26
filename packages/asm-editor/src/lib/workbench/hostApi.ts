@@ -1,6 +1,8 @@
 import type { Component, Snippet } from 'svelte'
 import type { Project } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
+import type { EditJournalStore } from '#lib/editJournal.ts'
+import type { WorkbenchUi } from './WorkbenchUi.svelte.ts'
 
 /**
  * What a page hosting the **Workbench** can give it and ask of it
@@ -54,6 +56,39 @@ export type WorkbenchHostLink = {
     title: string
     icon: Component
     onClick: () => void
+}
+
+/** What the host gives the `Workbench` component. */
+export interface WorkbenchProps {
+    /** The Project being edited, its FileSystem included. */
+    project: Project
+    readonly?: boolean
+    onBack?: () => void
+    /** Saves the Project; autosave calls it with `silent: true`. */
+    onSave?: (options: { silent: boolean }) => void
+    onShare?: () => void
+    /** Every change to the Project, for a host that tracks unsaved changes itself. */
+    onChange?: () => void
+    /** Whether the Project has changes nothing will save on its own; shows Save. */
+    unsaved?: boolean
+    /** Where the Edit journal is kept between visits; without one it lasts as long as the page. */
+    editJournals?: EditJournalStore
+    access?: Partial<Record<BuiltinPanelId, PanelAccess>>
+    /** Whether the documentation's links may navigate; the exam turns them off. */
+    documentationLinks?: boolean
+    /**
+     * Whether a documentation search looks through the Lectures too. An Exam searches the
+     * Documentation alone, so no Example hands a student a finished program (the **Search
+     * scope**); the AI assistant's search follows it.
+     */
+    searchLectures?: boolean
+    hostPanels?: WorkbenchHostPanel[]
+    hostLinks?: WorkbenchHostLink[]
+    /** The panel open beside the rail, by id; bindable so the host's chrome can open one. */
+    activePanel?: string | null
+    /** Host actions above the workspace, with access to its responsive menu state. */
+    header?: Snippet<[WorkbenchUi]>
+    loading?: Snippet
 }
 
 /** The sections of the Settings panel, in their order. */

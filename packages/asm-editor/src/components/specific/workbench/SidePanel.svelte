@@ -20,6 +20,7 @@
     import Explorer from '#cmp/specific/project/Explorer.svelte'
     import TestcasesList from '#cmp/specific/project/testcases/TestcasesList.svelte'
     import TestcasesSummary from '#cmp/specific/project/testcases/TestcasesSummary.svelte'
+    import { testcaseRegisters } from '#lib/testcases.ts'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { documentationLanguageOf } from '#lib/search/scope.ts'
     import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
@@ -237,12 +238,7 @@
                                 editable={session.testcasesEditable}
                                 systemSize={emulator.systemSize}
                                 language={project.language}
-                                registerNames={emulator.registers.map((r) => r.name)}
-                                registerSizes={Object.fromEntries(
-                                    emulator.registers.map((r) => [r.name, Number(r.size)])
-                                )}
-                                startingRegisterNames={emulator.startingRegisterNames}
-                                hiddenRegistersNames={emulator.hiddenRegisters}
+                                registers={testcaseRegisters(emulator)}
                                 style="flex: 1; min-height: 0;"
                             />
                         {/key}

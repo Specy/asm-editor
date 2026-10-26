@@ -48,14 +48,14 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
         title: string,
         icon: RailEntry['icon'],
         group: RailEntry['group'],
-        maximizable = false,
-        dot?: RailEntry['dot'],
-        tooltip?: string
+        extra: Partial<Pick<RailEntry, 'maximizable' | 'dot' | 'tooltip'>> = {}
     ) => {
         const access = options.access[id] ?? 'on'
         if (access === 'off') return
-        entries.push({ id, title, tooltip, icon, group, maximizable, access, dot })
+        entries.push({ id, title, icon, group, maximizable: false, access, ...extra })
     }
+    const link = (id: string, title: string, icon: RailEntry['icon'], action: () => void) =>
+        entries.push({ id, title, icon, group: 'bottom', maximizable: false, access: 'on', action })
     const host = (group: RailEntry['group']) => {
         for (const panel of options.hostPanels.filter((candidate) => candidate.group === group)) {
             entries.push({
@@ -70,63 +70,30 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
         }
     }
     builtin('explorer', 'Explorer', FaCopy, 'top')
-    builtin(
-        'search',
-        'Search',
-        FaSearch,
-        'top',
-        true,
-        undefined,
-        'Search: find text in the Project'
-    )
-    builtin('testcases', 'Testcases', FaFlask, 'top', true, options.testcasesDot)
-    builtin('documentation', 'Documentation', FaBook, 'top', true)
+    builtin('search', 'Search', FaSearch, 'top', {
+        maximizable: true,
+        tooltip: 'Search: find text in the Project'
+    })
+    builtin('testcases', 'Testcases', FaFlask, 'top', {
+        maximizable: true,
+        dot: options.testcasesDot
+    })
+    builtin('documentation', 'Documentation', FaBook, 'top', { maximizable: true })
     host('top')
     //last of the group, since it comes and goes with the Project's Executables: appearing, it
     //moves no other icon
     if (options.symbolsOffered)
-        builtin(
-            'symbols',
-            'Symbols',
-            FaTags,
-            'top',
-            false,
-            undefined,
-            'Symbols: the functions and strings of the program'
-        )
+        builtin('symbols', 'Symbols', FaTags, 'top', {
+            tooltip: 'Symbols: the functions and strings of the program'
+        })
     if (options.historyOffered)
-        builtin(
-            'history',
-            'Edit history',
-            FaHistory,
-            'top',
-            false,
-            undefined,
-            'View and restore edits made in the pixel and hex editors'
-        )
+        builtin('history', 'Edit history', FaHistory, 'top', {
+            tooltip: 'View and restore edits made in the pixel and hex editors'
+        })
     builtin('agent', 'AI assistant', SparklesIcon, 'bottom')
-    if (options.onShare) {
-        entries.push({
-            id: 'share',
-            title: 'Share',
-            icon: FaShareAlt,
-            group: 'bottom',
-            maximizable: false,
-            access: 'on',
-            action: options.onShare
-        })
-    }
-    for (const link of options.hostLinks) {
-        entries.push({
-            id: link.id,
-            title: link.title,
-            icon: link.icon,
-            group: 'bottom',
-            maximizable: false,
-            access: 'on',
-            action: link.onClick
-        })
-    }
+    if (options.onShare) link('share', 'Share', FaShareAlt, options.onShare)
+    for (const hostLink of options.hostLinks)
+        link(hostLink.id, hostLink.title, hostLink.icon, hostLink.onClick)
     host('bottom')
     builtin('settings', 'Settings', FaCog, 'bottom')
     return entries

@@ -45,7 +45,7 @@
 {#key refresh}
     <div class="progress">
         <div class={status}>
-            <RgbLine height="0.3rem" />
+            <RgbLine />
         </div>
     </div>
 {/key}

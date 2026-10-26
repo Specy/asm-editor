@@ -52,6 +52,7 @@
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import StdOutRenderer from '#cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '#cmp/specific/project/testcases/TestcasesEditor.svelte'
+    import { testcaseRegisters } from '#lib/testcases.ts'
     import type monaco from 'monaco-editor'
     import Card from '#cmp/shared/layout/Card.svelte'
     import {
@@ -225,19 +226,10 @@
         const mapped = session.project.sourceMaps[emulator.currentFile]?.lines[emulator.line]
         return mapped?.path === selectedFile ? mapped.line : -1
     })
-    function confirmReplacement(question: string, signal: AbortSignal) {
-        const pending = Prompt.confirm(question)
-        const id = Prompt.id
-        const cancel = () => {
-            if (Prompt.id === id && Prompt.promise) Prompt.cancel()
-        }
-        signal.addEventListener('abort', cancel, { once: true })
-        return pending.finally(() => signal.removeEventListener('abort', cancel))
-    }
     async function compileSourceFile() {
         if (!session || running || building) return
         try {
-            await session.compile(confirmReplacement)
+            await session.compile(Prompt.confirmUntilAborted)
             activePath = session.selected
         } catch (error) {
             toast.error(getM68kErrorMessage(error))
@@ -599,11 +591,9 @@
         {/if}
         <div class="playground-code">
             <Editor
-                on:change={handleEditorChange}
-                on:breakpointPress={(d) => {
-                    emulator.toggleBreakpoint(d.detail - 1, selectedFile)
-                }}
-                on:fileChange={(event) => session?.edit(event.detail.path, event.detail.value)}
+                onChange={handleEditorChange}
+                onBreakpointPress={(line) => emulator.toggleBreakpoint(line - 1, selectedFile)}
+                onFileChange={(path, value) => session?.edit(path, value)}
                 bind:editor
                 bind:code
                 source={fileSource}
@@ -614,11 +604,7 @@
                 breakpointsEditable={!selectedIsSource}
                 breakpoints={emulator.breakpoints
                     .filter(isLineBreakpoint)
-                    .filter(
-                        (breakpoint) =>
-                            breakpoint.file ===
-                            (selectedFile ?? emulator.buildSources?.entry ?? emulator.entry)
-                    )
+                    .filter((breakpoint) => breakpoint.file === displayedAssemblyFile)
                     .map((breakpoint) => breakpoint.line)}
                 diagnostics={shownDiagnostics}
                 language={editorLanguage}
@@ -657,12 +643,18 @@
     </div>
 {/snippet}
 
-{#snippet smallRegsColumn()}
+{#snippet regsColumn(fullscreen: boolean)}
     <!-- the Workbench's registers card: the flags inset on top and ruled off from edge to edge, then
          the PC, then the Register files reaching the card's edges -->
-    <!-- outside an embed the files ask for 15.85rem and no more, from a zero basis, so the row is as
-         tall as the tallest of what sits beside them and they fill it, scrolling inside -->
-    <div class="column card registers-card data-registers-wrapper" style={embeddedRegistersStyle}>
+    <!-- in the small layout outside an embed the files ask for 15.85rem and no more, from a zero
+         basis, so the row is as tall as the tallest of what sits beside them and they fill it,
+         scrolling inside -->
+    <div
+        class="column card registers-card"
+        class:data-registers-wrapper={!fullscreen}
+        class:fullscreen-registers-column={fullscreen}
+        style={fullscreen ? registersColumnStyle : embeddedRegistersStyle}
+    >
         {#if emulator.statusRegisters?.length > 0 && showFlags}
             <div class="inset">
                 <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
@@ -691,8 +683,8 @@
                 size={groupSize}
                 initialFileId={initialRegisterFile}
                 initialFormat={initialRegisterFormat}
-                gridStyle={smallRegistersGridStyle}
-                style={embedded
+                gridStyle={fullscreen ? undefined : smallRegistersGridStyle}
+                style={fullscreen || embedded
                     ? 'flex: 1; min-height: 0;'
                     : 'flex: 1 1 0px; min-height: 15.85rem;'}
                 files={emulator.registerFiles}
@@ -707,8 +699,8 @@
     </div>
 {/snippet}
 
-{#snippet smallMemoryPanel()}
-    <div class="column card memory-card code-data-memory-controls">
+{#snippet memoryPanel(fullscreen: boolean)}
+    <div class="column card memory-card" class:code-data-memory-controls={!fullscreen}>
         <div class="memory-controls">
             <MemoryControls
                 {emulator}
@@ -718,12 +710,12 @@
                 bytesPerPage={emulator.memory.global.pageSize}
                 memorySize={MEMORY_SIZE[language]}
                 currentAddress={emulator.memory.global.address}
-                style="flex: unset"
-                inputStyle="width: 6rem; padding: 0 0 0 0.6rem;"
-                onAddressChange={async (address) => {
-                    emulator.setGlobalMemoryAddress(address)
-                }}
-                hideLabel
+                style={fullscreen ? undefined : 'flex: unset'}
+                inputStyle={fullscreen
+                    ? 'height: 100%; padding: 0 0 0 0.6rem;'
+                    : 'width: 6rem; padding: 0 0 0 0.6rem;'}
+                onAddressChange={(address) => emulator.setGlobalMemoryAddress(address)}
+                hideLabel={!fullscreen || emulator.memory.global.rowSize < 16}
             />
         </div>
         <div class="memory-page">
@@ -731,93 +723,9 @@
                 memoryRegions={showMemoryRegions ? emulator?.memoryRegions : undefined}
                 dataLabels={showMemoryRegions ? emulator?.dataLabels : undefined}
                 readOnlyMemory={emulator?.readOnlyMemory}
-                style="flex: 1; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
-                systemSize={emulator.systemSize}
-                endianess={emulator.memory.global.endianess}
-                defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-                bytesPerRow={emulator.memory.global.rowSize}
-                pageSize={emulator.memory.global.pageSize}
-                memory={emulator.memory.global.data}
-                currentAddress={emulator.memory.global.address}
-                sp={emulator.sp}
-                callStackAddresses={makeColorizedLabels(emulator.callStack)}
-                {pokeable}
-                onPoke={pokeMemory}
-            />
-        </div>
-    </div>
-{/snippet}
-
-{#snippet fullscreenRegsColumn()}
-    <div
-        class="column card registers-card fullscreen-registers-column"
-        style={registersColumnStyle}
-    >
-        {#if emulator.statusRegisters && emulator.statusRegisters.length > 0 && showFlags}
-            <div class="inset">
-                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
-            </div>
-            <!-- the Register files' own header sets them apart, so only the PC is ruled off -->
-            {#if showPc}
-                <div class="rule"></div>
-            {/if}
-        {/if}
-        {#if showPc}
-            <RegistersVisualiser
-                systemSize={emulator.systemSize}
-                {language}
-                style="flex: unset; overflow: unset; padding: 0;"
-                gridStyle="padding: 0.2rem 0.7rem"
-                size={emulator.systemSize}
-                registers={[pc]}
-                withoutHeader
-                position="bottom"
-            />
-        {/if}
-        {#if showRegisters}
-            <RegisterFilesPanel
-                systemSize={emulator.systemSize}
-                {language}
-                size={groupSize}
-                initialFileId={initialRegisterFile}
-                initialFormat={initialRegisterFormat}
-                style="flex: 1; min-height: 0;"
-                files={emulator.registerFiles}
-                {pokeable}
-                canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
-                onPoke={pokeRegisters}
-                onRegisterClick={(register) => {
-                    handleRegisterClick(register.value)
-                }}
-            />
-        {/if}
-    </div>
-{/snippet}
-
-{#snippet fullscreenMemoryPanel()}
-    <div class="column card memory-card">
-        <div class="memory-controls">
-            <MemoryControls
-                {emulator}
-                buttonVar="secondary"
-                showRegions={showMemoryRegions}
-                systemSize={emulator.systemSize}
-                bytesPerPage={emulator.memory.global.pageSize}
-                memorySize={MEMORY_SIZE[language]}
-                inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
-                currentAddress={emulator.memory.global.address}
-                onAddressChange={(e) => {
-                    emulator.setGlobalMemoryAddress(e)
-                }}
-                hideLabel={emulator.memory.global.rowSize < 16}
-            />
-        </div>
-        <div class="memory-page">
-            <MemoryVisualiser
-                memoryRegions={showMemoryRegions ? emulator?.memoryRegions : undefined}
-                dataLabels={showMemoryRegions ? emulator?.dataLabels : undefined}
-                readOnlyMemory={emulator?.readOnlyMemory}
-                style="border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
+                style="{fullscreen
+                    ? ''
+                    : 'flex: 1; '}border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                 systemSize={emulator.systemSize}
                 endianess={emulator.memory.global.endianess}
                 defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
@@ -895,12 +803,7 @@
             systemSize={emulator.systemSize}
             {language}
             editable={!embedded}
-            registerNames={emulator.registers.map((r) => r.name)}
-            registerSizes={Object.fromEntries(
-                emulator.registers.map((r) => [r.name, Number(r.size)])
-            )}
-            startingRegisterNames={emulator.startingRegisterNames}
-            hiddenRegistersNames={emulator.hiddenRegisters}
+            registers={testcaseRegisters(emulator)}
             bind:visible={testcasesVisible}
             {testcasesResult}
             bind:testcases
@@ -923,10 +826,10 @@
                 {#if showRegsColumn || showMemory || children}
                     <div class="fullscreen-memory-wrapper">
                         {#if showRegsColumn}
-                            {@render fullscreenRegsColumn()}
+                            {@render regsColumn(true)}
                         {/if}
-                        {#if showMemory && (!children || !(!running && !built))}
-                            {@render fullscreenMemoryPanel()}
+                        {#if showMemory && (!children || running || built)}
+                            {@render memoryPanel(true)}
                         {:else if !running && children}
                             <Card
                                 background="secondary"
@@ -954,12 +857,12 @@
             </div>
 
             {#if showRegsColumn}
-                {@render smallRegsColumn()}
+                {@render regsColumn(false)}
                 {#if forceMemoryRight && showMemory}
-                    {@render smallMemoryPanel()}
+                    {@render memoryPanel(false)}
                 {/if}
             {:else if showMemory}
-                {@render smallMemoryPanel()}
+                {@render memoryPanel(false)}
             {/if}
         </div>
 
@@ -980,7 +883,7 @@
                 {#if showConsole}
                     {@render consolePanel()}
                 {/if}
-                {@render smallMemoryPanel()}
+                {@render memoryPanel(false)}
             </div>
         {:else if showConsole}
             {@render consolePanel()}

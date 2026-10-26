@@ -3984,13 +3984,7 @@ export class WorkbenchSession {
 
     /** Asks `question`, which an aborted `signal` takes back, as a dismissal answers it. */
     private confirm(question: string, signal: AbortSignal): Promise<boolean | null> {
-        const pending = Prompt.confirm(question)
-        const id = Prompt.id
-        const cancel = () => {
-            if (Prompt.id === id && Prompt.promise) Prompt.cancel()
-        }
-        signal.addEventListener('abort', cancel, { once: true })
-        return pending.finally(() => signal.removeEventListener('abort', cancel))
+        return Prompt.confirmUntilAborted(question, signal)
     }
 
     /**

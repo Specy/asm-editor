@@ -450,6 +450,8 @@
 </div>
 
 <style lang="scss">
+    @use '../../shared/button/tray.scss';
+
     /* the two ends of a bar over what it sits on: the empty middle lets the clicks through */
     .execution-controls {
         display: flex;
@@ -493,37 +495,12 @@
     }
 
     .tool {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        padding: 0 0.8rem;
-        border: none;
-        border-radius: 0.4rem;
-        background-color: transparent;
-        color: var(--primary-text);
-        font-family: Rubik;
-        font-size: 0.95rem;
-        font-weight: 500;
-        white-space: nowrap;
         user-select: none;
-        cursor: pointer;
-        transition:
-            background-color 0.15s,
-            color 0.15s;
+        @include tray.tool(0.8rem, 0.95rem);
 
         :global(.icon) {
             cursor: inherit;
         }
-    }
-
-    .tool:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-    }
-
-    .tool:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
     }
 
     .tool:disabled {
@@ -548,16 +525,7 @@
     }
 
     .primary {
-        background-color: var(--accent);
-        color: var(--accent-text);
-    }
-
-    .primary:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--accent) 85%, white);
-    }
-
-    .primary:focus-visible {
-        outline-color: var(--accent-text);
+        @include tray.primary(null);
     }
 
     /* sunk into the tray rather than see-through, as everything in it */

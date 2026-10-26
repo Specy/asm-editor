@@ -130,9 +130,11 @@
 </form>
 
 <style lang="scss">
+    @use '../../shared/button/tray.scss';
+
     /* drawn as the app's prompts are, a tray floating at the top of the page */
     .new-picture {
-        --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+        @include tray.surface(85%);
         position: fixed;
         top: 1rem;
         left: 50%;
@@ -143,12 +145,6 @@
         gap: 0.55rem;
         width: min(24rem, calc(100vw - 2rem));
         padding: 0.7rem;
-        border: 1px solid var(--tray-line);
-        border-radius: 0.6rem;
-        background-color: color-mix(in srgb, var(--primary) 85%, transparent);
-        backdrop-filter: blur(4px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
-        color: var(--primary-text);
         font-size: 0.9rem;
     }
     .title {
@@ -195,34 +191,14 @@
         height: 2.1rem;
     }
     .tool {
-        padding: 0 0.9rem;
-        border: none;
-        border-radius: 0.4rem;
-        background: transparent;
-        color: var(--primary-text);
-        font: inherit;
-        font-weight: 500;
-        cursor: pointer;
+        @include tray.tool;
 
-        &:hover:not(:disabled) {
-            background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
         &:disabled {
             opacity: 0.5;
             cursor: default;
         }
     }
     .primary {
-        min-width: 4.5rem;
-        background-color: var(--accent);
-        color: var(--accent-text);
-
-        &:hover:not(:disabled) {
-            background-color: color-mix(in srgb, var(--accent) 85%, white);
-        }
+        @include tray.primary;
     }
 </style>

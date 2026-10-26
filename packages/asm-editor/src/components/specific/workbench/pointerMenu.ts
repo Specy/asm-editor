@@ -79,7 +79,11 @@ function pointerAt(session: WorkbenchSession, address: bigint): bigint | undefin
     }
 }
 
-function copy(text: string) {
+/**
+ * Copies text to the clipboard, saying so only when it cannot: a menu's copy, or the Hex editor's,
+ * needs no word when it worked.
+ */
+export function copyToClipboard(text: string) {
     const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard
     if (!clipboard) {
         toast.error("Copying isn't available in this browser.")
@@ -131,13 +135,14 @@ function copyItems(
             label: 'Copy as hex',
             icon: FaCopy,
             disabled: value === undefined,
-            onSelect: () => copy(formatHex(value!, { prefix, bytes, minDigits: bytes * 2 }))
+            onSelect: () =>
+                copyToClipboard(formatHex(value!, { prefix, bytes, minDigits: bytes * 2 }))
         },
         {
             label: 'Copy as decimal',
             icon: FaHashtag,
             disabled: value === undefined,
-            onSelect: () => copy(value!.toString())
+            onSelect: () => copyToClipboard(value!.toString())
         }
     ]
 }

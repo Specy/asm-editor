@@ -4,7 +4,7 @@
     import Icon from './Icon.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { page } from '$app/state'
-    import AnimatedRgbLine from '#cmp/shared/misc/AnimatedRgbLine.svelte'
+    import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
     import FaDonate from '~icons/fa-solid/heart'
     import { resolve } from '$app/paths'
     interface Props {
@@ -17,7 +17,7 @@
 {#if pages.some((p) => page.url.pathname.match(p))}
     <footer class="footer">
         <div class="footer-inner">
-            <AnimatedRgbLine />
+            <RgbLine animated />
             <div class="footer-justify">
                 <a class="logo-wrapper" href="https://specy.app" title="View my other websites">
                     <div class="logo-content">

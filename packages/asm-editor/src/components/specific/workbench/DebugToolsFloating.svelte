@@ -5,16 +5,12 @@
      * or on its eye. Where each was left and whether it is open are remembered per person.
      */
     import ToggleableDraggable from '#cmp/shared/draggable/DraggableContainer.svelte'
-    import CallStack from '#cmp/specific/project/user-tools/CallStack.svelte'
-    import MutationsViewer from '#cmp/specific/project/user-tools/MutationsRenderer.svelte'
-    import StackPointerView from '#cmp/specific/project/memory/StackPointerView.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
-    import { makeColorizedLabels } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import {
         workbenchLayout,
         type FloatingWindowState
     } from '#stores/workbenchLayoutStore.svelte.ts'
-    import { memoryCellMenu } from './pointerMenu'
+    import DebugToolContent from './DebugToolContent.svelte'
+    import { debugTools } from './debugTools'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -25,7 +21,6 @@
 
     const { session, ui } = useWorkbench()
     const emulator = session.emulator
-    const language = $derived(session.project.language)
 
     /**
      * Center the 25.6px window bars on the host's top strip, leaving its navigation actions clear.
@@ -64,77 +59,27 @@
     }
 </script>
 
-<ToggleableDraggable
-    title="Call stack"
-    hiddenOnMobile={false}
-    bind:hidden={
-        () => !windowOf('callstack').open, (hidden) => update('callstack', 0, { open: !hidden })
-    }
-    bind:left={() => windowOf('callstack').left, (left) => update('callstack', 0, { left })}
-    bind:top={() => windowOf('callstack').top, (top) => update('callstack', 0, { top })}
->
-    <CallStack
-        stack={emulator.callStack}
-        onGoToInstruction={(address) => void session.revealAddress(address)}
-        onGoToLabel={(label) => {
-            if (!label.file) return
-            //a function in a Listing still being generated is found by its address once it is
-            if (label.line < 0) void session.revealAddress(label.address)
-            else void session.revealSourceLocation(label.file, label.line)
-        }}
-    />
-</ToggleableDraggable>
-
-<ToggleableDraggable
-    title="History"
-    hiddenOnMobile={false}
-    bind:hidden={
-        () => !windowOf('history').open, (hidden) => update('history', 0, { open: !hidden })
-    }
-    bind:left={() => windowOf('history').left, (left) => update('history', 0, { left })}
-    bind:top={() => windowOf('history').top, (top) => update('history', 0, { top })}
->
-    <MutationsViewer
-        {language}
-        statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
-        on:undo={(e) => session.undoSteps(e.detail)}
-        on:highlight={(e) => {
-            const step = e.detail
-            if (!step.file) return
-            if (step.line < 0) void session.revealAddress(BigInt(step.pc))
-            else void session.revealSourceLocation(step.file, step.line, 0)
-        }}
-        steps={emulator.latestSteps}
-    />
-</ToggleableDraggable>
-
-{#each emulator.memory.tabs as tab, index (tab.id)}
-    {@const id = `memory-${tab.id}`}
+<!-- in the order they always had, a later window over an earlier where they overlap: the Call
+     stack, the History, then the Stack pointer -->
+{#each debugTools(emulator.memory.tabs).reverse() as tool (tool.id)}
+    {@const index = tool.kind === 'memory' ? emulator.memory.tabs.indexOf(tool.tab) : 0}
     <ToggleableDraggable
-        title="Stack pointer"
+        title={tool.title}
         hiddenOnMobile={false}
         bind:hidden={
-            () => !windowOf(id, index).open, (hidden) => update(id, index, { open: !hidden })
+            () => !windowOf(tool.id, index).open,
+            (hidden) => update(tool.id, index, { open: !hidden })
         }
-        bind:left={() => windowOf(id, index).left, (left) => update(id, index, { left })}
-        bind:top={() => windowOf(id, index).top, (top) => update(id, index, { top })}
+        bind:left={() => windowOf(tool.id, index).left, (left) => update(tool.id, index, { left })}
+        bind:top={() => windowOf(tool.id, index).top, (top) => update(tool.id, index, { top })}
     >
-        <div class="window-body">
-            <StackPointerView
-                emulator={session.emulator}
-                {tab}
-                endianess={tab.endianess}
-                defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-                memorySize={MEMORY_SIZE[language]}
-                systemSize={emulator.systemSize}
-                sp={emulator.sp}
-                onAddressChange={(address, tab) => emulator.setTabMemoryAddress(address, tab.id)}
-                callStackAddresses={makeColorizedLabels(emulator.callStack)}
-                pokeable={session.pokeable}
-                onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
-                cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
-            />
-        </div>
+        {#if tool.kind === 'memory'}
+            <div class="window-body">
+                <DebugToolContent {tool} docked={false} />
+            </div>
+        {:else}
+            <DebugToolContent {tool} docked={false} />
+        {/if}
     </ToggleableDraggable>
 {/each}
 

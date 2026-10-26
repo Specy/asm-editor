@@ -62,6 +62,29 @@
     }
 }
 
+// a row's ×, faint until it is pointed at, then the colour of a failure
+@mixin remove-button {
+    display: grid;
+    place-items: center;
+    color: var(--hint);
+    background-color: transparent;
+    cursor: pointer;
+    opacity: 0.6;
+    transition:
+        color 0.15s,
+        opacity 0.15s;
+
+    :global(svg) {
+        width: 0.55rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+        color: var(--tc-fail);
+        opacity: 1;
+    }
+}
+
 // a button that reads as text until it is pointed at
 @mixin text-button {
     padding: 0.2rem 0;
