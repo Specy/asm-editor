@@ -1454,6 +1454,41 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
         })
     })
 
+    describe('emulator state', () => {
+        it('says the emulator is not loaded yet, and what to do then', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            context.getEmulator = () => null
+            const tools = createDefaultCodingAgentTools(context)
+            expect(await tools.step.execute({})).toEqual({
+                success: false,
+                errorKind: 'emulator_unavailable',
+                error: 'Emulator not loaded yet.',
+                retryable: true,
+                nextAction: 'Wait for the editor language to load, then compile and step again.',
+                details: undefined
+            })
+        })
+
+        it('says why the program cannot run, with its state', async () => {
+            const emulator = createMockEmulator()
+            Object.assign(emulator, { terminated: true })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.run_to_completion.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            expect(result).toMatchObject({
+                success: false,
+                errorKind: 'execution_state',
+                error: 'Program has already terminated.',
+                retryable: true,
+                nextAction: 'Call compile to reset execution state, then run or step again.',
+                details: { errors: [], state: { terminated: true } }
+            })
+            expect(emulator.run).not.toHaveBeenCalled()
+        })
+    })
+
     describe('latest steps', () => {
         it('renders a Poke with its writes in hex and no source line', () => {
             const poke: ExecutionStep = {

@@ -563,6 +563,28 @@ function executionDetails(context: DefaultCodingAgentToolContext, emulator: Emul
     }
 }
 
+/** What a tool that needs the Emulator answers while the editor's language is still loading it. */
+function emulatorUnavailable(toolRun: ToolRunContext, nextAction: string) {
+    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+        retryable: true,
+        nextAction
+    })
+}
+
+/** What a tool answers when the Emulator's state stops it, with that state beside the reason. */
+function blocked(
+    toolRun: ToolRunContext,
+    blocker: ExecutionBlocker,
+    context: DefaultCodingAgentToolContext,
+    emulator: Emulator
+) {
+    return toolRun.failure('execution_state', blocker.error, {
+        retryable: blocker.retryable,
+        nextAction: blocker.nextAction,
+        details: executionDetails(context, emulator)
+    })
+}
+
 async function handleCodeWrite(
     context: DefaultCodingAgentToolContext,
     targetPath: string,
@@ -575,17 +597,21 @@ async function handleCodeWrite(
 ) {
     context.setFile(targetPath, newContent)
     context.setActivePath?.(targetPath)
+    //what every result of a write says: the File as written, from the line the change starts on
+    const written = {
+        path: targetPath,
+        language: context.getEditorLanguage(),
+        previousLanguage,
+        languageChanged,
+        ...sliceLinesRange(newContent, Math.max(1, previewLine)),
+        files: Object.keys(getAllProjectFiles(context))
+    }
     // Source edits invalidate generated output, but must never be sent to the assembler.
     if (isSourceFile(targetPath)) {
         context.getEmulator()?.clear()
         return toolRun.success({
-            path: targetPath,
-            language: context.getEditorLanguage(),
+            ...written,
             sourceLanguage: sourceLanguage(targetPath) ?? 'header',
-            previousLanguage,
-            languageChanged,
-            ...sliceLinesRange(newContent, Math.max(1, previewLine), undefined, MAX_TAKE_LINES),
-            files: Object.keys(getAllProjectFiles(context)),
             compilationRequired: true,
             canExecute: false,
             nextAction:
@@ -598,23 +624,9 @@ async function handleCodeWrite(
         : { loaded: true, waitMs: 0 }
     const emulator = context.getEmulator()
 
-    const allFiles = getAllProjectFiles(context)
-    const preview = sliceLinesRange(newContent, Math.max(1, previewLine), undefined, MAX_TAKE_LINES)
-
     if (!emulator) {
         return toolRun.success({
-            path: targetPath,
-            language: context.getEditorLanguage(),
-            previousLanguage,
-            languageChanged,
-            code: preview.code,
-            lineCount: preview.lineCount,
-            startLine: preview.startLine,
-            endLine: preview.endLine,
-            returnedLines: preview.returnedLines,
-            hasMore: preview.hasMore,
-            nextStartLine: preview.nextStartLine,
-            files: Object.keys(allFiles),
+            ...written,
             emulatorSynchronized: false,
             warning:
                 'The file was updated, but the emulator is still loading. Call compile after it loads.'
@@ -636,18 +648,7 @@ async function handleCodeWrite(
                 nextAction:
                     'Fix the reported assembler errors with replace_file_content, preserving the user request.',
                 details: {
-                    path: targetPath,
-                    language: context.getEditorLanguage(),
-                    previousLanguage,
-                    languageChanged,
-                    code: preview.code,
-                    lineCount: preview.lineCount,
-                    startLine: preview.startLine,
-                    endLine: preview.endLine,
-                    returnedLines: preview.returnedLines,
-                    hasMore: preview.hasMore,
-                    nextStartLine: preview.nextStartLine,
-                    files: Object.keys(allFiles),
+                    ...written,
                     emulatorSynchronized: waitResult.loaded,
                     emulatorWaitMs: waitResult.waitMs,
                     errors,
@@ -658,18 +659,7 @@ async function handleCodeWrite(
     }
 
     return toolRun.success({
-        path: targetPath,
-        language: context.getEditorLanguage(),
-        previousLanguage,
-        languageChanged,
-        code: preview.code,
-        lineCount: preview.lineCount,
-        startLine: preview.startLine,
-        endLine: preview.endLine,
-        returnedLines: preview.returnedLines,
-        hasMore: preview.hasMore,
-        nextStartLine: preview.nextStartLine,
-        files: Object.keys(allFiles),
+        ...written,
         emulatorSynchronized: waitResult.loaded,
         emulatorWaitMs: waitResult.waitMs,
         canExecute: emulator.canExecute,
@@ -725,26 +715,13 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
                     )
                 }
 
-                const preview = sliceLinesRange(
-                    fileEntry.content,
-                    start_line ?? 1,
-                    end_line,
-                    MAX_TAKE_LINES
-                )
-
                 return toolRun.success({
                     path: targetPath,
                     language: context.getEditorLanguage(),
                     sourceLanguage:
                         sourceLanguage(targetPath) ??
                         (isSourceFile(targetPath) ? 'header' : 'assembly'),
-                    code: preview.code,
-                    lineCount: preview.lineCount,
-                    startLine: preview.startLine,
-                    endLine: preview.endLine,
-                    returnedLines: preview.returnedLines,
-                    hasMore: preview.hasMore,
-                    nextStartLine: preview.nextStartLine,
+                    ...sliceLinesRange(fileEntry.content, start_line ?? 1, end_line),
                     files: Object.keys(allFiles),
                     entry: entryPath ?? null
                 })
@@ -911,13 +888,11 @@ function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path }) =>
             runAgentTool(async (toolRun) => {
                 const emulator = context.getEmulator()
-                if (!emulator) {
-                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                        retryable: true,
-                        nextAction:
-                            'Wait for the editor language to load before inspecting breakpoints.'
-                    })
-                }
+                if (!emulator)
+                    return emulatorUnavailable(
+                        toolRun,
+                        'Wait for the editor language to load before inspecting breakpoints.'
+                    )
 
                 const entry = emulatorEntry(context, emulator)
                 const filteredBreakpoints = (emulator.breakpoints ?? []).filter((breakpoint) => {
@@ -1211,13 +1186,11 @@ function createSetBreakpointTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, instruction, address, line }) =>
             runAgentTool(async (toolRun) => {
                 const emulator = context.getEmulator()
-                if (!emulator) {
-                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                        retryable: true,
-                        nextAction:
-                            'Wait for the editor language to load before setting breakpoints.'
-                    })
-                }
+                if (!emulator)
+                    return emulatorUnavailable(
+                        toolRun,
+                        'Wait for the editor language to load before setting breakpoints.'
+                    )
 
                 const resolution = resolveBreakpointLocation(context, emulator, {
                     path,
@@ -1306,13 +1279,11 @@ function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, instruction, address, line, all }) =>
             runAgentTool(async (toolRun) => {
                 const emulator = context.getEmulator()
-                if (!emulator) {
-                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                        retryable: true,
-                        nextAction:
-                            'Wait for the editor language to load before removing breakpoints.'
-                    })
-                }
+                if (!emulator)
+                    return emulatorUnavailable(
+                        toolRun,
+                        'Wait for the editor language to load before removing breakpoints.'
+                    )
 
                 const entry = emulatorEntry(context, emulator)
 
@@ -1529,13 +1500,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait until the editor language has loaded, then call get_emulator_state again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait until the editor language has loaded, then call get_emulator_state again.'
+                        )
 
                     const checkDiagnostics = await emulator.check()
                     return toolRun.success({
@@ -1562,21 +1531,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ steps = 1 }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and step again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and step again.'
+                        )
                     const blocker = executionBlocker(emulator, 'execute')
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     try {
                         let terminated = false
@@ -1608,21 +1569,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and run again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and run again.'
+                        )
                     const blocker = executionBlocker(emulator, 'execute')
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     const status = await emulator.run(1000000)
                     const errors = collectEmulatorErrors(emulator)
@@ -1668,21 +1621,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ steps = 1 }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before undoing execution.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load before undoing execution.'
+                        )
                     const blocker = executionBlocker(emulator, 'undo')
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     try {
                         emulator.undo(steps)
@@ -1712,13 +1657,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ address }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before mapping addresses.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load before mapping addresses.'
+                        )
                     const parsedAddress = parseHexAddress(address)
                     if (parsedAddress === null) {
                         return toolRun.failure('invalid_input', `Invalid hex address: ${address}`, {
@@ -1758,12 +1701,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction: 'Wait for the editor language to load, then compile again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile again.'
+                        )
 
                     //the Selected program's Entry, which compile_source may have just made or
                     //selected
@@ -1886,13 +1828,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ address, length }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before reading memory.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load before reading memory.'
+                        )
                     const parsedAddress = parseHexAddress(address)
                     if (parsedAddress === null) {
                         return toolRun.failure('invalid_input', `Invalid hex address: ${address}`, {
@@ -1953,21 +1893,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ file, register, value }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and poke again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and poke again.'
+                        )
                     const blocker = pokeBlocker(emulator)
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     const fileId = file ?? CPU_REGISTER_FILE_ID
                     const registerFile = findRegisterFile(emulator, fileId)
@@ -2073,21 +2005,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ address, bytes }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and poke again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and poke again.'
+                        )
                     const blocker = pokeBlocker(emulator)
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     const parsedAddress = parseHexAddress(address)
                     if (parsedAddress === null) {
