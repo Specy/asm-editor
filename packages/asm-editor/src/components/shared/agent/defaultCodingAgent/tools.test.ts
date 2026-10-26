@@ -7,6 +7,7 @@ import {
     type CompilationRequest
 } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
+import { UNDO_HISTORY_SIZE } from '#lib/projectSettings.ts'
 import { buildDefaultCodingAgentPrompt } from './prompts'
 import {
     DEFAULT_TAKE_LINES,
@@ -1784,6 +1785,25 @@ describe('Programs', () => {
         })
     })
 
+    //as the Workbench's own Build does (WorkbenchSession.build), from the Selected program's Settings
+    it('compiles with the undo history the selected program asks for', async () => {
+        const { project, emulator, tools } = projectContext(
+            makeProject({ language: 'RISC-V', code: 'li a0, 1' })
+        )
+        await tools.compile.execute({})
+        expect(emulator.compile).toHaveBeenLastCalledWith(UNDO_HISTORY_SIZE, expect.anything())
+        project.setProgramSettings('main.riscv', { undoEnabled: false })
+        await tools.compile.execute({})
+        expect(emulator.compile).toHaveBeenLastCalledWith(0, expect.anything())
+    })
+
+    it('compiles with the default undo history where there is no project', async () => {
+        const emulator = createMockEmulator()
+        const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+        await createDefaultCodingAgentTools(context).compile.execute({})
+        expect(emulator.compile).toHaveBeenLastCalledWith(UNDO_HISTORY_SIZE, expect.anything())
+    })
+
     //the chat page makes a new Project, whose one Program is `main.<ext>`, for each language
     it('writes to the Entry of the language write_to_file switches to', async () => {
         let project = makeProject({ language: 'RISC-V', code: '' })
@@ -2016,7 +2036,7 @@ describe('C/C++ agent workflow', () => {
             const built = await tools.compile.execute({})
             expect(built).toMatchObject({ success: true, entry: 'main.c.riscv' })
             expect(emulator.compile).toHaveBeenCalledWith(
-                100,
+                UNDO_HISTORY_SIZE,
                 expect.objectContaining({
                     entry: 'main.c.riscv',
                     assemblerProfile: 'gnu-compiler-v1',

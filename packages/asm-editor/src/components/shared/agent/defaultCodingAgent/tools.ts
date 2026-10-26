@@ -18,6 +18,7 @@ import { createCompileSourceTool, isSourceFile } from './sourceTools'
 import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
 import { fileText, type BuildSources, type ProjectFile } from '#lib/projectFiles.ts'
 import { programBuildSources } from '#lib/buildSources.ts'
+import { resolveProjectSettings, UNDO_HISTORY_SIZE, undoHistorySize } from '#lib/projectSettings.ts'
 import { firstProgramEntry, startsProgram } from '#lib/workbench/firstProgram.ts'
 import {
     DEFAULT_NO_PROGRAM_MESSAGE,
@@ -216,6 +217,19 @@ export function projectAgentBuildSources(
             assemblyError: noProgramMessage
         }
     return programBuildSources(project)
+}
+
+/**
+ * The undo history the agent's compile gives the Core, the one the host's own Build gives it: what
+ * the Selected program's undo Setting asks for, or with no Project, as in a lecture's editor, what
+ * the language's default Settings, which a Playground runs on, ask for.
+ */
+function compileHistorySize(context: DefaultCodingAgentToolContext): number {
+    const project = context.getProject?.()
+    const language = project?.language ?? context.getEditorLanguage()
+    //a host with no language yet has no Emulator to compile on either
+    if (!language) return UNDO_HISTORY_SIZE
+    return undoHistorySize(resolveProjectSettings(language, project?.selected?.settings))
 }
 
 /**
@@ -1793,7 +1807,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             )
                         }
                         await emulator.compile(
-                            100,
+                            compileHistorySize(context),
                             context.getBuildSources?.() ?? { files: projectFiles, entry }
                         )
                     } catch (error) {
