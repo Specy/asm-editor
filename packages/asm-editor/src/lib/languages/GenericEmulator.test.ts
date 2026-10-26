@@ -1455,7 +1455,7 @@ describe('memory views', () => {
         expect(emulator.memory.global.data.current[0]).toBe(1)
         expect(emulator.memory.global.data.prevState[0]).toBe(0)
 
-        //a running refresh scrolls it last, after the views were read
+        //and so does a running refresh
         push()
         emulator.refreshPanels(true)
         expect(emulator.memory.tabs[0].address).toBe(0x1000n - 2n * pageSize)

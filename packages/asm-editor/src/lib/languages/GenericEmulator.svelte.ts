@@ -1948,11 +1948,7 @@ export abstract class GenericEmulator<T, R extends string>
             : RUNNING_PANEL_REFRESH_MS
         if (!force && now - this.lastPanelRefresh < interval) return
         this.lastPanelRefresh = now
-        this.updateRegisters()
-        this.updateStatusRegisters()
-        this.updateMemory()
-        this.updateData()
-        this.scrollStackTab()
+        this.refreshCoreViews()
     }
 
     /**
@@ -2016,7 +2012,10 @@ export abstract class GenericEmulator<T, R extends string>
         this.refreshCoreViews()
     }
 
-    /** The half of `refreshVisibleState` a step shares; a step owns its own line and Undo handling. */
+    /**
+     * The half of `refreshVisibleState` that a step, an Undo, the end of a testcase and a running
+     * program's panel refresh share; each owns its own line and Undo handling.
+     */
     private refreshCoreViews(): void {
         this.updateRegisters()
         this.scrollStackTab()
@@ -2351,11 +2350,7 @@ export abstract class GenericEmulator<T, R extends string>
             if (ins) this.state.currentFile = ins.file
             this.state.canUndo = false
 
-            this.updateRegisters()
-            this.scrollStackTab()
-            this.updateStatusRegisters()
-            this.updateMemory()
-            this.updateData()
+            this.refreshCoreViews()
             this.state.executionTime = performance.now() - started
         } catch (e) {
             //the run was superseded (clear/dispose/stop while an interrupt was pending), the state
@@ -2568,11 +2563,7 @@ export abstract class GenericEmulator<T, R extends string>
             //back, a runtime error's included, and the Core says again whether it has ended
             if (undone > 0) this.forgetRuntimeFailure()
             this.readTermination()
-            this.updateRegisters()
-            this.scrollStackTab()
-            this.updateMemory()
-            this.updateData()
-            this.updateStatusRegisters()
+            this.refreshCoreViews()
             return undone
         } catch (e) {
             const message = this._stringifyError(e)
