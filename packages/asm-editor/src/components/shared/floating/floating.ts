@@ -43,6 +43,9 @@ export interface Placement {
     arrow: number
 }
 
+/** How far along each of the arrow's sides its tip starts to round. */
+const TIP_ROUNDING = 2.5
+
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }
 
 function clamp(value: number, min: number, max: number) {
@@ -146,33 +149,35 @@ export function outlinePath(
     const points: string[] = [`M${n(x0 + r)},${n(y0)}`]
     const line = (x: number, y: number) => points.push(`L${n(x)},${n(y)}`)
     const corner = (x: number, y: number) => points.push(`A${n(r)},${n(r)} 0 0 1 ${n(x)},${n(y)}`)
+    //from one end of the arrow's base to its tip and on to the other end, the tip slightly rounded:
+    //a curve pulled towards the tip from a little way down each side
+    const head = (bx: number, by: number, tx: number, ty: number, ex: number, ey: number) => {
+        line(bx, by)
+        const along =
+            Math.min(TIP_ROUNDING, Math.hypot(bx - tx, by - ty) / 2) / Math.hypot(bx - tx, by - ty)
+        line(tx + (bx - tx) * along, ty + (by - ty) * along)
+        points.push(`Q${n(tx)},${n(ty)} ${n(tx + (ex - tx) * along)},${n(ty + (ey - ty) * along)}`)
+        line(ex, ey)
+    }
 
     //clockwise from the top left corner; an arrow faces the target, so a card below one has it on top
     if (arrow > 0 && side === 'bottom') {
-        line(at - arrow, y0)
-        line(at, y0 - tip)
-        line(at + arrow, y0)
+        head(at - arrow, y0, at, y0 - tip, at + arrow, y0)
     }
     line(x1 - r, y0)
     corner(x1, y0 + r)
     if (arrow > 0 && side === 'left') {
-        line(x1, at - arrow)
-        line(x1 + tip, at)
-        line(x1, at + arrow)
+        head(x1, at - arrow, x1 + tip, at, x1, at + arrow)
     }
     line(x1, y1 - r)
     corner(x1 - r, y1)
     if (arrow > 0 && side === 'top') {
-        line(at + arrow, y1)
-        line(at, y1 + tip)
-        line(at - arrow, y1)
+        head(at + arrow, y1, at, y1 + tip, at - arrow, y1)
     }
     line(x0 + r, y1)
     corner(x0, y1 - r)
     if (arrow > 0 && side === 'right') {
-        line(x0, at + arrow)
-        line(x0 - tip, at)
-        line(x0, at - arrow)
+        head(x0, at + arrow, x0 - tip, at, x0, at - arrow)
     }
     line(x0, y0 + r)
     corner(x0 + r, y0)

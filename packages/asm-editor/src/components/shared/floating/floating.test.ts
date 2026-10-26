@@ -91,20 +91,20 @@ describe('outlinePath', () => {
         )
     })
 
-    it("puts the arrow on the edge facing the target, its tip outside the card's box", () => {
+    it("puts the arrow on the edge facing the target, its rounded tip outside the card's box", () => {
         //a card above its target points down from its bottom edge
         expect(
             outlinePath(100, 30, { radius: 6, side: 'top', at: 40, arrow: 6, offset: 6 })
-        ).toContain('L52,36 L46,42 L40,36')
+        ).toContain('L52,36 L47.77,40.23 Q46,42 44.23,40.23 L40,36')
         //a card below its target points up from its top edge
         expect(outlinePath(100, 30, { radius: 6, side: 'bottom', at: 40, arrow: 6 })).toContain(
-            'L34,0 L40,-6 L46,0'
+            'L34,0 L38.23,-4.23 Q40,-6 41.77,-4.23 L46,0'
         )
     })
 
     it('keeps the arrow clear of the corners', () => {
         expect(outlinePath(100, 30, { radius: 6, side: 'bottom', at: 0, arrow: 6 })).toContain(
-            'L6,0 L12,-6 L18,0'
+            'L6,0 L10.23,-4.23 Q12,-6 13.77,-4.23 L18,0'
         )
     })
 
