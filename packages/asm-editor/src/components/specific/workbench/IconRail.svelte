@@ -8,6 +8,7 @@
      * the bottom group, where appearing moves no other icon.
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaSave from '~icons/fa-solid/save'
     import { useWorkbench, type RailEntry } from './workbenchContext'
@@ -40,7 +41,7 @@
     <button
         class="rail-button"
         class:active
-        title={entry.tooltip ?? entry.title}
+        {@attach tooltip(entry.tooltip ?? entry.title, { placement: 'right' })}
         aria-label={entry.title}
         aria-pressed={entry.action ? undefined : active}
         onclick={() => press(entry)}
@@ -58,7 +59,7 @@
     {#if withBack && context.onBack}
         <button
             class="rail-button"
-            title="Go back"
+            {@attach tooltip('Go back', { placement: 'right' })}
             aria-label="Go back"
             onclick={() => context.onBack?.()}
         >
@@ -74,7 +75,7 @@
     {#if withSave && context.onSave && context.unsaved}
         <button
             class="rail-button save"
-            title="Save the Project"
+            {@attach tooltip('Save the Project', { placement: 'right' })}
             aria-label="Save the Project"
             onclick={() => session.save()}
         >

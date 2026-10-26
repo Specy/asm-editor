@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { Snippet } from 'svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     let {
         label = 'read-only',
@@ -18,8 +19,9 @@
     } = $props()
 </script>
 
-<div class="read-only-notice" class:find-open={findOpen} role="status" title={description ?? label}>
-    <span class="label">{label}</span>
+<!-- the description on the label, clear of the action, which may have a Tooltip of its own -->
+<div class="read-only-notice" class:find-open={findOpen} role="status">
+    <span class="label" {@attach tooltip(description)}>{label}</span>
     {#if action}<span class="action">{@render action()}</span>{/if}
 </div>
 

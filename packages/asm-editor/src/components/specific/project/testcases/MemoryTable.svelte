@@ -20,6 +20,7 @@
     } from '#lib/testcases.ts'
     import MemoryValueForm from './MemoryValueForm.svelte'
     import WhenLabel, { type When } from './WhenLabel.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         testcase: Testcase
@@ -157,7 +158,7 @@
         {:else if editable}
             <button
                 class="row"
-                title="Change this value"
+                {@attach tooltip('Change this value')}
                 onclick={() => (editing = { when: row.when, index: row.index })}
             >
                 {@render cells(row.when, row.value, error)}

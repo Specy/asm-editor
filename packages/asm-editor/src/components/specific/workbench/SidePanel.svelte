@@ -14,6 +14,7 @@
      * decisions 23 to 29).
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
     import FaExpand from '~icons/fa-solid/expand'
     import FaCompress from '~icons/fa-solid/compress'
@@ -122,7 +123,7 @@
         {#if active?.maximizable && allowMaximize}
             <button
                 class="panel-action"
-                title={ui.maximized ? 'Restore the panel' : 'Maximize the panel'}
+                {@attach tooltip(ui.maximized ? 'Restore the panel' : 'Maximize the panel')}
                 aria-label={ui.maximized ? 'Restore the panel' : 'Maximize the panel'}
                 aria-pressed={ui.maximized}
                 onclick={() => ui.toggleMaximized()}
@@ -136,7 +137,7 @@
         {/if}
         <button
             class="panel-action"
-            title="Close the panel"
+            {@attach tooltip('Close the panel')}
             aria-label="Close the panel"
             onclick={() => {
                 if (phone) ui.drawerOpen = false

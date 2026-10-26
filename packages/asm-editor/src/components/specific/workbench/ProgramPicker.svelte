@@ -10,6 +10,7 @@
      * what follows it off the strip.
      */
     import Select from '#cmp/shared/input/Select.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaChevronDown from '~icons/fa-solid/chevron-down'
     import { useWorkbench } from './workbenchContext'
 
@@ -32,12 +33,11 @@
 </script>
 
 {#if choices.length >= 2}
-    <div
-        class="program-picker"
-        class:phone={ui.deviceClass === 'phone'}
-        title={locked ?? 'The selected program, whose Settings and Testcases the panels show'}
-    >
+    <div class="program-picker" class:phone={ui.deviceClass === 'phone'}>
         <Select
+            {@attach tooltip(
+                locked ?? 'The selected program, whose Settings and Testcases the panels show'
+            )}
             {options}
             bind:value={() => shown ?? '', (entry) => session.selectProgram(entry)}
             disabled={locked !== undefined}

@@ -6,6 +6,7 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import FaExpand from '~icons/fa-solid/expand'
     import FaFilePdf from '~icons/fa-solid/file-pdf'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { formatDuration, pdfDisplay, PREVIEW_UNAVAILABLE } from './previewSupport'
 
     /**
@@ -100,7 +101,9 @@
                 <span class="fact">{dimensions.width} × {dimensions.height} px</span>
             {/if}
             {#if kind.preview === 'image' && !actualSize && scale !== 100}
-                <span class="fact" title="The image is fitted to the pane">shown at {scale}%</span>
+                <span class="fact" {@attach tooltip('The image is fitted to the pane')}
+                    >shown at {scale}%</span
+                >
             {/if}
             {#if duration !== undefined && formatDuration(duration)}
                 <span class="fact">{formatDuration(duration)}</span>
@@ -109,12 +112,16 @@
         </div>
         {#if kind.preview === 'image'}
             <div class="tools">
+                <!-- named as its words, which a narrow pane drops -->
                 <button
                     type="button"
                     class="tool"
-                    title={actualSize
-                        ? 'Fit the image to the pane'
-                        : 'Show the image at its own size, a pixel for a pixel'}
+                    aria-label="Actual size"
+                    {@attach tooltip(
+                        actualSize
+                            ? 'Fit the image to the pane'
+                            : 'Show the image at its own size, a pixel for a pixel'
+                    )}
                     aria-pressed={actualSize}
                     onclick={() => (actualSize = !actualSize)}
                 >

@@ -55,6 +55,7 @@
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import SourceFileIcon from './SourceFileIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     type TreeNode = {
         path: string
@@ -669,7 +670,13 @@
 
     /** The File row the menu was opened on, kept lit while it is open. */
     let menuPath = $state<string | null>(null)
-    let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    let contextMenu = $state<{
+        x: number
+        y: number
+        items: ContextMenuEntry[]
+        /** Whether it is about one row, which its arrow points at. */
+        arrow: boolean
+    } | null>(null)
 
     function folderItems(folder: string): ContextMenuEntry[] {
         return [
@@ -755,7 +762,7 @@
         ]
     }
 
-    function openContextMenu(event: MouseEvent, items: ContextMenuEntry[]) {
+    function openContextMenu(event: MouseEvent, items: ContextMenuEntry[], arrow = true) {
         //a name being typed keeps the browser's own menu, for pasting into it
         if ((event.target as Element | null)?.closest?.('input')) return
         event.preventDefault()
@@ -763,8 +770,8 @@
         //one opened from the keyboard has no pointer, and opens under the focused row instead
         if (event.button === -1 || (event.clientX === 0 && event.clientY === 0)) {
             const rect = (event.target as Element).getBoundingClientRect()
-            contextMenu = { x: rect.left + 16, y: rect.bottom, items }
-        } else contextMenu = { x: event.clientX, y: event.clientY, items }
+            contextMenu = { x: rect.left + 16, y: rect.bottom, items, arrow }
+        } else contextMenu = { x: event.clientX, y: event.clientY, items, arrow }
     }
 
     function downloadFile(targetPath = selectedPath) {
@@ -794,7 +801,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="New text file"
+                {@attach tooltip('New text file')}
+                aria-label="New text file"
                 onclick={() => startCreate()}
             >
                 <FaPlus />
@@ -802,7 +810,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="Create a BMP image and open it in the pixel editor"
+                {@attach tooltip('Create a BMP image and open it in the pixel editor')}
+                aria-label="New picture"
                 onclick={() => startNewPicture()}
             >
                 <FaFileImage />
@@ -810,7 +819,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="Upload files"
+                {@attach tooltip('Upload files')}
+                aria-label="Upload files"
                 onclick={() => pickUploads()}
             >
                 <FaUpload />
@@ -835,7 +845,7 @@
             ondrop={onTreeDrop}
             oncontextmenu={(event) => {
                 menuPath = null
-                openContextMenu(event, folderItems(''))
+                openContextMenu(event, folderItems(''), false)
             }}
         >
             {#if rows.length === 0 && !editing}
@@ -872,10 +882,11 @@
                     <div
                         class="tree-row directory"
                         class:drop-target={dropFolder === row.path}
+                        class:menu-open={contextMenu !== null && menuPath === row.path}
                         title={row.path}
                         data-folder={row.path}
                         oncontextmenu={(event) => {
-                            menuPath = null
+                            menuPath = row.path
                             openContextMenu(event, folderItems(row.path))
                         }}
                     >
@@ -897,10 +908,13 @@
                             </span>
                             <span class="ellipsis">{row.name}</span>
                         </button>
+                        <!-- a long press on the row opens its menu, so its buttons' Tooltips
+                             leave touch alone -->
                         <div class="row-actions">
                             <button
                                 disabled={locked}
-                                title="New text file in this folder"
+                                {@attach tooltip('New text file in this folder', { touch: false })}
+                                aria-label="New text file"
                                 onclick={() => startCreate(row.path)}
                             >
                                 <FaPlus />
@@ -1003,12 +1017,15 @@
                                 >
                             {/if}
                         </button>
+                        <!-- a long press on the row opens its menu, so its buttons' Tooltips
+                             leave touch alone -->
                         <div class="row-actions">
                             {#if entries.has(row.path)}
                                 {#if onRemoveProgram}
                                     <button
                                         disabled={locked}
-                                        title="Remove program"
+                                        {@attach tooltip('Remove program', { touch: false })}
+                                        aria-label="Remove program"
                                         onclick={() => void removeProgram(row.path)}
                                     >
                                         <FaRegFlag />
@@ -1018,7 +1035,10 @@
                                 {@const create = onNewProgram}
                                 <button
                                     disabled={locked}
-                                    title="New program from this file"
+                                    {@attach tooltip('New program from this file', {
+                                        touch: false
+                                    })}
+                                    aria-label="New program from this file"
                                     onclick={() => {
                                         if (!locked) create(row.path)
                                     }}
@@ -1026,19 +1046,25 @@
                                     <FaFlag />
                                 </button>
                             {/if}
-                            <button title="Download" onclick={() => downloadFile(row.path)}>
+                            <button
+                                {@attach tooltip('Download', { touch: false })}
+                                aria-label="Download"
+                                onclick={() => downloadFile(row.path)}
+                            >
                                 <FaDownload />
                             </button>
                             <button
                                 disabled={locked}
-                                title="Rename"
+                                {@attach tooltip('Rename', { touch: false })}
+                                aria-label="Rename"
                                 onclick={() => startRename(row.path)}
                             >
                                 <FaPen />
                             </button>
                             <button
                                 disabled={locked}
-                                title="Delete"
+                                {@attach tooltip('Delete', { touch: false })}
+                                aria-label="Delete"
                                 onclick={() => deleteFile(row.path)}
                             >
                                 <FaTrash />
@@ -1084,7 +1110,7 @@
                 <span class="hints-title">Hints</span>
                 <button
                     class="hints-close"
-                    title="Hide the hints until the next reload"
+                    {@attach tooltip('Hide the hints until the next reload')}
                     aria-label="Hide the hints"
                     onclick={() => (hintsDismissed.value = true)}
                 >
@@ -1127,6 +1153,7 @@
             x={contextMenu.x}
             y={contextMenu.y}
             items={contextMenu.items}
+            arrow={contextMenu.arrow}
             label="File actions"
             onClose={() => {
                 contextMenu = null

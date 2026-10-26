@@ -26,6 +26,7 @@
      */
     import { tick, type Component, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
+    import type { HTMLButtonAttributes } from 'svelte/elements'
     import Icon from '#cmp/shared/layout/Icon.svelte'
 
     type SelectOption = {
@@ -36,7 +37,14 @@
         disabled?: boolean
     }
 
-    interface Props {
+    /**
+     * The rest goes to the control's button, an attachment such as a Tooltip among them; `title`
+     * is the visible label above it, not a tooltip.
+     */
+    interface Props extends Omit<
+        HTMLButtonAttributes,
+        'value' | 'style' | 'title' | 'disabled' | 'onchange'
+    > {
         options: SelectOption[]
         value: T
         style?: string
@@ -74,7 +82,8 @@
         popupWidth,
         openAbove = false,
         chevron,
-        listStyle = ''
+        listStyle = '',
+        ...rest
     }: Props = $props()
 
     //SSR safe and unique per instance, so the ids survive hydration
@@ -284,6 +293,7 @@
     <button
         bind:this={button}
         type="button"
+        {...rest}
         {disabled}
         class="control"
         {style}

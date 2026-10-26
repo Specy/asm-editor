@@ -2,6 +2,7 @@
     import FaSearch from '~icons/fa-solid/search'
     import FaMapMarkerAlt from '~icons/fa-solid/map-marker-alt'
     import FaMicroscope from '~icons/fa-solid/microscope'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { offsetHex } from './hexGrid'
 
     /**
@@ -48,8 +49,9 @@
         {#if offset !== undefined}
             <span
                 class="fact offset"
-                title="The caret's offset, in decimal: {offset.toLocaleString('en-US')}"
-                >Offset <b>0x{offsetHex(offset, digits)}</b></span
+                {@attach tooltip(
+                    `The caret's offset, in decimal: ${offset.toLocaleString('en-US')}`
+                )}>Offset <b>0x{offsetHex(offset, digits)}</b></span
             >
         {/if}
         {#if selection > 0}
@@ -60,20 +62,34 @@
             <span class="fact region">{region}</span>
         {/if}
         {#if readOnly}
-            <span class="fact badge read-only" title={readOnly}>read-only</span>
+            <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
         {/if}
     </div>
     <div class="tools">
-        <button type="button" class="tool" title="Find bytes or text (Ctrl+F)" onclick={onFind}>
+        <!-- named as their words, which a narrow pane drops -->
+        <button
+            type="button"
+            class="tool"
+            aria-label="Find"
+            {@attach tooltip('Find bytes or text', { shortcut: 'Mod+KeyF' })}
+            onclick={onFind}
+        >
             <FaSearch /><span>Find</span>
         </button>
-        <button type="button" class="tool" title="Go to offset (Ctrl+G)" onclick={onGoTo}>
+        <button
+            type="button"
+            class="tool"
+            aria-label="Go to"
+            {@attach tooltip('Go to offset', { shortcut: 'Mod+KeyG' })}
+            onclick={onGoTo}
+        >
             <FaMapMarkerAlt /><span>Go to</span>
         </button>
         <button
             type="button"
             class="tool"
-            title="Data inspector: the bytes at the caret as numbers"
+            aria-label="Inspector"
+            {@attach tooltip('Data inspector: the bytes at the caret as numbers')}
             aria-pressed={inspectorOpen}
             onclick={onToggleInspector}
         >

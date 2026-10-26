@@ -23,6 +23,7 @@
     import { tick, untrack } from 'svelte'
     import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
     import { TerminalTranscriptReader, styleClasses } from './terminalEscapes'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         terminal: Terminal
@@ -376,7 +377,9 @@
             >{/if}{#if offersEndOfInput}<button
                 type="button"
                 class="end-of-input"
-                title="End the program's standard input (Ctrl+D)"
+                {@attach tooltip("End the program's standard input", {
+                    shortcut: 'ControlLeft+KeyD'
+                })}
                 aria-keyshortcuts="Control+D"
                 onpointerdown={(event) => event.preventDefault()}
                 onclick={endInput}>End of input <kbd>Ctrl+D</kbd></button
