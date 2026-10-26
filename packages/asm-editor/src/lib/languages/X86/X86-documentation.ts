@@ -561,7 +561,7 @@ export function hasX86Description(name: string): boolean {
     return key in X86_WRITTEN_DESCRIPTIONS || key in X86_DESCRIPTIONS
 }
 
-export function formatX86Form(name: string, form: X86InstructionForm): string {
+export function formatX86Form(name: string, form: { operands: readonly string[] }): string {
     return form.operands.length ? `${name} ${form.operands.join(', ')}` : name
 }
 

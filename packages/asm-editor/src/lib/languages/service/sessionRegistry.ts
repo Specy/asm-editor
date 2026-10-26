@@ -1,6 +1,7 @@
+import type monaco from 'monaco-editor'
 import { sameFileContent, type BuildSources } from '#lib/projectFiles.ts'
 import type { ProjectAnalysisSnapshot } from './protocol'
-import type { ProjectModelIdentity } from './uri'
+import { parseProjectSourceUri, type ProjectModelIdentity } from './uri'
 
 export type LanguageSessionView = {
     readonly sessionId: string
@@ -26,6 +27,28 @@ export function registerLanguageSession(session: LanguageSessionView): () => voi
 
 export function languageSession(sessionId: string): LanguageSessionView | undefined {
     return sessions.get(sessionId)
+}
+
+export type ModelSources = {
+    identity: ProjectModelIdentity
+    session: LanguageSessionView
+    sources: BuildSources
+}
+
+/**
+ * The session an editor model belongs to and the sources it shows: the live Files, or the Build
+ * snapshot of the model's generation. None for a model of no registered session, or with no URI at
+ * all, as a test's stub model has.
+ */
+export function modelSources(model: monaco.editor.ITextModel): ModelSources | null {
+    const identity = model.uri ? parseProjectSourceUri(model.uri) : null
+    if (!identity) return null
+    const session = languageSession(identity.sessionId)
+    const sources = session?.sourcesFor(
+        identity.sourceKind,
+        identity.sourceKind === 'build' ? identity.buildGeneration : undefined
+    )
+    return session && sources ? { identity, session, sources } : null
 }
 
 /**
