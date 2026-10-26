@@ -464,6 +464,52 @@ describe('RISC-V memory-mapped keyboard and display', () => {
         expect(emulator.stdOut).toBe('B')
     })
 
+    it('leaves the transcript to its own Undo when a store to the data register is undone', async () => {
+        //Undo puts the register's old byte back through a store the device observes, but the
+        //transcript rewinds through its own history: the form feed that store restores must not
+        //clear what was printed since
+        const emulator = await run(
+            DATA +
+                `        li      s0, ${MARS_TRANSMITTER_DATA | 0}
+        li      t1, 12
+        sw      t1, 0(s0)
+        li      a0, 0x58
+        li      a7, 11
+        ecall
+        li      t1, 0x59
+        sw      t1, 0(s0)
+` +
+                EXIT
+        )
+        expect(emulator.stdOut).toBe('XY')
+        //the exit's two instructions, then the store of the Y
+        expect(emulator.undo(3)).toBe(3)
+        expect(emulator.stdOut).toBe('X')
+    })
+
+    it('prints nothing when a Poke of the data register is undone', async () => {
+        const emulator = await build(DATA + EXIT)
+        const register = BigInt(MARS_TRANSMITTER_DATA >>> 0)
+        expect(emulator.pokeMemory(register, new Uint8Array([0x5a, 0, 0, 0]))).toBe(true)
+        expect(emulator.stdOut).toBe('Z')
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.stdOut).toBe('Z')
+    })
+
+    it('keeps the receiver Ready for a keystroke typed after a Poke it undoes', async () => {
+        //the word Undo puts back was stated before the key was typed: the device states Ready
+        //again from what is waiting now, or a program polling the register would spin
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + EXIT, { keyboard })
+        const control = BigInt(MARS_RECEIVER_CONTROL >>> 0)
+        expect(emulator.pokeMemory(control, new Uint8Array([0x04, 0, 0, 0]))).toBe(true)
+        expect(emulator.readMemoryBytes(control, 4)[0]).toBe(0)
+        keyboard.typeText('A')
+        expect(emulator.readMemoryBytes(control, 4)[0]).toBe(MARS_READY_BIT)
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.readMemoryBytes(control, 4)[0]).toBe(MARS_READY_BIT)
+    })
+
     it('stops with an error naming the feature when a program enables interrupts', async () => {
         const emulator = await run(
             DATA +
@@ -2369,6 +2415,32 @@ target:
             }
         ])
     })
+
+    it.each(['RISC-V', 'RISC-V-64'] as const)(
+        'reads a store at or above 0x80000000 as the address it is on %s',
+        async (language) => {
+            const code =
+                DATA +
+                `        li      s0, ${MARS_TRANSMITTER_DATA | 0}
+        li      t1, 0x41
+        sw      t1, 0(s0)
+` +
+                EXIT
+            const emulator = RISCVEmulator(code, { language, display: SMALL })
+            await emulator.check()
+            await emulator.compile(200, code)
+            await emulator.run(INSTRUCTION_LIMIT)
+            const stores = emulator.latestSteps
+                .flatMap((step) => step.mutations)
+                .filter((mutation) => mutation.type === 'WriteMemory')
+            expect(stores).toEqual([
+                {
+                    type: 'WriteMemory',
+                    value: { address: 0xffff000cn, size: RegisterSize.Long, old: 0n, new: 0x41n }
+                }
+            ])
+        }
+    )
 
     it('reads a poked value whole on the 64 bit target', async () => {
         const code = `        .text\nmain:\n        li      t0, 3\n` + EXIT

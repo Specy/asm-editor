@@ -52,7 +52,11 @@ import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import { type ExecutionSlice, type ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import { MarsSlicePacer } from '#lib/languages/mars/marsSlice.ts'
-import { canUndoMarsHistoryRange } from '#lib/languages/mars/marsUndo.ts'
+import {
+    canUndoMarsHistoryRange,
+    memoryBackstepMutation,
+    registerBackstepMutation
+} from '#lib/languages/mars/marsUndo.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
@@ -248,10 +252,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     /**
-     * 32 vs 64 bit is a *module global* of the core (`RISCV.setIs64Bit`), not a per instance flag,
-     * so it has to be pinned right before every core creation (see `_compile`/`_checkCode`).
-     * This is a getter and not a field because the base constructor already runs `_checkCode`
-     * (through `semanticCheck()`), which happens before subclass field initializers would run.
+     * Whether this Emulator's Cores are RV64, which each one is made with (`makeRiscVCore`). A
+     * getter and not a field because the base constructor already runs `_checkCode` (through
+     * `semanticCheck()`), which happens before subclass field initializers would run.
      */
     private get is64Bit(): boolean {
         return this._emulatorOptions.language === 'RISC-V-64'
@@ -287,6 +290,15 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         return this.riscv?.getUndoDepth() ?? 0
     }
 
+    /**
+     * The Core's count of every instruction it has executed, one Undo entry each, the one a failed
+     * Step or slice stopped on included: what lets `GenericEmulator` record a call that threw, where
+     * the pacer's per-chunk counts are lost with the rejection.
+     */
+    _getInstructionsExecuted(): bigint {
+        return BigInt(this.riscv?.getInstructionsExecuted() ?? 0)
+    }
+
     _canUndoSteps(count: number): boolean {
         return this._canUndoHistoryRange(0, count)
     }
@@ -318,9 +330,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * Arguments after it, which the Core stores above the stack at every start, with argc in `a0`
      * and argv in `a1`, pointers as wide as the Target's
      * ([ADR 0046](../../../../../../docs/adr/0046-mips-and-risc-v-programs-get-argv-above-their-stack.md)).
-     * Checked here at this Emulator's width, which needs no switch of the Core's global one, so the
-     * Core's refusal (too many, too long) stops the Build as an Arguments problem; the Core
-     * `_compile` creates gets them.
+     * Checked here at this Emulator's width, so the Core's refusal (too many, too long) stops the
+     * Build as an Arguments problem; the Core `_compile` creates gets them.
      */
     _setProgramArguments(sources: BuildSources, args: string[]): void {
         const argv = [programArgv0(sources.entry, false, sources.entrySource), ...args]
@@ -369,14 +380,12 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
-        //the bitness decides which instructions assemble (`ld` is RV64 only), so pin the module
-        //global before creating the throwaway instance, exactly like `_compile` does
-        RISCV.setIs64Bit(this.is64Bit)
         const files = textAssemblyFiles(sources)
         const riscv = makeRiscVCore(
             files,
             sources.entry,
             buildAssemblerProfile(sources),
+            this.is64Bit,
             this.runtimeLink(sources)
         )
         const result = riscv.assemble()
@@ -442,13 +451,11 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         files: Record<string, string>,
         undoSize: number
     ) {
-        //creation + assembly is synchronous, so pinning the module global here cannot be
-        //interleaved with another instance's creation
-        RISCV.setIs64Bit(this.is64Bit)
         const riscv = makeRiscVCore(
             files,
             sources.entry,
             buildAssemblerProfile(sources),
+            this.is64Bit,
             this.runtimeLink(sources)
         )
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
@@ -565,7 +572,6 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      */
     private probeLabelAddress(sources: BuildSources, label: string): number | null {
         try {
-            RISCV.setIs64Bit(this.is64Bit)
             const probeSources = updateEntryText(
                 sources,
                 screenLabelProbeSource(sourceText(sources), label)
@@ -574,6 +580,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 textAssemblyFiles(probeSources),
                 probeSources.entry,
                 buildAssemblerProfile(probeSources),
+                this.is64Bit,
                 this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
@@ -1083,51 +1090,40 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         await this.coreCall(() => riscv.simulateWithLimit(toHaltLimit(haltLimit)))
     }
 
+    /**
+     * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
+     * Every action has a case, so a new one is a type error here rather than a row nobody chose.
+     */
     private backstepToMutation(step: JsBackStep): MutationOperation | null {
         switch (step.action) {
             case BackStepAction.REGISTER_RESTORE:
-                return {
-                    type: 'WriteRegister',
-                    value: {
-                        //`registers[i].name` is `_registerNames[i]` by construction, reading the
-                        //names directly avoids depending on the register list being built already
-                        register: this._registerNames[step.param1] ?? `x${step.param1}`,
-                        old: this.backstepValue(step.oldValue, this._systemSize),
-                        new: this.backstepValue(step.newValue, this._systemSize),
-                        size: this._systemSize
-                    }
-                }
+                //`registers[i].name` is `_registerNames[i]` by construction, reading the names
+                //directly avoids depending on the register list being built already
+                return registerBackstepMutation(
+                    step,
+                    this._registerNames[step.param1] ?? `x${step.param1}`,
+                    this._systemSize
+                )
             case BackStepAction.FLOATING_POINT_REGISTER_RESTORE:
-                return {
-                    type: 'WriteRegister',
-                    value: {
-                        //`param1` is the register number, which is this file's own order
-                        register: RISCVFloatingPointRegisterNames[step.param1] ?? `f${step.param1}`,
-                        //the file is 64 bit wide on both targets, a single being NaN-boxed into it
-                        old: this.backstepValue(step.oldValue, RegisterSize.Double),
-                        new: this.backstepValue(step.newValue, RegisterSize.Double),
-                        size: RegisterSize.Double
-                    }
-                }
+                //`param1` is the register number, which is this file's own order, and the file is
+                //64 bit wide on both targets, a single being NaN-boxed into it
+                return registerBackstepMutation(
+                    step,
+                    RISCVFloatingPointRegisterNames[step.param1] ?? `f${step.param1}`,
+                    RegisterSize.Double
+                )
             case BackStepAction.MEMORY_RESTORE_BYTE:
-                return makeMemoryBackstepMutation(step, RegisterSize.Byte)
+                return memoryBackstepMutation(step, RegisterSize.Byte)
             case BackStepAction.MEMORY_RESTORE_HALF:
-                return makeMemoryBackstepMutation(step, RegisterSize.Word)
+                return memoryBackstepMutation(step, RegisterSize.Word)
             case BackStepAction.MEMORY_RESTORE_WORD:
             case BackStepAction.MEMORY_RESTORE_RAW_WORD:
-                return makeMemoryBackstepMutation(step, RegisterSize.Long)
+                return memoryBackstepMutation(step, RegisterSize.Long)
             case BackStepAction.MEMORY_RESTORE_DOUBLE_WORD:
-                return makeMemoryBackstepMutation(step, RegisterSize.Double)
+                return memoryBackstepMutation(step, RegisterSize.Double)
+            //the address the restore puts back, and the one the instruction set
             case BackStepAction.PC_RESTORE:
-                return {
-                    type: 'WriteRegister',
-                    value: {
-                        register: 'pc',
-                        old: this.backstepValue(step.oldValue, this._systemSize),
-                        new: this.backstepValue(step.newValue, this._systemSize),
-                        size: this._systemSize
-                    }
-                }
+                return registerBackstepMutation(step, 'pc', this._systemSize)
             //the only writer of a backdoor entry is an instruction reading the `time` CSR (or
             //`timeh`), which the Core sets to the program time as it is read and journals against
             //that instruction, so the reading is one of the instruction's writes like any other
@@ -1136,26 +1132,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 //`param1` is the CSR *number*, the sparse architectural address the `csrr*`
                 //instructions take, and not a position in the file (see `riscvCsrRegisterName`)
                 const name = riscvCsrRegisterName(step.param1)
-                if (!name) {
-                    return {
-                        type: 'Other',
-                        value: `${backStepActionMap[step.action]} 0x${step.param1.toString(16)}`
-                    }
-                }
+                if (name) return registerBackstepMutation(step, name, this._systemSize)
+                const kind =
+                    step.action === BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR
+                        ? 'backdoor'
+                        : 'restore'
                 return {
-                    type: 'WriteRegister',
-                    value: {
-                        register: name,
-                        old: this.backstepValue(step.oldValue, this._systemSize),
-                        new: this.backstepValue(step.newValue, this._systemSize),
-                        size: this._systemSize
-                    }
+                    type: 'Other',
+                    value: `Control and status register ${kind} 0x${step.param1.toString(16)}`
                 }
             }
             //the cycle and instret counters are bookkeeping the program did not ask for, and the
             //Core advances them once per instruction, so the entry that undoes them is not a
-            //mutation the diff should show
+            //mutation the diff should show; nor is the heap break the Core keeps of its layout
             case BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT:
+            case BackStepAction.HEAP_RESTORE:
                 return null
             //the two a Poke records: the whole Poke, and the restore of a CSR written through its
             //own value. A poke group is rendered from its `writes` instead
@@ -1165,27 +1156,16 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             case BackStepAction.CONTROL_AND_STATUS_REGISTER_POKE_RESTORE:
                 return null
             case BackStepAction.DO_NOTHING:
-                return {
-                    type: 'Other',
-                    value: backStepActionMap[step.action]
-                }
+                return { type: 'Other', value: 'Do nothing' }
             //`newValue` is the code the exit set: 0 for exit, `a0` for exit2
             case BackStepAction.EXIT_RESTORE:
                 return { type: 'Other', value: exitStepText(step.newValue) }
             case BackStepAction.RANDOM_STREAM_RESTORE:
                 return { type: 'Other', value: randomStreamStepText(step.param1) }
+            //the Core reports -1 for a back step without an action, which its type leaves out
+            default:
+                return unknownBackStep(step.action)
         }
-        // The runtime uses -1 for a backstep without an action, although its type omits it.
-        return null
-    }
-
-    /**
-     * One side of a write as a back step reports it: a signed decimal string of the whole 64 bit
-     * value, the shape the Poke writes use, read at the width of what was written so that a 32
-     * bit target's registers and CSRs show their word and not a sign-extended long.
-     */
-    private backstepValue(value: string, size: RegisterSize): bigint {
-        return BigInt.asUintN(8 * size, BigInt(value))
     }
 
     private statementAtAddress(address: number): JsProgramStatement | null {
@@ -1349,42 +1329,7 @@ function formatStatement(statement: string) {
     return statement
 }
 
-/**
- * A memory restore as a write: what the store replaced and what it left, each a signed decimal
- * string of the whole value, read at the width of the store.
- */
-function makeMemoryBackstepMutation(step: JsBackStep, size: RegisterSize): MutationOperation {
-    return {
-        type: 'WriteMemory',
-        value: {
-            address: BigInt(step.param1),
-            size,
-            old: BigInt.asUintN(8 * size, BigInt(step.oldValue)),
-            new: BigInt.asUintN(8 * size, BigInt(step.newValue))
-        }
-    }
+/** No row for a back step without an action; `never` keeps the switch that calls it exhaustive. */
+function unknownBackStep(_action: never): null {
+    return null
 }
-
-const backStepActionMap = {
-    [BackStepAction.MEMORY_RESTORE_RAW_WORD]: 'Memory restore raw word',
-    [BackStepAction.MEMORY_RESTORE_DOUBLE_WORD]: 'Memory restore double word',
-    [BackStepAction.MEMORY_RESTORE_WORD]: 'Memory restore word',
-    [BackStepAction.MEMORY_RESTORE_HALF]: 'Memory restore half',
-    [BackStepAction.MEMORY_RESTORE_BYTE]: 'Memory restore byte',
-    [BackStepAction.REGISTER_RESTORE]: 'Register restore',
-    [BackStepAction.PC_RESTORE]: 'PC restore',
-    [BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE]: 'Control and status register restore',
-    [BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR]: 'Control and status register backdoor',
-    [BackStepAction.FLOATING_POINT_REGISTER_RESTORE]: 'Floating point register restore',
-    [BackStepAction.DO_NOTHING]: 'Do nothing',
-    [BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT]: 'Cycle and instret counters decrement',
-    //both belong to a Poke, which is read out of its group's `writes` and never through a back
-    //step, and an exit and a random draw have words of their own in `backstepToMutation`, but the
-    //map has to stay exhaustive over the Core's actions
-    [BackStepAction.CONTROL_AND_STATUS_REGISTER_POKE_RESTORE]:
-        'Control and status register poke restore',
-    [BackStepAction.POKE]: 'Poke',
-    [BackStepAction.EXIT_RESTORE]: 'Exit restore',
-    [BackStepAction.RANDOM_STREAM_RESTORE]: 'Random generator restore',
-    [BackStepAction.HEAP_RESTORE]: 'Heap break restore'
-} satisfies Record<BackStepAction, string>

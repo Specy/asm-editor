@@ -50,7 +50,11 @@ import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import { type ExecutionSlice, type ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import { MarsSlicePacer } from '#lib/languages/mars/marsSlice.ts'
-import { canUndoMarsHistoryRange } from '#lib/languages/mars/marsUndo.ts'
+import {
+    canUndoMarsHistoryRange,
+    memoryBackstepMutation,
+    registerBackstepMutation
+} from '#lib/languages/mars/marsUndo.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import { programArgv0 } from '#lib/commandLine.ts'
 import { MarsDevices } from '#lib/languages/mars/MarsDevices.ts'
@@ -295,6 +299,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     /** The Core groups its history by instruction or Poke, so the group count is the depth. */
     _undoDepth(): number {
         return this.mips?.getUndoDepth() ?? 0
+    }
+
+    /**
+     * The Core's count of every instruction it has executed, one Undo entry each, the one a failed
+     * Step or slice stopped on included: what lets `GenericEmulator` record a call that threw, where
+     * the pacer's per-chunk counts are lost with the rejection.
+     */
+    _getInstructionsExecuted(): bigint {
+        return BigInt(this.mips?.getInstructionsExecuted() ?? 0)
     }
 
     _canUndoSteps(count: number): boolean {
@@ -853,7 +866,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             file: statement?.sourcePath,
             //the Core reports the back steps newest first, which is the order they are undone in;
             //a row reads as what the instruction did, so it lists them in the order they happened
-            mutations: [...group.steps].reverse().map(backstepToMutation)
+            mutations: [...group.steps]
+                .reverse()
+                .map(backstepToMutation)
+                .filter((mutation) => mutation !== null)
         }
     }
 
@@ -1159,101 +1175,59 @@ function pokeWriteToMutation(write: PokeWrite): MutationOperation {
     }
 }
 
-function backstepToMutation(step: JsBackStep): MutationOperation {
-    if (step.action === BackStepAction.REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getRegisterFileName(step.param1), step)
-    }
-    if (step.action === BackStepAction.COPROC0_REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getCP0RegisterName(step.param1), step)
-    }
-    if (step.action === BackStepAction.COPROC1_REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getCP1RegisterName(step.param1), step)
-    }
-    const memorySize = getMemoryBackstepSize(step.action)
-    if (memorySize !== undefined) {
-        return {
-            type: 'WriteMemory',
-            value: {
-                address: BigInt(step.param1),
-                size: memorySize,
-                //the word, half or byte the store replaced and the one it left, each in the low
-                //bits of the signed int the facade hands over
-                old: BigInt.asUintN(8 * memorySize, BigInt(step.param2)),
-                new: BigInt.asUintN(8 * memorySize, BigInt(step.newValue))
-            }
-        }
-    }
-    if (step.action === BackStepAction.PC_RESTORE) {
-        //`addPCRestore` puts the old program counter in `param1`, and the address the
-        //instruction set in `newValue`
-        return makeRegisterBackstepMutation('$pc', step, step.param1)
-    }
-    if (step.action === BackStepAction.COPROC1_CONDITION_CLEAR) {
-        return {
-            type: 'Other',
-            value: `CP1 condition flag ${step.param1} restore: clear`
-        }
-    }
-    if (step.action === BackStepAction.COPROC1_CONDITION_SET) {
-        return {
-            type: 'Other',
-            value: `CP1 condition flag ${step.param1} restore: set`
-        }
-    }
-    if (step.action === BackStepAction.EXIT_RESTORE) {
-        //`newValue` is the code the exit set: 0 for exit, `$a0` for exit2
-        return { type: 'Other', value: exitStepText(step.newValue) }
-    }
-    if (step.action === BackStepAction.RANDOM_STREAM_RESTORE) {
-        return { type: 'Other', value: randomStreamStepText(step.param1) }
-    }
-    return {
-        type: 'Other',
-        value: backStepActionMap[step.action]
-    }
-}
-
-const backStepActionMap = {
-    [BackStepAction.MEMORY_RESTORE_BYTE]: 'Memory restore byte',
-    [BackStepAction.MEMORY_RESTORE_HALF]: 'Memory restore half',
-    [BackStepAction.MEMORY_RESTORE_WORD]: 'Memory restore word',
-    [BackStepAction.MEMORY_RESTORE_RAW_WORD]: 'Memory restore raw word',
-    [BackStepAction.COPROC0_REGISTER_RESTORE]: 'Coproc0 register restore',
-    [BackStepAction.COPROC1_REGISTER_RESTORE]: 'Coproc1 register restore',
-    [BackStepAction.COPROC1_CONDITION_CLEAR]: 'Coproc1 condition clear',
-    [BackStepAction.COPROC1_CONDITION_SET]: 'Coproc1 condition set',
-    [BackStepAction.DO_NOTHING]: 'Do nothing',
-    [BackStepAction.REGISTER_RESTORE]: 'Register restore',
-    [BackStepAction.PC_RESTORE]: 'PC restore',
-    //a Poke is read out of its group's `writes` and never through a back step, and an exit and a
-    //random draw have words of their own in `backstepToMutation`, but the map has to stay
-    //exhaustive over the Core's actions
-    [BackStepAction.POKE]: 'Poke',
-    [BackStepAction.EXIT_RESTORE]: 'Exit restore',
-    [BackStepAction.RANDOM_STREAM_RESTORE]: 'Random generator restore',
-    [BackStepAction.HEAP_RESTORE]: 'Heap break restore',
-    [BackStepAction.STACK_TOP_RESTORE]: 'Stack top restore'
-} satisfies Record<BackStepAction, string>
-
 /**
- * A register restore as a write: `old` is the value the back step puts back and `new` the value
- * the write left, both reported by the facade as signed 32 bit ints, the way every register
- * getter does. The old value is `param2` unless the caller says otherwise (the PC keeps its in
- * `param1`).
+ * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
+ * Every action has a case, so a new one is a type error here rather than a row nobody chose.
  */
-function makeRegisterBackstepMutation(
-    register: string,
-    step: JsBackStep,
-    old: number = step.param2
-): MutationOperation {
-    return {
-        type: 'WriteRegister',
-        value: {
-            register,
-            old: BigInt(old >>> 0),
-            new: BigInt(step.newValue >>> 0),
-            size: RegisterSize.Long
-        }
+function backstepToMutation(step: JsBackStep): MutationOperation | null {
+    switch (step.action) {
+        case BackStepAction.REGISTER_RESTORE:
+            return registerBackstepMutation(
+                step,
+                getRegisterFileName(step.param1),
+                RegisterSize.Long
+            )
+        case BackStepAction.COPROC0_REGISTER_RESTORE:
+            return registerBackstepMutation(
+                step,
+                getCP0RegisterName(step.param1),
+                RegisterSize.Long
+            )
+        case BackStepAction.COPROC1_REGISTER_RESTORE:
+            return registerBackstepMutation(
+                step,
+                getCP1RegisterName(step.param1),
+                RegisterSize.Long
+            )
+        //the address the restore puts back, and the one the instruction set
+        case BackStepAction.PC_RESTORE:
+            return registerBackstepMutation(step, '$pc', RegisterSize.Long)
+        case BackStepAction.MEMORY_RESTORE_BYTE:
+            return memoryBackstepMutation(step, RegisterSize.Byte)
+        case BackStepAction.MEMORY_RESTORE_HALF:
+            return memoryBackstepMutation(step, RegisterSize.Word)
+        case BackStepAction.MEMORY_RESTORE_WORD:
+        case BackStepAction.MEMORY_RESTORE_RAW_WORD:
+            return memoryBackstepMutation(step, RegisterSize.Long)
+        case BackStepAction.COPROC1_CONDITION_CLEAR:
+            return { type: 'Other', value: `CP1 condition flag ${step.param1} restore: clear` }
+        case BackStepAction.COPROC1_CONDITION_SET:
+            return { type: 'Other', value: `CP1 condition flag ${step.param1} restore: set` }
+        case BackStepAction.DO_NOTHING:
+            return { type: 'Other', value: 'Do nothing' }
+        //`newValue` is the code the exit set: 0 for exit, `$a0` for exit2
+        case BackStepAction.EXIT_RESTORE:
+            return { type: 'Other', value: exitStepText(step.newValue) }
+        case BackStepAction.RANDOM_STREAM_RESTORE:
+            return { type: 'Other', value: randomStreamStepText(step.param1) }
+        //a Poke group is rendered from its `writes`
+        //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)), so its step never
+        //reaches this list; the heap break and stack top restores are the Core's bookkeeping of
+        //its memory layout, which the program did not write
+        case BackStepAction.POKE:
+        case BackStepAction.HEAP_RESTORE:
+        case BackStepAction.STACK_TOP_RESTORE:
+            return null
     }
 }
 
@@ -1275,31 +1249,4 @@ function getCP0RegisterName(registerNumber: number) {
 function getCP1RegisterName(index: number) {
     if (Number.isInteger(index) && index >= 0 && index < 32) return `$f${index}`
     return `CP1[${index}]`
-}
-
-function getMemoryBackstepSize(action: BackStepAction): RegisterSize | undefined {
-    switch (action) {
-        case BackStepAction.MEMORY_RESTORE_BYTE:
-            return RegisterSize.Byte
-        case BackStepAction.MEMORY_RESTORE_HALF:
-            return RegisterSize.Word
-        case BackStepAction.MEMORY_RESTORE_WORD:
-        case BackStepAction.MEMORY_RESTORE_RAW_WORD:
-            return RegisterSize.Long
-        case BackStepAction.REGISTER_RESTORE:
-        case BackStepAction.PC_RESTORE:
-        case BackStepAction.COPROC0_REGISTER_RESTORE:
-        case BackStepAction.COPROC1_REGISTER_RESTORE:
-        case BackStepAction.COPROC1_CONDITION_CLEAR:
-        case BackStepAction.COPROC1_CONDITION_SET:
-        case BackStepAction.DO_NOTHING:
-        case BackStepAction.POKE:
-        case BackStepAction.EXIT_RESTORE:
-        case BackStepAction.RANDOM_STREAM_RESTORE:
-        case BackStepAction.HEAP_RESTORE:
-        case BackStepAction.STACK_TOP_RESTORE:
-            return undefined
-    }
-    const exhaustiveAction: never = action
-    return exhaustiveAction
 }

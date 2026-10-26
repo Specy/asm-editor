@@ -258,8 +258,10 @@ export class MarsDevices {
 
     /**
      * Runs the Core's `undo`, whose restoring stores reach the observers as ordinary writes: the
-     * Synth must not take them for the program's, an upload's start register least of all. Undo
-     * re-reads the Synth's block afterwards instead, with `readSynthBlock`.
+     * Synth must not take them for the program's, an upload's start register least of all, and the
+     * transmitter must not print them, a form feed least of all, which would clear the output. Undo
+     * re-reads the Synth's block afterwards instead, with `readSynthBlock`, and rewinds the Terminal
+     * through its own history ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md)).
      */
     rewind(undo: () => void): void {
         this.rewinding = true
@@ -454,13 +456,16 @@ export class MarsDevices {
                     `Poll the Ready bit (bit 0) instead.`
             )
         }
-        //a program is not the device: whatever it stored, the Ready bit is the device's to state
+        //a program is not the device: whatever it stored, the Ready bit is the device's to state.
+        //An Undo's restore is no different: the word it puts back was stated before the keystrokes
+        //typed since, and Ready has to answer for the ones waiting now
         const ready =
             register === MARS_TRANSMITTER_CONTROL || this.receiverArmed ? MARS_READY_BIT : 0
         this.core?.setPeripheralWord(register | 0, ready)
     }
 
     private onTransmitterDataWrite(value: number): void {
+        if (this.rewinding) return
         const character = value & 0xff
         if (character === FORM_FEED) {
             //MARS clears its display window: the output, not a read in progress or what is left of
