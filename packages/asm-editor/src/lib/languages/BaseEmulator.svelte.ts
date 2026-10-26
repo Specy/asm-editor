@@ -183,7 +183,11 @@ export abstract class BaseEmulator<R extends string> {
      */
     _undoDepth?(): number
 
-    /** Monotone completed guest/tool instruction count; callers measure guest deltas. */
+    /**
+     * Monotone count of the guest/tool instructions the Core has executed, each one entry of its
+     * Undo history while that records (a failing one too where the Core records it, as MARS and
+     * RARS do); callers measure deltas, across a call that threw as well.
+     */
     _getInstructionsExecuted?(): bigint
 
     /**

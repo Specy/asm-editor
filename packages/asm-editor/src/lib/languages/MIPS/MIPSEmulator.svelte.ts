@@ -297,6 +297,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         return this.mips?.getUndoDepth() ?? 0
     }
 
+    /**
+     * The Core's count of every instruction it has executed, one Undo entry each, the one a failed
+     * Step or slice stopped on included: what lets `GenericEmulator` record a call that threw, where
+     * the pacer's per-chunk counts are lost with the rejection.
+     */
+    _getInstructionsExecuted(): bigint {
+        return BigInt(this.mips?.getInstructionsExecuted() ?? 0)
+    }
+
     _canUndoSteps(count: number): boolean {
         return this._canUndoHistoryRange(0, count)
     }
