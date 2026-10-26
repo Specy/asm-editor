@@ -60,19 +60,31 @@ function createProjectStore() {
     }
 
     /**
-     * Writes a save's snapshot to the Project's linked file, if it has one, and to the browser's
-     * copy, with the journals it took. Never rejects: what failed is in the result.
+     * Writes a save's snapshot to the browser's copy, with the journals it took, and then to the
+     * Project's linked file, if it has one. Never rejects: what failed is in the result.
      */
     async function write(
         snapshot: ProjectData,
         taken: ReturnType<ProjectJournals['take']> | undefined
     ): Promise<SaveResult> {
         let result: SaveResult = { linked: 'none', local: 'saved' }
+        //The browser's copy first: a save started as the page closes reaches IndexedDB before the
+        //page is gone, where after a disk write it would never start.
+        try {
+            await db.updateProject(snapshot, taken?.writes)
+        } catch (error) {
+            taken?.putBack()
+            //A quota or a blocked database means the work is not stored anywhere. Reported rather
+            //than rejected, so autosave's caller can tell the user instead of producing an
+            //unhandled rejection that leaves them believing the project is saved.
+            console.error(error)
+            result = { linked: 'none', local: 'failed', error }
+        }
         try {
             const linked = writableFiles.get(snapshot.id)
             if (linked) {
                 if (linked.format === 'legacy' && !isLegacyLinkedFileCompatible(snapshot)) {
-                    result = { linked: 'needs-archive', local: 'saved' }
+                    result = { ...result, linked: 'needs-archive' }
                 } else {
                     const contents =
                         linked.format === 'archive'
@@ -83,22 +95,12 @@ function createProjectStore() {
                         typeof contents === 'string' ? contents : new Uint8Array(contents).buffer
                     )
                     await writer.close()
-                    result = { linked: 'saved', local: 'saved' }
+                    result = { ...result, linked: 'saved' }
                 }
             }
         } catch (error) {
             console.error(error)
-            result = { linked: 'failed', local: 'saved', error }
-        }
-        try {
-            await db.updateProject(snapshot, taken?.writes)
-        } catch (error) {
-            taken?.putBack()
-            //A quota or a blocked database means the work is not stored anywhere. Reported rather
-            //than rejected, so autosave's caller can tell the user instead of producing an
-            //unhandled rejection that leaves them believing the project is saved.
-            console.error(error)
-            result = { ...result, local: 'failed', error }
+            result = { ...result, linked: 'failed', error: result.error ?? error }
         }
         return result
     }

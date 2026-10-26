@@ -631,7 +631,9 @@ export class WorkbenchSession {
 
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative window callbacks consume this accumulator; it has no tracked consumer.
     private readonly pressedKeys = new Map<string, boolean>()
-    private readonly debouncedFileSave = createDebouncer(250)[0]
+    /** Autosave's wait for a pause in File changes, as typing makes them, see `filesChanged`. */
+    private readonly fileSaveDebouncer = createDebouncer(250)
+    private fileSavePending = false
     private knownTestcases: string | undefined
     /**
      * The Selected program whose Settings and Display configuration the Emulator was last given,
@@ -1111,8 +1113,27 @@ export class WorkbenchSession {
             this.fileSystemLocked = fileSystem.locked
             return fileSystem.subscribe((filesChanged) => {
                 this.fileSystemLocked = fileSystem.locked
-                if (filesChanged) this.debouncedFileSave(() => this.changed())
+                if (filesChanged) this.filesChanged()
             })
+        })
+
+        //a page closed, or hidden as a phone does before closing it, starts the saves it would
+        //otherwise lose while it still can: what a Hex editor holds typed, and the File changes
+        //autosave waits on a pause to save
+        $effect(() => {
+            const leave = () => {
+                this.flushTyping()
+                this.saveFileChanges()
+            }
+            const hidden = () => {
+                if (document.visibilityState === 'hidden') leave()
+            }
+            addEventListener('pagehide', leave)
+            document.addEventListener('visibilitychange', hidden)
+            return () => {
+                removeEventListener('pagehide', leave)
+                document.removeEventListener('visibilitychange', hidden)
+            }
         })
 
         $effect(() => {
@@ -1364,8 +1385,33 @@ export class WorkbenchSession {
         if (preferencesStore.values.autoSave.value) this.host.onSave?.({ silent: true })
     }
 
+    /**
+     * Save. It takes what a Hex editor holds typed, and stands in for the autosave a pause in File
+     * changes is waiting for, which would otherwise call the saved Project changed after it.
+     */
     save() {
+        this.flushTyping()
+        this.fileSaveDebouncer[1]()
+        this.fileSavePending = false
         this.host.onSave?.({ silent: false })
+    }
+
+    /**
+     * A change to the Files, as each key typed makes: the host hears of it at once, so that
+     * leaving the page asks about it, and autosave saves it once the changes pause.
+     */
+    private filesChanged() {
+        this.host.onChange?.()
+        this.fileSavePending = true
+        this.fileSaveDebouncer[0](() => this.saveFileChanges())
+    }
+
+    /** Saves at once the File changes autosave is waiting on a pause to save, if any. */
+    private saveFileChanges() {
+        this.fileSaveDebouncer[1]()
+        if (!this.fileSavePending) return
+        this.fileSavePending = false
+        this.changed()
     }
 
     /** Gives the Project a new name, which the Explorer shows at the root of its Files. */
