@@ -473,8 +473,6 @@ export const Z80_COLORS = {
     DARK_GRAY: 0x49
 } as const
 
-export type Z80ColorName = keyof typeof Z80_COLORS
-
 /**
  * Human descriptions of every port, for the I/O documentation page, the hover provider and the
  * coding agent's prompt. Examples are runnable in the interactive editor: `exampleInput` is the
