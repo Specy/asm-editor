@@ -173,7 +173,8 @@
                 searchForAgent(searchPlace, query, language, editorLanguage, limit),
 
             //a Project's Files are its FileSystem's, which every write and deletion goes through
-            //before the host's bookkeeping
+            //before the host's bookkeeping: a change it refuses, as it refuses every change while a
+            //Debug session holds the Files, throws, and the tool reports it
             getFiles: () => {
                 if (project) return project.fileSystem.files
                 if (Object.keys(internalFiles).length > 0) return internalFiles
@@ -207,11 +208,7 @@
             },
             deleteFile: (path) => {
                 if (project) {
-                    try {
-                        project.fileSystem.remove(path)
-                    } catch {
-                        return
-                    }
+                    project.fileSystem.remove(path)
                     fileDeleted(path)
                 } else {
                     delete internalFiles[path]
