@@ -140,7 +140,9 @@
 </div>
 
 <style lang="scss">
-    /* fixed, as Select's list is, and placed by hand rather than by the popover's centring */
+    /* fixed, as Select's list is, and placed by hand rather than by the popover's centring; a
+       translucent tint of the raised --tertiary surface, as Monaco's own menu is, that blurs what
+       is beneath, as the app's prompts are */
     .context-menu {
         position: fixed;
         inset: auto;
@@ -151,21 +153,26 @@
         max-width: min(18rem, calc(100vw - 8px));
         margin: 0;
         padding: 0.25rem;
-        border: 1px solid var(--tertiary);
+        border: 1px solid color-mix(in srgb, var(--tertiary-text) 15%, transparent);
         border-radius: 0.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: color-mix(in srgb, var(--tertiary) 85%, transparent);
+        backdrop-filter: blur(4px);
+        color: var(--tertiary-text);
         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
         font-size: 0.8rem;
         outline: none;
     }
 
+    /* rows and separators in whole multiples of 4px, so every separator sits at the same fraction
+       of a device pixel at 125%, 150% or 175% zoom and none is drawn a pixel thicker than another */
     .item {
         display: flex;
+        flex-shrink: 0;
         align-items: center;
         gap: 0.55rem;
         width: 100%;
-        padding: 0.38rem 0.6rem;
+        height: 28px;
+        padding: 0 0.6rem;
         border: 0;
         border-radius: 0.3rem;
         color: inherit;
@@ -211,9 +218,11 @@
         white-space: nowrap;
     }
 
+    /* edge to edge through the menu's padding, as Monaco's are, and 8px tall with its margins */
     .separator {
+        flex-shrink: 0;
         height: 1px;
-        margin: 0.25rem 0.3rem;
-        background-color: var(--tertiary);
+        margin: 4px -0.25rem 3px;
+        background-color: color-mix(in srgb, var(--tertiary-text) 15%, transparent);
     }
 </style>

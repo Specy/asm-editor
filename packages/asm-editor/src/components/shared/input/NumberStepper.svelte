@@ -88,14 +88,15 @@
 </div>
 
 <style lang="scss">
-    /* one control: the field and its buttons inside one rounded box */
+    /* one control: the field and its buttons inside one rounded box, which a host whose own
+       surface is --primary recolours to its fields' */
     .stepper {
         display: inline-flex;
         align-items: stretch;
         height: 1.75rem;
         border-radius: 0.35rem;
-        background: var(--primary);
-        color: var(--primary-text);
+        background: var(--stepper-background, var(--primary));
+        color: var(--stepper-text, var(--primary-text));
         overflow: hidden;
 
         /* ringed while the number is typed into, not after a press of − or + */
@@ -122,7 +123,7 @@
             height: 0.55rem;
         }
         &:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--primary-text) 12%, transparent);
+            background: color-mix(in srgb, currentColor 12%, transparent);
         }
         &:disabled {
             opacity: 0.35;
