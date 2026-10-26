@@ -6,7 +6,6 @@
         DEFAULT_TAKE_LINES,
         MAX_TAKE_LINES
     } from './defaultCodingAgent/types'
-    export { AssemblyCodingHarness } from './defaultCodingAgent/harness'
     export type {
         AgentToolAllowList,
         AgentWorkflow,
