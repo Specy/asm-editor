@@ -1304,10 +1304,13 @@ export abstract class GenericEmulator<T, R extends string>
         this.fileSystemSession = null
     }
 
-    /** Forgets what describes the program built last: its sources, its library, its memory. */
+    /**
+     * Forgets the program built last as a Debug session: its sources and its memory. The library
+     * Files it linked are left to `clear()`, because a test run keeps them with the Core it leaves
+     * readable.
+     */
     private forgetBuild(): void {
         this._buildSources = undefined
-        this._buildLibraryFiles = undefined
         this.memoryLayout = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
@@ -1320,6 +1323,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.phase = undefined
         this.endExecutionSession()
         this.forgetBuild()
+        this._buildLibraryFiles = undefined
         this.undoLedger = []
         this.noteList = []
         this.endNoted = false
