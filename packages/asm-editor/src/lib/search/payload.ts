@@ -35,6 +35,8 @@ export type EntryDocument = {
     category?: InstructionCategory
     summary: string
     text: string
+    /** An authored description, read with a lower weight than `text`. Optional, as `category` is. */
+    detail?: string
     code: string
     href: string
 }

@@ -332,15 +332,15 @@ function marsDocument(
         main && (!main.isPseudo || bodies.size === 1)
             ? mainDescription.body || undefined
             : undefined
-    const authored = content?.description?.trim() ? content.description : undefined
+    // An authored description follows the header's summary, so it is shown whole; MARS's starts
+    // with the sentence the summary stands for.
+    const authored = content?.description?.trim() ? content.description.trim() : undefined
     const source = authored ?? mainSource
 
     const names = dialect.names[mnemonic]
     const longName = names?.longName ?? (main ? longNameOf(mnemonic, main, forms) : mnemonic)
-    const derived = summaryOf(
-        authored ?? (mainDescription.body || mainDescription.title || longName)
-    )
-    const summary = names?.summary ?? asSentence(derived)
+    const derived = summaryOf(mainDescription.body || mainDescription.title || longName)
+    const summary = names?.summary ?? asSentence(authored ? summaryOf(authored) : derived)
 
     const seen = new Set<string>()
     const built = forms
@@ -372,7 +372,7 @@ function marsDocument(
         operands: legend(dialect, mnemonic, patterns, built),
         // MARS's first sentence is what the header's summary stands for, whether the table
         // rewrote it or not
-        description: descriptionAfterSummary(source, derived, plainText)
+        description: authored ?? descriptionAfterSummary(mainSource, derived, plainText)
     }
 }
 

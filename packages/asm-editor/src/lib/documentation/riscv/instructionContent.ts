@@ -1710,5 +1710,10 @@ export const riscvInstructionContent = instructionContentFromFiles(
         import: 'default',
         eager: true
     }),
-    metadata
+    metadata,
+    import.meta.glob<string>('./instructions/*.md', {
+        query: '?raw',
+        import: 'default',
+        eager: true
+    })
 )

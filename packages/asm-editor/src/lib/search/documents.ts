@@ -31,6 +31,7 @@ export function entryDocument(entry: DocumentationEntry, chapterTitle: string): 
         ...(entry.category ? { category: entry.category } : {}),
         summary: entry.summary,
         text: plainText(entry.searchText),
+        ...(entry.detailText ? { detail: plainText(entry.detailText) } : {}),
         code: entry.code ?? '',
         href: entry.href
     }
@@ -42,7 +43,7 @@ export function entryDocument(entry: DocumentationEntry, chapterTitle: string): 
  */
 export function entryEmbeddingText(entry: EntryDocument): string {
     const name = entry.signature ? `${entry.title} ${entry.signature}` : entry.title
-    const text = `${entry.chapterTitle}: ${name}. ${entry.summary}\n${entry.text}`
+    const text = `${entry.chapterTitle}: ${name}. ${entry.summary}\n${entry.text}${entry.detail ? `\n${entry.detail}` : ''}`
     return text.slice(0, ENTRY_EMBEDDING_CHARACTERS)
 }
 
