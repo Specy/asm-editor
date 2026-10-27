@@ -14,8 +14,8 @@
         "test": "vp run asm-editor#test",
         "measure": "vp run asm-editor#measure",
         "check": "vp run asm-editor#check",
-        "lint": "vp lint && vp run asm-editor#lint:svelte",
-        "fix": "vp lint --fix && vp run asm-editor#lint:svelte --fix && vp fmt",
+        "lint": "vp run asm-editor#sync && vp lint && vp run asm-editor#lint:svelte",
+        "fix": "vp run asm-editor#sync && vp lint --fix && vp run asm-editor#lint:svelte --fix && vp fmt",
         "format": "vp fmt",
         "format:check": "vp fmt --check",
         "cores:build": "vp run build:cores"

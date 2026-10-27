@@ -160,6 +160,9 @@ export default defineConfig({
             '**/*.svelte.js'
         ],
         // Type information for the typed rules, from the `oxlint-tsgolint` that Vite+ installs.
+        // It reads the editor's tsconfigs, which extend the `$app/tsconfig` that only
+        // `svelte-kit sync` writes (into `node_modules`, and not on install), so `pnpm lint`
+        // and `pnpm fix` sync first.
         options: { typeAware: true },
         plugins: ['typescript'],
         categories: { correctness: 'off' },
