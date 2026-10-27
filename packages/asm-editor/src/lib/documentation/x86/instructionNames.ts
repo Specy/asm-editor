@@ -287,7 +287,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         cmpxchg: {
             longName: 'Compare and exchange',
             summary:
-                'Compares al/ax/eax with the destination; if equal, stores the source there and sets ZF, else loads the destination into the accumulator.'
+                'Compares the accumulator (al, ax, eax or rax) with the destination; if equal, stores the source there and sets ZF, else clears ZF and loads the destination into the accumulator.'
         },
         cmpxchg16b: {
             longName: 'Compare and exchange 16 bytes',
@@ -423,12 +423,12 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         iret: {
             longName: 'Interrupt return, default size',
             summary:
-                'Returns from an interrupt by popping the instruction pointer, cs and the flags, then continuing at the new cs:ip.'
+                'Returns from an interrupt by popping the instruction pointer, cs and the flags, and in 64-bit mode the stack pointer and ss as well, then continuing at the popped address.'
         },
         iretd: {
             longName: 'Interrupt return, 32-bit',
             summary:
-                'Returns from an interrupt by popping eip, cs and eflags as 4-byte values, taking 12 bytes off the stack.'
+                'Returns from an interrupt by popping eip, cs and eflags as 4-byte values, and in 64-bit mode esp and ss as well.'
         },
         iretq: {
             longName: 'Interrupt return, 64-bit',
@@ -438,7 +438,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         iretw: {
             longName: 'Interrupt return, 16-bit',
             summary:
-                'Returns from an interrupt by popping ip, cs and the flags as 2-byte words, taking 6 bytes off the stack.'
+                'Returns from an interrupt by popping ip, cs and the flags as 2-byte words, and in 64-bit mode sp and ss as well.'
         },
         ja: {
             longName: 'Jump if above (CF == 0 and ZF == 0)',
@@ -502,7 +502,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         jmpe: {
             longName: 'Jump to IA-64 instruction set',
             summary:
-                'Jumps to the target and switches the processor to the IA-64 (Itanium) instruction set.'
+                'On an Itanium running IA-32 code, jumped to the target and switched to the IA-64 instruction set; x86 processors raise an invalid-opcode fault instead.'
         },
         jna: {
             longName: 'Jump if not above (CF == 1 or ZF == 1)',
@@ -1005,7 +1005,7 @@ export const x86InstructionNames: Readonly<Record<string, { longName: string; su
         },
         sahf: {
             longName: 'Store ah into flags',
-            summary: 'Copies ah into the low byte of rflags.'
+            summary: 'Loads SF, ZF, AF, PF and CF from bits 7, 6, 4, 2 and 0 of ah.'
         },
         sal: {
             longName: 'Arithmetic shift left',

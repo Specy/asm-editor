@@ -19,7 +19,9 @@ import {
 } from './generated/x86Instructions'
 import { withAliasSummaries } from './x86AliasSummaries'
 import { X86_SIM_ARGUMENT_OVERRIDES } from '../../documentation/x86/syscallBinding'
+import type { InstructionReference } from '../../documentation/instructions/document'
 import { X86_DESCRIPTIONS } from './generated/x86Descriptions'
+import { X86_INTEL_PAGE_URL, X86_INTEL_PAGES } from './generated/x86IntelPages'
 import { X86_SYSCALLS, type X86Syscall } from './generated/x86Syscalls'
 import {
     X86_ADDRESS_KEYWORDS,
@@ -144,7 +146,11 @@ const X86_WRITTEN_DESCRIPTIONS: Record<string, string> = {
             name,
             `${operation}
 
-The destination is a register or memory operand; the source is a register, memory operand or immediate, with at most one memory operand. Register and memory operands have the same width. When the instruction writes a 32-bit register, that write clears the upper half of its 64-bit register.
+${
+    name === 'cmp'
+        ? 'The first operand is a register or memory operand; the second is a register, memory operand or immediate, with at most one memory operand. Register and memory operands have the same width. Neither operand is written, so `cmp eax, ebx` leaves the upper half of `rax` as it was.'
+        : 'The destination is a register or memory operand; the source is a register, memory operand or immediate, with at most one memory operand. Register and memory operands have the same width. When the instruction writes a 32-bit register, that write clears the upper half of its 64-bit register.'
+}
 
 ${X86_SIGNED_IMMEDIATE_RULE}${name === 'and' ? '\n\nFor example, `and rax, 0xffffffff` does not clear the upper 32 bits: its immediate is sign-extended to all ones. `mov eax, eax` clears the upper half while preserving the low 32 bits.' : ''}`
         ])
@@ -186,14 +192,14 @@ The third operand is an immediate or \`cl\`. Its low six bits are used for 64-bi
         ['bsf', 'bsr'],
         `Finds a set bit in the source and stores its index in the destination register. \`bsf\` finds the least significant set bit; \`bsr\` finds the most significant. The operands have matching 16-, 32- or 64-bit widths, with indices 0–15, 0–31 or 0–63 respectively.
 
-If the source is zero, ZF is set and the destination is undefined. Otherwise ZF is cleared. A 32-bit destination write clears the upper half of its 64-bit register.`
+If the source is zero, ZF is set and the destination should be treated as undefined: current processors leave it as it was, but older ones made no such promise, and some clear the upper half of a 64-bit register even then. Otherwise ZF is cleared, and a 32-bit destination write clears the upper half of its 64-bit register.`
     ),
 
     ...instructionDescriptions(
         ['bt', 'btc', 'btr', 'bts'],
         `Copies the selected bit of the first operand into CF. \`bt\` leaves the operand unchanged; \`btc\` complements that bit, \`btr\` clears it and \`bts\` sets it.
 
-For a register operand, the index wraps modulo its width: 16, 32 or 64 bits, so \`bt rax, 63\` tests the top bit of \`rax\`. For a memory operand, a register index is a signed bit offset into a bit string and can select a bit outside the first word, doubleword or quadword. An immediate index is encoded in eight bits; the processor selects within the operand width, and NASM can fold constant high bits into the memory displacement. For a fixed memory bit, an explicit byte displacement and an index within the width make the selected location clear.`
+For a register operand, the index wraps modulo its width: 16, 32 or 64 bits, so \`bt rax, 63\` tests the top bit of \`rax\`. For a memory operand, a register index is a signed bit offset into a bit string and can select a bit outside the first word, doubleword or quadword. An immediate index is one byte, and the processor takes it modulo the operand width even for a memory operand. NASM encodes the number as written, so \`bt dword [rax], 40\` tests bit 8 of the doubleword at \`rax\`. To reach a bit beyond the operand, move the address instead (\`bt dword [rax + 4], 8\` tests bit 40 of the string) or put the index in a register.`
     ),
 
     ...instructionDescriptions(
@@ -317,7 +323,7 @@ The optional sole operand is an unsigned 16-bit count of additional bytes to rem
 
     ...instructionDescriptions(
         ['retw', 'retnw'],
-        `Requests a 16-bit near return. NASM accepts this spelling in 64-bit source with an operand-size prefix; ordinary 64-bit calls use \`ret\` or \`retq\`. In 16-bit code it pops a 16-bit offset into \`ip\`. The optional sole immediate operand is an unsigned 16-bit additional cleanup count, not a signed stack adjustment.`
+        `Returns with the 16-bit operand size, popping a 2-byte offset into the instruction pointer, which in 16-bit code is the ordinary near return. NASM also accepts it in 64-bit source, with an operand-size prefix, but there it removes only 2 bytes from the stack and jumps to that value zero-extended, an address below 64 KiB: it cannot return to a 64-bit caller, and ordinary 64-bit functions return with \`ret\`. The optional sole immediate operand is an unsigned 16-bit additional cleanup count, not a signed stack adjustment.`
     ),
 
     ...instructionDescriptions(
@@ -365,7 +371,9 @@ NASM also accepts two- and three-operand \`mul\` spellings as aliases of the cor
 
     imul: `Performs signed multiplication. With one explicit source, its width selects the implicit factor and full product: 8 bits multiplies \`al\` into \`ax\`; 16 bits multiplies \`ax\` into \`dx:ax\`; 32 bits multiplies \`eax\` into \`edx:eax\`; 64 bits multiplies \`rax\` into \`rdx:rax\`.
 
-With two operands, the destination register is multiplied by the source and keeps only the low destination-width bits. With three, the last two operands are multiplied into the first. \`imul rax, 5\` is shorthand for \`imul rax, rax, 5\`. CF and OF report whether the full signed product fits the destination width; other arithmetic flags are undefined.
+With two operands, the destination register is multiplied by the source and keeps only the low destination-width bits. With three, the last two operands are multiplied into the first. \`imul rax, 5\` is shorthand for \`imul rax, rax, 5\`.
+
+With one operand, CF and OF are set when the high half of the product is more than a sign extension of the low half, so the product does not fit the operand width. With two or three, they are set when the product had to be truncated to fit the destination. SF, ZF, AF and PF are undefined.
 
 ${X86_SIGNED_IMMEDIATE_RULE}`,
 
@@ -516,7 +524,98 @@ After the transfer, \`${input ? 'rdi' : 'rsi'}\` increases by ${bytes} when DF =
         )
     ),
 
+    bound: `Checks a signed index against a pair of signed bounds. The first operand is the index register; the second addresses the lower bound followed by the upper bound, each the width of the register. An index below the lower bound or above the upper bound raises a \`BR\` exception; an index equal to either bound passes, and the instruction then does nothing.
+
+It exists only in 16- and 32-bit code: 64-bit mode reuses its opcode byte as the EVEX prefix of AVX-512 instructions.`,
+
+    ...instructionDescriptions(
+        x86DocumentedNames.filter((name) => name.startsWith('cmov')),
+        `Copies the source into the destination when the condition in the mnemonic holds, and otherwise leaves the destination as it was. The condition reads the current flags, as the conditional jumps do; the [condition-code table](/documentation/x86/registers#condition-codes) lists the tests and the other spellings of each.
+
+The source is read whether or not the condition holds, so a memory source must be readable even when nothing moves. With 32-bit operands the destination is written either way: when the condition fails it keeps its low 32 bits, but the upper half of its 64-bit register is still cleared. The 16- and 64-bit forms leave a destination they do not move into untouched. There is no immediate source and no memory destination.
+
+Every x86-64 processor has these instructions; some older 32-bit processors do not.`
+    ),
+
+    cmpxchg: `Compares the accumulator with the destination (first operand) and, if they are equal, replaces the destination with the source. The accumulator is \`al\`, \`ax\`, \`eax\` or \`rax\`, by operand size. On a match it stores the source register into the destination and sets ZF; otherwise it clears ZF and loads the destination's value into the accumulator. The other arithmetic flags are set as \`cmp\` would set them for the accumulator and the destination.
+
+The destination can be a register or memory. With a memory destination and a \`lock\` prefix the whole compare and store is atomic, which is how a value shared between threads is updated safely: load it into \`rax\`, compute the new value in another register such as \`rbx\`, then \`lock cmpxchg [value], rbx\`. ZF set means the store happened. ZF clear means another thread changed the value first, and \`rax\` now holds its new value, ready for another attempt.`,
+
+    cmpxchg16b: `Compares \`rdx:rax\` with a 16-byte memory operand and, if they are equal, stores \`rcx:rbx\` there. ZF is set when they matched; otherwise it is cleared and the memory value is loaded into \`rdx:rax\`. The operand must be aligned to 16 bytes: a misaligned address raises a general-protection fault, which a Linux program receives as a segmentation fault. With \`lock\` the whole exchange is atomic, which is what it is for, such as updating a pointer together with a counter.`,
+
+    clc: `Clears CF. [\`stc\`](/documentation/x86/instruction/stc) sets it and [\`cmc\`](/documentation/x86/instruction/cmc) inverts it.`,
+    stc: `Sets CF. [\`clc\`](/documentation/x86/instruction/clc) clears it and [\`cmc\`](/documentation/x86/instruction/cmc) inverts it.`,
+    cld: `Clears DF, so the string instructions step \`rsi\` and \`rdi\` upward through memory. The Linux calling convention expects DF to be clear at every call and return, so code that sets it with [\`std\`](/documentation/x86/instruction/std) clears it again before either.`,
+    std: `Sets DF, so the string instructions step \`rsi\` and \`rdi\` downward through memory. [\`cld\`](/documentation/x86/instruction/cld) clears it, which has to happen before the next call or return: the Linux calling convention expects DF to be clear at both.`,
+    cli: `Clears IF, so the processor stops accepting maskable hardware interrupts. Only privileged code may do this, such as an operating-system kernel: in a Linux program \`cli\` raises a general-protection fault, which the program receives as a segmentation fault. [\`sti\`](/documentation/x86/instruction/sti) sets the flag again.`,
+    sti: `Sets IF, so the processor accepts maskable hardware interrupts again, from the end of the next instruction. Like [\`cli\`](/documentation/x86/instruction/cli), only privileged code may do this: in a Linux program \`sti\` raises a general-protection fault, which the program receives as a segmentation fault.`,
+
+    cbw: `Sign-extends \`al\` into \`ax\`, filling \`ah\` with copies of bit 7. The rest of \`rax\` is unchanged.`,
+    cwde: `Sign-extends \`ax\` into \`eax\`, filling bits 31–16 with copies of bit 15. As a 32-bit register write it also clears the upper half of \`rax\`, so the result is not a signed 64-bit value: [\`cdqe\`](/documentation/x86/instruction/cdqe) extends \`eax\` into all of \`rax\`.`,
+    cwd: `Sign-extends \`ax\` into \`dx:ax\`, filling \`dx\` with copies of bit 15. The rest of \`rax\` and \`rdx\` is unchanged.`,
+    cdq: `Sign-extends \`eax\` into \`edx:eax\`, filling \`edx\` with copies of bit 31. It writes \`edx\` as a 32-bit register, so the upper half of \`rdx\` is cleared. Use it before a 32-bit \`idiv\`; before a 64-bit one, [\`cqo\`](/documentation/x86/instruction/cqo) extends \`rax\` into \`rdx:rax\`.`,
+
+    iret: `Returns from an interrupt or exception handler, popping the instruction pointer, \`cs\` and the flags, and in 64-bit mode the stack pointer and \`ss\` as well. Only the flags the privilege level allows are restored.
+
+Under \`BITS 64\`, NASM assembles \`iret\` with the 32-bit operand size, as [\`iretd\`](/documentation/x86/instruction/iretd): it pops 4-byte slots and loads only \`eip\` and \`esp\`. A 64-bit handler returns with [\`iretq\`](/documentation/x86/instruction/iretq). A Linux program has no interrupt handlers of its own to return from.`,
+    iretw: `Returns from an interrupt with the 16-bit operand size, popping \`ip\`, \`cs\` and the flags as 2-byte slots, 6 bytes in all, in 16- and 32-bit code. In 64-bit mode it also pops \`sp\` and \`ss\`, 10 bytes in all.`,
+    iretd: `Returns from an interrupt with the 32-bit operand size, popping \`eip\`, \`cs\` and the flags as 4-byte slots, 12 bytes in all, in 16- and 32-bit code. In 64-bit mode it also pops \`esp\` and \`ss\`, 20 bytes in all, and loads only 32-bit \`eip\` and \`esp\`, so a 64-bit handler returns with [\`iretq\`](/documentation/x86/instruction/iretq) instead.`,
+    iretq: `Returns from an interrupt or exception handler in 64-bit code, popping \`rip\`, \`cs\`, \`rflags\`, \`rsp\` and \`ss\` as 8-byte slots, 40 bytes in all. Only the flags the privilege level allows are restored. A Linux program has no interrupt handlers of its own to return from.`,
+
+    ...instructionDescriptions(
+        ['int3', 'int03', 'brkpt'],
+        `Raises interrupt 3, the breakpoint trap, in a single byte (\`cc\`), so a debugger can write it over the first byte of any instruction. Unlike \`int 3\`, it is not subject to the virtual-8086 \`IOPL\` check or to interrupt redirection. Under Linux, a program that executes it receives \`SIGTRAP\`.`
+    ),
+
+    ...instructionDescriptions(
+        ['int1', 'int01', 'icebp'],
+        `Raises interrupt 1, the debug exception, in a single byte (\`f1\`). Intel documents it for hardware debugging tools and recommends [\`int3\`](/documentation/x86/instruction/int3) for software breakpoints. Under Linux, a program that executes it receives \`SIGTRAP\`.`
+    ),
+
+    nop: `Does nothing for the length of one instruction. The one-byte form is \`90h\`, which 16- and 32-bit code also gets from \`xchg ax, ax\` or \`xchg eax, eax\`. In 64-bit mode \`90h\` is always a true no-op, and NASM assembles \`xchg eax, eax\` as a real exchange that clears the upper half of \`rax\`, so that is not a NOP there. The longer \`nop r/m\` forms do nothing either; they pad code to an alignment in a single instruction.`,
+
+    xchg: `Exchanges the values of its two operands. When one of them is in memory, the exchange is always atomic, \`lock\` prefix or not, so \`xchg\` with memory is a ready-made synchronisation primitive, and slower than an ordinary move for that reason. A \`lock\` prefix on an exchange of two registers raises an invalid-opcode fault.
+
+In 64-bit code a 32-bit exchange clears the upper halves of both 64-bit registers, \`xchg eax, eax\` included: NASM assembles that as a real exchange rather than as \`90h\`, which in 64-bit mode is always a [\`nop\`](/documentation/x86/instruction/nop).`,
+
+    sahf: `Loads SF, ZF, AF, PF and CF from bits 7, 6, 4, 2 and 0 of \`ah\`. Bits 5, 3 and 1 are ignored, and OF and the rest of \`rflags\` are unchanged. In 64-bit mode it needs the LAHF/SAHF feature, which every current x86-64 processor has and a few of the first ones lack. [\`lahf\`](/documentation/x86/instruction/lahf) copies the same flags into \`ah\`.`,
+
+    sysenter: `Enters the operating system at privilege level 0, at an entry point and stack the kernel has stored in machine-specific registers. The low 16 bits of \`IA32_SYSENTER_CS\` select the kernel's code segment, with its stack segment in the next descriptor; \`IA32_SYSENTER_EIP\` and \`IA32_SYSENTER_ESP\` hold the entry point and stack pointer, loaded in full under a 64-bit kernel and as their low 32 bits otherwise. It also clears IF and VM. It saves no return address: the caller and the kernel agree on where to resume, and [\`sysexit\`](/documentation/x86/instruction/sysexit) returns there.
+
+It is the 32-bit system call path. A 64-bit Linux program enters the kernel with [\`syscall\`](/documentation/x86/instruction/syscall).`,
+
+    sysexit: `Returns from the operating system to user code at privilege level 3, as the counterpart of [\`sysenter\`](/documentation/x86/instruction/sysenter). Only kernel code may run it. The plain form returns to 32-bit code: the instruction pointer comes from \`edx\` and the stack pointer from \`ecx\`, and the user code and stack selectors are \`IA32_SYSENTER_CS\` plus 16 and plus 24. With the 64-bit operand size (\`o64 sysexit\`) it returns to 64-bit code instead, taking \`rip\` from all of \`rdx\` and \`rsp\` from all of \`rcx\`, with the selectors at plus 32 and plus 40.`,
+
+    sysret: `Returns from the operating system to user code at privilege level 3, as the counterpart of [\`syscall\`](/documentation/x86/instruction/syscall): it reloads the instruction pointer from \`rcx\` and \`rflags\` from \`r11\`, where \`syscall\` left them. Only kernel code in 64-bit mode may run it; user code gets a fault.
+
+The plain form returns to 32-bit compatibility-mode code using \`ecx\`, with \`cs\` from bits 63–48 of the \`STAR\` register. The 64-bit form (\`o64 sysret\`) returns to 64-bit code using all of \`rcx\`, with that selector plus 16. Either way \`ss\` is the selector plus 8, at privilege level 3.`,
+
     bswap: `Reverses the byte order of a 32- or 64-bit register. For example, \`bswap rax\` exchanges byte 0 with byte 7, byte 1 with byte 6, and so on. A 32-bit result also clears the register's upper 32 bits. There is no defined 16-bit form; \`xchg al, ah\` swaps the bytes of \`ax\`.`
+}
+
+/**
+ * The first processor an instruction ran on, as a header fact, where NASM's table gives another
+ * level for reasons of its own (each checked against Intel's manual, `scripts/x86-docs-sdm-audit.mjs`):
+ * NASM levels `movsx` and `bswap` from the 8086 because it assembles `movsx ax, al` and
+ * `bswap ax` as older instructions, files `cmpxchg` under the Pentium because the first 486s
+ * used another opcode, gives `syscall` the P6 level of AMD's K6 although no Intel processor had
+ * it before x86-64, and tags `movbe` and `movrs` with a generation where they have a CPUID
+ * feature of their own.
+ */
+export const X86_FIRST_PROCESSOR: Readonly<Record<string, string>> = {
+    movsx: '386 and later',
+    movsxb: '386 and later',
+    movzx: '386 and later',
+    movzxd: '386 and later',
+    bswap: '486 and later',
+    cmpxchg: '486 and later',
+    syscall: 'x86-64 and later',
+    sysret: 'x86-64 and later',
+    sysenter: 'Pentium II and later',
+    sysexit: 'Pentium II and later',
+    movbe: 'Atom, and Haswell and later',
+    movrs: 'Processors with the MOVRS extension',
+    jmpe: 'Itanium only'
 }
 
 /** Corrected visible one-line summaries where the imported assembler text has obvious typos. */
@@ -553,6 +652,20 @@ export function x86InstructionTitle(name: string): string {
     // The appendix writes its headings as "`ADD`: Add Integers"; the mnemonic is already the title
     // of the page it is shown on.
     return generated.title.replace(/^`[^`]*`(,\s*`[^`]*`)*:\s*/, '')
+}
+
+/**
+ * The instruction's page in Intel's preview of its manual, named for every mnemonic it covers:
+ * "Intel's reference: SAL/SAR/SHL/SHR". None for the few the preview leaves out (`nop`, `popf`,
+ * the string compares) and for a name two of its pages spell.
+ */
+export function x86IntelReference(name: string): InstructionReference | undefined {
+    const page = X86_INTEL_PAGES[name.toLowerCase()]
+    if (!page) return undefined
+    return {
+        label: `Intel's reference: ${page.replaceAll('-', '/')}`,
+        href: `${X86_INTEL_PAGE_URL}${page}.html`
+    }
 }
 
 /** True when the description came from a source rather than from the instruction's own summary. */

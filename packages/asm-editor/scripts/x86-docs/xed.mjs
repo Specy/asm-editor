@@ -70,7 +70,7 @@ export function parseXedRecords(text) {
 }
 
 /** The commit a checkout is at, read from `.git` without running anything in it. */
-function checkoutCommit(root) {
+export function checkoutCommit(root) {
     const git = join(root, '.git')
     const head = readFileSync(join(git, 'HEAD'), 'utf8').trim()
     const ref = /^ref: (.+)$/.exec(head)

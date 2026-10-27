@@ -128,3 +128,38 @@ describe('the next instruction in the same view', () => {
         expect(view.legend().open).toBe(false)
     })
 })
+
+describe("the architecture's own page", () => {
+    const reference = {
+        label: "Intel's reference: SAL/SAR/SHL/SHR",
+        href: 'https://intel.github.io/SDM/instruction/SAL-SAR-SHL-SHR.html'
+    }
+
+    it('is a header line that opens the page in a new tab', () => {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const view = mount(InstructionDocumentView, {
+            target,
+            props: { document: { ...instruction('shl'), reference } }
+        })
+        mounted.push(() => unmount(view))
+        flushSync()
+        const link = target.querySelector<HTMLAnchorElement>('.header a.reference')!
+        expect(link.textContent?.trim()).toBe(reference.label)
+        expect(link.querySelector('.external svg')).not.toBeNull()
+        expect(link.href).toBe(reference.href)
+        expect(link.target).toBe('_blank')
+    })
+
+    it('is left out where links are turned off', () => {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const view = mount(InstructionDocumentView, {
+            target,
+            props: { document: { ...instruction('shl'), reference }, disableLinks: true }
+        })
+        mounted.push(() => unmount(view))
+        flushSync()
+        expect(target.querySelector('a.reference')).toBeNull()
+    })
+})

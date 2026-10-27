@@ -95,11 +95,38 @@ export function resolveXedIclasses(name, available, aliases = {}) {
     return []
 }
 
+/**
+ * Where XED's FLAGS field is wrong, by class, with the field that replaces it. Each was found by
+ * `x86-docs-sdm-audit.mjs` and checked against Intel's manual, and `checkXedCorrections` fails
+ * the run once XED agrees, so a fix upstream shows up as an entry to delete.
+ */
+export const XED_CORRECTIONS = {
+    // XED has `af-u`; the manual sets AF from the result, as for `sub` and `adc`
+    SBB: 'MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]',
+    // XED has no FLAGS field; INT1 is delivered like INT3, which clears TF and may clear IF
+    INT1: 'MUST [ vif-mod ac-mod vm-tst vm-mod rf-0 nt-mod iopl-tst if-mod tf-0 ]'
+}
+
 /** Throws unless every class `XED_ICLASSES` and `XED_NOTES` name is one XED has. */
 export function checkXedNames(available) {
-    const named = [...Object.values(XED_ICLASSES).flat(), ...Object.keys(XED_NOTES)]
+    const named = [
+        ...Object.values(XED_ICLASSES).flat(),
+        ...Object.keys(XED_NOTES),
+        ...Object.keys(XED_CORRECTIONS)
+    ]
     const unknown = [...new Set(named)].filter((iclass) => !available.has(iclass))
     if (unknown.length) throw new Error(`XED has no instruction class ${unknown.join(', ')}`)
+}
+
+/** Throws when XED's own records of a class in `XED_CORRECTIONS` already say what it does. */
+export function checkXedCorrections(records) {
+    const fixed = Object.entries(XED_CORRECTIONS)
+        .filter(([iclass, field]) =>
+            (records.get(iclass) ?? []).every((record) => record.flags === field)
+        )
+        .map(([iclass]) => iclass)
+    if (fixed.length)
+        throw new Error(`XED now agrees about ${fixed.join(', ')}; drop the correction`)
 }
 
 /**
@@ -115,17 +142,44 @@ const COUNTED = {
  * What a mnemonic's records cannot say in one mark, per XED class: `note` for the instruction as
  * a whole, `flags` for one flag. A class here must be one some documented mnemonic uses.
  */
+/**
+ * A double shift is defined like a shift, except that a 16-bit operand can be shifted by more than
+ * its width (the count is masked to five bits), and then every flag is undefined.
+ */
+const DOUBLE_COUNTED = {
+    note: 'A count of 0 leaves every flag unchanged. A 16-bit operand shifted by more than 16 leaves every flag undefined.',
+    flags: COUNTED.flags
+}
+
+/**
+ * Popping RFLAGS loads IF only at a privilege level that allows it (CPL at most IOPL), which a
+ * Linux program never has: there the bit keeps its value and nothing faults.
+ */
+const PRIVILEGED_IF = {
+    flags: {
+        IF: 'loaded from the stack only with the privilege to change it, which a Linux program lacks'
+    }
+}
+
 export const XED_NOTES = {
     SHL: COUNTED,
     SHR: COUNTED,
     SAR: COUNTED,
-    SHLD: COUNTED,
-    SHRD: COUNTED,
+    SHLD: DOUBLE_COUNTED,
+    SHRD: DOUBLE_COUNTED,
     ROL: COUNTED,
     ROR: COUNTED,
     RCL: COUNTED,
     RCR: COUNTED,
-    CMPSD_XMM: { note: 'The SSE2 form, which compares two floating-point values, writes no flags.' }
+    CMPSD_XMM: {
+        note: 'The SSE2 form, which compares two floating-point values, writes no flags.'
+    },
+    POPF: PRIVILEGED_IF,
+    POPFD: PRIVILEGED_IF,
+    POPFQ: PRIVILEGED_IF,
+    IRET: PRIVILEGED_IF,
+    IRETD: PRIVILEGED_IF,
+    IRETQ: PRIVILEGED_IF
 }
 
 /**
@@ -159,7 +213,11 @@ const LOADED = { pop: 'loaded from the stack', ah: 'loaded from AH' }
  * read, so the caller can tell which ones nothing needed.
  */
 export function flagsOf(name, iclasses, records, used = new Set()) {
-    const own = iclasses.flatMap((iclass) => records.get(iclass) ?? [])
+    const own = iclasses.flatMap((iclass) =>
+        (records.get(iclass) ?? []).map((record) =>
+            XED_CORRECTIONS[iclass] ? { ...record, flags: XED_CORRECTIONS[iclass] } : record
+        )
+    )
     if (own.length === 0) return null
     const observed = OBSERVED[name]
     if (observed) {
@@ -216,7 +274,9 @@ export function flagsOf(name, iclasses, records, used = new Set()) {
             } else needsNote = true
         } else {
             const loaded = new Set(actions.flat().filter((action) => LOADED[action]))
-            if (kind === 'changed' && loaded.size === 1) mark.note = LOADED[[...loaded][0]]
+            const note = flagNote(flag)
+            if (note) mark.note = note
+            else if (kind === 'changed' && loaded.size === 1) mark.note = LOADED[[...loaded][0]]
         }
         marks[flag] = mark
     }

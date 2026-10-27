@@ -83,6 +83,17 @@ describe('documentHover', () => {
         ])
     })
 
+    it("ends with the architecture's own page beside its Documentation", () => {
+        const built = document([{ rows: ['ret'] }])
+        built.reference = {
+            label: "Intel's reference: RET",
+            href: 'https://intel.github.io/SDM/instruction/RET.html'
+        }
+        expect(documentHover(built, { href: '/documentation/x86/instruction/ret' }).at(-1)).toBe(
+            "[Documentation](/documentation/x86/instruction/ret) · [Intel's reference: RET](https://intel.github.io/SDM/instruction/RET.html)"
+        )
+    })
+
     it("writes its links into the Documentation with the page's origin, which Monaco needs", () => {
         vi.stubGlobal('location', { origin: 'https://asm.example' })
         onTestFinished(() => void vi.unstubAllGlobals())

@@ -81,7 +81,13 @@ describe('x86 hovers', () => {
         vi.stubGlobal('location', { origin: 'https://asm.example' })
         onTestFinished(() => void vi.unstubAllGlobals())
         expect(await hover('    mov rax, rbx', 'mov')).toContain(
-            '[Documentation](https://asm.example/documentation/x86/instruction/mov)'
+            "[Documentation](https://asm.example/documentation/x86/instruction/mov) · [Intel's reference: MOV](https://intel.github.io/SDM/instruction/MOV.html)"
+        )
+    })
+
+    it("links Intel's page from a vector instruction's hover too, which has no page here", async () => {
+        expect(await hover('    vaddps ymm0, ymm1, ymm2', 'vaddps')).toContain(
+            "[Intel's reference: ADDPS](https://intel.github.io/SDM/instruction/ADDPS.html)"
         )
     })
 })
