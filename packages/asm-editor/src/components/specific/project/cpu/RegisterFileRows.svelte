@@ -296,8 +296,14 @@
         return !!valueMenu && row.integer && !row.rendered.blank && row.rendered.chunks.length > 0
     }
 
-    //the pointer menu, at the pointer, or under the value when the keyboard opened it
-    let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    //the pointer menu, at the pointer, or under the value when the keyboard opened it; the value
+    //it is about is marked while it is open
+    let contextMenu = $state<{
+        x: number
+        y: number
+        items: ContextMenuEntry[]
+        row: Row
+    } | null>(null)
     function openValueMenu(event: MouseEvent, row: Row) {
         //the input being typed into keeps the browser's own menu, for pasting into it
         if (!valueMenu || (event.target as Element | null)?.closest?.('input')) return
@@ -306,8 +312,8 @@
         const items = valueMenu(BigInt.asUintN(bits, row.register.value), bits / 8)
         if (event.button === -1 || (event.clientX === 0 && event.clientY === 0)) {
             const rect = (event.currentTarget as Element).getBoundingClientRect()
-            contextMenu = { x: rect.left, y: rect.bottom, items }
-        } else contextMenu = { x: event.clientX, y: event.clientY, items }
+            contextMenu = { x: rect.left, y: rect.bottom, items, row }
+        } else contextMenu = { x: event.clientX, y: event.clientY, items, row }
     }
 
     function onChunkKey(event: KeyboardEvent) {
@@ -374,7 +380,8 @@
                 {:else if usesHex}
                     {row.register.value}
                 {:else}
-                    {row.register.value.toString(16).padStart(8, '0')}
+                    <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
+                    {row.register.toHex()}
                 {/if}
             </div>
             {#if row.integer && onRegisterClick}
@@ -391,6 +398,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             class="register-hex"
+            class:menu-open={contextMenu?.row.index === row.index}
             oncontextmenu={hasValueMenu(row) ? (event) => openValueMenu(event, row) : undefined}
         >
             {#if row.rendered.chunks.length === 0}
@@ -441,6 +449,7 @@
         x={contextMenu.x}
         y={contextMenu.y}
         items={contextMenu.items}
+        arrow
         label="Register value"
         onClose={() => (contextMenu = null)}
     />
@@ -581,6 +590,12 @@
         flex: 1;
         height: 100%;
         border-left: solid 0.1rem var(--wb-line, var(--tertiary));
+    }
+
+    /* the value a pointer menu is open for, outlined as the Symbols panel outlines its row */
+    .register-hex.menu-open {
+        outline: 1px solid var(--accent);
+        outline-offset: -1px;
     }
 
     //a pokeable chunk is the cell it always was, inside a button that carries the click: the styling

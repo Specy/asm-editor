@@ -125,6 +125,27 @@ describe('FileSystem', () => {
         run.undo(1)
         expect(run.canUndo(1)).toBe(false)
     })
+    it('keeps the record of every File a change leaves as it was, counted toward the limits', () => {
+        const fs = new FileSystem({
+            'main.s': { encoding: 'plain', content: 'nop' },
+            'notes.md': { encoding: 'plain', content: 'notes' },
+            'big.txt': { encoding: 'plain', content: 'x'.repeat(FILE_BYTE_LIMIT - 16) }
+        })
+        const big = fs.files['big.txt']
+        fs.writeText('main.s', 'nop\nnop')
+        expect(fs.files['big.txt']).toBe(big)
+        //a rename moves the record as it is, and a removal leaves the others
+        fs.rename('big.txt', 'assets/big.txt')
+        expect(fs.files['assets/big.txt']).toBe(big)
+        fs.remove('notes.md')
+        expect(fs.files['assets/big.txt']).toBe(big)
+        //the kept File still takes its room, and a record from elsewhere is still checked
+        expect(() => fs.writeText('more.txt', '0123456789')).toThrow('16 MiB')
+        expect(() =>
+            fs.replace({ ...fs.files, 'bad.txt': { encoding: 'plain', content: '\ud800' } })
+        ).toThrow(ProjectFormatError)
+        expect(Object.keys(fs.files)).toEqual(['main.s', 'assets/big.txt'])
+    })
     it('keeps immutable build snapshots and enforces atomic capacity failures', () => {
         const fs = new FileSystem({ main: { encoding: 'plain', content: 'old' } })
         const snapshot = fs.snapshot('main')

@@ -7,6 +7,7 @@
     import { fly } from 'svelte/transition'
     import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'
     import ProblemsList from './ProblemsList.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
     import {
         type Diagnostic,
@@ -34,7 +35,6 @@
         escapes = false,
         onDiagnosticSelect
     }: Props = $props()
-    let areDiagnosticsShown = $state(false)
 
     let hasErrors = $derived(diagnostics.some((d) => d.severity === 'error'))
     let listsDiagnostics = $derived(!!onDiagnosticSelect && diagnostics.length > 0)
@@ -46,18 +46,20 @@
 </script>
 
 <div class="std-out">
+    <!-- a mark of what the compiler found, which the console already shows: listed above the
+         output, or as its first lines -->
     {#if diagnostics.length}
-        <button
+        <span
             class="floating-std-icon"
+            role="img"
             in:fly|global={{ duration: 300 }}
             out:fly|global={{ duration: 200 }}
             class:warningOnly={!hasErrors}
-            class:diagnosticsShown={areDiagnosticsShown}
-            title={hasErrors ? 'Show compiler errors' : 'Show compiler warnings'}
-            onclick={() => (areDiagnosticsShown = !areDiagnosticsShown)}
+            {@attach tooltip(hasErrors ? 'Compiler errors' : 'Compiler warnings')}
+            aria-label={hasErrors ? 'Compiler errors' : 'Compiler warnings'}
         >
             <FaExclamationTriangle />
-        </button>
+        </span>
     {/if}
     <div class="output-content">
         {#if listsDiagnostics && onDiagnosticSelect}
@@ -76,6 +78,7 @@
     .floating-std-icon {
         position: absolute;
         z-index: 1;
+        display: flex;
         background-color: var(--red);
         color: var(--red-text);
         padding: 0.2rem;
@@ -83,21 +86,13 @@
         border-radius: 0.2rem;
         width: 1.4rem;
         height: 1.4rem;
-        cursor: pointer;
         transition: all 0.3s;
         bottom: 0.4rem;
-        &:hover {
-            filter: brightness(1.2);
-        }
     }
-    /* single-class selectors so source order decides: .diagnosticsShown must still win while open */
+    /* a single-class selector after the icon's, so source order lets it win */
     .warningOnly {
         background-color: #d19a3f;
         color: #181818;
-    }
-    .diagnosticsShown {
-        background-color: var(--accent2);
-        color: var(--accent2-text);
     }
     /* the console scrolls inside, so the box keeps its height and the icon its corner. A card like
        the code and the registers around it, inside the same 1px edge */

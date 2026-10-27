@@ -1,3 +1,4 @@
+import { partitionPoint } from '#lib/sorted.ts'
 import type { ElfAnalysis, ElfAnalysisSymbol, ElfSymbol } from './decoder'
 import type { ListingNameOrigin } from './listing'
 import { printableSymbolName } from './names'
@@ -210,18 +211,6 @@ export function readElfModel(
     let regions = sectionRegions(analysis, bytes)
     const fromSegments = !regions.some((region) => region.code)
     if (fromSegments) regions = segmentRegions(analysis, bytes, hex)
-    const regionOf = (address: number) => {
-        let low = 0
-        let high = regions.length - 1
-        while (low <= high) {
-            const middle = (low + high) >> 1
-            const region = regions[middle]
-            if (region.address > address) high = middle - 1
-            else if (region.address + region.size <= address) low = middle + 1
-            else return region
-        }
-        return undefined
-    }
     //a symbol at a region's end, or in the gap alignment leaves before the next region, names the
     //end of what the region holds; after the last region only its very end does
     const afterRegion = (address: number) => {
@@ -239,7 +228,7 @@ export function readElfModel(
         // Undefined, absolute and common symbols name no address of the file.
         if (symbol.sectionIndex === 0 || symbol.sectionIndex >= 0xff00) return
         const address = toNumber(symbol.value)
-        if (!regionOf(address) && !afterRegion(address)) return
+        if (!findRegion(regions, address) && !afterRegion(address)) return
         const name = printableSymbolName(versionedName(symbol))
         const names = symbolNames.get(address) ?? []
         if (names.some((existing) => existing.name === name)) return
@@ -275,31 +264,13 @@ export function readElfModel(
 
 /** The index of the last region that starts at or below a link-time address, or -1. */
 export function regionBefore(regions: Region[], address: number): number {
-    let low = 0
-    let high = regions.length - 1
-    let found = -1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        if (regions[middle].address <= address) {
-            found = middle
-            low = middle + 1
-        } else high = middle - 1
-    }
-    return found
+    return partitionPoint(regions.length, (i) => regions[i].address <= address) - 1
 }
 
 /** The region holding a link-time address, by binary search over the sorted regions. */
 export function findRegion(regions: Region[], address: number): Region | undefined {
-    let low = 0
-    let high = regions.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        const region = regions[middle]
-        if (region.address > address) high = middle - 1
-        else if (region.address + region.size <= address) low = middle + 1
-        else return region
-    }
-    return undefined
+    const region = regions[regionBefore(regions, address)]
+    return region && address < region.address + region.size ? region : undefined
 }
 
 /** The 8 bytes the file holds at a link-time address, when they fit a double exactly. */

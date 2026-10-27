@@ -92,7 +92,7 @@ describe('authored code blocks', () => {
             for (const entry of entriesOf(await documentationFor(language))) {
                 const view = entry.view
                 const texts = [
-                    view.type === 'instruction' ? view.document().description : view.markdown,
+                    view.type === 'instruction' ? view.document.description : view.markdown,
                     entry.instructionContent?.description
                 ]
                 for (const text of texts) {

@@ -154,6 +154,32 @@ describe('library hints and documentation', () => {
         )
         expect(riscvCallingConvention('void exit(int status)')).toBe('status → a0; returns nothing')
         expect(riscvCallingConvention('int rand(void)')).toBe('returns int in a0')
+        //RV32 gives a 64-bit integer two registers with no even one to start at, RV64 one
+        expect(riscvCallingConvention('long long llabs(long long n)')).toBe(
+            'n → a0:a1; returns long long in a0:a1'
+        )
+        expect(riscvCallingConvention('long long llabs(long long n)', 64)).toBe(
+            'n → a0; returns long long in a0'
+        )
+        expect(
+            riscvCallingConvention('long long strtoll(const char *str, char * *end, int base)')
+        ).toBe('str → a0; end → a1; base → a2; returns long long in a0:a1')
+        expect(riscvCallingConvention('double difftime(time_t end, time_t start)')).toBe(
+            'end → a0:a1; start → a2:a3; returns double in fa0'
+        )
+        expect(
+            riscvCallingConvention(
+                'void f(int a, int64_t b, int c, int d, int e, int g, uint64_t h)'
+            )
+        ).toBe(
+            'a → a0; b → a1:a2; c → a3; d → a4; e → a5; g → a6; h → a7 and the stack; returns nothing'
+        )
+        expect(
+            runtimeFunctionDocumentation(
+                { ...list.functions[0], prototype: 'long long llabs(long long n)' },
+                'RISC-V-64'
+            )
+        ).toContain('n → a0; returns long long in a0')
         expect(runtimeFunctionDocumentation(list.functions[0])).toContain('call printf')
         expect(runtimeFunctionDocumentation(list.functions[0], 'MIPS')).toContain('jal printf')
     })
@@ -167,6 +193,9 @@ describe('library hints and documentation', () => {
         )
         expect(mipsCallingConvention('long long llabs(long long n)')).toBe(
             'n → $a0:$a1; returns long long in $v0:$v1'
+        )
+        expect(mipsCallingConvention('double difftime(time_t end, time_t start)')).toBe(
+            'end → $a0:$a1; start → $a2:$a3; returns double in $f0'
         )
         expect(mipsCallingConvention('int f(int a, double b)')).toBe(
             'a → $a0; b → $a2:$a3; returns int in $v0'

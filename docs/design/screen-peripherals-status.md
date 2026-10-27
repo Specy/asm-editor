@@ -239,7 +239,7 @@ The plan says "same directory" and means `peripherals/screen/`; these went in `p
 | Key state   | `isKeyDown(code)`, `areKeysDown(codes)`, `anyKeyDown()`, `lastKeys()`, `modifiers()`, `pendingTransitions`                                  |
 | Lifecycle   | `reset()`                                                                                                                                   |
 
-- `keyDown`/`keyUp` take a `KeyboardEventLike`, the `{ code, key, repeat?, ctrlKey?, altKey?, metaKey?, shiftKey? }` subset of a DOM event, so the phase 4 widget passes the event straight through and a test passes an object literal.
+- `keyDown`/`keyUp` take a `KeyboardEventLike`, the `{ code, key, repeat?, ctrlKey?, altKey?, metaKey?, shiftKey?, getModifierState? }` subset of a DOM event, so the phase 4 widget passes the event straight through and a test passes an object literal.
 - Every key-state read applies at most one queued transition, and only when the hold interval has passed since the last one. `modifiers()` applies none and reads the physically held keys, so a Mouse snapshot is not distorted by the interval and does not consume the transition budget.
 - `lastKeys()` answers `{ down, up }`, both 0 until the first press and release: that is task 19's D1.L = 0 form, `down` in the lower word and `up` in the upper.
 - `areKeysDown(codes)` is task 19's other form; hand it the four codes high byte first and answer with the booleans in that order.
@@ -273,7 +273,7 @@ The plan says "same directory" and means `peripherals/screen/`; these went in `p
 - **Double click is time and button only**, no distance: positions are clamped logical pixels, one of which can be one GUI pixel or twenty depending on zoom, so a pixel threshold would mean something different on every Screen.
 - **The typed queue holds code points**, read as a string by `readCharacter()` or as a number by `readCharacterCode()`; a character outside an environment's byte stays the adapter's problem, as in `Z80Console`, which substitutes a question mark.
 - **Auto-repeat types again but presses once**, like a terminal: the key never came up, so the key-state view must not see a second press.
-- **Ctrl and Meta combinations type nothing** and are left to the host, as the upstream keyboard does; Alt does type, because AltGr is a text modifier on several layouts. They still produce key transitions, so a program can use them as keys.
+- **Ctrl and Meta combinations type nothing** and are left to the host, as the upstream keyboard does; Alt does type, because AltGr is a text modifier on several layouts, and so does Ctrl+Alt when the `AltGraph` modifier state is set, which is how Windows reports AltGr. They still produce key transitions, so a program can use them as keys.
 - **`typeText` normalizes `\r\n` and `\r` to `\n`**, so a paste and the Enter key look the same to a line read.
 - **A line read drops the control characters it cannot show** (escape, bell) and keeps tab; backspace edits and erases its own echo, never program output printed before the read.
 - **The event counter counts a move only when the clamped pixel changes**, so dragging further past an edge does not spin it.
@@ -591,7 +591,7 @@ The built app was served with `vite preview` and driven through the DevTools pro
 
 ### API notes for phase 8
 
-- `MarsDevices` is `attach(core, display)` / `detach()` / `dispose()`, `setDisplay(display)`, `resetScreen(display)`, `flush()` and `resync()`. `flush()` is the per-slice dirty-range re-read and `resync()` the whole-grid one; both are what phase 8 measures if the framebuffer turns out to cost more than the five percent ADR 0007 budgets.
+- `MarsDevices` is `attach(core, display)` / `dispose()`, `setDisplay(display)`, `resetScreen(display)`, `flush()` and `resync()`. `flush()` is the per-slice dirty-range re-read and `resync()` the whole-grid one; both are what phase 8 measures if the framebuffer turns out to cost more than the five percent ADR 0007 budgets.
 - The measurement that matters here: a full 512 by 256 re-read is about 15 ms under node (a 1024 by 1024 one about 135 ms), which is why only the dirty range is read per slice. A full re-read happens on a build, an undo and a display change.
 - `Emulator.setDisplay` is optional and present only on these two adapters; `emulator.setDisplay !== undefined` is how the GUI decides whether to show the popover at all.
 - `MIPS_INSTRUCTIONS_PER_MS` and `RISCV_INSTRUCTIONS_PER_MS` are still the Core agents' 1000, and are now the estimates with the most evidence behind them of the five.

@@ -152,8 +152,30 @@ button {
     font-family: Rubik;
 }
 
+/* Monaco's context menu, a translucent tint (its theme's menu.background) that blurs what is
+   beneath, as the app's own context menus and prompts are. Its menu.border is drawn this thick:
+   Monaco's stylesheet borders the menu by --vscode-strokeThickness, which the standalone editor
+   never defines, so it had no border at all. */
 .context-view.monaco-menu-container {
     --vscode-cornerRadius-large: 0.4rem;
+    --vscode-strokeThickness: 1px;
+    backdrop-filter: blur(4px);
+}
+
+/* 12px with its line where Monaco's are 11, so that past its 24px rows every separator sits at the
+   same fraction of a device pixel at 125%, 150% or 175% zoom and none is drawn a pixel thicker
+   than another, as in the app's own context menus */
+.context-view.monaco-menu-container
+    .monaco-menu
+    .monaco-action-bar.vertical
+    .action-label.separator {
+    margin: 5px 0 6px !important;
+}
+
+/* An element with a Tooltip shows it on a long press, which iOS would otherwise answer with its own
+   callout (tooltip.svelte.ts) */
+[data-tooltip-touch] {
+    -webkit-touch-callout: none;
 }
 
 /* Names a page for crawlers and screen readers where the design has no room for a

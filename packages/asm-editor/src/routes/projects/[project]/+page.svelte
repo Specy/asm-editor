@@ -23,7 +23,7 @@
     import lzstring from 'lz-string'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
-    import { blobDownloader, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
+    import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import { serializer } from '#lib/json.ts'
     import { examSessionPath, parseLegacyProjectExamPayload } from '#lib/exam.ts'
     import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
@@ -66,57 +66,69 @@
 
     async function loadProject() {
         const id = page.params.project ?? ''
-        if (id === 'exam') {
-            const code = page.url.searchParams.get('project')
-            if (!code) {
-                toast.error('Invalid legacy exam link', 10000)
-                status = 'error'
+        try {
+            if (id === 'exam') {
+                const code = page.url.searchParams.get('project')
+                if (!code) {
+                    toast.error('Invalid legacy exam link', 10000)
+                    status = 'error'
+                    return
+                }
+
+                const migratedExam = parseLegacyProjectExamPayload(code)
+                if (!migratedExam) {
+                    toast.error('Could not migrate legacy exam link', 10000)
+                    status = 'error'
+                    return
+                }
+
+                await goto(resolve(examSessionPath(migratedExam)), { replace: true })
                 return
             }
 
-            const migratedExam = parseLegacyProjectExamPayload(code)
-            if (!migratedExam) {
-                toast.error('Could not migrate legacy exam link', 10000)
-                status = 'error'
-                return
-            }
+            if (id === 'share') {
+                const code = page.url.searchParams.get('project')
+                if (!code) {
+                    toast.error('Invalid shared project link', 10000)
+                    status = 'error'
+                    return
+                }
+                const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
+                if (!parsedCode) {
+                    toast.error('Invalid shared project link', 10000)
+                    status = 'error'
+                    return
+                }
 
-            await goto(resolve(examSessionPath(migratedExam)), { replace: true })
-            return
+                //any shape a link was ever made from: the normalizer inside set reads them all
+                const parsed = serializer.parse<StoredProject>(parsedCode)
+                project.set({ ...parsed, id: SHARE_ID })
+            } else {
+                const loadedProject = await ProjectStore.getProject(id)
+                if (!loadedProject) {
+                    toast.error('Project not found', 10000)
+                    status = 'error'
+                    return
+                }
+                project.set(loadedProject)
+            }
+            status = 'loaded'
+        } catch (e) {
+            //a link mangled on its way here, or storage the browser blocked: an error screen, never
+            //a load that does not end
+            console.error(e)
+            toast.error(
+                id === 'share' ? 'Invalid shared project link' : 'Could not load this project',
+                10000
+            )
+            status = 'error'
         }
-
-        if (id === 'share') {
-            const code = page.url.searchParams.get('project')
-            if (!code) {
-                toast.error('Invalid shared project link', 10000)
-                status = 'error'
-                return
-            }
-            const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
-            if (!parsedCode) {
-                toast.error('Invalid shared project link', 10000)
-                status = 'error'
-                return
-            }
-
-            //any shape a link was ever made from: the normalizer inside set reads them all
-            const parsed = serializer.parse<StoredProject>(parsedCode)
-            project.set({ ...parsed, id: SHARE_ID })
-        } else {
-            const loadedProject = await ProjectStore.getProject(id)
-            if (!loadedProject) {
-                toast.error('Project not found', 10000)
-                status = 'error'
-                return
-            }
-            project.set(loadedProject)
-        }
-        status = 'loaded'
     }
 
     onMount(() => {
-        loadProject()
-        Monaco.load()
+        void loadProject()
+        //started early; an editor that asks for Monaco loads it again if this fails
+        Monaco.load().catch(() => undefined)
         return () => {
             Monaco.dispose()
         }
@@ -127,7 +139,8 @@
      * save (autosave while typing, the display a Build read from the source) is dropped for a
      * shared project rather than asked about: it would put the question up as soon as the program
      * is run, and whether a shared project becomes one of the user's own is theirs to decide, with
-     * the Save button or when they leave the page.
+     * the Save button or when they leave the page. False when nothing was stored, which a browser
+     * that refused the write is too.
      */
     async function save(project: Project, silent: boolean): Promise<boolean> {
         if (status !== 'loaded') return false
@@ -138,10 +151,20 @@
             )
             if (confirmed === null) return false
             if (!confirmed) return false
-            project.set({ id: undefined })
-            const newProject = await ProjectStore.addProject(project)
-            project.set({ id: newProject.id })
-            goto(resolve('/projects/[project]', { project: project.id }))
+            try {
+                //gives the Project its own id once it is stored, and leaves it the link's otherwise
+                await ProjectStore.addProject(project)
+            } catch (error) {
+                console.error(error)
+                toast.error(
+                    'Could not save this project in the browser — your changes are not stored.',
+                    10000
+                )
+                return false
+            }
+            //in place of the link in the history: the page is not loaded again for the link's
+            //address, so Back to it would go on showing the saved Project under that address
+            void goto(resolve('/projects/[project]', { project: project.id }), { replace: true })
         } else {
             const result = await ProjectStore.save(project, journals)
             if (result.local === 'failed') {
@@ -150,6 +173,7 @@
                     'Could not save this project in the browser — your changes are not stored.',
                     10000
                 )
+                return false
             }
             if (result.linked === 'failed') {
                 toast.error(
@@ -170,6 +194,17 @@
             }
         }
         return true
+    }
+
+    /**
+     * Saves for the Workbench or before leaving, and keeps what it means for `unsaved`: changes a
+     * save did not store stay unsaved, so Save stays and leaving asks.
+     */
+    async function saveChanges(silent: boolean): Promise<boolean> {
+        const saved = await save(project, silent)
+        lastSaveFailed = !saved
+        if (saved) dirty = false
+        return saved
     }
 
     async function offerArchiveSave(project: Project) {
@@ -228,16 +263,16 @@
             )
             return
         }
-        await navigator.clipboard.writeText(url)
-        toast.logPill('Copied to clipboard')
+        await copyText(url, 'Share link')
     }
 
     async function changePage(page: ResolvedPathname) {
         try {
             const stored = await ProjectStore.getProjectFromDb(project.id)
+            //a shared link's Project, or one deleted in another tab since it was opened
             if (!stored) {
                 const save = await Prompt.confirm(
-                    'This project has not been saved. Would you like to create and save it?'
+                    'This project is not in your projects. Would you like to save it there?'
                 )
                 if (save === null) return
                 if (save) {
@@ -252,10 +287,11 @@
             )
             if (wantsToSave === null) return
             if (wantsToSave) {
-                await save(project, false)
+                //a save that stored nothing keeps the page, with its changes, open
+                if (!(await saveChanges(false))) return
                 toast.logPill('Project saved')
             }
-            goto(page)
+            return goto(page)
         } catch (e) {
             console.error(e)
             toast.error('Error updating project')
@@ -303,11 +339,8 @@
                         {unsaved}
                         editJournals={journals}
                         onSave={async ({ silent }) => {
-                            const saved = await save(project, silent)
-                            lastSaveFailed = !saved
-                            if (!saved) return
-                            dirty = false
-                            if (!silent) toast.logPill('Project saved')
+                            const saved = await saveChanges(silent)
+                            if (saved && !silent) toast.logPill('Project saved')
                         }}
                         onChange={() => (dirty = true)}
                     >

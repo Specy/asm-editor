@@ -3,7 +3,7 @@ import PseudocodeWorker from './pseudocode.worker?worker'
 import type { FunctionAnnotations } from '#lib/annotations/annotations.ts'
 import { executableAnalysis } from '#lib/executables.ts'
 import { KeyIds } from '#lib/keyIds.ts'
-import type { Listing } from '#lib/listing/listing.ts'
+import { functionStartingAt, type Listing } from '#lib/listing/listing.ts'
 import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import { programImage, programNamesKey } from './programImage'
 import {
@@ -11,7 +11,6 @@ import {
     functionAnnotations,
     functionAnnotationsKey
 } from './pseudocodeAnnotations'
-import { functionAt } from './pseudocodeMap'
 import type { PseudocodeRequest, PseudocodeResponse } from './protocol'
 
 /**
@@ -225,7 +224,7 @@ export class PseudocodeClient {
             functionAnnotations(
                 file.annotations,
                 address,
-                functionAt(listing, address)?.end ?? address
+                functionStartingAt(listing, address)?.end ?? address
             )
         const programKey = `${this.contentIds.of(file.content)}\0${listing.base}\0${listing.version}\0${this.annotationIds.of(programNamesKey(listing))}`
         const key = `${programKey}\0${address}\0${this.annotationIds.of(functionAnnotationsKey(own))}`

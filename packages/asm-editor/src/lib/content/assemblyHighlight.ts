@@ -177,8 +177,27 @@ const X86_PREFIXES = lowerCased([...X86Prefixes, 'times'])
 
 /** MIPS spells every register with a `$`, by number or by name: `$8`, `$t0`, `$f2`. */
 const isMipsRegister = (name: string) => name.startsWith('$')
-const isRiscvRegister = (name: string) => RISCV_REGISTER.test(name)
-const RISCV_RELOCATIONS = /^%(?:pcrel_hi|pcrel_lo|hi|lo)$/i
+
+/** RV32 and RV64 read alike. */
+const RISCV_SYNTAX: Syntax = {
+    lineComment: ['#'],
+    starComment: false,
+    dollarIsHex: false,
+    percentIsBinary: false,
+    isRegister: (name) => RISCV_REGISTER.test(name),
+    dotDirectives: true,
+    operandDirectives: false,
+    sizeSuffixes: false,
+    relocations: /^%(?:pcrel_hi|pcrel_lo|hi|lo)$/i,
+    csrs: RISCV_CSRS,
+    numericLabels: true,
+    columnLabels: false,
+    brackets: '()',
+    quotes: `"'`,
+    escapingQuotes: `"'`,
+    decimalFractions: true,
+    immediates: false
+}
 
 const SYNTAX: Record<AvailableLanguages, Syntax> = {
     M68K: {
@@ -260,44 +279,8 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         decimalFractions: true,
         immediates: false
     },
-    'RISC-V': {
-        lineComment: ['#'],
-        starComment: false,
-        dollarIsHex: false,
-        percentIsBinary: false,
-        isRegister: isRiscvRegister,
-        dotDirectives: true,
-        operandDirectives: false,
-        sizeSuffixes: false,
-        relocations: RISCV_RELOCATIONS,
-        csrs: RISCV_CSRS,
-        numericLabels: true,
-        columnLabels: false,
-        brackets: '()',
-        quotes: `"'`,
-        escapingQuotes: `"'`,
-        decimalFractions: true,
-        immediates: false
-    },
-    'RISC-V-64': {
-        lineComment: ['#'],
-        starComment: false,
-        dollarIsHex: false,
-        percentIsBinary: false,
-        isRegister: isRiscvRegister,
-        dotDirectives: true,
-        operandDirectives: false,
-        sizeSuffixes: false,
-        relocations: RISCV_RELOCATIONS,
-        csrs: RISCV_CSRS,
-        numericLabels: true,
-        columnLabels: false,
-        brackets: '()',
-        quotes: `"'`,
-        escapingQuotes: `"'`,
-        decimalFractions: true,
-        immediates: false
-    }
+    'RISC-V': RISCV_SYNTAX,
+    'RISC-V-64': RISCV_SYNTAX
 }
 
 const isDigit = (c: string) => c >= '0' && c <= '9'

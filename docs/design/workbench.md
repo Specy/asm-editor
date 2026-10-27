@@ -94,6 +94,7 @@ The brief moved "save" out of the top bar but gave it no place in the rail. Save
 - Under autosave, which is on by default, the button is almost never visible. It appears when autosave is off, and for a Project opened from a share link, which is never saved silently.
 - Shift+S works as today.
 - Autosave stays a Preference that the Workbench reads. On a change it calls the host's save action silently, debounced for code, following the one save rule in [project-format.md](./project-format.md) (Saving).
+- The host hears of a change to the Files at once, before the debounce, so leaving asks about it. A save the debounce is still waiting on starts at once when the page is hidden or closed, together with what the Hex editor holds typed, and Save includes both, so nothing typed before it is left unsaved.
 
 ### Maximized panels
 

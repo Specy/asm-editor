@@ -20,8 +20,6 @@ import {
     type BuildArtifact,
     createMemoryTab,
     resetMemoryTab,
-    type Diagnostic,
-    type EmulatorInterrupt,
     type EmulatorNote,
     type EmulatorSettings,
     type ExecutionStep,
@@ -78,6 +76,7 @@ import {
 } from '#cmp/specific/project/memory/memoryTabUtils.ts'
 import {
     ExecutionController,
+    ExecutionSupersededError,
     type ExecutionGeneration
 } from '#lib/languages/ExecutionController.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -159,23 +158,26 @@ export function isRuntimeLibraryFile(file: string | undefined): boolean {
     return !!file && file.startsWith(RUNTIME_NAMESPACE)
 }
 
+/**
+ * The undo depth the adapters are given. It comes from a user setting, so it can be any number (or
+ * NaN); `0` means "no history at all".
+ */
+export function normalizeUndoSize(undoSize: number): number {
+    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+}
+
+/**
+ * The instruction limit a Testcase runs with: no limit, or one that is not positive, is unbounded,
+ * which is still a finite number, because Infinity would make a Core's budget arithmetic
+ * meaningless.
+ */
+export function toHaltLimit(limit: number | undefined): number {
+    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
+}
+
 /** Why a Build or a Testcase stopped before the program's own code: it ran out of instructions. */
 function programStartLimitMessage(name: string, limit: number): string {
     return `The program did not reach ${name} within ${limit.toLocaleString('en-US')} instructions`
-}
-
-/** A Build stopped by its Arguments: they do not parse, or the Core refuses them. */
-function argumentsDiagnostic(problem: string): Diagnostic {
-    const message = `Arguments: ${problem}`
-    return {
-        severity: 'error',
-        source: ARGUMENTS_DIAGNOSTIC_SOURCE,
-        lineIndex: 0,
-        column: 0,
-        line: { line: '', line_index: 0 },
-        message,
-        formatted: message
-    }
 }
 
 /** The Arguments problem a failed Build reports, or undefined for any other failure. */
@@ -496,26 +498,22 @@ export abstract class GenericEmulator<T, R extends string>
         const sp = this._getSp()
         if (!stackTab) return
         const newAddress = sp - (sp % BigInt(stackTab.pageSize))
-        if (stackTab.address !== newAddress) {
-            stackTab.address = newAddress
-            this.updateMemory()
-            //reset the prevState as we don't know what the previous state was
-            stackTab.data.prevState = stackTab.data.current
-        }
+        //only the Stack tab is read again: re-reading every view would make what they hold now
+        //their previous state too, and the bytes this step changed would lose their highlight
+        if (stackTab.address !== newAddress) this.showMemoryPage(stackTab, newAddress)
     }
 
     /**
-     * Places the Stack memory tab right after a successful compile.
-     * The default points it one page below SP and then lets `scrollStackTab()` snap it to the
-     * page containing SP. Languages whose legacy emulator did not auto-scroll on compile
-     * (M68K) override this to keep the "page below SP" position.
+     * Places the Stack memory tab right after a successful compile: one page below SP, the region
+     * the stack grows into. Snapping it onto the page that holds SP would show the unwritten memory
+     * above a stack that starts page aligned (M68K's 0x2000) or near the end of a page (MARS's and
+     * RARS's 0x7ffffffc).
      */
     protected positionStackTabOnCompile() {
         const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
         if (stackTab && !stackTab.userPlaced) {
             stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
         }
-        this.scrollStackTab()
     }
 
     /**
@@ -788,8 +786,14 @@ export abstract class GenericEmulator<T, R extends string>
         )
     }
 
-    /** A view moved to an address the user chose: what it held before is not a previous state. */
+    /** A view moved to an address the user chose. */
     private placeMemoryView(view: MemoryTab, address: bigint): void {
+        this.showMemoryPage(view, address)
+        view.userPlaced = true
+    }
+
+    /** A view moved to another page: what it held before is not a previous state. */
+    private showMemoryPage(view: MemoryTab, address: bigint): void {
         const page: MemoryPage = this.getInstance()
             ? this.readMemoryPage(address, view.pageSize)
             : {
@@ -799,36 +803,45 @@ export abstract class GenericEmulator<T, R extends string>
                   unreadable: null
               }
         view.address = address
-        view.userPlaced = true
         view.data.current = page.bytes
         view.data.prevState = page.bytes
         view.data.unreadable = page.unreadable
     }
 
     /**
+     * Shows the read the program now waits on, after sending what it played, until `read` answers:
+     * the person may take a while to answer, and a beep before a prompt has to be heard before the
+     * answer, not after. A read for a run Stop ended, by a Core that could not be halted, fails
+     * instead, showing nothing.
+     */
+    private async awaitInput<V>(
+        type: string,
+        question: string,
+        execution: ExecutionGeneration,
+        read: () => Promise<V>
+    ) {
+        this.executionController.ensureCurrent(execution)
+        this._peripherals.audio.flush()
+        this.state.interrupt = { type, message: question }
+        try {
+            return await read()
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    /**
      * A line, through the Terminal's Line discipline. `options` are how the program set up its
      * reads to show what is typed, where its environment lets it (EASy68K's tasks 12 and 16).
      */
-    /**
-     * Shows the read the program now waits on, after sending what it played: the person may take a
-     * while to answer, and a beep before a prompt has to be heard before the answer, not after.
-     */
-    private waitOnInput(interrupt: EmulatorInterrupt): void {
-        this._peripherals.audio.flush()
-        this.state.interrupt = interrupt
-    }
-
-    protected async requestInput(
+    protected requestInput(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
-        try {
-            return await this._peripherals.terminal.readAsync(question, execution, options)
-        } finally {
-            this.state.interrupt = undefined
-        }
+        return this.awaitInput('ReadInput', question, execution, () =>
+            this._peripherals.terminal.readAsync(question, execution, options)
+        )
     }
 
     /**
@@ -836,47 +849,24 @@ export abstract class GenericEmulator<T, R extends string>
      * the Target's code: the Terminal's Line discipline
      * ([ADR 0036](../../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)).
      */
-    protected async requestCharacter(
+    protected requestCharacter(
         question: string,
         execution: ExecutionGeneration,
         options?: TerminalReadOptions
     ) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
-        try {
-            return await this._peripherals.terminal.readCharAsync(question, execution, options)
-        } finally {
-            this.state.interrupt = undefined
-        }
-    }
-
-    /**
-     * A read of standard input, at most `length` bytes: what is left of the current line, or else a
-     * new one, or no bytes at End of input.
-     */
-    protected async requestStandardInput(
-        length: number,
-        question: string,
-        execution: ExecutionGeneration
-    ) {
-        this.waitOnInput({ type: 'StandardInput', message: question })
-        try {
-            return await this._peripherals.terminal.readStandardInput(length, question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
+        return this.awaitInput('ReadInput', question, execution, () =>
+            this._peripherals.terminal.readCharAsync(question, execution, options)
+        )
     }
 
     /**
      * One byte of input for a port that reads a byte at a time, the Z80's character port: the rest of
      * the current line, or else a new line or, in graphical use, a single keystroke.
      */
-    protected async requestByte(question: string, execution: ExecutionGeneration) {
-        this.waitOnInput({ type: 'ReadInput', message: question })
-        try {
-            return await this._peripherals.terminal.readByte(question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
+    protected requestByte(question: string, execution: ExecutionGeneration) {
+        return this.awaitInput('ReadInput', question, execution, () =>
+            this._peripherals.terminal.readByte(question, execution)
+        )
     }
 
     protected getLastExecutedLine(fallback = -1): number {
@@ -1104,7 +1094,10 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         if (problem === undefined) return
-        const diagnostic = argumentsDiagnostic(problem)
+        const diagnostic = {
+            ...makeGenericDiagnostic(`Arguments: ${problem}`),
+            source: ARGUMENTS_DIAGNOSTIC_SOURCE
+        }
         this.state.compilerDiagnostics = [diagnostic]
         this.state.canExecute = false
         throw new CompilationFailedError(diagnostic.message, [diagnostic])
@@ -1313,18 +1306,32 @@ export abstract class GenericEmulator<T, R extends string>
         this._peripherals.audio = this.interactiveAudio
     }
 
-    // ----- public api ----- //
-    clear(): void {
-        this.executionController.invalidate()
-        this.phase = undefined
+    /** Ends the program's FileSystem session, once the Core no longer runs inside it. */
+    private endExecutionSession(): void {
         this._clearExecution?.()
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
+    }
+
+    /**
+     * Forgets the program built last as a Debug session: its sources and its memory. The library
+     * Files it linked are left to `clear()`, because a test run keeps them with the Core it leaves
+     * readable.
+     */
+    private forgetBuild(): void {
         this._buildSources = undefined
         this.memoryLayout = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
         this.deviceRegions = []
+    }
+
+    // ----- public api ----- //
+    clear(): void {
+        this.executionController.invalidate()
+        this.phase = undefined
+        this.endExecutionSession()
+        this.forgetBuild()
         this._buildLibraryFiles = undefined
         this.undoLedger = []
         this.noteList = []
@@ -1437,6 +1444,9 @@ export abstract class GenericEmulator<T, R extends string>
      * `stopInUserCode` is the Build a Debug session starts from, which stops where a Step from the
      * program's start would (`runStartCode`). A Testcase starts at the first instruction instead:
      * its starting registers and instruction limit apply from there, as they always have.
+     *
+     * Resolves to the execution the Build began, which `clear()` supersedes: a Build that Stop or
+     * Cancel ended resolves too, with nothing built, and a test run tells it apart by that.
      */
     private async compileInternal(
         historySize: number,
@@ -1445,8 +1455,9 @@ export abstract class GenericEmulator<T, R extends string>
         stopInUserCode = false,
         scriptedInput?: string[],
         programArguments = this._emulatorOptions.programArguments
-    ): Promise<void> {
+    ): Promise<ExecutionGeneration> {
         this.clear()
+        const undoSize = normalizeUndoSize(historySize)
         if (scriptedInput !== undefined) this.useScriptedRun(scriptedInput)
         //A Build supersedes live checking the same way a newer check supersedes an older one: the
         //debounced check is disarmed and any check already in flight fails its id comparison when
@@ -1471,7 +1482,7 @@ export abstract class GenericEmulator<T, R extends string>
                 await this.executionController.whileCurrent(execution, this._prepareBuild(sources))
             this.executionController.ensureCurrent(execution)
             this.passProgramArguments(sources, programArguments)
-            const result = await this._compile(sources, historySize)
+            const result = await this._compile(sources, undoSize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
                 this.state.compilerDiagnostics = result.diagnostics
@@ -1492,11 +1503,11 @@ export abstract class GenericEmulator<T, R extends string>
                 execution
             )
             this.executionController.ensureCurrent(execution)
-            this._initialize(historySize)
+            this._initialize(undoSize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
                 Number.isFinite(megabytes) && megabytes >= 0 ? megabytes * 1024 * 1024 : 0,
-                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0,
+                undoSize,
                 this.fileDescriptorOptions()
             )
             if (output?.saved) this.fileSystemSession.protectBuildOutput(output.path)
@@ -1540,7 +1551,7 @@ export abstract class GenericEmulator<T, R extends string>
                     if (!this.executionController.isCurrent(execution)) throw e
                     //the program was built, and failed before its own code as a Step would show
                     this.reportRuntimeFailure(e)
-                    return
+                    return execution
                 }
             }
             this.state.currentFile = sources.entry
@@ -1557,8 +1568,9 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
+            return execution
         } catch (e) {
-            if (!this.executionController.isCurrent(execution)) return
+            if (!this.executionController.isCurrent(execution)) return execution
             //assembler errors already live in state.compilerDiagnostics and are rendered from there,
             //pushing them into state.errors too would render the whole list twice
             if (e instanceof CompilationFailedError) throw e
@@ -1935,11 +1947,7 @@ export abstract class GenericEmulator<T, R extends string>
             : RUNNING_PANEL_REFRESH_MS
         if (!force && now - this.lastPanelRefresh < interval) return
         this.lastPanelRefresh = now
-        this.updateRegisters()
-        this.updateStatusRegisters()
-        this.updateMemory()
-        this.updateData()
-        this.scrollStackTab()
+        this.refreshCoreViews()
     }
 
     /**
@@ -2003,7 +2011,10 @@ export abstract class GenericEmulator<T, R extends string>
         this.refreshCoreViews()
     }
 
-    /** The half of `refreshVisibleState` a step shares; a step owns its own line and Undo handling. */
+    /**
+     * The half of `refreshVisibleState` that a step, an Undo, the end of a testcase and a running
+     * program's panel refresh share; each owns its own line and Undo handling.
+     */
     private refreshCoreViews(): void {
         this.updateRegisters()
         this.scrollStackTab()
@@ -2292,9 +2303,7 @@ export abstract class GenericEmulator<T, R extends string>
                 )
                 return await this.runTestcaseInternal(testcase, haltLimit)
             } finally {
-                this._clearExecution?.()
-                this.fileSystemSession?.stop()
-                this.fileSystemSession = null
+                this.endExecutionSession()
                 this.useInteractiveRun()
                 this.state.canExecute = false
                 this.state.canUndo = false
@@ -2330,6 +2339,8 @@ export abstract class GenericEmulator<T, R extends string>
                     )
             }
             if (!this._hasTerminated()) await this.runTestcaseFromStart(testcase, haltLimit)
+            //a run Stop ended part way, which a Core that cannot be stopped finishes unseen
+            this.executionController.ensureCurrent(execution)
             //the run is over whether or not the program ended, and its output is what is compared
             this._peripherals.terminal.flushOutput()
             const ins = this._getNextInstruction()
@@ -2338,11 +2349,7 @@ export abstract class GenericEmulator<T, R extends string>
             if (ins) this.state.currentFile = ins.file
             this.state.canUndo = false
 
-            this.updateRegisters()
-            this.scrollStackTab()
-            this.updateStatusRegisters()
-            this.updateMemory()
-            this.updateData()
+            this.refreshCoreViews()
             this.state.executionTime = performance.now() - started
         } catch (e) {
             //the run was superseded (clear/dispose/stop while an interrupt was pending), the state
@@ -2378,7 +2385,7 @@ export abstract class GenericEmulator<T, R extends string>
                 this._writeMemoryBytes(value.address, encoded)
             }
         }
-        await this._runTestcase(testcase, haltLimit)
+        await this._runTestcase(toHaltLimit(haltLimit))
     }
 
     /**
@@ -2390,6 +2397,12 @@ export abstract class GenericEmulator<T, R extends string>
         return own !== undefined && own.trim() !== '' ? own : this._emulatorOptions.programArguments
     }
 
+    /**
+     * Runs the Testcases one after another, each from its own Build. `clear()`, which Stop and a
+     * Build call, ends the whole run, which then fails with `ExecutionSupersededError`, whoever
+     * cleared: the Testcase it cut short is not checked, the ones after it do not run, and nothing
+     * is said in the Terminal that it emptied.
+     */
     async test(sources: BuildInput, testcases: Testcase[], haltLimit: number, historySize = 0) {
         //held across the whole loop: `validateTestcase` reads registers and memory back out of the
         //core between two runs, which a semantic check must not be able to slip into either
@@ -2407,13 +2420,17 @@ export abstract class GenericEmulator<T, R extends string>
         const terminal = this._peripherals.terminal
         const results: TestcaseResult[] = []
         const snapshot = normalizeBuildInput(sources)
+        //Each Testcase's Build begins an execution of its own, which a `clear()` while it builds
+        //or runs supersedes; between two Testcases there is no wait for one to come in.
+        let stopped = false
         for (const original of testcases) {
             const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
                 //The whole testcase loop already owns the Core operation lock.
                 const isolatedFileSystem = new FileSystem(snapshot.files)
+                let execution: ExecutionGeneration
                 try {
-                    await this.compileInternal(
+                    execution = await this.compileInternal(
                         historySize,
                         snapshot,
                         isolatedFileSystem,
@@ -2434,7 +2451,11 @@ export abstract class GenericEmulator<T, R extends string>
                     })
                     continue
                 }
+                stopped = !this.executionController.isCurrent(execution)
+                if (stopped) break
                 await this.runTestcaseInternal(testcase, haltLimit)
+                stopped = !this.executionController.isCurrent(execution)
+                if (stopped) break
                 const errors = await this.validateTestcase(testcase)
                 results.push({
                     errors,
@@ -2445,34 +2466,22 @@ export abstract class GenericEmulator<T, R extends string>
                 console.error(e)
                 this.addError(this._stringifyError(e))
             } finally {
-                this._clearExecution?.()
-                this.fileSystemSession?.stop()
-                this.fileSystemSession = null
+                this.endExecutionSession()
                 this.useInteractiveRun()
             }
         }
-        const passedTests = results.filter((r) => r.passed)
+        //what `clear()` left is the state the run ended in, and the results so far are no run's
+        if (stopped) throw new ExecutionSupersededError()
+        const passed = results.filter((r) => r.passed).length
+        const failed = results.length - passed
         terminal.prepend('⏳ Running tests...\n\n')
-        if (passedTests.length !== results.length) {
-            terminal.write(
-                `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
-            )
-        }
-        if (passedTests.length > 0) {
-            if (!terminal.output.endsWith('testcases not passed')) {
-                terminal.write('\n')
-            }
-            terminal.write(`\n✅ ${passedTests.length} testcases passed \n`)
-        }
+        if (failed > 0) terminal.write(`\n❌ ${failed} testcases not passed\n`)
+        if (passed > 0) terminal.write(`\n\n✅ ${passed} testcases passed \n`)
         if (testcases.length > 0) {
             //The final Core remains readable for registers, memory, Screen and result reporting,
             //but its isolated FileSystem session has been released. It is therefore a Test result,
             //not an interactive Debug session that can be undone and resumed.
-            this._buildSources = undefined
-            this.memoryLayout = undefined
-            this.heapBounds = undefined
-            this.stackTop = undefined
-            this.deviceRegions = []
+            this.forgetBuild()
             this.state.canExecute = false
             this.state.canUndo = false
         }
@@ -2553,11 +2562,7 @@ export abstract class GenericEmulator<T, R extends string>
             //back, a runtime error's included, and the Core says again whether it has ended
             if (undone > 0) this.forgetRuntimeFailure()
             this.readTermination()
-            this.updateRegisters()
-            this.scrollStackTab()
-            this.updateMemory()
-            this.updateData()
-            this.updateStatusRegisters()
+            this.refreshCoreViews()
             return undone
         } catch (e) {
             const message = this._stringifyError(e)

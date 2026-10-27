@@ -1,5 +1,4 @@
 import type { Element, Parent, Root, RootContent } from 'hast'
-import lzstring from 'lz-string'
 import { visit } from 'unist-util-visit'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import { serializer } from '#lib/json.ts'
@@ -9,10 +8,10 @@ import {
     parsePlaygroundFence,
     parseTestcaseFence,
     playgroundFileName,
-    type PlaygroundFence,
-    type PlaygroundSettings
+    type PlaygroundFence
 } from './playgrounds'
-import { encodePlaygroundProgram, type PlaygroundProgram } from './playgroundProgram'
+import type { PlaygroundProgram } from './playgroundProgram'
+import { embedQuery } from './embedUrl'
 import { highlightedAssemblyCode } from './codeBlocks'
 
 /**
@@ -100,9 +99,9 @@ function playgroundBox(fence: PlaygroundFence, parent: Parent) {
             ? ''
             : 'max-width: 70ch; margin: 1.5rem var(--md-inline-margin, auto);'
     const screenHeight = fence.settings.showScreen ? 'min(40rem, 85vh)' : undefined
-    //a playground's Screen waits for a Build (see `embedQuery`), so there is nothing to make room
-    //for until then: the frame starts at the stylesheet's height and the renderer grows it once the
-    //embed says it is built. A `tall` fence asked for its height whatever it shows
+    //a playground's Screen waits for a Build (see `playgroundEmbedUrl`), so there is nothing to
+    //make room for until then: the frame starts at the stylesheet's height and the renderer grows
+    //it once the embed says it is built. A `tall` fence asked for its height whatever it shows
     const grows = !fence.tall && screenHeight !== undefined
     const height = fence.tall
         ? 'height: 80dvh;'
@@ -301,52 +300,19 @@ function markedTestcases(raw: string | undefined): Testcase[] {
 }
 
 /**
- * The embed's settings for a fence. Every playground keeps its memory, registers, flags, PC and
- * Screen out of the way until its program is built, leaving the reader the whole width for the code
- * while it is edited; the console and the Testcases stay, so nothing under the code moves on Build.
+ * The address of a marked playground's embed, or none when its fence is not a playground's. Every
+ * playground keeps its memory, registers, flags, PC and Screen out of the way until its program is
+ * built, leaving the reader the whole width for the code while it is edited; the console and the
+ * Testcases stay, so nothing under the code moves on Build.
  */
-function embedQuery(settings: PlaygroundSettings): string {
-    const showMemory = settings.showMemory ? 'showMemory=true&' : ''
-    const showConsole = settings.showConsole ? 'showConsole=true&' : ''
-    const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
-    const showPc = settings.showPc ? 'showPc=true&' : ''
-    const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
-    const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
-    const showScreen = settings.showScreen ? 'showScreen=true&' : ''
-    const openScreen = settings.openScreen ? 'openScreen=true&' : ''
-    const hideUntilBuilt = 'hideUntilBuilt=true&'
-    const showOpenButton = settings.openButton ? 'openButton=true&' : ''
-    const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
-    return [
-        showMemory,
-        showConsole,
-        showTests,
-        showPc,
-        showRegisters,
-        showFlags,
-        showScreen,
-        openScreen,
-        hideUntilBuilt,
-        showOpenButton,
-        registerFile
-    ].join('')
-}
-
-/** The address of a marked playground's embed, or none when its fence is not a playground's. */
 export function playgroundEmbedUrl(marks: PlaygroundMarks): string | undefined {
     const fence = parsePlaygroundFence(marks.info)
     if (!fence) return undefined
-    const settings = fence.settings
-    const testcases = markedTestcases(marks.testcases)
     const program =
         marks.program === undefined ? undefined : (JSON.parse(marks.program) as PlaygroundProgram)
-    const lang = `language=${settings.language}&`
-    const tests =
-        testcases.length > 0
-            ? `testcases=${lzstring.compressToEncodedURIComponent(serializer.stringify(testcases))}&`
-            : ''
-    const source = program
-        ? `program=${encodePlaygroundProgram(program)}`
-        : `code=${lzstring.compressToEncodedURIComponent(marks.code)}`
-    return `/embed?${lang}${embedQuery(settings)}${tests}${source}`
+    const query = embedQuery(
+        { ...fence.settings, hideUntilBuilt: true },
+        { code: marks.code, program, testcases: markedTestcases(marks.testcases) }
+    )
+    return `/embed?${query}`
 }

@@ -5,15 +5,14 @@ import {
     buildConfigurationsEqual,
     sameFileContent
 } from '#lib/projectFiles.ts'
-import { languageWorkerManager } from './LanguageWorkerManager'
+import { languageWorkerManager, type LanguageWorkerMessage } from './LanguageWorkerManager'
 import type {
     ProjectAnalysisSnapshot,
     ProjectAnalysisTarget,
-    ProjectFileAnalysisStatus,
     ProjectFileChange,
-    ProjectWorkerRequest,
-    ProjectWorkerResponse
+    ProjectWorkerRequest
 } from './protocol'
+import { unresolvedSnapshot } from './adapters/unresolved'
 import { registerLanguageSession } from './sessionRegistry'
 import { compilerCapabilities } from '#lib/sourceCompilation/capabilities.ts'
 import type { SourceHelpSessionContext } from '#lib/sourceLanguageHelp/context.ts'
@@ -53,14 +52,20 @@ export class ProjectLanguageSession {
         this.target = target
         this.currentSources = sources
         this.unregister = registerLanguageSession(this)
-        this.connection = languageWorkerManager.acquire(target, sessionId, (response) =>
-            this.receive(response)
+        this.connect()
+    }
+
+    /** Acquires the Target's Worker and opens the sources as they are now on it. */
+    private connect(): void {
+        const sources = this.currentSources
+        this.connection = languageWorkerManager.acquire(this.target, this.sessionId, (message) =>
+            this.receive(message)
         )
         this.connection?.post({
             type: 'open',
-            sessionId,
+            sessionId: this.sessionId,
             revision: this.revision,
-            target,
+            target: this.target,
             entry: sources.entry,
             files: sources.files,
             ...buildConfiguration(sources)
@@ -134,7 +139,9 @@ export class ProjectLanguageSession {
         // markers otherwise disappear on every keystroke and flash back when the answer arrives.
         // `pending` tells the UI that the retained snapshot is stale without destroying it.
         for (const listener of this.listeners) listener(this.currentSnapshot, true)
-        this.connection?.post({
+        //a Worker that died took the sources it had with it: a new one is sent all of them
+        if (!this.connection) return this.connect()
+        this.connection.post({
             type: 'update',
             sessionId: this.sessionId,
             revision: this.revision,
@@ -159,46 +166,37 @@ export class ProjectLanguageSession {
         this.unregister()
     }
 
-    private receive(response: ProjectWorkerResponse): void {
+    private receive(message: LanguageWorkerMessage): void {
         //The Worker's readiness handshake is the manager's business, not a session's.
-        if (response.type === 'ready') return
-        if (response.type === 'failure') {
+        if (message.type === 'ready') return
+        if (message.type === 'worker-died') {
+            //nothing more comes from it, whatever revision it was on: the next change acquires a
+            //new one
+            this.connection = undefined
+            return this.fail(message.message)
+        }
+        if (message.type === 'failure') {
             // A failed old profile/source unit cannot replace Diagnostics for the new revision.
-            if (response.revision === this.revision) {
-                console.error(`${this.target} analysis failed: ${response.message}`)
-                const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
-                for (const [path, file] of Object.entries(this.currentSources.files)) {
-                    fileStatus[path] = file.encoding === 'plain' ? 'not-reachable' : 'binary'
-                }
-                const snapshot: ProjectAnalysisSnapshot = {
-                    sessionId: this.sessionId,
-                    revision: this.revision,
-                    target: this.target,
-                    diagnostics: [
-                        {
-                            severity: 'error',
-                            source: this.target.toLowerCase(),
-                            location: {
-                                path: this.currentSources.entry,
-                                range: {
-                                    start: { line: 0, column: 0 },
-                                    end: { line: 0, column: 1 }
-                                }
-                            },
-                            message: response.message
-                        }
-                    ],
-                    symbols: [],
-                    occurrences: [],
-                    fileStatus
-                }
-                this.currentSnapshot = snapshot
-                for (const listener of this.listeners) listener(snapshot, false)
-            }
+            if (message.revision === this.revision) this.fail(message.message)
             return
         }
-        const snapshot = response.snapshot
+        const snapshot = message.snapshot
         if (snapshot.revision !== this.revision || snapshot.target !== this.target) return
+        this.currentSnapshot = snapshot
+        for (const listener of this.listeners) listener(snapshot, false)
+    }
+
+    /** The current revision's answer when it could not be analyzed: why, and nothing checked. */
+    private fail(message: string): void {
+        console.error(`${this.target} analysis failed: ${message}`)
+        const snapshot = unresolvedSnapshot(
+            this.currentSources,
+            message,
+            this.sessionId,
+            this.revision,
+            this.target,
+            this.target.toLowerCase()
+        )
         this.currentSnapshot = snapshot
         for (const listener of this.listeners) listener(snapshot, false)
     }

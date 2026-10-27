@@ -280,11 +280,16 @@ function cleanProgram(raw: unknown): Program {
  */
 export function normalizeProjectData(raw: StoredProject | undefined): ProjectData {
     const language = isAvailableLanguage(raw?.language) ? raw.language : 'M68K'
-    let files = raw?.files !== undefined ? cleanFiles(raw.files) : {}
-    if (raw?.files === undefined) {
-        const content = typeof raw?.code === 'string' ? raw.code : BASE_CODE[language]
-        files = { [defaultEntryPath(language)]: { encoding: 'plain', content } }
-    }
+    const files = cleanFiles(
+        raw?.files !== undefined
+            ? raw.files
+            : {
+                  [defaultEntryPath(language)]: {
+                      encoding: 'plain',
+                      content: typeof raw?.code === 'string' ? raw.code : BASE_CODE[language]
+                  }
+              }
+    )
     const now = Date.now()
     const compilations = cleanCompilationRecords(raw?.compilations)
     //a record is about a File the Project has, and goes with it
@@ -300,7 +305,7 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
     }
     return {
         id: raw?.id ?? '',
-        files: cleanFiles(files),
+        files,
         ...programs,
         createdAt: raw?.createdAt ?? now,
         updatedAt: raw?.updatedAt ?? now,
@@ -1021,7 +1026,9 @@ export function makeProject(data?: StoredProject) {
                     ...(input ? { renamedInput: true as const } : {})
                 }
             })
-            sourceMaps = {}
+            //only the maps of the records a renamed input makes stale go: a rename of a File no
+            //record names leaves every Source map, and with them the C Breakpoints
+            reconcileSourceMaps()
         },
 
         set code(v: string) {
@@ -1067,6 +1074,27 @@ function removeUntil(char: string, value: string) {
     return split.join(char)
 }
 
+/**
+ * A memory value read back from JSON, its address and expected numbers BigInts again; one of a
+ * type this version does not know is kept as it is.
+ */
+function cleanMemoryValue(memory: MemoryValue): MemoryValue {
+    if (memory.type === 'number-chunk')
+        return {
+            ...memory,
+            expected: memory.expected.map((e) => BigInt(e)),
+            address: BigInt(memory.address)
+        }
+    if (memory.type === 'string-chunk') return { ...memory, address: BigInt(memory.address) }
+    if (memory.type === 'number')
+        return { ...memory, address: BigInt(memory.address), expected: BigInt(memory.expected) }
+    return memory
+}
+
+/** Registers read back from JSON, each value a BigInt again. */
+const cleanRegisters = (registers: Record<string, bigint>) =>
+    Object.fromEntries(Object.entries(registers).map(([key, value]) => [key, BigInt(value)]))
+
 export function cleanTestcases(testcases: Testcase[]) {
     return testcases.map((original) => {
         //a name that is not text is dropped rather than shown, and no key is added to a Testcase
@@ -1077,60 +1105,10 @@ export function cleanTestcases(testcases: Testcase[]) {
             ...(typeof name === 'string' ? { name } : {}),
             //likewise Arguments, which only text can be
             ...(typeof args === 'string' ? { arguments: args } : {}),
-            expectedMemory: testcase.expectedMemory.map((memory) => {
-                if (memory.type === 'number-chunk') {
-                    return {
-                        ...memory,
-                        expected: memory.expected.map((e) => BigInt(e)),
-                        address: BigInt(memory.address)
-                    }
-                } else if (memory.type === 'string-chunk') {
-                    return {
-                        ...memory,
-                        address: BigInt(memory.address)
-                    }
-                } else if (memory.type === 'number') {
-                    return {
-                        ...memory,
-                        address: BigInt(memory.address),
-                        expected: BigInt(memory.expected)
-                    }
-                } else {
-                    return memory
-                }
-            }),
-            expectedRegisters: Object.fromEntries(
-                Object.entries(testcase.expectedRegisters).map(([key, value]) => {
-                    return [key, BigInt(value)]
-                })
-            ),
-            startingMemory: testcase.startingMemory.map((memory) => {
-                if (memory.type === 'number-chunk') {
-                    return {
-                        ...memory,
-                        expected: memory.expected.map((e) => BigInt(e)),
-                        address: BigInt(memory.address)
-                    }
-                } else if (memory.type === 'string-chunk') {
-                    return {
-                        ...memory,
-                        address: BigInt(memory.address)
-                    }
-                } else if (memory.type === 'number') {
-                    return {
-                        ...memory,
-                        address: BigInt(memory.address),
-                        expected: BigInt(memory.expected)
-                    }
-                } else {
-                    return memory
-                }
-            }),
-            startingRegisters: Object.fromEntries(
-                Object.entries(testcase.startingRegisters).map(([key, value]) => {
-                    return [key, BigInt(value)]
-                })
-            )
+            expectedMemory: testcase.expectedMemory.map(cleanMemoryValue),
+            expectedRegisters: cleanRegisters(testcase.expectedRegisters),
+            startingMemory: testcase.startingMemory.map(cleanMemoryValue),
+            startingRegisters: cleanRegisters(testcase.startingRegisters)
         }
     })
 }

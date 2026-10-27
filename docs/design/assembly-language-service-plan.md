@@ -64,6 +64,10 @@ Implemented so far:
   addresses and machine bytes/words when the Core exposes them; S68K shows addresses only because
   it interprets structured instructions and does not encode opcodes. These details intentionally do
   not render inline, where they made assembly source noisy and caused vertical displacement.
+- The MIPS/RISC-V duplication Phase 7 names is gone: one completion, hover and signature help
+  provider serves both, given each language's dialect (`languages/mars/marsLanguage.ts`). x86, Z80,
+  MIPS and RISC-V build signature help from one operand factory
+  (`languages/service/operandSignatureHelp.ts`).
 
 Still planned:
 
@@ -107,8 +111,8 @@ Out of scope:
 - `GenericEmulator` currently starts a debounced `_checkCode` assembly after source changes and
   stores the result in `compilerDiagnostics`.
 - MIPS and RISC-V Cores keep important state in module globals. A throwaway check can corrupt a
-  retained or running Core unless it is serialized with execution. RISC-V bitness is also a module
-  global.
+  retained or running Core unless it is serialized with execution. RISC-V bitness was also a module
+  global; a Core now keeps the width it is made with (`is64Bit`, see the Core improvements below).
 - x86 checking loads an additional WASM Core and is asynchronous. Its current public editor API is
   single-file and exposes diagnostics but no tolerant syntax or symbol model.
 - M68K now uses `@specy/s68k` 2.1.1. `S68k.parseLine` provides tolerant, exact per-line spans for
@@ -503,9 +507,8 @@ Target adapters:
   after an error. The tolerant snapshot remains available when authoritative symbols disappear.
 - Z80: assemble in the Worker and derive diagnostics plus the authoritative symbol index from
   `AssemblyResult`.
-- MIPS/RISC-V: create a throwaway Core from the complete text source set, pin bitness immediately
-  before creation, assemble, and retain tokenized lines and parsed/compiled statements for the
-  accepted revision.
+- MIPS/RISC-V: create a throwaway Core from the complete text source set at the Target's width,
+  assemble, and retain tokenized lines and parsed/compiled statements for the accepted revision.
 - x86: create one diagnostic Core inside the x86 Worker and serialize its checks. The implemented
   Core virtual-Project API supplies File-aware diagnostics for native NASM includes.
 
@@ -775,8 +778,8 @@ upstream APIs.
 
 ### `@specy/mips` and `@specy/risc-v`
 
-- Replace module-global RISC-V bitness with an immutable factory option or separate RV32/RV64
-  factories.
+- Done: RISC-V bitness is the factory option `is64Bit`. RARS still holds the width in module state,
+  so a Core switches it back to its own whenever it assembles, initializes or runs.
 - Expose a structured symbol index: stable identity, kind, value/address, definition locations,
   reference locations, scope and original spelling.
 - Expose directive and macro metadata from the same grammar used by assembly.

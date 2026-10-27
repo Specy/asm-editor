@@ -39,7 +39,7 @@ describe('editor content sync', () => {
         app.open('a.asm')
         flushSync()
         expect(app.shown()).toBe('edited A')
-        unmount(app)
+        void unmount(app)
     })
 
     it('does not write one File’s text into another when edits and switches interleave', () => {
@@ -54,7 +54,7 @@ describe('editor content sync', () => {
         flushSync()
         expect(app.files_()).toEqual({ 'a.asm': 'first edit', 'b.asm': 'edited B' })
         expect(app.shown()).toBe('first edit')
-        unmount(app)
+        void unmount(app)
     })
 
     it('still carries edits back through code for a single-source host', () => {
@@ -63,6 +63,6 @@ describe('editor content sync', () => {
         app.typeInEditor('edited A')
         flushSync()
         expect(app.shown()).toBe('edited A')
-        unmount(app)
+        void unmount(app)
     })
 })

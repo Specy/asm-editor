@@ -38,7 +38,9 @@
     import { CELL_GRID_MAX } from '#lib/Project.svelte.ts'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
     import { ScopedTheme, ThemeStore, themeCssVariables } from '#stores/themeStore.svelte.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
+    import FileStatusLine from '../FileStatusLine.svelte'
     import FaPencilAlt from '~icons/fa-solid/pencil-alt'
     import FaSlash from '~icons/fa-solid/slash'
     import FaVectorSquare from '~icons/fa-solid/vector-square'
@@ -121,8 +123,8 @@
      */
     let ownFile: ProjectFile | undefined
     /**
-     * Whether two records of the File hold the same bytes: a change to any other File rebuilds
-     * every record, which must not make the picture be read and drawn again.
+     * Whether two records of the File hold the same bytes: a comment, or a write of the bytes it
+     * already holds, makes a new record, which must not make the picture be read and drawn again.
      */
     function sameBytes(left: ProjectFile, right: ProjectFile | undefined) {
         return !!right && left.encoding === right.encoding && left.content === right.content
@@ -160,7 +162,6 @@
     let usedColours = $state.raw<number[]>([])
     /** Colours added to the row from an empty slot, kept there before the picture uses them. */
     let addedColours = $state.raw<number[]>(view.addedColours ?? [])
-    let addInput = $state<HTMLInputElement>()
     /** Whether Canvas size is open, and the size typed into it. */
     let canvasWidth = $state(0)
     let canvasHeight = $state(0)
@@ -518,37 +519,30 @@
         }
         context.drawImage(picture, sx, sy, ex - sx, ey - sy, vx, vy, vw, vh)
         context.lineWidth = 1
-        if (zoom >= PIXEL_GRID_ZOOM) {
-            context.strokeStyle = theme.line
-            context.globalAlpha = 0.5
+        //a line down every `stepX` pixels and across every `stepY`, on the edges in view
+        const gridLines = (stepX: number, stepY: number) => {
             context.beginPath()
-            for (let x = sx; x <= ex; x++) {
+            for (let x = Math.ceil(sx / stepX) * stepX; x <= ex; x += stepX) {
                 const [lx] = at(x, 0)
                 context.moveTo(Math.round(lx) + 0.5, vy)
                 context.lineTo(Math.round(lx) + 0.5, vy + vh)
             }
-            for (let y = sy; y <= ey; y++) {
+            for (let y = Math.ceil(sy / stepY) * stepY; y <= ey; y += stepY) {
                 const [, ly] = at(0, y)
                 context.moveTo(vx, Math.round(ly) + 0.5)
                 context.lineTo(vx + vw, Math.round(ly) + 0.5)
             }
             context.stroke()
+        }
+        if (zoom >= PIXEL_GRID_ZOOM) {
+            context.strokeStyle = theme.line
+            context.globalAlpha = 0.5
+            gridLines(1, 1)
             context.globalAlpha = 1
         }
         if (grid) {
             context.strokeStyle = theme.accent
-            context.beginPath()
-            for (let x = Math.ceil(sx / grid.width) * grid.width; x <= ex; x += grid.width) {
-                const [lx] = at(x, 0)
-                context.moveTo(Math.round(lx) + 0.5, vy)
-                context.lineTo(Math.round(lx) + 0.5, vy + vh)
-            }
-            for (let y = Math.ceil(sy / grid.height) * grid.height; y <= ey; y += grid.height) {
-                const [, ly] = at(0, y)
-                context.moveTo(vx, Math.round(ly) + 0.5)
-                context.lineTo(vx + vw, Math.round(ly) + 0.5)
-            }
-            context.stroke()
+            gridLines(grid.width, grid.height)
         }
         const fillRun = (y: number, x0: number, x1: number) => {
             const [cx, cy] = at(x0, y)
@@ -852,12 +846,7 @@
         const distance = Math.hypot(a.x - b.x, a.y - b.y) || 1
         const next = clampZoom(gesture.zoom * (distance / gesture.distance))
         const rect = canvas.getBoundingClientRect()
-        const [mx, my] = [(a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top]
-        zoom = next
-        centre = bounded([
-            gesture.anchor[0] - mx / next + viewWidth / (2 * next),
-            gesture.anchor[1] - my / next + viewHeight / (2 * next)
-        ])
+        zoomKeeping(next, gesture.anchor, (a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top)
     }
 
     /** A line of wheel turning, in pixels. */
@@ -898,8 +887,11 @@
         stopGlide()
         const rect = canvas.getBoundingClientRect()
         const [x, y] = [clientX ?? rect.left + viewWidth / 2, clientY ?? rect.top + viewHeight / 2]
-        const [px, py] = pictureAt(x, y)
-        const [mx, my] = [x - rect.left, y - rect.top]
+        zoomKeeping(next, pictureAt(x, y), x - rect.left, y - rect.top)
+    }
+
+    /** Zooms to `next` with the picture's point `[px, py]` at `mx`, `my` in the pane. */
+    function zoomKeeping(next: number, [px, py]: [number, number], mx: number, my: number) {
         zoom = next
         centre = bounded([
             px - mx / next + viewWidth / (2 * next),
@@ -965,17 +957,22 @@
         save([run], `Recolour palette entry ${index}`)
     }
 
-    let recolourInput = $state<HTMLInputElement>()
-    let recolouring: number | undefined
-    function startRecolour(index: number) {
-        if (!palette || locked || !recolourInput) return
-        recolouring = index
-        recolourInput.value = hex(palette[index])
+    /** The browser's colour picker, hidden, which recolouring an entry and an empty slot open. */
+    let picker = $state<HTMLInputElement>()
+    /** What takes the colour the picker gives. */
+    let onPicked: ((colour: number) => void) | undefined
+    function pickColour(start: number, done: (colour: number) => void) {
+        if (!picker) return
+        picker.value = hex(start)
+        onPicked = done
         try {
-            recolourInput.showPicker()
+            picker.showPicker()
         } catch {
-            recolourInput.click()
+            picker.click()
         }
+    }
+    function startRecolour(index: number) {
+        if (palette && !locked) pickColour(palette[index], (colour) => recolour(index, colour))
     }
     /**
      * A long press on a palette entry recolours it, the picker opening as the finger lifts: a
@@ -1022,8 +1019,6 @@
     function applyCanvasSize() {
         if (!doc || dropdown !== 'canvas' || locked || canvasProblem || canvasUnchanged) return
         const [width, height] = [canvasWidth, canvasHeight]
-        const valid = (side: number) => Number.isInteger(side) && side >= 1 && side <= canvasLimit
-        if (!valid(width) || !valid(height) || width * height > PIXEL_LIMIT) return
         const resized = resizeBmp(doc.bytes, doc.layout, width, height)
         if (onResize(ownPath, resized, `Resize canvas to ${width} × ${height}`)) closeCanvasForm()
     }
@@ -1070,13 +1065,7 @@
 
     /** An empty slot of the colour row: the browser's colour picker, for a colour to add there. */
     function startAdding() {
-        if (!addInput) return
-        addInput.value = hex(inkColour)
-        try {
-            addInput.showPicker()
-        } catch {
-            addInput.click()
-        }
+        pickColour(inkColour, addColour)
     }
 
     /** A colour picked for an empty slot: drawn with, and kept in the row in that slot. */
@@ -1187,7 +1176,8 @@
             return
         }
         const handled = (() => {
-            if (key in TOOL_KEYS) {
+            //a tool is its plain key: Shift with it is the Workbench's, as Shift+B builds
+            if (!event.shiftKey && key in TOOL_KEYS) {
                 setTool(TOOL_KEYS[key])
                 return true
             }
@@ -1288,7 +1278,7 @@
         { id: 'outline', label: 'Outline' },
         { id: 'filled', label: 'Filled' }
     ]
-    /** Ellipse's switch, its words drawn short: the labels name the buttons apart from the tool. */
+    /** Ellipse's switch, each option's Tooltip saying that Shift draws the other. */
     const ELLIPSE_KINDS = [
         {
             id: 'ellipse',
@@ -1350,19 +1340,23 @@
     bind:this={root}
     {onkeydown}
 >
-    <div class="pixel-status">
-        <div class="facts" aria-label="Status">
+    <FileStatusLine class="pixel-status">
+        {#snippet facts()}
             {#if doc}
                 <span class="fact">{doc.width} × {doc.height} px</span>
-                <span class="fact" title="Pixel format and row order in the BMP file"
+                <span class="fact" {@attach tooltip('Pixel format and row order in the BMP file')}
                     >{describeLayout(doc.layout)}</span
                 >
                 <!-- the numbers that change as the pointer moves and the zoom slides keep their room,
                      up to four digits, so nothing after them moves -->
-                <span class="fact number zoom" title="Zoom level">{zoomPercent(zoom)}</span>
+                <span class="fact number zoom" {@attach tooltip('Zoom level')}
+                    >{zoomPercent(zoom)}</span
+                >
                 <span
                     class="fact position"
-                    title="Pixel coordinates, starting at (0, 0) in the top-left corner"
+                    {@attach tooltip(
+                        'Pixel coordinates, starting at (0, 0) in the top-left corner'
+                    )}
                 >
                     <span class="axis">X</span>
                     <span class="number coordinate">{pointed?.[0] ?? ''}</span>
@@ -1374,10 +1368,10 @@
                 {/if}
             {/if}
             {#if readOnly}
-                <span class="fact badge read-only" title={readOnly}>read-only</span>
+                <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
             {/if}
-        </div>
-    </div>
+        {/snippet}
+    </FileStatusLine>
     <!-- Undo and Redo at the left, the tools and colours in the middle, the view at the right,
      as a drawing program's toolbar has them -->
     <div class="pixel-toolbar" role="toolbar" aria-label="Pixel tools">
@@ -1386,7 +1380,7 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Undo (Ctrl+Z)"
+                    {@attach tooltip('Undo', { shortcut: 'Mod+KeyZ' })}
                     aria-label="Undo"
                     disabled={locked || !canUndo}
                     onclick={() => undo()}><FaUndo /></button
@@ -1394,7 +1388,7 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Redo (Ctrl+Shift+Z)"
+                    {@attach tooltip('Redo', { shortcut: 'Mod+Shift+KeyZ' })}
                     aria-label="Redo"
                     disabled={locked || !canRedo}
                     onclick={() => undo(true)}><FaRedo /></button
@@ -1421,7 +1415,10 @@
                                         <button
                                             type="button"
                                             class="tool"
-                                            title={`${entry.label} (${entry.key}): ${entry.description}.${tool === entry.tool ? ' Click again for settings.' : ''}`}
+                                            {@attach tooltip(
+                                                `${entry.label}: ${entry.description}.${tool === entry.tool ? ' Click again for settings.' : ''}`,
+                                                { shortcut: entry.key }
+                                            )}
                                             aria-label={entry.label}
                                             aria-pressed={tool === entry.tool}
                                             disabled={locked && drawing}
@@ -1432,7 +1429,7 @@
                                         <button
                                             type="button"
                                             class="caret"
-                                            title="{entry.label} settings"
+                                            {@attach tooltip(`${entry.label} settings`)}
                                             aria-label="{entry.label} settings"
                                             aria-haspopup="dialog"
                                             aria-expanded={dropdown === entry.tool}
@@ -1446,7 +1443,9 @@
                                     <button
                                         type="button"
                                         class="tool"
-                                        title="{entry.label} ({entry.key}): {entry.description}."
+                                        {@attach tooltip(`${entry.label}: ${entry.description}.`, {
+                                            shortcut: entry.key
+                                        })}
                                         aria-label={entry.label}
                                         aria-pressed={tool === entry.tool}
                                         disabled={locked && drawing}
@@ -1463,8 +1462,8 @@
                     <span class="divider" class:unseen={wrapped} aria-hidden="true"></span>
                 {/if}
                 <div class="colour-set" bind:this={colourSet}>
-                    <!-- the colour pickers open under the colour drawn with, whichever slot or entry
-                         asked for one -->
+                    <!-- the colour picker opens under the colour drawn with, whichever slot or entry
+                         asked for it -->
                     <div class="current-colour">
                         {#if palette}
                             {@const entry = 'index' in currentInk ? currentInk.index : 0}
@@ -1474,15 +1473,15 @@
                                 aria-label="Drawing colour: palette entry {entry}, {hex(
                                     palette[entry]
                                 )}"
-                                title="Change palette entry {entry} ({hex(
-                                    palette[entry]
-                                )}) and every pixel that uses it"
+                                {@attach tooltip(
+                                    `Change palette entry ${entry} (${hex(palette[entry])}) and every pixel that uses it`
+                                )}
                                 style:--swatch={cssColour(palette[entry])}
                                 disabled={locked}
                                 onclick={() => startRecolour(entry)}
                             ></button>
                         {:else}
-                            <label class="current" title="Choose the drawing colour">
+                            <label class="current" {@attach tooltip('Choose the drawing colour')}>
                                 <input
                                     type="color"
                                     aria-label="Drawing colour"
@@ -1492,29 +1491,17 @@
                                 />
                             </label>
                         {/if}
-                        {#if palette}
-                            <input
-                                type="color"
-                                class="hidden-picker"
-                                tabindex="-1"
-                                aria-hidden="true"
-                                bind:this={recolourInput}
-                                onchange={(event) => {
-                                    if (recolouring !== undefined)
-                                        recolour(recolouring, parseHex(event.currentTarget.value))
-                                    recolouring = undefined
-                                }}
-                            />
-                        {:else}
-                            <input
-                                type="color"
-                                class="hidden-picker"
-                                tabindex="-1"
-                                aria-hidden="true"
-                                bind:this={addInput}
-                                onchange={(event) => addColour(parseHex(event.currentTarget.value))}
-                            />
-                        {/if}
+                        <input
+                            type="color"
+                            class="hidden-picker"
+                            tabindex="-1"
+                            aria-hidden="true"
+                            bind:this={picker}
+                            onchange={(event) => {
+                                onPicked?.(parseHex(event.currentTarget.value))
+                                onPicked = undefined
+                            }}
+                        />
                     </div>
                     <span class="divider" aria-hidden="true"></span>
                     <div class="group colours">
@@ -1533,9 +1520,11 @@
                                         aria-selected={'index' in currentInk &&
                                             currentInk.index === index}
                                         aria-label="Palette entry {index}, {hex(colour)}"
-                                        title="Select palette entry {index} ({hex(
-                                            colour
-                                        )}). Double-click or long-press to change it for every pixel that uses it."
+                                        {@attach tooltip(
+                                            `Select palette entry ${index} (${hex(colour)}). Double-click or long-press to change it for every pixel that uses it.`,
+                                            //a long press recolours the entry
+                                            { touch: false }
+                                        )}
                                         style:--swatch={cssColour(colour)}
                                         onclick={() => (ink = { index })}
                                         ondblclick={() => startRecolour(index)}
@@ -1554,7 +1543,9 @@
                                         type="button"
                                         class="swatch empty"
                                         aria-label="Add a colour"
-                                        title="Choose a colour, add it to the swatches and use it for drawing"
+                                        {@attach tooltip(
+                                            'Choose a colour, add it to the swatches and use it for drawing'
+                                        )}
                                         onclick={startAdding}
                                     ></button>
                                 {:else}
@@ -1564,9 +1555,11 @@
                                         aria-label="Use {hex(colour)}{(colour & 0xff) === 0
                                             ? ', transparent'
                                             : ''}"
-                                        title={(colour & 0xff) === 0
-                                            ? 'Draw transparent pixels'
-                                            : `Draw with ${hex(colour)}`}
+                                        {@attach tooltip(
+                                            (colour & 0xff) === 0
+                                                ? 'Draw transparent pixels'
+                                                : `Draw with ${hex(colour)}`
+                                        )}
                                         aria-pressed={picked(colour)}
                                         style:--swatch={cssColour(colour)}
                                         onclick={() =>
@@ -1585,21 +1578,21 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Zoom out (-)"
+                    {@attach tooltip('Zoom out', { shortcut: '-' })}
                     aria-label="Zoom out"
                     onclick={() => zoomStep(true)}><FaSearchMinus /></button
                 >
                 <button
                     type="button"
                     class="tool"
-                    title="Zoom in (+)"
+                    {@attach tooltip('Zoom in', { shortcut: '+' })}
                     aria-label="Zoom in"
                     onclick={() => zoomStep()}><FaSearchPlus /></button
                 >
                 <button
                     type="button"
                     class="tool"
-                    title="Fit the whole image in the editor (0)"
+                    {@attach tooltip('Fit the whole image in the editor', { shortcut: '0' })}
                     aria-label="Fit image"
                     onclick={() => fit(true)}><FaCompress /></button
                 >
@@ -1607,7 +1600,7 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Configure the grid for sprite frames or tiles"
+                    {@attach tooltip('Configure the grid for sprite frames or tiles')}
                     aria-label="Cell grid"
                     aria-pressed={!!grid}
                     aria-haspopup="dialog"
@@ -1618,7 +1611,9 @@
                 <button
                     type="button"
                     class="tool"
-                    title="Crop or expand the canvas, keeping existing pixels at the top left"
+                    {@attach tooltip(
+                        'Crop or expand the canvas, keeping existing pixels at the top left'
+                    )}
                     aria-label="Canvas size"
                     aria-haspopup="dialog"
                     aria-expanded={dropdown === 'canvas'}
@@ -1787,11 +1782,7 @@
                             options={ELLIPSE_KINDS}
                             selected={circle ? 'circle' : 'ellipse'}
                             onSelect={(id) => (circle = id === 'circle')}
-                        >
-                            {#snippet face(option)}
-                                {option.id === 'circle' ? 'Circle' : 'Ellipse'}
-                            {/snippet}
-                        </SegmentedControl>
+                        />
                     </div>
                 {/if}
                 <div class="setting">
@@ -1838,27 +1829,6 @@
     .dock-inset {
         --dock-room: calc(var(--wb-control-height, 2.6rem) + 0.75rem);
     }
-    .pixel-status {
-        display: flex;
-        align-items: center;
-        min-height: 2rem;
-        padding: 0.2rem 0.6rem;
-        border-bottom: 1px solid var(--pixel-line);
-        background: var(--wb-section-header, var(--secondary));
-        font-size: 0.8rem;
-    }
-    .facts {
-        display: flex;
-        flex: 1;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 0.8rem;
-        min-width: 0;
-    }
-    .fact {
-        white-space: nowrap;
-        opacity: 0.85;
-    }
     /* numbers that change under the pointer, in figures of one width, each with its room */
     .number {
         font-family: 'Fira Code', monospace;
@@ -1879,12 +1849,6 @@
     .coordinate {
         display: inline-block;
         min-width: 4ch;
-    }
-    .badge {
-        padding: 0.05rem 0.4rem;
-        border-radius: 0.6rem;
-        background: color-mix(in srgb, var(--accent) 18%, transparent);
-        opacity: 1;
     }
     /* at the far end, so the facts before it moving never move it */
     .read-only {

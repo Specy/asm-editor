@@ -118,6 +118,32 @@ describe('Z80 source set', () => {
         ])
     })
 
+    it('notes an expanded macro in the included File that invokes it', async () => {
+        //the assembler names an included File as it resolved it, `./lib.asm` and `src/../lib.asm`
+        const twice = ['twice macro', '    nop', '    nop', '    endm', '    twice', '    halt']
+        for (const [entry, include] of [
+            ['main.asm', 'lib.asm'],
+            ['src/main.asm', '../lib.asm']
+        ]) {
+            const sources = {
+                entry,
+                files: {
+                    [entry]: { encoding: 'plain' as const, content: `#include "${include}"\n` },
+                    'lib.asm': {
+                        encoding: 'plain' as const,
+                        content: ['    org $8000', ...twice, ''].join('\n')
+                    }
+                }
+            }
+            const emulator = Z80Emulator(sources)
+            await emulator.compile(20, sources)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.decorations).toEqual([
+                expect.objectContaining({ file: 'lib.asm', note: 'Expanded macro', belowLine: 5 })
+            ])
+        }
+    })
+
     it('embeds binary Files without transcoding their bytes', async () => {
         const sources = {
             entry: 'main.asm',

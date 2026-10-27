@@ -1,9 +1,8 @@
 <script lang="ts">
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { tokenizeAssembly } from '#lib/content/assemblyHighlight.ts'
-    import { assemblyPaletteStyle, assemblyTokenClass } from '#lib/content/assemblyPalette.ts'
-    import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
+    import { assemblyTokenClass } from '#lib/content/assemblyPalette.ts'
+    import { codeBlockStyle } from '#lib/content/codeBlockStyle.ts'
     import { codeLineNumbers } from '#lib/content/codeBlocks.ts'
     import '#cmp/shared/markdown/codeBlocks.css'
 
@@ -37,23 +36,10 @@
             }))
         )
     })
-    const palette = $derived(
-        assemblyPaletteStyle(
-            ThemeStore.isColorDark(
-                ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
-            )
-        )
-    )
+    const codeStyle = $derived(codeBlockStyle())
 </script>
 
-<figure
-    class="code-sample"
-    class:fill
-    style={palette}
-    style:--example-font-family={EDITOR_FONT.fontFamily}
-    style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
-    style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
->
+<figure class="code-sample" class:fill style={codeStyle}>
     {#if label}
         <figcaption>{label}</figcaption>
     {/if}

@@ -1,7 +1,8 @@
 <script lang="ts" module>
     /**
-     * Each content's bytes, decoded once: a rename or a comment makes a new File record over the
-     * same content, and both panes may show it, so a 16 MiB File is not decoded again for each.
+     * Each content's bytes, decoded once: a comment, or a write of the bytes the File already
+     * holds, makes a new File record over the same content, and both panes may show it, so a
+     * 16 MiB File is not decoded again for each.
      * Keyed by the content string itself, per encoding, as the ELF analyses are: a key built from
      * it would copy megabytes at every lookup.
      */
@@ -24,12 +25,12 @@
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
-    import { toast } from '#stores/toastStore.ts'
     import FaCopy from '~icons/fa-solid/copy'
     import FaFont from '~icons/fa-solid/font'
     import FaSearch from '~icons/fa-solid/search'
     import FaMapMarkerAlt from '~icons/fa-solid/map-marker-alt'
     import FaListOl from '~icons/fa-solid/list-ol'
+    import { copyToClipboard } from '../pointerMenu'
     import { INSPECTED_BYTES } from './dataInspector'
     import { elfRegions, regionAt, regionHover, regionSpans, type FileRegion } from './elfRegions'
     import DataInspector from './DataInspector.svelte'
@@ -383,16 +384,7 @@
     function copy(column: HexColumn) {
         if (!size) return
         const copied = copiedBytes()
-        const text = column === 'hex' ? bytesAsHex(copied) : bytesAsText(copied)
-        const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard
-        if (!clipboard) {
-            toast.error("Copying isn't available in this browser.")
-            return
-        }
-        clipboard.writeText(text).then(
-            () => {},
-            () => toast.error("Couldn't copy to the clipboard.")
-        )
+        copyToClipboard(column === 'hex' ? bytesAsHex(copied) : bytesAsText(copied))
     }
 
     function moveTo(offset: number, column: HexColumn = caret.column, extend = false) {
@@ -1059,6 +1051,7 @@
             x={contextMenu.x}
             y={contextMenu.y}
             items={menuItems}
+            arrow
             label="Bytes"
             onClose={() => (contextMenu = null)}
         />

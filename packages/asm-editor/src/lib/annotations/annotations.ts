@@ -101,26 +101,6 @@ export type FunctionAnnotations = {
     functionComment?: string
 }
 
-/**
- * {@link FunctionAnnotations} of the function from `start` to `end`, exclusive, as a
- * `ListingFunction` gives them. Its keys are stable, so `JSON.stringify` of the result keys a
- * decompilation by them.
- */
-export function forFunction(
-    annotations: Annotations | undefined,
-    start: number,
-    end: number
-): FunctionAnnotations {
-    const locals = Object.entries(localsOf(annotations, start))
-        .map(([id, name]) => ({ id, name }))
-        .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
-    const comments = [...addressMap(annotations?.comments)]
-        .filter(([address]) => address >= start && address < end)
-        .map(([address, text]) => ({ address, text }))
-    const functionComment = functionCommentAt(annotations, start)
-    return { locals, comments, ...(functionComment !== undefined ? { functionComment } : {}) }
-}
-
 /** `record` with `key` set to `value`, or without it for undefined; undefined when left empty. */
 function withEntry<T>(
     record: Readonly<Record<string, T>> | undefined,

@@ -11,6 +11,7 @@
     import type { MemoryRegion, DataLabel } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
     import Button from '#cmp/shared/button/Button.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaSearch from '~icons/fa-solid/search'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaAngleRight from '~icons/fa-solid/angle-right'
@@ -44,7 +45,7 @@
 
     let {
         emulator,
-        currentAddress = $bindable(),
+        currentAddress,
         bytesPerPage,
         memorySize,
         hideLabel = false,
@@ -70,17 +71,27 @@
     let chosen = $state<bigint | undefined>()
     const regions = $derived(emulator?.memoryRegions ?? [])
     const labels = $derived(emulator?.dataLabels ?? [])
+    /** The labels the field completes and the picker lists: the library's only when asked for. */
+    const shownLabels = $derived(
+        showLibrary ? labels : labels.filter((label) => !label.fromLibrary)
+    )
     function addressInView(address: bigint) {
         return address >= currentAddress && address < currentAddress + BigInt(bytesPerPage)
     }
+    /**
+     * The address the field names, by number or by label: what a search goes to. It throws for a
+     * text that names none, and for an address outside memory.
+     */
+    function typedAddress(): bigint {
+        const address = resolveMemoryAddress(hexAddress || '0', !!emulator?.buildSources, (name) =>
+            emulator?.resolveMemoryLabel(name)
+        )
+        if (address < 0n || address > memorySize) throw new Error('Address is outside memory')
+        return address
+    }
     const searchChangesView = $derived.by(() => {
         try {
-            const address = resolveMemoryAddress(
-                hexAddress || '0',
-                !!emulator?.buildSources,
-                (name) => emulator?.resolveMemoryLabel(name)
-            )
-            return address >= 0n && address <= memorySize && !addressInView(address)
+            return !addressInView(typedAddress())
         } catch {
             return false
         }
@@ -103,11 +114,9 @@
     const completionNames = $derived(
         [
             ...new Set([
-                ...labels
-                    .filter((label) => showLibrary || !label.fromLibrary)
-                    .flatMap((label) =>
-                        label.displayName ? [label.displayName, label.name] : [label.name]
-                    ),
+                ...shownLabels.flatMap((label) =>
+                    label.displayName ? [label.displayName, label.name] : [label.name]
+                ),
                 ...sourceLabelNames
             ])
         ].sort((a, b) => a.localeCompare(b))
@@ -165,9 +174,7 @@
             )
             const children: Destination[] = []
             for (const region of group) {
-                const members = regionLabels(region, labels).filter(
-                    (label) => showLibrary || !label.fromLibrary
-                )
+                const members = regionLabels(region, shownLabels)
                 const regionMatch = matches(`${name} ${region.kind}`)
                 const matchingLabels = members.filter(
                     (label) =>
@@ -219,13 +226,7 @@
     )
     function searchAddress() {
         try {
-            const newAddress = resolveMemoryAddress(
-                hexAddress || '0',
-                !!emulator?.buildSources,
-                (name) => emulator?.resolveMemoryLabel(name)
-            )
-            if (newAddress < 0n || newAddress > memorySize)
-                throw new Error('Address is outside memory')
+            const newAddress = typedAddress()
             error = ''
             hexAddress = toHexString(newAddress, systemSize)
             if (!addressInView(newAddress)) updateAddress(newAddress)
@@ -238,9 +239,7 @@
         if (row.label)
             return `${row.label.displayName ?? row.label.name}${row.label.preview ? ` "${row.label.preview}"` : ''}${row.label.fromLibrary ? ' (library)' : ''}`
         const group = regions.filter((region) => region.section === row.region?.section)
-        const first = regionLabels(row.region, labels).find(
-            (label) => showLibrary || !label.fromLibrary
-        )
+        const first = regionLabels(row.region, shownLabels)[0]
         return `${row.region.section && group.length > 1 ? row.region.kind : row.region.name}${first ? ` · ${first.displayName ?? first.name}` : ''}`
     }
 
@@ -261,7 +260,7 @@
 </script>
 
 <div class="memory-controls-layout">
-    <Form style="width:100%; {style}" on:submit={searchAddress}>
+    <Form style="width:100%; {style}" onSubmit={searchAddress}>
         <div class="address-search" class:without-regions={!showRegions}>
             <!-- a click anywhere on the field puts the caret in its input, which the keyboard
                  reaches by Tab -->
@@ -322,7 +321,8 @@
                     cssVar="unset"
                     bg="transparent"
                     color="var(--secondary-text)"
-                    title="Search address"
+                    {@attach tooltip('Search address')}
+                    aria-label="Search address"
                     active={searchChangesView}
                 >
                     <Icon size={1}>
@@ -336,7 +336,8 @@
                 hasIcon
                 style="padding: 0; width:1.8rem; min-height: 1.8rem;"
                 cssVar={buttonVar}
-                title="Previous page"
+                {@attach tooltip('Previous page')}
+                aria-label="Previous page"
             >
                 <Icon size={1.2}>
                     <FaAngleLeft />
@@ -348,7 +349,8 @@
                 hasIcon
                 style="padding: 0; width:1.8rem; min-height: 1.8rem;"
                 cssVar={buttonVar}
-                title="Next page"
+                {@attach tooltip('Next page')}
+                aria-label="Next page"
             >
                 <Icon size={1.2}>
                     <FaAngleRight />
@@ -356,16 +358,19 @@
             </Button>
 
             {#if showRegions}
+                <!-- the title completes the region's name, which the trigger cuts short; the
+                     Tooltip says why the picker is disabled -->
                 <div
                     class="region-picker"
-                    title={emulator?.buildSources
-                        ? currentRegion || 'Memory regions'
-                        : 'Build to see memory regions'}
+                    title={emulator?.buildSources ? currentRegion || 'Memory regions' : undefined}
                 >
                     <Select
                         options={destinations}
                         bind:value={chosen}
                         disabled={!emulator?.buildSources}
+                        {@attach tooltip(
+                            emulator?.buildSources ? undefined : 'Build to see memory regions'
+                        )}
                         ariaLabel="Memory regions"
                         popupWidth={360}
                         wrapperStyle="height: 100%;"

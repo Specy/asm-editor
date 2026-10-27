@@ -15,6 +15,7 @@
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
@@ -90,7 +91,7 @@
         try {
             await ProjectStore.addProject(project)
             toast.logPill('Project created')
-            goto(resolve('/projects/[project]', { project: project.id }))
+            void goto(resolve('/projects/[project]', { project: project.id }))
         } catch (e) {
             console.error(e)
             toast.error('Error creating project')
@@ -100,8 +101,9 @@
     /** A program brought in instead of a template opens as Create would; several are listed. */
     async function importDropped(files: File[]) {
         const projects = await importFiles(files)
-        if (projects.length === 1) goto(resolve('/projects/[project]', { project: projects[0].id }))
-        else if (projects.length > 1) goto(resolve('/projects'))
+        if (projects.length === 1)
+            void goto(resolve('/projects/[project]', { project: projects[0].id }))
+        else if (projects.length > 1) void goto(resolve('/projects'))
     }
 </script>
 
@@ -116,7 +118,12 @@
 <Page cropped="40rem" style="padding-top: 3rem">
     <div class="create-project">
         <div class="row top-title">
-            <a href={resolve('/projects')} class="go-back" title="Go to the projects page">
+            <a
+                href={resolve('/projects')}
+                class="go-back"
+                {@attach tooltip('Go to the projects page')}
+                aria-label="Back"
+            >
                 <Button hasIcon cssVar="primary" style="padding: 0.4rem">
                     <Icon size={2}>
                         <FaAngleLeft />
@@ -135,7 +142,7 @@
         {/if}
         <Form
             style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; margin:0.5rem 0"
-            on:submit={create}
+            onSubmit={create}
         >
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
@@ -172,7 +179,7 @@
         <div
             style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
         >
-            <ButtonLink href="/projects" cssVar="primary" title="Cancel new project"
+            <ButtonLink href="/projects" cssVar="primary" {@attach tooltip('Cancel new project')}
                 >Cancel
             </ButtonLink>
             <Button onClick={create}>Create</Button>

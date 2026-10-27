@@ -58,8 +58,12 @@ function render(
                 get testcasesResult() {
                     return props.testcasesResult
                 },
-                registerNames: ['D0', 'D1', 'A0'],
-                startingRegisterNames: ['D0', 'D1', 'A0'],
+                registers: {
+                    names: ['D0', 'D1', 'A0'],
+                    starting: ['D0', 'D1', 'A0'],
+                    hidden: [],
+                    sizes: {}
+                },
                 systemSize: RegisterSize.Long,
                 language,
                 editable

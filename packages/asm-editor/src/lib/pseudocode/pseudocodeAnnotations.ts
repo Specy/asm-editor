@@ -6,6 +6,7 @@ import {
     type FunctionAnnotations
 } from '#lib/annotations/annotations.ts'
 import type { Annotations } from '#lib/projectFiles.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 
 /**
  * What one function's decompilation takes of a File's **Annotations**
@@ -31,22 +32,11 @@ function commentsOf(record: Annotations['comments']): Comments {
     return sorted
 }
 
-/** The first index of a sorted array whose value is at least `value`. */
-function lowerBound(values: readonly number[], value: number): number {
-    let low = 0
-    let high = values.length
-    while (low < high) {
-        const middle = (low + high) >> 1
-        if (values[middle] < value) low = middle + 1
-        else high = middle
-    }
-    return low
-}
-
 /**
- * `forFunction` (`#lib/annotations/annotations.ts`), the same result, with a record's comments
- * sorted once rather than for each function: the function from `start` to `end`, exclusive, at
- * link-time addresses.
+ * {@link FunctionAnnotations} of the function from `start` to `end`, exclusive, at link-time
+ * addresses, as a `ListingFunction` gives them, with a record's comments sorted once rather than
+ * for each function. Its keys are stable, so `JSON.stringify` of the result keys a decompilation
+ * by them.
  */
 export function functionAnnotations(
     annotations: Annotations | undefined,
@@ -58,7 +48,8 @@ export function functionAnnotations(
         .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
     const { addresses, texts } = commentsOf(annotations?.comments)
     const comments: FunctionAnnotations['comments'] = []
-    for (let i = lowerBound(addresses, start); i < addresses.length && addresses[i] < end; i++)
+    const first = partitionPoint(addresses.length, (i) => addresses[i] < start)
+    for (let i = first; i < addresses.length && addresses[i] < end; i++)
         comments.push({ address: addresses[i], text: texts[i] })
     const functionComment = functionCommentAt(annotations, start)
     return { locals, comments, ...(functionComment !== undefined ? { functionComment } : {}) }

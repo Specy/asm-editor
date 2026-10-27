@@ -6,7 +6,8 @@ const baseline = {
     signatures: { riscv32: { printf: '_Z16__aed_sig_printfIFiPKczEEvPT_' } },
     layouts: { riscv32: { 'sizeof(max_align_t)': 32 } }
 }
-test('ABI rejects removed compiler support, changed public signatures and layouts', () => {
+//node:test reports a failing test itself: the promise test() returns only says when it is over
+void test('ABI rejects removed compiler support, changed public signatures and layouts', () => {
     const current = structuredClone(baseline)
     current.exported.riscv32.pop()
     current.signatures.riscv32.printf = 'changed'
@@ -16,7 +17,7 @@ test('ABI rejects removed compiler support, changed public signatures and layout
         ['riscv32', 'riscv32', 'riscv32']
     )
 })
-test('ABI accepts additions and preserves target-specific required symbols', () => {
+void test('ABI accepts additions and preserves target-specific required symbols', () => {
     const current = structuredClone(baseline)
     current.exported.riscv32.push('new_function')
     assert.deepEqual(checkAbi(baseline, current), [])

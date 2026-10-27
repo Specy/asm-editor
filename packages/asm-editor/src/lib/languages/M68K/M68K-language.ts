@@ -3,13 +3,11 @@ import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
 import {
     AddressingMode,
-    AffectedFlagKind,
     fromSizesToString,
     fromSizeToString,
     getAddressingModeNames,
     getInstructionDocumentation,
     M68KDirectives,
-    M68KFlag,
     M68kInstructions,
     M68KRecognizedDirectives,
     M68KRecognizedInstructions
@@ -266,13 +264,13 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
                         const name = fromSizeToString(size)
                         if (
                             !name.startsWith(typedSize.toLowerCase()) ||
-                            !hasOwnKey(DescriptionsMap, name)
+                            !hasOwnKey(SIZE_COMPLETIONS, name)
                         ) {
                             return []
                         }
                         return [
                             {
-                                ...DescriptionsMap[name],
+                                documentation: SIZE_COMPLETIONS[name].documentation,
                                 kind: monaco.languages.CompletionItemKind.Enum,
                                 label: name,
                                 insertText: `${insertTextWithTypedCase(name, typedSize)} `,
@@ -338,9 +336,6 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                 (parsed.kind === 'instruction' || parsed.kind === 'directive')
             ) {
                 const documentation = getInstructionDocumentation(operation.name.toLowerCase())
-                const defaultSize = documentation?.defaultSize
-                    ? fromSizeToString(documentation.defaultSize)
-                    : ''
                 if (!documentation) return null
                 const range = new monaco.Range(
                     position.lineNumber,
@@ -348,28 +343,6 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                     position.lineNumber,
                     s68kColumnToUtf16(line, operation.nameSpan.end) + 1
                 )
-                const flagSymbols = [
-                    M68KFlag.Extend,
-                    M68KFlag.Negative,
-                    M68KFlag.Zero,
-                    M68KFlag.Overflow,
-                    M68KFlag.Carry
-                ]
-                const flagHeaders = flagSymbols.map((f) => f).join(' | ')
-                const flagValues = flagSymbols
-                    .map((f) => {
-                        const kind = documentation.affectsFlags[f]
-                        if (kind === AffectedFlagKind.Edits) return '\u2731'
-                        if (kind === AffectedFlagKind.ToZero) return '0'
-                        if (kind === AffectedFlagKind.ToOne) return '1'
-                        return '\u2014'
-                    })
-                    .join(' | ')
-                const flagsTable = `| ${flagHeaders} |\n|${flagSymbols.map(() => ' :---: ').join('|')}|\n| ${flagValues} |`
-                const operands =
-                    documentation.args?.map(
-                        (e, i) => `**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``
-                    ) ?? []
                 const name = operation.name.toLowerCase()
                 const document = parsed.kind === 'instruction' ? m68kHoverDocument(name) : undefined
                 if (document) {
@@ -381,6 +354,14 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                     })
                     return { range, contents: blocks.map((value) => ({ value })) }
                 }
+                // A directive has no page: its operands, sizes, description and example.
+                const defaultSize = documentation.defaultSize
+                    ? fromSizeToString(documentation.defaultSize)
+                    : ''
+                const operands =
+                    documentation.args?.map(
+                        (e, i) => `**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``
+                    ) ?? []
                 const contents = [
                     {
                         value: [`# ${operation.name}`, ...operands].join('\n\n')
@@ -392,7 +373,6 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                 if (documentation.description) {
                     contents.push({ value: documentation.description })
                 }
-                if (parsed.kind === 'instruction') contents.push({ value: `${flagsTable}` })
                 if (documentation.example) {
                     contents.push({ value: documentation.example })
                 }
@@ -487,24 +467,84 @@ export function createM68kSignatureHelpProvider(
     }
 }
 
-const DescriptionsMap = {
+/** The sizes completion offers after an operation's dot: what each is offered with, and resolves to. */
+const SIZE_COMPLETIONS = {
     l: {
-        documentation: 'Select all bits of the register',
-        insertText: 'l '
+        detail: 'Select all 32 bits of the register',
+        documentation: 'Select all bits of the register'
     },
     w: {
-        documentation: 'Select first part of the register',
-        insertText: 'w '
+        detail: 'Selects first 16 bits of the register',
+        documentation: 'Select first part of the register'
     },
     b: {
-        documentation: 'Select first 8 bits of the register',
-        insertText: 'b '
+        detail: 'Selects first 8 bits of the register',
+        documentation: 'Select first 8 bits of the register'
     },
     s: {
-        documentation: 'Select a short branch displacement',
-        insertText: 's '
+        detail: 'Selects a short branch displacement',
+        documentation: 'Select a short branch displacement'
     }
-} satisfies Record<string, Pick<monaco.languages.CompletionItem, 'documentation' | 'insertText'>>
+}
+
+/**
+ * The addressing modes completion offers at an operand, in the order it offers them: the mode, its
+ * kind of completion, its label and insert text, and the detail and documentation it resolves to.
+ */
+const OPERAND_COMPLETIONS: [
+    mode: AddressingMode,
+    kind: 'Variable' | 'Value',
+    label: string,
+    insertText: string,
+    detail: string,
+    documentation?: string
+][] = [
+    [AddressingMode.AddressRegister, 'Variable', 'An', 'a0', 'Address register'],
+    [AddressingMode.DataRegister, 'Variable', 'Dn', 'd0', 'Data register'],
+    [
+        AddressingMode.Immediate,
+        'Value',
+        '#',
+        '#',
+        '#<num/label> | decimal number or label',
+        'Decimal immediate number or label'
+    ],
+    [AddressingMode.Absolute, 'Value', 'EA', 'label', 'Effective address'],
+    [AddressingMode.Indirect, 'Value', '(An)', '(a0)', 'Indirect'],
+    [AddressingMode.PreIndirect, 'Value', '-(An)', '-(a0)', 'Indirect with predecrement'],
+    [AddressingMode.PostIndirect, 'Value', '(An)+', '(a0)+', 'Indirect with postincrement'],
+    [
+        AddressingMode.IndirectWithDisplacement,
+        'Value',
+        'd(An)',
+        '0(a0)',
+        'Address-register displacement'
+    ],
+    [
+        AddressingMode.IndirectIndex,
+        'Value',
+        'd(An,Xn)',
+        '0(a0,d0)',
+        'Address-register displacement with an index'
+    ],
+    [AddressingMode.PcDisplacement, 'Value', 'd(PC)', '0(pc)', 'Program-counter displacement'],
+    [
+        AddressingMode.PcIndex,
+        'Value',
+        'd(PC,Xn)',
+        '0(pc,d0)',
+        'Program-counter displacement with an index'
+    ],
+    [
+        AddressingMode.RegisterRange,
+        'Variable',
+        '<register list>',
+        'd0-d1/a0-a1',
+        'Register list for MOVEM'
+    ],
+    [AddressingMode.StatusRegister, 'Variable', 'sr', 'sr', 'Status register'],
+    [AddressingMode.ConditionCodeRegister, 'Variable', 'ccr', 'ccr', 'Condition-code register']
+]
 
 function getAddressingModes(
     am: AddressingMode[] | undefined,
@@ -512,180 +552,26 @@ function getAddressingModes(
     range: monaco.IRange
 ): monaco.languages.CompletionItem[] {
     if (!am) return []
-    const amMap = new Map(am.map((e) => [e, true]))
-    const res: monaco.languages.CompletionItem[] = []
-    if (amMap.has(AddressingMode.AddressRegister)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Variable,
-            label: 'An',
-            insertText: 'a0',
+    const allowed = new Set(am)
+    return OPERAND_COMPLETIONS.filter(([mode]) => allowed.has(mode)).map(
+        ([, kind, label, insertText]) => ({
+            kind: monaco.languages.CompletionItemKind[kind],
+            label,
+            insertText,
             range
         })
-    }
-    if (amMap.has(AddressingMode.DataRegister)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Variable,
-            label: 'Dn',
-            insertText: 'd0',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.Immediate)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: '#',
-            insertText: '#',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.Absolute)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: 'EA',
-            insertText: 'label',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.Indirect)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: '(An)',
-            insertText: '(a0)',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.PreIndirect)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: '-(An)',
-            insertText: '-(a0)',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.PostIndirect)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: '(An)+',
-            insertText: '(a0)+',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.IndirectWithDisplacement)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: 'd(An)',
-            insertText: '0(a0)',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.IndirectIndex)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: 'd(An,Xn)',
-            insertText: '0(a0,d0)',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.PcDisplacement)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: 'd(PC)',
-            insertText: '0(pc)',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.PcIndex)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Value,
-            label: 'd(PC,Xn)',
-            insertText: '0(pc,d0)',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.RegisterRange)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Variable,
-            label: '<register list>',
-            insertText: 'd0-d1/a0-a1',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.StatusRegister)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Variable,
-            label: 'sr',
-            insertText: 'sr',
-            range
-        })
-    }
-    if (amMap.has(AddressingMode.ConditionCodeRegister)) {
-        res.push({
-            kind: monaco.languages.CompletionItemKind.Variable,
-            label: 'ccr',
-            insertText: 'ccr',
-            range
-        })
-    }
-    return res
+    )
 }
 
-const CompletionMap = {
-    l: {
-        detail: 'Select all 32 bits of the register'
-    },
-    w: {
-        detail: 'Selects first 16 bits of the register'
-    },
-    b: {
-        detail: 'Selects first 8 bits of the register'
-    },
-    s: {
-        detail: 'Selects a short branch displacement'
-    },
-    An: {
-        detail: 'Address register'
-    },
-    Dn: {
-        detail: 'Data register'
-    },
-    EA: {
-        detail: 'Effective address'
-    },
-    '(An)': {
-        detail: 'Indirect'
-    },
-    '-(An)': {
-        detail: 'Indirect with predecrement'
-    },
-    '(An)+': {
-        detail: 'Indirect with postincrement'
-    },
-    'd(An)': {
-        detail: 'Address-register displacement'
-    },
-    'd(An,Xn)': {
-        detail: 'Address-register displacement with an index'
-    },
-    'd(PC)': {
-        detail: 'Program-counter displacement'
-    },
-    'd(PC,Xn)': {
-        detail: 'Program-counter displacement with an index'
-    },
-    '<register list>': {
-        detail: 'Register list for MOVEM'
-    },
-    sr: {
-        detail: 'Status register'
-    },
-    ccr: {
-        detail: 'Condition-code register'
-    },
-
-    '#': {
-        detail: '#<num/label> | decimal number or label',
-        documentation: 'Decimal immediate number or label'
-    },
+/** What an offered item resolves to by its label: the sizes, the modes and the number prefixes. */
+const CompletionMap: Record<string, { detail: string; documentation?: string }> = {
+    ...SIZE_COMPLETIONS,
+    ...Object.fromEntries(
+        OPERAND_COMPLETIONS.map(([, , label, , detail, documentation]) => [
+            label,
+            { detail, documentation }
+        ])
+    ),
     $: {
         detail: '$<num> | hexadecimal number',
         documentation: 'Hexadecimal immediate number'
@@ -698,11 +584,4 @@ const CompletionMap = {
         detail: '%<num> | binary number',
         documentation: 'Binary immediate number'
     }
-} satisfies Record<
-    string,
-    | Pick<monaco.languages.CompletionItem, 'detail'>
-    | {
-          detail: string
-          documentation: string
-      }
->
+}

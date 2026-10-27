@@ -8,6 +8,7 @@
         type Diagnostic,
         formatDiagnostic
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         diagnostics: Diagnostic[]
@@ -23,7 +24,7 @@
             <button
                 class:error={diagnostic.severity === 'error'}
                 onclick={() => onDiagnosticSelect(diagnostic)}
-                title="Open source location"
+                {@attach tooltip('Open source location')}
             >
                 {diagnostic.file
                     ? `${diagnostic.file}:${diagnostic.lineIndex + 1}${diagnostic.column > 0 ? `:${diagnostic.column}` : ''}: `
@@ -43,7 +44,7 @@
                             formatted: related.message,
                             related: []
                         })}
-                    title="Open related source location"
+                    {@attach tooltip('Open related source location')}
                 >
                     ↳ {related.file}:{related.lineIndex + 1}:{related.column}: {related.message}
                 </button>

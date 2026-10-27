@@ -5,6 +5,7 @@
      * itself the button that does, when `recompile` is given.
      */
     import FaSpinner from '~icons/fa-solid/spinner'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         notice: string
@@ -21,7 +22,7 @@
             class="compilation-notice clickable"
             disabled={recompile.disabled}
             aria-busy={recompile.busy}
-            title="Recompile the source to restore its mapping"
+            {@attach tooltip('Recompile the source to restore its mapping')}
             onclick={recompile.onClick}
         >
             {#if recompile.busy}

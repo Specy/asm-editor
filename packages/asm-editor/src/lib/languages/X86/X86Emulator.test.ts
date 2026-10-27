@@ -1040,6 +1040,49 @@ describe('x86 pokes', () => {
     })
 })
 
+describe('x86 memory views', () => {
+    it('shows the bytes of a page that runs into unmapped memory, and marks the rest unreadable', async () => {
+        //the quadword fills the last 8 bytes of the data page, and nothing is mapped after it
+        const sources = programSources(
+            [
+                'bits 64',
+                'global _start',
+                'section .data align=4096',
+                '    times 4088 db 0',
+                'value: dq 0x1122334455667788',
+                'section .text',
+                '_start:',
+                '    mov rbx, value',
+                '    mov rax, 60',
+                '    xor rdi, rdi',
+                '    syscall'
+            ].join('\n')
+        )
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            await emulator.step()
+            const value = registerOf(fileOf(emulator, 'cpu'), 'rbx').value
+            emulator.setGlobalMemoryAddress(value)
+            const { data } = emulator.memory.global
+            expect([...data.current.subarray(0, 8)]).toEqual([
+                0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11
+            ])
+            expect([...data.unreadable!.mask.subarray(0, 8)]).toEqual([0, 0, 0, 0, 0, 0, 0, 0])
+            expect(data.unreadable!.mask.subarray(8).every((byte) => byte === 1)).toBe(true)
+            expect(data.unreadable!.reason).toContain('not mapped')
+
+            emulator.setGlobalMemoryAddress(0n)
+            expect(emulator.memory.global.data.unreadable!.mask.every((byte) => byte === 1)).toBe(
+                true
+            )
+            expect(emulator.errors).toEqual([])
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
 describe('x86 start unit', () => {
     //a stand-in for compiled C, which fills a buffer through the start unit's memset and returns
     //what it reads back: `memset(buffer, 7, 16); return buffer[15] + 13;`

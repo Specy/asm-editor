@@ -3,6 +3,7 @@
     import FaSlidersH from '~icons/fa-solid/sliders-h'
     import type { MarsDisplayOrigin, ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
     import DisplayConfigurationForm from './DisplayConfigurationForm.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     /**
      * The bitmap display configuration of the MIPS and RISC-V Screen panel: MARS's and RARS's own
@@ -66,7 +67,11 @@
 <div class="display-configuration" bind:this={panel}>
     <button
         class="display-button"
-        title="Bitmap display parameters"
+        {@attach tooltip(
+            fromDirective
+                ? "Bitmap display parameters, set by the program's @screen comment"
+                : 'Bitmap display parameters'
+        )}
         aria-expanded={onOpen ? undefined : open}
         disabled={onOpen ? false : disabled}
         onclick={() => (onOpen ? onOpen() : (open = !open))}
@@ -76,7 +81,7 @@
         </Icon>
         Display
         {#if fromDirective}
-            <span class="from-source" title="Set by the program's @screen comment">@</span>
+            <span class="from-source">@</span>
         {/if}
     </button>
     {#if open}

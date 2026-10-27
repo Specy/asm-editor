@@ -1,4 +1,5 @@
 import type { DemangledName } from '#lib/languages/demangle/demangledNames.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 import type { ListingHolders } from './addressNames'
 
 /**
@@ -208,16 +209,12 @@ export class ListingError extends Error {
 /** The line holding the byte at a link-time address, or -1 when no line covers it. */
 export function lineOfAddress(listing: Listing, address: number): number {
     const { byAddress, addresses, sizes } = listing.lines
-    let low = 0
-    let high = byAddress.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        const line = byAddress[middle]
-        if (addresses[line] > address) high = middle - 1
-        else if (addresses[line] + sizes[line] <= address) low = middle + 1
-        else return line
-    }
-    return -1
+    // The first line ending after the address, if it starts at or below it.
+    const at = partitionPoint(
+        byAddress.length,
+        (k) => addresses[byAddress[k]] + sizes[byAddress[k]] <= address
+    )
+    return at < byAddress.length && addresses[byAddress[at]] <= address ? byAddress[at] : -1
 }
 
 /**
@@ -237,16 +234,22 @@ export function lineOfFileOffset(listing: Listing, offset: number): number {
 export function functionAtLine(listing: Listing, line: number): ListingFunction | undefined {
     const { functions } = listing
     // Functions are in address order, and so in line order.
-    let low = 0
-    let high = functions.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        const candidate = functions[middle]
-        if (candidate.line > line) high = middle - 1
-        else if (candidate.endLine <= line) low = middle + 1
-        else return candidate
-    }
-    return undefined
+    const fn = functions[partitionPoint(functions.length, (i) => functions[i].endLine <= line)]
+    return fn && fn.line <= line ? fn : undefined
+}
+
+/** The function whose range holds a link-time address, if any. */
+export function functionContaining(listing: Listing, address: number): ListingFunction | undefined {
+    const { functions } = listing
+    const fn = functions[partitionPoint(functions.length, (i) => functions[i].end <= address)]
+    return fn && fn.address <= address ? fn : undefined
+}
+
+/** The function starting at a link-time address, if any. */
+export function functionStartingAt(listing: Listing, address: number): ListingFunction | undefined {
+    const { functions } = listing
+    const fn = functions[partitionPoint(functions.length, (i) => functions[i].address < address)]
+    return fn?.address === address ? fn : undefined
 }
 
 /** The link-time address of the instruction on a 0-based line, or undefined for any other line. */
@@ -260,15 +263,8 @@ export function instructionAddressAt(listing: Listing, line: number): number | u
 export function personCommentIndex(listing: Listing, line: number): number {
     const lines = listing.comments?.lines
     if (!lines) return -1
-    let low = 0
-    let high = lines.length - 1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        if (lines[middle] < line) low = middle + 1
-        else if (lines[middle] > line) high = middle - 1
-        else return middle
-    }
-    return -1
+    const at = partitionPoint(lines.length, (i) => lines[i] < line)
+    return lines[at] === line ? at : -1
 }
 
 /**

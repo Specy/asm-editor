@@ -2,7 +2,7 @@ import { runtimeDefinition } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
-import { resolveFilePath, type BuildSources } from '#lib/projectFiles.ts'
+import { resolveProjectInclude, type BuildSources } from '#lib/projectFiles.ts'
 import { languageSession } from './sessionRegistry'
 import { parseProjectSourceUri, projectSourceUri, type ProjectModelIdentity } from './uri'
 import { splitAssemblyComment } from './assemblyText'
@@ -70,12 +70,19 @@ function sourceSymbols(
         if (file.encoding !== 'plain') continue
         file.content.split(/\r?\n/).forEach((rawLine, line) => {
             const source = lineWithoutComment(rawLine, options)
+            // A pattern that ends with the name places it past the keyword before it, where a
+            // search of the line would find the `e` in `.eqv e` or the `ac` in `.macro ac` first.
+            const directive = (match: RegExpExecArray | null, kind: SourceSymbol['kind']) => {
+                if (!match?.[1]) return
+                const from = match.index + match[0].length - match[1].length
+                symbols.push(sourceSymbol(rawLine, path, line, match[1], kind, from))
+            }
             if (options.dialect === 'mars') {
                 const equ = /^\s*\.eqv\s+([A-Za-z_.$][\w.$]*)/i.exec(source)
                 const macro = /^\s*\.macro\s+([A-Za-z_.$][\w.$]*)/i.exec(source)
                 const section = /^\s*\.(text|data|ktext|kdata|bss)\b/i.exec(source)
-                if (equ?.[1]) symbols.push(sourceSymbol(rawLine, path, line, equ[1], 'constant'))
-                if (macro?.[1]) symbols.push(sourceSymbol(rawLine, path, line, macro[1], 'macro'))
+                directive(equ, 'constant')
+                directive(macro, 'macro')
                 if (section?.[0]) {
                     const name = section[0].trim()
                     symbols.push(sourceSymbol(rawLine, path, line, name, 'section'))
@@ -86,21 +93,16 @@ function sourceSymbols(
                 const macro = /^\s*%macro\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
                 const structure = /^\s*struc\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
                 const section = /^\s*(?:section|segment)\s+([^\s;]+)/i.exec(source)
-                const match = equ?.[1] ?? define?.[1]
-                if (match) symbols.push(sourceSymbol(rawLine, path, line, match, 'constant'))
-                if (macro?.[1]) symbols.push(sourceSymbol(rawLine, path, line, macro[1], 'macro'))
-                if (structure?.[1]) {
-                    symbols.push(sourceSymbol(rawLine, path, line, structure[1], 'data'))
-                }
-                if (section?.[1]) {
-                    symbols.push(sourceSymbol(rawLine, path, line, section[1], 'section'))
-                }
+                if (equ?.[1]) symbols.push(sourceSymbol(rawLine, path, line, equ[1], 'constant'))
+                else directive(define, 'constant')
+                directive(macro, 'macro')
+                directive(structure, 'data')
+                directive(section, 'section')
             } else if (options.dialect === 'z80') {
-                const macro =
-                    /^\s*([A-Za-z_.][\w.]*)\s+\.?macro\b/i.exec(source) ??
-                    /^\s*\.?macro\s+([A-Za-z_.][\w.]*)/i.exec(source)
+                const named = /^\s*([A-Za-z_.][\w.]*)\s+\.?macro\b/i.exec(source)
                 const section = /^\s*(#code|#data|\.?section(?:\s+[^\s;]+)?)/i.exec(source)
-                if (macro?.[1]) symbols.push(sourceSymbol(rawLine, path, line, macro[1], 'macro'))
+                if (named?.[1]) symbols.push(sourceSymbol(rawLine, path, line, named[1], 'macro'))
+                else directive(/^\s*\.?macro\s+([A-Za-z_.][\w.]*)/i.exec(source), 'macro')
                 if (section?.[1]) {
                     const name = section[1].trim()
                     symbols.push(sourceSymbol(rawLine, path, line, name, 'section'))
@@ -159,30 +161,6 @@ function includeOnLine(
     // the final occurrence inside this anchored directive match rather than the first one.
     const startColumn = quoted.lastIndexOf(match[2])
     return { path: match[2], startColumn, endColumn: startColumn + match[2].length }
-}
-
-function containingDirectory(path: string): string {
-    const parts = path.split('/')
-    parts.pop()
-    return parts.join('/')
-}
-
-function resolveProjectInclude(
-    containingPath: string,
-    writtenPath: string,
-    sources: BuildSources
-): string | null {
-    const directory = containingDirectory(containingPath)
-    const candidates = [directory ? `${directory}/${writtenPath}` : writtenPath, writtenPath]
-    for (const candidate of candidates) {
-        try {
-            const normalized = resolveFilePath(candidate)
-            if (sources.files[normalized]) return normalized
-        } catch {
-            // A path which escapes the Project root intentionally has no link or completion target.
-        }
-    }
-    return null
 }
 
 function sourceIncludeOnLine(line: string, options: ProjectAssemblyLanguageOptions): string | null {

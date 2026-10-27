@@ -129,6 +129,25 @@ describe('M68K Project Files', () => {
             emulator.dispose()
         }
     })
+
+    it('incbin reads a File whose name has a character outside the BMP', async () => {
+        //the Core counts the line in Unicode scalars, where the emoji is two UTF-16 code units
+        const sources = {
+            entry: 'main.m68k',
+            files: {
+                'main.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    org $1000\n    incbin "🎵.bin"\n'
+                },
+                '🎵.bin': { encoding: 'base64' as const, content: 'AQI=' }
+            }
+        }
+        const emulator = M68KEmulator(sources)
+        await emulator.compile(0, sources)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.readMemoryBytes(0x1000n, 2)).toEqual(new Uint8Array([1, 2]))
+        emulator.dispose()
+    })
 })
 
 function inkCount(emulator: Awaited<ReturnType<typeof run>>): number {

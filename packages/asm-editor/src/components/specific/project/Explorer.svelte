@@ -28,11 +28,11 @@
     import { writeUploads } from '#lib/workbench/fileUploads.ts'
     import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import type { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
-    import { fileBytes, type ProjectFiles } from '#lib/projectFiles.ts'
+    import { fileBytes, resolveFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
     import { bytesDownloader } from '#lib/utils.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { toast } from '#stores/toastStore.ts'
-    import { untrack } from 'svelte'
+    import { untrack, type Component } from 'svelte'
     import { SvelteSet } from 'svelte/reactivity'
     import {
         isCompilationTarget,
@@ -55,6 +55,7 @@
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import SourceFileIcon from './SourceFileIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     type TreeNode = {
         path: string
@@ -63,6 +64,8 @@
         children: TreeNode[]
     }
     type TreeRow = Omit<TreeNode, 'children'> & { depth: number; expanded: boolean }
+    /** A menu item that touch screens also show as a button on the File's row, by its icon. */
+    type RowAction = Extract<ContextMenuEntry, { label: string }> & { icon: Component }
 
     interface Props {
         name?: string
@@ -322,14 +325,29 @@
         editing = null
     }
 
-    /** Applies the typed name; a failure keeps the input open so the name can be fixed. */
+    /**
+     * Applies the typed name; a failure keeps the input open so the name can be fixed. The host
+     * is handed the path as the FileSystem stores it, `x.s` for `./x.s` or `sub/../x.s`, which
+     * is where the File is.
+     */
     function commitEdit(input?: HTMLInputElement) {
         const current = editing
         if (!current) return
         const typed = draftName.trim()
+        if (!typed) return cancelEdit()
+        const refuse = (error: unknown) => {
+            reportFailure(error)
+            input?.focus()
+        }
+        let path: string
+        try {
+            path = resolveFilePath(
+                joinPath(current.mode === 'create' ? current.parent : dirname(current.path), typed)
+            )
+        } catch (error) {
+            return refuse(error)
+        }
         if (current.mode === 'create') {
-            if (!typed) return cancelEdit()
-            const path = joinPath(current.parent, typed)
             try {
                 if (files[path]) throw new Error(`${path} already exists`)
                 const fileLanguage = sourceLanguage(path)
@@ -343,13 +361,11 @@
                 expandParents(path)
                 onSelect(path)
             } catch (error) {
-                reportFailure(error)
-                input?.focus()
+                refuse(error)
             }
         } else {
             const previousPath = current.path
-            const path = joinPath(dirname(previousPath), typed)
-            if (!typed || path === previousPath) return cancelEdit()
+            if (path === previousPath) return cancelEdit()
             const lost = replacedProgramLoss(previousPath, path)
             if (lost) {
                 //the question takes the focus, so the input closes first; No keeps the old name
@@ -374,8 +390,7 @@
                 onRenamed?.(previousPath, path)
                 onSelect(path)
             } catch (error) {
-                reportFailure(error)
-                input?.focus()
+                refuse(error)
             }
         }
     }
@@ -657,7 +672,13 @@
 
     /** The File row the menu was opened on, kept lit while it is open. */
     let menuPath = $state<string | null>(null)
-    let contextMenu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
+    let contextMenu = $state<{
+        x: number
+        y: number
+        items: ContextMenuEntry[]
+        /** Whether it is about one row, which its arrow points at. */
+        arrow: boolean
+    } | null>(null)
 
     function folderItems(folder: string): ContextMenuEntry[] {
         return [
@@ -693,7 +714,7 @@
         return editorFileKind(path, file) === 'assembly'
     }
 
-    function programItems(path: string): ContextMenuEntry[] {
+    function programItems(path: string): RowAction[] {
         if (entries.has(path)) {
             if (!onRemoveProgram) return []
             return [
@@ -719,12 +740,15 @@
         ]
     }
 
-    function fileItems(path: string): ContextMenuEntry[] {
+    /**
+     * A File's own actions, which its menu lists and touch screens also show as its row's buttons
+     * (decision 11), so both offer the same Program action. Rename and Delete come last, and the
+     * menu sets them apart.
+     */
+    function rowActions(path: string): RowAction[] {
         return [
-            { label: 'Open', icon: FaFileAlt, onSelect: () => onSelect(path) },
             ...programItems(path),
             { label: 'Download', icon: FaDownload, onSelect: () => downloadFile(path) },
-            { separator: true },
             {
                 label: 'Rename',
                 icon: FaPen,
@@ -737,13 +761,23 @@
                 danger: true,
                 disabled: locked,
                 onSelect: () => deleteFile(path)
-            },
+            }
+        ]
+    }
+
+    function fileItems(path: string): ContextMenuEntry[] {
+        const actions = rowActions(path)
+        return [
+            { label: 'Open', icon: FaFileAlt, onSelect: () => onSelect(path) },
+            ...actions.slice(0, -2),
+            { separator: true },
+            ...actions.slice(-2),
             { separator: true },
             ...folderItems(dirname(path))
         ]
     }
 
-    function openContextMenu(event: MouseEvent, items: ContextMenuEntry[]) {
+    function openContextMenu(event: MouseEvent, items: ContextMenuEntry[], arrow = true) {
         //a name being typed keeps the browser's own menu, for pasting into it
         if ((event.target as Element | null)?.closest?.('input')) return
         event.preventDefault()
@@ -751,8 +785,8 @@
         //one opened from the keyboard has no pointer, and opens under the focused row instead
         if (event.button === -1 || (event.clientX === 0 && event.clientY === 0)) {
             const rect = (event.target as Element).getBoundingClientRect()
-            contextMenu = { x: rect.left + 16, y: rect.bottom, items }
-        } else contextMenu = { x: event.clientX, y: event.clientY, items }
+            contextMenu = { x: rect.left + 16, y: rect.bottom, items, arrow }
+        } else contextMenu = { x: event.clientX, y: event.clientY, items, arrow }
     }
 
     function downloadFile(targetPath = selectedPath) {
@@ -782,7 +816,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="New text file"
+                {@attach tooltip('New text file')}
+                aria-label="New text file"
                 onclick={() => startCreate()}
             >
                 <FaPlus />
@@ -790,7 +825,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="Create a BMP image and open it in the pixel editor"
+                {@attach tooltip('Create a BMP image and open it in the pixel editor')}
+                aria-label="New picture"
                 onclick={() => startNewPicture()}
             >
                 <FaFileImage />
@@ -798,7 +834,8 @@
             <button
                 class="icon-action"
                 disabled={locked}
-                title="Upload files"
+                {@attach tooltip('Upload files')}
+                aria-label="Upload files"
                 onclick={() => pickUploads()}
             >
                 <FaUpload />
@@ -823,7 +860,7 @@
             ondrop={onTreeDrop}
             oncontextmenu={(event) => {
                 menuPath = null
-                openContextMenu(event, folderItems(''))
+                openContextMenu(event, folderItems(''), false)
             }}
         >
             {#if rows.length === 0 && !editing}
@@ -860,10 +897,11 @@
                     <div
                         class="tree-row directory"
                         class:drop-target={dropFolder === row.path}
+                        class:menu-open={contextMenu !== null && menuPath === row.path}
                         title={row.path}
                         data-folder={row.path}
                         oncontextmenu={(event) => {
-                            menuPath = null
+                            menuPath = row.path
                             openContextMenu(event, folderItems(row.path))
                         }}
                     >
@@ -885,10 +923,13 @@
                             </span>
                             <span class="ellipsis">{row.name}</span>
                         </button>
+                        <!-- a long press on the row opens its menu, so its buttons' Tooltips
+                             leave touch alone -->
                         <div class="row-actions">
                             <button
                                 disabled={locked}
-                                title="New text file in this folder"
+                                {@attach tooltip('New text file in this folder', { touch: false })}
+                                aria-label="New text file"
                                 onclick={() => startCreate(row.path)}
                             >
                                 <FaPlus />
@@ -991,46 +1032,19 @@
                                 >
                             {/if}
                         </button>
+                        <!-- a long press on the row opens its menu, so its buttons' Tooltips
+                             leave touch alone -->
                         <div class="row-actions">
-                            {#if entries.has(row.path)}
-                                {#if onRemoveProgram}
-                                    <button
-                                        disabled={locked}
-                                        title="Remove program"
-                                        onclick={() => void removeProgram(row.path)}
-                                    >
-                                        <FaRegFlag />
-                                    </button>
-                                {/if}
-                            {:else if onNewProgram && offersProgram(row.path)}
-                                {@const create = onNewProgram}
+                            {#each rowActions(row.path) as action (action.label)}
                                 <button
-                                    disabled={locked}
-                                    title="New program from this file"
-                                    onclick={() => {
-                                        if (!locked) create(row.path)
-                                    }}
+                                    disabled={action.disabled}
+                                    {@attach tooltip(action.label, { touch: false })}
+                                    aria-label={action.label}
+                                    onclick={action.onSelect}
                                 >
-                                    <FaFlag />
+                                    <action.icon />
                                 </button>
-                            {/if}
-                            <button title="Download" onclick={() => downloadFile(row.path)}>
-                                <FaDownload />
-                            </button>
-                            <button
-                                disabled={locked}
-                                title="Rename"
-                                onclick={() => startRename(row.path)}
-                            >
-                                <FaPen />
-                            </button>
-                            <button
-                                disabled={locked}
-                                title="Delete"
-                                onclick={() => deleteFile(row.path)}
-                            >
-                                <FaTrash />
-                            </button>
+                            {/each}
                         </div>
                     </div>
                 {/if}
@@ -1072,7 +1086,7 @@
                 <span class="hints-title">Hints</span>
                 <button
                     class="hints-close"
-                    title="Hide the hints until the next reload"
+                    {@attach tooltip('Hide the hints until the next reload')}
                     aria-label="Hide the hints"
                     onclick={() => (hintsDismissed.value = true)}
                 >
@@ -1115,6 +1129,7 @@
             x={contextMenu.x}
             y={contextMenu.y}
             items={contextMenu.items}
+            arrow={contextMenu.arrow}
             label="File actions"
             onClose={() => {
                 contextMenu = null

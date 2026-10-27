@@ -7,7 +7,7 @@ import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
-import { MarsHandlers, normalizeUndoSize, toHaltLimit } from '#lib/languages/mars/marsHandlers.ts'
+import { MarsHandlers } from '#lib/languages/mars/marsHandlers.ts'
 
 /**
  * The handlers MIPS and RISC-V share, against the real Terminal and FileSystem and no Core, for the
@@ -86,6 +86,17 @@ describe('the MARS and RARS handlers', () => {
         ])
     })
 
+    it('fails a read for a run that was superseded without putting up its interrupt or read', async () => {
+        const { map, terminal, interrupts, executionController } = setup()
+        terminal.useInteractiveInput()
+        //a Core that Stop could not halt, reading on the stopped run's behalf
+        executionController.invalidate()
+        const read = map.readInt()
+        expect(terminal.pendingRead).toBeNull()
+        await expect(read).rejects.toThrow('Execution superseded')
+        expect(interrupts).toEqual([])
+    })
+
     it('runs every handler in a FileSystem frame keyed by the active instruction serial', () => {
         const { map, session, terminal } = setup()
         const frames = vi.spyOn(session!, 'performInstruction')
@@ -138,19 +149,6 @@ describe('the MARS and RARS handlers', () => {
         const source = new RandomSource({ mode: 'seeded' })
         expect(map.randomSeed(0)).toBe(0xc4e8badd8e2e)
         expect(map.randomSeed(-2)).toBe(source.seedFor(-2))
-    })
-
-    it('reads an undo size and a halt limit the way both Cores take them', () => {
-        expect([200, 2.7, 0, -3, Number.NaN, Infinity].map(normalizeUndoSize)).toEqual([
-            200, 2, 0, 0, 0, 0
-        ])
-        const unbounded = Number.MAX_SAFE_INTEGER
-        expect([500, 0, -1, undefined].map(toHaltLimit)).toEqual([
-            500,
-            unbounded,
-            unbounded,
-            unbounded
-        ])
     })
 })
 

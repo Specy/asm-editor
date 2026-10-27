@@ -3,11 +3,12 @@ import {
     ANIMATING_PANEL_REFRESH_MS,
     CPU_REGISTER_FILE_ID,
     GenericEmulator,
-    RUNNING_PANEL_REFRESH_MS
+    normalizeUndoSize,
+    RUNNING_PANEL_REFRESH_MS,
+    toHaltLimit
 } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     BuildDownloadError,
-    EmulatorStatus,
     type CompileResult,
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -144,10 +145,6 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return { terminated: this.hasEnded }
     }
 
-    _getStatus(): EmulatorStatus {
-        return this.hasEnded ? EmulatorStatus.Terminated : EmulatorStatus.Running
-    }
-
     _hasTerminated(): boolean {
         return this.hasEnded
     }
@@ -187,6 +184,15 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** A character read as an adapter makes one, which `requestCharacter` is protected for. */
     readCharacter(): Promise<string> {
         return this.requestCharacter('Enter a character', this.executionController.capture())
+    }
+
+    /**
+     * Line reads as an adapter makes them, which `requestInput` is protected for: tied to the
+     * execution under way now, as an adapter ties the reads of the run it starts.
+     */
+    lineReader(): () => Promise<string> {
+        const execution = this.executionController.capture()
+        return () => this.requestInput('A number?', execution)
     }
 
     _getNextInstruction(): Instruction | null {
@@ -257,14 +263,6 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** Rebuilding the CPU registers out of the Core, which an adapter does after a Core write. */
     rebuildRegistersFromCore(): void {
         this.setRegisters()
-    }
-
-    _getRegisterValuesRecord(): Record<FakeRegister, bigint> {
-        return { R0: 0n }
-    }
-
-    _getRegisterValue(): bigint {
-        return 0n
     }
 
     _setRegisterValue(register: FakeRegister, value: bigint, size?: RegisterSize): void {
@@ -909,6 +907,55 @@ describe('stop', () => {
         //the slice that was waiting is the last one that ever ran
         expect(emulator.requests).toHaveLength(1)
     })
+
+    it('ends a test run: the Testcase it cut short is not checked and the rest do not run', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let runs = 0
+        let release!: () => void
+        emulator._runTestcase = async () => {
+            runs += 1
+            emulator.peripherals.terminal.write('hi')
+            if (runs === 1) await new Promise<void>((resolve) => (release = resolve))
+        }
+        const expectsHi: Testcase = { ...emptyTestcase, expectedOutput: 'hi' }
+        const done = emulator.test('', [expectsHi, expectsHi, expectsHi], 100)
+        await vi.waitFor(() => expect(runs).toBe(1))
+        //Stop: the same path the GUI takes
+        emulator.clear()
+        //the Core it could not halt finishes the Testcase unseen, and the run has no results
+        release()
+        await expect(done).rejects.toThrow('Execution superseded')
+        expect(runs).toBe(1)
+        //nor does the run say anything in the Terminal Stop emptied
+        expect(emulator.peripherals.terminal.output).toBe('')
+        expect(emulator.canExecute).toBe(false)
+    })
+
+    it('fails a read that a stopped Testcase makes at once, rather than asking for input', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        let release!: () => void
+        let read: Promise<string> | undefined
+        let shown: unknown
+        emulator._runTestcase = async () => {
+            const readLine = emulator.lineReader()
+            await new Promise<void>((resolve) => (release = resolve))
+            read = readLine()
+            //what the read put up before it failed, which the view would show
+            shown = {
+                read: emulator.peripherals.terminal.pendingRead,
+                interrupt: emulator.interrupt
+            }
+            await read
+        }
+        const done = emulator.test('', [emptyTestcase, emptyTestcase], 100)
+        await vi.waitFor(() => expect(release).toBeDefined())
+        emulator.clear()
+        release()
+        await expect(done).rejects.toThrow('Execution superseded')
+        await expect(read).rejects.toThrow('Execution superseded')
+        expect(shown).toEqual({ read: null, interrupt: undefined })
+        expect(emulator.peripherals.terminal.pendingRead).toBeNull()
+    })
 })
 
 describe('pause', () => {
@@ -1379,6 +1426,45 @@ describe('memory views', () => {
         expect(emulator.errors).toEqual([])
     })
 
+    it('keeps the changed-byte highlight of a step that scrolls the Stack tab', async () => {
+        const autoScroll = preferencesStore.values.autoScrollStackTab
+        const previous = autoScroll.value
+        autoScroll.value = true
+        onTestFinished(() => {
+            autoScroll.value = previous
+        })
+        const emulator = new FakeEmulator()
+        let sp = 0x1000n
+        emulator._getSp = () => sp
+        await emulator.compile(0, undefined)
+        emulator.setGlobalMemoryAddress(0x2000n)
+        //on the page that holds SP, so that the push below scrolls it
+        emulator.setTabMemoryAddress(0x1000n, emulator.memory.tabs[0].id)
+        const pageSize = BigInt(emulator.memory.tabs[0].pageSize)
+        //a push that crosses into the page below and writes where the global view looks
+        let pushed = 0
+        const push = () => {
+            sp -= pageSize
+            emulator.memoryBytes.set(0x2000n, ++pushed)
+        }
+        emulator._step = async () => {
+            push()
+            return { terminated: false }
+        }
+
+        await emulator.step()
+        expect(emulator.memory.tabs[0].address).toBe(0x1000n - pageSize)
+        expect(emulator.memory.global.data.current[0]).toBe(1)
+        expect(emulator.memory.global.data.prevState[0]).toBe(0)
+
+        //and so does a running refresh
+        push()
+        emulator.refreshPanels(true)
+        expect(emulator.memory.tabs[0].address).toBe(0x1000n - 2n * pageSize)
+        expect(emulator.memory.global.data.current[0]).toBe(2)
+        expect(emulator.memory.global.data.prevState[0]).toBe(1)
+    })
+
     it('reads it whole again once it points somewhere readable', async () => {
         const emulator = new FakeEmulator()
         await emulator.compile(0, undefined)
@@ -1446,6 +1532,19 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
         expect(emulator.peripherals.random.isSeeded).toBe(false)
+    })
+
+    it('reads an undo size and a halt limit the way every Core takes them', () => {
+        expect([200, 2.7, 0, -3, Number.NaN, Infinity].map(normalizeUndoSize)).toEqual([
+            200, 2, 0, 0, 0, 0
+        ])
+        const unbounded = Number.MAX_SAFE_INTEGER
+        expect([500, 0, -1, undefined].map(toHaltLimit)).toEqual([
+            500,
+            unbounded,
+            unbounded,
+            unbounded
+        ])
     })
 })
 

@@ -37,19 +37,13 @@ function lineText(listing: Listing, line: number): string {
     return listing.text.slice(start, end > start && listing.text[end - 1] === '\n' ? end - 1 : end)
 }
 
-/** The labels at a link-time address, in line order. */
-function labelsAt(listing: Listing, address: number): ListingLabel[] {
-    return listing.labels.filter((label) => label.address === address)
-}
-
 /**
  * The label a rename at an address renames: the name operands use there, the last of its labels
  * that is no jump target (aliases come first, decision 6); a jump target's own.
  */
 function renamedLabelAt(listing: Listing, label: ListingLabel): ListingLabel {
     if (label.kind === 'block') return label
-    const named = labelsAt(listing, label.address).filter((each) => each.kind !== 'block')
-    return named.at(-1) ?? label
+    return ListingIndex.of(listing).operandLabel(label.address) ?? label
 }
 
 /**

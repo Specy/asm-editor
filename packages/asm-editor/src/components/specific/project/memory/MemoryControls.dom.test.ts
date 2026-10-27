@@ -74,7 +74,7 @@ function render(
     })
     flushSync()
     dispose = () => {
-        unmount(app)
+        void unmount(app)
         target.remove()
     }
     const input = target.querySelector<HTMLInputElement>('[aria-label="Address or label"]')!
@@ -84,7 +84,7 @@ function render(
         flushSync()
     }
     const search = () => {
-        target.querySelector<HTMLButtonElement>('[title="Search address"]')!.click()
+        target.querySelector<HTMLButtonElement>('[aria-label="Search address"]')!.click()
         flushSync()
     }
     return { target, change, type, search, input }
@@ -180,8 +180,8 @@ it('uses displayed label names for keyboard type ahead and returns focus on filt
 it('leaves the region picker out when the regions are hidden, the page buttons still there', () => {
     const ui = render(true, false)
     expect(ui.target.querySelector('.region-picker')).toBeNull()
-    expect(ui.target.querySelector('[title="Previous page"]')).not.toBeNull()
-    expect(ui.target.querySelector('[title="Next page"]')).not.toBeNull()
+    expect(ui.target.querySelector('[aria-label="Previous page"]')).not.toBeNull()
+    expect(ui.target.querySelector('[aria-label="Next page"]')).not.toBeNull()
 })
 
 it('lists the Arguments as a region of their own, with their parts under it', async () => {

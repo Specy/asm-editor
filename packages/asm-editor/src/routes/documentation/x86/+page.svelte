@@ -1,74 +1,34 @@
 <script lang="ts">
-    import { resolve } from '$app/paths'
-    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
-    import { breadcrumbLd } from '#lib/seo.ts'
-    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
-    import Page from '#cmp/shared/layout/Page.svelte'
-
-    let jsonLd = $derived([
-        breadcrumbLd([
-            { name: 'Documentation', pathname: '/documentation' },
-            { name: 'x86-64', pathname: '/documentation/x86' }
-        ])
-    ])
+    import DocumentationHome from '#cmp/documentation/site/DocumentationHome.svelte'
 </script>
 
-<PageMeta
+<DocumentationHome
+    language="x86"
     title="x86-64 assembly reference - instructions, registers and Linux syscalls | Asm Editor"
     description="Read the x86-64 documentation, including the instructions with the operand forms NASM accepts, the assembler directives, the registers and flags, and the Linux syscalls this emulator implements"
-    type="website"
-    {jsonLd}
-/>
-<Page cropped contentStyle="padding: 1rem; gap: 1rem">
-    <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">x86-64 Documentation</h1>
-    <SearchLauncher size="full" placeholder="Search the x86-64 docs and courses" />
-    <p class="intro">
-        x86-64 is the instruction set most desktop and server processors run. It has sixteen 64 bit
-        general purpose registers, memory addressed as one flat space, and an instruction for almost
-        everything of around 2600 mnemonics.
-    </p>
-    <p class="intro">
-        Programs in asm-editor are written in <a
-            href="https://www.nasm.us/"
-            target="_blank"
-            rel="noreferrer">NASM</a
-        >
-        syntax, assembled by the NASM assembler, and run by
-        <a href="https://github.com/jart/blink" target="_blank" rel="noreferrer">blink</a>, which
-        emulates a Linux program. So a program starts at
-        <code>_start</code>, its code goes in <code>section .text</code> and its data in
-        <code>section .data</code>, and it reaches the outside world through the
-        <code>syscall</code> instruction. It ends by calling syscall 60. A program that runs off the end
-        of its own code executes whatever bytes follow in memory.
-    </p>
-    <div class="links">
-        <NavigationLinkButton href={resolve('/documentation/x86/instruction')}>
-            <div>Instructions</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/directive')}>
-            <div>Directives</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/registers')}>
-            <div>Registers & Flags</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/vector-instructions')}>
-            <div>Vector instructions</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/syscall')}>
-            <div>Syscalls</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/using-c')}>
-            <div>Using C and C++</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/executables')}>
-            <div>Executables</div>
-        </NavigationLinkButton>
-        <NavigationLinkButton href={resolve('/documentation/x86/all')}>
-            <div>Complete Documentation</div>
-        </NavigationLinkButton>
-    </div>
-</Page>
+>
+    {#snippet intro()}
+        <p class="intro">
+            x86-64 is the instruction set most desktop and server processors run. It has sixteen 64
+            bit general purpose registers, memory addressed as one flat space, and an instruction
+            for almost everything of around 2600 mnemonics.
+        </p>
+        <p class="intro">
+            Programs in asm-editor are written in <a
+                href="https://www.nasm.us/"
+                target="_blank"
+                rel="noreferrer">NASM</a
+            >
+            syntax, assembled by the NASM assembler, and run by
+            <a href="https://github.com/jart/blink" target="_blank" rel="noreferrer">blink</a>,
+            which emulates a Linux program. So a program starts at
+            <code>_start</code>, its code goes in <code>section .text</code> and its data in
+            <code>section .data</code>, and it reaches the outside world through the
+            <code>syscall</code> instruction. It ends by calling syscall 60. A program that runs off the
+            end of its own code executes whatever bytes follow in memory.
+        </p>
+    {/snippet}
+</DocumentationHome>
 
 <style lang="scss">
     .intro {
@@ -85,21 +45,5 @@
     a {
         color: var(--accent);
         text-decoration: underline;
-    }
-    .links {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        max-width: 60rem;
-        gap: 0.8rem;
-    }
-    @media (max-width: 900px) {
-        .links {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    @media (max-width: 400px) {
-        .links {
-            grid-template-columns: repeat(1, 1fr);
-        }
     }
 </style>

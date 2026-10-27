@@ -104,7 +104,7 @@ function sidePanel(panel: string, data: StoredProject = {}) {
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const title = () =>
@@ -206,9 +206,9 @@ describe('the Explorer', () => {
             test: () => new Promise<[]>((resolve) => (finish = () => resolve([])))
         })
         const deletes = () =>
-            [...view.shown().querySelectorAll<HTMLButtonElement>('button[title="Delete"]')].map(
-                (button) => button.disabled
-            )
+            [
+                ...view.shown().querySelectorAll<HTMLButtonElement>('button[aria-label="Delete"]')
+            ].map((button) => button.disabled)
         expect(deletes()).toEqual([false, false, false])
         const run = view.session.test()
         await vi.waitFor(() => expect(view.session.testing).toBe(true))

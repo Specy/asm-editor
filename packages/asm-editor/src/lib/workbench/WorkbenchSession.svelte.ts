@@ -59,6 +59,7 @@ import {
 } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { BuildDownloadError, CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
+import { ExecutionSupersededError } from '#lib/languages/ExecutionController.ts'
 import {
     isLineBreakpoint,
     makeRegister,
@@ -71,6 +72,7 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     functionAtLine,
+    functionStartingAt,
     instructionAddressAt,
     lineOfFileOffset,
     lineOfPlace,
@@ -85,7 +87,6 @@ import {
 } from '#lib/pseudocode/pseudocodeDocuments.svelte.ts'
 import {
     defaultPseudocodeFunction,
-    functionAt,
     pseudocodeBreakpointAddresses,
     pseudocodeBreakpointsOn,
     pseudocodeCommentPlace,
@@ -150,10 +151,7 @@ import {
     isSourceBreakpoint,
     mappedBreakpoints
 } from '#lib/sourceCompilation/sourceBreakpoints.ts'
-import {
-    sourceMapColorIndices,
-    type SourceMapColoring
-} from '#lib/sourceCompilation/sourceColoring.ts'
+import { sourceMapColorIndices } from '#lib/sourceCompilation/sourceColoring.ts'
 import { sameLocations, type MappingSelection } from '#lib/sourceCompilation/mappingSelection.ts'
 import {
     editorFileLanguage,
@@ -631,7 +629,9 @@ export class WorkbenchSession {
 
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative window callbacks consume this accumulator; it has no tracked consumer.
     private readonly pressedKeys = new Map<string, boolean>()
-    private readonly debouncedFileSave = createDebouncer(250)[0]
+    /** Autosave's wait for a pause in File changes, as typing makes them, see `filesChanged`. */
+    private readonly fileSaveDebouncer = createDebouncer(250)
+    private fileSavePending = false
     private knownTestcases: string | undefined
     /**
      * The Selected program whose Settings and Display configuration the Emulator was last given,
@@ -780,7 +780,6 @@ export class WorkbenchSession {
             const pseudocode = this.pseudocodePair
             return pseudocode ? pseudocodePairing(pseudocode) : undefined
         })
-        this.mappingColors = $derived<SourceMapColoring | undefined>(this.linePairing?.coloring)
         this.retainedModelKeys = $derived.by(() => {
             //a File's text, and for a File of bytes its Listing, which an Executable has; a key
             //with no model behind it keeps nothing
@@ -833,14 +832,6 @@ export class WorkbenchSession {
                     editorFileLanguage(diagnostic.location.path, this.project.language) ===
                         this.project.language
             ) ?? false
-        )
-        this.languageErrorCount = $derived(
-            this.languageAnalysis?.diagnostics.filter(
-                (diagnostic) =>
-                    diagnostic.severity === 'error' &&
-                    editorFileLanguage(diagnostic.location.path, this.project.language) ===
-                        this.project.language
-            ).length ?? 0
         )
         this.diagnosticCounts = $derived.by(() => {
             const counts: Record<string, { errors: number; warnings: number }> = Object.create(null)
@@ -922,7 +913,7 @@ export class WorkbenchSession {
             return pair?.locationAt(pair.assembly.instructionLine)
         })
         this.activeMappingColors = $derived.by(() => {
-            const coloring = this.mappingColors
+            const coloring = this.linePairing?.coloring
             const execution = this.executionSourceLocation
             if (!coloring) return undefined
             const colors = sourceMapColorIndices(
@@ -1111,8 +1102,27 @@ export class WorkbenchSession {
             this.fileSystemLocked = fileSystem.locked
             return fileSystem.subscribe((filesChanged) => {
                 this.fileSystemLocked = fileSystem.locked
-                if (filesChanged) this.debouncedFileSave(() => this.changed())
+                if (filesChanged) this.filesChanged()
             })
+        })
+
+        //a page closed, or hidden as a phone does before closing it, starts the saves it would
+        //otherwise lose while it still can: what a Hex editor holds typed, and the File changes
+        //autosave waits on a pause to save
+        $effect(() => {
+            const leave = () => {
+                this.flushTyping()
+                this.saveFileChanges()
+            }
+            const hidden = () => {
+                if (document.visibilityState === 'hidden') leave()
+            }
+            addEventListener('pagehide', leave)
+            document.addEventListener('visibilitychange', hidden)
+            return () => {
+                removeEventListener('pagehide', leave)
+                document.removeEventListener('visibilitychange', hidden)
+            }
         })
 
         $effect(() => {
@@ -1187,8 +1197,6 @@ export class WorkbenchSession {
      * for the others, and while the Project has no Program.
      */
     declare readonly commandLine: CommandLineState | undefined
-    /** The colours of the panes whose lines are linked, see `linePairing`. */
-    declare readonly mappingColors: SourceMapColoring | undefined
     /** A C File and its Generated assembly, shown side by side with a current Source map. */
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
     /** A function's Pseudocode and the Listing beside it, once it is decompiled. */
@@ -1211,7 +1219,6 @@ export class WorkbenchSession {
     declare readonly liveViewDiagnostics: Diagnostic[]
     declare readonly activeDiagnostics: Diagnostic[]
     declare readonly liveBuildHasErrors: boolean
-    declare readonly languageErrorCount: number
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
     declare readonly worstSeverity: Diagnostic['severity'] | undefined
@@ -1252,7 +1259,6 @@ export class WorkbenchSession {
             // A pending revision deliberately retains the previous snapshot, so diagnostics and
             // their Monaco ranges remain stable until their replacements are ready.
             if (snapshot && !pending) {
-                const current = untrack(() => this.sourceInput)
                 this.languageAnalysis = snapshot
                 this.liveLanguageDiagnostics = snapshot.diagnostics
                     .filter(
@@ -1260,7 +1266,7 @@ export class WorkbenchSession {
                             editorFileLanguage(diagnostic.location.path, this.project.language) ===
                             this.project.language
                     )
-                    .map((diagnostic) => languageDiagnosticToDiagnostic(diagnostic, current))
+                    .map(languageDiagnosticToDiagnostic)
             }
             this.languageAnalysisPending = pending
         })
@@ -1364,8 +1370,33 @@ export class WorkbenchSession {
         if (preferencesStore.values.autoSave.value) this.host.onSave?.({ silent: true })
     }
 
+    /**
+     * Save. It takes what a Hex editor holds typed, and stands in for the autosave a pause in File
+     * changes is waiting for, which would otherwise call the saved Project changed after it.
+     */
     save() {
+        this.flushTyping()
+        this.fileSaveDebouncer[1]()
+        this.fileSavePending = false
         this.host.onSave?.({ silent: false })
+    }
+
+    /**
+     * A change to the Files, as each key typed makes: the host hears of it at once, so that
+     * leaving the page asks about it, and autosave saves it once the changes pause.
+     */
+    private filesChanged() {
+        this.host.onChange?.()
+        this.fileSavePending = true
+        this.fileSaveDebouncer[0](() => this.saveFileChanges())
+    }
+
+    /** Saves at once the File changes autosave is waiting on a pause to save, if any. */
+    private saveFileChanges() {
+        this.fileSaveDebouncer[1]()
+        if (!this.fileSavePending) return
+        this.fileSavePending = false
+        this.changed()
     }
 
     /** Gives the Project a new name, which the Explorer shows at the root of its Files. */
@@ -1926,10 +1957,6 @@ export class WorkbenchSession {
         return this.undoAnnotation(path, true)
     }
 
-    canRedoAnnotation(path: string): boolean {
-        return this.canUndoAnnotation(path, true)
-    }
-
     /**
      * What Rename… at a line and column of a pane's Listing renames, if anything; in its
      * Pseudocode, the label a function's or a global's name there stands for (decision 18).
@@ -2377,6 +2404,19 @@ export class WorkbenchSession {
         const other = this.createGroup()
         if (file.groupId) await this.transferTab(file.path, origin, other)
         else this.selectFile(file.path, other)
+    }
+
+    /**
+     * Why no File's bytes can be changed now, whatever pane shows it, or undefined when they can:
+     * never in a read-only Workbench, nor during a Debug session, a Run or a Build. A pane's own
+     * reasons, a Runtime library member or the Build's snapshot, are its `bytesReadOnly`.
+     */
+    byteEditRefusal(): string | undefined {
+        if (this.host.readonly) return 'This Project is read-only'
+        if (this.debugSession || this.fileSystemLocked)
+            return 'The Files are read-only during a Debug session: Stop to edit them'
+        if (this.running || this.building) return 'The Files are read-only while a Build runs'
+        return undefined
     }
 
     /**
@@ -3236,7 +3276,7 @@ export class WorkbenchSession {
      */
     pseudocodeFunctionFor(group: EditorGroup, listing: Listing): ListingFunction | undefined {
         const followed = group.pseudocodeFunctions[group.displayedPath]
-        const chosen = followed === undefined ? undefined : functionAt(listing, followed)
+        const chosen = followed === undefined ? undefined : functionStartingAt(listing, followed)
         if (chosen) return chosen
         const pane = this.listingPaneOf(group)
         const atCursor =
@@ -3731,7 +3771,7 @@ export class WorkbenchSession {
         await tick()
         const listing = group.pseudocodeListing
         await listing?.ready.catch(() => undefined)
-        const fn = listing?.listing && functionAt(listing.listing, place.functionAddress)
+        const fn = listing?.listing && functionStartingAt(listing.listing, place.functionAddress)
         if (pane && fn)
             await this.revealWhenShown(pane, fn.line, {
                 focus: false,
@@ -3924,13 +3964,7 @@ export class WorkbenchSession {
 
     /** Asks `question`, which an aborted `signal` takes back, as a dismissal answers it. */
     private confirm(question: string, signal: AbortSignal): Promise<boolean | null> {
-        const pending = Prompt.confirm(question)
-        const id = Prompt.id
-        const cancel = () => {
-            if (Prompt.id === id && Prompt.promise) Prompt.cancel()
-        }
-        signal.addEventListener('abort', cancel, { once: true })
-        return pending.finally(() => signal.removeEventListener('abort', cancel))
+        return Prompt.confirmUntilAborted(question, signal)
     }
 
     /**
@@ -4303,23 +4337,32 @@ export class WorkbenchSession {
         this.followExecutionIn(group)
         this.flushTyping()
         this.running = true
+        const clears = this.executionClears
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))
         const started = performance.now()
         this.testing = true
         this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
-            this.testcasesResult = await this.emulator.test(
+            //Stop in that frame ends the run before it starts, which then has no results to show
+            //and nothing to log, as a Build that Stop ends has not
+            if (clears !== this.executionClears) return
+            const results = await this.emulator.test(
                 this.sourceInput,
                 $state.snapshot(this.project.selected?.testcases ?? []),
                 TESTCASE_INSTRUCTION_LIMIT,
                 undoHistorySize(this.effectiveSettings)
             )
-            this.appendLog(testRunEntry(this.testcasesResult, performance.now() - started))
+            this.testcasesResult = results
+            this.appendLog(testRunEntry(results, performance.now() - started))
             this.bottomTab = 'log'
         } catch (e) {
+            //and so does a `clear()` part way through the Testcases, whoever made it: Stop, or the
+            //coding agent's Build or change to the source
+            if (e instanceof ExecutionSupersededError) return
             console.error(e)
-            toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+            if (clears === this.executionClears)
+                toast.error('Error executing tests. ' + getM68kErrorMessage(e))
         } finally {
             this.running = false
             //the effects that saw the Testcases run flush before this is cleared

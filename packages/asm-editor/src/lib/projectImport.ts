@@ -10,36 +10,35 @@ export const IMPORTABLE_FILES =
 
 /**
  * Adds an imported Project to the store, asking before it replaces a different one with the same
- * id: the Project it saved, or undefined when the import was cancelled or failed.
+ * id: the Project it saved, or undefined when the import was cancelled, failed, or was not stored
+ * by the browser.
  */
 export async function importProject({ project, notice }: ExternalImport) {
     try {
         if (notice) toast.warn(notice, 8000)
         const existing = await ProjectStore.getProject(project.id)
-        if (existing && !projectContentEquals(existing.toObject(), project.toObject())) {
-            const override = await Prompt.confirm(
-                'An existing project with this id already exists, do you want to override it?'
-            )
-            if (override === null) {
-                toast.success('Cancelled import')
-                return undefined
-            }
-            if (!override) {
-                toast.success('Cancelled import')
-                return undefined
-            }
-            await ProjectStore.save(project)
-            toast.logPill('Overriden project!')
-            return project
-        } else if (existing) {
-            ProjectStore.save(project)
-            toast.logPill('Updated project!')
-            return project
-        } else {
+        if (!existing) {
             const proj = await ProjectStore.addProject(project)
             toast.success('Imported project!')
             return proj
         }
+        const replaces = !projectContentEquals(existing.toObject(), project.toObject())
+        if (replaces) {
+            const override = await Prompt.confirm(
+                'An existing project with this id already exists, do you want to override it?'
+            )
+            if (!override) {
+                toast.success('Cancelled import')
+                return undefined
+            }
+        }
+        const result = await ProjectStore.save(project)
+        if (result.local === 'failed') {
+            toast.error('Failed to import project!')
+            return undefined
+        }
+        toast.logPill(replaces ? 'Overriden project!' : 'Updated project!')
+        return project
     } catch (e) {
         console.error(e)
         toast.error('Failed to import project!')

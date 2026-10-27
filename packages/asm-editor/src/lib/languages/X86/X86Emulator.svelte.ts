@@ -28,7 +28,6 @@ import {
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     BuildDownloadError,
-    EmulatorStatus,
     type CompileResult,
     type Instruction
 } from '#lib/languages/BaseEmulator.svelte.ts'
@@ -56,7 +55,6 @@ import {
     sliceInstructionBudget
 } from '#lib/languages/ExecutionSlice.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import {
     END_OF_INPUT,
     assembleInstruction,
@@ -93,7 +91,12 @@ import {
 } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { x86DiagnosticHint } from './X86-diagnostics'
-import { ProjectFormatError, type BuildInput, type BuildSources } from '#lib/projectFiles.ts'
+import {
+    ProjectFormatError,
+    sourceLineText,
+    type BuildInput,
+    type BuildSources
+} from '#lib/projectFiles.ts'
 import {
     linksX86StartUnit,
     prepareX86Runtime,
@@ -182,6 +185,13 @@ const SIGILL = 4
 
 /** The longest an x86 instruction can be, prefixes included. */
 const MAX_INSTRUCTION_LENGTH = 15n
+
+/**
+ * The clock ids that read the Time Source's calendar, and those that read CPU time; the others
+ * read elapsed time ([ADR 0040](../../../../../../docs/adr/0040-programs-see-calendar-elapsed-and-cpu-clocks.md)).
+ */
+const CALENDAR_CLOCKS = new Set([0, 5, 11])
+const CPU_CLOCKS = new Set([2, 3])
 
 /** Instructions whose only purpose is to raise SIGILL, which a real processor raises too. */
 const UNDEFINED_INSTRUCTIONS = new Set(['ud0', 'ud1', 'ud2'])
@@ -415,8 +425,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         core.setEnvironment({
             now: (id) => {
                 const clock = this._peripherals.clock
-                if (id === 0 || id === 5 || id === 11) return clock.calendarNow()
-                if (id === 2 || id === 3) return clock.cpuNow(core.getInstructionsExecuted())
+                if (CALENDAR_CLOCKS.has(id)) return clock.calendarNow()
+                if (CPU_CLOCKS.has(id)) return clock.cpuNow(core.getInstructionsExecuted())
                 return clock.now()
             },
             random: (length) => {
@@ -805,7 +815,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _initialize(undoSize: number): void {
         const core = this.requireCore()
-        this.undoSize = Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+        this.undoSize = undoSize
         core.initialize(this.undoSize)
         this.recordingRandom = true
         this.undoRecording = true
@@ -1303,27 +1313,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return names.map((_, index) => this.x87Blanks[index] ?? false)
     }
 
-    _getRegisterValue(
-        register: X86RegisterName,
-        size: RegisterSize | undefined = RegisterSize.Double
-    ): bigint {
-        return this.requireCore().getRegisterValue(
-            normalizeRegisterName(register),
-            toCoreRegisterSize(size)
-        )
-    }
-
     _getRegisterValues(): bigint[] {
         return this.core?.getRegisterValues() ?? new Array(this._registerNames.length).fill(0n)
-    }
-
-    _getRegisterValuesRecord(): Record<X86RegisterName, bigint> {
-        if (!this.core) {
-            return Object.fromEntries(
-                this._registerNames.map((register) => [register, 0n])
-            ) as Record<X86RegisterName, bigint>
-        }
-        return this.core.getRegisterValuesRecord()
     }
 
     _getMemoryLayout() {
@@ -1457,10 +1448,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.getSp() ?? 0n
     }
 
-    _getStatus(): EmulatorStatus {
-        return toLocalStatus(this.core?.getStatus() ?? CoreEmulatorStatus.NotReady)
-    }
-
     _getUndoHistory(max: number): ExecutionStep[] {
         return this._getUndoHistoryRange(0, max)
     }
@@ -1514,15 +1501,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { kind: 'end' }
     }
 
+    /**
+     * Throws when any byte of the range is not mapped, as the Core does, so that the memory view
+     * can tell the bytes it reads from the ones it cannot.
+     */
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
-        try {
-            return this.requireCore().readMemoryBytes(address, length)
-        } catch (e) {
-            if (String(e).includes('virtual address is not mapped')) {
-                return new Uint8Array(Number(length)).fill(0)
-            }
-            throw e
-        }
+        return this.requireCore().readMemoryBytes(address, length)
     }
 
     /** Completed guest-instruction deltas exclude tool execution and work with history disabled. */
@@ -1548,10 +1532,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { reason: 'terminated', instructions }
     }
 
-    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+    async _runTestcase(haltLimit: number): Promise<void> {
         this.loadedObjects = undefined
         this.mappingsMayChange()
-        await this.runWithInput(haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit, [])
+        await this.runWithInput(haltLimit, [])
     }
 
     /**
@@ -1571,7 +1555,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.requireCore().setRegisterValue(
             normalizeRegisterName(register),
             value,
-            toCoreRegisterSize(size)
+            CORE_REGISTER_SIZE[size]
         )
     }
 
@@ -1582,11 +1566,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         await this.executionController.waitFor(execution, () => core.step())
         await this.finishBlockedInstruction(execution)
         return { terminated: core.hasTerminated() }
-    }
-
-    _stringifyError(error: unknown, _line?: number): string {
-        if (error instanceof Error) return error.message
-        return String(error)
     }
 
     _undo(): void {
@@ -1700,9 +1679,19 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.state.interrupt = undefined
     }
 
+    /**
+     * Waits out a program's wait for the time the Core says is left of it. The Core measures that
+     * on the clock the deadline is on, which `now` above reads: the calendar for glibc's `sleep`
+     * (`clock_nanosleep` on CLOCK_REALTIME) and a `FUTEX_CLOCK_REALTIME` wait, elapsed time for
+     * `nanosleep`. Waiting moves both of them by the same amount, and CPU time not at all
+     * (ADR 0040), so a deadline on a CPU clock is one no wait reaches: only input or a signal ends
+     * it, as for a wait with no deadline.
+     */
     private async waitForClock(request: X86WaitRequest, signal: AbortSignal): Promise<void> {
-        if (request.deadlineNanoseconds === null) {
-            if (this._peripherals.clock.isVirtual && !request.acceptsInput)
+        const clock = this._peripherals.clock
+        const milliseconds = CPU_CLOCKS.has(request.clock) ? null : request.remainingMilliseconds
+        if (milliseconds === null) {
+            if (clock.isVirtual && !request.acceptsInput)
                 throw new Error('An indefinite x86 wait has no external wake source in a Testcase')
             await new Promise<void>((_resolve, reject) => {
                 const abort = () => reject(signal.reason ?? new Error('Wait aborted'))
@@ -1711,17 +1700,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             })
             return
         }
-        const now = this._peripherals.clock.now()
-        const nanoseconds = request.deadlineNanoseconds - BigInt(Math.floor(now * 1e6))
-        const milliseconds = nanoseconds <= 0n ? 0 : Number(nanoseconds) / 1e6
         if (!Number.isFinite(milliseconds) || milliseconds > Number.MAX_SAFE_INTEGER)
             throw new Error('x86 wait deadline exceeds the Time Source range')
-        if (this._peripherals.clock.isVirtual && milliseconds > 0 && now + milliseconds === now)
+        const now = clock.now()
+        if (clock.isVirtual && milliseconds > 0 && now + milliseconds === now)
             throw new Error('x86 wait is smaller than virtual clock precision at the current time')
-        await this._peripherals.clock.wait(
-            this._peripherals.clock.isVirtual
-                ? milliseconds
-                : Math.min(2147483647, Math.ceil(milliseconds)),
+        await clock.wait(
+            clock.isVirtual ? milliseconds : Math.min(2147483647, Math.ceil(milliseconds)),
             signal
         )
     }
@@ -1739,13 +1724,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /**
      * An Executable starts only in the Build's run to `main`, after `_beginExecutionSession` placed
      * the memory view at its stack pointer, which was still 0: place it again at the stack page, as
-     * an assembled program's is.
+     * an assembled program's is. The Stack tab then snaps onto the page that holds SP.
      */
     protected override positionStackTabOnCompile(): void {
         const global = this.state.memory.global
         if (this.executable && !global.userPlaced)
             global.address = alignDown(this._getSp(), BigInt(global.pageSize))
         super.positionStackTabOnCompile()
+        this.scrollStackTab()
     }
 
     private updateMemoryAddresses(): void {
@@ -1869,44 +1855,30 @@ function isX86RegisterName(register: string): register is X86RegisterName {
     return X86_REGISTER_NAMES.some((candidate) => candidate === register)
 }
 
-function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {
-    switch (size) {
-        case RegisterSize.Byte:
-            return CoreRegisterSize.Byte
-        case RegisterSize.Word:
-            return CoreRegisterSize.Word
-        case RegisterSize.Long:
-            return CoreRegisterSize.Long
-        case RegisterSize.Quad:
-            return CoreRegisterSize.Quad
-        case RegisterSize.Oct:
-            return CoreRegisterSize.Oct
-        case RegisterSize.Double:
-        default:
-            return CoreRegisterSize.Double
-    }
-}
+/**
+ * Register widths across the Core boundary. The two enums have the same values, so these are
+ * identities; the tables let the type checker say that every width of each enum has one.
+ */
+const CORE_REGISTER_SIZE = {
+    [RegisterSize.Byte]: CoreRegisterSize.Byte,
+    [RegisterSize.Word]: CoreRegisterSize.Word,
+    [RegisterSize.Long]: CoreRegisterSize.Long,
+    [RegisterSize.Double]: CoreRegisterSize.Double,
+    [RegisterSize.Quad]: CoreRegisterSize.Quad,
+    [RegisterSize.Oct]: CoreRegisterSize.Oct
+} as const satisfies Record<RegisterSize, CoreRegisterSize>
 
-function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
-    switch (size) {
-        case CoreRegisterSize.Byte:
-            return RegisterSize.Byte
-        case CoreRegisterSize.Word:
-            return RegisterSize.Word
-        case CoreRegisterSize.Long:
-            return RegisterSize.Long
-        //an SSE register write: the undo history names it `xmm<n>` and the panel shows it 16 bytes
-        //wide, so the width has to survive the crossing
-        case CoreRegisterSize.Quad:
-            return RegisterSize.Quad
-        //an AVX register write: the undo history names it `ymm<n>` and the panel shows it 32 bytes wide
-        case CoreRegisterSize.Oct:
-            return RegisterSize.Oct
-        case CoreRegisterSize.Double:
-        default:
-            return RegisterSize.Double
-    }
-}
+const LOCAL_REGISTER_SIZE = {
+    [CoreRegisterSize.Byte]: RegisterSize.Byte,
+    [CoreRegisterSize.Word]: RegisterSize.Word,
+    [CoreRegisterSize.Long]: RegisterSize.Long,
+    [CoreRegisterSize.Double]: RegisterSize.Double,
+    //an SSE register write: the undo history names it `xmm<n>` and the panel shows it 16 bytes
+    //wide, so the width has to survive the crossing
+    [CoreRegisterSize.Quad]: RegisterSize.Quad,
+    //an AVX register write: the undo history names it `ymm<n>` and the panel shows it 32 bytes wide
+    [CoreRegisterSize.Oct]: RegisterSize.Oct
+} as const satisfies Record<CoreRegisterSize, RegisterSize>
 
 /**
  * How far back `_getLastInstruction` looks for the instruction under a run of Pokes. Deep enough for
@@ -2000,28 +1972,15 @@ function fromDoubleBits(bits: bigint): number {
     return doubleBits.getFloat64(0, true)
 }
 
-function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
-    if (status === CoreEmulatorStatus.Terminated) return EmulatorStatus.Terminated
-    return EmulatorStatus.Running
-}
-
-function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
-    const file = sources.files[source.path]
-    return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
-}
-
 function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
-    const source = { path: error.file || sources.entry, line: error.lineIndex }
-    const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
         severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
-        file: source.path,
-        lineIndex: source.line,
+        file: error.file || sources.entry,
+        lineIndex: error.lineIndex,
         column: Math.max(1, error.column),
         ...(error.endColumn === undefined ? {} : { endColumn: error.endColumn }),
         ...(error.code ? { code: error.code } : {}),
-        line: { line, line_index: source.line },
         message: error.message,
         ...(hint ? { hint } : {}),
         formatted: hint ? `${error.formatted}\n${hint}` : error.formatted
@@ -2036,7 +1995,7 @@ function coreDiagnosticToDiagnostic(
         path: diagnostic.file || sources.entry,
         line: Math.max(0, diagnostic.line - 1)
     }
-    const line = sourceLine(sources, source)
+    const line = sourceLineText(sources, source.path, source.line)
     const hint =
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
@@ -2047,10 +2006,6 @@ function coreDiagnosticToDiagnostic(
         column: span.column,
         ...(span.endColumn === undefined ? {} : { endColumn: span.endColumn }),
         ...(diagnostic.warningClass ? { code: diagnostic.warningClass } : {}),
-        line: {
-            line,
-            line_index: source.line
-        },
         message: diagnostic.error,
         ...(hint ? { hint } : {}),
         formatted: hint ? `${diagnostic.error}\n${hint}` : diagnostic.error
@@ -2115,7 +2070,7 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
             type: operation.type,
             value: {
                 ...operation.value,
-                size: toLocalRegisterSize(operation.value.size)
+                size: LOCAL_REGISTER_SIZE[operation.value.size]
             }
         }
     }
@@ -2124,7 +2079,7 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
             type: operation.type,
             value: {
                 ...operation.value,
-                size: toLocalRegisterSize(operation.value.size)
+                size: LOCAL_REGISTER_SIZE[operation.value.size]
             }
         }
     }
@@ -2159,7 +2114,6 @@ function executableDiagnostic(
         file,
         lineIndex: 0,
         column: 1,
-        line: { line: '', line_index: 0 },
         message,
         formatted: message
     }

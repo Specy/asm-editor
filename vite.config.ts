@@ -142,7 +142,7 @@ export default defineConfig({
     },
     // Oxlint lints everything except the Svelte files, which stay on ESLint (`eslint.config.js`)
     // for `eslint-plugin-svelte`. The rules are the ESLint and typescript-eslint recommended sets
-    // the project had, plus the options it set on them.
+    // the project had, plus the options it set on them, and two rules that need type information.
     lint: {
         ignorePatterns: [
             '/build/',
@@ -159,6 +159,11 @@ export default defineConfig({
             '**/*.svelte.ts',
             '**/*.svelte.js'
         ],
+        // Type information for the typed rules, from the `oxlint-tsgolint` that Vite+ installs.
+        // It reads the editor's tsconfigs, which extend the `$app/tsconfig` that only
+        // `svelte-kit sync` writes (into `node_modules`, and not on install), so `pnpm lint`
+        // and `pnpm fix` sync first.
+        options: { typeAware: true },
         plugins: ['typescript'],
         categories: { correctness: 'off' },
         env: { browser: true, node: true },
@@ -241,7 +246,14 @@ export default defineConfig({
             'typescript/no-wrapper-object-types': 'error',
             'typescript/prefer-as-const': 'error',
             'typescript/prefer-namespace-keyword': 'error',
-            'typescript/triple-slash-reference': 'error'
+            'typescript/triple-slash-reference': 'error',
+            // The typed rules, which ESLint runs on the Svelte files too. A promise nobody awaits or
+            // catches loses its error; `void` marks one left to run on purpose.
+            'typescript/no-floating-promises': 'error',
+            'typescript/switch-exhaustiveness-check': [
+                'error',
+                { considerDefaultExhaustiveForUnions: true }
+            ]
         },
         overrides: [
             {

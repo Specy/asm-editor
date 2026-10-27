@@ -62,6 +62,20 @@ function createPromptStore() {
     }
 
     /**
+     * Asks `question`, which an aborted `signal` takes back, as a dismissal answers it: the
+     * confirm a Compile asks before it replaces a File, which its Cancel or its timeout withdraws.
+     */
+    function confirmUntilAborted(question: string, signal: AbortSignal): Promise<boolean | null> {
+        const pending = confirm(question)
+        const id = prompt.id
+        const cancelThis = () => {
+            if (prompt.id === id && prompt.promise) cancel()
+        }
+        signal.addEventListener('abort', cancelThis, { once: true })
+        return pending.finally(() => signal.removeEventListener('abort', cancelThis))
+    }
+
+    /**
      * A question answered Yes, No or Cancel, MARS's and RARS's confirm dialog: true, false, or null
      * for Cancel, which is also what a prompt that something else dismissed answers.
      */
@@ -148,6 +162,7 @@ function createPromptStore() {
             return prompt.promise
         },
         confirm,
+        confirmUntilAborted,
         confirmOrCancel,
         alert,
         askText,

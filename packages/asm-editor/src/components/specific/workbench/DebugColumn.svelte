@@ -21,6 +21,7 @@
      */
     import { tick } from 'svelte'
     import Splitter from '#cmp/shared/layout/Splitter.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
@@ -108,7 +109,7 @@
             class="strip-button"
             aria-expanded="false"
             aria-controls={columnId}
-            title="Show the registers and memory"
+            {@attach tooltip('Show the registers and memory', { placement: 'left' })}
             bind:this={expandButton}
             onclick={() => setCollapsed(false)}
         >
@@ -150,7 +151,8 @@
                         class="collapse-button"
                         aria-expanded="true"
                         aria-controls={columnId}
-                        title="Collapse the registers and memory"
+                        aria-label="Collapse"
+                        {@attach tooltip('Collapse the registers and memory')}
                         bind:this={collapseButton}
                         onclick={() => setCollapsed(true)}
                     >

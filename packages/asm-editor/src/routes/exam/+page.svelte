@@ -11,7 +11,7 @@
     import MarkdownEditor from '#cmp/shared/markdown/MarkdownEditor.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
     import Input from '#cmp/shared/input/Input.svelte'
-    import { encryptData, makeHash } from '#lib/utils.ts'
+    import { copyText, encryptData, makeHash } from '#lib/utils.ts'
     import { toast } from '#stores/toastStore.ts'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import FaPlus from '~icons/fa-solid/plus'
@@ -19,6 +19,7 @@
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import {
         createDefaultExamSection,
@@ -63,6 +64,8 @@
         createDefaultExamSection(ExamSectionType.AssemblyCoding)
     ] as ExamSection[])
     let newSectionType = $state(ExamSectionType.AssemblyCoding)
+    /** The exam link just made, while the browser would not copy it: it is nowhere else to copy. */
+    let uncopiedExamUrl = $state('')
 
     function addSection() {
         const section = createDefaultExamSection(newSectionType)
@@ -193,8 +196,7 @@
         }
 
         const url = createExamSessionLink(payload)
-        await navigator.clipboard.writeText(url)
-        toast.logPill('Exam link copied to clipboard')
+        uncopiedExamUrl = (await copyText(url, 'Exam link')) ? '' : url
     }
 </script>
 
@@ -255,6 +257,11 @@
                 </Icon>
                 Create exam link
             </Button>
+            {#if uncopiedExamUrl}
+                <p>The browser did not let the page copy the exam link. Copy it from here:</p>
+                <textarea class="exam-link" aria-label="Exam link" readonly value={uncopiedExamUrl}
+                ></textarea>
+            {/if}
         </section>
 
         <div class="sections-stack">
@@ -276,7 +283,8 @@
                             </div>
 
                             <Button
-                                title="Move section up"
+                                {@attach tooltip('Move section up')}
+                                aria-label="Move section up"
                                 cssVar="secondary"
                                 hasIcon
                                 style="padding: 0.6rem;"
@@ -288,7 +296,8 @@
                                 </Icon>
                             </Button>
                             <Button
-                                title="Move section down"
+                                {@attach tooltip('Move section down')}
+                                aria-label="Move section down"
                                 cssVar="secondary"
                                 hasIcon
                                 style="padding: 0.6rem;"
@@ -300,7 +309,8 @@
                                 </Icon>
                             </Button>
                             <Button
-                                title="Delete section"
+                                {@attach tooltip('Delete section')}
+                                aria-label="Delete section"
                                 cssVar="secondary"
                                 hasIcon
                                 style="padding: 0.6rem;"
@@ -515,6 +525,19 @@
         max-height: 13rem;
         overflow: hidden;
         margin-bottom: 0.8rem;
+    }
+
+    .exam-link {
+        width: 100%;
+        min-height: 5rem;
+        resize: vertical;
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
+        border: none;
+        border-radius: 0.4rem;
+        padding: 0.5rem;
+        font: 0.82rem/1.45 monospace;
+        overflow-wrap: anywhere;
     }
 
     .sections-stack {

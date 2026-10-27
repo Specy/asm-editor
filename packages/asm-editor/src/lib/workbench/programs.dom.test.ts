@@ -27,6 +27,7 @@ import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/Execu
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import type { EditorGroup } from './EditorGroup.svelte'
 import { NO_PROGRAM_MESSAGE, type WorkbenchSession } from './WorkbenchSession.svelte'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 
 vi.mock('#lib/sourceCompilation/compileProjectSource.ts', () => ({ compileProjectSource: vi.fn() }))
 
@@ -365,11 +366,13 @@ describe("a pane's dock", () => {
         const assembly = dock(session, left)
         const executable = dock(session, right)
         expect(assembly.buttons()).toEqual(['Build'])
-        expect(assembly.button('Build')!.title).toBe('Assemble the program and start debugging it')
+        expect(tooltipText(assembly.button('Build'))).toBe(
+            'Assemble the program and start debugging it'
+        )
         expect(executable.buttons()).toEqual(['Debug', 'Disassemble', 'Decompile', 'Hex'])
         const debug = executable.button('Debug')!
         expect(debug.textContent?.trim()).toBe('Debug')
-        expect(debug.title).toBe('Load the program and start debugging it')
+        expect(tooltipText(debug)).toBe('Load the program and start debugging it')
         //while it builds, the button says what the Build waits for, beside Cancel
         let finish = () => {}
         emulator.compile = (_historySize, sources) =>
@@ -386,7 +389,7 @@ describe("a pane's dock", () => {
         flushSync()
         expect(session.project.selectedProgram).toBe('crackme')
         expect(debug.textContent?.trim()).toBe('Loading the program…')
-        expect(debug.title).toBe('Loading the program…')
+        expect(tooltipText(debug)).toBe('Loading the program…')
         expect(executable.button('Cancel the Build')).not.toBeNull()
         finish()
         await vi.waitFor(() => expect(session.building).toBe(false))

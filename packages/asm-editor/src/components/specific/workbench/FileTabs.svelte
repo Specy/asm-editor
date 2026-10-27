@@ -12,6 +12,7 @@
      */
     import FaTimes from '~icons/fa-solid/times'
     import FaColumns from '~icons/fa-solid/columns'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { useWorkbench } from './workbenchContext'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
 
@@ -47,17 +48,14 @@
                 group.sourceView === 'live' &&
                 session.languageAnalysis?.fileStatus[path] === 'not-reachable'}
             {@const preview = path === group.tabs.preview}
-            <div
-                class="tab"
-                class:active
-                class:unreached
-                class:preview
-                title={(unreached
-                    ? `${path}: not analyzed from the selected program's Entry file`
-                    : path) + (preview ? ' (preview: double-click to keep it open)' : '')}
-            >
+            <div class="tab" class:active class:unreached class:preview>
+                <!-- the path on the name rather than the whole tab, where it would also show over the
+                     close button, beside its Tooltip -->
                 <button
                     class="tab-select"
+                    title={(unreached
+                        ? `${path}: not analyzed from the selected program's Entry file`
+                        : path) + (preview ? ' (preview: double-click to keep it open)' : '')}
                     draggable="true"
                     ondragstart={(event) => session.startFileDrag(event, path, group)}
                     ondragend={() => session.endFileDrag()}
@@ -83,7 +81,7 @@
                 </button>
                 <button
                     class="tab-close"
-                    title="Close {labels[index]}"
+                    {@attach tooltip(`Close ${labels[index]}`)}
                     aria-label="Close {labels[index]}"
                     onclick={() => session.closeTab(path, group)}
                 >
@@ -96,7 +94,7 @@
     {#if session.groups.length === 1}
         <button
             class="group-action"
-            title="Split editor"
+            {@attach tooltip('Split editor')}
             aria-label="Split editor"
             disabled={!group.displayedPath}
             onclick={() => session.splitEditor()}><FaColumns /></button
@@ -105,13 +103,16 @@
     {#if session.groups.length > 1 && !group.tabs.paths.length}
         <button
             class="group-action"
-            title="Close editor"
+            {@attach tooltip('Close editor')}
             aria-label="Close editor"
             onclick={() => session.closeGroup(group)}><FaTimes /></button
         >
     {/if}
     {#if liveFile}
-        <span class="version" title="The current contents of a File the program created or changed">
+        <span
+            class="version"
+            {@attach tooltip('The current contents of a File the program created or changed')}
+        >
             Live file
         </span>
     {/if}

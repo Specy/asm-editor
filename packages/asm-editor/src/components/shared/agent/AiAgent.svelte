@@ -2,32 +2,19 @@
     import {
         connectToDiscernsChatbot,
         type RegisteredTool,
-        type EnvironmentContext,
         type WebsiteProtocol
     } from '@discerns/sdk'
     import { DISCERNS_AVATAR_ID, DISCERNS_AVATAR_INSTANCE_ID } from '#lib/Config.ts'
 
     interface Props {
         tools?: RegisteredTool[]
-        environmentContext?: Record<string, EnvironmentContext>
         avatarContext?: string | null
         style?: string
         theme?: 'dark' | 'light'
         accent?: string
-        onConnectionStatusChange?: (connected: boolean) => void
-        onNewConversation?: (conversationId: string) => void
     }
 
-    let {
-        tools = [],
-        environmentContext = {},
-        avatarContext = null,
-        style = '',
-        theme = 'dark',
-        accent,
-        onConnectionStatusChange,
-        onNewConversation
-    }: Props = $props()
+    let { tools = [], avatarContext = null, style = '', theme = 'dark', accent }: Props = $props()
 
     const BASE_URL = 'https://app.discerns.ai'
 
@@ -46,8 +33,9 @@
 
     let iframe: HTMLIFrameElement | undefined = $state()
     let protocol: WebsiteProtocol | undefined = $state()
-    let registeredToolNames: Set<string> = $state(new Set())
-    let registeredContextKeys: Set<string> = $state(new Set())
+    //the tools the protocol has been given, which the connect effect resets with it
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Reactive mutation would self-invalidate and repeat tool side effects.
+    let registeredToolNames = new Set<string>()
 
     // Connect to the chatbot when the iframe is available
     $effect(() => {
@@ -57,22 +45,24 @@
         let disposeProtocol: (() => void) | undefined
 
         // Reset tracked state on recreation
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Reactive mutation would self-invalidate and repeat tool side effects.
         registeredToolNames = new Set()
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Reactive mutation would self-invalidate and repeat context side effects.
-        registeredContextKeys = new Set()
         protocol = undefined
 
-        connectToDiscernsChatbot(iframe).then((result) => {
-            if (disposed) {
-                result.dispose()
-                return
-            }
-            protocol = result
-            disposeProtocol = result.dispose
-        })
+        connectToDiscernsChatbot(iframe)
+            .then((result) => {
+                if (disposed) {
+                    result.dispose()
+                    return
+                }
+                protocol = result
+                disposeProtocol = result.dispose
+            })
+            .catch((error) => console.error('Could not connect to the chatbot', error))
 
         return () => {
+            //an unmount before the chatbot first answers cannot stop the SDK's connection poll, a
+            //ping every 500 ms with its message listener, which runs on until an answer that a
+            //removed iframe never gives: connectToDiscernsChatbot takes no abort signal to pass yet
             disposed = true
             disposeProtocol?.()
             protocol = undefined
@@ -85,10 +75,17 @@
 
         const currentToolNames = new Set(tools.map((t) => t.name))
 
+        //an ask the chatbot does not answer rejects after the SDK's timeout, which leaves nothing to
+        //do but say so. The SDK keeps the tool either way and registers it again when the chatbot
+        //next says it is ready: a register gets its retry, while an unregister leaves the tool with
+        //the chatbot although it is no longer counted here, which the hosts' fixed tool lists
+        //never meet
         // Unregister removed tools
         for (const name of registeredToolNames) {
             if (!currentToolNames.has(name)) {
-                protocol.unregisterTool(name)
+                protocol
+                    .unregisterTool(name)
+                    .catch((error) => console.error(`Could not unregister tool "${name}"`, error))
                 registeredToolNames.delete(name)
             }
         }
@@ -96,48 +93,17 @@
         // Register new tools
         for (const t of tools) {
             if (!registeredToolNames.has(t.name)) {
-                protocol.registerTool(t)
+                protocol
+                    .registerTool(t)
+                    .catch((error) => console.error(`Could not register tool "${t.name}"`, error))
                 registeredToolNames.add(t.name)
             }
-        }
-    })
-
-    // Sync environment context reactively
-    $effect(() => {
-        if (!protocol) return
-
-        const currentKeys = new Set(Object.keys(environmentContext))
-
-        // Remove stale context
-        for (const key of registeredContextKeys) {
-            if (!currentKeys.has(key)) {
-                protocol.removeFromContext(key)
-                registeredContextKeys.delete(key)
-            }
-        }
-
-        // Add/update context
-        for (const [key, ctx] of Object.entries(environmentContext)) {
-            protocol.addToContext(key, ctx)
-            registeredContextKeys.add(key)
         }
     })
 
     // Sync avatar context
     $effect(() => {
         protocol?.setAvatarContext(avatarContext ?? null)
-    })
-
-    // Sync connection status callback
-    $effect(() => {
-        if (!onConnectionStatusChange) return
-        return protocol?.onConnectionStatus(onConnectionStatusChange)
-    })
-
-    // Sync new conversation callback
-    $effect(() => {
-        if (!onNewConversation) return
-        return protocol?.onNewConversation(onNewConversation)
     })
 </script>
 
@@ -148,6 +114,3 @@
     {style}
     title="AI Chat"
 ></iframe>
-
-<style lang="scss">
-</style>

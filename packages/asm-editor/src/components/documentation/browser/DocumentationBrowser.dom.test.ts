@@ -68,7 +68,7 @@ function open(chapters: Chapter[]) {
         props: { language: 'mips', chapters, variant: 'page' }
     })
     dispose = () => {
-        unmount(app)
+        void unmount(app)
         target.remove()
     }
     for (const toggle of target.querySelectorAll<HTMLButtonElement>('.chapter-toggle')) {
@@ -141,7 +141,7 @@ describe('a link asked for from outside the panel', () => {
             }
         })
         dispose = () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
         flushSync()

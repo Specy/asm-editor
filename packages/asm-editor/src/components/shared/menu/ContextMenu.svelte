@@ -20,8 +20,16 @@
      * manual popover, so it sits in the browser's top layer above transformed or clipped panels
      * while staying in its host's subtree and theme. It opens with its first item focused and moves
      * between items with the arrow keys, Home and End; closing gives focus back to where it was.
+     *
+     * A menu about one item (a File's row, a register's value) points at it: an arrow on its edge
+     * has its tip on the point, so the menu sits where the pointer is, as menus everywhere do, and
+     * still shows what it is about. It opens below the point, above it near the bottom of the
+     * screen, and slides left near the right edge, the arrow staying on the point (the Tooltips
+     * design, decision 12).
      */
     import { onMount, tick } from 'svelte'
+    import CardOutline from '#cmp/shared/floating/CardOutline.svelte'
+    import { placeCard, type Side } from '#cmp/shared/floating/floating.ts'
 
     interface Props {
         /** The point it opens at, in viewport coordinates; it moves inwards to stay on screen. */
@@ -29,21 +37,49 @@
         y: number
         items: readonly ContextMenuEntry[]
         label?: string
+        /**
+         * Whether it is about one item, which an arrow with its tip on the point shows; left out
+         * for a menu about nothing in particular, such as the Explorer's for its empty space.
+         */
+        arrow?: boolean
         onClose: () => void
     }
 
-    let { x, y, items, label = 'Context menu', onClose }: Props = $props()
+    let { x, y, items, label = 'Context menu', arrow = false, onClose }: Props = $props()
 
     const EDGE = 4
+    const ARROW = 6
+    /** 0.4rem, the corner the outline is drawn with. */
+    const RADIUS = 6.4
     let menu: HTMLDivElement
     let left = $state(0)
     let top = $state(0)
+    let width = $state(0)
+    let height = $state(0)
+    let side = $state<Side>('bottom')
+    let at = $state(0)
     let previousFocus: Element | null = null
 
     function place() {
-        const { width, height } = menu.getBoundingClientRect()
-        left = Math.max(EDGE, Math.min(x, window.innerWidth - width - EDGE))
-        top = Math.max(EDGE, Math.min(y, window.innerHeight - height - EDGE))
+        width = menu.offsetWidth
+        height = menu.offsetHeight
+        const placed = placeCard(
+            { left: x, top: y, width: 0, height: 0 },
+            { width, height },
+            {
+                side: 'bottom',
+                gap: 0,
+                arrow: arrow ? ARROW : 0,
+                radius: RADIUS,
+                align: 'start',
+                margin: EDGE,
+                viewport: { width: window.innerWidth, height: window.innerHeight }
+            }
+        )
+        left = placed.left
+        top = placed.top
+        side = placed.side
+        at = placed.arrow
     }
 
     function buttons(): HTMLButtonElement[] {
@@ -118,6 +154,18 @@
     onkeydown={onKeydown}
     oncontextmenu={(event) => event.preventDefault()}
 >
+    <CardOutline
+        {width}
+        {height}
+        radius={RADIUS}
+        {side}
+        at={arrow ? at : undefined}
+        arrow={ARROW}
+        fill="color-mix(in srgb, var(--tertiary) 85%, transparent)"
+        stroke="color-mix(in srgb, var(--tertiary-text) 15%, transparent)"
+        blur
+        shadow={{ y: 8, blur: 24, opacity: 0.35 }}
+    />
     {#each items as entry, index (index)}
         {#if 'separator' in entry}
             <div class="separator" role="separator"></div>
@@ -140,7 +188,11 @@
 </div>
 
 <style lang="scss">
-    /* fixed, as Select's list is, and placed by hand rather than by the popover's centring */
+    /* fixed, as Select's list is, and placed by hand rather than by the popover's centring; a
+       translucent tint of the raised --tertiary surface, as Monaco's own menu is, that blurs what
+       is beneath, as the app's prompts are. The outline draws that surface, its edge and its shadow
+       as one shape with the arrow, so the menu draws none of its own; the padding keeps the room
+       the edge took */
     .context-menu {
         position: fixed;
         inset: auto;
@@ -150,22 +202,25 @@
         min-width: 11rem;
         max-width: min(18rem, calc(100vw - 8px));
         margin: 0;
-        padding: 0.25rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
+        padding: calc(0.25rem + 1px);
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        color: var(--tertiary-text);
         font-size: 0.8rem;
         outline: none;
     }
 
+    /* rows and separators in whole multiples of 4px, so every separator sits at the same fraction
+       of a device pixel at 125%, 150% or 175% zoom and none is drawn a pixel thicker than another */
     .item {
         display: flex;
+        flex-shrink: 0;
         align-items: center;
         gap: 0.55rem;
         width: 100%;
-        padding: 0.38rem 0.6rem;
+        height: 28px;
+        padding: 0 0.6rem;
         border: 0;
         border-radius: 0.3rem;
         color: inherit;
@@ -211,9 +266,11 @@
         white-space: nowrap;
     }
 
+    /* edge to edge through the menu's padding, as Monaco's are, and 8px tall with its margins */
     .separator {
+        flex-shrink: 0;
         height: 1px;
-        margin: 0.25rem 0.3rem;
-        background-color: var(--tertiary);
+        margin: 4px -0.25rem 3px;
+        background-color: color-mix(in srgb, var(--tertiary-text) 15%, transparent);
     }
 </style>

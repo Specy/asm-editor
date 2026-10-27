@@ -18,6 +18,7 @@ import { ListingPatcher } from '#lib/listing/listingPatcher.svelte.ts'
 import { withoutComment } from '#lib/listing/patchResolver.ts'
 import PatchPromptView from '#cmp/specific/workbench/PatchPrompt.svelte'
 import ListingNotice from '#cmp/specific/workbench/ListingNotice.svelte'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 import { PatchPrompt } from './patchPrompt.svelte'
 import type { WorkbenchSessionHost } from './WorkbenchSession.svelte'
 
@@ -226,7 +227,7 @@ describe('the Patch instruction prompt', () => {
         })
         const view = mount(PatchPromptView, { target: host, props })
         disposers.push(() => {
-            unmount(view)
+            void unmount(view)
             host.remove()
         })
         flushSync()
@@ -383,7 +384,7 @@ describe('the Patch instruction prompt', () => {
         })
         flushSync()
         host.querySelector('input')!.focus()
-        unmount(view)
+        void unmount(view)
         host.remove()
         expect(released).toEqual(['release'])
     })
@@ -454,10 +455,10 @@ describe('the Listing notice during a Debug session', () => {
         })
         flushSync()
         expect(host.textContent?.trim()).toBe('read-only')
-        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
+        expect(tooltipText(host.querySelector('[role="status"] [aria-describedby]'))).toBe(
             'Generated Listing of crackme: read-only. While the program is paused, Space or the context menu patches the instruction on a line, in memory only.'
         )
-        unmount(notice)
+        void unmount(notice)
         //a touch screen has no Space, and its context menu opens on a long press
         const touch = mount(ListingNotice, {
             target: host,
@@ -465,9 +466,9 @@ describe('the Listing notice during a Debug session', () => {
         })
         flushSync()
         expect(host.textContent?.trim()).toBe('read-only')
-        expect(host.querySelector('[role="status"]')?.getAttribute('title')).toBe(
+        expect(tooltipText(host.querySelector('[role="status"] [aria-describedby]'))).toBe(
             'Generated Listing of crackme: read-only. While the program is paused, a long press on a line offers to patch its instruction, in memory only.'
         )
-        unmount(touch)
+        void unmount(touch)
     })
 })

@@ -124,7 +124,7 @@ function setup(
             target.querySelector<HTMLElement>(`[data-column="${column}"][data-offset="${offset}"]`),
         status: () => target.querySelector('.hex-status')!.textContent!.replace(/\s+/g, ' '),
         bytes: () => [...fs.readBytes('blob')],
-        unmount: () => unmount(editor)
+        unmount: () => void unmount(editor)
     }
 }
 
@@ -299,6 +299,12 @@ function findStatus(target: HTMLElement) {
     return status ? [...status.children].map((child) => child.textContent).join(' · ') : ''
 }
 
+/** An element's Tooltip, as its description reads. */
+function description(element: Element) {
+    const id = element.getAttribute('aria-describedby')
+    return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, ' ').trim() : undefined
+}
+
 describe('going to an offset and finding', () => {
     it('goes to an offset typed in hex or in decimal', () => {
         const hex = setup()
@@ -336,14 +342,14 @@ describe('going to an offset and finding', () => {
         expect(hex.status()).toContain('Offset 0x0001')
         expect(hex.status()).toContain('3 bytes selected')
         expect(findStatus(hex.target)).toBe('Offset 0x0001 · 1 of 2')
-        expect(
-            hex.target.querySelector('[aria-label^="Previous match"]')!.getAttribute('title')
-        ).toBe('Previous match (Shift+Enter)')
+        expect(description(hex.target.querySelector('[aria-label^="Previous match"]')!)).toBe(
+            'Previous match, Shift+Enter'
+        )
         enter()
         expect(hex.status()).toContain('Offset 0x0005')
         expect(findStatus(hex.target)).toBe('Offset 0x0005 · 2 of 2')
-        expect(hex.target.querySelector('[aria-label^="Next match"]')!.getAttribute('title')).toBe(
-            'Next match (Enter)'
+        expect(description(hex.target.querySelector('[aria-label^="Next match"]')!)).toBe(
+            'Next match, Enter'
         )
         enter()
         expect(hex.status()).toContain('Offset 0x0001')
@@ -403,8 +409,8 @@ describe('going to an offset and finding', () => {
             const button = hex.target.querySelector<HTMLButtonElement>(
                 `[aria-label^="${direction} match"]`
             )!
-            expect(button.title).toBe(
-                direction === 'Previous' ? 'Previous match (Shift+Enter)' : 'Next match (Enter)'
+            expect(description(button)).toBe(
+                direction === 'Previous' ? 'Previous match, Shift+Enter' : 'Next match, Enter'
             )
             button.click()
             flushSync()
@@ -586,7 +592,7 @@ describe('an Executable', () => {
         pointer('pointermove', 0x15)
         expect(card()).not.toBeNull()
         //Find, opened from the status bar
-        hex.target.querySelector<HTMLButtonElement>('.hex-status [title^="Find"]')!.click()
+        hex.target.querySelector<HTMLButtonElement>('.hex-status [aria-label="Find"]')!.click()
         flushSync()
         expect(hex.target.querySelector('.hex-find-bar')).not.toBeNull()
         expect(card()).toBeNull()
@@ -676,7 +682,7 @@ describe('typing before a Build', () => {
         }
         let mounted = true
         const close = () => {
-            if (mounted) unmount(editor)
+            if (mounted) void unmount(editor)
             mounted = false
         }
         return {

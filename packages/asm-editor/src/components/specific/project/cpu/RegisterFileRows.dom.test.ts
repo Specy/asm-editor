@@ -1,6 +1,7 @@
-import { beforeAll, describe, expect, it, vi } from 'vite-plus/test'
+import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import RegisterFileRows from './RegisterFileRows.svelte'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
 import {
     makeRegister,
@@ -111,7 +112,7 @@ function render(
         values: () => [...target.querySelectorAll<HTMLElement>('.register-hex')],
         menu: () => document.querySelector<HTMLElement>('[role="menu"]'),
         close: () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
     }
@@ -272,6 +273,27 @@ function rightClick(element: Element): boolean {
     flushSync()
     return event.defaultPrevented
 }
+
+describe("a register name's hover", () => {
+    it('reads a negative value in hexadecimal at the register width under the decimal preference', () => {
+        const decimal = preferencesStore.values.useDecimalAsDefault
+        const previous = decimal.value
+        decimal.value = true
+        onTestFinished(() => {
+            decimal.value = previous
+        })
+        //MIPS and RISC-V report their CPU registers signed
+        const panel = render({
+            registers: [
+                makeRegister('d0', -1n, RegisterSize.Long),
+                makeRegister('d1', 0x1234n, RegisterSize.Long)
+            ]
+        })
+        const hovers = [...panel.target.querySelectorAll('.hover-register-value')]
+        expect(hovers.map((hover) => hover.textContent?.trim())).toEqual(['ffffffff', '00001234'])
+        panel.close()
+    })
+})
 
 describe("a register value's pointer menu", () => {
     it('opens on a right click with the value unsigned at the register width', async () => {

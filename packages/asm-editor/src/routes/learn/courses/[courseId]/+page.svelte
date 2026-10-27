@@ -46,10 +46,6 @@
     {jsonLd}
 />
 
-<svelte:head>
-    <meta property="og:image" content={data.course.image} />
-</svelte:head>
-
 <Page cropped contentStyle="padding: 1rem; gap: 2rem">
     <Header noMargin>
         {data.course.name}

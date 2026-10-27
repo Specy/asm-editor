@@ -26,6 +26,7 @@
      */
     import { tick, type Component, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
+    import type { HTMLButtonAttributes } from 'svelte/elements'
     import Icon from '#cmp/shared/layout/Icon.svelte'
 
     type SelectOption = {
@@ -36,7 +37,14 @@
         disabled?: boolean
     }
 
-    interface Props {
+    /**
+     * The rest goes to the control's button, an attachment such as a Tooltip among them; `title`
+     * is the visible label above it, not a tooltip.
+     */
+    interface Props extends Omit<
+        HTMLButtonAttributes,
+        'value' | 'style' | 'title' | 'disabled' | 'onchange'
+    > {
         options: SelectOption[]
         value: T
         style?: string
@@ -74,7 +82,8 @@
         popupWidth,
         openAbove = false,
         chevron,
-        listStyle = ''
+        listStyle = '',
+        ...rest
     }: Props = $props()
 
     //SSR safe and unique per instance, so the ids survive hydration
@@ -179,12 +188,17 @@
         }
     }
 
-    function commit(index: number) {
-        //the list is still on screen while it animates away; a click landing then chooses nothing
-        if (!open || disabled) return
-        if (!selectable(index)) return
+    /** Makes an option the value, and says whether it could. */
+    function choose(index: number): boolean {
+        if (disabled || !selectable(index)) return false
         value = options[index].value
         onChange?.(options[index].value)
+        return true
+    }
+
+    function commit(index: number) {
+        //the list is still on screen while it animates away; a click landing then chooses nothing
+        if (!open || !choose(index)) return
         closeList()
         button?.focus()
     }
@@ -196,10 +210,10 @@
         })
     }
 
-    async function moveTo(index: number) {
+    function moveTo(index: number) {
         activeIndex = index
-        await tick()
-        scrollActiveIntoView()
+        //once the list has drawn it as the active option
+        void tick().then(scrollActiveIntoView)
     }
 
     /** Type ahead: letters typed close together jump to the option that starts with them. */
@@ -218,7 +232,8 @@
         )
         if (match === -1) return
         if (open) moveTo(match)
-        else commit(match)
+        //a closed list chooses at once, as a native select does, and changes nothing it already holds
+        else if (match !== selectedIndex) choose(match)
     }
 
     function onKeyDown(event: KeyboardEvent) {
@@ -226,12 +241,12 @@
             case 'ArrowDown':
                 event.preventDefault()
                 if (open) moveTo(step(activeIndex, 1))
-                else openList()
+                else void openList()
                 return
             case 'ArrowUp':
                 event.preventDefault()
                 if (open) moveTo(step(activeIndex, -1))
-                else openList()
+                else void openList()
                 return
             case 'Home':
                 if (!open) return
@@ -247,7 +262,7 @@
             case ' ':
                 event.preventDefault()
                 if (open) commit(activeIndex)
-                else openList()
+                else void openList()
                 return
             case 'Escape':
                 if (!open) return
@@ -284,6 +299,7 @@
     <button
         bind:this={button}
         type="button"
+        {...rest}
         {disabled}
         class="control"
         {style}

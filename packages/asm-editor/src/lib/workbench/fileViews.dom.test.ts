@@ -17,6 +17,7 @@ import { encodeBase64, fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
 import type { EditJournalStore, SavedJournal } from '#lib/editJournal.ts'
 import { PREVIEW_UNAVAILABLE } from '#cmp/specific/workbench/preview/previewSupport.ts'
 import { makeBmp } from '#lib/pixels/bmp.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
@@ -461,6 +462,73 @@ describe('the Hex editor in a session', () => {
         save(third.project)
         expect(kept.has('gone.bin')).toBe(false)
         expect(kept.has('blob.bin')).toBe(true)
+    })
+
+    it('reports typing at once, and saves what autosave waits on as the page is hidden', () => {
+        preferencesStore.values.autoSave.value = true
+        vi.useFakeTimers()
+        const onChange = vi.fn()
+        const onSave = vi.fn()
+        const { session, project } = setup(undefined, {}, { onChange, onSave })
+        let pending: Uint8Array | undefined = Uint8Array.of(5)
+        session.registerTypingFlush(() => {
+            if (pending) session.editFileBytes('blob.bin', 2, pending)
+            pending = undefined
+        })
+        const visibility = vi.spyOn(document, 'visibilityState', 'get')
+        try {
+            onChange.mockClear()
+            onSave.mockClear()
+            session.editFileBytes('blob.bin', 0, Uint8Array.of(9))
+            //leaving asks about it before autosave's pause is over
+            expect(onChange).toHaveBeenCalledOnce()
+            expect(onSave).not.toHaveBeenCalled()
+            //a tab hidden saves the typing a Hex editor held, with the change waiting on autosave
+            visibility.mockReturnValue('hidden')
+            document.dispatchEvent(new Event('visibilitychange'))
+            expect(pending).toBeUndefined()
+            expect(onSave).toHaveBeenCalledExactlyOnceWith({ silent: true })
+            expect([...fileBytes(project.files['blob.bin'])]).toEqual([9, 2, 5, 4])
+            vi.advanceTimersByTime(1000)
+            expect(onSave).toHaveBeenCalledOnce()
+            //and a page closed in a pause, as the next typing starts one
+            session.editFileBytes('blob.bin', 3, Uint8Array.of(6))
+            window.dispatchEvent(new Event('pagehide'))
+            expect(onSave).toHaveBeenCalledTimes(2)
+        } finally {
+            visibility.mockRestore()
+            vi.useRealTimers()
+        }
+    })
+
+    it('saves what a Hex editor typed with Save, leaving nothing to save after it', () => {
+        preferencesStore.values.autoSave.value = false
+        vi.useFakeTimers()
+        const onChange = vi.fn()
+        let saved: number[] | undefined
+        const { session, project } = setup(
+            undefined,
+            {},
+            {
+                onChange,
+                onSave: () => (saved = [...fileBytes(project.files['blob.bin'])])
+            }
+        )
+        let pending: Uint8Array | undefined = Uint8Array.of(5)
+        session.registerTypingFlush(() => {
+            if (pending) session.editFileBytes('blob.bin', 2, pending)
+            pending = undefined
+        })
+        try {
+            session.save()
+            expect(saved).toEqual([1, 2, 5, 4])
+            onChange.mockClear()
+            vi.advanceTimersByTime(1000)
+            expect(onChange).not.toHaveBeenCalled()
+        } finally {
+            vi.useRealTimers()
+            preferencesStore.values.autoSave.value = true
+        }
     })
 
     it('keeps a previewed File in preview when Undo has nothing to take back', () => {

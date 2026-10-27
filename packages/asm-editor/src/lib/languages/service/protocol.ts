@@ -61,9 +61,3 @@ export type ProjectWorkerResponse =
      * requests until it has seen this.
      */
     | { type: 'ready' }
-
-/** Kept as aliases while the M68K adapter/provider names remain Target-specific. */
-export type M68kAnalysisSnapshot = ProjectAnalysisSnapshot
-export type M68kFileAnalysisStatus = ProjectFileAnalysisStatus
-export type M68kWorkerRequest = ProjectWorkerRequest
-export type M68kWorkerResponse = ProjectWorkerResponse

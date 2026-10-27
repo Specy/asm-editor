@@ -1,13 +1,14 @@
 <script>
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 </script>
 
 <main class="page">
     <div class="center-wrapper">
         <div class="floating-middle">
             <div class="go-back">
-                <a href={resolve('/')} title="Go back to the main page">
+                <a href={resolve('/')} {@attach tooltip('Go back to the main page')}>
                     <div class="go-back-404">404</div>
                 </a>
                 <ButtonLink href={resolve('/')} cssVar="accent2">Click to go back</ButtonLink>

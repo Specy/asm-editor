@@ -120,7 +120,7 @@ function setup(
     const editor = mount(PixelEditor, { target, props })
     let mountedNow = true
     const dispose = () => {
-        if (mountedNow) unmount(editor)
+        if (mountedNow) void unmount(editor)
         mountedNow = false
     }
     mounted.push(dispose)
@@ -225,6 +225,21 @@ describe('drawing', () => {
         expect(pixels.button('Eraser')).toBeNull()
         pixels.key('e')
         expect(pixels.button('Line')!.getAttribute('aria-pressed')).toBe('true')
+    })
+
+    it('leaves a tool key with Shift to the Workbench, whose Shift+B builds', () => {
+        const pixels = setup()
+        pixels.key('l')
+        const reached: KeyboardEvent[] = []
+        const listener = (event: KeyboardEvent) => reached.push(event)
+        window.addEventListener('keydown', listener)
+        try {
+            pixels.key('B', { shiftKey: true })
+        } finally {
+            window.removeEventListener('keydown', listener)
+        }
+        expect(pixels.button('Line')!.getAttribute('aria-pressed')).toBe('true')
+        expect(reached.map((event) => [event.key, event.defaultPrevented])).toEqual([['B', false]])
     })
 
     it('draws with the Pencil where the Erase it kept has no alpha channel to erase to', () => {
@@ -469,6 +484,22 @@ describe('a picture with a palette', () => {
         pixels.pointer('pointerdown', 1, 1)
         pixels.pointer('pointerup', 1, 1)
         expect(pixels.raw(1, 1)).toBe(9)
+    })
+
+    it('recolours the entry drawn with, through the colour picker', () => {
+        const pixels = setup({
+            bytes: makeBmp({ width: 4, height: 2, format: 'indexed4', palette: PALETTE_16 })
+        })
+        pixels.target.querySelector<HTMLButtonElement>('.current-swatch')!.click()
+        const picker = pixels.target.querySelector<HTMLInputElement>(
+            '.current-colour input.hidden-picker'
+        )!
+        expect(picker.value).toBe('#ffffff')
+        picker.value = '#ff00aa'
+        picker.dispatchEvent(new Event('change', { bubbles: true }))
+        flushSync()
+        expect(pixels.labels).toEqual(['Recolour palette entry 15'])
+        expect(pixels.button('Drawing colour: palette entry 15, #ff00aa')).not.toBeNull()
     })
 })
 

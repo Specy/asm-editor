@@ -97,7 +97,7 @@ type OperandSymbol = { symbol: string; meaning: string; href?: string }
 
 **M6. Wiring** (me).
 
-- `EntryView` gets one `{ type: 'instruction'; document: () => InstructionDocument }`, built lazily and cached; `EntryBody` draws it with the panel density; the four per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell` and `DocsOperand` (if unused elsewhere) go.
+- `EntryView` gets one `{ type: 'instruction'; document: () => InstructionDocument }`, built lazily and cached (since 2026-10-26 `document: InstructionDocument`: every adapter built it with the entry anyway, whose signature and summary read it); `EntryBody` draws it with the panel density; the four per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell` and `DocsOperand` (if unused elsewhere) go.
 - The five instruction routes build the document in `+page.server.ts` and draw `InstructionDocumentView` with their example in a snippet; the page's title, meta and JSON-LD use the long name and summary.
 - Entries' `summary` (search rows) and the hovers use the new long name and summary.
 
@@ -110,7 +110,7 @@ type OperandSymbol = { symbol: string; meaning: string; href?: string }
 
 Implemented on 2026-10-18 on `feat/pseudocode` and pushed there in three commits (the records, the x86 flags data, the code); the Cores' commits are on their default branches, not released.
 
-- **Shared:** `instructions/document.ts` (shape, `documentSignature`, `descriptionAfterSummary`), `instructions/formPatterns.ts` (the grouping), `instructions/hoverLine.ts` (`documentHover`), the view in `src/components/documentation/instruction/` (`InstructionDocumentView`, `FormPatternRow`, `FlagStrip`, `OperandLegend`, `InstructionPageHead`). `EntryView` has one `instruction` type; the per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell`, `InstructionFormList`, `formGroups.ts`, `m68kForms.ts`, `z80DocsUtils.ts` and `DocsOperand` are gone.
+- **Shared:** `instructions/document.ts` (shape, `documentSignature`, `descriptionAfterSummary`), `instructions/formPatterns.ts` (the grouping), `instructions/hoverLine.ts` (`documentHover`), the view in `src/components/documentation/instruction/` (`InstructionDocumentView`, `FormPatternRow`, `FlagStrip`, `OperandLegend`, `InstructionPage`). `EntryView` has one `instruction` type; the per-language views, `MarsVariantList`, `X86InstructionForms`, `M68KInstructionForms`, `Z80FlagsCell`, `InstructionFormList`, `formGroups.ts`, `m68kForms.ts`, `z80DocsUtils.ts` and `DocsOperand` are gone.
 - **Adapters:** `x86/`, `z80/`, `mars/` (MIPS and RISC-V, with `expansion.ts`), `m68k/`, each with `operands.ts`, `instructionNames.ts` and tests. Row counts: x86 `mov` 65 forms to 14 rows, `add` 38 to 4; Z80 `ld` 192 to 35, `set` 192 to 4; MIPS `lw` 12 to 9 (one real form, then pseudo-instructions under three notes); M68K unchanged in count.
 - **Cores (M4):** MARS `JsInstruction.expansion` / `compactExpansion`, RARS `getExpansion()`, built locally with smoke tests, committed with the `isPseudo` work on mars `main` and rars `master`. Not released.
 - **x86 data (M5):** `generated/x86Flags.ts` from Intel XED v2026.08.23 (vendored extract `scripts/x86-docs/xed-flags.txt`, `XED-LICENSE.txt`), 270 of 273 instructions; the description generator's raw markup, lost cross references and doubled names fixed (0 left of 20, 60, 129).

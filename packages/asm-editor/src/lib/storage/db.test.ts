@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it } from 'vite-plus/test'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Db } from './db'
 import { makeProject } from '#lib/Project.svelte.ts'
 import { EditJournal } from '#lib/editJournal.ts'
@@ -54,7 +54,7 @@ describe('the version 2 upgrade', () => {
             { ...legacyRow, testcases: [testcase], display: { unitWidth: 2 } }
         ])
         const db = new Db()
-        const project = await db.getProject('abcdefg')
+        const project = (await db.getProject('abcdefg'))!
         expect(project.files).toEqual({
             'main.m68k': { encoding: 'plain', content: '    move.l #1, d0' }
         })
@@ -104,12 +104,12 @@ describe('the version 2 upgrade', () => {
                 activeTab: 'lib.mips'
             })
             await db.addProject(project)
-            const loaded = await db.getProject(project.id)
+            const loaded = (await db.getProject(project.id))!
             expect(loaded.openTabs).toEqual(['lib.mips', 'main.mips'])
             expect(loaded.activeTab).toBe('lib.mips')
             loaded.setOpenTabs([], '')
-            await db.updateProject(loaded)
-            const empty = await db.getProject(project.id)
+            await db.updateProject(loaded.toObject())
+            const empty = (await db.getProject(project.id))!
             expect(empty.openTabs).toEqual([])
             expect(empty.activeTab).toBeUndefined()
         } finally {
@@ -137,7 +137,7 @@ describe('the version 2 upgrade', () => {
             }
             expect(project.files.chall).toEqual(edited)
             await db.addProject(project)
-            const loaded = await db.getProject(project.id)
+            const loaded = (await db.getProject(project.id))!
             const journal = new EditJournal(loaded.fileSystem)
             journal.change(
                 'chall',
@@ -149,8 +149,8 @@ describe('the version 2 upgrade', () => {
             const store = db.journalStore(project.id)
             store.changed('chall', () => journal.saved('chall'))
             expect((await store.load()).size).toBe(0)
-            await db.updateProject(loaded, store.take().writes)
-            const again = await db.getProject(project.id)
+            await db.updateProject(loaded.toObject(), store.take().writes)
+            const again = (await db.getProject(project.id))!
             //the File is its bytes, the journal no part of it
             expect(again.files.chall).toEqual({
                 encoding: 'base64',
@@ -170,15 +170,46 @@ describe('the version 2 upgrade', () => {
             failed.putBack()
             expect([...store.take().writes]).toEqual([['chall', undefined]])
             //a journal forgotten in a save, and every journal of a Project deleted with it
-            await db.updateProject(again, new Map([['chall', undefined]]))
+            await db.updateProject(again.toObject(), new Map([['chall', undefined]]))
             expect((await store.load()).size).toBe(0)
-            await db.updateProject(again, new Map([['chall', journal.saved('chall')]]))
+            await db.updateProject(again.toObject(), new Map([['chall', journal.saved('chall')]]))
             const other = makeProject({ language: 'X86', entry: 'chall', files: { chall: edited } })
             await db.addProject(other)
-            await db.updateProject(other, new Map([['chall', journal.saved('chall')]]))
+            await db.updateProject(other.toObject(), new Map([['chall', journal.saved('chall')]]))
             await db.deleteProject(again)
             expect((await store.load()).size).toBe(0)
             expect((await db.journalStore(other.id).load()).size).toBe(1)
+        } finally {
+            db.close()
+        }
+    })
+
+    it('reads no project for an id with no row, as after a delete in another tab', async () => {
+        const db = new Db()
+        try {
+            const project = makeProject({ name: 'deleted' })
+            await db.addProject(project)
+            await db.deleteProject(project)
+            expect(await db.getProject(project.id)).toBeUndefined()
+            expect(await db.getProject('missing')).toBeUndefined()
+        } finally {
+            db.close()
+        }
+    })
+
+    it('leaves a Project the id it had when the browser refuses to add it', async () => {
+        const db = new Db()
+        try {
+            //a shared link's Project, which keeps its link's id until it is stored
+            const project = makeProject({ id: '__share__', name: 'refused' })
+            vi.spyOn(db.projects, 'add').mockRejectedValueOnce(
+                new DOMException('Full', 'QuotaExceededError')
+            )
+            await expect(db.addProject(project)).rejects.toThrow('Full')
+            expect(project.id).toBe('__share__')
+            await db.addProject(project)
+            expect(project.id).not.toBe('__share__')
+            expect((await db.getProject(project.id))?.name).toBe('refused')
         } finally {
             db.close()
         }
@@ -198,12 +229,12 @@ describe('the version 2 upgrade', () => {
             })
             project.setFileView('image.png', 'hex')
             await db.addProject(project)
-            const loaded = await db.getProject(project.id)
+            const loaded = (await db.getProject(project.id))!
             expect(loaded.fileViews).toEqual({ 'image.png': 'hex' })
             expect(loaded.openTabs).toEqual(['image.png', 'main.mips'])
             loaded.setFileView('image.png', undefined)
-            await db.updateProject(loaded)
-            expect((await db.getProject(project.id)).fileViews).toBeUndefined()
+            await db.updateProject(loaded.toObject())
+            expect((await db.getProject(project.id))!.fileViews).toBeUndefined()
         } finally {
             db.close()
         }
@@ -222,15 +253,15 @@ describe('the version 2 upgrade', () => {
                 settings: { undoEnabled: false },
                 testcases: [testcase]
             } as never)
-            const project = await db.getProject('before1')
+            const project = (await db.getProject('before1'))!
             expect(project.programs['main.m68k']?.settings).toEqual({ undoEnabled: false })
             expect(project.selected?.testcases).toHaveLength(1)
             project.createProgram('second.m68k')
-            await db.updateProject(project)
+            await db.updateProject(project.toObject())
             const row = (await db.projects.get('before1')) as unknown as Record<string, unknown>
             for (const field of ['entry', 'settings', 'testcases', 'display'])
                 expect(row, field).not.toHaveProperty(field)
-            const again = await db.getProject('before1')
+            const again = (await db.getProject('before1'))!
             expect(Object.keys(again.programs)).toEqual(['main.m68k', 'second.m68k'])
             expect(again.selectedProgram).toBe('second.m68k')
             expect(again.program('main.m68k')?.testcases[0]?.expectedOutput).toBe('1')

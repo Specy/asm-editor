@@ -19,6 +19,7 @@ import ExecutionDock from '#cmp/specific/project/ExecutionDock.svelte'
 import ExecutionControlsHarness from '#cmp/specific/workbench/__fixtures__/ExecutionControlsHarness.svelte'
 import FaTh from '~icons/fa-solid/th'
 import FaListOl from '~icons/fa-solid/list-ol'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 
 //relative to the package, where the tests run: a DOM test's module URL is no file URL
 const crackme = readFileSync('../x86/blink-js/tests/fixtures/elf/crackme').toString('base64')
@@ -173,9 +174,9 @@ describe('the view switch', () => {
         expect(group.displayedView).toBe('hex')
         expect(group.bytesReadOnly).toMatch(/Debug session/)
         expect(group.bytesNotice).toBeUndefined()
-        expect(
-            read().views?.querySelector('button[aria-label="Hex"]')?.getAttribute('title')
-        ).toContain('Changes made while debugging appear in the Memory view.')
+        expect(tooltipText(read().views?.querySelector('button[aria-label="Hex"]'))).toContain(
+            'Changes made while debugging appear in the Memory view.'
+        )
     })
 
     it("gives a pane showing such a File a dock with the switch on every device's layout", () => {
@@ -395,7 +396,7 @@ describe('the execution dock', () => {
             )
             buttons[1].click()
             expect(onChange).toHaveBeenLastCalledWith('listing')
-            unmount(app)
+            void unmount(app)
         }
     })
 })

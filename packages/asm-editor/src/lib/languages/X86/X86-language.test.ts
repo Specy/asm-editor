@@ -2,7 +2,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { X86LanguageConfiguration } from './X86-grammar'
-import { createX86HoverProvider } from './X86-language'
+import { createX86CompletionProvider, createX86HoverProvider } from './X86-language'
 
 class Range {
     constructor(
@@ -13,7 +13,22 @@ class Range {
     ) {}
 }
 
-const monacoStub = { Range, languages: {} } as unknown as MonacoType
+const monacoStub = {
+    Range,
+    languages: {
+        CompletionItemKind: {
+            Function: 'Function',
+            Snippet: 'Snippet',
+            Keyword: 'Keyword',
+            Value: 'Value',
+            Module: 'Module',
+            Reference: 'Reference',
+            Variable: 'Variable',
+            TypeParameter: 'TypeParameter'
+        },
+        CompletionItemInsertTextRule: { InsertAsSnippet: 4 }
+    }
+} as unknown as MonacoType
 
 /** The word Monaco reports: the pattern match that touches the column, as its wordHelper picks it. */
 function wordAt(line: string, column: number) {
@@ -68,5 +83,82 @@ describe('x86 hovers', () => {
         expect(await hover('    mov rax, rbx', 'mov')).toContain(
             '[Documentation](https://asm.example/documentation/x86/instruction/mov)'
         )
+    })
+})
+
+/** The suggestions at the end of `line`, under `text`, as `label kind detail sortText insertText`. */
+async function completions(line: string, text = '') {
+    const result = await createX86CompletionProvider(monacoStub).provideCompletionItems(
+        {
+            uri: undefined,
+            getValueInRange: () => line,
+            getValue: () => `${text}${line}`
+        } as unknown as monaco.editor.ITextModel,
+        { lineNumber: 1, column: line.length + 1 } as monaco.Position,
+        {} as monaco.languages.CompletionContext,
+        {} as monaco.CancellationToken
+    )
+    return (result?.suggestions ?? []).map((item) =>
+        [
+            typeof item.label === 'string' ? item.label : item.label.label,
+            item.kind,
+            item.detail,
+            item.sortText,
+            item.insertText
+        ].join(' ')
+    )
+}
+
+describe('x86 completion', () => {
+    it('offers directives alone after a percent sign', async () => {
+        expect(await completions('    %de')).toEqual([
+            '%defalias Keyword NASM directive 020%defalias %defalias',
+            '%define Keyword NASM directive 020%define %define',
+            '%defstr Keyword NASM directive 020%defstr %defstr',
+            '%deftok Keyword NASM directive 020%deftok %deftok',
+            '%depend Keyword NASM directive 020%depend %depend'
+        ])
+        expect(await completions('    SEC')).toEqual([
+            'section Keyword NASM directive 020section SECTION',
+            'sectalign Keyword NASM directive 020sectalign SECTALIGN'
+        ])
+    })
+
+    it('offers every section and every bit width whatever has been typed', async () => {
+        expect(await completions('segment .d')).toEqual([
+            '.text Module Section 010.text .text',
+            '.data Module Section 010.data .data',
+            '.bss Module Section 010.bss .bss',
+            '.rodata Module Section 010.rodata .rodata'
+        ])
+        expect(await completions('bits 6')).toEqual([
+            '16 Value 16-bit mode 01016 16',
+            '32 Value 32-bit mode 01032 32',
+            '64 Value 64-bit mode 01064 64'
+        ])
+    })
+
+    it("offers a jump the file's labels, in the case typed", async () => {
+        expect(await completions('    jne LO', 'start:\nloop: nop\nLoopTwo:\n')).toEqual([
+            'loop Reference Jump target 010loop LOOP',
+            'LoopTwo Reference Jump target 010LoopTwo LOOPTWO'
+        ])
+    })
+
+    it('offers registers, then size specifiers outside an address, then labels', async () => {
+        expect(await completions('    mov eax, q', 'quit:\n')).toEqual([
+            'qword TypeParameter Size specifier 020qword qword',
+            'quit Reference Label 030quit quit'
+        ])
+        expect(await completions('    mov [rs', 'rsum:\n')).toEqual([
+            'rsp Variable Address register 010rsp rsp',
+            'rsi Variable Address register 010rsi rsi',
+            'rsum Reference Label 030rsum rsum'
+        ])
+        expect(await completions('    mov RS', 'rsum:\n')).toEqual([
+            'rsp Variable Register 010rsp RSP',
+            'rsi Variable Register 010rsi RSI',
+            'rsum Reference Label 030rsum RSUM'
+        ])
     })
 })

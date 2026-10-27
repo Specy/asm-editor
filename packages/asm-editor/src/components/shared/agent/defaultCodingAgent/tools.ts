@@ -18,6 +18,7 @@ import { createCompileSourceTool, isSourceFile } from './sourceTools'
 import { defaultEntryPath, type Project } from '#lib/Project.svelte.ts'
 import { fileText, type BuildSources, type ProjectFile } from '#lib/projectFiles.ts'
 import { programBuildSources } from '#lib/buildSources.ts'
+import { resolveProjectSettings, UNDO_HISTORY_SIZE, undoHistorySize } from '#lib/projectSettings.ts'
 import { firstProgramEntry, startsProgram } from '#lib/workbench/firstProgram.ts'
 import {
     DEFAULT_NO_PROGRAM_MESSAGE,
@@ -194,23 +195,11 @@ function pokeNote(changed: boolean, recorded: boolean): string | undefined {
 }
 
 /**
- * The Entry the tools build and default to: the host's, which for a Project is its Selected
- * program's and undefined while it has none, never a `main.<ext>` made up for it
- * ([programs.md](../../../../../../../docs/design/programs.md), decision 7). A host that names no
- * Entry at all holds one file, which goes by the language's default name.
- */
-export function getEffectiveEntry(context: DefaultCodingAgentToolContext): string | undefined {
-    if (context.getEntryPath) return context.getEntryPath()
-    const lang = context.getEditorLanguage()
-    return lang ? defaultEntryPath(lang) : 'main.s'
-}
-
-/**
  * The File a Breakpoint or a location that names none is in: the Entry, or with no Program the one
  * the Emulator was last given.
  */
 function emulatorEntry(context: DefaultCodingAgentToolContext, emulator: Emulator): string {
-    return getEffectiveEntry(context) ?? emulator.entry
+    return context.getEntryPath() ?? emulator.entry
 }
 
 /**
@@ -228,6 +217,19 @@ export function projectAgentBuildSources(
             assemblyError: noProgramMessage
         }
     return programBuildSources(project)
+}
+
+/**
+ * The undo history the agent's compile gives the Core, the one the host's own Build gives it: what
+ * the Selected program's undo Setting asks for, or with no Project, as in a lecture's editor, what
+ * the language's default Settings, which a Playground runs on, ask for.
+ */
+function compileHistorySize(context: DefaultCodingAgentToolContext): number {
+    const project = context.getProject?.()
+    const language = project?.language ?? context.getEditorLanguage()
+    //a host with no language yet has no Emulator to compile on either
+    if (!language) return UNDO_HISTORY_SIZE
+    return undoHistorySize(resolveProjectSettings(language, project?.selected?.settings))
 }
 
 /**
@@ -263,52 +265,57 @@ function noProgram(
     )
 }
 
-export function getAllProjectFiles(context: DefaultCodingAgentToolContext): Record<string, string> {
-    if (context.getFiles) {
-        const raw = context.getFiles()
-        const result: Record<string, string> = {}
-        for (const [path, fileOrContent] of Object.entries(raw)) {
-            if (typeof fileOrContent === 'string') {
-                result[path] = fileOrContent
-            } else if (
-                fileOrContent &&
-                typeof fileOrContent === 'object' &&
-                'content' in fileOrContent
-            ) {
-                result[path] = fileText(fileOrContent as ProjectFile)
-            }
+/**
+ * The project's Files as the tools read them: each one's text, or null for a binary File, one whose
+ * bytes are not UTF-8 text, such as an x86 Build's `main` or a BMP. The tools list a binary File
+ * and never read it, as a Build never gives one to the assembler as text.
+ */
+export function getAllProjectFiles(
+    context: DefaultCodingAgentToolContext
+): Record<string, string | null> {
+    const result: Record<string, string | null> = {}
+    for (const [path, fileOrContent] of Object.entries(context.getFiles())) {
+        if (typeof fileOrContent === 'string') {
+            result[path] = fileOrContent
+            continue
         }
-        if (Object.keys(result).length > 0) {
-            return result
+        try {
+            result[path] = fileText(fileOrContent)
+        } catch {
+            result[path] = null
         }
     }
-    const entry = getEffectiveEntry(context)
-    if (entry === undefined) return {}
-    const code = context.getEditorCode?.() ?? ''
-    return { [entry]: code }
+    return result
 }
 
+/** Why a File the tools were asked to read cannot be: it is binary, which is never read as text. */
+function binaryFileError(path: string) {
+    return `File "${path}" is binary, not text, so it cannot be read or edited as text.`
+}
+
+function binaryFile(toolRun: ToolRunContext, path: string) {
+    return toolRun.failure('invalid_input', binaryFileError(path), {
+        retryable: false,
+        nextAction: 'Call list_files to see which files are text.'
+    })
+}
+
+/**
+ * The File at `path`, or with none the active File: when that one is gone, as after the agent
+ * deleted it, the Entry file.
+ */
 export function getFile(
     context: DefaultCodingAgentToolContext,
     path?: string
 ): { path: string; content: string } | null {
-    const entry = getEffectiveEntry(context)
+    const entry = context.getEntryPath()
     const targetPath = path ?? context.getActivePath?.() ?? entry
     if (targetPath === undefined) return null
-    if (context.getFile) {
-        const content = context.getFile(targetPath)
-        if (content !== null && content !== undefined) {
-            return { path: targetPath, content }
-        }
-    }
-    const all = getAllProjectFiles(context)
-    if (targetPath in all) {
-        return { path: targetPath, content: all[targetPath] }
-    }
-    if (!path && entry !== undefined && context.getEditorCode) {
-        return { path: entry, content: context.getEditorCode() }
-    }
-    return null
+    const content = context.getFile(targetPath)
+    if (content !== null) return { path: targetPath, content }
+    if (path || entry === undefined || entry === targetPath) return null
+    const entryContent = context.getFile(entry)
+    return entryContent === null ? null : { path: entry, content: entryContent }
 }
 
 /**
@@ -356,33 +363,17 @@ function toggleBreakpoint(emulator: Emulator, breakpoint: SourceBreakpoint) {
     else emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
 }
 
-export function setFile(context: DefaultCodingAgentToolContext, path: string, content: string) {
-    if (context.setFile) {
-        context.setFile(path, content)
-    } else if (context.setEditorCode) {
-        context.setEditorCode(content)
-    }
-}
-
-export function deleteFile(context: DefaultCodingAgentToolContext, path: string): boolean {
-    if (context.deleteFile) {
-        context.deleteFile(path)
-        return true
-    }
-    return false
-}
-
 export function syncEmulator(context: DefaultCodingAgentToolContext, emulator: Emulator) {
     if (context.getBuildSources) {
         emulator.setSources(context.getBuildSources())
         return
     }
-    const entry = getEffectiveEntry(context)
+    const entry = context.getEntryPath()
     if (entry === undefined) return
     const all = getAllProjectFiles(context)
     const projectFiles: Record<string, ProjectFile> = {}
     for (const [p, c] of Object.entries(all)) {
-        projectFiles[p] = { encoding: 'plain', content: c }
+        if (c !== null) projectFiles[p] = { encoding: 'plain', content: c }
     }
     emulator.setSources({
         files: projectFiles,
@@ -590,16 +581,19 @@ function pokeBlocker(emulator: Emulator): ExecutionBlocker | null {
 }
 
 /**
- * The Emulator's state as the tools report it: the project's files resolve through the context, and
- * the editor's Target comes along so that a reported width is named the way that architecture names
- * it rather than the way the 68000 does.
+ * The Emulator's state as the tools report it: its lines read as the breakpoint tools read them, a
+ * File's text or, for an Executable or a library, the running program's Listing, and the editor's
+ * Target comes along so that a reported width is named the way that architecture names it rather
+ * than the way the 68000 does.
  */
 function emulatorState(
     context: DefaultCodingAgentToolContext,
     emulator: Emulator,
     options: FormatEmulatorStateOptions = {}
 ) {
-    return formatEmulatorState((file) => getFile(context, file)?.content ?? '', emulator, {
+    const text = (file?: string) =>
+        (file === undefined ? getFile(context) : fileOf(context, emulator, file))?.content ?? ''
+    return formatEmulatorState(text, emulator, {
         language: context.getEditorLanguage(),
         ...options
     })
@@ -613,6 +607,28 @@ function executionDetails(context: DefaultCodingAgentToolContext, emulator: Emul
     }
 }
 
+/** What a tool that needs the Emulator answers while the editor's language is still loading it. */
+function emulatorUnavailable(toolRun: ToolRunContext, nextAction: string) {
+    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+        retryable: true,
+        nextAction
+    })
+}
+
+/** What a tool answers when the Emulator's state stops it, with that state beside the reason. */
+function blocked(
+    toolRun: ToolRunContext,
+    blocker: ExecutionBlocker,
+    context: DefaultCodingAgentToolContext,
+    emulator: Emulator
+) {
+    return toolRun.failure('execution_state', blocker.error, {
+        retryable: blocker.retryable,
+        nextAction: blocker.nextAction,
+        details: executionDetails(context, emulator)
+    })
+}
+
 async function handleCodeWrite(
     context: DefaultCodingAgentToolContext,
     targetPath: string,
@@ -623,19 +639,23 @@ async function handleCodeWrite(
     toolRun: ToolRunContext,
     previousEmulator: Emulator | null = null
 ) {
-    setFile(context, targetPath, newContent)
+    context.setFile(targetPath, newContent)
     context.setActivePath?.(targetPath)
+    //what every result of a write says: the File as written, from the line the change starts on
+    const written = {
+        path: targetPath,
+        language: context.getEditorLanguage(),
+        previousLanguage,
+        languageChanged,
+        ...sliceLinesRange(newContent, Math.max(1, previewLine)),
+        files: Object.keys(getAllProjectFiles(context))
+    }
     // Source edits invalidate generated output, but must never be sent to the assembler.
     if (isSourceFile(targetPath)) {
         context.getEmulator()?.clear()
         return toolRun.success({
-            path: targetPath,
-            language: context.getEditorLanguage(),
+            ...written,
             sourceLanguage: sourceLanguage(targetPath) ?? 'header',
-            previousLanguage,
-            languageChanged,
-            ...sliceLinesRange(newContent, Math.max(1, previewLine), undefined, MAX_TAKE_LINES),
-            files: Object.keys(getAllProjectFiles(context)),
             compilationRequired: true,
             canExecute: false,
             nextAction:
@@ -648,23 +668,9 @@ async function handleCodeWrite(
         : { loaded: true, waitMs: 0 }
     const emulator = context.getEmulator()
 
-    const allFiles = getAllProjectFiles(context)
-    const preview = sliceLinesRange(newContent, Math.max(1, previewLine), undefined, MAX_TAKE_LINES)
-
     if (!emulator) {
         return toolRun.success({
-            path: targetPath,
-            language: context.getEditorLanguage(),
-            previousLanguage,
-            languageChanged,
-            code: preview.code,
-            lineCount: preview.lineCount,
-            startLine: preview.startLine,
-            endLine: preview.endLine,
-            returnedLines: preview.returnedLines,
-            hasMore: preview.hasMore,
-            nextStartLine: preview.nextStartLine,
-            files: Object.keys(allFiles),
+            ...written,
             emulatorSynchronized: false,
             warning:
                 'The file was updated, but the emulator is still loading. Call compile after it loads.'
@@ -686,18 +692,7 @@ async function handleCodeWrite(
                 nextAction:
                     'Fix the reported assembler errors with replace_file_content, preserving the user request.',
                 details: {
-                    path: targetPath,
-                    language: context.getEditorLanguage(),
-                    previousLanguage,
-                    languageChanged,
-                    code: preview.code,
-                    lineCount: preview.lineCount,
-                    startLine: preview.startLine,
-                    endLine: preview.endLine,
-                    returnedLines: preview.returnedLines,
-                    hasMore: preview.hasMore,
-                    nextStartLine: preview.nextStartLine,
-                    files: Object.keys(allFiles),
+                    ...written,
                     emulatorSynchronized: waitResult.loaded,
                     emulatorWaitMs: waitResult.waitMs,
                     errors,
@@ -708,18 +703,7 @@ async function handleCodeWrite(
     }
 
     return toolRun.success({
-        path: targetPath,
-        language: context.getEditorLanguage(),
-        previousLanguage,
-        languageChanged,
-        code: preview.code,
-        lineCount: preview.lineCount,
-        startLine: preview.startLine,
-        endLine: preview.endLine,
-        returnedLines: preview.returnedLines,
-        hasMore: preview.hasMore,
-        nextStartLine: preview.nextStartLine,
-        files: Object.keys(allFiles),
+        ...written,
         emulatorSynchronized: waitResult.loaded,
         emulatorWaitMs: waitResult.waitMs,
         canExecute: emulator.canExecute,
@@ -758,13 +742,14 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, start_line, end_line }) =>
             runAgentTool(async (toolRun) => {
                 const allFiles = getAllProjectFiles(context)
-                const entryPath = getEffectiveEntry(context)
+                const entryPath = context.getEntryPath()
                 const targetPath = path ?? context.getActivePath?.() ?? entryPath
                 if (targetPath === undefined)
                     return noProgram(context, toolRun, 'Call view_file with a path.')
 
                 const fileEntry = getFile(context, targetPath)
                 if (!fileEntry) {
+                    if (allFiles[targetPath] === null) return binaryFile(toolRun, targetPath)
                     return toolRun.failure(
                         'invalid_input',
                         `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`,
@@ -775,26 +760,13 @@ function createViewFileTool(context: DefaultCodingAgentToolContext) {
                     )
                 }
 
-                const preview = sliceLinesRange(
-                    fileEntry.content,
-                    start_line ?? 1,
-                    end_line,
-                    MAX_TAKE_LINES
-                )
-
                 return toolRun.success({
                     path: targetPath,
                     language: context.getEditorLanguage(),
                     sourceLanguage:
                         sourceLanguage(targetPath) ??
                         (isSourceFile(targetPath) ? 'header' : 'assembly'),
-                    code: preview.code,
-                    lineCount: preview.lineCount,
-                    startLine: preview.startLine,
-                    endLine: preview.endLine,
-                    returnedLines: preview.returnedLines,
-                    hasMore: preview.hasMore,
-                    nextStartLine: preview.nextStartLine,
+                    ...sliceLinesRange(fileEntry.content, start_line ?? 1, end_line),
                     files: Object.keys(allFiles),
                     entry: entryPath ?? null
                 })
@@ -839,12 +811,13 @@ function createReplaceFileContentTool(context: DefaultCodingAgentToolContext) {
         }),
         execute: async ({ path, target_content, replacement_content, start_line, end_line }) =>
             runAgentTool(async (toolRun) => {
-                const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+                const targetPath = path ?? context.getActivePath?.() ?? context.getEntryPath()
                 if (targetPath === undefined)
                     return noProgram(context, toolRun, 'Call replace_file_content with a path.')
                 const existing = getFile(context, targetPath)
                 if (!existing) {
                     const allFiles = getAllProjectFiles(context)
+                    if (allFiles[targetPath] === null) return binaryFile(toolRun, targetPath)
                     return toolRun.failure(
                         'invalid_input',
                         `File "${targetPath}" does not exist. Use write_to_file to create new files. Available files: ${Object.keys(allFiles).join(', ')}`,
@@ -916,10 +889,6 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
                     (sourceLanguage(path ?? '') && !context.getEditorLanguage()
                         ? 'RISC-V'
                         : undefined)
-                const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
-                if (targetPath === undefined)
-                    return noProgram(context, toolRun, 'Call write_to_file with a path.')
-
                 const previousLanguage = context.getEditorLanguage()
                 const previousEmulator = context.getEmulator()
                 const languageChanged =
@@ -930,6 +899,15 @@ function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
                 if (languageChanged && requestedLanguage) {
                     context.setEditorLanguage(requestedLanguage)
                 }
+                //a new language makes the chat page a new Project and a lecture's editor a new
+                //file, so a write that names no path goes to the Entry of that language, not to
+                //the File the old one had active
+                const targetPath =
+                    path ??
+                    (languageChanged ? undefined : context.getActivePath?.()) ??
+                    context.getEntryPath()
+                if (targetPath === undefined)
+                    return noProgram(context, toolRun, 'Call write_to_file with a path.')
 
                 return handleCodeWrite(
                     context,
@@ -961,13 +939,11 @@ function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path }) =>
             runAgentTool(async (toolRun) => {
                 const emulator = context.getEmulator()
-                if (!emulator) {
-                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                        retryable: true,
-                        nextAction:
-                            'Wait for the editor language to load before inspecting breakpoints.'
-                    })
-                }
+                if (!emulator)
+                    return emulatorUnavailable(
+                        toolRun,
+                        'Wait for the editor language to load before inspecting breakpoints.'
+                    )
 
                 const entry = emulatorEntry(context, emulator)
                 const filteredBreakpoints = (emulator.breakpoints ?? []).filter((breakpoint) => {
@@ -1135,7 +1111,10 @@ function resolveBreakpointLocation(
     if (!fileObj) {
         return {
             success: false,
-            error: `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`
+            error:
+                allFiles[targetPath] === null
+                    ? binaryFileError(targetPath)
+                    : `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`
         }
     }
 
@@ -1261,13 +1240,11 @@ function createSetBreakpointTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, instruction, address, line }) =>
             runAgentTool(async (toolRun) => {
                 const emulator = context.getEmulator()
-                if (!emulator) {
-                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                        retryable: true,
-                        nextAction:
-                            'Wait for the editor language to load before setting breakpoints.'
-                    })
-                }
+                if (!emulator)
+                    return emulatorUnavailable(
+                        toolRun,
+                        'Wait for the editor language to load before setting breakpoints.'
+                    )
 
                 const resolution = resolveBreakpointLocation(context, emulator, {
                     path,
@@ -1356,13 +1333,11 @@ function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
         execute: async ({ path, instruction, address, line, all }) =>
             runAgentTool(async (toolRun) => {
                 const emulator = context.getEmulator()
-                if (!emulator) {
-                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                        retryable: true,
-                        nextAction:
-                            'Wait for the editor language to load before removing breakpoints.'
-                    })
-                }
+                if (!emulator)
+                    return emulatorUnavailable(
+                        toolRun,
+                        'Wait for the editor language to load before removing breakpoints.'
+                    )
 
                 const entry = emulatorEntry(context, emulator)
 
@@ -1500,18 +1475,22 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
         list_files: tool({
             name: 'list_files',
             description:
-                'Lists all source, header, assembly and data files in the current project with their line counts, sizes, and which file is the entry file.',
+                'Lists all source, header, assembly and data files in the current project with their line counts, sizes, and which file is the entry file. A binary file, such as an executable or an image, is marked binary and has neither, as it cannot be read as text.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const allFiles = getAllProjectFiles(context)
-                    const entry = getEffectiveEntry(context)
-                    const files = Object.entries(allFiles).map(([p, text]) => ({
-                        path: p,
-                        lineCount: text.length === 0 ? 1 : text.split('\n').length,
-                        size: text.length,
-                        isEntry: p === entry
-                    }))
+                    const entry = context.getEntryPath()
+                    const files = Object.entries(allFiles).map(([p, text]) =>
+                        text === null
+                            ? { path: p, binary: true, isEntry: p === entry }
+                            : {
+                                  path: p,
+                                  lineCount: text.length === 0 ? 1 : text.split('\n').length,
+                                  size: text.length,
+                                  isEntry: p === entry
+                              }
+                    )
 
                     return toolRun.success({
                         files,
@@ -1545,7 +1524,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
                     //asked, as nothing was asked before (programs-plan.md, decision 13)
                     const project = context.getProject?.()
                     const hadProgram = project?.program(path) !== undefined
-                    deleteFile(context, path)
+                    context.deleteFile(path)
                     const deletedProgram = hadProgram && project?.program(path) === undefined
                     const deleted = {
                         deleted: path,
@@ -1579,13 +1558,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait until the editor language has loaded, then call get_emulator_state again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait until the editor language has loaded, then call get_emulator_state again.'
+                        )
 
                     const checkDiagnostics = await emulator.check()
                     return toolRun.success({
@@ -1612,21 +1589,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ steps = 1 }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and step again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and step again.'
+                        )
                     const blocker = executionBlocker(emulator, 'execute')
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     try {
                         let terminated = false
@@ -1658,21 +1627,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and run again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and run again.'
+                        )
                     const blocker = executionBlocker(emulator, 'execute')
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     const status = await emulator.run(1000000)
                     const errors = collectEmulatorErrors(emulator)
@@ -1718,21 +1679,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ steps = 1 }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before undoing execution.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load before undoing execution.'
+                        )
                     const blocker = executionBlocker(emulator, 'undo')
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     try {
                         emulator.undo(steps)
@@ -1762,13 +1715,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ address }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before mapping addresses.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load before mapping addresses.'
+                        )
                     const parsedAddress = parseHexAddress(address)
                     if (parsedAddress === null) {
                         return toolRun.failure('invalid_input', `Invalid hex address: ${address}`, {
@@ -1808,16 +1759,15 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction: 'Wait for the editor language to load, then compile again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile again.'
+                        )
 
                     //the Selected program's Entry, which compile_source may have just made or
                     //selected
-                    const entry = getEffectiveEntry(context)
+                    const entry = context.getEntryPath()
                     if (entry === undefined) return noProgram(context, toolRun)
                     const project = context.getProject?.()
                     const generated = project?.compilations.find(
@@ -1844,7 +1794,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         const all = getAllProjectFiles(context)
                         const projectFiles: Record<string, ProjectFile> = {}
                         for (const [p, c] of Object.entries(all)) {
-                            projectFiles[p] = { encoding: 'plain', content: c }
+                            if (c !== null) projectFiles[p] = { encoding: 'plain', content: c }
                         }
                         if (sourceLanguage(entry)) {
                             return toolRun.failure(
@@ -1857,7 +1807,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             )
                         }
                         await emulator.compile(
-                            100,
+                            compileHistorySize(context),
                             context.getBuildSources?.() ?? { files: projectFiles, entry }
                         )
                     } catch (error) {
@@ -1867,7 +1817,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     const errors = collectEmulatorErrors(emulator)
                     const diagnostics = collectEmulatorDiagnostics(emulator)
                     const currentFile = emulator.currentFile ?? entry
-                    const currentFileContent = getFile(context, currentFile)?.content ?? ''
+                    const currentFileContent = fileOf(context, emulator, currentFile)?.content ?? ''
 
                     if (errors.length > 0) {
                         return toolRun.failure('compile_error', errors[0], {
@@ -1936,13 +1886,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ address, length }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before reading memory.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load before reading memory.'
+                        )
                     const parsedAddress = parseHexAddress(address)
                     if (parsedAddress === null) {
                         return toolRun.failure('invalid_input', `Invalid hex address: ${address}`, {
@@ -2003,21 +1951,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ file, register, value }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and poke again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and poke again.'
+                        )
                     const blocker = pokeBlocker(emulator)
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     const fileId = file ?? CPU_REGISTER_FILE_ID
                     const registerFile = findRegisterFile(emulator, fileId)
@@ -2123,21 +2063,13 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
             execute: async ({ address, bytes }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load, then compile and poke again.'
-                        })
-                    }
+                    if (!emulator)
+                        return emulatorUnavailable(
+                            toolRun,
+                            'Wait for the editor language to load, then compile and poke again.'
+                        )
                     const blocker = pokeBlocker(emulator)
-                    if (blocker) {
-                        return toolRun.failure('execution_state', blocker.error, {
-                            retryable: blocker.retryable,
-                            nextAction: blocker.nextAction,
-                            details: executionDetails(context, emulator)
-                        })
-                    }
+                    if (blocker) return blocked(toolRun, blocker, context, emulator)
 
                     const parsedAddress = parseHexAddress(address)
                     if (parsedAddress === null) {

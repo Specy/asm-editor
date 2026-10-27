@@ -11,8 +11,8 @@ import type { MarsDevices } from './MarsDevices'
 /**
  * The syscall handlers of the MARS and RARS derived Cores (MIPS and RISC-V): the program's reads,
  * prints, dialogs, Files, time and random seeds, served from the Emulator's peripherals. RARS's
- * services are ports of MARS's and both Cores take the same handlers, so both adapters register the
- * map made here, and a change to the handlers' shapes is made once.
+ * services are ports of MARS's and both Cores take the same handlers, so `MarsEmulator` registers
+ * the map made here on either, and a change to the handlers' shapes is made once.
  *
  * Pure transport ([ADR 0035](../../../../../../docs/adr/0035-environments-match-their-reference.md)):
  * the Cores format what they print and parse what they read, with their Reference environment's
@@ -43,8 +43,9 @@ type MarsConfirmResult = (typeof CONFIRM_RESULT)[keyof typeof CONFIRM_RESULT]
 /**
  * The handlers both Cores take, with the results the ones made here give. `@specy/mips` and
  * `@specy/risc-v` declare the same map (`HandlerMapFns`), each with its own enums, so it is declared
- * here, as `MarsCore` is, rather than taken from either package: each adapter's `registerHandlers`
- * call checks it against its own Core, so a Core release that changes a handler fails there.
+ * here, as `MarsCore` is, rather than taken from either package: the `registerHandlers` each
+ * adapter hands `MarsEmulator` is checked against it, so a Core release that changes a handler
+ * fails there.
  *
  * Reads answer with the text typed, which the service parses (an empty answer to read char is the
  * service's own error); an input dialog answers null for Cancel, which the program receives as
@@ -324,6 +325,8 @@ export class MarsHandlers {
         answer: (execution: ExecutionGeneration) => Promise<T>
     ): Promise<T> {
         const execution = this.execution
+        //a read for a run that Stop ended, by a Core that could not be halted, shows nothing
+        this.host.executionController.ensureCurrent(execution)
         this.host.devices.flush()
         //and a Note played before the prompt is heard while it waits, not once it is answered
         this.host.peripherals.audio.flush()
@@ -380,18 +383,4 @@ export function exitStepText(code: number | string): string {
  */
 export function randomStreamStepText(generator: number): string {
     return `Random generator ${generator} advanced`
-}
-
-/**
- * The undo depth comes from a user setting, so it can be any number (or NaN). `0` means "no
- * history at all", which the core expresses as `setUndoEnabled(false)` rather than a zero sized
- * stack (a zero length backstep array makes the core throw on the first executed instruction).
- */
-export function normalizeUndoSize(undoSize: number): number {
-    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
-}
-
-/** The Core's halt limit for a Testcase run: no limit, or one that is not positive, is unbounded. */
-export function toHaltLimit(limit: number | undefined): number {
-    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
 }

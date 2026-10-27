@@ -47,7 +47,7 @@ let app: ReturnType<typeof mount> | null = null
 
 afterEach(() => {
     Prompt.cancel()
-    if (app) unmount(app)
+    if (app) void unmount(app)
     app = null
     document.body.innerHTML = ''
 })

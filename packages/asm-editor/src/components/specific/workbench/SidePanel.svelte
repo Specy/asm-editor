@@ -14,12 +14,14 @@
      * decisions 23 to 29).
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
     import FaExpand from '~icons/fa-solid/expand'
     import FaCompress from '~icons/fa-solid/compress'
     import Explorer from '#cmp/specific/project/Explorer.svelte'
     import TestcasesList from '#cmp/specific/project/testcases/TestcasesList.svelte'
     import TestcasesSummary from '#cmp/specific/project/testcases/TestcasesSummary.svelte'
+    import { testcaseRegisters } from '#lib/testcases.ts'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { documentationLanguageOf } from '#lib/search/scope.ts'
     import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
@@ -121,7 +123,7 @@
         {#if active?.maximizable && allowMaximize}
             <button
                 class="panel-action"
-                title={ui.maximized ? 'Restore the panel' : 'Maximize the panel'}
+                {@attach tooltip(ui.maximized ? 'Restore the panel' : 'Maximize the panel')}
                 aria-label={ui.maximized ? 'Restore the panel' : 'Maximize the panel'}
                 aria-pressed={ui.maximized}
                 onclick={() => ui.toggleMaximized()}
@@ -135,7 +137,7 @@
         {/if}
         <button
             class="panel-action"
-            title="Close the panel"
+            {@attach tooltip('Close the panel')}
             aria-label="Close the panel"
             onclick={() => {
                 if (phone) ui.drawerOpen = false
@@ -237,12 +239,7 @@
                                 editable={session.testcasesEditable}
                                 systemSize={emulator.systemSize}
                                 language={project.language}
-                                registerNames={emulator.registers.map((r) => r.name)}
-                                registerSizes={Object.fromEntries(
-                                    emulator.registers.map((r) => [r.name, Number(r.size)])
-                                )}
-                                startingRegisterNames={emulator.startingRegisterNames}
-                                hiddenRegistersNames={emulator.hiddenRegisters}
+                                registers={testcaseRegisters(emulator)}
                                 style="flex: 1; min-height: 0;"
                             />
                         {/key}

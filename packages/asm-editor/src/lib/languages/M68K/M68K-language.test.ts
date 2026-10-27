@@ -238,6 +238,77 @@ describe('M68K v2 language tooling', () => {
         )
     })
 
+    it('offers the addressing modes of the operand with their insert text and detail', async () => {
+        const provider = createM68KCompletion(monacoStub)
+        const resolved = async (line: string) =>
+            Promise.all(
+                (await completions(line)).map(async (item) => {
+                    const { label, insertText, kind, detail, documentation } =
+                        (await provider.resolveCompletionItem!(item, {} as never)) ?? item
+                    return [label, insertText, kind, detail, documentation].join(' | ')
+                })
+            )
+        // The size the operation already has comes first, then the modes in a fixed order.
+        expect(await resolved('move.w ')).toEqual([
+            'w | w  | 4 | Selects first 16 bits of the register | Select first part of the register',
+            'An | a0 | 5 | Address register | ',
+            'Dn | d0 | 5 | Data register | ',
+            '# | # | 6 | #<num/label> | decimal number or label | Decimal immediate number or label',
+            'EA | label | 6 | Effective address | ',
+            '(An) | (a0) | 6 | Indirect | ',
+            '-(An) | -(a0) | 6 | Indirect with predecrement | ',
+            '(An)+ | (a0)+ | 6 | Indirect with postincrement | ',
+            'd(An) | 0(a0) | 6 | Address-register displacement | ',
+            'd(An,Xn) | 0(a0,d0) | 6 | Address-register displacement with an index | ',
+            'd(PC) | 0(pc) | 6 | Program-counter displacement | ',
+            'd(PC,Xn) | 0(pc,d0) | 6 | Program-counter displacement with an index | ',
+            'sr | sr | 5 | Status register | ',
+            'ccr | ccr | 5 | Condition-code register | '
+        ])
+        expect(await resolved('movem.w ')).toContain(
+            '<register list> | d0-d1/a0-a1 | 5 | Register list for MOVEM | '
+        )
+        expect(await resolved('bra.')).toEqual([
+            'b | b  | 4 | Selects first 8 bits of the register | Select first 8 bits of the register',
+            's | s  | 4 | Selects a short branch displacement | Select a short branch displacement',
+            'w | w  | 4 | Selects first 16 bits of the register | Select first part of the register',
+            'l | l  | 4 | Select all 32 bits of the register | Select all bits of the register'
+        ])
+        expect(await resolved('move.w #')).toEqual([
+            '$ | $ | 3 | $<num> | hexadecimal number | Hexadecimal immediate number',
+            '% | % | 3 | %<num> | binary number | Binary immediate number',
+            '@ | @ | 3 | @<num> | octal number | Octal immediate number',
+            "' | ' | 3 |  | "
+        ])
+    })
+
+    it('describes a directive by its sizes, description and example', async () => {
+        const provider = createM68kHoverProvider(monacoStub)
+        const hover = async (line: string, column: number) =>
+            provider.provideHover(
+                { getLineContent: () => line } as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+        expect(await hover('    org $1000', 6)).toEqual({
+            range: new Range(1, 5, 1, 8),
+            contents: [
+                { value: '# org' },
+                { value: '**Sizes:** Not sized ' },
+                { value: 'Sets the current position in memory for the following instructions' },
+                { value: 'org $1000' }
+            ]
+        })
+        const dc = await hover('label: DC.L 1', 9)
+        expect(dc?.range).toEqual(new Range(1, 8, 1, 10))
+        expect(dc?.contents.map((content) => content.value)).toEqual([
+            '# DC',
+            '**Sizes:** b, w, l ',
+            expect.stringMatching(/^Defines constants, /),
+            "dc.b 'Hello world!', 4, %10, $F, @8, 'a', some_label"
+        ])
+    })
+
     it('returns no empty hover and highlights only the operation token', async () => {
         const provider = createM68kHoverProvider(monacoStub)
         const line = 'entry: move.w #1,d0'
@@ -312,6 +383,22 @@ describe('M68K v2 language tooling', () => {
         expect(result?.value.signatures[0].label).toContain('move.w')
         expect(result?.value.signatures[0].parameters).toHaveLength(2)
         result?.dispose()
+    })
+
+    it('names the postincrement and predecrement operands in signature help', async () => {
+        const provider = createM68kSignatureHelpProvider(monacoStub)
+        const label = async (line: string) => {
+            const result = await provider.provideSignatureHelp(
+                { getValueInRange: () => line } as never,
+                { lineNumber: 1, column: line.length + 1 } as never,
+                {} as never,
+                {} as never
+            )
+            result?.dispose()
+            return result?.value.signatures[0].label
+        }
+        expect(await label('cmpm ')).toBe('cmpm (An)+, (An)+')
+        expect(await label('addx ')).toBe('addx Dn/-(An), Dn/-(An)')
     })
 
     it('does not show signature help while the cursor is in a comment', async () => {

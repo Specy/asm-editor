@@ -3,6 +3,7 @@
     import { ScopedTheme } from '#stores/themeStore.svelte.ts'
     import { fly } from 'svelte/transition'
     import FaTimes from '~icons/fa-solid/times'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -25,7 +26,13 @@
                 <div class="title-text">
                     {$toast.title}
                 </div>
-                <button type="button" class="close" title="Close" onclick={toast.closeToast}>
+                <button
+                    type="button"
+                    class="close"
+                    {@attach tooltip('Close')}
+                    aria-label="Close"
+                    onclick={toast.closeToast}
+                >
                     <FaTimes />
                 </button>
             </div>
@@ -55,19 +62,15 @@
 {/key}
 
 <style lang="scss">
+    @use '../button/tray.scss';
+
     /* both drawn as the Workbench's execution trays where they float over the code: a translucent
        tint that blurs what is beneath, a hairline edge, lifted by a shadow */
     .toast-wrapper,
     .pill {
+        @include tray.surface;
         position: fixed;
         z-index: 20;
-        color: var(--primary-text);
-        background-color: color-mix(in srgb, var(--primary) 80%, transparent);
-        backdrop-filter: blur(4px);
-        border: 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent);
-        border-radius: 0.6rem;
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
-        font-family: Rubik;
         transition: transform 0.3s ease-out;
     }
     .toast-wrapper {
@@ -101,7 +104,7 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.35rem 0.35rem 0.35rem 0.75rem;
-        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent);
+        border-bottom: 1px solid var(--tray-line);
         font-size: 0.95rem;
         font-weight: 500;
     }

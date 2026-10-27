@@ -13,6 +13,7 @@
     import type { FileJournal } from '#lib/editJournal.ts'
     import FaUndo from '~icons/fa-solid/undo'
     import FaRedo from '~icons/fa-solid/redo'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { useWorkbench } from './workbenchContext'
     import CollapsibleSection from './CollapsibleSection.svelte'
 
@@ -35,7 +36,11 @@
             ? path
             : undefined
     })
-    const readOnly = $derived(group.bytesReadOnly)
+    /**
+     * Why no step can be gone back or forward to now: the session's reasons, which hold for every
+     * File, and not the focused pane's own, a Runtime library member it shows, say.
+     */
+    const readOnly = $derived(session.byteEditRefusal())
 
     /** The newest step's time, which orders the Files after the open one. */
     const latest = (journal: FileJournal) =>
@@ -132,7 +137,7 @@
                 <button
                     type="button"
                     class="action"
-                    title="Undo the last edit to {path}"
+                    {@attach tooltip(`Undo the last edit to ${path}`)}
                     aria-label="Undo"
                     disabled={!!readOnly || current === 0}
                     onclick={() => session.undoFileEdit(path)}><FaUndo /></button
@@ -140,7 +145,7 @@
                 <button
                     type="button"
                     class="action"
-                    title="Redo the next edit to {path}"
+                    {@attach tooltip(`Redo the next edit to ${path}`)}
                     aria-label="Redo"
                     disabled={!!readOnly || !journal.redo.length}
                     onclick={() => session.undoFileEdit(path, true)}><FaRedo /></button

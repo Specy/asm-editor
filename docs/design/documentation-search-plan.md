@@ -278,6 +278,8 @@ interface Chapter {
     - Today only M68K does. The other 828 pages exist only because the crawler finds them through the
       sidebar lists, which phase 6 changes.
     - A test compares the generated set with today's 954 names.
+    - They now read `INSTRUCTION_PAGES` (`lib/documentation/instructions/pages.ts`), the same names,
+      which the sitemap and the lecture links read too.
 - **Shared pieces leave the M68K folder.** `InstructionsMenu`, `MenuLink`, `ClientOnly` and
   `style.scss` live under the M68K routes but are imported by every language. They move to
   `packages/asm-editor/src/components/documentation/`.

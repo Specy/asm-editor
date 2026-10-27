@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaBars from '~icons/fa-solid/bars'
     import FaHeart from '~icons/fa-solid/heart'
@@ -33,7 +34,7 @@
         <button
             type="button"
             class="action brand"
-            title={drawerOpen ? 'Close the menu' : 'Open the menu'}
+            {@attach tooltip(drawerOpen ? 'Close the menu' : 'Open the menu')}
             aria-label={drawerOpen ? 'Close the menu' : 'Open the menu'}
             aria-expanded={drawerOpen}
             onclick={onToggleMenu}
@@ -44,7 +45,7 @@
         <a
             class="action brand"
             href={resolve('/')}
-            title="Go to the home page"
+            {@attach tooltip('Go to the home page')}
             aria-label="Go to the home page"
             onclick={(event) => {
                 if (

@@ -111,12 +111,8 @@ function column({ language = 'X86', floating = true } = {}) {
     disposers.push(() => unmount(app))
     return {
         aside: () => target.querySelector<HTMLElement>('aside[aria-label="Debugger"]')!,
-        collapse: () =>
-            target.querySelector<HTMLButtonElement>(
-                'button[title="Collapse the registers and memory"]'
-            )!,
-        strip: () =>
-            target.querySelector<HTMLButtonElement>('button[title="Show the registers and memory"]')
+        collapse: () => target.querySelector<HTMLButtonElement>('button[aria-label="Collapse"]')!,
+        strip: () => target.querySelector<HTMLButtonElement>('button.strip-button')
     }
 }
 

@@ -11,9 +11,11 @@
 
     interface Props {
         tool: DebugTool
+        /** In a section or a row of the Workbench; a floating window keeps the tools' own look. */
+        docked?: boolean
     }
 
-    let { tool }: Props = $props()
+    let { tool, docked = true }: Props = $props()
 
     const { session, ui } = useWorkbench()
     const emulator = session.emulator
@@ -22,7 +24,7 @@
 
 {#if tool.kind === 'callstack'}
     <CallStack
-        docked
+        {docked}
         stack={emulator.callStack}
         onGoToInstruction={(address) => void session.revealAddress(address)}
         onGoToLabel={(label) => {
@@ -34,12 +36,11 @@
     />
 {:else if tool.kind === 'history'}
     <MutationsViewer
-        docked
+        {docked}
         {language}
         statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
-        on:undo={(e) => session.undoSteps(e.detail)}
-        on:highlight={(e) => {
-            const step = e.detail
+        onUndo={(index) => session.undoSteps(index)}
+        onHighlight={(step) => {
             if (!step.file) return
             if (step.line < 0) void session.revealAddress(BigInt(step.pc))
             else void session.revealSourceLocation(step.file, step.line, 0)
@@ -60,6 +61,6 @@
         pokeable={session.pokeable}
         onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
         cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
-        controlsVar="secondary"
+        controlsVar={docked ? 'secondary' : 'primary'}
     />
 {/if}

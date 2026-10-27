@@ -4,6 +4,7 @@ import {
     type DemangledName
 } from '#lib/languages/demangle/demangledNames.ts'
 import type { Demangler } from '#lib/languages/demangle/loadDemangler.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 import type { DecodedInstruction, ElfAnalysis, ListingDecoder } from './decoder'
 import {
     findRegion,
@@ -111,17 +112,7 @@ const ZERO_RUN = 64
 
 /** The index of the last value at or below `value` in an ascending array, or -1. */
 function floorIndex(sorted: Float64Array, value: number): number {
-    let low = 0
-    let high = sorted.length - 1
-    let found = -1
-    while (low <= high) {
-        const middle = (low + high) >> 1
-        if (sorted[middle] <= value) {
-            found = middle
-            low = middle + 1
-        } else high = middle - 1
-    }
-    return found
+    return partitionPoint(sorted.length, (i) => sorted[i] <= value) - 1
 }
 
 /** Comment parts said of one thing, by a space: `name "text"`, `vtable for X+0x10 "text"`. */
@@ -310,18 +301,12 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
         const region = findRegion(codeRegions, address)
         const list = region && entries.get(region)
         if (!list) return []
-        let low = 0
-        let high = list.length - 1
-        while (low < high) {
-            const middle = (low + high) >> 1
-            if (Number(list[middle].address) < address) low = middle + 1
-            else high = middle
-        }
+        const first = partitionPoint(list.length, (i) => Number(list[i].address) < address)
         const out: DecodedInstruction[] = []
-        for (let i = low; i < list.length && out.length < count; ++i) {
+        for (let i = first; i < list.length && out.length < count; ++i) {
             const item = list[i]
             if ('data' in item) break
-            if (Number(item.address) >= address) out.push(item)
+            out.push(item)
         }
         return out
     }
@@ -338,12 +323,13 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     // `main`: the address `_start` passes to `__libc_start_main` in `rdi` (`programStart.ts`,
     // which a Build reads it by too).
     let main: number | undefined = mainSymbol(model)
-    if (main === undefined && entry && isStart(entry)) {
+    if (main === undefined && entry && isStart(entry))
         main = mainFromStart(instructionsFrom(entry, START_INSTRUCTIONS), (instruction) =>
             calledNames(model, stubs, instruction)
         )
-        if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
-    }
+    // Outside code, `main` is no function: a symbol of data (`const char main[] = {…}` in
+    // `.rodata`) or an address `_start` passes that holds none.
+    if (main !== undefined && !findRegion(codeRegions, main)) main = undefined
     if (main !== undefined && !isStart(main)) {
         // Linear decoding ran across `main`'s first byte: decode its region again from there.
         anchors.add(main)
@@ -814,15 +800,9 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
     /** The addresses of an ascending list in `[start, end)`. */
     const within = (sorted: Float64Array | undefined, start: number, end: number) => {
         if (!sorted) return NO_ADDRESSES
-        let low = 0
-        let high = sorted.length
-        while (low < high) {
-            const middle = (low + high) >> 1
-            if (sorted[middle] < start) low = middle + 1
-            else high = middle
-        }
+        const first = partitionPoint(sorted.length, (i) => sorted[i] < start)
         const found: number[] = []
-        for (let at = low; at < sorted.length && sorted[at] < end; ++at) found.push(sorted[at])
+        for (let at = first; at < sorted.length && sorted[at] < end; ++at) found.push(sorted[at])
         return found
     }
     /** The label an inline data line defines, noted once the comments above that line are. */
@@ -958,13 +938,7 @@ export function generateListing(decoder: ListingDecoder, input: ListingInput): L
      */
     function emitData(region: Region, start: number, end: number, inline: boolean) {
         const fileEnd = region.address + region.fileSize
-        let next = 0
-        let high = boundaries.length
-        while (next < high) {
-            const middle = (next + high) >> 1
-            if (boundaries[middle] <= start) next = middle + 1
-            else high = middle
-        }
+        let next = partitionPoint(boundaries.length, (i) => boundaries[i] <= start)
         // The comment saying the demangled name of an inline label, for the first line after it.
         let named: string | undefined
         /** A data line, with that comment and its own, if any. */

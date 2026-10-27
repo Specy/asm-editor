@@ -72,7 +72,7 @@ function picker(data: StoredProject = {}, deviceClass: DeviceClass = 'desktop') 
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const button = () => target.querySelector<HTMLButtonElement>('[role="combobox"]')
@@ -130,7 +130,8 @@ it("is disabled during a Debug session, saying why, and shows that session's Pro
     view.emulator.canExecute = true
     flushSync()
     expect(view.button()?.disabled).toBe(true)
-    expect(view.button()?.closest('.program-picker')?.getAttribute('title')).toBe(
+    const described = view.button()?.getAttribute('aria-describedby')
+    expect(document.getElementById(described!)?.textContent?.trim()).toBe(
         'Stop the Debug session before changing programs'
     )
     expect(view.button()?.textContent).toContain('sort.s')

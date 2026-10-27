@@ -16,11 +16,13 @@
     import FaShareAlt from '~icons/fa-solid/share-alt'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import { Prompt } from '#stores/promptStore.svelte.ts'
+    import { toast } from '#stores/toastStore.ts'
     import { createEventDispatcher } from 'svelte'
     import { isSingleSourceProject } from '#lib/projectArchive.ts'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         project: Project
@@ -41,16 +43,30 @@
     const created = $derived(new Date(project.createdAt))
     const edited = $derived(new Date(project.updatedAt))
 
-    function save() {
-        project.name = textContent
-        project.description = descriptionContent
-        ProjectStore.save(project)
+    /**
+     * Saves the name or description that changed, and only that: the other may be one this list's
+     * copy is behind on, changed in another tab since, and stays as it is stored.
+     */
+    async function save() {
+        const name = textContent
+        const description = descriptionContent
+        const details: { name?: string; description?: string } = {}
+        if (name !== (project.name || 'Unnamed')) details.name = name
+        if (description !== (project.description || '')) details.description = description
+        if (details.name === undefined && details.description === undefined) return
+        const result = await ProjectStore.saveDetails(project.id, details)
+        if (result.local === 'failed') toast.error(`Could not save "${name}" in the browser`)
     }
     async function deleteProject() {
         const result = await Prompt.confirm(`Are you sure you want to delete "${project.name}"?`)
         if (result === null) return
         if (!result) return
-        ProjectStore.deleteProject(project)
+        try {
+            await ProjectStore.deleteProject(project)
+        } catch (error) {
+            console.error(error)
+            toast.error(`Could not delete "${project.name}"`)
+        }
     }
 </script>
 
@@ -70,7 +86,7 @@
         <div class="card-actions">
             <button
                 class="card-action"
-                title="Share this project"
+                {@attach tooltip('Share this project')}
                 aria-label="Share this project"
                 onclick={() => dispatcher('share', project)}
             >
@@ -78,9 +94,11 @@
             </button>
             <button
                 class="card-action"
-                title={singleSource
-                    ? 'Download this project as a source file'
-                    : 'Download this project as an archive'}
+                {@attach tooltip(
+                    singleSource
+                        ? 'Download this project as a source file'
+                        : 'Download this project as an archive'
+                )}
                 aria-label="Download this project"
                 onclick={() => dispatcher('download', project)}
             >
@@ -88,7 +106,7 @@
             </button>
             <button
                 class="card-action delete"
-                title="Delete this project"
+                {@attach tooltip('Delete this project')}
                 aria-label="Delete this project"
                 onclick={deleteProject}
             >

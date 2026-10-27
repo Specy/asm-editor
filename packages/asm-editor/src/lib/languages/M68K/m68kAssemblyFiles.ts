@@ -1,5 +1,6 @@
 import { S68k } from '@specy/s68k'
 import { assemblyFiles, fileBytes, type BuildSources } from '#lib/projectFiles.ts'
+import { s68kColumnToUtf16 } from './m68kDiagnostics'
 
 /** A line that cannot contain this token cannot be an `incbin` directive. */
 const INCBIN_TOKEN = /\bincbin\b/i
@@ -42,7 +43,10 @@ export function m68kAssemblyFiles(sources: BuildSources): Record<string, string 
                 const target = resolveM68kFile(sourcePath, m68kWrittenPath(field.text), sources)
                 if (!target) return line
                 const alias = aliasFor(target)
-                return `${line.slice(0, field.span.start)}"${alias}"${line.slice(field.span.end)}`
+                //the span counts Unicode scalars, and the line is sliced in UTF-16 code units
+                const start = s68kColumnToUtf16(line, field.span.start)
+                const end = s68kColumnToUtf16(line, field.span.end)
+                return `${line.slice(0, start)}"${alias}"${line.slice(end)}`
             })
             .join('\n')
     }

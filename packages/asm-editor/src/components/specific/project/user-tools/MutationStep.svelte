@@ -1,6 +1,5 @@
 <script lang="ts">
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import { createEventDispatcher } from 'svelte'
     import FaUndo from '~icons/fa-solid/undo'
     import {
         type ExecutionStep,
@@ -11,18 +10,32 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { sizeName } from '#lib/languages/sizeNames.ts'
     import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         step: ExecutionStep
-        canUndoToHere?: boolean
+        /** Why "Undo to here" cannot take the program back to this row; undefined when it can. */
+        undoBlocked?: string
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
         /** Contrast with the section surface when shown in a docked History panel. */
         docked?: boolean
+        /** "Undo to here" was pressed. */
+        onUndo?: () => void
+        /** "Go to line" was pressed, to show the step's line in the code. */
+        onHighlight?: (step: ExecutionStep) => void
     }
 
-    let { step, flags, language, canUndoToHere = true, docked = false }: Props = $props()
+    let {
+        step,
+        flags,
+        language,
+        undoBlocked,
+        docked = false,
+        onUndo,
+        onHighlight
+    }: Props = $props()
     //each Core records its own status register, so the bits are read with the Target's own layout
     let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
@@ -173,24 +186,16 @@
             ? expanded.filter((other) => other !== index)
             : [...expanded, index]
     }
-
-    const dispatcher = createEventDispatcher<{
-        undo: void
-        highlight: ExecutionStep
-    }>()
 </script>
 
 <div class="column step" class:docked>
     <div class="step-header column">
         <button
-            title={canUndoToHere && step.undoable !== false
-                ? 'Undo to here'
-                : 'Undo stops before effects that are not recorded'}
-            disabled={!canUndoToHere || step.undoable === false}
+            {@attach tooltip(undoBlocked ?? 'Undo to here')}
+            aria-label="Undo to here"
+            disabled={undoBlocked !== undefined}
             class="undo-to-here"
-            onclick={() => {
-                dispatcher('undo')
-            }}
+            onclick={() => onUndo?.()}
         >
             <Icon size={0.75}>
                 <FaUndo />
@@ -226,11 +231,9 @@
                 <span class="pc">
                     <span style="opacity: 0.6"> 0x </span>{step.pc.toString(16).toUpperCase()}
                     <button
-                        title="Go to line"
+                        {@attach tooltip('Go to line')}
                         class="go-to-line"
-                        onclick={() => {
-                            dispatcher('highlight', step)
-                        }}
+                        onclick={() => onHighlight?.(step)}
                     >
                         go
                     </button>
@@ -283,7 +286,9 @@
                     <button
                         class="mutation"
                         class:expanded={expanded.includes(i)}
-                        title={expanded.includes(i) ? 'Hide the values' : 'Show the values'}
+                        {@attach tooltip(
+                            expanded.includes(i) ? 'Hide the values' : 'Show the values'
+                        )}
                         onclick={() => toggle(i)}
                     >
                         {expanded.includes(i) ? writeDetail(mutation) : writeLabel(mutation)}

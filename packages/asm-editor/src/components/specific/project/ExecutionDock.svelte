@@ -97,6 +97,7 @@
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
@@ -220,7 +221,7 @@
                     class:progress={!!progress}
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
-                    title={progress?.phase ?? buildButton.title}
+                    {@attach tooltip(progress?.phase ?? buildButton.title)}
                     aria-label={buildButton.label}
                     aria-busy={building}
                 >
@@ -239,7 +240,7 @@
                     <button
                         type="button"
                         class="tool"
-                        title="Stop building and go back to editing"
+                        {@attach tooltip('Stop building and go back to editing')}
                         aria-label="Cancel the Build"
                         onclick={progress.onCancel}>Cancel</button
                     >
@@ -253,8 +254,10 @@
                     disabled={compilation.disabled}
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
-                    title={compilation.warning ??
-                        'Compile the source and the Files it includes with Compiler Explorer'}
+                    {@attach tooltip(
+                        compilation.warning ??
+                            'Compile the source and the Files it includes with Compiler Explorer'
+                    )}
                     onclick={compilation.onCompile}
                 >
                     <Icon size={0.9}>
@@ -273,7 +276,7 @@
                     <select
                         class="tool optimization"
                         aria-label="Optimization"
-                        title="Compiler optimization"
+                        {@attach tooltip('Compiler optimization')}
                         value={compilation.optimization.value}
                         disabled={compilation.busy || compilation.disabled}
                         onchange={(event) =>
@@ -289,7 +292,7 @@
                     <select
                         class="tool compiler"
                         aria-label="Source compiler"
-                        title="Source compiler"
+                        {@attach tooltip('Source compiler')}
                         value={compilation.compiler.value}
                         disabled={compilation.busy || compilation.disabled}
                         onchange={(event) =>
@@ -304,14 +307,21 @@
                     <button
                         type="button"
                         class="tool"
-                        title="Cancel source compilation"
+                        {@attach tooltip('Cancel source compilation')}
                         aria-label="Cancel source compilation"
                         onclick={compilation.onCancel}>Cancel</button
                     >
                 {/if}
             {/if}
         {:else if showExecution}
-            <button type="button" class="tool" onclick={onStop} title="End the Debug session">
+            <!-- the narrow layouts drop the words, so each button is also named -->
+            <button
+                type="button"
+                class="tool"
+                onclick={onStop}
+                {@attach tooltip('End the Debug session')}
+                aria-label="Stop"
+            >
                 <Icon size={0.8}>
                     <FaStop />
                 </Icon>
@@ -322,7 +332,10 @@
                 class="tool primary"
                 onclick={() => (running ? onPause() : onRun())}
                 disabled={executionDisabled || building}
-                title={running ? 'Pause the program' : 'Run to the end or the next breakpoint'}
+                {@attach tooltip(
+                    running ? 'Pause the program' : 'Run to the end or the next breakpoint'
+                )}
+                aria-label={running ? 'Pause' : 'Run'}
             >
                 <Icon size={0.8}>
                     {#if running}
@@ -339,7 +352,8 @@
                 class="tool"
                 disabled={undoDisabled || running || !canUndo}
                 onclick={onUndo}
-                title="Undo the last step"
+                {@attach tooltip('Undo the last step')}
+                aria-label="Undo"
             >
                 <Icon size={0.8}>
                     <FaUndo />
@@ -351,7 +365,8 @@
                 class="tool emphasis"
                 disabled={executionDisabled || running || building}
                 onclick={onStep}
-                title="Run one instruction"
+                {@attach tooltip('Run one instruction')}
+                aria-label="Step"
             >
                 <Icon size={0.8}>
                     <FaStepForward />
@@ -398,11 +413,14 @@
                     class:playing={sound.playing && !sound.muted}
                     onclick={sound.onToggle}
                     aria-pressed={!sound.muted}
-                    title={sound.loading
-                        ? 'Loading sounds…'
-                        : sound.muted
-                          ? 'Turn sound on'
-                          : 'Turn sound off'}
+                    {@attach tooltip(
+                        sound.loading
+                            ? 'Loading sounds…'
+                            : sound.muted
+                              ? 'Turn sound on'
+                              : 'Turn sound off'
+                    )}
+                    aria-label="Sound"
                 >
                     <Icon size={0.9}>
                         {#if sound.loading}
@@ -422,9 +440,12 @@
                     class="tool"
                     onclick={() => onTest?.()}
                     disabled={buildDisabled || building || running}
-                    title={debugging
-                        ? 'End the Debug session and run the Testcases'
-                        : 'Run the Testcases'}
+                    {@attach tooltip(
+                        debugging
+                            ? 'End the Debug session and run the Testcases'
+                            : 'Run the Testcases'
+                    )}
+                    aria-label="Test"
                 >
                     <Icon size={0.9}>
                         <FaFlask />
@@ -437,7 +458,8 @@
                     type="button"
                     class="tool {action.tone ?? ''}"
                     onclick={action.onClick}
-                    title={action.title}
+                    {@attach tooltip(action.title)}
+                    aria-label={action.label}
                 >
                     <Icon size={0.9}>
                         <action.icon />
@@ -450,6 +472,8 @@
 </div>
 
 <style lang="scss">
+    @use '../../shared/button/tray.scss';
+
     /* the two ends of a bar over what it sits on: the empty middle lets the clicks through */
     .execution-controls {
         display: flex;
@@ -493,37 +517,12 @@
     }
 
     .tool {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        padding: 0 0.8rem;
-        border: none;
-        border-radius: 0.4rem;
-        background-color: transparent;
-        color: var(--primary-text);
-        font-family: Rubik;
-        font-size: 0.95rem;
-        font-weight: 500;
-        white-space: nowrap;
         user-select: none;
-        cursor: pointer;
-        transition:
-            background-color 0.15s,
-            color 0.15s;
+        @include tray.tool(0.8rem, 0.95rem);
 
         :global(.icon) {
             cursor: inherit;
         }
-    }
-
-    .tool:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-    }
-
-    .tool:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
     }
 
     .tool:disabled {
@@ -548,16 +547,7 @@
     }
 
     .primary {
-        background-color: var(--accent);
-        color: var(--accent-text);
-    }
-
-    .primary:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--accent) 85%, white);
-    }
-
-    .primary:focus-visible {
-        outline-color: var(--accent-text);
+        @include tray.primary(null);
     }
 
     /* sunk into the tray rather than see-through, as everything in it */

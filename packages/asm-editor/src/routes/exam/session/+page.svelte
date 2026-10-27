@@ -34,7 +34,7 @@
         type OpenQuestionSection
     } from '#lib/exam.ts'
 
-    import { makeHash, textDownloader } from '#lib/utils.ts'
+    import { copyText, makeHash, textDownloader } from '#lib/utils.ts'
     import { createDebouncer } from '#lib/debounce.ts'
     import { serializer } from '#lib/json.ts'
     import { toast } from '#stores/toastStore.ts'
@@ -47,6 +47,7 @@
     import ExamReviewAgent from '#cmp/specific/exam/ExamReviewAgent.svelte'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { preloadAllEmulators } from '#lib/languages/Emulator.ts'
 
     const EXAM_SESSION_SNAPSHOT_VERSION = 1
@@ -377,6 +378,8 @@
             toast.error('Wrong unlock password')
             return
         }
+        //a finished exam had its guards taken off, and the student goes back to answering under them
+        attachExamListeners()
         await requestExamFullscreen()
         examDisabled = false
         examSubmission.submissionTimestamp = 0
@@ -405,6 +408,17 @@
             }
             examDisabled = true
         }
+    }
+
+    /**
+     * The guards an exam runs under. A listener added twice is added once, so unlocking an exam that
+     * was only paused, and kept them, changes nothing.
+     */
+    function attachExamListeners() {
+        document.addEventListener('visibilitychange', listenVisibilityChange)
+        document.addEventListener('fullscreenchange', listenFullscreenChange)
+        window.addEventListener('blur', listenVisibilityChange)
+        window.addEventListener('keydown', preventDefaultKeyPresses)
     }
 
     function detachExamListeners() {
@@ -459,10 +473,7 @@
     }
 
     async function startExam() {
-        document.addEventListener('visibilitychange', listenVisibilityChange)
-        document.addEventListener('fullscreenchange', listenFullscreenChange)
-        window.addEventListener('blur', listenVisibilityChange)
-        window.addEventListener('keydown', preventDefaultKeyPresses)
+        attachExamListeners()
         await requestExamFullscreen()
     }
 
@@ -647,8 +658,11 @@
     }
 
     onMount(() => {
-        loadExam()
-        preloadAllEmulators()
+        void loadExam()
+        //a warm-up: a Core that fails here loads again, and says why, when a section first needs it
+        preloadAllEmulators().catch((error) =>
+            console.warn('Could not preload the emulators', error)
+        )
 
         const intervalId = setInterval(() => {
             now = Date.now()
@@ -754,12 +768,7 @@
                     />
                     <Button onClick={unlockExam}>Unlock</Button>
                 </Row>
-                <Button
-                    onClick={async () => {
-                        await navigator.clipboard.writeText(submissionUrl)
-                        toast.logPill('Submission link copied to clipboard')
-                    }}
-                >
+                <Button onClick={() => copyText(submissionUrl, 'Submission link')}>
                     Copy submission link again
                 </Button>
                 <Button
@@ -807,7 +816,8 @@
                                         teacherAgentOpen = !teacherAgentOpen
                                     }
                                 }}
-                                title="Ask AI to review this result"
+                                {@attach tooltip('Ask AI to review this result')}
+                                aria-label="Ask AI"
                                 style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 0.4rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
                             >
                                 <Icon>
@@ -825,7 +835,8 @@
                             hasIcon
                             disabled={!canGoToPreviousSection}
                             onClick={goToPreviousSection}
-                            title="Previous section"
+                            {@attach tooltip('Previous section')}
+                            aria-label="Previous section"
                             style="padding:0.3rem; width:2.2rem; height:2.2rem"
                         >
                             <Icon>
@@ -838,7 +849,8 @@
                             hasIcon
                             disabled={!canGoToNextSection}
                             onClick={goToNextSection}
-                            title="Next section"
+                            {@attach tooltip('Next section')}
+                            aria-label="Next section"
                             style="padding:0.3rem; width:2.2rem; height:2.2rem"
                         >
                             <Icon>

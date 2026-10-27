@@ -12,7 +12,7 @@
     import Header from '#cmp/shared/layout/Header.svelte'
     import { page } from '$app/state'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import OpenEditorButton from '#cmp/shared/button/OpenEditorButton.svelte'
     import { resolve } from '$app/paths'
     import { courseTheme } from '#lib/languages/languageColors.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
@@ -22,6 +22,7 @@
     import SearchPalette from '#cmp/search/SearchPalette.svelte'
     import { COURSES_SCOPE, courseLanguage, languageScope } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -113,24 +114,14 @@
                 style="width: 100%; gap: 0.5rem"
                 cssVar="tertiary"
                 href="/donate"
-                title="Donate to the project"
+                {@attach tooltip('Donate to the project')}
             >
                 <Icon>
                     <FaDonate />
                 </Icon>
                 Donate
             </ButtonLink>
-            <ButtonLink
-                style="width: 100%;"
-                href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
-                title="Open the editor"
-            >
-                {#if ProjectStore.projects.length > 0}
-                    Go to your projects
-                {:else}
-                    Create your first project
-                {/if}
-            </ButtonLink>
+            <OpenEditorButton />
         </Column>
 
         {#snippet content()}

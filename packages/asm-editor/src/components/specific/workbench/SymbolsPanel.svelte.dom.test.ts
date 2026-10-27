@@ -103,7 +103,7 @@ function symbolsPanel(
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const panel = () => target.querySelector<HTMLElement>('.symbols')!

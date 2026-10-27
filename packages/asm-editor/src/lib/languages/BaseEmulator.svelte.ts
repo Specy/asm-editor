@@ -11,15 +11,9 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { Termination } from '#lib/languages/termination.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
 import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
-
-export type CompilationError = {
-    type: 'raw'
-    message: string
-}
 
 /**
  * A successful assembly may still carry warnings/suggestions, a failed one carries the whole list
@@ -91,11 +85,6 @@ export class BuildDownloadError extends Error {
     }
 }
 
-export enum EmulatorStatus {
-    Terminated = 0,
-    Running = 1
-}
-
 export type Instruction = {
     address: bigint
     lineNumber: number
@@ -134,31 +123,28 @@ export abstract class BaseEmulator<R extends string> {
         return this._registerFiles
     }
 
-    getSystemSize(): RegisterSize {
-        return this._systemSize
-    }
-
-    getEndianness(): 'little' | 'big' {
-        return this._endianness
-    }
-
-    getRegisterNames(): R[] {
-        return this._registerNames
-    }
-
+    /** `undoSize` is the Undo history's depth, a whole number, 0 for no history at all. */
     abstract _initialize(undoSize: number): void
 
     abstract _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string }
 
-    abstract _runTestcase(testcase: Testcase, haltLimit: number): MaybePromise<void>
+    /** Runs a Testcase's program within `haltLimit` instructions, finite and positive. */
+    abstract _runTestcase(haltLimit: number): MaybePromise<void>
 
     abstract _dispose(): void
 
-    abstract _stringifyError(error: unknown, line?: number): string
+    /**
+     * What an error the Core or the adapter threw says to the person, the error's own message
+     * unless the adapter knows better. `line`, one-based, is where a failing program stopped, for
+     * a Core whose errors do not name it.
+     */
+    _stringifyError(error: unknown, _line?: number): string {
+        return error instanceof Error ? error.message : String(error)
+    }
 
     /**
-     * `undoSize` is the requested undo-history depth for the program being assembled. It is passed
-     * here (and not only to `_initialize`) because some cores allocate their backstep buffer during
+     * `undoSize` is the undo-history depth for the program being assembled, as `_initialize` gets
+     * it. It is passed here (and not only to `_initialize`) because some cores allocate their backstep buffer during
      * assembly and therefore have to be told the depth *before* the code is assembled (MIPS).
      * Languages whose core does not care can ignore the parameter.
      */
@@ -183,7 +169,11 @@ export abstract class BaseEmulator<R extends string> {
      */
     _undoDepth?(): number
 
-    /** Monotone completed guest/tool instruction count; callers measure guest deltas. */
+    /**
+     * Monotone count of the guest/tool instructions the Core has executed, each one entry of its
+     * Undo history while that records (a failing one too where the Core records it, as MARS and
+     * RARS do); callers measure deltas, across a call that threw as well.
+     */
     _getInstructionsExecuted?(): bigint
 
     /**
@@ -225,8 +215,6 @@ export abstract class BaseEmulator<R extends string> {
     abstract _canUndo(): boolean
 
     abstract _step(): Promise<{ terminated: boolean }>
-
-    abstract _getStatus(): EmulatorStatus
 
     abstract _writeMemoryBytes(address: bigint, data: Uint8Array): void
 
@@ -312,10 +300,6 @@ export abstract class BaseEmulator<R extends string> {
     abstract _getInstructionAt(address: bigint): Instruction | null
 
     abstract _getRegisterValues(): bigint[]
-
-    abstract _getRegisterValuesRecord(): Record<R, bigint>
-
-    abstract _getRegisterValue(register: R, size?: RegisterSize): bigint
 
     abstract _setRegisterValue(register: R, value: bigint, size?: RegisterSize): void
 

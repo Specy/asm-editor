@@ -7,6 +7,7 @@ import {
     type CompilationRequest
 } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
+import { UNDO_HISTORY_SIZE } from '#lib/projectSettings.ts'
 import { buildDefaultCodingAgentPrompt } from './prompts'
 import {
     DEFAULT_TAKE_LINES,
@@ -1454,6 +1455,88 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
         })
     })
 
+    describe('Executables', () => {
+        /**
+         * An emulator stopped in an imported Executable, `main`, on the second line of its Listing,
+         * which is what the editor shows for it: `main` itself is bytes, no text File.
+         */
+        function inExecutable() {
+            const emulator = createMockEmulator()
+            const listing = '  401000:  mov eax, 1\n  401005:  ret'
+            Object.assign(emulator, {
+                currentFile: 'main',
+                line: 1,
+                listings: {
+                    session: new Map([['main', { listing: { text: listing } }]]),
+                    isLibrary: () => false
+                },
+                latestSteps: [
+                    {
+                        kind: 'instruction',
+                        file: 'main',
+                        mutations: [],
+                        pc: 0x401000,
+                        line: 0,
+                        old_ccr: { bits: 0 },
+                        new_ccr: { bits: 0 }
+                    }
+                ]
+            })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            return createDefaultCodingAgentTools(context)
+        }
+
+        it('reports the current line and the latest steps from the Listing', async () => {
+            const result = (await inExecutable().step.execute({})) as unknown as ToolExecutionResult
+            expect(result.currentLine).toBe('main:2 |   401005:  ret')
+            expect((result.latestSteps as FormattedStep[])[0].line).toBe(
+                'main:1 |   401000:  mov eax, 1'
+            )
+        })
+
+        it('reports the current line from the Listing after a compile', async () => {
+            expect(await inExecutable().compile.execute({})).toMatchObject({
+                success: true,
+                currentLine: 'main:2 |   401005:  ret'
+            })
+        })
+    })
+
+    describe('emulator state', () => {
+        it('says the emulator is not loaded yet, and what to do then', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            context.getEmulator = () => null
+            const tools = createDefaultCodingAgentTools(context)
+            expect(await tools.step.execute({})).toEqual({
+                success: false,
+                errorKind: 'emulator_unavailable',
+                error: 'Emulator not loaded yet.',
+                retryable: true,
+                nextAction: 'Wait for the editor language to load, then compile and step again.',
+                details: undefined
+            })
+        })
+
+        it('says why the program cannot run, with its state', async () => {
+            const emulator = createMockEmulator()
+            Object.assign(emulator, { terminated: true })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.run_to_completion.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            expect(result).toMatchObject({
+                success: false,
+                errorKind: 'execution_state',
+                error: 'Program has already terminated.',
+                retryable: true,
+                nextAction: 'Call compile to reset execution state, then run or step again.',
+                details: { errors: [], state: { terminated: true } }
+            })
+            expect(emulator.run).not.toHaveBeenCalled()
+        })
+    })
+
     describe('latest steps', () => {
         it('renders a Poke with its writes in hex and no source line', () => {
             const poke: ExecutionStep = {
@@ -1614,7 +1697,14 @@ function projectContext(project: Project) {
     context.getProject = () => project
     context.getEditorLanguage = () => project.language
     context.getFiles = () => project.files
-    context.getFile = (path) => (path in project.files ? project.fileSystem.readText(path) : null)
+    //null for no File and for a binary one, as the hook says
+    context.getFile = (path) => {
+        try {
+            return project.fileSystem.readText(path)
+        } catch {
+            return null
+        }
+    }
     context.setFile = (path, code) => {
         const added = !(path in project.files)
         project.fileSystem.writeText(path, code)
@@ -1695,6 +1785,64 @@ describe('Programs', () => {
         })
     })
 
+    //as the Workbench's own Build does (WorkbenchSession.build), from the Selected program's Settings
+    it('compiles with the undo history the selected program asks for', async () => {
+        const { project, emulator, tools } = projectContext(
+            makeProject({ language: 'RISC-V', code: 'li a0, 1' })
+        )
+        await tools.compile.execute({})
+        expect(emulator.compile).toHaveBeenLastCalledWith(UNDO_HISTORY_SIZE, expect.anything())
+        project.setProgramSettings('main.riscv', { undoEnabled: false })
+        await tools.compile.execute({})
+        expect(emulator.compile).toHaveBeenLastCalledWith(0, expect.anything())
+    })
+
+    it('compiles with the default undo history where there is no project', async () => {
+        const emulator = createMockEmulator()
+        const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+        await createDefaultCodingAgentTools(context).compile.execute({})
+        expect(emulator.compile).toHaveBeenLastCalledWith(UNDO_HISTORY_SIZE, expect.anything())
+    })
+
+    //the chat page makes a new Project, whose one Program is `main.<ext>`, for each language
+    it('writes to the Entry of the language write_to_file switches to', async () => {
+        let project = makeProject({ language: 'RISC-V', code: '' })
+        let emulator = createMockEmulator()
+        //the File the old language's editor showed
+        let activePath: string | undefined = 'main.riscv'
+        const { context } = createTestContext({})
+        context.getProject = () => project
+        context.getEditorLanguage = () => project.language
+        context.setEditorLanguage = (language) => {
+            project = makeProject({ language, code: '' })
+            emulator = createMockEmulator()
+        }
+        context.getEmulator = () => emulator
+        context.getFiles = () => project.files
+        context.getFile = (path) =>
+            path in project.files ? project.fileSystem.readText(path) : null
+        context.setFile = (path, code) => project.fileSystem.writeText(path, code)
+        context.getEntryPath = () => project.selectedProgram
+        context.getActivePath = () => activePath
+        context.setActivePath = (path) => {
+            activePath = path
+        }
+        context.getBuildSources = () => projectAgentBuildSources(project)
+        const tools = createDefaultCodingAgentTools(context)
+        const code = 'li $v0, 10\nsyscall'
+        expect(await tools.write_to_file.execute({ code, language: 'MIPS' })).toMatchObject({
+            success: true,
+            path: 'main.mips',
+            language: 'MIPS',
+            languageChanged: true,
+            files: ['main.mips']
+        })
+        expect(project.fileSystem.readText('main.mips')).toBe(code)
+        expect(emulator.setSources).toHaveBeenLastCalledWith(
+            expect.objectContaining({ entry: 'main.mips' })
+        )
+    })
+
     it('makes the first program from a new assembly file the agent writes', async () => {
         const { project, tools } = projectContext(
             makeProject({ language: 'RISC-V', files: {}, programs: {} })
@@ -1704,6 +1852,80 @@ describe('Programs', () => {
         await tools.write_to_file.execute({ path: 'sort.riscv', code: 'li a0, 1' })
         expect(project.selectedProgram).toBe('sort.riscv')
         expect(await tools.list_files.execute({})).toMatchObject({ entry: 'sort.riscv' })
+    })
+})
+
+describe('binary files', () => {
+    /** A RISC-V Project beside an x86 Build's kind of output: an ELF stored as bytes, not UTF-8. */
+    function withBinary() {
+        const context = projectContext(makeProject({ language: 'RISC-V', code: 'li a0, 1' }))
+        context.project.fileSystem.writeBytes(
+            'main',
+            new Uint8Array([0x7f, 0x45, 0x4c, 0x46, 0xff, 0xfe, 0x00]),
+            true,
+            'base64'
+        )
+        return context
+    }
+    const binary = 'File "main" is binary, not text, so it cannot be read or edited as text.'
+
+    it('lists a binary file as binary and still reads the text ones', async () => {
+        const { tools } = withBinary()
+        expect(await tools.list_files.execute({})).toMatchObject({
+            success: true,
+            files: [
+                { path: 'main.riscv', lineCount: 1, isEntry: true },
+                { path: 'main', binary: true, isEntry: false }
+            ]
+        })
+        expect(await tools.view_file.execute({})).toMatchObject({
+            success: true,
+            path: 'main.riscv',
+            code: 'li a0, 1',
+            files: ['main.riscv', 'main']
+        })
+    })
+
+    it('says a binary file cannot be read or edited as text', async () => {
+        const { tools } = withBinary()
+        expect(await tools.view_file.execute({ path: 'main' })).toMatchObject({
+            success: false,
+            errorKind: 'invalid_input',
+            error: binary
+        })
+        expect(
+            await tools.replace_file_content.execute({
+                path: 'main',
+                target_content: 'ELF',
+                replacement_content: 'elf'
+            })
+        ).toMatchObject({ success: false, error: binary })
+        expect(await tools.set_breakpoint.execute({ path: 'main', line: 1 })).toMatchObject({
+            success: false,
+            error: binary
+        })
+    })
+
+    it('writes, builds and deletes beside a binary file', async () => {
+        const { project, emulator, tools } = withBinary()
+        expect(
+            await tools.write_to_file.execute({ path: 'main.riscv', code: 'li a0, 2' })
+        ).toMatchObject({ success: true, files: ['main.riscv', 'main'] })
+        expect(await tools.compile.execute({})).toMatchObject({
+            success: true,
+            entry: 'main.riscv'
+        })
+        //the Build is given the Files as they are stored, the binary one as bytes
+        expect(emulator.compile).toHaveBeenCalledWith(
+            expect.any(Number),
+            expect.objectContaining({
+                files: expect.objectContaining({ main: project.files.main })
+            })
+        )
+        expect(await tools.delete_file.execute({ path: 'main' })).toMatchObject({
+            success: true,
+            remainingFiles: ['main.riscv']
+        })
     })
 })
 
@@ -1814,7 +2036,7 @@ describe('C/C++ agent workflow', () => {
             const built = await tools.compile.execute({})
             expect(built).toMatchObject({ success: true, entry: 'main.c.riscv' })
             expect(emulator.compile).toHaveBeenCalledWith(
-                100,
+                UNDO_HISTORY_SIZE,
                 expect.objectContaining({
                     entry: 'main.c.riscv',
                     assemblerProfile: 'gnu-compiler-v1',
@@ -1867,6 +2089,54 @@ describe('C/C++ agent workflow', () => {
             expect(project.selectedProgram).toBe(entry)
             expect(Object.keys(project.programs)).toEqual([entry])
             expect(project.compilations).toEqual([])
+        } finally {
+            compiler.mockRestore()
+        }
+    })
+
+    it('gives each compiler diagnostic the text of the line it points at', async () => {
+        const compiler = vi.spyOn(compilerExplorerDriver, 'compile').mockRejectedValue(
+            new SourceCompilationError('bad C source', [
+                {
+                    severity: 'error',
+                    message: 'expected ;',
+                    formatted: 'main.c:2:10: error: expected ;',
+                    file: 'main.c',
+                    lineIndex: 1,
+                    column: 9,
+                    source: 'Compiler Explorer'
+                },
+                {
+                    severity: 'warning',
+                    message: 'in a header the Project does not hold',
+                    formatted: '@lib/sim.h:1:1: warning: in a header the Project does not hold',
+                    file: '@lib/sim.h',
+                    lineIndex: 0,
+                    column: 0,
+                    source: 'Compiler Explorer'
+                }
+            ])
+        )
+        try {
+            const { tools } = sourceContext()
+            await tools.write_to_file.execute({
+                path: 'main.c',
+                code: 'int main() {\n    int x\n}'
+            })
+            const result = await tools.compile_source.execute({ path: 'main.c' })
+            expect(result).toMatchObject({
+                success: false,
+                errorKind: 'compile_error',
+                details: {
+                    diagnostics: [
+                        { message: 'expected ;', sourceLine: '    int x' },
+                        { message: 'in a header the Project does not hold' }
+                    ]
+                }
+            })
+            expect(
+                (result as { details: { diagnostics: object[] } }).details.diagnostics[1]
+            ).not.toHaveProperty('sourceLine')
         } finally {
             compiler.mockRestore()
         }

@@ -3,6 +3,7 @@ import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import { partitionPoint } from '#lib/sorted.ts'
 import {
     marsDisplayGeometry,
     marsWordAddress,
@@ -177,11 +178,6 @@ export class MarsDevices {
         return regions
     }
 
-    /** The grid the Screen currently mirrors, for the GUI and the tests. */
-    get displayGeometry(): MarsDisplayGeometry | null {
-        return this.geometry
-    }
-
     /**
      * Points the devices at a freshly assembled and initialized Core. Registrations live on the
      * Core's memory singleton and survive `assemble()`/`initialize()`, so the previous ones are
@@ -192,11 +188,6 @@ export class MarsDevices {
         this.core = core
         this.observeRegisters()
         this.configureDisplay(display)
-    }
-
-    /** Drops every registration. The input subscriptions outlive it, see `dispose`. */
-    detach(): void {
-        this.detachCore()
     }
 
     /** The Emulator is going away: no keystroke may reach a Core that no longer exists. */
@@ -258,8 +249,10 @@ export class MarsDevices {
 
     /**
      * Runs the Core's `undo`, whose restoring stores reach the observers as ordinary writes: the
-     * Synth must not take them for the program's, an upload's start register least of all. Undo
-     * re-reads the Synth's block afterwards instead, with `readSynthBlock`.
+     * Synth must not take them for the program's, an upload's start register least of all, and the
+     * transmitter must not print them, a form feed least of all, which would clear the output. Undo
+     * re-reads the Synth's block afterwards instead, with `readSynthBlock`, and rewinds the Terminal
+     * through its own history ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md)).
      */
     rewind(undo: () => void): void {
         this.rewinding = true
@@ -454,13 +447,16 @@ export class MarsDevices {
                     `Poll the Ready bit (bit 0) instead.`
             )
         }
-        //a program is not the device: whatever it stored, the Ready bit is the device's to state
+        //a program is not the device: whatever it stored, the Ready bit is the device's to state.
+        //An Undo's restore is no different: the word it puts back was stated before the keystrokes
+        //typed since, and Ready has to answer for the ones waiting now
         const ready =
             register === MARS_TRANSMITTER_CONTROL || this.receiverArmed ? MARS_READY_BIT : 0
         this.core?.setPeripheralWord(register | 0, ready)
     }
 
     private onTransmitterDataWrite(value: number): void {
+        if (this.rewinding) return
         const character = value & 0xff
         if (character === FORM_FEED) {
             //MARS clears its display window: the output, not a read in progress or what is left of
@@ -507,14 +503,7 @@ export class MarsDevices {
             }
         }
         if (readable(geometry.words - 1)) return geometry.words
-        let low = 0
-        let high = geometry.words - 1
-        while (low < high) {
-            const middle = low + Math.ceil((high - low) / 2)
-            if (readable(middle)) low = middle
-            else high = middle - 1
-        }
-        return readable(0) ? low + 1 : 0
+        return partitionPoint(geometry.words - 1, readable)
     }
 }
 

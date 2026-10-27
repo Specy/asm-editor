@@ -67,7 +67,7 @@ function render(source: string, options: Record<string, unknown> = {}) {
         target,
         props,
         cleanup: () => {
-            unmount(component)
+            void unmount(component)
             target.remove()
         }
     }

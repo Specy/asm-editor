@@ -4,10 +4,12 @@
      * knob crosses it. A button with the switch role, so it is focusable and toggles with Space and
      * Enter like a native checkbox, and the label around it stays free to be plain text.
      */
-    interface Props {
+    import type { HTMLButtonAttributes } from 'svelte/elements'
+
+    /** The rest goes to the button, an attachment such as a Tooltip among them. */
+    interface Props extends Omit<HTMLButtonAttributes, 'disabled' | 'style' | 'onchange'> {
         checked: boolean
         disabled?: boolean
-        title?: string
         style?: string
         onChange?: (checked: boolean) => void
     }
@@ -15,9 +17,9 @@
     let {
         checked = $bindable(false),
         disabled = false,
-        title = undefined,
         style = '',
-        onChange
+        onChange,
+        ...rest
     }: Props = $props()
 
     function toggle() {
@@ -29,12 +31,12 @@
 
 <button
     type="button"
+    {...rest}
     role="switch"
     aria-checked={checked}
     class="switch"
     class:on={checked}
     {disabled}
-    {title}
     {style}
     onclick={toggle}
 >

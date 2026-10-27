@@ -14,8 +14,9 @@ import {
 } from './assemblyTokenColors'
 
 /**
- * The store's own `getColor`/`getText`/`layer`, over whichever theme is being asked about: those
- * only ever answer for the app's theme, and the editor is not always wearing it.
+ * A theme's colours, the text that sits on each and a shade a layer away, over whichever theme is
+ * being asked about: the store's own `getColor` only ever answers for the app's theme, and the
+ * editor is not always wearing it.
  */
 function readerOf(theme: Record<ThemeKeys, ThemeProp<ThemeKeys>>) {
     const color = (key: ThemeKeys) => new TinyColor(theme[key].color)
@@ -38,6 +39,8 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
     const isDark = color('secondary').isDark()
     const tokens = ASSEMBLY_TOKEN_COLORS[isDark ? 'dark' : 'light']
     const brackets = ASSEMBLY_BRACKET_COLORS[isDark ? 'dark' : 'light']
+    //the hairline the app's own raised cards and context menus are edged and divided with
+    const hairline = new TinyColor(text('tertiary')).setAlpha(0.15).toHex8String()
     return {
         base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
@@ -63,10 +66,11 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
             'editorWidget.background': color('tertiary').toHexString(),
             'editorSuggestWidget.selectedBackground': color('accent2').darken(5).toHexString(),
             'input.background': layer('tertiary', 10).toHexString(),
-            'menu.background': color('tertiary').toHexString(),
+            //translucent, so the blur global.css gives the context menu shows what is beneath
+            'menu.background': color('tertiary').setAlpha(0.85).toHex8String(),
             'menu.foreground': text('tertiary'),
-            'menu.border': color('accent2').toHexString(),
-            'menu.separatorBackground': layer('tertiary', 12).toHexString(),
+            'menu.border': hairline,
+            'menu.separatorBackground': hairline,
             'menu.selectionBackground': layer('tertiary', 6).toHexString(),
             'menu.selectionForeground': text('tertiary'),
             //Monaco's context menu uses list hover colors for mouse and keyboard focus.

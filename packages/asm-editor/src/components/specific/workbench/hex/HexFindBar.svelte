@@ -8,6 +8,7 @@
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaTimes from '~icons/fa-solid/times'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { readsAsHex } from './hexSearch'
 
     /**
@@ -42,7 +43,7 @@
 
     const KINDS = [
         { id: 'hex', label: 'Hex', title: 'Hex bytes, ?? for any byte' },
-        { id: 'text', label: 'Text', title: 'Text' }
+        { id: 'text', label: 'Text' }
     ]
 
     onMount(() => {
@@ -114,7 +115,7 @@
             <button
                 type="button"
                 class="icon"
-                title="Previous match (Shift+Enter)"
+                {@attach tooltip('Previous match', { shortcut: 'Shift+Enter' })}
                 aria-label="Previous match"
                 onclick={() => onSubmit(true)}
             >
@@ -123,7 +124,7 @@
             <button
                 type="button"
                 class="icon"
-                title="Next match (Enter)"
+                {@attach tooltip('Next match', { shortcut: 'Enter' })}
                 aria-label="Next match"
                 onclick={() => onSubmit(false)}
             >
@@ -135,7 +136,7 @@
         <button
             type="button"
             class="icon"
-            title="Close (Escape)"
+            {@attach tooltip('Close', { shortcut: 'Escape' })}
             aria-label="Close"
             onclick={onClose}><FaTimes /></button
         >

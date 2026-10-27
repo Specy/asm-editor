@@ -58,7 +58,6 @@ export function parseZ80ScreenDirective(code: string): Z80ScreenDirectiveParse {
                 warning(
                     lineIndex,
                     column,
-                    lineText,
                     `A program has one @screen directive; this one is ignored, the one on line ${firstLine + 1} is used.`
                 )
             )
@@ -69,9 +68,7 @@ export function parseZ80ScreenDirective(code: string): Z80ScreenDirectiveParse {
         //with an `=` and a reader moving between the two should not have to remember which is which
         const word = rest.replace(/^mode[ \t]*=[ \t]*/i, '').split(/[\s,]+/)[0] ?? ''
         if (word.length === 0) {
-            diagnostics.push(
-                warning(lineIndex, column, lineText, `@screen needs a mode: ${KNOWN_MODES}.`)
-            )
+            diagnostics.push(warning(lineIndex, column, `@screen needs a mode: ${KNOWN_MODES}.`))
             continue
         }
         const named = MODES[word.toLowerCase()]
@@ -80,7 +77,6 @@ export function parseZ80ScreenDirective(code: string): Z80ScreenDirectiveParse {
                 warning(
                     lineIndex,
                     column,
-                    lineText,
                     `Unknown @screen mode "${word}"; the modes are ${KNOWN_MODES}.`
                 )
             )
@@ -92,15 +88,11 @@ export function parseZ80ScreenDirective(code: string): Z80ScreenDirectiveParse {
     return { mode, diagnostics }
 }
 
-function warning(lineIndex: number, column: number, lineText: string, message: string): Diagnostic {
+function warning(lineIndex: number, column: number, message: string): Diagnostic {
     return {
         severity: 'warning',
         lineIndex,
         column,
-        line: {
-            line: lineText,
-            line_index: lineIndex + 1
-        },
         message,
         formatted: message
     }

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { languageLabel } from '#lib/languages/languageLabel.ts'
+    import { resolveFilePath } from '#lib/projectFiles.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import {
         isCompilationTarget,
@@ -38,10 +39,15 @@
             .slice(0, compact ? 4 : 6)
     )
 
+    /**
+     * Makes a text File at the typed path, which is handed on as the FileSystem stores it, `x.s`
+     * for `./x.s` or `/x.s`, so the first Program and the pane find the File there.
+     */
     async function createFile(suggested = 'src/new.asm') {
-        const path = (await Prompt.askText('Path for the new text file', true, suggested))?.trim()
-        if (!path) return
+        const typed = (await Prompt.askText('Path for the new text file', true, suggested))?.trim()
+        if (!typed) return
         try {
+            const path = resolveFilePath(typed)
             const fileLanguage = sourceLanguage(path)
             project.fileSystem.writeText(
                 path,

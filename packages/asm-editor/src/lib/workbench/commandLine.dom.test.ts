@@ -208,7 +208,6 @@ describe('the Command line', () => {
             source: 'Arguments',
             lineIndex: 0,
             column: 0,
-            line: { line: '', line_index: 0 },
             message: 'Arguments: The double quote (") at column 1 is never closed',
             formatted: 'Arguments: The double quote (") at column 1 is never closed'
         }
@@ -251,7 +250,7 @@ describe('the Command line component', () => {
         })
         flushSync()
         disposers.push(() => {
-            unmount(component)
+            void unmount(component)
             target.remove()
         })
         const input = target.querySelector('input')!
@@ -323,7 +322,7 @@ describe('a read the program waits on, below the Command line', () => {
         flushSync()
         disposers.push(() => {
             terminal.cancelPendingInput()
-            unmount(component)
+            void unmount(component)
             target.remove()
         })
         return {

@@ -2,6 +2,7 @@ import { SHARE_ID } from '#stores/projectsStore.svelte.ts'
 import lzstring from 'lz-string'
 import { legacyProjectShape, withoutBuildOutputs, type Project } from '#lib/Project.svelte.ts'
 import { serializer } from '#lib/json.ts'
+import { toast } from '#stores/toastStore.ts'
 
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))
@@ -49,6 +50,26 @@ export function bytesDownloader(bytes: Uint8Array, fileName: string) {
 }
 export function textDownloader(text: string, fileName: string) {
     blobDownloader(new Blob([text], { type: 'text/json' }), fileName)
+}
+
+/**
+ * Copies `text` to the clipboard and says how that went in a toast, `label` naming what it is, as
+ * "Share link". Answers whether it was copied, for a caller whose text is nowhere else on the page:
+ * a browser can refuse, when the click that asked is too long ago or the page has lost focus, and a
+ * page served without HTTPS has no clipboard at all.
+ */
+export async function copyText(text: string, label: string): Promise<boolean> {
+    try {
+        await navigator.clipboard.writeText(text)
+        toast.logPill(`${label} copied to clipboard`)
+        return true
+    } catch (error) {
+        console.error(error)
+        toast.error(
+            `Couldn't copy the ${label[0].toLowerCase()}${label.slice(1)} to the clipboard.`
+        )
+        return false
+    }
 }
 
 export function delay(ms: number) {

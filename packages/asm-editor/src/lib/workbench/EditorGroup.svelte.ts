@@ -487,14 +487,16 @@ export class EditorGroup {
             ? map
             : undefined
     }
-    get compilationNotice() {
+    /** Whether the displayed Generated assembly is stale or edited; undefined for any other File. */
+    private get displayedCompilationStatus() {
         const record = this.displayedCompilation
-        if (!record) return ''
-        const status = compilationStatus(
-            record,
-            this.session.project.files,
-            this.session.project.language
-        )
+        return record
+            ? compilationStatus(record, this.session.project.files, this.session.project.language)
+            : undefined
+    }
+    get compilationNotice() {
+        const status = this.displayedCompilationStatus
+        if (!status) return ''
         if (status.stale)
             return 'Stale assembly: source or headers changed. Recompile to update this File.'
         if (status.edited)
@@ -508,14 +510,10 @@ export class EditorGroup {
      * compiling it again restores; the notice for it is itself the button that does.
      */
     get sourceMappingLost() {
-        const record = this.displayedCompilation
-        if (!record || this.unsupportedRuntimeAbi || this.compilationMap) return false
-        const status = compilationStatus(
-            record,
-            this.session.project.files,
-            this.session.project.language
-        )
-        return !status.stale && !status.edited
+        if (!this.displayedCompilation || this.unsupportedRuntimeAbi || this.compilationMap)
+            return false
+        const status = this.displayedCompilationStatus
+        return status !== undefined && !status.stale && !status.edited
     }
     /**
      * Whether the displayed Generated assembly requires a Runtime ABI whose library this editor
@@ -528,15 +526,9 @@ export class EditorGroup {
         return abi !== undefined && !hasRuntimeLibraryFor(abi, this.session.project.language)
     }
     get recompilationNeeded() {
-        const record = this.displayedCompilation
-        if (!record) return false
         if (this.unsupportedRuntimeAbi) return true
-        const status = compilationStatus(
-            record,
-            this.session.project.files,
-            this.session.project.language
-        )
-        return status.stale || status.edited
+        const status = this.displayedCompilationStatus
+        return status !== undefined && (status.stale || status.edited)
     }
     /**
      * The views the displayed File can be switched between, in the order the view switch offers
@@ -626,16 +618,17 @@ export class EditorGroup {
     }
     get breakpointsEditable() {
         const s = this.session
+        const editable = canEditProjectBreakpoints(this.sourceSelection, {
+            readonly: s.host.readonly,
+            building: s.building,
+            fileSystemLocked: s.fileSystemLocked
+        })
         //a Pseudocode line's go on its instructions, in the Executable's Listing (decision 10)
         if (this.displayedView === 'pseudocode')
             return (
                 this.displayedPseudocode?.map !== undefined &&
                 !this.displayedLibraryListing &&
-                canEditProjectBreakpoints(this.sourceSelection, {
-                    readonly: s.host.readonly,
-                    building: s.building,
-                    fileSystemLocked: s.fileSystemLocked
-                })
+                editable
             )
         //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
         //during a Debug session
@@ -643,26 +636,13 @@ export class EditorGroup {
         //an Executable's Listing takes them on its instructions, a library's none: a Breakpoint
         //is only ever in the Executable (decision 11)
         const listing = this.displayedListing
-        if (listing)
-            return (
-                !this.displayedLibraryListing &&
-                listing.status === 'ready' &&
-                canEditProjectBreakpoints(this.sourceSelection, {
-                    readonly: s.host.readonly,
-                    building: s.building,
-                    fileSystemLocked: s.fileSystemLocked
-                })
-            )
+        if (listing) return !this.displayedLibraryListing && listing.status === 'ready' && editable
         return (
             //a C or C++ File's Breakpoints stop on its Generated assembly; the library's C source
             //is not the user's code, and Step does not stop in it
             (this.displayedLanguage === s.project.language ||
                 (isCompilationTarget(s.project.language) && !this.displayedLibraryMember)) &&
-            canEditProjectBreakpoints(this.sourceSelection, {
-                readonly: s.host.readonly,
-                building: s.building,
-                fileSystemLocked: s.fileSystemLocked
-            })
+            editable
         )
     }
     /**
@@ -803,16 +783,17 @@ export class EditorGroup {
     }
     /**
      * Why the displayed File's bytes cannot be typed over now, or undefined when they can: whatever
-     * keeps a File's text read-only. A File stored as text has its text overwritten instead.
+     * keeps a File's text read-only, the session's reasons for every File (`byteEditRefusal`) and
+     * this pane's own. A File stored as text has its text overwritten instead.
      */
     get bytesReadOnly(): string | undefined {
         const s = this.session
-        if (s.host.readonly) return 'This Project is read-only'
+        //a read-only Workbench says so first, as no Stop would make its Files editable
+        if (s.host.readonly) return s.byteEditRefusal()
         if (this.displayedLibraryMember) return 'A Runtime library member is read-only'
-        if (s.debugSession || s.fileSystemLocked || this.sourceView === 'snapshot')
+        if (this.sourceView === 'snapshot')
             return 'The Files are read-only during a Debug session: Stop to edit them'
-        if (s.running || s.building) return 'The Files are read-only while a Build runs'
-        return undefined
+        return s.byteEditRefusal()
     }
     /** Why a File the browser could not preview is shown in the Hex editor instead. */
     get bytesNotice(): string | undefined {

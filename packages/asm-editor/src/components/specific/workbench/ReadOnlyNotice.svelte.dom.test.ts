@@ -32,7 +32,7 @@ function render<Props extends Record<string, unknown>>(
     })
     flushSync()
     dispose = () => {
-        unmount(mounted)
+        void unmount(mounted)
         target.remove()
     }
     const notice = target.querySelector<HTMLElement>('.read-only-notice[role="status"]')!
@@ -74,11 +74,11 @@ describe('the read-only notice', () => {
     for (const [over, renderNotice] of cases)
         it(`over a ${over} hides while the find widget is open, and comes back after`, () => {
             const { notice, setFindOpen } = renderNotice()
-            const title = notice.title
+            const text = notice.textContent
             expect(notice.classList).not.toContain('find-open')
             setFindOpen(true)
             expect(notice.classList).toContain('find-open')
-            expect(notice.title).toBe(title)
+            expect(notice.textContent).toBe(text)
             setFindOpen(false)
             expect(notice.classList).not.toContain('find-open')
         })
@@ -111,7 +111,8 @@ describe('the "?" of the Listing\'s and the Pseudocode\'s notices', () => {
             const help = notice.querySelector<HTMLButtonElement>('button')!
             expect(help.textContent).toBe('?')
             expect(help.getAttribute('aria-label')).toBe(question)
-            expect(help.title).toBe(question)
+            const described = help.getAttribute('aria-describedby')
+            expect(document.getElementById(described!)?.textContent?.trim()).toBe(question)
             help.click()
             expect(onHelp).toHaveBeenCalledOnce()
             dispose()

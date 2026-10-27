@@ -6,6 +6,8 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import FaExpand from '~icons/fa-solid/expand'
     import FaFilePdf from '~icons/fa-solid/file-pdf'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import FileStatusLine, { byteCount } from '../FileStatusLine.svelte'
     import { formatDuration, pdfDisplay, PREVIEW_UNAVAILABLE } from './previewSupport'
 
     /**
@@ -36,13 +38,19 @@
     const pdf = typeof navigator === 'undefined' ? 'tab' : pdfDisplay(navigator)
 
     /**
-     * The File's bytes as a Blob URL, made again when the File, its bytes, its type or the pane's
-     * File change, the last one revoked: a Blob URL holds its bytes until it is.
+     * The File's bytes as a Blob URL, made again when its bytes, its type or the pane's File
+     * change, the last one revoked: a Blob URL holds its bytes until it is. It follows the content
+     * rather than the record, which the pane reads from the Project's map of Files, new at a change
+     * to any other File: that would reload a PDF at its first page and a video at its start.
      */
+    const content = $derived(file.content)
+    const encoding = $derived(file.encoding)
+    const mime = $derived(kind.mime)
     let source = $state.raw<{ url: string; blob: Blob }>()
     $effect(() => {
         void path
-        const blob = new Blob([fileBytes(file) as Uint8Array<ArrayBuffer>], { type: kind.mime })
+        const bytes = fileBytes({ encoding, content })
+        const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime })
         const url = URL.createObjectURL(blob)
         source = { url, blob }
         return () => URL.revokeObjectURL(url)
@@ -81,42 +89,43 @@
     function download() {
         if (source) blobDownloader(source.blob, name)
     }
-
-    const count = (bytes: number) =>
-        `${bytes.toLocaleString('en-US')} ${bytes === 1 ? 'byte' : 'bytes'}`
 </script>
 
 <div class="file-preview" class:dock-inset={dockInset} aria-label="Preview of {path}" role="region">
-    <div class="preview-status">
-        <div class="facts" aria-label="Status">
+    <FileStatusLine tools={kind.preview === 'image' ? actualSizeTool : undefined}>
+        {#snippet facts()}
             <span class="fact mime">{kind.mime}</span>
             {#if dimensions}
                 <span class="fact">{dimensions.width} × {dimensions.height} px</span>
             {/if}
             {#if kind.preview === 'image' && !actualSize && scale !== 100}
-                <span class="fact" title="The image is fitted to the pane">shown at {scale}%</span>
+                <span class="fact" {@attach tooltip('The image is fitted to the pane')}
+                    >shown at {scale}%</span
+                >
             {/if}
             {#if duration !== undefined && formatDuration(duration)}
                 <span class="fact">{formatDuration(duration)}</span>
             {/if}
-            <span class="fact">{count(size)}</span>
-        </div>
-        {#if kind.preview === 'image'}
-            <div class="tools">
-                <button
-                    type="button"
-                    class="tool"
-                    title={actualSize
-                        ? 'Fit the image to the pane'
-                        : 'Show the image at its own size, a pixel for a pixel'}
-                    aria-pressed={actualSize}
-                    onclick={() => (actualSize = !actualSize)}
-                >
-                    <FaExpand /><span>Actual size</span>
-                </button>
-            </div>
-        {/if}
-    </div>
+            <span class="fact">{byteCount(size)}</span>
+        {/snippet}
+    </FileStatusLine>
+    {#snippet actualSizeTool()}
+        <!-- named as its words, which a narrow pane drops -->
+        <button
+            type="button"
+            class="tool"
+            aria-label="Actual size"
+            {@attach tooltip(
+                actualSize
+                    ? 'Fit the image to the pane'
+                    : 'Show the image at its own size, a pixel for a pixel'
+            )}
+            aria-pressed={actualSize}
+            onclick={() => (actualSize = !actualSize)}
+        >
+            <FaExpand /><span>Actual size</span>
+        </button>
+    {/snippet}
     <div class="preview-body {kind.preview}" class:actual-size={actualSize}>
         {#if source}
             {#if kind.preview === 'image'}
@@ -196,68 +205,11 @@
     .dock-inset {
         --dock-room: calc(var(--wb-control-height, 2.6rem) + 0.75rem);
     }
-    /* the Hex editor's status line, over the Preview where the dock does not cover it */
-    .preview-status {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        min-height: 2rem;
-        padding: 0.2rem 0.3rem 0.2rem 0.6rem;
-        border-bottom: 1px solid var(--preview-line);
-        background: var(--wb-section-header, var(--secondary));
-        font-size: 0.8rem;
-        container: preview-status / inline-size;
-    }
-    .facts {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 0.8rem;
-        min-width: 0;
-    }
-    .fact {
-        white-space: nowrap;
-        opacity: 0.85;
-    }
     .mime {
         font-family: monospace;
     }
-    .tools {
-        display: flex;
-        flex-shrink: 0;
-        gap: 0.15rem;
-    }
-    .tool {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        height: 1.6rem;
-        padding: 0 0.5rem;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-
-        :global(svg) {
-            width: 0.75rem;
-            height: 0.75rem;
-            opacity: 0.8;
-        }
-        &:hover {
-            background: color-mix(in srgb, var(--tertiary) 55%, transparent);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
-        &[aria-pressed='true'] {
-            background: var(--accent);
-            color: var(--accent-text);
-        }
-    }
-    @container preview-status (max-width: 22rem) {
+    /* one button, which keeps its words in a narrower pane than the Hex editor's three */
+    @container file-status (max-width: 22rem) {
         .tool span {
             display: none;
         }

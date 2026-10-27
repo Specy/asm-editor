@@ -10,9 +10,7 @@
     import { playgroundEmbedUrl } from '#lib/content/markdownPlaygrounds.ts'
     import { isEmbedBuiltMessage } from '#lib/content/embedMessages.ts'
     import { colourCodeBlocksWithMonaco } from '#lib/content/monacoCodeBlocks.ts'
-    import { assemblyPaletteStyle } from '#lib/content/assemblyPalette.ts'
-    import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { EDITOR_FONT } from '#lib/monaco/editorFont.ts'
+    import { codeBlockStyle } from '#lib/content/codeBlockStyle.ts'
     import { generateTheme } from '#lib/monaco/editorTheme.ts'
     import './codeBlocks.css'
 
@@ -79,19 +77,8 @@
         prepare
     }: Props = $props()
 
-    /**
-     * The colours of the code blocks, the ones the editor's theme is made from
-     * (`#lib/monaco/assemblyTokenColors.ts`), so a block reads as the editor would show it.
-     * It follows the secondary surface the page is drawn on, the same one the editor draws on:
-     * the theme a layout dresses its subtree in, or the reader's own.
-     */
-    const palette = $derived(
-        assemblyPaletteStyle(
-            ThemeStore.isColorDark(
-                ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
-            )
-        )
-    )
+    /** The code blocks' colours and font, the editor's. */
+    const codeStyle = $derived(codeBlockStyle())
 
     const options = $derived<MarkdownOptions>({
         //a Lecture section read in the Documentation panel opens its links beside the Workbench
@@ -191,13 +178,10 @@
     class:heading-ids={headingIds}
     class:simple-code={simpleCode}
     class:code-gutter-spacing={gutterSpacing}
-    style={style ? `${palette}; ${style}` : palette}
+    style={style ? `${codeStyle}; ${style}` : codeStyle}
     style:--gap={spacing}
     style:--md-inline-margin={centered ? null : '0'}
     style:--code-block-gutter-display={lineNumbers ? 'block' : 'none'}
-    style:--example-font-family={EDITOR_FONT.fontFamily}
-    style:--example-font-size={`${EDITOR_FONT.fontSize}px`}
-    style:--example-line-height={`${EDITOR_FONT.lineHeight}px`}
 >
     <div class="markdown-body" bind:this={content}>
         <!-- sanitized by the pipeline: DOMPurify, or its stricter rules for a Project File's -->
